@@ -164,11 +164,170 @@ const SG_SCHEMA = {
   ],
 };
 
-// Placeholder FI schemas — copy of the corresponding corporate schema for now,
-// real FI-specific fields will replace these later. region kept the same so
-// jurisdiction badge / styling logic is unchanged.
-const UK_FI_SCHEMA = { ...UK_SCHEMA, label: "United Kingdom (FI)" };
-const SG_FI_SCHEMA = { ...SG_SCHEMA, label: "Singapore / Default (FI)" };
+/* ═══════════════════════════════════════════
+   FI SCHEMAS — shared building blocks
+   The two FI schemas (UK and SG) are structurally
+   identical. Only Section 5 (Account Usage) differs
+   in currency labelling, so it's parameterised by
+   a fmt(amount) helper.
+   ═══════════════════════════════════════════ */
+const fiBusinessResearchFields = [
+  { field: "business_name", label: "Business Name", tier: 1 },
+  { field: "trading_name", label: "Doing Business As / Trade Name", tier: 1 },
+  { field: "business_activity_description", label: "Business Activity Description", tier: 2 },
+  { field: "website", label: "Website", tier: 1 },
+  { field: "registration_number", label: "Business Registration Number", tier: 1 },
+  { field: "registered_address_line1", label: "Address Line 1", tier: 1 },
+  { field: "registered_address_line2", label: "Address Line 2", tier: 1 },
+  { field: "registered_address_city", label: "City", tier: 1 },
+  { field: "registered_address_state", label: "State", tier: 1 },
+  { field: "registered_address_postcode", label: "Postcode", tier: 1 },
+  { field: "registered_address_country", label: "Country", tier: 1 },
+  { field: "incorporation_date", label: "Date of Incorporation", tier: 1 },
+  { field: "annual_turnover", label: "Annual Turnover", tier: 2 },
+  { field: "employee_count", label: "Number of Employees", tier: 2 },
+  { field: "operating_countries", label: "Operating Countries", tier: 2 },
+  { field: "publicly_listed", label: "Publicly Listed", tier: 2 },
+  { field: "listed_where", label: "Listed Exchanges", tier: 2 },
+];
+
+const fiBusinessGapFields = [
+  { field: "business_type", label: "Business Type", inputType: "select", required: true, section: "business",
+    options: ["Sole Proprietorship", "Partnership", "Private Company", "Listed Company", "Public Sector / Government / State-Owned", "Club / Society / Trust / Charity / Not-for-Profit"] },
+  { field: "requested_products", label: "Requested Products / Services (multi)", inputType: "select", required: true, section: "business",
+    options: ["Verify", "Global Collections (Payin)", "Domestic Remittances (Payout)", "International Remittances (Payout)"] },
+  { field: "industry_sector", label: "Industry Sector (multi)", inputType: "text", required: true, section: "business" },
+  { field: "vat_number", label: "VAT Number", inputType: "text", required: false, section: "business" },
+  { field: "additional_urls", label: "Additional URLs / Linked Websites", inputType: "text", required: false, section: "business" },
+  { field: "business_address_same", label: "Is your business address the same as your registered address?", inputType: "select", required: true, section: "business", options: ["Yes", "No"] },
+  { field: "business_address_line1", label: "Business Address Line 1", inputType: "text", required: true, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "business_address_line2", label: "Business Address Line 2", inputType: "text", required: false, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "business_address_city", label: "Business Address City", inputType: "text", required: true, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "business_address_state", label: "Business Address State", inputType: "text", required: true, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "business_address_postcode", label: "Business Address Postcode", inputType: "text", required: true, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "business_address_country", label: "Business Address Country", inputType: "text", required: true, section: "business", dependsOn: { business_address_same: "No" } },
+  { field: "org_structure_doc", label: "Organisation Structure Chart", inputType: "file", required: false, section: "business" },
+  { field: "business_registration_doc", label: "Business Registration Document (Certificate of Incorporation or equivalent)", inputType: "file", required: false, section: "business" },
+];
+
+const fiSpecificFields = [
+  { field: "has_licence", label: "Do you hold a licence or permit to operate?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "regulatory_authority", label: "Regulatory Authority Name", inputType: "text", required: true, section: "fi", dependsOn: { has_licence: "Yes" } },
+  { field: "licence_number", label: "Licence Number", inputType: "text", required: true, section: "fi", dependsOn: { has_licence: "Yes" } },
+  { field: "no_licence_reason", label: "If no licence, please explain why one is not required", inputType: "textarea", required: true, section: "fi", dependsOn: { has_licence: "No" } },
+  { field: "has_branches", label: "Do you have physical branches or office locations?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "branch_count", label: "How many branches?", inputType: "text", required: true, section: "fi", dependsOn: { has_branches: "Yes" } },
+  { field: "branch_countries", label: "Where are your main offices located? (multi)", inputType: "text", required: true, section: "fi", dependsOn: { has_branches: "Yes" } },
+  { field: "services_other_fis", label: "Do you service other financial institutions?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "cross_border_services", label: "Do you provide cross-border services?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "accepts_cash", label: "Do you accept cash?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "issues_prepaid_cards", label: "Do you issue prepaid cards?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "non_resident_customers", label: "Do you have non-resident customers?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "funds_from_outside", label: "Will you fund your Nium account from outside your incorporated country?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "products_offered", label: "What products / services do you offer to your customers? (multi)", inputType: "select", required: true, section: "fi",
+    options: ["Savings Accounts", "Checking Accounts", "Personal Banking", "Wallets", "Cross-Border Payment Services", "Prepaid Cards", "Other"] },
+  { field: "products_offered_other", label: "Please describe your other products / services", inputType: "textarea", required: true, section: "fi", dependsOn: { products_offered: "Other" } },
+  { field: "customer_individual_pct", label: "Individual Customers %", inputType: "text", required: true, section: "fi" },
+  { field: "customer_corporate_pct", label: "Corporate Customers %", inputType: "text", required: true, section: "fi" },
+  { field: "corporate_industries", label: "Top 5 industries your corporate customers operate in (multi)", inputType: "text", required: true, section: "fi" },
+  { field: "deals_virtual_currency", label: "Do you deal with virtual currencies (crypto, points, rewards)?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "virtual_currency_types", label: "Which virtual currencies? (multi)", inputType: "select", required: true, section: "fi",
+    options: ["Cryptocurrency", "Points", "Rewards", "NFT", "Other"], dependsOn: { deals_virtual_currency: "Yes" } },
+];
+
+const fiStakeholderFields = [
+  { field: "stakeholder_note", label: "Stakeholder Details", inputType: "textarea", required: true, section: "stakeholders",
+    placeholder: "List all directors, UBOs (>25% ownership), and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
+  { field: "payout_c2c_pct", label: "Payout — C2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_b2b_pct", label: "Payout — B2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_b2c_pct", label: "Payout — B2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_c2b_pct", label: "Payout — C2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_c2c_pct", label: "Collections — C2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_b2b_pct", label: "Collections — B2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_b2c_pct", label: "Collections — B2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_c2b_pct", label: "Collections — C2B %", inputType: "text", required: true, section: "stakeholders" },
+];
+
+const fiDisclosureFields = [
+  { field: "licence_suspended", label: "Has your business ever had a licence suspended or revoked?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
+  { field: "licence_suspended_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { licence_suspended: "Yes" } },
+  { field: "regulatory_action", label: "Has your business been subject to regulatory enforcement action?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
+  { field: "regulatory_action_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { regulatory_action: "Yes" } },
+  { field: "administration_proceedings", label: "Has your business ever been entered into administration proceedings?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
+  { field: "administration_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { administration_proceedings: "Yes" } },
+  { field: "directors_convicted", label: "Have any owners or directors been convicted of any crime?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
+  { field: "directors_convicted_details", label: "Please provide details", inputType: "textarea", required: true, section: "disclosures", dependsOn: { directors_convicted: "Yes" } },
+];
+
+const fiUsageFields = (fmt) => {
+  const volumeOpts = [`${fmt("1")}–${fmt("100,000")}`, `${fmt("100,001")}–${fmt("250,000")}`, `${fmt("250,001")}–${fmt("500,000")}`, `${fmt("500,001")}–${fmt("800,000")}`, `Over ${fmt("800,000")}`];
+  const avgTxOpts = [`Under ${fmt("1,000")}`, `${fmt("1,001")}–${fmt("10,000")}`, `${fmt("10,001")}–${fmt("20,000")}`, `${fmt("20,001")}–${fmt("50,000")}`, `${fmt("50,001")}–${fmt("100,000")}`, `${fmt("100,001")}–${fmt("300,000")}`, `${fmt("300,001")}–${fmt("600,000")}`, `${fmt("600,001")}–${fmt("1,000,000")}`, `Over ${fmt("1,000,000")}`];
+  return [
+    { field: "intended_use", label: "Intended Use of Account", inputType: "select", required: true, section: "usage",
+      options: ["Payroll", "Supplier Payments", "Cross-Border Trade", "FX Conversion", "Expense Management", "Collections", "Treasury", "Other"] },
+    { field: "intended_use_description", label: "Please describe how Nium's products will be used", inputType: "textarea", required: true, section: "usage" },
+    { field: "monthly_credit_volume", label: "Expected Monthly Credit Volume", inputType: "select", required: true, section: "usage", options: volumeOpts },
+    { field: "monthly_tx_count_credit", label: "Expected Number of Monthly Credit Transactions", inputType: "text", required: true, section: "usage" },
+    { field: "avg_tx_value_credit", label: "Expected Average Credit Transaction Value", inputType: "select", required: true, section: "usage", options: avgTxOpts },
+    { field: "top_payin_countries", label: "Top Transaction Countries — Payin (multi, with % split)", inputType: "text", required: true, section: "usage" },
+    { field: "top_payout_countries", label: "Top Transaction Countries — Payout (multi, with % split)", inputType: "text", required: true, section: "usage" },
+    { field: "top_senders", label: "Top Senders", inputType: "textarea", required: true, section: "usage" },
+    { field: "monthly_debit_volume", label: "Expected Monthly Debit Volume", inputType: "select", required: true, section: "usage", options: volumeOpts },
+    { field: "monthly_tx_count_debit", label: "Expected Number of Monthly Debit Transactions", inputType: "text", required: true, section: "usage" },
+    { field: "avg_tx_value_debit", label: "Expected Average Debit Transaction Value", inputType: "select", required: true, section: "usage", options: avgTxOpts },
+    { field: "top_beneficiaries", label: "Top Beneficiaries", inputType: "textarea", required: true, section: "usage" },
+  ];
+};
+
+const fiBankFields = [
+  { field: "account_currency", label: "Account Currency", inputType: "select", required: true, section: "bank",
+    options: ["GBP", "USD", "EUR", "SGD", "AUD", "CAD", "HKD", "JPY", "NZD", "CHF", "SEK", "NOK", "DKK", "CNY", "INR", "MYR", "THB", "IDR", "PHP", "AED", "SAR", "BRL", "MXN", "ZAR", "TRY", "PLN"] },
+  { field: "bank_account_name", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
+  { field: "bank_name", label: "Bank Name", inputType: "text", required: true, section: "bank" },
+  { field: "bank_account_number", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
+  { field: "routing_type", label: "Routing Type", inputType: "select", required: true, section: "bank", options: ["Sort Code", "SWIFT/BIC", "IBAN", "ABA", "BSB", "IFSC"] },
+  { field: "routing_value", label: "Routing Value", inputType: "text", required: true, section: "bank" },
+  { field: "bank_country", label: "Bank Country", inputType: "text", required: true, section: "bank" },
+];
+
+const fiDocumentFields = [
+  { field: "wolfsberg_questionnaire", label: "Wolfsberg Questionnaire", inputType: "file", required: false, section: "documents" },
+  { field: "aml_policy", label: "AML Policy / Procedures", inputType: "file", required: false, section: "documents" },
+  { field: "fsl_licence_doc", label: "Copy of Financial Services Licence (or URL where it can be verified)", inputType: "text", required: false, section: "documents" },
+  { field: "loa_doc", label: "Letter of Authority / Board Resolution (if applicant is not a Director)", inputType: "file", required: false, section: "documents" },
+];
+
+const UK_FI_SCHEMA = {
+  label: "United Kingdom (FI)",
+  region: "UK",
+  jurisdiction: "GB",
+  researchFields: fiBusinessResearchFields,
+  gapFields: [
+    ...fiBusinessGapFields,
+    ...fiSpecificFields,
+    ...fiStakeholderFields,
+    ...fiDisclosureFields,
+    ...fiUsageFields(n => "£" + n),
+    ...fiBankFields,
+    ...fiDocumentFields,
+  ],
+};
+
+const SG_FI_SCHEMA = {
+  label: "Singapore / Default (FI)",
+  region: "SG",
+  jurisdiction: "SG",
+  researchFields: fiBusinessResearchFields,
+  gapFields: [
+    ...fiBusinessGapFields,
+    ...fiSpecificFields,
+    ...fiStakeholderFields,
+    ...fiDisclosureFields,
+    ...fiUsageFields(n => "SGD " + n),
+    ...fiBankFields,
+    ...fiDocumentFields,
+  ],
+};
 
 const getSchema = (code, entityType) => {
   if (entityType === "FI") return code === "GB" ? UK_FI_SCHEMA : SG_FI_SCHEMA;
@@ -372,6 +531,21 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
         </select>
       ) : type === "textarea" ? (
         <textarea ref={ref} value={local} onChange={handleChange} placeholder={placeholder} rows={3} style={{ ...sty, resize: "vertical" }} />
+      ) : type === "file" ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <input
+            ref={ref}
+            type="file"
+            onChange={(e) => {
+              const f = e.target.files && e.target.files[0];
+              const name = f ? f.name : "";
+              setLocal(name);
+              onUpdate(id, name);
+            }}
+            style={{ ...sty, padding: "8px 10px", cursor: "pointer" }}
+          />
+          {local && <span style={{ fontSize: 11, color: "#4a9e8e", fontWeight: 600, whiteSpace: "nowrap" }}>✓ {local}</span>}
+        </div>
       ) : (
         <input ref={ref} type={type || "text"} value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
       )}
@@ -414,7 +588,30 @@ export default function KYCAgent() {
   }, []);
 
   const countryObj = COUNTRIES.find(c => c.code === countryCode);
-  const updateGap = useCallback((field, value) => { gapRef.current[field] = value; }, []);
+
+  // Fields referenced by any other field's dependsOn — when their value changes
+  // we bump formVersion so conditional fields show/hide. Computed once per
+  // schema change so text-field updates stay cheap.
+  const parentFieldsRef = useRef(new Set());
+  useEffect(() => {
+    const s = new Set();
+    if (activeSchema) {
+      activeSchema.gapFields.forEach(f => {
+        if (f.dependsOn) Object.keys(f.dependsOn).forEach(k => s.add(k));
+      });
+    }
+    parentFieldsRef.current = s;
+  }, [activeSchema]);
+
+  const updateGap = useCallback((field, value) => {
+    gapRef.current[field] = value;
+    if (parentFieldsRef.current.has(field)) setFormVersion(v => v + 1);
+  }, []);
+
+  const dependsOnSatisfied = (g) => {
+    if (!g.dependsOn) return true;
+    return Object.entries(g.dependsOn).every(([k, v]) => gapRef.current[k] === v);
+  };
 
   const resetAll = () => {
     setStep(0); setResearch(null); setActiveSchema(null);
@@ -471,6 +668,7 @@ export default function KYCAgent() {
   };
 
   const allGapsFilled = () => getCombinedGaps().filter(g => g.required).every(g => {
+    if (!dependsOnSatisfied(g)) return true;
     const v = gapRef.current[g.field];
     if (!v || !String(v).trim()) return false;
     if (g.section === "secondary" && !secondaryConfirms[g.field]) return false;
@@ -551,13 +749,21 @@ export default function KYCAgent() {
     corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
     secondary: { title: "Pre-filled — Please Confirm", icon: "🔍", sub: "Found on secondary sources (Wikipedia, LinkedIn, news, corporate website). Edit if wrong, then tick to confirm each one is correct.", twoCol: false },
     applicant: { title: "Applicant Details", icon: "👤", sub: "Person authorised to submit this application", twoCol: true },
+    business: { title: "Business Details", icon: "🏢", sub: "Confirm and complete business information", twoCol: true },
     nature: { title: "Nature & Size of Business", icon: "🏢", sub: "Business activity and size details", twoCol: true },
+    fi: { title: "FI Specific Questions", icon: "🏦", sub: "Licensing, services, and customer profile", twoCol: false },
+    stakeholders: { title: "Stakeholders & Transaction Mix", icon: "👥", sub: "Directors, UBOs, signatories and payment-mix breakdown", twoCol: true },
+    disclosures: { title: "Corporate Disclosures", icon: "📋", sub: "Past regulatory or legal events", twoCol: false },
     account: { title: "Expected Account Usage", icon: "💰", sub: "Transaction volumes, purpose, and source of funds", twoCol: false },
+    usage: { title: "Account Usage & Volumes", icon: "💰", sub: "Expected transaction volumes and counterparties", twoCol: true },
     bank: { title: "Bank Account Details", icon: "🏦", sub: "Settlement account for transactions", twoCol: true },
+    documents: { title: "Additional Documents", icon: "📄", sub: "Upload supporting documentation", twoCol: false },
   };
 
   const renderGapSection = (sectionKey) => {
-    const items = getCombinedGaps().filter(g => g.section === sectionKey);
+    const items = getCombinedGaps()
+      .filter(g => g.section === sectionKey)
+      .filter(dependsOnSatisfied);
     if (items.length === 0) return null;
     const cfg = sectionConfig[sectionKey] || { title: sectionKey, icon: "📋", sub: "", twoCol: false };
 
@@ -595,7 +801,7 @@ export default function KYCAgent() {
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
         <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
         <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
-          {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={"Enter " + g.label.toLowerCase()} />)}
+          {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
         </div>
       </div>
     );
@@ -807,7 +1013,7 @@ export default function KYCAgent() {
                 </div>
               </div>
             </div>
-            {["corrections", "secondary", "applicant", "nature", "account", "bank"].map(s => renderGapSection(s))}
+            {["corrections", "secondary", "applicant", "business", "nature", "fi", "stakeholders", "disclosures", "account", "usage", "bank", "documents"].map(s => renderGapSection(s))}
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <button
