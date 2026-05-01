@@ -363,12 +363,6 @@ const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : 
 
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
   const fieldList = schema.researchFields.map(f => `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`).join(",\n");
-  const gapList = schema.gapFields.map(f => {
-    let obj = `{"field": "${f.field}", "label": "${f.label}", "reason": "Not publicly available", "inputType": "${f.inputType}", "required": ${f.required}, "section": "${f.section}"`;
-    if (f.options) obj += `, "options": ${JSON.stringify(f.options)}`;
-    obj += "}";
-    return "    " + obj;
-  }).join(",\n");
 
   const countryAuthoritative = SOURCE_TRUST[countryCode] || [];
   const countryMatchesFramework = countryCode === "GB" || countryCode === "SG";
@@ -435,16 +429,13 @@ Research "${name}" registered in ${country} using web search. Return ONLY valid 
   "countryOfRegistration": "${countryCode}",
   "found": [
 ${fieldList}
-  ],
-  "gaps": [
-${gapList}
   ]
 }
 
 OUTPUT RULES:
 - Only include a field in "found" if you have ACTUAL data with a real source. Omit fields you couldn't find rather than inventing values.
 - The "source" field must be the actual ${country} authority/source you used (e.g. for India: "Ministry of Corporate Affairs (MCA)", "BSE", "RBI"; for Brazil: "Receita Federal", "CVM"). Never cite a foreign registry that wouldn't have data for ${country}.
-- The "gaps" array must ALWAYS include ALL fields exactly as listed above.
+- Do NOT include a "gaps" array — the client already knows the gap fields from the schema.
 - Return ONLY the raw JSON object.`;
 };
 

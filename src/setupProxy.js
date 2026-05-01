@@ -29,7 +29,7 @@ module.exports = function (app) {
 
         const finalMessages = messages || [{ role: "user", content: prompt }];
         const finalModel = model || "claude-sonnet-4-5";
-        const finalMaxTokens = max_tokens || 8000;
+        const finalMaxTokens = max_tokens || 16000;
         const finalTools = Array.isArray(tools)
           ? tools
           : [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
