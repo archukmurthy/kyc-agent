@@ -26,7 +26,13 @@ const COUNTRIES = [
   { code: "PL", name: "Poland" },{ code: "TR", name: "Turkey" },
   { code: "IL", name: "Israel" },{ code: "NZ", name: "New Zealand" },
   { code: "PK", name: "Pakistan" },{ code: "BD", name: "Bangladesh" },
-  { code: "LK", name: "Sri Lanka" },
+  { code: "LK", name: "Sri Lanka" },{ code: "AM", name: "Armenia" },
+];
+
+const CURRENCIES = [
+  "GBP", "USD", "EUR", "SGD", "AUD", "CAD", "JPY", "HKD", "CHF", "NZD",
+  "SEK", "NOK", "DKK", "INR", "CNY", "KRW", "MYR", "IDR", "THB", "PHP",
+  "VND", "AED", "SAR", "ZAR", "BRL", "MXN", "TRY", "PLN", "ILS", "TWD",
 ];
 
 // Markets where Nium holds a licence. Country of registration matching one of these
@@ -34,35 +40,63 @@ const COUNTRIES = [
 const LICENSED_MARKETS = ["GB"];
 
 /* ═══════════════════════════════════════════
+   SHARED GAP SECTIONS (account + bank are
+   identical structure across jurisdictions —
+   only the currency label differs)
+   ═══════════════════════════════════════════ */
+const VOLUME_OPTIONS = ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"];
+
+const accountSection = (currencyLabel) => [
+  { field: "creditMonthlyVolume", label: `Expected Monthly Credit Volume (${currencyLabel})`, inputType: "select", required: true, section: "account", options: VOLUME_OPTIONS },
+  { field: "creditTopCountries", label: "Top Credit Transaction Countries", inputType: "text", required: true, section: "account" },
+  { field: "debitMonthlyVolume", label: `Expected Monthly Debit Volume (${currencyLabel})`, inputType: "select", required: true, section: "account", options: VOLUME_OPTIONS },
+  { field: "debitTopCountries", label: "Top Debit Transaction Countries", inputType: "text", required: true, section: "account" },
+  { field: "intendedUses", label: "Intended Use of Account", inputType: "textarea", required: true, section: "account" },
+  { field: "sourceOfFunds", label: "Source of Funds", inputType: "textarea", required: false, section: "account" },
+];
+
+const bankSection = () => [
+  { field: "bankAccountName", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
+  { field: "bankAccountNumber", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
+  { field: "bankName", label: "Bank Name", inputType: "text", required: true, section: "bank" },
+  { field: "bankSortCode", label: "Sort Code", inputType: "text", required: true, section: "bank" },
+  { field: "bankCurrency", label: "Account Currency", inputType: "select", required: true, section: "bank", options: CURRENCIES },
+  { field: "bankCountry", label: "Bank Country", inputType: "text", required: true, section: "bank" },
+];
+
+/* ═══════════════════════════════════════════
    JURISDICTION SCHEMAS
+   Each researchField has a `tier`:
+     1 = basic identity / public registry
+     2 = enrichment, ownership, risk screening
    ═══════════════════════════════════════════ */
 const UK_SCHEMA = {
   label: "United Kingdom",
   region: "UK",
   researchFields: [
-    { field: "businessType", label: "Business Type" },
-    { field: "businessRegistrationNumber", label: "Companies House Number" },
-    { field: "registeredDate", label: "Date of Incorporation" },
-    { field: "registeredCountry", label: "Registered Country" },
-    { field: "tradeName", label: "Trade Name" },
-    { field: "website", label: "Website" },
-    { field: "addressLine1", label: "Registered Address Line 1" },
-    { field: "addressLine2", label: "Registered Address Line 2" },
-    { field: "city", label: "City" },
-    { field: "state", label: "County / State" },
-    { field: "postcode", label: "Postcode" },
-    { field: "country", label: "Address Country" },
-    { field: "sicCode", label: "SIC Code" },
-    { field: "annualRevenue", label: "Annual Revenue" },
-    { field: "employees", label: "Number of Employees" },
-    { field: "stockListing", label: "Stock Exchange Listing" },
-    { field: "leiNumber", label: "LEI Number" },
-    { field: "countriesOfOperation", label: "Countries of Operation" },
-    { field: "isMultiLayered", label: "Multi-layered Corporate Structure" },
-    { field: "uboAnalysis", label: "UBO / Ownership Analysis" },
-    { field: "directors", label: "Key Directors (with nationality)" },
-    { field: "companySecretary", label: "Company Secretary" },
-    { field: "isPEP", label: "PEP Status of Directors" },
+    { field: "businessType", label: "Business Type", tier: 1 },
+    { field: "businessRegistrationNumber", label: "Companies House Number", tier: 1 },
+    { field: "registeredDate", label: "Date of Incorporation", tier: 1 },
+    { field: "registeredCountry", label: "Registered Country", tier: 1 },
+    { field: "tradeName", label: "Trade Name", tier: 1 },
+    { field: "website", label: "Website", tier: 1 },
+    { field: "addressLine1", label: "Registered Address Line 1", tier: 1 },
+    { field: "addressLine2", label: "Registered Address Line 2", tier: 1 },
+    { field: "city", label: "City", tier: 1 },
+    { field: "state", label: "County / State", tier: 1 },
+    { field: "postcode", label: "Postcode", tier: 1 },
+    { field: "country", label: "Address Country", tier: 1 },
+    { field: "sicCode", label: "SIC Code", tier: 1 },
+    { field: "annualRevenue", label: "Annual Revenue", tier: 2 },
+    { field: "employees", label: "Number of Employees", tier: 2 },
+    { field: "stockListing", label: "Stock Exchange Listing", tier: 2 },
+    { field: "leiNumber", label: "LEI Number", tier: 2 },
+    { field: "countriesOfOperation", label: "Countries of Operation", tier: 2 },
+    { field: "isMultiLayered", label: "Multi-layered Corporate Structure", tier: 2 },
+    { field: "uboAnalysis", label: "UBO / Ownership Analysis", tier: 2 },
+    { field: "directors", label: "Key Directors (with nationality)", tier: 2 },
+    { field: "companySecretary", label: "Company Secretary", tier: 2 },
+    { field: "isPEP", label: "PEP Status of Directors", tier: 2 },
   ],
   gapFields: [
     { field: "applicantFirstName", label: "Applicant First Name", inputType: "text", required: true, section: "applicant" },
@@ -74,51 +108,41 @@ const UK_SCHEMA = {
     { field: "applicantNationality", label: "Applicant Nationality (2-letter code)", inputType: "text", required: true, section: "applicant" },
     { field: "applicantBirthCountry", label: "Applicant Birth Country", inputType: "text", required: true, section: "applicant" },
     { field: "applicantIsPEP", label: "Is Applicant a PEP?", inputType: "select", required: true, section: "applicant", options: ["Yes", "No"] },
-    { field: "creditMonthlyVolume", label: "Expected Monthly Credit Volume (GBP)", inputType: "select", required: true, section: "account", options: ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"] },
-    { field: "creditTopCountries", label: "Top Credit Transaction Countries", inputType: "text", required: true, section: "account" },
-    { field: "debitMonthlyVolume", label: "Expected Monthly Debit Volume (GBP)", inputType: "select", required: true, section: "account", options: ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"] },
-    { field: "debitTopCountries", label: "Top Debit Transaction Countries", inputType: "text", required: true, section: "account" },
-    { field: "intendedUses", label: "Intended Use of Account", inputType: "textarea", required: true, section: "account" },
-    { field: "sourceOfFunds", label: "Source of Funds", inputType: "textarea", required: false, section: "account" },
-    { field: "bankAccountName", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
-    { field: "bankAccountNumber", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
-    { field: "bankName", label: "Bank Name", inputType: "text", required: true, section: "bank" },
-    { field: "bankSortCode", label: "Sort Code", inputType: "text", required: true, section: "bank" },
-    { field: "bankCurrency", label: "Account Currency", inputType: "text", required: true, section: "bank" },
-    { field: "bankCountry", label: "Bank Country", inputType: "text", required: true, section: "bank" },
-  ]
+    ...accountSection("GBP"),
+    ...bankSection(),
+  ],
 };
 
 const SG_SCHEMA = {
   label: "Singapore / Default",
   region: "SG",
   researchFields: [
-    { field: "businessType", label: "Business Type (ACRA entity type)" },
-    { field: "businessRegistrationNumber", label: "UEN / Registration Number" },
-    { field: "registeredDate", label: "Date of Incorporation" },
-    { field: "registeredCountry", label: "Registered Country" },
-    { field: "tradeName", label: "Trade Name" },
-    { field: "formerName", label: "Former Name (if any)" },
-    { field: "website", label: "Website" },
-    { field: "addressLine1", label: "Registered Address Line 1" },
-    { field: "addressLine2", label: "Registered Address Line 2" },
-    { field: "city", label: "City" },
-    { field: "state", label: "State" },
-    { field: "postcode", label: "Postcode" },
-    { field: "country", label: "Address Country" },
-    { field: "sicCode", label: "SSIC / Industry Code" },
-    { field: "annualRevenue", label: "Annual Revenue / Turnover" },
-    { field: "employees", label: "Number of Employees" },
-    { field: "stockListing", label: "Stock Exchange Listing" },
-    { field: "leiNumber", label: "LEI Number" },
-    { field: "countriesOfOperation", label: "Operating Countries" },
-    { field: "industryCodes", label: "Industry Sector Codes" },
-    { field: "industryDescription", label: "Business Description" },
-    { field: "isMultiLayered", label: "Multi-layered Corporate Structure" },
-    { field: "uboAnalysis", label: "UBO / Ownership Analysis" },
-    { field: "directors", label: "Key Directors / Officers" },
-    { field: "companySecretary", label: "Company Secretary" },
-    { field: "listedExchange", label: "Listed Exchange (if public)" },
+    { field: "businessType", label: "Business Type / Entity Form", tier: 1 },
+    { field: "businessRegistrationNumber", label: "Company Registration Number / Tax ID", tier: 1 },
+    { field: "registeredDate", label: "Date of Incorporation", tier: 1 },
+    { field: "registeredCountry", label: "Registered Country", tier: 1 },
+    { field: "tradeName", label: "Trade Name", tier: 1 },
+    { field: "formerName", label: "Former Name (if any)", tier: 1 },
+    { field: "website", label: "Website", tier: 1 },
+    { field: "addressLine1", label: "Registered Address Line 1", tier: 1 },
+    { field: "addressLine2", label: "Registered Address Line 2", tier: 1 },
+    { field: "city", label: "City", tier: 1 },
+    { field: "state", label: "State", tier: 1 },
+    { field: "postcode", label: "Postcode", tier: 1 },
+    { field: "country", label: "Address Country", tier: 1 },
+    { field: "sicCode", label: "Industry Classification Code", tier: 1 },
+    { field: "annualRevenue", label: "Annual Revenue / Turnover", tier: 2 },
+    { field: "employees", label: "Number of Employees", tier: 2 },
+    { field: "stockListing", label: "Stock Exchange Listing", tier: 2 },
+    { field: "leiNumber", label: "LEI Number", tier: 2 },
+    { field: "countriesOfOperation", label: "Operating Countries", tier: 2 },
+    { field: "industryCodes", label: "Industry Sector Codes", tier: 2 },
+    { field: "industryDescription", label: "Business Description", tier: 2 },
+    { field: "isMultiLayered", label: "Multi-layered Corporate Structure", tier: 2 },
+    { field: "uboAnalysis", label: "UBO / Ownership Analysis", tier: 2 },
+    { field: "directors", label: "Key Directors / Officers", tier: 2 },
+    { field: "companySecretary", label: "Company Secretary", tier: 2 },
+    { field: "listedExchange", label: "Listed Exchange (if public)", tier: 2 },
   ],
   gapFields: [
     { field: "applicantFirstName", label: "Applicant First Name", inputType: "text", required: true, section: "applicant" },
@@ -135,30 +159,15 @@ const SG_SCHEMA = {
     { field: "natureIndustryDescription", label: "Business Description (2-3 sentences)", inputType: "textarea", required: false, section: "nature" },
     { field: "sizeTotalEmployees", label: "Total Employees (range)", inputType: "select", required: true, section: "nature", options: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5000+"] },
     { field: "sizeAnnualTurnover", label: "Annual Turnover (range)", inputType: "select", required: true, section: "nature", options: ["Under 100K", "100K - 500K", "500K - 1M", "1M - 5M", "5M - 25M", "25M - 100M", "Over 100M"] },
-    { field: "creditMonthlyVolume", label: "Expected Monthly Credit Volume", inputType: "select", required: true, section: "account", options: ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"] },
-    { field: "creditMonthlyTransactions", label: "Expected Monthly Credit Transactions", inputType: "select", required: true, section: "account", options: ["1-10", "11-50", "51-200", "201-500", "500+"] },
-    { field: "creditAvgValue", label: "Average Credit Transaction Value", inputType: "select", required: true, section: "account", options: ["Under 1,000", "1,000 - 5,000", "5,000 - 25,000", "25,000 - 100,000", "Over 100,000"] },
-    { field: "creditTopCountries", label: "Top Credit Countries (ISO codes)", inputType: "text", required: true, section: "account" },
-    { field: "debitMonthlyVolume", label: "Expected Monthly Debit Volume", inputType: "select", required: true, section: "account", options: ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"] },
-    { field: "debitMonthlyTransactions", label: "Expected Monthly Debit Transactions", inputType: "select", required: true, section: "account", options: ["1-10", "11-50", "51-200", "201-500", "500+"] },
-    { field: "debitAvgValue", label: "Average Debit Transaction Value", inputType: "select", required: true, section: "account", options: ["Under 1,000", "1,000 - 5,000", "5,000 - 25,000", "25,000 - 100,000", "Over 100,000"] },
-    { field: "debitTopCountries", label: "Top Debit Countries (ISO codes)", inputType: "text", required: true, section: "account" },
-    { field: "intendedUses", label: "Intended Use of Account", inputType: "textarea", required: true, section: "account" },
-    { field: "sourceOfFunds", label: "Source of Funds", inputType: "textarea", required: false, section: "account" },
-    { field: "bankAccountName", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
-    { field: "bankAccountNumber", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
-    { field: "bankName", label: "Bank Name", inputType: "text", required: true, section: "bank" },
-    { field: "bankCountry", label: "Bank Country", inputType: "text", required: true, section: "bank" },
-    { field: "bankCurrency", label: "Account Currency", inputType: "text", required: true, section: "bank" },
-    { field: "bankRoutingType", label: "Routing Code Type (e.g. SWIFT, IFSC)", inputType: "text", required: true, section: "bank" },
-    { field: "bankRoutingValue", label: "Routing Code Value", inputType: "text", required: true, section: "bank" },
-  ]
+    ...accountSection("SGD"),
+    ...bankSection(),
+  ],
 };
 
 const getSchema = (code) => LICENSED_MARKETS.includes(code) && code === "GB" ? UK_SCHEMA : SG_SCHEMA;
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
-const buildPrompt = (name, country, schema) => {
+const buildPrompt = (name, country, countryCode, schema) => {
   const fieldList = schema.researchFields.map(f => `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`).join(",\n");
   const gapList = schema.gapFields.map(f => {
     let obj = `{"field": "${f.field}", "label": "${f.label}", "reason": "Not publicly available", "inputType": "${f.inputType}", "required": ${f.required}, "section": "${f.section}"`;
@@ -167,11 +176,33 @@ const buildPrompt = (name, country, schema) => {
     return "    " + obj;
   }).join(",\n");
 
-  return `You are a KYC research agent for ${schema.label} jurisdiction. Research "${name}" registered in "${country}" using web search. Return ONLY valid JSON (no markdown, no backticks, no preamble).
+  const countryAuthoritative = SOURCE_TRUST[countryCode] || [];
+  const countryMatchesFramework = countryCode === "GB" || countryCode === "SG";
+  const preferredLine = countryAuthoritative.length > 0
+    ? `Preferred authoritative sources for ${country}: ${countryAuthoritative.slice(0, 8).join(", ")}.`
+    : `No specific registry list provided for ${country} — use the country's national company registry, securities regulator, and tax authority.`;
+
+  return `You are a KYC research agent for Nium.
+
+JURISDICTION CONTEXT (read carefully, this is two separate things):
+1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
+2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Nium has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
+
+WHERE TO SEARCH:
+- Search ${country}'s public records, registries, and regulators for "${name}".
+- ${preferredLine}
+- ALSO acceptable: LEI/GLEIF, company's official website, audited annual reports, official stock exchange filings.
+- DO NOT cite registries from countries other than ${country}. For example: do not say "ACRA" or "Companies House" or "SEC EDGAR" unless ${country} actually is Singapore, the UK, or the US respectively. Use the actual ${country} registry name.
+
+LABEL MAPPING:
+- The schema labels below are generic. Map each one to the ${country}-specific equivalent in your search and citation. Examples: "Company Registration Number" → CIN (India), CNPJ (Brazil), KvK number (Netherlands), HRB number (Germany), CNPC (China), Sirene (France), etc. "Industry Classification Code" → NIC (India), CNAE (Brazil), NAICS (US/CA), SIC (UK), JSIC (Japan), etc.
+
+Research "${name}" registered in ${country} using web search. Return ONLY valid JSON (no markdown, no backticks, no preamble).
 
 {
   "companyName": "Official registered name",
   "jurisdiction": "${schema.region}",
+  "countryOfRegistration": "${countryCode}",
   "found": [
 ${fieldList}
   ],
@@ -180,14 +211,138 @@ ${gapList}
   ]
 }
 
-RULES:
-- Only include a field in "found" if you have ACTUAL data. Remove fields with empty/unknown values.
-- Be specific with sources: "Companies House", "ACRA", "SEC EDGAR", "Wikipedia", "Annual Report", "Corporate Website", etc.
+OUTPUT RULES:
+- Only include a field in "found" if you have ACTUAL data with a real source. Omit fields you couldn't find rather than inventing values.
+- The "source" field must be the actual ${country} authority/source you used (e.g. for India: "Ministry of Corporate Affairs (MCA)", "BSE", "RBI"; for Brazil: "Receita Federal", "CVM"). Never cite a foreign registry that wouldn't have data for ${country}.
 - The "gaps" array must ALWAYS include ALL fields exactly as listed above.
 - Return ONLY the raw JSON object.`;
 };
 
-const LOADER_MSGS = ["Searching company registries...", "Checking regulatory databases...", "Extracting director information...", "Analysing ownership structure...", "Compiling financial data...", "Identifying jurisdiction-specific gaps...", "Building onboarding form...", "Almost done..."];
+const LOADER_MSGS = [
+  "Searching company registries...",
+  "Checking regulatory databases...",
+  "Extracting director information...",
+  "Analysing ownership structure...",
+  "Compiling financial data...",
+  "Identifying jurisdiction-specific gaps...",
+  "Building onboarding form...",
+  "Almost done, compiling results...",
+];
+
+/* ═══════════════════════════════════════════
+   SOURCE TRUST CLASSIFICATION
+
+   Per-country lists of authoritative registries
+   and regulators. Anything matching (case-insensitive
+   substring) is treated as "authoritative" — those
+   items go on the Confirm page as pre-checked.
+
+   Anything else (Wikipedia, LinkedIn, Crunchbase,
+   news outlets, unknowns) is classified "secondary"
+   and routed to the Fill Gaps page as a pre-filled
+   editable field that requires explicit confirmation.
+   ═══════════════════════════════════════════ */
+const SOURCE_TRUST = {
+  GB: ["companies house", "fca", "financial conduct authority", "lse", "london stock exchange", "hmrc", "psc register"],
+  SG: ["acra", "mas", "monetary authority of singapore", "sgx", "iras"],
+  US: ["sec", "edgar", "secretary of state", "irs", "finra", "nyse", "nasdaq", "occ", "delaware division"],
+  AU: ["asic", "asx", "austrac"],
+  CA: ["corporations canada", "innovation, science and economic development", "osc", "tsx", "tmx group"],
+  NL: ["kvk", "kamer van koophandel", "afm", "euronext"],
+  LT: ["registru centras", "registrų centras", "centre of registers"],
+  JP: ["national tax agency", "houjin bangou", "edinet", "jpx", "tse", "tokyo stock exchange"],
+  HK: ["companies registry", "hkex", "sfc", "ird"],
+  MY: ["ssm", "suruhanjaya syarikat", "bursa malaysia", "sc malaysia"],
+  ID: ["ahu", "direktorat jenderal", "ojk", "idx"],
+  DE: ["handelsregister", "bundesanzeiger", "bafin", "deutsche börse", "deutsche borse"],
+  FR: ["insee", "sirene", "rcs", "infogreffe", "amf", "euronext paris"],
+  IE: ["cro", "companies registration office", "central bank of ireland", "euronext dublin"],
+  IN: ["mca", "ministry of corporate affairs", "sebi", "bse", "nse india", "rbi", "reserve bank of india"],
+  TH: ["dbd", "department of business development", "sec thailand", "set thailand"],
+  VN: ["national business registration", "ssc vietnam", "hose", "hnx"],
+  PH: ["sec philippines", "pse"],
+  KR: ["dart", "fss", "krx", "kosdaq"],
+  CN: ["necips", "saic", "csrc", "sse", "szse", "shanghai stock exchange", "shenzhen stock exchange", "national enterprise credit"],
+  TW: ["gcis", "ministry of economic affairs", "fsc taiwan", "twse"],
+  AE: ["ded", "dfm", "adx", "sca", "uae securities", "department of economic development"],
+  SA: ["mci", "ministry of commerce", "cma saudi", "tadawul", "saudi business center"],
+  ZA: ["cipc", "jse", "fsca"],
+  NG: ["cac", "corporate affairs commission", "sec nigeria", "ngx"],
+  KE: ["brs", "business registration service", "cma kenya", "nse kenya"],
+  EG: ["gafi", "fra", "egx"],
+  BR: ["junta comercial", "rfb", "cnpj", "cvm", "b3 s.a"],
+  MX: ["rfc", "sat", "cnbv", "bmv", "servicio de administración tributaria"],
+  AR: ["igj", "cnv", "byma"],
+  CL: ["cmf", "bolsa de comercio", "rut chile"],
+  CO: ["rues", "cámaras de comercio", "sfc", "bvc"],
+  ES: ["registro mercantil", "cnmv", "bme"],
+  IT: ["registro imprese", "consob", "borsa italiana"],
+  CH: ["handelsregister", "zefix", "finma", "six swiss"],
+  SE: ["bolagsverket", "finansinspektionen", "nasdaq stockholm"],
+  NO: ["brønnøysund", "bronnoysund", "finanstilsynet", "oslo børs", "oslo bors"],
+  DK: ["erhvervsstyrelsen", "cvr", "nasdaq copenhagen", "finanstilsynet"],
+  PL: ["krs", "krajowy rejestr sądowy", "knf", "gpw"],
+  TR: ["mersis", "tobb", "cmb turkey", "spk", "bist"],
+  IL: ["israeli companies registrar", "isa israel", "tase"],
+  NZ: ["companies office", "fma", "nzx"],
+  PK: ["secp", "psx"],
+  BD: ["rjsc", "bsec", "dse bangladesh"],
+  LK: ["roc sri lanka", "sec sri lanka", "cse colombo"],
+  AM: ["state register of legal entities", "e-register.am", "ministry of justice of armenia", "central bank of armenia", "cba.am", "armenia securities exchange", "amx", "armenian stock exchange", "state revenue committee", "src armenia"],
+};
+
+// Always authoritative regardless of jurisdiction.
+const UNIVERSAL_AUTHORITATIVE = [
+  "lei ", "gleif", "global legal entity",
+  "official filing", "official register", "regulatory filing",
+  "annual report", "audited financial", "audited account",
+  "10-k", "10-q", "form 10-k", "form 8-k", "20-f",
+  "prospectus", "stock exchange filing",
+];
+
+const classifySource = (source, countryCode) => {
+  if (!source || typeof source !== "string") return "secondary";
+  const s = source.toLowerCase();
+  const country = SOURCE_TRUST[countryCode] || [];
+  for (const pattern of country) if (s.includes(pattern)) return "authoritative";
+  for (const pattern of UNIVERSAL_AUTHORITATIVE) if (s.includes(pattern)) return "authoritative";
+  return "secondary";
+};
+
+/* ═══════════════════════════════════════════
+   TEST DATA — fills empty gap fields with
+   plausible values for demos.
+   ═══════════════════════════════════════════ */
+const TEST_DATA = {
+  applicantFirstName: "Jane",
+  applicantLastName: "Smith",
+  applicantEmail: "jane.smith@example.com",
+  applicantMobile: "7700900123",
+  applicantMobileCountryCode: "+44",
+  applicantDateOfBirth: "1985-06-15",
+  applicantNationality: "GB",
+  applicantBirthCountry: "United Kingdom",
+  applicantIsPEP: "No",
+  applicantSharePercentage: "25",
+  applicantPosition: "Director",
+  natureOperatingCountries: "GB,US,SG",
+  natureIndustryCodes: "IS131",
+  natureIndustryDescription: "Software development and SaaS distribution to enterprise customers.",
+  sizeTotalEmployees: "51-200",
+  sizeAnnualTurnover: "5M - 25M",
+  creditMonthlyVolume: "250,000 - 1,000,000",
+  creditTopCountries: "GB,US,DE",
+  debitMonthlyVolume: "50,000 - 250,000",
+  debitTopCountries: "GB,SG,IN",
+  intendedUses: "Customer payments, supplier disbursements, payroll, FX hedging.",
+  sourceOfFunds: "Trading revenue and operating cashflow.",
+  bankAccountName: "Acme Holdings Ltd",
+  bankAccountNumber: "12345678",
+  bankName: "HSBC UK",
+  bankSortCode: "40-12-34",
+  bankCurrency: "GBP",
+  bankCountry: "United Kingdom",
+};
 
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
   const ref = useRef(null);
@@ -219,8 +374,14 @@ export default function KYCAgent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [research, setResearch] = useState(null);
+  const [researchTimestamp, setResearchTimestamp] = useState("");
   const [checks, setChecks] = useState({});
+  const [revealedTs, setRevealedTs] = useState({});
+  const [secondaryConfirms, setSecondaryConfirms] = useState({});
   const gapRef = useRef({});
+  // bumped whenever we mutate gapRef from outside the input (e.g. test-data fill)
+  // so StableInput components re-sync from the new ref values.
+  const [, setFormVersion] = useState(0);
   const [declared, setDeclared] = useState(false);
   const [done, setDone] = useState(false);
   const [device, setDevice] = useState({});
@@ -228,7 +389,11 @@ export default function KYCAgent() {
   const [submitTs, setSubmitTs] = useState("");
   const [activeSchema, setActiveSchema] = useState(null);
 
-  useEffect(() => { if (!loading) return; const t = setInterval(() => setLoaderIdx(i => (i + 1) % LOADER_MSGS.length), 2500); return () => clearInterval(t); }, [loading]);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setLoaderIdx(i => Math.min(i + 1, LOADER_MSGS.length - 1)), 2500);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     const fetchIP = async () => { try { const r = await fetch("https://api.ipify.org?format=json"); const d = await r.json(); return d.ip; } catch { return "Could not detect"; } };
@@ -238,17 +403,66 @@ export default function KYCAgent() {
   const countryObj = COUNTRIES.find(c => c.code === countryCode);
   const updateGap = useCallback((field, value) => { gapRef.current[field] = value; }, []);
 
+  const resetAll = () => {
+    setStep(0); setResearch(null); setActiveSchema(null);
+    setChecks({}); setRevealedTs({}); setResearchTimestamp("");
+    setSecondaryConfirms({});
+    gapRef.current = {}; setFormVersion(v => v + 1);
+    setError(""); setDeclared(false);
+  };
+
+  const fillTestData = () => {
+    const newConfirms = { ...secondaryConfirms };
+    getCombinedGaps().forEach(g => {
+      if (g.section === "secondary") newConfirms[g.field] = true;
+      const current = gapRef.current[g.field];
+      if (current && String(current).trim().length > 0) return;
+      let val = TEST_DATA[g.field];
+      if (val === undefined && g.field.startsWith("corrected_")) {
+        const original = g.field.replace(/^corrected_/, "");
+        val = TEST_DATA[original] || "Corrected value";
+      }
+      if (val === undefined && g.field.startsWith("secondary_")) {
+        val = g.originalValue || "Sample value";
+      }
+      if (val === undefined) {
+        val = g.inputType === "select" && g.options && g.options.length > 0 ? g.options[0] : "Sample value";
+      }
+      gapRef.current[g.field] = val;
+    });
+    setSecondaryConfirms(newConfirms);
+    setFormVersion(v => v + 1);
+  };
+
   const getCombinedGaps = () => {
     if (!research || !activeSchema) return [];
     const apiGaps = research.gaps || activeSchema.gapFields;
-    const unchecked = (research.found || []).filter((_, i) => !checks[i]).map(item => ({
-      field: "corrected_" + item.field, label: item.label + " (correction needed)",
-      reason: "Original: " + item.value, inputType: "text", required: true, section: "corrections"
-    }));
-    return [...unchecked, ...apiGaps];
+    // Authoritative items the user unchecked → corrections.
+    // Secondary items are NOT shown as checkboxes on Step 2, so they
+    // never enter the corrections flow — they go straight to the
+    // "secondary" section below.
+    const unchecked = (research.found || [])
+      .filter((item, i) => item.trust !== "secondary" && !checks[i])
+      .map(item => ({
+        field: "corrected_" + item.field, label: item.label + " (correction needed)",
+        reason: "Original: " + item.value, inputType: "text", required: true, section: "corrections"
+      }));
+    const secondary = (research.found || [])
+      .filter(item => item.trust === "secondary")
+      .map(item => ({
+        field: "secondary_" + item.field, label: item.label,
+        inputType: "text", required: true, section: "secondary",
+        source: item.source, originalValue: item.value,
+      }));
+    return [...unchecked, ...secondary, ...apiGaps];
   };
 
-  const allGapsFilled = () => getCombinedGaps().filter(g => g.required).every(g => { const v = gapRef.current[g.field]; return v && String(v).trim().length > 0; });
+  const allGapsFilled = () => getCombinedGaps().filter(g => g.required).every(g => {
+    const v = gapRef.current[g.field];
+    if (!v || !String(v).trim()) return false;
+    if (g.section === "secondary" && !secondaryConfirms[g.field]) return false;
+    return true;
+  });
 
   const doResearch = async () => {
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
@@ -263,11 +477,18 @@ export default function KYCAgent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, schema)
+          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema)
         })
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
+        const claudeErr = errData && errData.details && errData.details.error;
+        if (claudeErr && claudeErr.type === "rate_limit_error") {
+          throw new Error("Anthropic rate limit reached for this minute. Wait ~60 seconds and try again, or add credits to raise your limit.");
+        }
+        if (claudeErr && claudeErr.message) {
+          throw new Error(`${errData.error || "Claude API error"}: ${claudeErr.message}`);
+        }
         throw new Error(errData.error || `HTTP ${resp.status}`);
       }
       const data = await resp.json();
@@ -277,9 +498,28 @@ export default function KYCAgent() {
       const si = text.indexOf("{"); const ei = text.lastIndexOf("}");
       if (si === -1 || ei === -1) throw new Error("No JSON found in response");
       const parsed = JSON.parse(text.slice(si, ei + 1));
-      setResearch(parsed);
-      const c = {}; (parsed.found || []).forEach((_, i) => { c[i] = true; }); setChecks(c);
+      const found = (parsed.found || []).map(item => ({
+        ...item,
+        trust: classifySource(item.source, countryCode),
+      }));
+      const tagged = { ...parsed, found };
+      setResearch(tagged);
+      setResearchTimestamp(new Date().toISOString());
+      // Pre-check authoritative items; leave secondary unchecked on Step 2.
+      // (Secondary items render on Step 3 as pre-filled inputs to confirm.)
+      const c = {};
+      found.forEach((item, i) => { c[i] = item.trust === "authoritative"; });
+      setChecks(c);
+      setRevealedTs({});
       gapRef.current = {};
+      // Pre-populate secondary items into the gap form so the user can edit.
+      found.forEach(item => {
+        if (item.trust === "secondary") {
+          gapRef.current["secondary_" + item.field] = item.value;
+        }
+      });
+      setSecondaryConfirms({});
+      setFormVersion(v => v + 1);
       setStep(2);
     } catch (err) { setError("Research failed: " + err.message); setStep(0); }
     finally { setLoading(false); }
@@ -295,6 +535,7 @@ export default function KYCAgent() {
   const stepNames = ["Input", "Research", "Confirm", "Fill Gaps", "Declare"];
   const sectionConfig = {
     corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
+    secondary: { title: "Pre-filled — Please Confirm", icon: "🔍", sub: "Found on secondary sources (Wikipedia, LinkedIn, news, corporate website). Edit if wrong, then tick to confirm each one is correct.", twoCol: false },
     applicant: { title: "Applicant Details", icon: "👤", sub: "Person authorised to submit this application", twoCol: true },
     nature: { title: "Nature & Size of Business", icon: "🏢", sub: "Business activity and size details", twoCol: true },
     account: { title: "Expected Account Usage", icon: "💰", sub: "Transaction volumes, purpose, and source of funds", twoCol: false },
@@ -305,6 +546,36 @@ export default function KYCAgent() {
     const items = getCombinedGaps().filter(g => g.section === sectionKey);
     if (items.length === 0) return null;
     const cfg = sectionConfig[sectionKey] || { title: sectionKey, icon: "📋", sub: "", twoCol: false };
+
+    if (sectionKey === "secondary") {
+      return (
+        <div style={card} key={sectionKey}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
+          <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
+          {items.map(g => {
+            const confirmed = !!secondaryConfirms[g.field];
+            return (
+              <div key={g.field} style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: confirmed ? "#f0f9f6" : "#fff8ed", border: `1.5px solid ${confirmed ? "#4a9e8e" : "#e0a040"}` }}>
+                <StableInput id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} placeholder={"Enter " + g.label.toLowerCase()} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: -4 }}>
+                  <span style={{ fontSize: 11, color: "#1a3a4a90", fontStyle: "italic" }}>📌 Source: {g.source || "Unknown"} <span style={{ color: "#b07d10", fontWeight: 600, fontStyle: "normal" }}>· Unverified</span></span>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, fontWeight: 700, color: confirmed ? "#1a6b56" : "#b07d10" }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmed}
+                      onChange={(e) => setSecondaryConfirms(p => ({ ...p, [g.field]: e.target.checked }))}
+                      style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }}
+                    />
+                    {confirmed ? "Confirmed" : "Tick to confirm correct"}
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     return (
       <div style={card} key={sectionKey}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
@@ -321,6 +592,40 @@ export default function KYCAgent() {
       {activeSchema.region === "UK" ? "🇬🇧 UK Licence" : "🇸🇬 SG Licence"}
     </span>
   ) : null;
+
+  const tierOf = (item) => {
+    const def = activeSchema && activeSchema.researchFields.find(f => f.field === item.field);
+    return def && def.tier === 2 ? 2 : 1;
+  };
+
+  const renderFoundTable = (items, title, subtitle) => (
+    <div style={card}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{title}</h3>
+      <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>{subtitle}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
+        {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
+      </div>
+      {items.map(({ item, idx }) => (
+        <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: idx % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
+          <input type="checkbox" checked={!!checks[idx]} onChange={() => setChecks(p => ({ ...p, [idx]: !p[idx] }))} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+          <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
+          <span style={{ fontSize: 11, wordBreak: "break-word" }}>{item.value}</span>
+          <span
+            onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+            title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+            style={{ fontSize: 10, color: "#4a9e8e", fontStyle: "italic", cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 }}
+          >
+            {revealedTs[idx] ? `🕒 ${researchTimestamp}` : item.source}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const authFound = (research?.found || []).map((item, idx) => ({ item, idx })).filter(x => x.item.trust !== "secondary");
+  const tier1Items = authFound.filter(x => tierOf(x.item) === 1);
+  const tier2Items = authFound.filter(x => tierOf(x.item) === 2);
+  const secondaryCount = (research?.found || []).filter(item => item.trust === "secondary").length;
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
@@ -373,15 +678,55 @@ export default function KYCAgent() {
         )}
 
         {step === 1 && (
-          <div style={{ ...card, textAlign: "center", padding: "60px 28px" }}>
-            <div style={{ position: "relative", width: 70, height: 70, margin: "0 auto 24px" }}>
-              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "3px solid rgba(74,158,142,0.15)", borderTopColor: "#4a9e8e", animation: "kspin 1s linear infinite" }} />
-              <div style={{ position: "absolute", inset: 10, borderRadius: "50%", border: "3px solid rgba(26,58,74,0.08)", borderBottomColor: "#1a3a4a", animation: "kspin 1.6s linear infinite reverse" }} />
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🔍</div>
+          <div style={{ ...card, textAlign: "center", padding: "56px 28px" }}>
+            <div style={{ position: "relative", width: 130, height: 130, margin: "0 auto 28px" }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  border: "2px solid rgba(74,158,142,0.55)",
+                  animation: `kpulse 2.4s ease-out ${i * 0.8}s infinite`,
+                }} />
+              ))}
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, animation: "kbob 2.6s ease-in-out infinite" }}>🔍</div>
             </div>
-            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Researching {companyName}... {jurisdictionBadge}</div>
-            <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic" }}>{LOADER_MSGS[loaderIdx]}</div>
-            <style>{`@keyframes kspin { to { transform: rotate(360deg) } }`}</style>
+
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              Researching {companyName}... {jurisdictionBadge}
+            </div>
+            <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: 22, minHeight: 18 }}>
+              {LOADER_MSGS[loaderIdx]}
+            </div>
+
+            <div style={{ width: "100%", maxWidth: 420, height: 6, background: "rgba(74,158,142,0.12)", borderRadius: 3, overflow: "hidden", margin: "0 auto 18px" }}>
+              <div style={{
+                width: `${((loaderIdx + 1) / LOADER_MSGS.length) * 100}%`,
+                height: "100%",
+                background: "linear-gradient(90deg,#4a9e8e,#1a3a4a)",
+                transition: "width 0.6s ease",
+              }} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 7, flexWrap: "wrap" }}>
+              {LOADER_MSGS.map((_, i) => (
+                <div key={i} style={{
+                  width: 9, height: 9, borderRadius: "50%",
+                  background: i <= loaderIdx ? "#4a9e8e" : "rgba(26,58,74,0.15)",
+                  transition: "background 0.3s",
+                  boxShadow: i === loaderIdx ? "0 0 0 3px rgba(74,158,142,0.25)" : "none",
+                }} />
+              ))}
+            </div>
+
+            <style>{`
+              @keyframes kpulse {
+                0%   { transform: scale(0.55); opacity: 1;   border-color: rgba(74,158,142,0.7); }
+                100% { transform: scale(1.45); opacity: 0;   border-color: rgba(74,158,142,0); }
+              }
+              @keyframes kbob {
+                0%, 100% { transform: translateY(0); }
+                50%      { transform: translateY(-6px); }
+              }
+            `}</style>
           </div>
         )}
 
@@ -396,31 +741,27 @@ export default function KYCAgent() {
                 </div>
               </div>
               <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
-                Review the information below. <strong>Uncheck any incorrect field</strong> — it will appear on the next page for correction.
+                Below: data found from <strong>authoritative sources</strong> (registries, regulators, exchanges). Uncheck anything wrong — it'll appear on the next page for correction. Click any source to reveal when it was fetched.
+                {secondaryCount > 0 && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8ed", borderRadius: 6, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
+                    ⚠️ {secondaryCount} additional field{secondaryCount === 1 ? "" : "s"} found on <strong>secondary sources</strong> (Wikipedia, LinkedIn, news, corporate website) — you'll review and confirm those on the next page.
+                  </div>
+                )}
               </div>
             </div>
-            <div style={card}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 14px" }}>Pre-filled from Public Sources</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
-                {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
+
+            {tier1Items.length > 0 && renderFoundTable(tier1Items, "Tier 1 — Identity & Registration", "Public-registry data: legal name, registration number, address, business type.")}
+            {tier2Items.length > 0 && renderFoundTable(tier2Items, "Tier 2 — Enrichment & Risk", "Ownership, directors, financials, listings, PEP status.")}
+
+            {(research.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length > 0 && (
+              <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
+                ⚠️ {(research.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length} field(s) unchecked — will appear on next page for correction.
               </div>
-              {(research.found || []).map((item, i) => (
-                <div key={item.field + i} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: i % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[i] ? 1 : 0.3 }}>
-                  <input type="checkbox" checked={!!checks[i]} onChange={() => setChecks(p => ({ ...p, [i]: !p[i] }))} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
-                  <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
-                  <span style={{ fontSize: 11, wordBreak: "break-word" }}>{item.value}</span>
-                  <span style={{ fontSize: 10, color: "#4a9e8e", fontStyle: "italic" }}>{item.source}</span>
-                </div>
-              ))}
-              {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
-                <div style={{ marginTop: 10, padding: "8px 12px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-                  ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
-                </div>
-              )}
-            </div>
+            )}
+
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => { setStep(0); setResearch(null); setActiveSchema(null); }}>← Start Over</Btn>
-              <Btn variant="green" onClick={() => { gapRef.current = {}; setStep(3); setError(""); }}>Confirm and Continue →</Btn>
+              <Btn variant="secondary" onClick={resetAll}>← Start Over</Btn>
+              <Btn variant="green" onClick={() => { setStep(3); setError(""); }}>Confirm and Continue →</Btn>
             </div>
           </div>
         )}
@@ -436,7 +777,23 @@ export default function KYCAgent() {
                 </div>
               </div>
             </div>
-            {["corrections", "applicant", "nature", "account", "bank"].map(s => renderGapSection(s))}
+            {["corrections", "secondary", "applicant", "nature", "account", "bank"].map(s => renderGapSection(s))}
+
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={fillTestData}
+                style={{
+                  padding: "10px 20px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit",
+                  background: "transparent", color: "#4a9e8e",
+                  border: "2px dashed #4a9e8e",
+                }}
+              >
+                ✨ Fill with test data
+              </button>
+            </div>
+
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => setStep(2)}>← Back to Review</Btn>
               <Btn variant="primary" onClick={() => { if (allGapsFilled()) { setStep(4); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
@@ -500,8 +857,9 @@ export default function KYCAgent() {
               {[
                 ["Company", research?.companyName || companyName],
                 ["Jurisdiction", activeSchema?.region === "UK" ? "United Kingdom" : "Singapore / Default"],
-                ["Pre-filled", (research?.found || []).filter((_, i) => checks[i]).length + " confirmed"],
-                ["Corrected", (research?.found || []).filter((_, i) => !checks[i]).length + " manually fixed"],
+                ["Pre-filled (authoritative)", (research?.found || []).filter((item, i) => item.trust !== "secondary" && checks[i]).length + " confirmed"],
+                ["Corrected", (research?.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length + " manually fixed"],
+                ["Secondary-source", (research?.found || []).filter(item => item.trust === "secondary").length + " reviewed & confirmed"],
                 ["Manual fields", Object.keys(gapRef.current).length + " provided"],
                 ["Applicant", (gapRef.current.applicantFirstName || "") + " " + (gapRef.current.applicantLastName || "")],
                 ["Declared at", submitTs.replace("T", " ").slice(0, 19) + " UTC"],
@@ -512,7 +870,7 @@ export default function KYCAgent() {
                 </div>
               ))}
             </div>
-            <Btn variant="secondary" onClick={() => { setStep(0); setCompanyName(""); setCountryCode(""); setResearch(null); setChecks({}); gapRef.current = {}; setDeclared(false); setDone(false); setError(""); setActiveSchema(null); }}>Start New Application</Btn>
+            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
 
