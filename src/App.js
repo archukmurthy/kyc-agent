@@ -762,7 +762,15 @@ export default function KYCAgent() {
       text = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
       const si = text.indexOf("{"); const ei = text.lastIndexOf("}");
       if (si === -1 || ei === -1) throw new Error("No JSON found in response");
-      const parsed = JSON.parse(text.slice(si, ei + 1));
+      const slice = text.slice(si, ei + 1);
+      let parsed;
+      try {
+        parsed = JSON.parse(slice);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("Raw research response (could not parse):", text);
+        throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens — see browser console for the full response.`);
+      }
       const found = (parsed.found || []).map(item => ({
         ...item,
         trust: classifySource(item.source, countryCode),
