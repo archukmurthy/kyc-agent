@@ -73,6 +73,7 @@ const bankSection = () => [
 const UK_SCHEMA = {
   label: "United Kingdom",
   region: "UK",
+  flow: "corporate",
   researchFields: [
     { field: "businessType", label: "Business Type", tier: 1 },
     { field: "businessRegistrationNumber", label: "Companies House Number", tier: 1 },
@@ -116,6 +117,7 @@ const UK_SCHEMA = {
 const SG_SCHEMA = {
   label: "Singapore / Default",
   region: "SG",
+  flow: "corporate",
   researchFields: [
     { field: "businessType", label: "Business Type / Entity Form", tier: 1 },
     { field: "businessRegistrationNumber", label: "Company Registration Number / Tax ID", tier: 1 },
@@ -171,24 +173,49 @@ const SG_SCHEMA = {
    in currency labelling, so it's parameterised by
    a fmt(amount) helper.
    ═══════════════════════════════════════════ */
-const fiBusinessResearchFields = [
-  { field: "business_name", label: "Business Name", tier: 1 },
-  { field: "trading_name", label: "Doing Business As / Trade Name", tier: 1 },
-  { field: "business_activity_description", label: "Business Activity Description", tier: 2 },
-  { field: "website", label: "Website", tier: 1 },
-  { field: "registration_number", label: "Business Registration Number", tier: 1 },
-  { field: "registered_address_line1", label: "Address Line 1", tier: 1 },
-  { field: "registered_address_line2", label: "Address Line 2", tier: 1 },
-  { field: "registered_address_city", label: "City", tier: 1 },
-  { field: "registered_address_state", label: "State", tier: 1 },
-  { field: "registered_address_postcode", label: "Postcode", tier: 1 },
-  { field: "registered_address_country", label: "Country", tier: 1 },
-  { field: "incorporation_date", label: "Date of Incorporation", tier: 1 },
-  { field: "annual_turnover", label: "Annual Turnover", tier: 2 },
-  { field: "employee_count", label: "Number of Employees", tier: 2 },
-  { field: "operating_countries", label: "Operating Countries", tier: 2 },
-  { field: "publicly_listed", label: "Publicly Listed", tier: 2 },
-  { field: "listed_where", label: "Listed Exchanges", tier: 2 },
+const fiResearchFields = [
+  // Identity & registry
+  { field: "business_name", label: "Business Name", tier: 1, searchHint: "Full registered legal name from Companies House or equivalent official registry" },
+  { field: "trading_name", label: "Doing Business As / Trade Name", tier: 1, searchHint: "Any trading or DBA name — check Companies House previous names" },
+  { field: "registration_number", label: "Business Registration Number", tier: 1, searchHint: "Company registration number from Companies House or equivalent registry" },
+  { field: "business_activity_description", label: "Business Activity Description", tier: 2, searchHint: "What does this company do? Check annual report, Companies House SIC code, company website" },
+  { field: "website", label: "Website", tier: 1, searchHint: "Official company website" },
+  { field: "registered_address_line1", label: "Address Line 1", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "registered_address_line2", label: "Address Line 2", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "registered_address_city", label: "City", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "registered_address_state", label: "State", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "registered_address_postcode", label: "Postcode", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "registered_address_country", label: "Country", tier: 1, searchHint: "Full registered address from Companies House or equivalent registry" },
+  { field: "incorporation_date", label: "Date of Incorporation", tier: 1, searchHint: "Date of incorporation from Companies House or equivalent registry" },
+  // Operations & size
+  { field: "employee_count", label: "Number of Employees", tier: 2, searchHint: "Number of employees — check annual report, LinkedIn, or Companies House accounts" },
+  { field: "annual_turnover", label: "Annual Turnover", tier: 2, searchHint: "Annual revenue/turnover band — check annual report or Companies House accounts" },
+  { field: "operating_countries", label: "Operating Countries", tier: 2, searchHint: "Countries where the company operates — check annual report geographic breakdown" },
+  { field: "payout_transaction_countries", label: "Payout Transaction Countries", tier: 2, searchHint: "Countries the company sends payments to — check annual report" },
+  { field: "industry_sector", label: "Industry Sector (multi)", tier: 1, searchHint: "Primary industry sector — check Companies House SIC code and annual report" },
+  // Listing
+  { field: "publicly_listed", label: "Publicly Listed", tier: 2, searchHint: "Is the company or its parent listed on a stock exchange? Check LSE, NYSE, SGX" },
+  { field: "listed_where", label: "Listed Exchanges", tier: 2, searchHint: "Which stock exchange? Check LSE, annual report" },
+  // Regulatory
+  { field: "has_licence", label: "Do you hold a licence or permit to operate?", tier: 1, searchHint: "Does the company hold a financial services licence? Check FCA register (register.fca.org.uk), MAS directory, or equivalent regulatory database for the country" },
+  { field: "regulatory_authority", label: "Regulatory Authority Name", tier: 1, searchHint: "Which regulatory authority? e.g. FCA, MAS, ASIC, SEC — check official regulatory register" },
+  { field: "licence_number", label: "Licence Number", tier: 1, searchHint: "FCA FRN or equivalent licence number — check FCA register or MAS directory" },
+  // Branches & services
+  { field: "has_branches", label: "Do you have physical branches or office locations?", tier: 2, searchHint: "Does the company have physical branches or offices? Check annual report" },
+  { field: "branch_count", label: "How many branches?", tier: 2, searchHint: "How many branches — check annual report" },
+  { field: "branch_countries", label: "Where are your main offices located? (multi)", tier: 2, searchHint: "Countries with offices — check annual report" },
+  { field: "services_other_fis", label: "Do you service other financial institutions?", tier: 2, searchHint: "Does the company provide services to other financial institutions? Check annual report" },
+  { field: "cross_border_services", label: "Do you provide cross-border services?", tier: 2, searchHint: "Does the company provide cross-border payment services? Check annual report and website" },
+  { field: "issues_prepaid_cards", label: "Do you issue prepaid cards?", tier: 2, searchHint: "Does the company issue prepaid cards? Check annual report and website" },
+  { field: "non_resident_customers", label: "Do you have non-resident customers?", tier: 2, searchHint: "Does the company serve non-resident or international customers? Check annual report" },
+  { field: "products_offered", label: "What products / services do you offer to your customers? (multi)", tier: 2, searchHint: "What products and services does the company offer? Check annual report and website" },
+  // Ownership
+  { field: "director_names", label: "Directors / Officers", tier: 2, searchHint: "Names and roles of directors — check Companies House officers section or equivalent registry" },
+  { field: "ubo_parent_company", label: "UBO / Parent Company", tier: 2, searchHint: "Ultimate beneficial owner or parent company — check Companies House PSC register or equivalent" },
+  { field: "ubo_share_percentage", label: "UBO Share Percentage", tier: 2, searchHint: "Ownership percentage — check Companies House PSC register" },
+  // Disclosures
+  { field: "licence_suspended", label: "Has your business ever had a licence suspended or revoked?", tier: 2, searchHint: "Has the company ever had a licence suspended or been subject to regulatory enforcement? Check FCA enforcement actions page (fca.org.uk/news/enforcement-actions), regulatory notices, news" },
+  { field: "administration_proceedings", label: "Has your business ever been entered into administration proceedings?", tier: 2, searchHint: "Has the company been in administration? Check Companies House and news" },
 ];
 
 const fiBusinessGapFields = [
@@ -196,7 +223,6 @@ const fiBusinessGapFields = [
     options: ["Sole Proprietorship", "Partnership", "Private Company", "Listed Company", "Public Sector / Government / State-Owned", "Club / Society / Trust / Charity / Not-for-Profit"] },
   { field: "requested_products", label: "Requested Products / Services (multi)", inputType: "select", required: true, section: "business",
     options: ["Verify", "Global Collections (Payin)", "Domestic Remittances (Payout)", "International Remittances (Payout)"] },
-  { field: "industry_sector", label: "Industry Sector (multi)", inputType: "text", required: true, section: "business" },
   { field: "vat_number", label: "VAT Number", inputType: "text", required: false, section: "business" },
   { field: "additional_urls", label: "Additional URLs / Linked Websites", inputType: "text", required: false, section: "business" },
   { field: "business_address_same", label: "Is your business address the same as your registered address?", inputType: "select", required: true, section: "business", options: ["Yes", "No"] },
@@ -210,22 +236,17 @@ const fiBusinessGapFields = [
   { field: "business_registration_doc", label: "Business Registration Document (Certificate of Incorporation or equivalent)", inputType: "file", required: false, section: "business" },
 ];
 
+// Several FI questions (has_licence, regulatory_authority, licence_number,
+// has_branches, branch_count, branch_countries, services_other_fis,
+// cross_border_services, issues_prepaid_cards, non_resident_customers,
+// products_offered) moved to fiResearchFields so the AI tries to find them.
+// The free-text/details children still live here and use dependsOn to read
+// the parent's value — dependsOnSatisfied falls back to research.found when
+// the parent isn't a gap field.
 const fiSpecificFields = [
-  { field: "has_licence", label: "Do you hold a licence or permit to operate?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "regulatory_authority", label: "Regulatory Authority Name", inputType: "text", required: true, section: "fi", dependsOn: { has_licence: "Yes" } },
-  { field: "licence_number", label: "Licence Number", inputType: "text", required: true, section: "fi", dependsOn: { has_licence: "Yes" } },
   { field: "no_licence_reason", label: "If no licence, please explain why one is not required", inputType: "textarea", required: true, section: "fi", dependsOn: { has_licence: "No" } },
-  { field: "has_branches", label: "Do you have physical branches or office locations?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "branch_count", label: "How many branches?", inputType: "text", required: true, section: "fi", dependsOn: { has_branches: "Yes" } },
-  { field: "branch_countries", label: "Where are your main offices located? (multi)", inputType: "text", required: true, section: "fi", dependsOn: { has_branches: "Yes" } },
-  { field: "services_other_fis", label: "Do you service other financial institutions?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "cross_border_services", label: "Do you provide cross-border services?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
   { field: "accepts_cash", label: "Do you accept cash?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "issues_prepaid_cards", label: "Do you issue prepaid cards?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "non_resident_customers", label: "Do you have non-resident customers?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
   { field: "funds_from_outside", label: "Will you fund your Nium account from outside your incorporated country?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "products_offered", label: "What products / services do you offer to your customers? (multi)", inputType: "select", required: true, section: "fi",
-    options: ["Savings Accounts", "Checking Accounts", "Personal Banking", "Wallets", "Cross-Border Payment Services", "Prepaid Cards", "Other"] },
   { field: "products_offered_other", label: "Please describe your other products / services", inputType: "textarea", required: true, section: "fi", dependsOn: { products_offered: "Other" } },
   { field: "customer_individual_pct", label: "Individual Customers %", inputType: "text", required: true, section: "fi" },
   { field: "customer_corporate_pct", label: "Corporate Customers %", inputType: "text", required: true, section: "fi" },
@@ -248,12 +269,12 @@ const fiStakeholderFields = [
   { field: "collections_c2b_pct", label: "Collections — C2B %", inputType: "text", required: true, section: "stakeholders" },
 ];
 
+// licence_suspended and administration_proceedings moved to fiResearchFields;
+// their detail fields stay here and read the parent value via dependsOn.
 const fiDisclosureFields = [
-  { field: "licence_suspended", label: "Has your business ever had a licence suspended or revoked?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
   { field: "licence_suspended_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { licence_suspended: "Yes" } },
   { field: "regulatory_action", label: "Has your business been subject to regulatory enforcement action?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
   { field: "regulatory_action_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { regulatory_action: "Yes" } },
-  { field: "administration_proceedings", label: "Has your business ever been entered into administration proceedings?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
   { field: "administration_details", label: "Please provide details (status and resolution)", inputType: "textarea", required: true, section: "disclosures", dependsOn: { administration_proceedings: "Yes" } },
   { field: "directors_convicted", label: "Have any owners or directors been convicted of any crime?", inputType: "select", required: true, section: "disclosures", options: ["Yes", "No"] },
   { field: "directors_convicted_details", label: "Please provide details", inputType: "textarea", required: true, section: "disclosures", dependsOn: { directors_convicted: "Yes" } },
@@ -301,7 +322,8 @@ const UK_FI_SCHEMA = {
   label: "United Kingdom (FI)",
   region: "UK",
   jurisdiction: "GB",
-  researchFields: fiBusinessResearchFields,
+  flow: "fi",
+  researchFields: fiResearchFields,
   gapFields: [
     ...fiBusinessGapFields,
     ...fiSpecificFields,
@@ -317,7 +339,8 @@ const SG_FI_SCHEMA = {
   label: "Singapore / Default (FI)",
   region: "SG",
   jurisdiction: "SG",
-  researchFields: fiBusinessResearchFields,
+  flow: "fi",
+  researchFields: fiResearchFields,
   gapFields: [
     ...fiBusinessGapFields,
     ...fiSpecificFields,
@@ -353,6 +376,26 @@ const buildPrompt = (name, country, countryCode, schema) => {
     ? `Preferred authoritative sources for ${country}: ${countryAuthoritative.slice(0, 8).join(", ")}.`
     : `No specific registry list provided for ${country} — use the country's national company registry, securities regulator, and tax authority.`;
 
+  const fieldGuide = schema.researchFields
+    .filter(f => f.searchHint)
+    .map(f => `- ${f.field}: ${f.searchHint}`)
+    .join("\n");
+  const fieldGuideBlock = fieldGuide
+    ? `\nFIELD SEARCH GUIDE — for each field, here is where/what to look for:\n${fieldGuide}\n`
+    : "";
+
+  const fiPrioritySources = schema.flow === "fi"
+    ? `\nPRIORITY SOURCES FOR FI RESEARCH — search these in order:
+1. Companies House (find-and-update.company-information.service.gov.uk) for UK — gets you: registration number, registered address, incorporation date, directors, PSC/UBO, SIC code
+2. FCA Register (register.fca.org.uk) for UK — gets you: FRN, regulatory permissions, any enforcement history
+3. MAS Financial Institutions Directory (mas.gov.sg/financial-institutions) for Singapore — gets you: licence type, licence number
+4. Annual Report — gets you: employees, turnover, operating countries, products, branch info, cross-border services, customer types, listed status
+5. LSE / SGX / stock exchange website — gets you: listing confirmation, exchange name
+6. FCA enforcement actions page — gets you: any licence suspensions or regulatory actions
+
+Do NOT leave any of these fields blank without having checked all 5 sources above.\n`
+    : "";
+
   return `You are a KYC research agent for Nium.
 
 JURISDICTION CONTEXT (read carefully, this is two separate things):
@@ -367,7 +410,7 @@ WHERE TO SEARCH:
 
 LABEL MAPPING:
 - The schema labels below are generic. Map each one to the ${country}-specific equivalent in your search and citation. Examples: "Company Registration Number" → CIN (India), CNPJ (Brazil), KvK number (Netherlands), HRB number (Germany), CNPC (China), Sirene (France), etc. "Industry Classification Code" → NIC (India), CNAE (Brazil), NAICS (US/CA), SIC (UK), JSIC (Japan), etc.
-
+${fieldGuideBlock}${fiPrioritySources}
 Research "${name}" registered in ${country} using web search. Return ONLY valid JSON (no markdown, no backticks, no preamble).
 
 {
@@ -564,8 +607,26 @@ const DUMMY_RESEARCH_VALUES = {
   annual_turnover: "$500,001–$1,500,000",
   employee_count: "51-250",
   operating_countries: "UK, US, SG",
+  payout_transaction_countries: "GB, US, EU",
+  industry_sector: "Financial Services / Payments",
   publicly_listed: "No",
   listed_where: "—",
+  has_licence: "Yes",
+  regulatory_authority: "FCA",
+  licence_number: "FRN 123456",
+  has_branches: "Yes",
+  branch_count: "12",
+  branch_countries: "UK, DE, FR",
+  services_other_fis: "Yes",
+  cross_border_services: "Yes",
+  issues_prepaid_cards: "No",
+  non_resident_customers: "Yes",
+  products_offered: "Cross-Border Payment Services",
+  director_names: "John Smith (CEO), Jane Doe (CFO), Mark Lee (CTO)",
+  ubo_parent_company: "ACME Group Holdings Ltd",
+  ubo_share_percentage: "100% (wholly-owned subsidiary)",
+  licence_suspended: "No",
+  administration_proceedings: "No",
 };
 
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
@@ -644,13 +705,19 @@ export default function KYCAgent() {
 
   // Fields referenced by any other field's dependsOn — when their value changes
   // we bump formVersion so conditional fields show/hide. Computed once per
-  // schema change so text-field updates stay cheap.
+  // schema change so text-field updates stay cheap. Also tracks
+  // `corrected_<researchField>` for deps whose parent now lives in researchFields.
   const parentFieldsRef = useRef(new Set());
   useEffect(() => {
     const s = new Set();
     if (activeSchema) {
       activeSchema.gapFields.forEach(f => {
-        if (f.dependsOn) Object.keys(f.dependsOn).forEach(k => s.add(k));
+        if (f.dependsOn) Object.keys(f.dependsOn).forEach(k => {
+          s.add(k);
+          if (activeSchema.researchFields.some(rf => rf.field === k)) {
+            s.add("corrected_" + k);
+          }
+        });
       });
     }
     parentFieldsRef.current = s;
@@ -661,9 +728,23 @@ export default function KYCAgent() {
     if (parentFieldsRef.current.has(field)) setFormVersion(v => v + 1);
   }, []);
 
+  // Effective parent value for dependsOn evaluation:
+  //   1. customer correction (if user unchecked the research item and entered a new value)
+  //   2. direct gap-field value
+  //   3. AI-researched value
   const dependsOnSatisfied = (g) => {
     if (!g.dependsOn) return true;
-    return Object.entries(g.dependsOn).every(([k, v]) => gapRef.current[k] === v);
+    return Object.entries(g.dependsOn).every(([k, v]) => {
+      const corrected = gapRef.current["corrected_" + k];
+      if (corrected !== undefined && corrected !== "") return corrected === v;
+      const gap = gapRef.current[k];
+      if (gap !== undefined && gap !== "") return gap === v;
+      if (research && research.found) {
+        const item = research.found.find(it => it.field === k);
+        if (item) return item.value === v;
+      }
+      return false;
+    });
   };
 
   const resetAll = () => {
