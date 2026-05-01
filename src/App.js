@@ -164,7 +164,19 @@ const SG_SCHEMA = {
   ],
 };
 
-const getSchema = (code) => LICENSED_MARKETS.includes(code) && code === "GB" ? UK_SCHEMA : SG_SCHEMA;
+// Placeholder FI schemas — copy of the corresponding corporate schema for now,
+// real FI-specific fields will replace these later. region kept the same so
+// jurisdiction badge / styling logic is unchanged.
+const UK_FI_SCHEMA = { ...UK_SCHEMA, label: "United Kingdom (FI)" };
+const SG_FI_SCHEMA = { ...SG_SCHEMA, label: "Singapore / Default (FI)" };
+
+const getSchema = (code, entityType) => {
+  if (entityType === "FI") return code === "GB" ? UK_FI_SCHEMA : SG_FI_SCHEMA;
+  if (entityType === "Platform") return SG_FI_SCHEMA;
+  if (entityType === "Direct") return SG_SCHEMA;
+  // Corporate (default)
+  return LICENSED_MARKETS.includes(code) && code === "GB" ? UK_SCHEMA : SG_SCHEMA;
+};
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
 const buildPrompt = (name, country, countryCode, schema) => {
@@ -371,6 +383,7 @@ export default function KYCAgent() {
   const [step, setStep] = useState(0);
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
+  const [entityType, setEntityType] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [research, setResearch] = useState(null);
@@ -466,9 +479,10 @@ export default function KYCAgent() {
 
   const doResearch = async () => {
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
+    if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
-    const schema = getSchema(countryCode);
+    const schema = getSchema(countryCode, entityType);
     setActiveSchema(schema);
     setLoading(true); setStep(1); setLoaderIdx(0);
     try {
@@ -593,6 +607,12 @@ export default function KYCAgent() {
     </span>
   ) : null;
 
+  const entityBadge = entityType ? (
+    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", background: "#e0a040", color: "#fff", marginLeft: 8 }}>
+      {entityType}
+    </span>
+  ) : null;
+
   const tierOf = (item) => {
     const def = activeSchema && activeSchema.researchFields.find(f => f.field === item.field);
     return def && def.tier === 2 ? 2 : 1;
@@ -653,6 +673,16 @@ export default function KYCAgent() {
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
             <StableInput id="companyName" label="Company Legal Name" type="text" value={companyName} onUpdate={(_, v) => setCompanyName(v)} required placeholder="e.g. Tesco PLC, DBS Group Holdings" />
             <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
+              <select value={entityType} onChange={e => setEntityType(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
+                <option value="">Select entity type...</option>
+                <option value="FI">FI</option>
+                <option value="Platform">Platform</option>
+                <option value="Direct">Direct</option>
+                <option value="Corporate">Corporate</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
               <select value={countryCode} onChange={e => setCountryCode(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
                 <option value="">Select country...</option>
@@ -691,7 +721,7 @@ export default function KYCAgent() {
             </div>
 
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-              Researching {companyName}... {jurisdictionBadge}
+              Researching {companyName}... {jurisdictionBadge}{entityBadge}
             </div>
             <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: 22, minHeight: 18 }}>
               {LOADER_MSGS[loaderIdx]}
@@ -736,7 +766,7 @@ export default function KYCAgent() {
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
                 <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}</h2>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>{(research.found || []).length} fields found · {(research.gaps || activeSchema.gapFields || []).length} gaps identified</p>
                 </div>
               </div>
@@ -772,7 +802,7 @@ export default function KYCAgent() {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>
                 <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Additional Information Required {jurisdictionBadge}</h2>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Additional Information Required {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>{getCombinedGaps().length} fields need your input</p>
                 </div>
               </div>
@@ -808,7 +838,7 @@ export default function KYCAgent() {
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#1a3a4a,#2d5a6e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📜</div>
                 <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Applicant Declaration {jurisdictionBadge}</h2>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Applicant Declaration {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>Review and confirm</p>
                 </div>
               </div>
@@ -850,7 +880,7 @@ export default function KYCAgent() {
         {done && (
           <div style={{ ...card, textAlign: "center", padding: "44px 28px" }}>
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 18px", boxShadow: "0 6px 20px rgba(74,158,142,0.3)" }}>✓</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>Application Submitted {jurisdictionBadge}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>Application Submitted {jurisdictionBadge}{entityBadge}</h2>
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</p>
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>
@@ -870,7 +900,7 @@ export default function KYCAgent() {
                 </div>
               ))}
             </div>
-            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
+            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
 
