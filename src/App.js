@@ -361,7 +361,7 @@ const getSchema = (code, entityType) => {
 };
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
-const buildPrompt = (name, country, countryCode, schema) => {
+const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
   const fieldList = schema.researchFields.map(f => `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`).join(",\n");
   const gapList = schema.gapFields.map(f => {
     let obj = `{"field": "${f.field}", "label": "${f.label}", "reason": "Not publicly available", "inputType": "${f.inputType}", "required": ${f.required}, "section": "${f.section}"`;
@@ -384,6 +384,22 @@ const buildPrompt = (name, country, countryCode, schema) => {
     ? `\nFIELD SEARCH GUIDE — for each field, here is where/what to look for:\n${fieldGuide}\n`
     : "";
 
+  const hasWolfsberg = wolfsbergFields && Object.keys(wolfsbergFields).length > 0;
+  const wolfsbergBlock = hasWolfsberg
+    ? `\nWOLFSBERG CBDDQ DATA ALREADY EXTRACTED:
+The following fields have been extracted from the institution's Wolfsberg questionnaire. Treat these as confirmed values with source = 'Wolfsberg CBDDQ' and sourceTier = 'tier1'. Do not re-search for these fields — focus your web research on finding the remaining fields not covered below.
+
+${JSON.stringify(wolfsbergFields, null, 2)}
+
+When building your results array, include these Wolfsberg fields as results with:
+  source: 'Wolfsberg CBDDQ (uploaded)'
+  sourceUrl: null
+  sourceTier: 'tier1'
+  confidence: 'high'
+
+Map Wolfsberg keys onto our schema field ids by name similarity (e.g. legal_name → business_name, parent_company → ubo_parent_company, cross_border_remittances → cross_border_services). Then use web search to find the remaining fields not already answered above.\n`
+    : "";
+
   const fiPrioritySources = schema.flow === "fi"
     ? `\nPRIORITY SOURCES FOR FI RESEARCH — search these in order:
 1. Companies House (find-and-update.company-information.service.gov.uk) for UK — gets you: registration number, registered address, incorporation date, directors, PSC/UBO, SIC code
@@ -397,7 +413,7 @@ Do NOT leave any of these fields blank without having checked all 5 sources abov
     : "";
 
   return `You are a KYC research agent for Nium.
-
+${wolfsbergBlock}
 JURISDICTION CONTEXT (read carefully, this is two separate things):
 1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
 2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Nium has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
@@ -442,6 +458,92 @@ const LOADER_MSGS = [
   "Building onboarding form...",
   "Almost done, compiling results...",
 ];
+
+// Two-phase loader messages for the FI flow when a Wolfsberg PDF is uploaded.
+const LOADER_MSGS_WOLFSBERG_PHASE1 = [
+  "Reading your Wolfsberg questionnaire...",
+  "Extracting AML programme details...",
+  "Extracting ownership and business area data...",
+];
+const LOADER_MSGS_WOLFSBERG_PHASE2 = [
+  "Searching official registries for remaining fields...",
+  "Checking FCA register...",
+  "Scanning annual report for missing data...",
+  "Almost done, compiling results...",
+];
+
+// Read a File object as base64 (data: prefix stripped) for sending in an
+// Anthropic messages "document" content block.
+const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result).split(",")[1]);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+const WOLFSBERG_EXTRACTION_PROMPT = `You are a KYC compliance data extractor. Extract all available field values from this Wolfsberg CBDDQ questionnaire and return them as a JSON object.
+
+Return ONLY valid JSON with no markdown, no backticks.
+Map the questionnaire answers to these field IDs where possible:
+
+{
+  "legal_name": "string or null",
+  "registered_address": "string or null",
+  "incorporation_date": "string or null",
+  "lei_number": "string or null",
+  "parent_company": "string or null",
+  "parent_jurisdiction": "string or null",
+  "publicly_listed": "Yes/No or null",
+  "listed_where": "string or null",
+  "business_type": "string or null",
+  "ubo_names": "string or null",
+  "ubo_share_percentage": "string or null",
+  "bearer_shares": "Yes/No or null",
+  "offshore_banking_licence": "Yes/No or null",
+  "regulatory_authority": "string or null",
+  "employee_count": "string or null",
+  "total_assets": "string or null",
+  "non_resident_customers": "Yes/No or null",
+  "top_non_resident_countries": "string or null",
+  "business_areas": "array of active business areas",
+  "correspondent_banking": "Yes/No or null",
+  "services_other_fis": "Yes/No or null",
+  "trade_finance": "Yes/No or null",
+  "cross_border_remittances": "Yes/No or null",
+  "deals_virtual_currency": "Yes/No or null",
+  "virtual_currency_types": "string or null",
+  "aml_programme_in_place": "Yes/No or null",
+  "aml_team_size": "string or null",
+  "aml_policy_board_approved": "Yes/No or null",
+  "board_aml_reporting_frequency": "string or null",
+  "aml_outsourced": "Yes/No or null",
+  "aml_outsourced_to": "string or null",
+  "abc_programme": "Yes/No or null",
+  "pep_screening": "Yes/No or null",
+  "pep_screening_method": "string or null",
+  "adverse_media_screening": "Yes/No or null",
+  "ubo_threshold_pct": "string or null",
+  "edd_shell_banks": "string or null",
+  "edd_peps": "string or null",
+  "edd_virtual_currency": "string or null",
+  "transaction_monitoring_method": "string or null",
+  "suspicious_activity_reporting": "Yes/No or null",
+  "fatf_rec16_compliance": "Yes/No or null",
+  "sanctions_policy_board_approved": "Yes/No or null",
+  "sanctions_lists_used": "string or null",
+  "sanctions_screening_update_days": "string or null",
+  "presence_in_sanctioned_countries": "Yes/No or null",
+  "record_retention_period": "string or null",
+  "kyc_quality_assurance": "Yes/No or null",
+  "internal_audit_covers_aml": "Yes/No or null",
+  "policies_updated_annually": "Yes/No or null",
+  "prohibits_shell_banks": "Yes/No or null",
+  "prohibits_anonymous_accounts": "Yes/No or null",
+  "licence_suspended": "Yes/No or null",
+  "regulatory_action": "Yes/No or null"
+}
+
+For each field: extract the actual answer from the questionnaire. If the question was not answered or not present, return null. Do not guess or fabricate. For Yes/No questions return "Yes" or "No" as strings.`;
 
 /* ═══════════════════════════════════════════
    SOURCE TRUST CLASSIFICATION
@@ -687,14 +789,34 @@ export default function KYCAgent() {
   const [done, setDone] = useState(false);
   const [device, setDevice] = useState({});
   const [loaderIdx, setLoaderIdx] = useState(0);
+  const [loaderPhase, setLoaderPhase] = useState(0); // 0 = no Wolfsberg, 1 = extraction, 2 = web research
   const [submitTs, setSubmitTs] = useState("");
   const [activeSchema, setActiveSchema] = useState(null);
+  const [wolfsbergFile, setWolfsbergFile] = useState(null); // { file, name } | null
+  const [wolfsbergExtractedFields, setWolfsbergExtractedFields] = useState({});
+  const [docsChoice, setDocsChoice] = useState(""); // "yes" | "no" | ""
+
+  // Step routing: FI flow inserts a Documents step between Input and Research.
+  const isFi = entityType === "FI";
+  const STEPS = isFi
+    ? { input: 0, documents: 1, research: 2, confirm: 3, fillGaps: 4, declare: 5 }
+    : { input: 0, research: 1, confirm: 2, fillGaps: 3, declare: 4 };
+  const stepNames = isFi
+    ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Declare"]
+    : ["Input", "Research", "Confirm", "Fill Gaps", "Declare"];
+
+  // Loader messages — three modes: no Wolfsberg (existing), Wolfsberg phase 1 (extraction), phase 2 (research).
+  const loaderMsgs = loaderPhase === 1
+    ? LOADER_MSGS_WOLFSBERG_PHASE1
+    : loaderPhase === 2
+      ? LOADER_MSGS_WOLFSBERG_PHASE2
+      : LOADER_MSGS;
 
   useEffect(() => {
     if (!loading) return;
-    const t = setInterval(() => setLoaderIdx(i => Math.min(i + 1, LOADER_MSGS.length - 1)), 2500);
+    const t = setInterval(() => setLoaderIdx(i => Math.min(i + 1, loaderMsgs.length - 1)), 2500);
     return () => clearInterval(t);
-  }, [loading]);
+  }, [loading, loaderMsgs]);
 
   useEffect(() => {
     const fetchIP = async () => { try { const r = await fetch("https://api.ipify.org?format=json"); const d = await r.json(); return d.ip; } catch { return "Could not detect"; } };
@@ -748,11 +870,13 @@ export default function KYCAgent() {
   };
 
   const resetAll = () => {
-    setStep(0); setResearch(null); setActiveSchema(null);
+    setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRevealedTs({}); setResearchTimestamp("");
     setSecondaryConfirms({});
     gapRef.current = {}; setFormVersion(v => v + 1);
     setError(""); setDeclared(false);
+    setWolfsbergFile(null); setWolfsbergExtractedFields({}); setDocsChoice("");
+    setLoaderPhase(0);
   };
 
   const fillTestData = () => {
@@ -816,14 +940,66 @@ export default function KYCAgent() {
     setError("");
     const schema = getSchema(countryCode, entityType);
     setActiveSchema(schema);
-    setLoading(true); setStep(1); setLoaderIdx(0);
+    setLoading(true); setStep(STEPS.research); setLoaderIdx(0);
     try {
-      // ═══ CALLING OUR BACKEND PROXY, NOT CLAUDE DIRECTLY ═══
+      // ─── Phase 1: Wolfsberg PDF extraction (FI flow only, optional) ───
+      let wolfsbergFields = {};
+      if (wolfsbergFile && wolfsbergFile.file) {
+        setLoaderPhase(1); setLoaderIdx(0);
+        const base64PDF = await readFileAsBase64(wolfsbergFile.file);
+        const extractRes = await fetch("/api/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            max_tokens: 4096,
+            tools: [],
+            messages: [{
+              role: "user",
+              content: [
+                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64PDF } },
+                { type: "text", text: WOLFSBERG_EXTRACTION_PROMPT },
+              ],
+            }],
+          }),
+        });
+        if (extractRes.ok) {
+          const extractData = await extractRes.json();
+          const extractedText = (extractData.content || [])
+            .filter(b => b.type === "text")
+            .map(b => b.text)
+            .join("");
+          try {
+            wolfsbergFields = JSON.parse(
+              extractedText
+                .replace(/^```json\s*/i, "")
+                .replace(/^```/i, "")
+                .replace(/```\s*$/i, "")
+                .trim()
+            );
+            // Drop nulls so the prompt only carries what we actually extracted.
+            wolfsbergFields = Object.fromEntries(
+              Object.entries(wolfsbergFields).filter(([, v]) => v !== null && v !== "")
+            );
+            setWolfsbergExtractedFields(wolfsbergFields);
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("Could not parse Wolfsberg extraction", e, extractedText);
+            wolfsbergFields = {};
+          }
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn("Wolfsberg extraction call failed", extractRes.status);
+        }
+        setLoaderPhase(2); setLoaderIdx(0);
+      }
+
+      // ─── Phase 2: web research, optionally seeded with Wolfsberg fields ───
       const resp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema)
+          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields)
         })
       });
       if (!resp.ok) {
@@ -852,10 +1028,15 @@ export default function KYCAgent() {
         console.error("Raw research response (could not parse):", text);
         throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens — see browser console for the full response.`);
       }
-      const found = (parsed.found || []).map(item => ({
-        ...item,
-        trust: classifySource(item.source, countryCode),
-      }));
+      const found = (parsed.found || []).map(item => {
+        const isWolfsberg = !!(item.source && /wolfsberg/i.test(item.source));
+        return {
+          ...item,
+          // Wolfsberg-sourced items are tier-1 confirmed regardless of country trust list.
+          trust: isWolfsberg ? "authoritative" : classifySource(item.source, countryCode),
+          wolfsberg: isWolfsberg,
+        };
+      });
       const tagged = { ...parsed, found };
       setResearch(tagged);
       setResearchTimestamp(new Date().toISOString());
@@ -874,9 +1055,9 @@ export default function KYCAgent() {
       });
       setSecondaryConfirms({});
       setFormVersion(v => v + 1);
-      setStep(2);
-    } catch (err) { setError("Research failed: " + err.message); setStep(0); }
-    finally { setLoading(false); }
+      setStep(STEPS.confirm);
+    } catch (err) { setError("Research failed: " + err.message); setStep(STEPS.input); }
+    finally { setLoading(false); setLoaderPhase(0); }
   };
 
   // Bypasses /api/research and synthesises a plausible result using
@@ -890,26 +1071,40 @@ export default function KYCAgent() {
     setError("");
     const schema = getSchema(countryCode, entityType);
     setActiveSchema(schema);
-    setLoading(true); setStep(1); setLoaderIdx(0);
-
-    // Hold the loader briefly so the animation is visible.
-    await new Promise(r => setTimeout(r, 3000));
+    setLoading(true); setStep(STEPS.research); setLoaderIdx(0);
+    if (wolfsbergFile && wolfsbergFile.file) {
+      setLoaderPhase(1);
+      await new Promise(r => setTimeout(r, 1500));
+      setLoaderPhase(2); setLoaderIdx(0);
+      await new Promise(r => setTimeout(r, 1500));
+    } else {
+      // Hold the loader briefly so the animation is visible.
+      await new Promise(r => setTimeout(r, 3000));
+    }
 
     const authPattern = (SOURCE_TRUST[countryCode] || ["public registry"])[0];
     const authSource = authPattern.replace(/\b\w/g, c => c.toUpperCase());
     const secondarySources = ["Wikipedia", "LinkedIn", "Company website"];
+    const wolfsbergSource = "Wolfsberg CBDDQ (uploaded)";
+    // When a dummy Wolfsberg file is present, mark a few representative fields
+    // as Wolfsberg-sourced so the badge gets exercised on Step 4.
+    const wolfsbergFields = (wolfsbergFile && wolfsbergFile.file)
+      ? new Set(["regulatory_authority", "licence_number", "has_licence", "ubo_parent_company", "ubo_share_percentage", "non_resident_customers", "services_other_fis"])
+      : new Set();
 
     const found = schema.researchFields.map((f, i) => {
+      const isWolfsberg = wolfsbergFields.has(f.field);
       // Make ~1 in 4 tier-2 fields look like they came from a secondary source
-      const isSecondary = f.tier === 2 && i % 4 === 0;
-      const source = isSecondary ? secondarySources[i % secondarySources.length] : authSource;
+      const isSecondary = !isWolfsberg && f.tier === 2 && i % 4 === 0;
+      const source = isWolfsberg ? wolfsbergSource : (isSecondary ? secondarySources[i % secondarySources.length] : authSource);
       const value = DUMMY_RESEARCH_VALUES[f.field] || ("Sample " + f.label);
       return {
         field: f.field,
         label: f.label,
         value,
         source,
-        trust: classifySource(source, countryCode),
+        trust: isWolfsberg ? "authoritative" : classifySource(source, countryCode),
+        wolfsberg: isWolfsberg,
       };
     });
 
@@ -935,8 +1130,24 @@ export default function KYCAgent() {
     });
     setSecondaryConfirms({});
     setFormVersion(v => v + 1);
-    setLoading(false);
-    setStep(2);
+    setLoading(false); setLoaderPhase(0);
+    setStep(STEPS.confirm);
+  };
+
+  const proceedFromDocuments = () => {
+    if (!docsChoice) { setError("Please choose an option to continue."); return; }
+    if (docsChoice === "yes" && !wolfsbergFile) { setError("Please upload your CBDDQ file or choose Skip."); return; }
+    setError("");
+    doResearch();
+  };
+
+  const handleWolfsbergFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { setError("File must be a PDF."); return; }
+    if (file.size > 20 * 1024 * 1024) { setError("File must be 20MB or smaller."); return; }
+    setError("");
+    setWolfsbergFile({ file, name: file.name });
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
@@ -946,7 +1157,6 @@ export default function KYCAgent() {
     return <button style={v[variant] || v.primary} onClick={disabled ? undefined : onClick}>{children}</button>;
   };
 
-  const stepNames = ["Input", "Research", "Confirm", "Fill Gaps", "Declare"];
   const sectionConfig = {
     corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
     secondary: { title: "Pre-filled — Please Confirm", icon: "🔍", sub: "Found on secondary sources (Wikipedia, LinkedIn, news, corporate website). Edit if wrong, then tick to confirm each one is correct.", twoCol: false },
@@ -1038,13 +1248,23 @@ export default function KYCAgent() {
           <input type="checkbox" checked={!!checks[idx]} onChange={() => setChecks(p => ({ ...p, [idx]: !p[idx] }))} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
           <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
           <span style={{ fontSize: 11, wordBreak: "break-word" }}>{item.value}</span>
-          <span
-            onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-            title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
-            style={{ fontSize: 10, color: "#4a9e8e", fontStyle: "italic", cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 }}
-          >
-            {revealedTs[idx] ? `🕒 ${researchTimestamp}` : item.source}
-          </span>
+          {item.wolfsberg ? (
+            <span
+              onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+              title={revealedTs[idx] ? `🕒 ${researchTimestamp}` : "From uploaded Wolfsberg CBDDQ"}
+              style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#0B3D91", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+            >
+              {revealedTs[idx] ? `🕒 ${researchTimestamp.slice(11, 19)}` : "📄 Wolfsberg CBDDQ"}
+            </span>
+          ) : (
+            <span
+              onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+              title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+              style={{ fontSize: 10, color: "#4a9e8e", fontStyle: "italic", cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 }}
+            >
+              {revealedTs[idx] ? `🕒 ${researchTimestamp}` : item.source}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -1070,12 +1290,12 @@ export default function KYCAgent() {
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < step ? "#4a9e8e" : i === step ? "#1a3a4a" : "#e0e4e8", color: i <= step ? "#fff" : "#999", boxShadow: i === step ? "0 0 0 3px rgba(74,158,142,0.2)" : "none" }}>{i + 1}</div>
               <span style={{ fontSize: 11, fontWeight: i === step ? 700 : 400, color: i <= step ? "#1a3a4a" : "#aaa" }}>{s}</span>
-              {i < 4 && <div style={{ width: 14, height: 2, background: i < step ? "#4a9e8e" : "#e0e4e8" }} />}
+              {i < stepNames.length - 1 && <div style={{ width: 14, height: 2, background: i < step ? "#4a9e8e" : "#e0e4e8" }} />}
             </div>
           ))}
         </div>
 
-        {step === 0 && (
+        {step === STEPS.input && (
           <div style={card}>
             <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Company Lookup</h2>
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
@@ -1118,12 +1338,92 @@ export default function KYCAgent() {
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
               <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>
-              <Btn onClick={doResearch} variant="primary">🔍 Research Company</Btn>
+              {isFi ? (
+                <Btn onClick={() => {
+                  if (!companyName.trim()) { setError("Please enter a company name."); return; }
+                  if (!entityType) { setError("Please select an entity type."); return; }
+                  if (!countryCode) { setError("Please select a country."); return; }
+                  setError("");
+                  setStep(STEPS.documents);
+                }} variant="primary">Continue →</Btn>
+              ) : (
+                <Btn onClick={doResearch} variant="primary">🔍 Research Company</Btn>
+              )}
             </div>
           </div>
         )}
 
-        {step === 1 && (
+        {step === STEPS.documents && isFi && (
+          <div>
+            <div style={card}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>Before we research — do you have a Wolfsberg questionnaire?</h2>
+              <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
+                The Wolfsberg CBDDQ (Correspondent Banking Due Diligence Questionnaire) is a standardised AML questionnaire completed by financial institutions. If your institution has a completed and signed copy, uploading it now will significantly improve the accuracy of our research — we can extract up to 40 additional fields automatically, reducing what you need to fill in manually.
+              </p>
+
+              {/* Card A — Yes, I have a Wolfsberg CBDDQ */}
+              <div
+                onClick={() => { setDocsChoice("yes"); setError(""); }}
+                style={{
+                  padding: "16px 18px", borderRadius: 10, marginBottom: 12, cursor: "pointer",
+                  background: docsChoice === "yes" ? "#f0f9f6" : "#fafcfb",
+                  border: `2px solid ${docsChoice === "yes" ? "#4a9e8e" : "rgba(26,58,74,0.12)"}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#0B3D91", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff" }}>📤</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>Yes, I have a Wolfsberg CBDDQ</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80" }}>Upload your completed and signed CBDDQ PDF</div>
+                  </div>
+                </div>
+                {docsChoice === "yes" && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(26,58,74,0.08)" }}>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleWolfsbergFile}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 13, background: "#fff", cursor: "pointer", boxSizing: "border-box" }}
+                    />
+                    <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "8px 0 4px" }}>Accepted format: PDF. Maximum size: 20MB.</p>
+                    <p style={{ fontSize: 11, color: "#1a3a4a70", fontStyle: "italic", margin: 0 }}>
+                      We will extract: AML programme details, sanctions lists, EDD policies, business areas, employee count, ownership structure, LEI number, and more.
+                    </p>
+                    {wolfsbergFile && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "#1a6b56" }}>✓ {wolfsbergFile.name}</div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Card B — No, skip this step */}
+              <div
+                onClick={() => { setDocsChoice("no"); setWolfsbergFile(null); setError(""); }}
+                style={{
+                  padding: "16px 18px", borderRadius: 10, cursor: "pointer",
+                  background: docsChoice === "no" ? "#f0f3f8" : "#fafcfb",
+                  border: `2px solid ${docsChoice === "no" ? "#1a3a4a" : "rgba(26,58,74,0.12)"}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a3a4a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff" }}>→</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>No, skip this step</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80" }}>We will research using public sources only</div>
+                  </div>
+                </div>
+              </div>
+
+              {error && <div style={{ marginTop: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <Btn variant="secondary" onClick={() => { setError(""); setStep(STEPS.input); }}>← Back</Btn>
+              <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
+            </div>
+          </div>
+        )}
+
+        {step === STEPS.research && (
           <div style={{ ...card, textAlign: "center", padding: "56px 28px" }}>
             <div style={{ position: "relative", width: 130, height: 130, margin: "0 auto 28px" }}>
               {[0, 1, 2].map(i => (
@@ -1139,13 +1439,18 @@ export default function KYCAgent() {
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
               Researching {companyName}... {jurisdictionBadge}{entityBadge}
             </div>
+            {loaderPhase > 0 && (
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0B3D91", marginBottom: 6 }}>
+                {loaderPhase === 1 ? "Phase 1 of 2 — Wolfsberg" : "Phase 2 of 2 — Web research"}
+              </div>
+            )}
             <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: 22, minHeight: 18 }}>
-              {LOADER_MSGS[loaderIdx]}
+              {loaderMsgs[Math.min(loaderIdx, loaderMsgs.length - 1)]}
             </div>
 
             <div style={{ width: "100%", maxWidth: 420, height: 6, background: "rgba(74,158,142,0.12)", borderRadius: 3, overflow: "hidden", margin: "0 auto 18px" }}>
               <div style={{
-                width: `${((loaderIdx + 1) / LOADER_MSGS.length) * 100}%`,
+                width: `${((loaderIdx + 1) / loaderMsgs.length) * 100}%`,
                 height: "100%",
                 background: "linear-gradient(90deg,#4a9e8e,#1a3a4a)",
                 transition: "width 0.6s ease",
@@ -1153,7 +1458,7 @@ export default function KYCAgent() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "center", gap: 7, flexWrap: "wrap" }}>
-              {LOADER_MSGS.map((_, i) => (
+              {loaderMsgs.map((_, i) => (
                 <div key={i} style={{
                   width: 9, height: 9, borderRadius: "50%",
                   background: i <= loaderIdx ? "#4a9e8e" : "rgba(26,58,74,0.15)",
@@ -1176,7 +1481,7 @@ export default function KYCAgent() {
           </div>
         )}
 
-        {step === 2 && research && (
+        {step === STEPS.confirm && research && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
@@ -1207,12 +1512,12 @@ export default function KYCAgent() {
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={resetAll}>← Start Over</Btn>
-              <Btn variant="green" onClick={() => { setStep(3); setError(""); }}>Confirm and Continue →</Btn>
+              <Btn variant="green" onClick={() => { setStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
             </div>
           </div>
         )}
 
-        {step === 3 && research && activeSchema && (
+        {step === STEPS.fillGaps && research && activeSchema && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1241,14 +1546,14 @@ export default function KYCAgent() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => setStep(2)}>← Back to Review</Btn>
-              <Btn variant="primary" onClick={() => { if (allGapsFilled()) { setStep(4); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
+              <Btn variant="secondary" onClick={() => setStep(STEPS.confirm)}>← Back to Review</Btn>
+              <Btn variant="primary" onClick={() => { if (allGapsFilled()) { setStep(STEPS.declare); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
             </div>
-            {error && step === 3 && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+            {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
           </div>
         )}
 
-        {step === 4 && !done && (
+        {step === STEPS.declare && !done && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
@@ -1287,7 +1592,7 @@ export default function KYCAgent() {
               </div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => setStep(3)}>← Back</Btn>
+              <Btn variant="secondary" onClick={() => setStep(STEPS.fillGaps)}>← Back</Btn>
               <Btn variant="green" onClick={() => { setSubmitTs(new Date().toISOString()); setDone(true); }} disabled={!declared}>✓ Submit Application</Btn>
             </div>
           </div>
@@ -1306,6 +1611,7 @@ export default function KYCAgent() {
                 ["Pre-filled (authoritative)", (research?.found || []).filter((item, i) => item.trust !== "secondary" && checks[i]).length + " confirmed"],
                 ["Corrected", (research?.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length + " manually fixed"],
                 ["Secondary-source", (research?.found || []).filter(item => item.trust === "secondary").length + " reviewed & confirmed"],
+                ...(wolfsbergFile ? [["Wolfsberg CBDDQ", `${wolfsbergFile.name} · ${Object.keys(wolfsbergExtractedFields).length} fields extracted`]] : []),
                 ["Manual fields", Object.keys(gapRef.current).length + " provided"],
                 ["Applicant", (gapRef.current.applicantFirstName || "") + " " + (gapRef.current.applicantLastName || "")],
                 ["Declared at", submitTs.replace("T", " ").slice(0, 19) + " UTC"],

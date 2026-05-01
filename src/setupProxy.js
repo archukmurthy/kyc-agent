@@ -13,9 +13,10 @@ module.exports = function (app) {
     req.on("data", (chunk) => { raw += chunk; });
     req.on("end", async () => {
       try {
-        const { prompt } = JSON.parse(raw || "{}");
-        if (!prompt) {
-          return res.status(400).json({ error: "Missing prompt in request body" });
+        const body = JSON.parse(raw || "{}");
+        const { prompt, messages, model, tools, max_tokens } = body;
+        if (!prompt && !messages) {
+          return res.status(400).json({ error: "Missing prompt or messages in request body" });
         }
 
         const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -26,6 +27,20 @@ module.exports = function (app) {
           });
         }
 
+        const finalMessages = messages || [{ role: "user", content: prompt }];
+        const finalModel = model || "claude-sonnet-4-5";
+        const finalMaxTokens = max_tokens || 8000;
+        const finalTools = Array.isArray(tools)
+          ? tools
+          : [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
+
+        const requestBody = {
+          model: finalModel,
+          max_tokens: finalMaxTokens,
+          messages: finalMessages,
+        };
+        if (finalTools.length > 0) requestBody.tools = finalTools;
+
         const r = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
@@ -33,12 +48,7 @@ module.exports = function (app) {
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
           },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-5",
-            max_tokens: 8000,
-            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
-            messages: [{ role: "user", content: prompt }],
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const data = await r.json();
