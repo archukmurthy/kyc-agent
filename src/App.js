@@ -515,6 +515,59 @@ const TEST_DATA = {
   bankCountry: "United Kingdom",
 };
 
+/* ═══════════════════════════════════════════
+   DUMMY RESEARCH VALUES — used by the
+   "Dummy Research" button on Step 0 to simulate
+   an API response without spending credits.
+   ═══════════════════════════════════════════ */
+const DUMMY_RESEARCH_VALUES = {
+  // Corporate (UK + SG) research fields
+  businessType: "Private Limited Company",
+  businessRegistrationNumber: "12345678",
+  registeredDate: "2015-03-12",
+  registeredCountry: "United Kingdom",
+  tradeName: "ACME Holdings",
+  formerName: "ACME Inc.",
+  website: "https://example.com",
+  addressLine1: "123 Sample Street",
+  addressLine2: "Suite 4B",
+  city: "London",
+  state: "Greater London",
+  postcode: "EC1A 1AA",
+  country: "United Kingdom",
+  sicCode: "62012",
+  annualRevenue: "£12,500,000",
+  employees: "85",
+  stockListing: "Not listed",
+  leiNumber: "529900T8BM49AURSDO55",
+  countriesOfOperation: "UK, US, SG",
+  industryCodes: "62012, 70229",
+  industryDescription: "Software development and SaaS distribution to enterprise customers.",
+  isMultiLayered: "No",
+  uboAnalysis: "John Smith (40%), Jane Doe (35%), Trustees (25%)",
+  directors: "John Smith (UK), Jane Doe (UK), Mark Lee (SG)",
+  companySecretary: "Jane Doe",
+  isPEP: "No",
+  listedExchange: "Not listed",
+  // FI research fields
+  business_name: "ACME Financial Services Ltd",
+  trading_name: "ACME Pay",
+  business_activity_description: "Cross-border payment services for SMEs and individuals.",
+  registration_number: "12345678",
+  registered_address_line1: "123 Sample Street",
+  registered_address_line2: "Suite 4B",
+  registered_address_city: "London",
+  registered_address_state: "Greater London",
+  registered_address_postcode: "EC1A 1AA",
+  registered_address_country: "United Kingdom",
+  incorporation_date: "2015-03-12",
+  annual_turnover: "$500,001–$1,500,000",
+  employee_count: "51-250",
+  operating_countries: "UK, US, SG",
+  publicly_listed: "No",
+  listed_where: "—",
+};
+
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
   const ref = useRef(null);
   const [local, setLocal] = useState(value || "");
@@ -737,6 +790,66 @@ export default function KYCAgent() {
     finally { setLoading(false); }
   };
 
+  // Bypasses /api/research and synthesises a plausible result using
+  // DUMMY_RESEARCH_VALUES + the selected country's authoritative source list.
+  // Sprinkles a couple of secondary-source rows so Step 3's "Pre-filled —
+  // Please Confirm" section is also exercised.
+  const doDummyResearch = async () => {
+    if (!companyName.trim()) { setError("Please enter a company name."); return; }
+    if (!entityType) { setError("Please select an entity type."); return; }
+    if (!countryCode) { setError("Please select a country."); return; }
+    setError("");
+    const schema = getSchema(countryCode, entityType);
+    setActiveSchema(schema);
+    setLoading(true); setStep(1); setLoaderIdx(0);
+
+    // Hold the loader briefly so the animation is visible.
+    await new Promise(r => setTimeout(r, 3000));
+
+    const authPattern = (SOURCE_TRUST[countryCode] || ["public registry"])[0];
+    const authSource = authPattern.replace(/\b\w/g, c => c.toUpperCase());
+    const secondarySources = ["Wikipedia", "LinkedIn", "Company website"];
+
+    const found = schema.researchFields.map((f, i) => {
+      // Make ~1 in 4 tier-2 fields look like they came from a secondary source
+      const isSecondary = f.tier === 2 && i % 4 === 0;
+      const source = isSecondary ? secondarySources[i % secondarySources.length] : authSource;
+      const value = DUMMY_RESEARCH_VALUES[f.field] || ("Sample " + f.label);
+      return {
+        field: f.field,
+        label: f.label,
+        value,
+        source,
+        trust: classifySource(source, countryCode),
+      };
+    });
+
+    const tagged = {
+      companyName,
+      jurisdiction: schema.region,
+      countryOfRegistration: countryCode,
+      found,
+      gaps: schema.gapFields.map(f => ({ ...f, reason: "Not publicly available" })),
+    };
+    setResearch(tagged);
+    setResearchTimestamp(new Date().toISOString());
+
+    const c = {};
+    found.forEach((item, i) => { c[i] = item.trust === "authoritative"; });
+    setChecks(c);
+    setRevealedTs({});
+    gapRef.current = {};
+    found.forEach(item => {
+      if (item.trust === "secondary") {
+        gapRef.current["secondary_" + item.field] = item.value;
+      }
+    });
+    setSecondaryConfirms({});
+    setFormVersion(v => v + 1);
+    setLoading(false);
+    setStep(2);
+  };
+
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
   const Btn = ({ children, onClick, variant, disabled }) => {
     const base = { padding: "12px 26px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: disabled ? 0.4 : 1, border: "none" };
@@ -898,16 +1011,24 @@ export default function KYCAgent() {
             {countryCode && (() => {
               const lic = getApplicableLicence(countryCode);
               const isLicensed = LICENSED_MARKETS.includes(countryCode);
+              const isFiFlow = entityType === "FI" || entityType === "Platform";
+              const routesNote = entityType === "Platform" || entityType === "Direct"
+                ? ` (${entityType} routes to ${isFiFlow ? "FI" : "Corporate"} schema)`
+                : "";
               return (
                 <div style={{ padding: "10px 14px", borderRadius: 8, background: isLicensed ? "#f0f3f8" : "#fff8ed", fontSize: 12, marginBottom: 14, borderLeft: isLicensed ? "3px solid #1a3a4a" : "3px solid #e0a040" }}>
                   <div style={{ marginBottom: 4 }}><strong>🌍 Researching in:</strong> {countryObj?.name} ({countryCode})</div>
                   <div><strong>📋 Applicable licence:</strong> {lic === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) — default for non-licensed markets"}</div>
+                  {entityType && (
+                    <div style={{ marginTop: 4 }}><strong>📑 Form set:</strong> {isFiFlow ? "FI version" : "Corporate version"}{routesNote}</div>
+                  )}
                   {!isLicensed && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>Nium has no licence in {countryObj?.name}, so this customer is onboarded under the Singapore licence. Public records will be searched in {countryObj?.name}, but SG requirements apply.</div>}
                 </div>
               );
             })()}
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+              <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>
               <Btn onClick={doResearch} variant="primary">🔍 Research Company</Btn>
             </div>
           </div>
