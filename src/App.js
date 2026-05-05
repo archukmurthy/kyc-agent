@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ═══════════════════════════════════════════
+   APP-LEVEL CONSTANTS
+   Edit here when product config changes.
+   ═══════════════════════════════════════════ */
+const MANUAL_FORM_URL = "https://nium.com/apply";
+// TODO: replace with actual product form URL
+
+// eslint-disable-next-line no-unused-vars
+const CACHE_STALE_DAYS = 90;
+// Number of days before cached research is considered stale (used by Session 2 cache layer)
+
+/* ═══════════════════════════════════════════
    COUNTRY LIST
    ═══════════════════════════════════════════ */
 const COUNTRIES = [
@@ -450,18 +461,28 @@ const LOADER_MSGS = [
   "Almost done, compiling results...",
 ];
 
-// Two-phase loader messages for the FI flow when a Wolfsberg PDF is uploaded.
+// Two-phase loader messages for the AI + Documents journey.
+// Phase 1 messages are generated dynamically in doResearch from the
+// uploadedDocs map; this list is the fallback when nothing was uploaded.
 const LOADER_MSGS_WOLFSBERG_PHASE1 = [
-  "Reading your Wolfsberg questionnaire...",
-  "Extracting AML programme details...",
-  "Extracting ownership and business area data...",
+  "Reading your documents...",
 ];
 const LOADER_MSGS_WOLFSBERG_PHASE2 = [
-  "Searching official registries for remaining fields...",
-  "Checking FCA register...",
-  "Scanning annual report for missing data...",
-  "Almost done, compiling results...",
+  "Searching official registries…",
+  "Checking regulatory databases…",
+  "Scanning secondary sources…",
+  "Almost done, compiling results…",
 ];
+
+// Build the Phase-1 status messages for the docs we actually have.
+const buildPhase1Msgs = (docs) => {
+  const msgs = [];
+  DOC_TYPES.forEach(d => {
+    if (docs[d.key]) msgs.push(`Reading ${d.label}…`);
+  });
+  if (msgs.length === 0) msgs.push("Reading your documents…");
+  return msgs;
+};
 
 // Read a File object as base64 (data: prefix stripped) for sending in an
 // Anthropic messages "document" content block.
@@ -535,6 +556,225 @@ Map the questionnaire answers to these field IDs where possible:
 }
 
 For each field: extract the actual answer from the questionnaire. If the question was not answered or not present, return null. Do not guess or fabricate. For Yes/No questions return "Yes" or "No" as strings.`;
+
+/* ═══════════════════════════════════════════
+   PER-DOCUMENT EXTRACTION PROMPTS
+
+   Each prompt instructs Claude to read a PDF (or
+   image, for org chart) and return a JSON array of
+   {fieldId, value} objects. The keys returned are
+   "generic" — mapEXTRACTION_KEY_TO_SCHEMA() below
+   maps them onto the active schema's field IDs.
+   ═══════════════════════════════════════════ */
+const CERT_EXTRACTION_PROMPT = `Extract the following from this Certificate of Incorporation or equivalent company registration document:
+- legal_name: full registered legal name
+- registration_number: company/registration number
+- incorporation_date: date of incorporation (ISO format)
+- registered_address: full registered address
+- legal_form: company type (e.g. private limited, PLC)
+- country_of_incorporation: country
+
+Return as JSON array of {fieldId, value} objects. Only include fields actually present in the document. No markdown, no backticks.`;
+
+const LICENCE_EXTRACTION_PROMPT = `Extract the following from this regulatory licence or authorisation document:
+- licence_number: licence or registration number
+- regulatory_authority: name of the issuing regulator
+- has_licence: always 'Yes' if this document exists
+- regulated_status: type of authorisation if stated
+- licence_date: date of issue if present
+- permitted_activities: description of permitted activities if present
+
+Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
+
+const ANNUAL_REPORT_EXTRACTION_PROMPT = `Extract the following from this annual report or financial statements document:
+- annual_turnover_band: revenue range (return as a descriptive string e.g. 'Over £250 million')
+- employee_count_band: number of employees or band
+- operating_countries: countries where the company operates
+- business_description: what the company does
+- publicly_listed: Yes or No based on whether shares are publicly traded
+- listed_where: stock exchange name if listed
+- total_assets: total assets value or band if stated
+- payout_transaction_countries: countries they send payments to if mentioned
+- directors: names of board directors if listed
+- ubo_names: parent company or major shareholders if disclosed
+
+Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
+
+const ORG_CHART_EXTRACTION_PROMPT = `Extract the following from this ownership structure or org chart document:
+- ubo_names: names of ultimate beneficial owners
+- ubo_share_percentage: ownership percentages
+- group_structure: description of corporate structure
+- parent_company: immediate parent company name if shown
+
+Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
+
+const AML_POLICY_EXTRACTION_PROMPT = `Extract the following from this AML policy document:
+- aml_programme_in_place: always 'Yes' if this exists
+- policies_updated_annually: Yes/No if stated
+- pep_screening: Yes/No if PEP screening is mentioned
+- transaction_monitoring_method: automated/manual/combination if stated
+- suspicious_activity_reporting: Yes/No if stated
+- record_retention_period: retention period if stated
+- aml_policy_board_approved: Yes/No if stated
+
+Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
+
+/* DOC_TYPES — single source of truth for which
+   document slots exist, their UI presentation, the
+   accepted MIME types, the badge label, the human-
+   readable source name shown on Confirm, and the
+   prompt to use when extracting.
+   The `entities` field gates which cards render in
+   the Document Upload step. */
+const DOC_TYPES = [
+  {
+    key: "wolfsberg",
+    icon: "📋",
+    label: "Wolfsberg Questionnaire (CBDDQ)",
+    helper: "Completed and signed Correspondent Banking Due Diligence Questionnaire. Extracts ~40 AML and compliance fields automatically.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    badge: { text: "Most valuable", color: "#e0a040" },
+    entities: ["FI"],
+    sourceName: "Wolfsberg CBDDQ (uploaded)",
+    extractionPrompt: WOLFSBERG_EXTRACTION_PROMPT,
+    returnsObject: true, // legacy shape: { key: value, ... }
+  },
+  {
+    key: "certificate",
+    icon: "🏛",
+    label: "Certificate of Incorporation",
+    helper: "Issued by Companies House (UK), ACRA (SG), or equivalent registry. Extracts entity name, registration number, address, and incorporation date.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    entities: ["FI", "Corporate", "Platform", "Direct"],
+    sourceName: "Certificate of Incorporation (uploaded)",
+    extractionPrompt: CERT_EXTRACTION_PROMPT,
+  },
+  {
+    key: "licence",
+    icon: "✅",
+    label: "Regulatory Licence / Authorisation",
+    helper: "FCA authorisation letter, MAS licence, or equivalent. Extracts licence number, regulatory authority, and permitted activities.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    entities: ["FI"],
+    sourceName: "Regulatory Licence (uploaded)",
+    extractionPrompt: LICENCE_EXTRACTION_PROMPT,
+  },
+  {
+    key: "annualReport",
+    icon: "📊",
+    label: "Annual Report",
+    helper: "Most recent published annual report. Best for publicly listed institutions. Extracts turnover, employee count, operating countries, and products offered.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    entities: ["FI", "Corporate", "Platform", "Direct"],
+    sourceName: "Annual Report (uploaded)",
+    extractionPrompt: ANNUAL_REPORT_EXTRACTION_PROMPT,
+  },
+  {
+    key: "financialStatements",
+    icon: "💰",
+    label: "Audited Financial Statements",
+    helper: "Alternative to annual report for private institutions. Extracts turnover band, total assets, and employee count.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    entities: ["FI", "Corporate", "Platform", "Direct"],
+    sourceName: "Audited Financial Statements (uploaded)",
+    extractionPrompt: ANNUAL_REPORT_EXTRACTION_PROMPT,
+  },
+  {
+    key: "orgChart",
+    icon: "🏢",
+    label: "Ownership Structure / Org Chart",
+    helper: "Corporate structure chart showing UBOs and shareholding percentages. Extracts beneficial owner names and share percentages.",
+    accept: "application/pdf,image/png,image/jpeg",
+    accepts: ".pdf,.png,.jpg,.jpeg",
+    entities: ["FI", "Corporate", "Platform", "Direct"],
+    sourceName: "Ownership / Org Chart (uploaded)",
+    extractionPrompt: ORG_CHART_EXTRACTION_PROMPT,
+  },
+  {
+    key: "amlPolicy",
+    icon: "🛡",
+    label: "AML Policy & Procedures",
+    helper: "Your institution's AML/CTF policy document. Confirms AML programme components in place.",
+    accept: "application/pdf",
+    accepts: ".pdf",
+    entities: ["FI"],
+    sourceName: "AML Policy (uploaded)",
+    extractionPrompt: AML_POLICY_EXTRACTION_PROMPT,
+  },
+];
+
+const initialUploadedDocs = () => Object.fromEntries(DOC_TYPES.map(d => [d.key, null]));
+
+/* Map a generic extraction-prompt key onto an
+   actual schema research field id. flow is "fi" or
+   "corporate". Returns null if the key has no slot
+   in the active schema (we drop those values).
+   The Wolfsberg prompt has its own AI-driven
+   mapping inside the prompt text and is handled
+   separately. */
+const EXTRACTION_KEY_TO_SCHEMA = {
+  fi: {
+    legal_name: "business_name",
+    registration_number: "registration_number",
+    incorporation_date: "incorporation_date",
+    registered_address: "registered_address_line1",
+    legal_form: null,
+    country_of_incorporation: "registered_address_country",
+    licence_number: "licence_number",
+    regulatory_authority: "regulatory_authority",
+    has_licence: "has_licence",
+    regulated_status: null,
+    licence_date: null,
+    permitted_activities: null,
+    annual_turnover_band: "annual_turnover",
+    employee_count_band: "employee_count",
+    operating_countries: "operating_countries",
+    business_description: "business_activity_description",
+    publicly_listed: "publicly_listed",
+    listed_where: "listed_where",
+    total_assets: null,
+    payout_transaction_countries: "payout_transaction_countries",
+    directors: "director_names",
+    ubo_names: "ubo_parent_company",
+    ubo_share_percentage: "ubo_share_percentage",
+    group_structure: null,
+    parent_company: "ubo_parent_company",
+    aml_programme_in_place: null,
+    policies_updated_annually: null,
+    pep_screening: null,
+    transaction_monitoring_method: null,
+    suspicious_activity_reporting: null,
+    record_retention_period: null,
+    aml_policy_board_approved: null,
+  },
+  corporate: {
+    legal_name: "tradeName",
+    registration_number: "businessRegistrationNumber",
+    incorporation_date: "registeredDate",
+    registered_address: "addressLine1",
+    legal_form: "businessType",
+    country_of_incorporation: "registeredCountry",
+    annual_turnover_band: "annualRevenue",
+    employee_count_band: "employees",
+    operating_countries: "countriesOfOperation",
+    business_description: "industryDescription",
+    publicly_listed: "stockListing",
+    listed_where: "listedExchange",
+    directors: "directors",
+    ubo_names: "uboAnalysis",
+    parent_company: "uboAnalysis",
+  },
+};
+
+const mapExtractedKey = (flow, key) => {
+  const m = EXTRACTION_KEY_TO_SCHEMA[flow] || {};
+  return key in m ? m[key] : null;
+};
 
 /* ═══════════════════════════════════════════
    SOURCE TRUST CLASSIFICATION
@@ -771,7 +1011,6 @@ export default function KYCAgent() {
   const [researchTimestamp, setResearchTimestamp] = useState("");
   const [checks, setChecks] = useState({});
   const [revealedTs, setRevealedTs] = useState({});
-  const [secondaryConfirms, setSecondaryConfirms] = useState({});
   const gapRef = useRef({});
   // bumped whenever we mutate gapRef from outside the input (e.g. test-data fill)
   // so StableInput components re-sync from the new ref values.
@@ -783,22 +1022,34 @@ export default function KYCAgent() {
   const [loaderPhase, setLoaderPhase] = useState(0); // 0 = no Wolfsberg, 1 = extraction, 2 = web research
   const [submitTs, setSubmitTs] = useState("");
   const [activeSchema, setActiveSchema] = useState(null);
-  const [wolfsbergFile, setWolfsbergFile] = useState(null); // { file, name } | null
-  const [wolfsbergExtractedFields, setWolfsbergExtractedFields] = useState({});
-  const [docsChoice, setDocsChoice] = useState(""); // "yes" | "no" | ""
+  const [uploadedDocs, setUploadedDocs] = useState(initialUploadedDocs());
+  // Journey selection (Part 1) — lives between Step 1 input and the rest.
+  const [journeyType, setJourneyType] = useState("");          // "ai_documents" | "ai_only" | "manual" | ""
+  const [journeyOpen, setJourneyOpen] = useState(false);
+  const [selectedJourneyCard, setSelectedJourneyCard] = useState(null); // "A" | "B" | "C"
+  const [manualOpened, setManualOpened] = useState(false);
+  // Part 5 — silent metadata trail of every pre-fill / customer action.
+  const [fieldMetadata, setFieldMetadata] = useState([]);
+  // Loader messages — replaced per-run in doResearch when documents are
+  // being processed. Phase 0 = web only, Phase 1 = doc extraction, Phase 2 = web.
+  const [phase1Msgs, setPhase1Msgs] = useState(LOADER_MSGS_WOLFSBERG_PHASE1);
 
-  // Step routing: FI flow inserts a Documents step between Input and Research.
-  const isFi = entityType === "FI";
-  const STEPS = isFi
+  // Step routing: ai_documents flow inserts a Documents step between Input and Research.
+  // stepsFor() takes a journey explicitly so async handlers can compute the
+  // correct step index without relying on a stale state closure (e.g. during
+  // back-and-forth navigation between Documents and Journey).
+  const stepsFor = (j) => j === "ai_documents"
     ? { input: 0, documents: 1, research: 2, confirm: 3, fillGaps: 4, declare: 5 }
     : { input: 0, research: 1, confirm: 2, fillGaps: 3, declare: 4 };
-  const stepNames = isFi
+  const isAiDocs = journeyType === "ai_documents";
+  const STEPS = stepsFor(journeyType);
+  const stepNames = isAiDocs
     ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Declare"]
-    : ["Input", "Research", "Confirm", "Fill Gaps", "Declare"];
+    : ["Company", "Research", "Confirm", "Fill Gaps", "Declare"];
 
-  // Loader messages — three modes: no Wolfsberg (existing), Wolfsberg phase 1 (extraction), phase 2 (research).
+  // Loader messages — three modes: no docs (existing), doc-extraction phase, web phase.
   const loaderMsgs = loaderPhase === 1
-    ? LOADER_MSGS_WOLFSBERG_PHASE1
+    ? phase1Msgs
     : loaderPhase === 2
       ? LOADER_MSGS_WOLFSBERG_PHASE2
       : LOADER_MSGS;
@@ -863,17 +1114,16 @@ export default function KYCAgent() {
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRevealedTs({}); setResearchTimestamp("");
-    setSecondaryConfirms({});
     gapRef.current = {}; setFormVersion(v => v + 1);
     setError(""); setDeclared(false);
-    setWolfsbergFile(null); setWolfsbergExtractedFields({}); setDocsChoice("");
+    setUploadedDocs(initialUploadedDocs());
+    setJourneyType(""); setJourneyOpen(false); setSelectedJourneyCard(null); setManualOpened(false);
+    setFieldMetadata([]);
     setLoaderPhase(0);
   };
 
   const fillTestData = () => {
-    const newConfirms = { ...secondaryConfirms };
     getCombinedGaps().forEach(g => {
-      if (g.section === "secondary") newConfirms[g.field] = true;
       const current = gapRef.current[g.field];
       if (current && String(current).trim().length > 0) return;
       let val = TEST_DATA[g.field];
@@ -881,106 +1131,150 @@ export default function KYCAgent() {
         const original = g.field.replace(/^corrected_/, "");
         val = TEST_DATA[original] || "Corrected value";
       }
-      if (val === undefined && g.field.startsWith("secondary_")) {
-        val = g.originalValue || "Sample value";
-      }
       if (val === undefined) {
         val = g.inputType === "select" && g.options && g.options.length > 0 ? g.options[0] : "Sample value";
       }
       gapRef.current[g.field] = val;
     });
-    setSecondaryConfirms(newConfirms);
     setFormVersion(v => v + 1);
   };
 
+  // Unified post-Confirm gap list.
+  //   1. corrections — fields the user unchecked on Confirm (any tier)
+  //   2. missing_research — research fields the AI couldn't find from
+  //      any source (rendered as plain text inputs, optional)
+  //   3. schema.gapFields — always-manual fields
   const getCombinedGaps = () => {
     if (!research || !activeSchema) return [];
     const apiGaps = research.gaps || activeSchema.gapFields;
-    // Authoritative items the user unchecked → corrections.
-    // Secondary items are NOT shown as checkboxes on Step 2, so they
-    // never enter the corrections flow — they go straight to the
-    // "secondary" section below.
     const unchecked = (research.found || [])
-      .filter((item, i) => item.trust !== "secondary" && !checks[i])
+      .filter((item, i) => !checks[i])
       .map(item => ({
         field: "corrected_" + item.field, label: item.label + " (correction needed)",
         reason: "Original: " + item.value, inputType: "text", required: true, section: "corrections"
       }));
-    const secondary = (research.found || [])
-      .filter(item => item.trust === "secondary")
-      .map(item => ({
-        field: "secondary_" + item.field, label: item.label,
-        inputType: "text", required: true, section: "secondary",
-        source: item.source, originalValue: item.value,
+    const foundIds = new Set((research.found || []).map(i => i.field));
+    const missingResearch = (activeSchema.researchFields || [])
+      .filter(rf => !foundIds.has(rf.field))
+      .map(rf => ({
+        field: rf.field, label: rf.label, inputType: "text", required: false, section: "missing_research",
       }));
-    return [...unchecked, ...secondary, ...apiGaps];
+    return [...unchecked, ...missingResearch, ...apiGaps];
   };
 
   const allGapsFilled = () => getCombinedGaps().filter(g => g.required).every(g => {
     if (!dependsOnSatisfied(g)) return true;
     const v = gapRef.current[g.field];
     if (!v || !String(v).trim()) return false;
-    if (g.section === "secondary" && !secondaryConfirms[g.field]) return false;
     return true;
   });
 
-  const doResearch = async () => {
+  // ─── Single-doc extraction helper. Returns { docFound, wolfsbergFields, raw }.
+  // - docFound: array of result rows tagged sourceTier:"document"
+  // - wolfsbergFields: only populated for the Wolfsberg slot (legacy object format),
+  //     used to seed the web prompt so the AI doesn't re-search those fields.
+  // - raw: parsed JSON for the by-doc audit map.
+  const extractFromDoc = async (docType, file, schema, flow, fetchTs) => {
+    const base64 = await readFileAsBase64(file);
+    const mediaType = file.type === "image/png" || file.type === "image/jpeg" ? file.type : "application/pdf";
+    const isImage = mediaType.startsWith("image/");
+    const blockType = isImage ? "image" : "document";
+    const resp = await fetch("/api/research", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 4096,
+        tools: [],
+        messages: [{
+          role: "user",
+          content: [
+            { type: blockType, source: { type: "base64", media_type: mediaType, data: base64 } },
+            { type: "text", text: docType.extractionPrompt },
+          ],
+        }],
+      }),
+    });
+    if (!resp.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(`Extraction call failed for ${docType.key}`, resp.status);
+      return { docFound: [], wolfsbergFields: {}, raw: null };
+    }
+    const respData = await resp.json();
+    const txt = (respData.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = txt.replace(/^```json\s*/i, "").replace(/^```/i, "").replace(/```\s*$/i, "").trim();
+    if (docType.returnsObject) {
+      // Wolfsberg legacy shape — let the web prompt do the field-id mapping.
+      try {
+        const parsed = JSON.parse(cleaned);
+        const filtered = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== null && v !== ""));
+        return { docFound: [], wolfsbergFields: filtered, raw: filtered };
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn(`Could not parse Wolfsberg extraction`, e, txt);
+        return { docFound: [], wolfsbergFields: {}, raw: null };
+      }
+    }
+    try {
+      const arr = JSON.parse(cleaned);
+      if (!Array.isArray(arr)) return { docFound: [], wolfsbergFields: {}, raw: arr };
+      const docFound = [];
+      for (const entry of arr) {
+        if (!entry || !entry.fieldId || entry.value === null || entry.value === undefined || entry.value === "") continue;
+        const mapped = mapExtractedKey(flow, entry.fieldId);
+        if (!mapped) continue;
+        const sf = schema.researchFields.find(r => r.field === mapped);
+        if (!sf) continue;
+        if (docFound.some(f => f.field === mapped)) continue;
+        docFound.push({
+          field: mapped, label: sf.label, value: String(entry.value),
+          source: docType.sourceName, sourceUrl: null,
+          sourceTier: "document", documentType: docType.key,
+          fetchedAt: fetchTs, method: "document_extract", confidence: "high",
+          trust: "authoritative", wolfsberg: false,
+        });
+      }
+      return { docFound, wolfsbergFields: {}, raw: arr };
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`Could not parse extraction for ${docType.key}`, e, txt);
+      return { docFound: [], wolfsbergFields: {}, raw: null };
+    }
+  };
+
+  const doResearch = async (journeyOverride) => {
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
+    const journey = journeyOverride || journeyType || "ai_only";
+    const S = stepsFor(journey);
     const schema = getSchema(countryCode, entityType);
     setActiveSchema(schema);
-    setLoading(true); setStep(STEPS.research); setLoaderIdx(0);
+    setLoading(true); setStep(S.research); setLoaderIdx(0);
     try {
-      // ─── Phase 1: Wolfsberg PDF extraction (FI flow only, optional) ───
-      let wolfsbergFields = {};
-      if (wolfsbergFile && wolfsbergFile.file) {
+      // ─── Phase 1: extract from each uploaded document, in DOC_TYPES order ───
+      const flow = schema.flow === "fi" ? "fi" : "corporate";
+      const hasAnyDocs = DOC_TYPES.some(d => uploadedDocs[d.key]);
+      const runDocPhase = journey === "ai_documents" && hasAnyDocs;
+
+      let docFound = [];                  // sourceTier:"document" rows, ordered by DOC_TYPES priority
+      let wolfsbergFields = {};           // legacy obj for prompt injection
+
+      if (runDocPhase) {
+        setPhase1Msgs(buildPhase1Msgs(uploadedDocs));
         setLoaderPhase(1); setLoaderIdx(0);
-        const base64PDF = await readFileAsBase64(wolfsbergFile.file);
-        const extractRes = await fetch("/api/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-5",
-            max_tokens: 4096,
-            tools: [],
-            messages: [{
-              role: "user",
-              content: [
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64PDF } },
-                { type: "text", text: WOLFSBERG_EXTRACTION_PROMPT },
-              ],
-            }],
-          }),
-        });
-        if (extractRes.ok) {
-          const extractData = await extractRes.json();
-          const extractedText = (extractData.content || [])
-            .filter(b => b.type === "text")
-            .map(b => b.text)
-            .join("");
-          try {
-            wolfsbergFields = JSON.parse(
-              extractedText
-                .replace(/^```json\s*/i, "")
-                .replace(/^```/i, "")
-                .replace(/```\s*$/i, "")
-                .trim()
-            );
-            // Drop nulls so the prompt only carries what we actually extracted.
-            wolfsbergFields = Object.fromEntries(
-              Object.entries(wolfsbergFields).filter(([, v]) => v !== null && v !== "")
-            );
-            setWolfsbergExtractedFields(wolfsbergFields);
-          } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn("Could not parse Wolfsberg extraction", e, extractedText);
-            wolfsbergFields = {};
+        for (let i = 0; i < DOC_TYPES.length; i++) {
+          const dt = DOC_TYPES[i];
+          const file = uploadedDocs[dt.key];
+          if (!file) continue;
+          const fetchTs = new Date().toISOString();
+          const { docFound: dFound, wolfsbergFields: wFields } = await extractFromDoc(dt, file, schema, flow, fetchTs);
+          if (dt.key === "wolfsberg") wolfsbergFields = wFields;
+          // Dedup: keep first source (which respects DOC_TYPES priority order).
+          for (const row of dFound) {
+            if (!docFound.some(f => f.field === row.field)) docFound.push(row);
           }
-        } else {
-          // eslint-disable-next-line no-console
-          console.warn("Wolfsberg extraction call failed", extractRes.status);
         }
         setLoaderPhase(2); setLoaderIdx(0);
       }
@@ -1010,92 +1304,139 @@ export default function KYCAgent() {
       text = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
       const si = text.indexOf("{"); const ei = text.lastIndexOf("}");
       if (si === -1 || ei === -1) throw new Error("No JSON found in response");
-      const slice = text.slice(si, ei + 1);
       let parsed;
       try {
-        parsed = JSON.parse(slice);
+        parsed = JSON.parse(text.slice(si, ei + 1));
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("Raw research response (could not parse):", text);
         throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens — see browser console for the full response.`);
       }
-      const found = (parsed.found || []).map(item => {
-        const isWolfsberg = !!(item.source && /wolfsberg/i.test(item.source));
+      const webFetchTs = new Date().toISOString();
+      const webFound = (parsed.found || []).map(item => {
+        const isWolfsbergSrc = !!(item.source && /wolfsberg/i.test(item.source));
+        const tier = isWolfsbergSrc
+          ? "document"
+          : (classifySource(item.source, countryCode) === "authoritative" ? "tier1" : "tier2");
         return {
           ...item,
-          // Wolfsberg-sourced items are tier-1 confirmed regardless of country trust list.
-          trust: isWolfsberg ? "authoritative" : classifySource(item.source, countryCode),
-          wolfsberg: isWolfsberg,
+          sourceUrl: item.sourceUrl || null,
+          sourceTier: tier,
+          documentType: isWolfsbergSrc ? "wolfsberg" : null,
+          fetchedAt: webFetchTs,
+          method: isWolfsbergSrc ? "document_extract" : "web_search",
+          confidence: tier === "tier2" ? "low" : "high",
+          trust: tier === "tier2" ? "secondary" : "authoritative",
+          wolfsberg: isWolfsbergSrc,
         };
       });
-      const tagged = { ...parsed, found };
-      setResearch(tagged);
-      setResearchTimestamp(new Date().toISOString());
-      // Pre-check authoritative items; leave secondary unchecked on Step 2.
-      // (Secondary items render on Step 3 as pre-filled inputs to confirm.)
+
+      // Doc-extracted rows take priority over anything web returned for the same field.
+      const docFieldIds = new Set(docFound.map(f => f.field));
+      const merged = [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))];
+
+      setResearch({ ...parsed, found: merged });
+      setResearchTimestamp(webFetchTs);
+
+      // Build silent metadata trail (Part 5).
+      const meta = merged.map(item => ({
+        fieldId: item.field, value: item.value,
+        source: item.source || "Unknown", sourceUrl: item.sourceUrl || null,
+        sourceTier: item.sourceTier, documentType: item.documentType || null,
+        fetchedAt: item.fetchedAt, method: item.method, confidence: item.confidence,
+        customerAction: null, customerActionAt: null,
+      }));
+      setFieldMetadata(meta);
+
+      // Unified pre-fill engine: pre-check every found item. Customer unchecks
+      // anything wrong, including tier-2 unverified items (which carry an
+      // inline warning on the Confirm page).
       const c = {};
-      found.forEach((item, i) => { c[i] = item.trust === "authoritative"; });
+      merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
       setRevealedTs({});
       gapRef.current = {};
-      // Pre-populate secondary items into the gap form so the user can edit.
-      found.forEach(item => {
-        if (item.trust === "secondary") {
-          gapRef.current["secondary_" + item.field] = item.value;
-        }
-      });
-      setSecondaryConfirms({});
       setFormVersion(v => v + 1);
-      setStep(STEPS.confirm);
-    } catch (err) { setError("Research failed: " + err.message); setStep(STEPS.input); }
+      setStep(S.confirm);
+    } catch (err) { setError("Research failed: " + err.message); setStep(S.input); }
     finally { setLoading(false); setLoaderPhase(0); }
   };
 
   // Bypasses /api/research and synthesises a plausible result using
   // DUMMY_RESEARCH_VALUES + the selected country's authoritative source list.
-  // Sprinkles a couple of secondary-source rows so Step 3's "Pre-filled —
-  // Please Confirm" section is also exercised.
-  const doDummyResearch = async () => {
+  // Mirrors the production flow: doc-uploaded fields tagged sourceTier:"document",
+  // plus a sprinkle of tier-2 web rows.
+  const doDummyResearch = async (journeyOverride) => {
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
+    const journey = journeyOverride || journeyType || "ai_only";
+    const S = stepsFor(journey);
     const schema = getSchema(countryCode, entityType);
     setActiveSchema(schema);
-    setLoading(true); setStep(STEPS.research); setLoaderIdx(0);
-    if (wolfsbergFile && wolfsbergFile.file) {
+    setLoading(true); setStep(S.research); setLoaderIdx(0);
+
+    const hasAnyDocs = DOC_TYPES.some(d => uploadedDocs[d.key]);
+    const runDocPhase = journey === "ai_documents" && hasAnyDocs;
+
+    if (runDocPhase) {
+      setPhase1Msgs(buildPhase1Msgs(uploadedDocs));
       setLoaderPhase(1);
       await new Promise(r => setTimeout(r, 1500));
       setLoaderPhase(2); setLoaderIdx(0);
       await new Promise(r => setTimeout(r, 1500));
     } else {
-      // Hold the loader briefly so the animation is visible.
       await new Promise(r => setTimeout(r, 3000));
     }
 
     const authPattern = (SOURCE_TRUST[countryCode] || ["public registry"])[0];
     const authSource = authPattern.replace(/\b\w/g, c => c.toUpperCase());
     const secondarySources = ["Wikipedia", "LinkedIn", "Company website"];
-    const wolfsbergSource = "Wolfsberg CBDDQ (uploaded)";
-    // When a dummy Wolfsberg file is present, mark a few representative fields
-    // as Wolfsberg-sourced so the badge gets exercised on Step 4.
-    const wolfsbergFields = (wolfsbergFile && wolfsbergFile.file)
-      ? new Set(["regulatory_authority", "licence_number", "has_licence", "ubo_parent_company", "ubo_share_percentage", "non_resident_customers", "services_other_fis"])
-      : new Set();
 
+    // Build a mock "doc-extracted" set: pick representative fields for each
+    // uploaded doc so the navy badge gets exercised on Confirm.
+    const docExtractedByField = {};   // field → { docKey, sourceName }
+    if (runDocPhase) {
+      const mockMap = {
+        wolfsberg: ["regulatory_authority", "licence_number", "has_licence", "ubo_parent_company", "ubo_share_percentage", "non_resident_customers", "services_other_fis"],
+        certificate: ["business_name", "registration_number", "incorporation_date", "registered_address_line1", "tradeName", "businessRegistrationNumber", "registeredDate", "addressLine1", "businessType", "registeredCountry"],
+        licence: ["licence_number", "regulatory_authority", "has_licence"],
+        annualReport: ["annual_turnover", "employee_count", "operating_countries", "publicly_listed", "annualRevenue", "employees", "countriesOfOperation", "stockListing"],
+        financialStatements: ["annual_turnover", "employee_count", "annualRevenue", "employees"],
+        orgChart: ["ubo_parent_company", "ubo_share_percentage", "uboAnalysis"],
+        amlPolicy: [],
+      };
+      DOC_TYPES.forEach(dt => {
+        if (!uploadedDocs[dt.key]) return;
+        const fields = mockMap[dt.key] || [];
+        fields.forEach(f => {
+          if (!(f in docExtractedByField)) {
+            docExtractedByField[f] = { docKey: dt.key, sourceName: dt.sourceName };
+          }
+        });
+      });
+    }
+
+    const dummyTs = new Date().toISOString();
     const found = schema.researchFields.map((f, i) => {
-      const isWolfsberg = wolfsbergFields.has(f.field);
-      // Make ~1 in 4 tier-2 fields look like they came from a secondary source
-      const isSecondary = !isWolfsberg && f.tier === 2 && i % 4 === 0;
-      const source = isWolfsberg ? wolfsbergSource : (isSecondary ? secondarySources[i % secondarySources.length] : authSource);
+      const docHit = docExtractedByField[f.field];
+      const isSecondary = !docHit && f.tier === 2 && i % 4 === 0;
+      const source = docHit
+        ? docHit.sourceName
+        : (isSecondary ? secondarySources[i % secondarySources.length] : authSource);
+      const sourceTier = docHit ? "document" : (isSecondary ? "tier2" : "tier1");
       const value = DUMMY_RESEARCH_VALUES[f.field] || ("Sample " + f.label);
       return {
-        field: f.field,
-        label: f.label,
-        value,
-        source,
-        trust: isWolfsberg ? "authoritative" : classifySource(source, countryCode),
-        wolfsberg: isWolfsberg,
+        field: f.field, label: f.label, value, source,
+        sourceUrl: null,
+        sourceTier,
+        documentType: docHit ? docHit.docKey : null,
+        fetchedAt: dummyTs,
+        method: docHit ? "document_extract" : "web_search",
+        confidence: sourceTier === "tier2" ? "low" : "high",
+        trust: sourceTier === "tier2" ? "secondary" : "authoritative",
+        wolfsberg: docHit && docHit.docKey === "wolfsberg",
       };
     });
 
@@ -1107,38 +1448,169 @@ export default function KYCAgent() {
       gaps: schema.gapFields.map(f => ({ ...f, reason: "Not publicly available" })),
     };
     setResearch(tagged);
-    setResearchTimestamp(new Date().toISOString());
+    setResearchTimestamp(dummyTs);
+
+    setFieldMetadata(found.map(item => ({
+      fieldId: item.field, value: item.value,
+      source: item.source, sourceUrl: null,
+      sourceTier: item.sourceTier, documentType: item.documentType,
+      fetchedAt: item.fetchedAt, method: item.method, confidence: item.confidence,
+      customerAction: null, customerActionAt: null,
+    })));
 
     const c = {};
-    found.forEach((item, i) => { c[i] = item.trust === "authoritative"; });
+    found.forEach((_, i) => { c[i] = true; });
     setChecks(c);
     setRevealedTs({});
     gapRef.current = {};
-    found.forEach(item => {
-      if (item.trust === "secondary") {
-        gapRef.current["secondary_" + item.field] = item.value;
-      }
-    });
-    setSecondaryConfirms({});
     setFormVersion(v => v + 1);
     setLoading(false); setLoaderPhase(0);
-    setStep(STEPS.confirm);
+    setStep(S.confirm);
   };
 
+  // Continue handler from Documents step → triggers research with whatever
+  // was uploaded (zero docs is fine; web search runs alone).
   const proceedFromDocuments = () => {
-    if (!docsChoice) { setError("Please choose an option to continue."); return; }
-    if (docsChoice === "yes" && !wolfsbergFile) { setError("Please upload your CBDDQ file or choose Skip."); return; }
     setError("");
     doResearch();
   };
 
-  const handleWolfsbergFile = (e) => {
+  // Generic per-doc file handler. Clears the slot on null.
+  const handleDocFile = (key) => (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    if (file.type !== "application/pdf") { setError("File must be a PDF."); return; }
-    if (file.size > 20 * 1024 * 1024) { setError("File must be 20MB or smaller."); return; }
+    const dt = DOC_TYPES.find(d => d.key === key);
+    if (!dt) return;
+    const accepted = dt.accept.split(",").map(s => s.trim());
+    if (!accepted.includes(file.type)) {
+      setError(`${dt.label}: file must be ${dt.accepts}.`);
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) { setError(`${dt.label}: file must be 20MB or smaller.`); return; }
     setError("");
-    setWolfsbergFile({ file, name: file.name });
+    setUploadedDocs(prev => ({ ...prev, [key]: file }));
+  };
+  const removeDocFile = (key) => () => setUploadedDocs(prev => ({ ...prev, [key]: null }));
+
+  // Journey-screen Continue → routes per selected card.
+  const proceedFromJourney = () => {
+    if (!selectedJourneyCard) { setError("Please choose an option to continue."); return; }
+    setError("");
+    if (selectedJourneyCard === "A") {
+      setJourneyType("ai_documents");
+      setJourneyOpen(false);
+      setManualOpened(false);
+      setStep(1); // documents step
+    } else if (selectedJourneyCard === "B") {
+      setJourneyType("ai_only");
+      setJourneyOpen(false);
+      setManualOpened(false);
+      // STEPS in this branch is { input:0, research:1, ... }
+      doResearch("ai_only");
+    } else if (selectedJourneyCard === "C") {
+      setJourneyType("manual");
+      window.open(MANUAL_FORM_URL, "_blank", "noopener,noreferrer");
+      setManualOpened(true);
+    }
+  };
+
+  // RFC4122 v4 UUID — uses crypto.randomUUID where available, falls back
+  // to a Math.random()-based generator for older browsers.
+  const genUUID = () => {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : ((r & 0x3) | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  // Final submission: build the metadata + payload, log, advance to Done.
+  const submitApplication = () => {
+    const submittedAt = new Date().toISOString();
+    setSubmitTs(submittedAt);
+
+    // Append manual-input metadata for every gapRef entry that has a value.
+    const manualEntries = [];
+    Object.entries(gapRef.current).forEach(([fieldId, value]) => {
+      if (value === undefined || value === null || String(value).trim() === "") return;
+      const key = fieldId.startsWith("corrected_") ? fieldId.slice("corrected_".length) : fieldId;
+      // Mark corrections distinctly so the trail shows the user's overwrite
+      // alongside the original AI-found row.
+      manualEntries.push({
+        fieldId: key,
+        value: String(value),
+        source: "Customer input",
+        sourceUrl: null,
+        sourceTier: "manual",
+        documentType: null,
+        fetchedAt: submittedAt,
+        method: "manual",
+        confidence: "verified",
+        customerAction: fieldId.startsWith("corrected_") ? "corrected" : "entered",
+        customerActionAt: submittedAt,
+      });
+    });
+    const finalMeta = [...fieldMetadata.filter(m => !manualEntries.some(e => e.fieldId === m.fieldId && e.customerAction === "corrected")), ...manualEntries];
+    setFieldMetadata(finalMeta);
+
+    // Build a flat fieldId → value map. For corrections, the manual value wins.
+    const fieldValues = {};
+    (research?.found || []).forEach((it, i) => {
+      if (checks[i]) fieldValues[it.field] = it.value;
+    });
+    Object.entries(gapRef.current).forEach(([fieldId, value]) => {
+      if (value === undefined || value === null || String(value).trim() === "") return;
+      const key = fieldId.startsWith("corrected_") ? fieldId.slice("corrected_".length) : fieldId;
+      fieldValues[key] = String(value);
+    });
+
+    const payload = {
+      submissionId: genUUID(),
+      submittedAt,
+      company: {
+        name: research?.companyName || companyName,
+        countryCode,
+        countryName: countryObj ? countryObj.name : countryCode,
+        entityType,
+        schemaJurisdiction: activeSchema?.region === "UK" ? "GB" : "SG",
+      },
+      journeyType,
+      documentsUploaded: DOC_TYPES.filter(d => uploadedDocs[d.key]).map(d => d.key),
+      researchTimestamp,
+      fromCache: false,
+      fieldValues,
+      fieldMetadata: finalMeta,
+      declaration: {
+        ipAddress: device.ipAddress,
+        userAgent: device.userAgent,
+        platform: device.platform,
+        timezone: device.timezone,
+        timestamp: submittedAt,
+        language: device.language,
+        agreedAt: submittedAt,
+        certifiedAt: submittedAt,
+      },
+    };
+    // eslint-disable-next-line no-console
+    console.log("APPLICATION_SUBMISSION", payload);
+    setDone(true);
+  };
+
+  // Toggle a Confirm-page checkbox AND record the action in metadata.
+  const toggleCheck = (idx) => {
+    setChecks(prev => {
+      const next = { ...prev, [idx]: !prev[idx] };
+      const item = (research && research.found) ? research.found[idx] : null;
+      if (item) {
+        const action = next[idx] ? "accepted" : "rejected";
+        const at = new Date().toISOString();
+        setFieldMetadata(prevMeta => prevMeta.map(m =>
+          m.fieldId === item.field ? { ...m, customerAction: action, customerActionAt: at } : m
+        ));
+      }
+      return next;
+    });
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
@@ -1150,7 +1622,7 @@ export default function KYCAgent() {
 
   const sectionConfig = {
     corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
-    secondary: { title: "Pre-filled — Please Confirm", icon: "🔍", sub: "Found on secondary sources (Wikipedia, LinkedIn, news, corporate website). Edit if wrong, then tick to confirm each one is correct.", twoCol: false },
+    missing_research: { title: "Missing Research Fields", icon: "❓", sub: "We could not find these from any source — fill in if you have the data (all optional).", twoCol: true },
     applicant: { title: "Applicant Details", icon: "👤", sub: "Person authorised to submit this application", twoCol: true },
     business: { title: "Business Details", icon: "🏢", sub: "Confirm and complete business information", twoCol: true },
     nature: { title: "Nature & Size of Business", icon: "🏢", sub: "Business activity and size details", twoCol: true },
@@ -1169,35 +1641,6 @@ export default function KYCAgent() {
       .filter(dependsOnSatisfied);
     if (items.length === 0) return null;
     const cfg = sectionConfig[sectionKey] || { title: sectionKey, icon: "📋", sub: "", twoCol: false };
-
-    if (sectionKey === "secondary") {
-      return (
-        <div style={card} key={sectionKey}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
-          <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
-          {items.map(g => {
-            const confirmed = !!secondaryConfirms[g.field];
-            return (
-              <div key={g.field} style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: confirmed ? "#f0f9f6" : "#fff8ed", border: `1.5px solid ${confirmed ? "#4a9e8e" : "#e0a040"}` }}>
-                <StableInput id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} placeholder={"Enter " + g.label.toLowerCase()} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: -4 }}>
-                  <span style={{ fontSize: 11, color: "#1a3a4a90", fontStyle: "italic" }}>📌 Source: {g.source || "Unknown"} <span style={{ color: "#b07d10", fontWeight: 600, fontStyle: "normal" }}>· Unverified</span></span>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, fontWeight: 700, color: confirmed ? "#1a6b56" : "#b07d10" }}>
-                    <input
-                      type="checkbox"
-                      checked={confirmed}
-                      onChange={(e) => setSecondaryConfirms(p => ({ ...p, [g.field]: e.target.checked }))}
-                      style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }}
-                    />
-                    {confirmed ? "Confirmed" : "Tick to confirm correct"}
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
 
     return (
       <div style={card} key={sectionKey}>
@@ -1222,49 +1665,99 @@ export default function KYCAgent() {
     </span>
   ) : null;
 
-  const tierOf = (item) => {
-    const def = activeSchema && activeSchema.researchFields.find(f => f.field === item.field);
-    return def && def.tier === 2 ? 2 : 1;
+  // Lookup the metadata entry for a given fieldId — used by the "When?"
+  // click-to-reveal badge so timestamps come from fieldMetadata, the
+  // single source of truth.
+  const metaFor = (fieldId) => fieldMetadata.find(m => m.fieldId === fieldId);
+
+  // Source-tier visual treatment per row.
+  // document → dark navy badge with the document type label
+  // tier1    → green pill with the source name
+  // tier2    → amber pill with "From an unverified source — please confirm"
+  const renderSourceBadge = (item, idx) => {
+    const m = metaFor(item.field);
+    const ts = (m && m.fetchedAt) || researchTimestamp || "";
+    const tsShort = ts ? ts.slice(11, 19) : "";
+    if (item.sourceTier === "document") {
+      const label = item.source || "Uploaded document";
+      return (
+        <span
+          onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+          title={revealedTs[idx] ? `🕒 ${ts}` : `From uploaded ${label}`}
+          style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#0B3D91", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+        >
+          {revealedTs[idx] ? `🕒 ${tsShort}` : `📄 ${label}`}
+        </span>
+      );
+    }
+    if (item.sourceTier === "tier1") {
+      return (
+        <span
+          onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+          title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+          style={{ fontSize: 10, fontWeight: 700, color: "#1a6b56", background: "#dff2ec", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+        >
+          {revealedTs[idx] ? `🕒 ${ts}` : `✅ ${item.source}`}
+        </span>
+      );
+    }
+    // tier2
+    return (
+      <span
+        onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+        title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+        style={{ fontSize: 10, fontWeight: 700, color: "#8c5500", background: "#fff1d6", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+      >
+        {revealedTs[idx] ? `🕒 ${ts}` : `⚠️ ${item.source}`}
+      </span>
+    );
   };
 
-  const renderFoundTable = (items, title, subtitle) => (
+  // One unified table grouped by source tier, sorted within group by
+  // schema research-field order.
+  const renderUnifiedFoundTable = (items, title, subtitle) => (
     <div style={card}>
       <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{title}</h3>
       <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>{subtitle}</p>
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
         {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
       </div>
-      {items.map(({ item, idx }) => (
-        <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: idx % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
-          <input type="checkbox" checked={!!checks[idx]} onChange={() => setChecks(p => ({ ...p, [idx]: !p[idx] }))} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+      {items.map(({ item, idx }, n) => (
+        <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
+          <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
           <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
-          <span style={{ fontSize: 11, wordBreak: "break-word" }}>{item.value}</span>
-          {item.wolfsberg ? (
-            <span
-              onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-              title={revealedTs[idx] ? `🕒 ${researchTimestamp}` : "From uploaded Wolfsberg CBDDQ"}
-              style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#0B3D91", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
-            >
-              {revealedTs[idx] ? `🕒 ${researchTimestamp.slice(11, 19)}` : "📄 Wolfsberg CBDDQ"}
-            </span>
-          ) : (
-            <span
-              onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-              title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
-              style={{ fontSize: 10, color: "#4a9e8e", fontStyle: "italic", cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 }}
-            >
-              {revealedTs[idx] ? `🕒 ${researchTimestamp}` : item.source}
-            </span>
-          )}
+          <span style={{ fontSize: 11, wordBreak: "break-word" }}>
+            {item.value}
+            {item.sourceTier === "tier2" && (
+              <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
+                From an unverified source — please confirm this is correct
+              </div>
+            )}
+          </span>
+          {renderSourceBadge(item, idx)}
         </div>
       ))}
     </div>
   );
 
-  const authFound = (research?.found || []).map((item, idx) => ({ item, idx })).filter(x => x.item.trust !== "secondary");
-  const tier1Items = authFound.filter(x => tierOf(x.item) === 1);
-  const tier2Items = authFound.filter(x => tierOf(x.item) === 2);
-  const secondaryCount = (research?.found || []).filter(item => item.trust === "secondary").length;
+  // Sort key per spec: documents first, tier1 next, tier2 last; within group
+  // by the schema researchFields order.
+  const sourceTierRank = { document: 0, tier1: 1, tier2: 2 };
+  const fieldOrderMap = activeSchema ? new Map(activeSchema.researchFields.map((f, i) => [f.field, i])) : new Map();
+  const sortedFound = (research?.found || [])
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const ra = sourceTierRank[a.item.sourceTier] ?? 99;
+      const rb = sourceTierRank[b.item.sourceTier] ?? 99;
+      if (ra !== rb) return ra - rb;
+      const fa = fieldOrderMap.has(a.item.field) ? fieldOrderMap.get(a.item.field) : 999;
+      const fb = fieldOrderMap.has(b.item.field) ? fieldOrderMap.get(b.item.field) : 999;
+      return fa - fb;
+    });
+
+  const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
+  const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
+  const tier2Count = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
@@ -1286,7 +1779,7 @@ export default function KYCAgent() {
           ))}
         </div>
 
-        {step === STEPS.input && (
+        {step === STEPS.input && !journeyOpen && (
           <div style={card}>
             <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Company Lookup</h2>
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
@@ -1329,90 +1822,182 @@ export default function KYCAgent() {
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
               <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>
-              {isFi ? (
-                <Btn onClick={() => {
-                  if (!companyName.trim()) { setError("Please enter a company name."); return; }
-                  if (!entityType) { setError("Please select an entity type."); return; }
-                  if (!countryCode) { setError("Please select a country."); return; }
-                  setError("");
-                  setStep(STEPS.documents);
-                }} variant="primary">Continue →</Btn>
-              ) : (
-                <Btn onClick={doResearch} variant="primary">🔍 Research Company</Btn>
-              )}
+              <Btn onClick={() => {
+                if (!companyName.trim()) { setError("Please enter a company name."); return; }
+                if (!entityType) { setError("Please select an entity type."); return; }
+                if (!countryCode) { setError("Please select a country."); return; }
+                setError("");
+                setSelectedJourneyCard(null);
+                setManualOpened(false);
+                setJourneyOpen(true);
+              }} variant="primary">Continue →</Btn>
             </div>
           </div>
         )}
 
-        {step === STEPS.documents && isFi && (
-          <div>
-            <div style={card}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>Before we research — do you have a Wolfsberg questionnaire?</h2>
-              <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
-                The Wolfsberg CBDDQ (Correspondent Banking Due Diligence Questionnaire) is a standardised AML questionnaire completed by financial institutions. If your institution has a completed and signed copy, uploading it now will significantly improve the accuracy of our research — we can extract up to 40 additional fields automatically, reducing what you need to fill in manually.
-              </p>
+        {step === STEPS.input && journeyOpen && (
+          <div style={card}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>How would you like to complete your application?</h2>
+            <p style={{ fontSize: 13, color: "#1a3a4a80", margin: "0 0 18px" }}>Choose the option that works best for you. You can always go back and change this.</p>
 
-              {/* Card A — Yes, I have a Wolfsberg CBDDQ */}
-              <div
-                onClick={() => { setDocsChoice("yes"); setError(""); }}
-                style={{
-                  padding: "16px 18px", borderRadius: 10, marginBottom: 12, cursor: "pointer",
-                  background: docsChoice === "yes" ? "#f0f9f6" : "#fafcfb",
-                  border: `2px solid ${docsChoice === "yes" ? "#4a9e8e" : "rgba(26,58,74,0.12)"}`,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#0B3D91", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff" }}>📤</div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>Yes, I have a Wolfsberg CBDDQ</div>
-                    <div style={{ fontSize: 12, color: "#1a3a4a80" }}>Upload your completed and signed CBDDQ PDF</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 }}>
+              {/* Card A */}
+              {(() => {
+                const sel = selectedJourneyCard === "A";
+                return (
+                  <div
+                    onClick={() => { setSelectedJourneyCard("A"); setError(""); }}
+                    style={{
+                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      background: sel ? "#f0f9f6" : "#fafcfb",
+                      border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.18)"}`,
+                      boxShadow: sel ? "0 6px 18px rgba(26,58,74,0.12)" : "none",
+                    }}
+                  >
+                    <span style={{ position: "absolute", top: 10, right: 10, background: "#4a9e8e", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>Recommended</span>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔍📄</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Upload documents &amp; let AI fill the rest</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Upload any documents you have — we extract data from them instantly. For anything we can't find in your documents, our AI searches public registries and web sources.</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#4a9e8e" }}>Fastest · Most accurate · Lowest effort</div>
                   </div>
-                </div>
-                {docsChoice === "yes" && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(26,58,74,0.08)" }}>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={handleWolfsbergFile}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 13, background: "#fff", cursor: "pointer", boxSizing: "border-box" }}
-                    />
-                    <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "8px 0 4px" }}>Accepted format: PDF. Maximum size: 20MB.</p>
-                    <p style={{ fontSize: 11, color: "#1a3a4a70", fontStyle: "italic", margin: 0 }}>
-                      We will extract: AML programme details, sanctions lists, EDD policies, business areas, employee count, ownership structure, LEI number, and more.
-                    </p>
-                    {wolfsbergFile && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "#1a6b56" }}>✓ {wolfsbergFile.name}</div>}
-                  </div>
-                )}
-              </div>
+                );
+              })()}
 
-              {/* Card B — No, skip this step */}
-              <div
-                onClick={() => { setDocsChoice("no"); setWolfsbergFile(null); setError(""); }}
-                style={{
-                  padding: "16px 18px", borderRadius: 10, cursor: "pointer",
-                  background: docsChoice === "no" ? "#f0f3f8" : "#fafcfb",
-                  border: `2px solid ${docsChoice === "no" ? "#1a3a4a" : "rgba(26,58,74,0.12)"}`,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#1a3a4a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#fff" }}>→</div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>No, skip this step</div>
-                    <div style={{ fontSize: 12, color: "#1a3a4a80" }}>We will research using public sources only</div>
+              {/* Card B */}
+              {(() => {
+                const sel = selectedJourneyCard === "B";
+                return (
+                  <div
+                    onClick={() => { setSelectedJourneyCard("B"); setError(""); }}
+                    style={{
+                      padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      background: sel ? "#f0f3f8" : "#fafcfb",
+                      border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.12)"}`,
+                    }}
+                  >
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Let AI research your company</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>No documents needed. Our AI searches Companies House, regulatory registers, annual reports and other public sources to pre-fill your application.</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#4a9e8e" }}>~30 seconds · No uploads needed</div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
-              {error && <div style={{ marginTop: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+              {/* Card C */}
+              {(() => {
+                const sel = selectedJourneyCard === "C";
+                return (
+                  <div
+                    onClick={() => { setSelectedJourneyCard("C"); setError(""); }}
+                    style={{
+                      padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      background: sel ? "#f5f5f5" : "#f8f8f8",
+                      border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.1)"}`,
+                      opacity: 0.92,
+                    }}
+                  >
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>✏️</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>I'll complete the form myself</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Skip the AI research and fill everything manually using your own records. You'll be redirected to our standard application form.</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#1a3a4a90" }}>Full control · No AI · ~15 minutes</div>
+                  </div>
+                );
+              })()}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => { setError(""); setStep(STEPS.input); }}>← Back</Btn>
-              <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
+            {manualOpened && (
+              <div style={{ marginTop: 4, marginBottom: 12, padding: "10px 14px", background: "#f0f3f8", borderRadius: 8, fontSize: 12, color: "#1a3a4a", borderLeft: "3px solid #1a3a4a" }}>
+                Opening the manual form in a new tab… You can also continue with AI assistance above.
+              </div>
+            )}
+
+            {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <Btn variant="secondary" onClick={() => { setJourneyOpen(false); setManualOpened(false); setError(""); }}>← Back</Btn>
+              <Btn variant="primary" onClick={proceedFromJourney}>Continue →</Btn>
             </div>
           </div>
         )}
+
+        {isAiDocs && step === STEPS.documents && (() => {
+          const docs = DOC_TYPES.filter(d => d.entities.includes(entityType));
+          const uploadedCount = docs.reduce((n, d) => n + (uploadedDocs[d.key] ? 1 : 0), 0);
+          return (
+            <div>
+              <div style={card}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Upload your documents</h2>
+                <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
+                  All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                  {docs.map(d => {
+                    const file = uploadedDocs[d.key];
+                    const inputId = `upload-${d.key}`;
+                    return (
+                      <div key={d.key} style={{
+                        padding: "14px 14px", borderRadius: 12,
+                        background: file ? "#f0f9f6" : "#fafcfb",
+                        border: file ? "2px solid #4a9e8e" : "2px dashed rgba(26,58,74,0.18)",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <div style={{ fontSize: 20 }}>{d.icon}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, flex: 1 }}>{d.label}</div>
+                          {d.badge && (
+                            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.05em", padding: "3px 8px", borderRadius: 999, background: d.badge.color, color: "#fff", textTransform: "uppercase" }}>{d.badge.text}</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 10 }}>{d.helper}</div>
+                        {file ? (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid rgba(74,158,142,0.25)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                              <span style={{ color: "#1a6b56", fontWeight: 700, fontSize: 14 }}>✓</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "#1a3a4a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</div>
+                                <div style={{ fontSize: 10, color: "#1a3a4a70" }}>{(file.size / 1024).toFixed(0)} KB</div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={removeDocFile(d.key)}
+                              title="Remove"
+                              style={{ background: "transparent", border: "none", color: "#1a3a4a", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 4 }}
+                            >×</button>
+                          </div>
+                        ) : (
+                          <label htmlFor={inputId} style={{ display: "block", padding: "12px 10px", textAlign: "center", borderRadius: 8, background: "#fff", border: "1.5px dashed rgba(26,58,74,0.22)", cursor: "pointer", fontSize: 12, color: "#1a3a4a90" }}>
+                            Click to upload or drag and drop
+                            <div style={{ fontSize: 10, color: "#1a3a4a60", marginTop: 4 }}>{d.accepts}</div>
+                          </label>
+                        )}
+                        <input
+                          id={inputId}
+                          type="file"
+                          accept={d.accept}
+                          onChange={handleDocFile(d.key)}
+                          style={{ display: "none" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {error && <div style={{ marginTop: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+
+                <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: uploadedCount > 0 ? "#f0f9f6" : "#fafcfb", color: uploadedCount > 0 ? "#1a6b56" : "#1a3a4a70", fontSize: 12, fontWeight: 600 }}>
+                  {uploadedCount > 0
+                    ? `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} ready to upload`
+                    : "No documents selected — AI will use web search only"}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <Btn variant="secondary" onClick={() => { setError(""); setJourneyOpen(true); setStep(STEPS.input); }}>← Back</Btn>
+                <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
+              </div>
+            </div>
+          );
+        })()}
 
         {step === STEPS.research && (
           <div style={{ ...card, textAlign: "center", padding: "56px 28px" }}>
@@ -1432,7 +2017,7 @@ export default function KYCAgent() {
             </div>
             {loaderPhase > 0 && (
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0B3D91", marginBottom: 6 }}>
-                {loaderPhase === 1 ? "Phase 1 of 2 — Wolfsberg" : "Phase 2 of 2 — Web research"}
+                {loaderPhase === 1 ? "Phase 1 of 2 — Documents" : "Phase 2 of 2 — Web research"}
               </div>
             )}
             <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: 22, minHeight: 18 }}>
@@ -1479,25 +2064,21 @@ export default function KYCAgent() {
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
-                  <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>{(research.found || []).length} fields found · {(research.gaps || activeSchema.gapFields || []).length} gaps identified</p>
+                  <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
+                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count} need your attention
+                  </p>
                 </div>
               </div>
               <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
-                Below: data found from <strong>authoritative sources</strong> (registries, regulators, exchanges). Uncheck anything wrong — it'll appear on the next page for correction. Click any source to reveal when it was fetched.
-                {secondaryCount > 0 && (
-                  <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff8ed", borderRadius: 6, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-                    ⚠️ {secondaryCount} additional field{secondaryCount === 1 ? "" : "s"} found on <strong>secondary sources</strong> (Wikipedia, LinkedIn, news, corporate website) — you'll review and confirm those on the next page.
-                  </div>
-                )}
+                Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then unverified web sources. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
               </div>
             </div>
 
-            {tier1Items.length > 0 && renderFoundTable(tier1Items, "Tier 1 — Identity & Registration", "Public-registry data: legal name, registration number, address, business type.")}
-            {tier2Items.length > 0 && renderFoundTable(tier2Items, "Tier 2 — Enrichment & Risk", "Ownership, directors, financials, listings, PEP status.")}
+            {sortedFound.length > 0 && renderUnifiedFoundTable(sortedFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
 
-            {(research.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length > 0 && (
+            {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
               <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-                ⚠️ {(research.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length} field(s) unchecked — will appear on next page for correction.
+                ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
               </div>
             )}
 
@@ -1519,7 +2100,7 @@ export default function KYCAgent() {
                 </div>
               </div>
             </div>
-            {["corrections", "secondary", "applicant", "business", "nature", "fi", "stakeholders", "disclosures", "account", "usage", "bank", "documents"].map(s => renderGapSection(s))}
+            {["corrections", "missing_research", "applicant", "business", "nature", "fi", "stakeholders", "disclosures", "account", "usage", "bank", "documents"].map(s => renderGapSection(s))}
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <button
@@ -1584,7 +2165,7 @@ export default function KYCAgent() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => setStep(STEPS.fillGaps)}>← Back</Btn>
-              <Btn variant="green" onClick={() => { setSubmitTs(new Date().toISOString()); setDone(true); }} disabled={!declared}>✓ Submit Application</Btn>
+              <Btn variant="green" onClick={submitApplication} disabled={!declared}>✓ Submit Application</Btn>
             </div>
           </div>
         )}
@@ -1596,22 +2177,33 @@ export default function KYCAgent() {
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</p>
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>
-              {[
-                ["Company", research?.companyName || companyName],
-                ["Jurisdiction", activeSchema?.region === "UK" ? "United Kingdom" : "Singapore / Default"],
-                ["Pre-filled (authoritative)", (research?.found || []).filter((item, i) => item.trust !== "secondary" && checks[i]).length + " confirmed"],
-                ["Corrected", (research?.found || []).filter((item, i) => item.trust !== "secondary" && !checks[i]).length + " manually fixed"],
-                ["Secondary-source", (research?.found || []).filter(item => item.trust === "secondary").length + " reviewed & confirmed"],
-                ...(wolfsbergFile ? [["Wolfsberg CBDDQ", `${wolfsbergFile.name} · ${Object.keys(wolfsbergExtractedFields).length} fields extracted`]] : []),
-                ["Manual fields", Object.keys(gapRef.current).length + " provided"],
-                ["Applicant", (gapRef.current.applicantFirstName || "") + " " + (gapRef.current.applicantLastName || "")],
-                ["Declared at", submitTs.replace("T", " ").slice(0, 19) + " UTC"],
-                ["IP Address", device.ipAddress],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(26,58,74,0.04)", fontSize: 12 }}>
-                  <span style={{ fontWeight: 600 }}>{k}</span><span style={{ color: "#1a3a4a90" }}>{v}</span>
-                </div>
-              ))}
+              {(() => {
+                const docKeys = DOC_TYPES.filter(d => uploadedDocs[d.key]).map(d => d.label);
+                const docExtractedCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
+                const tier1 = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
+                const tier2 = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
+                const accepted = (research?.found || []).filter((_, i) => checks[i]).length;
+                const rejected = (research?.found || []).filter((_, i) => !checks[i]).length;
+                const rows = [
+                  ["Company", research?.companyName || companyName],
+                  ["Journey", journeyType === "ai_documents" ? "AI + Documents" : "AI Research Only"],
+                  ["Jurisdiction", activeSchema?.region === "UK" ? "United Kingdom" : "Singapore / Default"],
+                  ["From documents", docExtractedCount + " fields"],
+                  ["From official sources", tier1 + " fields"],
+                  ["From unverified sources", tier2 + " fields"],
+                  ["Accepted on Confirm", accepted + " · " + rejected + " corrected"],
+                  ...(docKeys.length > 0 ? [["Documents uploaded", docKeys.join(", ")]] : []),
+                  ["Manual fields", Object.keys(gapRef.current).length + " provided"],
+                  ["Applicant", (gapRef.current.applicantFirstName || "") + " " + (gapRef.current.applicantLastName || "")],
+                  ["Declared at", submitTs.replace("T", " ").slice(0, 19) + " UTC"],
+                  ["IP Address", device.ipAddress],
+                ];
+                return rows.map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid rgba(26,58,74,0.04)", fontSize: 12 }}>
+                    <span style={{ fontWeight: 600 }}>{k}</span><span style={{ color: "#1a3a4a90" }}>{v}</span>
+                  </div>
+                ));
+              })()}
             </div>
             <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
           </div>
