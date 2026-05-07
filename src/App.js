@@ -40,12 +40,6 @@ const COUNTRIES = [
   { code: "LK", name: "Sri Lanka" },{ code: "AM", name: "Armenia" },
 ];
 
-const CURRENCIES = [
-  "GBP", "USD", "EUR", "SGD", "AUD", "CAD", "JPY", "HKD", "CHF", "NZD",
-  "SEK", "NOK", "DKK", "INR", "CNY", "KRW", "MYR", "IDR", "THB", "PHP",
-  "VND", "AED", "SAR", "ZAR", "BRL", "MXN", "TRY", "PLN", "ILS", "TWD",
-];
-
 // Markets where Nium holds a licence. Country of registration matching one of these
 // uses that market's schema. Otherwise the Singapore licence applies as default.
 const LICENSED_MARKETS = ["GB"];
@@ -64,15 +58,6 @@ const accountSection = (currencyLabel) => [
   { field: "debitTopCountries", label: "Top Debit Transaction Countries", inputType: "text", required: true, section: "account" },
   { field: "intendedUses", label: "Intended Use of Account", inputType: "textarea", required: true, section: "account" },
   { field: "sourceOfFunds", label: "Source of Funds", inputType: "textarea", required: false, section: "account" },
-];
-
-const bankSection = () => [
-  { field: "bankAccountName", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
-  { field: "bankAccountNumber", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
-  { field: "bankName", label: "Bank Name", inputType: "text", required: true, section: "bank" },
-  { field: "bankSortCode", label: "Sort Code", inputType: "text", required: true, section: "bank" },
-  { field: "bankCurrency", label: "Account Currency", inputType: "select", required: true, section: "bank", options: CURRENCIES },
-  { field: "bankCountry", label: "Bank Country", inputType: "text", required: true, section: "bank" },
 ];
 
 /* ═══════════════════════════════════════════
@@ -121,7 +106,6 @@ const UK_SCHEMA = {
     { field: "applicantBirthCountry", label: "Applicant Birth Country", inputType: "text", required: true, section: "applicant" },
     { field: "applicantIsPEP", label: "Is Applicant a PEP?", inputType: "select", required: true, section: "applicant", options: ["Yes", "No"] },
     ...accountSection("GBP"),
-    ...bankSection(),
   ],
 };
 
@@ -173,7 +157,6 @@ const SG_SCHEMA = {
     { field: "sizeTotalEmployees", label: "Total Employees (range)", inputType: "select", required: true, section: "nature", options: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5000+"] },
     { field: "sizeAnnualTurnover", label: "Annual Turnover (range)", inputType: "select", required: true, section: "nature", options: ["Under 100K", "100K - 500K", "500K - 1M", "1M - 5M", "5M - 25M", "25M - 100M", "Over 100M"] },
     ...accountSection("SGD"),
-    ...bankSection(),
   ],
 };
 
@@ -311,17 +294,6 @@ const fiUsageFields = (fmt) => {
   ];
 };
 
-const fiBankFields = [
-  { field: "account_currency", label: "Account Currency", inputType: "select", required: true, section: "bank",
-    options: ["GBP", "USD", "EUR", "SGD", "AUD", "CAD", "HKD", "JPY", "NZD", "CHF", "SEK", "NOK", "DKK", "CNY", "INR", "MYR", "THB", "IDR", "PHP", "AED", "SAR", "BRL", "MXN", "ZAR", "TRY", "PLN"] },
-  { field: "bank_account_name", label: "Bank Account Name", inputType: "text", required: true, section: "bank" },
-  { field: "bank_name", label: "Bank Name", inputType: "text", required: true, section: "bank" },
-  { field: "bank_account_number", label: "Bank Account Number", inputType: "text", required: true, section: "bank" },
-  { field: "routing_type", label: "Routing Type", inputType: "select", required: true, section: "bank", options: ["Sort Code", "SWIFT/BIC", "IBAN", "ABA", "BSB", "IFSC"] },
-  { field: "routing_value", label: "Routing Value", inputType: "text", required: true, section: "bank" },
-  { field: "bank_country", label: "Bank Country", inputType: "text", required: true, section: "bank" },
-];
-
 const fiDocumentFields = [
   { field: "wolfsberg_questionnaire", label: "Wolfsberg Questionnaire", inputType: "file", required: false, section: "documents" },
   { field: "aml_policy", label: "AML Policy / Procedures", inputType: "file", required: false, section: "documents" },
@@ -341,7 +313,6 @@ const UK_FI_SCHEMA = {
     ...fiStakeholderFields,
     ...fiDisclosureFields,
     ...fiUsageFields(n => "£" + n),
-    ...fiBankFields,
     ...fiDocumentFields,
   ],
 };
@@ -358,7 +329,6 @@ const SG_FI_SCHEMA = {
     ...fiStakeholderFields,
     ...fiDisclosureFields,
     ...fiUsageFields(n => "SGD " + n),
-    ...fiBankFields,
     ...fiDocumentFields,
   ],
 };
