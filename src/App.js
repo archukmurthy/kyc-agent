@@ -342,6 +342,142 @@ const getSchema = (code, entityType) => {
 };
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
+/* ═══════════════════════════════════════════
+   CONFIG-DRIVEN HELPERS
+
+   The customer flow now reads its definitions from a tenant config
+   loaded via /api/config. These helpers compose the active schema,
+   source classifier, and document list from that config object,
+   falling back to the hardcoded constants above when the config has
+   no entry for a given combination.
+   ═══════════════════════════════════════════ */
+
+// Apply the configured routing policy to pick the licence for a customer
+// country. "regional" matches the country to a licence's countriesCovered;
+// "global" always returns the primary licence.
+const pickLicence = (countryCode, tenantConfig) => {
+  const licences = tenantConfig?.licences || [];
+  if (!licences.length) return null;
+  const primary = licences.find(l => l.isPrimary) || licences[0];
+  if (tenantConfig?.routingPolicy === "global") return primary;
+  const match = licences.find(l => Array.isArray(l.countriesCovered) && l.countriesCovered.includes(countryCode));
+  return match || primary;
+};
+
+// Look up the schema for an entity-type + customer-country combination.
+// Returns a fully-formed schema object compatible with the rest of the app
+// (label, region, flow, jurisdiction, researchFields, gapFields).
+const getSchemaFromConfig = (countryCode, entityTypeId, tenantConfig) => {
+  if (!tenantConfig) return getSchema(countryCode, entityTypeId);
+  const licence = pickLicence(countryCode, tenantConfig);
+  if (!licence) return getSchema(countryCode, entityTypeId);
+  const key = `${entityTypeId}:${licence.id}`;
+  const stored = tenantConfig.schemas?.[key];
+  if (!stored) return getSchema(countryCode, entityTypeId);
+  // flow heuristic: FI entity types use the FI flow; others are corporate.
+  const flow = entityTypeId === "FI" ? "fi" : "corporate";
+  return {
+    label: `${licence.jurisdictionName || licence.id}${flow === "fi" ? " (FI)" : ""}`,
+    region: licence.jurisdictionCode === "GB" ? "UK" : (licence.jurisdictionCode || "SG"),
+    jurisdiction: licence.jurisdictionCode || licence.id,
+    flow,
+    researchFields: stored.researchFields || [],
+    gapFields: stored.gapFields || [],
+  };
+};
+
+// Classify a source string (e.g. "Companies House" or a URL) using the
+// tenant's primary/secondary patterns. Falls back to the hardcoded
+// SOURCE_TRUST tables when the config has no matching pattern, which keeps
+// jurisdiction-specific authoritative recognition working.
+const classifySourceFromConfig = (source, countryCode, tenantConfig) => {
+  if (!source || typeof source !== "string") return "tier2";
+  const s = source.toLowerCase();
+  const tiers = tenantConfig?.sourceTiers;
+  if (tiers) {
+    for (const entry of (tiers.primary || [])) {
+      if (entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier1";
+    }
+    for (const entry of (tiers.secondary || [])) {
+      if (entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier2";
+    }
+  }
+  // Fallback to original SOURCE_TRUST + UNIVERSAL_AUTHORITATIVE rules.
+  return classifySource(source, countryCode) === "authoritative" ? "tier1" : "tier2";
+};
+
+// Merge the configured per-entity-type document list with the hardcoded
+// DOC_TYPES (which carry the extraction prompts and source-name strings).
+// Config can hide / reorder / rename docs; the AI extraction logic stays
+// hardcoded and is applied to docs whose ids match a DOC_TYPES entry.
+const docTypesForEntity = (entityTypeId, tenantConfig) => {
+  const configured = tenantConfig?.documents?.[entityTypeId];
+  if (!configured) {
+    return DOC_TYPES.filter(d => d.entities.includes(entityTypeId));
+  }
+  return configured
+    .filter(d => d.active !== false)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map(cfg => {
+      const base = DOC_TYPES.find(d => d.key === cfg.id);
+      if (!base) return null;
+      return {
+        ...base,
+        label: cfg.name || base.label,
+        helper: cfg.helperText || base.helper,
+        icon: cfg.icon || base.icon,
+      };
+    })
+    .filter(Boolean);
+};
+
+// Built locally from the still-present hardcoded constants above. This is
+// the offline fallback used only when /api/config is unreachable; the
+// canonical source is the API endpoint, which seeds itself from the same
+// data via lib/seedSchemas.js.
+const buildLocalDefaultConfig = () => ({
+  _tenantId: "local",
+  _version: 0,
+  _seededAt: new Date().toISOString(),
+  company: {
+    name: "Nium",
+    logo: null,
+    manualFormUrl: MANUAL_FORM_URL,
+    privacyPolicyUrl: "",
+    submissionWebhookUrl: "",
+    submissionEmail: "",
+    primaryContactName: "",
+    primaryContactEmail: "",
+  },
+  licences: [
+    { id: "GB", jurisdictionCode: "GB", jurisdictionName: "United Kingdom", licenceType: "Payment Institution", licenceNumber: "", regulatoryAuthority: "FCA", countriesCovered: ["GB"], isPrimary: false },
+    { id: "SG", jurisdictionCode: "SG", jurisdictionName: "Singapore", licenceType: "Major Payment Institution", licenceNumber: "", regulatoryAuthority: "MAS", countriesCovered: [], isPrimary: true },
+  ],
+  routingPolicy: "regional",
+  entityTypes: [
+    { id: "FI", label: "Financial Institution", description: "Banks, payment institutions, EMIs", icon: "🏦", active: true, sortOrder: 1 },
+    { id: "Platform", label: "Platform", description: "Technology platforms and marketplaces", icon: "💻", active: true, sortOrder: 2 },
+    { id: "Direct", label: "Direct", description: "Direct business customers", icon: "🏢", active: true, sortOrder: 3 },
+    { id: "Corporate", label: "Corporate", description: "Corporate and commercial entities", icon: "🏛", active: true, sortOrder: 4 },
+  ],
+  schemas: {
+    "Corporate:GB": { researchFields: UK_SCHEMA.researchFields, gapFields: UK_SCHEMA.gapFields },
+    "Corporate:SG": { researchFields: SG_SCHEMA.researchFields, gapFields: SG_SCHEMA.gapFields },
+    "FI:GB": { researchFields: UK_FI_SCHEMA.researchFields, gapFields: UK_FI_SCHEMA.gapFields },
+    "FI:SG": { researchFields: SG_FI_SCHEMA.researchFields, gapFields: SG_FI_SCHEMA.gapFields },
+    "Platform:GB": { researchFields: UK_SCHEMA.researchFields, gapFields: UK_SCHEMA.gapFields },
+    "Platform:SG": { researchFields: SG_SCHEMA.researchFields, gapFields: SG_SCHEMA.gapFields },
+    "Direct:GB": { researchFields: UK_SCHEMA.researchFields, gapFields: UK_SCHEMA.gapFields },
+    "Direct:SG": { researchFields: SG_SCHEMA.researchFields, gapFields: SG_SCHEMA.gapFields },
+  },
+  sourceTiers: {
+    primary: [],
+    secondary: [],
+    documentsArePrimary: true,
+  },
+  documents: {},
+});
+
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
   const fieldList = schema.researchFields.map(f => `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`).join(",\n");
 
@@ -970,7 +1106,42 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
   );
 }
 
-export default function KYCAgent() {
+export default function KYCAgent({ previewMode = false } = {}) {
+  // Tenant config — loaded from /api/config on mount, or from sessionStorage
+  // when running in preview mode (the admin "Preview" button stages the
+  // current unsaved config under the "preview_config" key).
+  const [tenantConfig, setTenantConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (previewMode) {
+      try {
+        const raw = sessionStorage.getItem("preview_config");
+        if (raw) {
+          setTenantConfig(JSON.parse(raw));
+          setConfigLoading(false);
+          return () => {};
+        }
+      } catch (_) { /* fall through */ }
+      setTenantConfig(buildLocalDefaultConfig());
+      setConfigLoading(false);
+      return () => {};
+    }
+    fetch("/api/config")
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((cfg) => { if (!cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn("Falling back to local default config:", err.message);
+        if (!cancelled) {
+          setTenantConfig(buildLocalDefaultConfig());
+          setConfigLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [previewMode]);
+
   const [step, setStep] = useState(0);
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
@@ -1219,7 +1390,7 @@ export default function KYCAgent() {
     setError("");
     const journey = journeyOverride || journeyType || "ai_only";
     const S = stepsFor(journey);
-    const schema = getSchema(countryCode, entityType);
+    const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
     setActiveSchema(schema);
     setLoading(true); setStep(S.research); setLoaderIdx(0);
     try {
@@ -1287,7 +1458,7 @@ export default function KYCAgent() {
         const isWolfsbergSrc = !!(item.source && /wolfsberg/i.test(item.source));
         const tier = isWolfsbergSrc
           ? "document"
-          : (classifySource(item.source, countryCode) === "authoritative" ? "tier1" : "tier2");
+          : classifySourceFromConfig(item.source, countryCode, tenantConfig);
         return {
           ...item,
           sourceUrl: item.sourceUrl || null,
@@ -1343,7 +1514,7 @@ export default function KYCAgent() {
     setError("");
     const journey = journeyOverride || journeyType || "ai_only";
     const S = stepsFor(journey);
-    const schema = getSchema(countryCode, entityType);
+    const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
     setActiveSchema(schema);
     setLoading(true); setStep(S.research); setLoaderIdx(0);
 
@@ -1479,7 +1650,7 @@ export default function KYCAgent() {
       doResearch("ai_only");
     } else if (selectedJourneyCard === "C") {
       setJourneyType("manual");
-      window.open(MANUAL_FORM_URL, "_blank", "noopener,noreferrer");
+      window.open(manualFormUrl_, "_blank", "noopener,noreferrer");
       setManualOpened(true);
     }
   };
@@ -1729,12 +1900,54 @@ export default function KYCAgent() {
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
   const tier2Count = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
 
+  // Resolved values from tenant config with safe fallbacks. Keep these on the
+  // happy path (after configLoading guard) so any null deref is contained.
+  const companyName_ = tenantConfig?.company?.name || "Nium";
+  const companyLogo_ = tenantConfig?.company?.logo || null;
+  const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
+  const activeEntityTypes = (tenantConfig?.entityTypes || [])
+    .filter(e => e.active !== false)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  if (configLoading) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)",
+        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
+        color: "#1a3a4a",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: 48, height: 48, border: "3px solid rgba(74,158,142,0.2)",
+            borderTopColor: "#4a9e8e", borderRadius: "50%", margin: "0 auto 14px",
+            animation: "kspin 0.9s linear infinite",
+          }} />
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Loading configuration…</div>
+          <style>{`@keyframes kspin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
+      {previewMode && (
+        <div style={{
+          background: "#0B3D91", color: "#fff", padding: "10px 16px",
+          textAlign: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+        }}>
+          ⚠ Preview Mode — Showing unpublished admin config from this session
+        </div>
+      )}
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 16px 60px" }}>
 
         <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#4a9e8e", marginBottom: 4 }}>Nium Compliance</div>
+          {companyLogo_ ? (
+            <img src={companyLogo_} alt={companyName_} style={{ height: 40, marginBottom: 6 }} />
+          ) : null}
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#4a9e8e", marginBottom: 4 }}>{companyName_} Compliance</div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>KYC Onboarding Agent</h1>
           <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>AI-powered multi-jurisdiction company research and data collection</p>
         </div>
@@ -1758,10 +1971,9 @@ export default function KYCAgent() {
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
               <select value={entityType} onChange={e => setEntityType(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
                 <option value="">Select entity type...</option>
-                <option value="FI">FI</option>
-                <option value="Platform">Platform</option>
-                <option value="Direct">Direct</option>
-                <option value="Corporate">Corporate</option>
+                {activeEntityTypes.map(e => (
+                  <option key={e.id} value={e.id}>{e.icon ? `${e.icon} ` : ""}{e.label || e.id}</option>
+                ))}
               </select>
             </div>
             <div style={{ marginBottom: 14 }}>
@@ -1785,7 +1997,7 @@ export default function KYCAgent() {
                   {entityType && (
                     <div style={{ marginTop: 4 }}><strong>📑 Form set:</strong> {isFiFlow ? "FI version" : "Corporate version"}{routesNote}</div>
                   )}
-                  {!isLicensed && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>Nium has no licence in {countryObj?.name}, so this customer is onboarded under the Singapore licence. Public records will be searched in {countryObj?.name}, but SG requirements apply.</div>}
+                  {!isLicensed && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>{companyName_} has no licence in {countryObj?.name}, so this customer is onboarded under the Singapore licence. Public records will be searched in {countryObj?.name}, but SG requirements apply.</div>}
                 </div>
               );
             })()}
@@ -1891,7 +2103,7 @@ export default function KYCAgent() {
         )}
 
         {isAiDocs && step === STEPS.documents && (() => {
-          const docs = DOC_TYPES.filter(d => d.entities.includes(entityType));
+          const docs = docTypesForEntity(entityType, tenantConfig);
           const uploadedCount = docs.reduce((n, d) => n + (uploadedDocs[d.key] ? 1 : 0), 0);
           return (
             <div>
@@ -2148,7 +2360,7 @@ export default function KYCAgent() {
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>
               {(() => {
-                const docKeys = DOC_TYPES.filter(d => uploadedDocs[d.key]).map(d => d.label);
+                const docKeys = docTypesForEntity(entityType, tenantConfig).filter(d => uploadedDocs[d.key]).map(d => d.label);
                 const docExtractedCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
                 const tier1 = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
                 const tier2 = (research?.found || []).filter(i => i.sourceTier === "tier2").length;

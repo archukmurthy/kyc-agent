@@ -2,5 +2,12 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "build",
-  "framework": "create-react-app"
+  "framework": "create-react-app",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/admin/(.*)", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/preview", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

@@ -1,10 +1,32 @@
 // Local dev only. CRA auto-loads this file when running `npm start` and
 // registers the middleware on the webpack-dev-server Express instance.
-// Mirrors api/research.js so /api/research works locally the same way it
-// does on Vercel in production. This file is NOT bundled into the React
-// app — it only runs in the dev server process.
+// Mirrors api/research.js, api/config.js, and api/admin-auth.js so the same
+// endpoints work locally as on Vercel in production. This file is NOT
+// bundled into the React app — it only runs in the dev server process.
 //
-// Requires ANTHROPIC_API_KEY in .env.local (CRA loads it automatically).
+// Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
+
+const path = require("path");
+
+// Lazy-require the API handlers and shared modules from their canonical
+// locations so dev and production run the exact same code paths.
+const configHandler = require(path.join(__dirname, "..", "api", "config.js"));
+const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.js"));
+
+function adapt(handler) {
+  // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
+  // bodyParser may have already populated req.body; if not, the handler
+  // streams it itself.
+  return (req, res) => {
+    res.status = (code) => { res.statusCode = code; return res; };
+    res.json = (data) => {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(data));
+      return res;
+    };
+    return handler(req, res);
+  };
+}
 
 module.exports = function (app) {
   app.post("/api/research", (req, res) => {
@@ -61,4 +83,7 @@ module.exports = function (app) {
       }
     });
   });
+
+  app.all("/api/config", adapt(configHandler));
+  app.post("/api/admin-auth", adapt(adminAuthHandler));
 };
