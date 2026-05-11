@@ -2,13 +2,20 @@ import React, { useState, useEffect } from "react";
 import { card, label, inputBase, btnPrimary, sectionTitle, sectionSub, tokens } from "../styles";
 
 const FIELDS = [
-  { key: "name", label: "Company name", type: "text", required: true },
-  { key: "manualFormUrl", label: "Manual application form URL", type: "url" },
-  { key: "privacyPolicyUrl", label: "Privacy policy URL", type: "url" },
-  { key: "submissionWebhookUrl", label: "Submission webhook URL", type: "url" },
-  { key: "submissionEmail", label: "Submission notification email", type: "email" },
-  { key: "primaryContactName", label: "Primary contact name", type: "text" },
-  { key: "primaryContactEmail", label: "Primary contact email", type: "email" },
+  { key: "name", label: "Company name", type: "text", required: true,
+    hint: "Shown in the customer header (\"{name} Compliance\") and on the admin sidebar." },
+  { key: "manualFormUrl", label: "Manual application form URL", type: "url",
+    hint: "Where customers go when they pick \"I'll complete the form myself\" on the journey screen." },
+  { key: "privacyPolicyUrl", label: "Privacy policy URL", type: "url",
+    hint: "Linked from the footer on every customer page." },
+  { key: "submissionWebhookUrl", label: "Submission webhook URL", type: "url",
+    hint: "Admin metadata. Reserved for the future submission backend (not yet called by the app)." },
+  { key: "submissionEmail", label: "Submission notification email", type: "email",
+    hint: "Admin metadata. Reserved for the future submission backend." },
+  { key: "primaryContactName", label: "Primary contact name", type: "text",
+    hint: "Admin reference — who owns this tenant. Not shown to customers." },
+  { key: "primaryContactEmail", label: "Primary contact email", type: "email",
+    hint: "Admin reference. Also surfaced as a \"Contact\" footer link on the customer pages." },
 ];
 
 export default function CompanyModule({ config, patchConfig, markSaved }) {
@@ -69,7 +76,7 @@ export default function CompanyModule({ config, patchConfig, markSaved }) {
 
           <div style={{ flex: 1 }}>
             {FIELDS.map((f) => (
-              <div key={f.key} style={{ marginBottom: 12 }}>
+              <div key={f.key} style={{ marginBottom: 14 }}>
                 <label style={label}>{f.label} {f.required && <span style={{ color: tokens.danger }}>*</span>}</label>
                 <input
                   type={f.type}
@@ -77,6 +84,9 @@ export default function CompanyModule({ config, patchConfig, markSaved }) {
                   onChange={(e) => update(f.key, e.target.value)}
                   style={inputBase}
                 />
+                {f.hint && (
+                  <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 4, lineHeight: 1.4 }}>{f.hint}</div>
+                )}
               </div>
             ))}
           </div>

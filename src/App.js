@@ -1117,7 +1117,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     let cancelled = false;
     if (previewMode) {
       try {
-        const raw = sessionStorage.getItem("preview_config");
+        // Try localStorage first (set by admin's Preview button), then
+        // sessionStorage (legacy), before falling back to local defaults.
+        const raw = localStorage.getItem("preview_config")
+          || sessionStorage.getItem("preview_config");
         if (raw) {
           setTenantConfig(JSON.parse(raw));
           setConfigLoading(false);
@@ -1128,7 +1131,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setConfigLoading(false);
       return () => {};
     }
-    fetch("/api/config")
+    fetch("/api/config", { cache: "no-store" })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((cfg) => { if (!cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
       .catch((err) => {
@@ -2390,6 +2393,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
+
+        <footer style={{
+          textAlign: "center", marginTop: 40, paddingTop: 18,
+          borderTop: "1px solid rgba(26,58,74,0.08)",
+          fontSize: 11, color: "#1a3a4a70",
+        }}>
+          © {new Date().getFullYear()} {companyName_}
+          {tenantConfig?.company?.privacyPolicyUrl && (
+            <>
+              {" · "}
+              <a
+                href={tenantConfig.company.privacyPolicyUrl}
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: "#1a3a4a", textDecoration: "underline" }}
+              >Privacy Policy</a>
+            </>
+          )}
+          {tenantConfig?.company?.primaryContactEmail && (
+            <>
+              {" · "}
+              <a
+                href={`mailto:${tenantConfig.company.primaryContactEmail}`}
+                style={{ color: "#1a3a4a", textDecoration: "underline" }}
+              >Contact</a>
+            </>
+          )}
+        </footer>
 
       </div>
     </div>

@@ -66,6 +66,33 @@ export default function AdminSetup({ token, onLogout }) {
     });
   }
 
+  async function handleReset() {
+    if (!window.confirm("Reset to default Nium config?\n\nThis wipes the live config AND every archived version for this tenant. The admin UI will reload with the seeded defaults.")) return;
+    setPublishing(true);
+    setPublishResult(null);
+    try {
+      const r = await fetch("/api/config", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${r.status}`);
+      }
+      // Pull the freshly-seeded default config back.
+      const cfgRes = await fetch("/api/config", { cache: "no-store" });
+      const cfg = await cfgRes.json();
+      setConfig(cfg);
+      setSavedModules(new Set());
+      setPublishResult({ ok: true, message: "Reset to defaults — Nium config is live" });
+      loadVersions();
+    } catch (err) {
+      setPublishResult({ ok: false, message: "Reset failed: " + err.message });
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   async function handlePublish() {
     if (!config) return;
     setPublishing(true);
@@ -94,12 +121,15 @@ export default function AdminSetup({ token, onLogout }) {
   function handlePreview() {
     if (!config) return;
     try {
-      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(config));
+      // localStorage so the new tab can read it regardless of how it was
+      // opened (sessionStorage isn't reliably inherited across tabs).
+      localStorage.setItem(PREVIEW_KEY, JSON.stringify(config));
+      localStorage.setItem(PREVIEW_KEY + "_ts", String(Date.now()));
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn("Could not write preview config to sessionStorage", e);
+      console.warn("Could not write preview config to localStorage", e);
     }
-    window.open("/preview", "_blank", "noopener");
+    window.open("/preview", "_blank");
   }
 
   const activeModule = useMemo(() => MODULES.find((m) => m.id === active), [active]);
@@ -211,6 +241,12 @@ export default function AdminSetup({ token, onLogout }) {
                 marginRight: 6,
               }}>{publishResult.message}</span>
             )}
+            <button
+              onClick={handleReset}
+              disabled={publishing}
+              title="Wipe stored config and re-seed Nium defaults"
+              style={{ ...btnSecondary, color: tokens.danger, borderColor: tokens.danger, opacity: publishing ? 0.6 : 1 }}
+            >↺ Reset to default</button>
             <button onClick={handlePreview} style={btnSecondary}>👁 Preview</button>
             <button onClick={handlePublish} disabled={publishing} style={{ ...btnPrimary, opacity: publishing ? 0.6 : 1 }}>
               {publishing ? "Publishing…" : "Publish"}

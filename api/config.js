@@ -46,6 +46,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const tenant = tenantId();
@@ -94,6 +95,18 @@ module.exports = async function handler(req, res) {
 
       await storage.set(configKey(tenant), next);
       return res.status(200).json({ success: true, version: newVersion });
+    }
+
+    if (req.method === "DELETE") {
+      // Reset-to-defaults. Wipes the live config AND every archived version
+      // for this tenant. The next GET re-seeds from lib/seedConfig.js.
+      const expected = process.env.ADMIN_PASSWORD;
+      const auth = req.headers.authorization || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+      if (token !== expected) return res.status(401).json({ error: "Unauthorized" });
+      const keys = await storage.list(`config:${tenant}`);
+      for (const k of keys) await storage.del(k);
+      return res.status(200).json({ success: true, cleared: keys.length });
     }
 
     if (req.method === "PUT") {
