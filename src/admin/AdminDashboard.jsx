@@ -69,14 +69,19 @@ export default function AdminDashboard({
 
   const status = useMemo(() => computeStatus(localConfig), [localConfig]);
 
+  // Resume target for "Run Full Setup Wizard".
+  //
+  // Company / documents / sources are treated as optional — they have
+  // defaults and don't gate publishing. Only licences, active entity types,
+  // and schemas for active matrix cells are "required". When everything
+  // required is done, return 1 so the user reviews from the beginning rather
+  // than landing on Publish (which would feel like the wizard pushing them
+  // to re-publish).
   function firstIncompleteStep() {
-    if (!status.company) return 1;
     if (!status.licences) return 2;
     if (!status.entityTypes) return 3;
     if (status.schemas !== true) return 4;
-    if (!status.documents) return 5;
-    if (!status.sources) return 6;
-    return 7;
+    return 1;
   }
 
   function onConfigChange(patch) {

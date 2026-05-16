@@ -19,9 +19,9 @@ const STEPS = [
   { n: 7, label: "Publish",      Component: StepPublish,      title: "Review & Publish" },
 ];
 
-// 7-step wizard shell. Each step receives the live config + onChange. Step 7
-// also gets the admin token so it can POST the publish itself; on success it
-// calls onPublishSuccess to let the dashboard close out.
+// 7-step wizard shell. Step navigation is unconstrained: the step indicator,
+// Back, and Continue all just change `currentStep`; data is never reset, so
+// jumping around is a non-destructive review action.
 export default function AdminWizard({
   localConfig,
   onConfigChange,
@@ -39,13 +39,17 @@ export default function AdminWizard({
   const step = STEPS[currentStep - 1];
   const StepComponent = step.Component;
   const isPublishStep = currentStep === 7;
+  const prevStep = STEPS[currentStep - 2];
+
+  function jumpTo(n) {
+    const clamped = Math.min(Math.max(n, 1), STEPS.length);
+    setCurrentStep(clamped);
+  }
 
   function next() {
     if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
     } else if (onPublish) {
-      // Fallback: if the publish step itself can't run, defer to the dashboard
-      // publish handler. With Step 7 wired, this path is rarely hit.
       onPublish();
     }
   }
@@ -86,7 +90,11 @@ export default function AdminWizard({
         </div>
       </div>
 
-      <AdminStepIndicator currentStep={currentStep} steps={STEPS.map((s) => s.label)} />
+      <AdminStepIndicator
+        currentStep={currentStep}
+        steps={STEPS.map((s) => s.label)}
+        onClick={jumpTo}
+      />
 
       {resumed && currentStep === startAtStep && (
         <div style={{ textAlign: "center", padding: "6px 16px 0", fontSize: 12, color: adminColors.niumBlue, fontWeight: 600 }}>
@@ -95,6 +103,20 @@ export default function AdminWizard({
       )}
 
       <div style={{ flex: 1, padding: "16px 16px 96px" }}>
+        <div
+          style={{
+            maxWidth: 720,
+            margin: "0 auto 12px",
+            padding: "0 8px",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: adminColors.textMuted,
+          }}
+        >
+          Step {currentStep} of {STEPS.length} — {step.title}
+        </div>
         {isPublishStep ? (
           <StepPublish
             config={localConfig}
@@ -137,11 +159,20 @@ export default function AdminWizard({
           <div>
             {currentStep > 1 && (
               <button type="button" onClick={back} style={adminStyles.btnSecondary}>
-                ← Back
+                ← Back{prevStep ? ` to ${prevStep.label}` : ""}
               </button>
             )}
           </div>
-          {!isPublishStep && (
+          {isPublishStep ? (
+            <button
+              type="button"
+              onClick={() => onPublish && onPublish()}
+              style={adminStyles.btnPrimary}
+              title="Publish from the bottom bar (same as the in-step Publish button)"
+            >
+              Publish Configuration
+            </button>
+          ) : (
             <button type="button" onClick={next} style={adminStyles.btnPrimary}>
               Continue →
             </button>
