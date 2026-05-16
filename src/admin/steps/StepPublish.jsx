@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import WizardCard from "../components/WizardCard";
 import MatrixOverview from "../components/MatrixOverview";
 import VersionHistory from "../components/VersionHistory";
+import { getTenantId } from "../../utils/tenant";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
 
@@ -40,6 +41,7 @@ export default function StepPublish({
   config,
   onChange,
   adminToken,
+  tenantId,
   onPublishSuccess,
   isStandalone = false,
 }) {
@@ -49,6 +51,7 @@ export default function StepPublish({
   const [publishedVersion, setPublishedVersion] = useState(null);
   const [publishError, setPublishError] = useState(null);
 
+  const activeTenant = tenantId || getTenantId();
   const canPublish =
     readiness.licences && readiness.entityTypes && readiness.hasAtLeastOneSchema;
 
@@ -57,9 +60,9 @@ export default function StepPublish({
     setPublishing(true);
     setPublishError(null);
     try {
-      const r = await fetch("/api/config", {
+      const r = await fetch(`/api/config?tenant=${encodeURIComponent(activeTenant)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}`, "X-Tenant-Id": activeTenant },
         body: JSON.stringify(config),
       });
       const data = await r.json();
@@ -178,6 +181,7 @@ export default function StepPublish({
       <div style={{ marginTop: 22 }}>
         <VersionHistory
           token={adminToken}
+          tenantId={activeTenant}
           currentVersion={config?._version}
           onRolledBack={(v) => {
             // Refresh the parent's config so it reflects the rolled-back state.

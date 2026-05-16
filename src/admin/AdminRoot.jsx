@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AdminDashboard from "./AdminDashboard";
 import { adminColors, adminStyles } from "./adminDesign";
-import buildDefaultConfig from "./defaultConfig";
+import buildDefaultConfig, { buildBlankConfig } from "./defaultConfig";
+import { getTenantId } from "../utils/tenant";
 
 const TOKEN_KEY = "admin_token";
 const TENANT_KEY = "tenant_id";
@@ -14,6 +15,7 @@ const TENANT_KEY = "tenant_id";
 // Falls back to a client-side default config if /api/config is unreachable so
 // the admin UI still renders something coherent.
 export default function AdminRoot() {
+  const [tenantId] = useState(() => getTenantId());
   const [token, setToken] = useState(() => {
     try {
       return sessionStorage.getItem(TOKEN_KEY) || "";
@@ -29,7 +31,7 @@ export default function AdminRoot() {
     setConfigLoading(true);
     setConfigError(null);
     try {
-      const r = await fetch("/api/config", { cache: "no-store" });
+      const r = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
       if (!r.ok) throw new Error(`Config fetch failed (${r.status})`);
       const cfg = await r.json();
       setTenantConfig(cfg);
@@ -37,20 +39,21 @@ export default function AdminRoot() {
       // eslint-disable-next-line no-console
       console.error("Admin config load failed, falling back to client default:", err);
       setConfigError(err.message);
-      setTenantConfig(buildDefaultConfig(sessionStorage.getItem(TENANT_KEY) || "nium"));
+      // Offline fallback: Nium gets the defaults, other tenants get a blank.
+      setTenantConfig(tenantId === "nium" ? buildDefaultConfig(tenantId) : buildBlankConfig(tenantId));
     } finally {
       setConfigLoading(false);
     }
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     if (token) loadConfig();
   }, [token, loadConfig]);
 
-  function handleAuthSuccess(authToken, tenantId) {
+  function handleAuthSuccess(authToken, resolvedTenant) {
     try {
       sessionStorage.setItem(TOKEN_KEY, authToken);
-      if (tenantId) sessionStorage.setItem(TENANT_KEY, tenantId);
+      if (resolvedTenant) sessionStorage.setItem(TENANT_KEY, resolvedTenant);
     } catch (_) {}
     setToken(authToken);
   }
@@ -64,7 +67,7 @@ export default function AdminRoot() {
   }
 
   if (!token) {
-    return <PasswordGate onSuccess={handleAuthSuccess} />;
+    return <PasswordGate tenantId={tenantId} onSuccess={handleAuthSuccess} />;
   }
 
   if (configLoading || !tenantConfig) {
@@ -102,13 +105,15 @@ export default function AdminRoot() {
         tenantConfig={tenantConfig}
         firstLogin={firstLogin}
         token={token}
+        tenantId={tenantId}
         onSignOut={handleSignOut}
+        onReloadConfig={loadConfig}
       />
     </>
   );
 }
 
-function PasswordGate({ onSuccess }) {
+function PasswordGate({ tenantId, onSuccess }) {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -119,9 +124,9 @@ function PasswordGate({ onSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin-auth", {
+      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "nium")}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "nium" },
         body: JSON.stringify({ password }),
       });
       if (!r.ok) {
@@ -180,6 +185,9 @@ function PasswordGate({ onSuccess }) {
           <p style={{ fontSize: 12, color: adminColors.textMuted, margin: "4px 0 0" }}>
             Intelligence-Led Onboarding Platform
           </p>
+          <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
+            Tenant: {tenantId || "nium"}
+          </div>
         </div>
 
         <label style={adminStyles.label}>Password</label>

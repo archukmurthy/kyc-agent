@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { adminColors, adminStyles } from "../adminDesign";
+import { getTenantId } from "../../utils/tenant";
 
-// Pulls /api/config-versions and lists archived configs. Rollback POSTs the
-// chosen version back through /api/config-versions (server treats POST with
-// {version} as a rollback request).
-export default function VersionHistory({ token, currentVersion, onRolledBack }) {
+// Pulls /api/config-versions and lists archived configs for the active
+// tenant. Rollback POSTs the chosen version back through the same endpoint
+// (server treats POST with {version} as a rollback request).
+export default function VersionHistory({ token, tenantId, currentVersion, onRolledBack }) {
+  const activeTenant = tenantId || getTenantId();
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,7 +16,7 @@ export default function VersionHistory({ token, currentVersion, onRolledBack }) 
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/config-versions", { cache: "no-store" });
+      const r = await fetch(`/api/config-versions?tenant=${encodeURIComponent(activeTenant)}`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       setVersions(data.versions || []);
@@ -24,7 +26,7 @@ export default function VersionHistory({ token, currentVersion, onRolledBack }) 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTenant]);
 
   useEffect(() => {
     load();
@@ -36,9 +38,9 @@ export default function VersionHistory({ token, currentVersion, onRolledBack }) 
     }
     setBusy(v);
     try {
-      const r = await fetch("/api/config-versions", {
+      const r = await fetch(`/api/config-versions?tenant=${encodeURIComponent(activeTenant)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Tenant-Id": activeTenant },
         body: JSON.stringify({ version: v }),
       });
       const data = await r.json();

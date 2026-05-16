@@ -6,6 +6,7 @@ import { adminColors, adminStyles } from "../adminDesign";
 // controls. The wizard renders its own slim top bar instead of this header.
 export default function AdminHeader({
   tenantConfig,
+  tenantId,
   hasUnpublishedChanges,
   canPublish,
   publishing,
@@ -63,6 +64,26 @@ export default function AdminHeader({
         <div style={{ fontSize: 12, fontWeight: 600, color: adminColors.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>
           Admin
         </div>
+        {tenantId && (
+          <span
+            title="Tenant being configured"
+            style={{
+              marginLeft: 8,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "3px 10px",
+              borderRadius: 99,
+              fontSize: 12,
+              fontWeight: 600,
+              background: "rgba(11,61,145,0.08)",
+              color: adminColors.niumBlue,
+              border: `1px solid rgba(11,61,145,0.16)`,
+            }}
+          >
+            Tenant: {tenantId}
+          </span>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

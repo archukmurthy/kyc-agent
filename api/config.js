@@ -1,16 +1,26 @@
 // Tenant config endpoint.
 //
-// GET  — returns the current config for TENANT_ID. Seeds and persists a fresh
-//        default config on first read.
-// POST — replaces the current config (admin-authed). The previous version is
-//        archived under config:{tenant}:v{n} for rollback.
+// All reads/writes are scoped to the tenant resolved from the request via
+// lib/tenant.js (?tenant= query param, x-tenant-id header, or TENANT_ID env
+// var, in that order). Each tenant has fully isolated config in KV.
+//
+// GET    — returns the current config for the resolved tenant. Seeds on
+//          first read: Nium tenant gets the default config; any other tenant
+//          gets a blank template.
+// POST   — replaces the current config (admin-authed). Archives previous
+//          version. Refuses to publish an empty config for the Nium tenant
+//          to protect the seed.
+// PUT    — admin-only versions list (last 5).
+// DELETE — admin-only reset to defaults (Nium re-seeds; others get a fresh
+//          blank).
+//
+// NOTE: ADMIN_PASSWORD is currently shared across all tenants. When
+// per-tenant authentication is needed, look up the tenant's password instead
+// of comparing against the single env var.
 
 const storage = require("../lib/storage");
-const { buildDefaultConfig } = require("../lib/seedConfig");
-
-function tenantId() {
-  return process.env.TENANT_ID || "nium";
-}
+const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
+const { getTenantIdFromRequest } = require("../lib/tenant");
 
 function configKey(tenant) {
   return `config:${tenant}`;
@@ -20,12 +30,37 @@ function versionKey(tenant, version) {
   return `config:${tenant}:v${version}`;
 }
 
-async function readConfig(tenant) {
-  const stored = await storage.get(configKey(tenant));
-  if (stored) return stored;
-  const seeded = buildDefaultConfig(tenant);
+// Seed a tenant that doesn't yet have a config. Nium gets the canonical
+// defaults; everyone else gets a blank template.
+async function seedTenant(tenant) {
+  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
+  seeded._tenantId = tenant;
   await storage.set(configKey(tenant), seeded);
   return seeded;
+}
+
+// Read the live config for a tenant, seeding on miss. For the Nium tenant we
+// also self-heal: if the stored config is corrupted or accidentally emptied
+// (no licences), we re-seed it from defaults so the live customer flow is
+// never left in a broken state.
+async function readConfig(tenant) {
+  let stored = await storage.get(configKey(tenant));
+  if (!stored) return seedTenant(tenant);
+
+  if (tenant === "nium") {
+    const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
+    if (!hasLicences) {
+      // eslint-disable-next-line no-console
+      console.warn("Nium config missing licences — self-healing from defaults");
+      const fresh = buildDefaultConfig(tenant);
+      fresh._tenantId = tenant;
+      fresh._selfHealedAt = new Date().toISOString();
+      await storage.set(configKey(tenant), fresh);
+      return fresh;
+    }
+  }
+
+  return stored;
 }
 
 function readBody(req) {
@@ -44,12 +79,12 @@ function readBody(req) {
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const tenant = tenantId();
+  const tenant = getTenantIdFromRequest(req);
 
   try {
     if (req.method === "GET") {
@@ -73,6 +108,18 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Invalid request body" });
       }
 
+      // Nium protection — refuse empty publishes that would wipe the live
+      // schemas. Self-healing only catches reads; this catches writes.
+      if (tenant === "nium") {
+        const lic = Array.isArray(body.licences) ? body.licences.length : 0;
+        const ent = Array.isArray(body.entityTypes) ? body.entityTypes.filter((e) => e && e.active !== false).length : 0;
+        if (lic === 0 || ent === 0) {
+          return res.status(400).json({
+            error: "Cannot publish an empty configuration for the Nium tenant. Please ensure at least one licence and one entity type are configured.",
+          });
+        }
+      }
+
       const previous = await readConfig(tenant);
       const previousVersion = previous._version || 0;
       const newVersion = previousVersion + 1;
@@ -85,6 +132,8 @@ module.exports = async function handler(req, res) {
       delete sanitized._version;
       delete sanitized._publishedAt;
       delete sanitized._tenantId;
+      delete sanitized._isDefault;
+      delete sanitized._isBlank;
 
       const next = {
         ...sanitized,
@@ -99,7 +148,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "DELETE") {
       // Reset-to-defaults. Wipes the live config AND every archived version
-      // for this tenant. The next GET re-seeds from lib/seedConfig.js.
+      // for this tenant. The next GET re-seeds (Nium → defaults; others → blank).
       const expected = process.env.ADMIN_PASSWORD;
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";

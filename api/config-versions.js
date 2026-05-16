@@ -10,10 +10,7 @@
 // is simpler under Vercel's filesystem routing and equivalent in semantics.
 
 const storage = require("../lib/storage");
-
-function tenantId() {
-  return process.env.TENANT_ID || "nium";
-}
+const { getTenantIdFromRequest } = require("../lib/tenant");
 
 function configKey(tenant) {
   return `config:${tenant}`;
@@ -53,7 +50,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const tenant = tenantId();
+  const tenant = getTenantIdFromRequest(req);
 
   try {
     if (req.method === "GET") {

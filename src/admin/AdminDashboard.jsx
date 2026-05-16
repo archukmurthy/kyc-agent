@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AdminHeader from "./components/AdminHeader";
 import QuickActionCard from "./components/QuickActionCard";
+import TenantBanner from "./components/TenantBanner";
 import AdminWizard from "./AdminWizard";
 import StepCompany from "./steps/StepCompany";
 import StepDocuments from "./steps/StepDocuments";
@@ -52,7 +53,9 @@ export default function AdminDashboard({
   tenantConfig,
   firstLogin,
   token,
+  tenantId = "nium",
   onSignOut,
+  onReloadConfig,
 }) {
   const [localConfig, setLocalConfig] = useState(tenantConfig);
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
@@ -99,16 +102,16 @@ export default function AdminDashboard({
     setPublishing(true);
     setPublishMsg(null);
     try {
-      const r = await fetch("/api/config", {
+      const r = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Tenant-Id": tenantId },
         body: JSON.stringify(localConfig),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setPublishMsg({ ok: true, text: `Published — v${data.version} is live` });
       setHasUnpublishedChanges(false);
-      const cfgRes = await fetch("/api/config", { cache: "no-store" });
+      const cfgRes = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
       if (cfgRes.ok) {
         const cfg = await cfgRes.json();
         setLocalConfig(cfg);
@@ -127,7 +130,11 @@ export default function AdminDashboard({
       localStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
       localStorage.setItem(PREVIEW_KEY + "_ts", String(Date.now()));
     } catch (_) {}
-    window.open("/preview", "_blank");
+    // Open the customer flow scoped to this tenant with a preview banner.
+    const path = tenantId && tenantId !== "nium"
+      ? `/?tenant=${encodeURIComponent(tenantId)}&preview=true`
+      : `/?preview=true`;
+    window.open(path, "_blank");
   }
 
   function goView(v) {
@@ -161,6 +168,7 @@ export default function AdminDashboard({
         onPublish={handlePublish}
         startAtStep={wizardStartStep}
         adminToken={token}
+        tenantId={tenantId}
         onPublishSuccess={() => {
           setHasUnpublishedChanges(false);
           showToast("✅ Configuration published");
@@ -176,6 +184,7 @@ export default function AdminDashboard({
       <div style={adminStyles.pageWrapper}>
         <AdminHeader
           tenantConfig={localConfig}
+          tenantId={tenantId}
           hasUnpublishedChanges={hasUnpublishedChanges}
           canPublish={!!status.company && !!status.licences}
           publishing={publishing}
@@ -214,6 +223,7 @@ export default function AdminDashboard({
     <div style={adminStyles.pageWrapper}>
       <AdminHeader
         tenantConfig={localConfig}
+        tenantId={tenantId}
         hasUnpublishedChanges={hasUnpublishedChanges}
         canPublish={!!status.company && !!status.licences}
         publishing={publishing}
@@ -234,6 +244,12 @@ export default function AdminDashboard({
 
       <div style={adminStyles.pageInner}>
         {publishMsg && <PublishToast msg={publishMsg} />}
+
+        <TenantBanner
+          tenantId={tenantId}
+          companyName={localConfig?.company?.name}
+          token={token}
+        />
 
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>

@@ -13,6 +13,52 @@ The `ANTHROPIC_API_KEY` lives in two places: locally in `.env.local` at the repo
 
 Deployment is handled by Vercel on push to `main` (see `vercel.json`). The only required env var is `ANTHROPIC_API_KEY`.
 
+## Multi-Tenant URLs
+
+Each tenant has fully isolated configuration in KV (or the dev filesystem
+store). The active tenant is resolved per request, with this priority:
+
+1. `?tenant=` URL query parameter (browser) / `req.query.tenant` (server)
+2. `x-tenant-id` request header
+3. `TENANT_ID` environment variable
+4. fallback `"nium"`
+
+### URLs
+
+| Tenant            | Customer flow                | Admin                            |
+| ----------------- | ---------------------------- | -------------------------------- |
+| Primary (Nium)    | `/`                          | `/admin`                         |
+| Any other tenant  | `/?tenant={tenantId}`        | `/admin?tenant={tenantId}`       |
+
+Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
+"Preview Mode" banner and is opened by the admin "Preview" button.
+
+### Creating a new tenant
+
+1. Sign in to `/admin` (Nium admin)
+2. Click "+ Create New Tenant" on the dashboard banner
+3. Enter a tenant ID (lowercase letters, numbers, hyphens; max 32 chars)
+4. Pick start-from: blank (empty config) or copy-from-Nium-defaults
+5. The success screen links straight into the new tenant's admin and customer
+   flow
+
+### Nium protection
+
+- The Nium config is the only one that auto-seeds from
+  `lib/seedConfig.js#buildDefaultConfig` on first read. Every other tenant
+  seeds blank via `buildBlankConfig`.
+- `POST /api/config?tenant=nium` refuses publishes that have zero licences or
+  zero active entity types — guards against an accidental wipe.
+- Reads of the Nium config self-heal: if the stored config has no licences
+  (corrupted / accidentally cleared) it's re-seeded from defaults and the
+  customer flow is never left broken.
+
+### Env vars
+
+- `TENANT_ID=nium` — the default tenant served when no `?tenant=` is present
+- `ADMIN_PASSWORD=...` — shared across all tenants for now (per-tenant
+  passwords are a future change)
+
 ## Architecture
 
 This is a single-page React app (Create React App) with one Vercel serverless function. The app is a 5-step KYC onboarding wizard for Nium: **Input → Research → Confirm → Fill Gaps → Declare**.

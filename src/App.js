@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { getTenantId, isPreviewMode } from "./utils/tenant";
 
 /* ═══════════════════════════════════════════
    APP-LEVEL CONSTANTS
@@ -1110,8 +1111,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Tenant config — loaded from /api/config on mount, or from sessionStorage
   // when running in preview mode (the admin "Preview" button stages the
   // current unsaved config under the "preview_config" key).
+  //
+  // Tenant resolution comes from the URL (?tenant=X) so this component can
+  // serve any tenant; "nium" is the default for plain /. Preview mode is
+  // either triggered by the /preview route (index.js sets previewMode prop)
+  // or by ?preview=true in the URL.
+  const [tenantId] = useState(() => getTenantId());
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
+  const inPreview = previewMode || isPreviewMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -1131,7 +1139,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setConfigLoading(false);
       return () => {};
     }
-    fetch("/api/config", { cache: "no-store" })
+    const url = `/api/config?tenant=${encodeURIComponent(tenantId)}`;
+    fetch(url, { cache: "no-store" })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((cfg) => { if (!cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
       .catch((err) => {
@@ -1143,7 +1152,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         }
       });
     return () => { cancelled = true; };
-  }, [previewMode]);
+  }, [previewMode, tenantId]);
 
   const [step, setStep] = useState(0);
   const [companyName, setCompanyName] = useState("");
@@ -1942,6 +1951,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
           textAlign: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
         }}>
           ⚠ Preview Mode — Showing unpublished admin config from this session
+        </div>
+      )}
+      {!previewMode && inPreview && (
+        <div style={{
+          background: "#FCD34D", color: "#7C2D12",
+          padding: "8px 16px",
+          textAlign: "center", fontSize: 12, fontWeight: 700,
+          position: "sticky", top: 0, zIndex: 1000,
+          minHeight: 32, display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          ⚠ Preview Mode — submissions are not saved
         </div>
       )}
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 16px 60px" }}>

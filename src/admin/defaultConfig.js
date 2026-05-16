@@ -96,4 +96,48 @@ export function buildDefaultConfig(tenantId = "nium") {
   };
 }
 
+// Empty config for a brand-new non-Nium tenant. Same shape as
+// buildDefaultConfig but with no licences/entityTypes/schemas/documents.
+// Client mirror of lib/seedConfig.js#buildBlankConfig.
+export function buildBlankConfig(tenantId = "") {
+  const now = new Date().toISOString();
+  return {
+    _tenantId: tenantId,
+    _version: 1,
+    _seededAt: now,
+    _isDefault: false,
+    _isBlank: true,
+
+    company: {
+      name: "",
+      logo: null,
+      manualFormUrl: "",
+      privacyPolicyUrl: "",
+      submissionWebhookUrl: "",
+      submissionEmail: "",
+      primaryContactName: "",
+      primaryContactEmail: "",
+    },
+
+    licences: [],
+    routingPolicy: "regional",
+    entityTypes: [],
+    schemas: {},
+
+    sourceTiers: {
+      primary: [
+        { name: "Government Domains", pattern: ".gov", jurisdiction: null },
+      ],
+      secondary: [
+        { name: "LinkedIn", pattern: "linkedin.com" },
+        { name: "Wikipedia", pattern: "wikipedia.org" },
+      ],
+      documentsArePrimary: true,
+    },
+
+    documentLibrary: [],
+    documents: {},
+  };
+}
+
 export default buildDefaultConfig;

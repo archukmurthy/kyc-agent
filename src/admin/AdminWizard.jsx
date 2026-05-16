@@ -29,6 +29,7 @@ export default function AdminWizard({
   onPublish,
   startAtStep = 1,
   adminToken,
+  tenantId,
   onPublishSuccess,
   resumed = false,
 }) {
@@ -122,6 +123,7 @@ export default function AdminWizard({
             config={localConfig}
             onChange={onConfigChange}
             adminToken={adminToken}
+            tenantId={tenantId}
             onPublishSuccess={onPublishSuccess}
           />
         ) : (
