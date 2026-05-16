@@ -1,16 +1,23 @@
-// Admin password gate. Returns the password back as the "token" on success;
-// the admin UI sends it as Authorization: Bearer <token> on subsequent
-// /api/config POSTs. This is intentionally minimal — single shared password,
-// no sessions — and is sufficient for the internal admin UI.
+// Per-tenant admin password gate.
 //
-// The response also echoes back the tenant ID resolved from the request so
-// the admin frontend can confirm which tenant it authenticated against.
+// Lookup order:
+//   1. tenant-auth:{tenantId} in storage — hashed password set by super-admin
+//   2. Nium-only fallback: ADMIN_PASSWORD env var. On a successful env
+//      fallback, the KV entry + tenant-registry are seeded so subsequent
+//      logins use the KV path.
 //
-// TODO: ADMIN_PASSWORD is shared across all tenants today. When per-tenant
-// passwords are needed, look up the tenant's password instead of comparing
-// against the single env var.
+// Returns the password back as the "token" on success so the admin UI can
+// use it as Authorization: Bearer <token> on subsequent /api/config calls.
 
+const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
+const { hashPassword, verifyPassword } = require("../lib/auth");
+
+const REGISTRY_KEY = "tenant-registry";
+
+function authKey(tid) {
+  return `tenant-auth:${tid}`;
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -26,6 +33,39 @@ function readBody(req) {
   });
 }
 
+async function seedNiumAuth(envPassword) {
+  // Idempotent: only writes if entry is missing.
+  try {
+    const existing = await storage.get(authKey("nium"));
+    if (!existing) {
+      await storage.set(authKey("nium"), {
+        passwordHash: hashPassword(envPassword),
+        createdAt: new Date().toISOString(),
+        createdBy: "system-seed",
+        tenantId: "nium",
+        companyName: "Nium",
+      });
+    }
+    const registry = (await storage.get(REGISTRY_KEY)) || [];
+    if (!registry.find((t) => t.tenantId === "nium")) {
+      registry.unshift({
+        tenantId: "nium",
+        companyName: "Nium",
+        createdAt: new Date().toISOString(),
+        createdBy: "system",
+        lastPublishedAt: null,
+        isActive: true,
+        isInternal: true,
+        isBlank: false,
+      });
+      await storage.set(REGISTRY_KEY, registry);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("Could not seed Nium auth/registry:", e.message);
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -37,21 +77,58 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const expected = process.env.ADMIN_PASSWORD;
-    if (!expected) {
-      return res.status(500).json({ success: false, error: "ADMIN_PASSWORD not configured on server" });
-    }
+    const tenantId = getTenantIdFromRequest(req);
     const body = await readBody(req);
-    const provided = body && typeof body.password === "string" ? body.password : "";
-    if (provided === expected) {
+    const password = body && typeof body.password === "string" ? body.password : "";
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: "Password required" });
+    }
+
+    const tenantAuth = await storage.get(authKey(tenantId));
+
+    // No KV record? Nium falls back to the env password (and self-seeds on
+    // success). Every other tenant must be created via /super-admin first.
+    if (!tenantAuth) {
+      if (tenantId !== "nium") {
+        return res.status(401).json({
+          success: false,
+          error: "Tenant not found or not configured",
+        });
+      }
+      const envPassword = process.env.ADMIN_PASSWORD;
+      if (!envPassword) {
+        return res.status(500).json({
+          success: false,
+          error: "ADMIN_PASSWORD not configured on server",
+        });
+      }
+      if (password !== envPassword) {
+        return res.status(401).json({ success: false, error: "Incorrect password" });
+      }
+      // Seed for next time.
+      await seedNiumAuth(envPassword);
       return res.status(200).json({
         success: true,
-        token: expected,
-        tenantId: getTenantIdFromRequest(req),
+        token: password,
+        tenantId,
+        companyName: "Nium",
       });
     }
-    return res.status(401).json({ success: false });
+
+    if (!verifyPassword(password, tenantAuth.passwordHash)) {
+      return res.status(401).json({ success: false, error: "Incorrect password" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      token: password,
+      tenantId,
+      companyName: tenantAuth.companyName || "",
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, error: "Server error", message: err.message });
+    // eslint-disable-next-line no-console
+    console.error("admin-auth error", err);
+    return res.status(500).json({ success: false, error: "Authentication failed", message: err.message });
   }
 };

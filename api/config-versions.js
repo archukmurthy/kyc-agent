@@ -11,9 +11,23 @@
 
 const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
+const { verifyPassword } = require("../lib/auth");
 
 function configKey(tenant) {
   return `config:${tenant}`;
+}
+
+async function authorizeAdmin(tenant, token) {
+  if (!token) return false;
+  try {
+    const stored = await storage.get(`tenant-auth:${tenant}`);
+    if (stored && verifyPassword(token, stored.passwordHash)) return true;
+  } catch (_) {}
+  if (tenant === "nium") {
+    const env = process.env.ADMIN_PASSWORD;
+    if (env && token === env) return true;
+  }
+  return false;
 }
 
 function versionKey(tenant, version) {
@@ -76,12 +90,11 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const expected = process.env.ADMIN_PASSWORD;
-      if (!expected) return res.status(500).json({ error: "ADMIN_PASSWORD not configured on server" });
-
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-      if (token !== expected) return res.status(401).json({ error: "Unauthorized" });
+      if (!(await authorizeAdmin(tenant, token))) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
       const body = await readBody(req);
       const targetVersion = Number(body && body.version);

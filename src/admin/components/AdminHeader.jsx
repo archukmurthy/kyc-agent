@@ -66,7 +66,7 @@ export default function AdminHeader({
         </div>
         {tenantId && (
           <span
-            title="Tenant being configured"
+            title="The tenant this admin is configuring (set by the URL)"
             style={{
               marginLeft: 8,
               display: "inline-flex",
@@ -81,7 +81,7 @@ export default function AdminHeader({
               border: `1px solid rgba(11,61,145,0.16)`,
             }}
           >
-            Tenant: {tenantId}
+            Configuring: {tenantConfig?.company?.name || tenantId}
           </span>
         )}
       </div>

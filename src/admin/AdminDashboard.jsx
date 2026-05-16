@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AdminHeader from "./components/AdminHeader";
 import QuickActionCard from "./components/QuickActionCard";
-import TenantBanner from "./components/TenantBanner";
 import AdminWizard from "./AdminWizard";
 import StepCompany from "./steps/StepCompany";
 import StepDocuments from "./steps/StepDocuments";
@@ -244,12 +243,6 @@ export default function AdminDashboard({
 
       <div style={adminStyles.pageInner}>
         {publishMsg && <PublishToast msg={publishMsg} />}
-
-        <TenantBanner
-          tenantId={tenantId}
-          companyName={localConfig?.company?.name}
-          token={token}
-        />
 
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>

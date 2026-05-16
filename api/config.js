@@ -21,6 +21,7 @@
 const storage = require("../lib/storage");
 const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
+const { verifyPassword } = require("../lib/auth");
 
 function configKey(tenant) {
   return `config:${tenant}`;
@@ -28,6 +29,28 @@ function configKey(tenant) {
 
 function versionKey(tenant, version) {
   return `config:${tenant}:v${version}`;
+}
+
+function authKey(tid) {
+  return `tenant-auth:${tid}`;
+}
+
+// Authorize an admin write for a specific tenant. Two paths:
+//   1. tenant-auth:{tenant} hash matches the bearer token (the per-tenant
+//      password set by /super-admin or the auto-seeded Nium entry)
+//   2. Nium-only fallback: bearer token equals ADMIN_PASSWORD env var.
+//      Lets the first-ever Nium publish succeed before the auto-seed runs.
+async function authorizeAdmin(tenant, token) {
+  if (!token) return false;
+  try {
+    const stored = await storage.get(authKey(tenant));
+    if (stored && verifyPassword(token, stored.passwordHash)) return true;
+  } catch (_) {}
+  if (tenant === "nium") {
+    const env = process.env.ADMIN_PASSWORD;
+    if (env && token === env) return true;
+  }
+  return false;
 }
 
 // Seed a tenant that doesn't yet have a config. Nium gets the canonical
@@ -93,13 +116,9 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      const expected = process.env.ADMIN_PASSWORD;
-      if (!expected) {
-        return res.status(500).json({ error: "ADMIN_PASSWORD not configured on server" });
-      }
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-      if (token !== expected) {
+      if (!(await authorizeAdmin(tenant, token))) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -149,10 +168,11 @@ module.exports = async function handler(req, res) {
     if (req.method === "DELETE") {
       // Reset-to-defaults. Wipes the live config AND every archived version
       // for this tenant. The next GET re-seeds (Nium → defaults; others → blank).
-      const expected = process.env.ADMIN_PASSWORD;
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-      if (token !== expected) return res.status(401).json({ error: "Unauthorized" });
+      if (!(await authorizeAdmin(tenant, token))) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const keys = await storage.list(`config:${tenant}`);
       for (const k of keys) await storage.del(k);
       return res.status(200).json({ success: true, cleared: keys.length });
@@ -160,10 +180,11 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "PUT") {
       // Versions list — admin-only. Returns last 5 archived versions newest-first.
-      const expected = process.env.ADMIN_PASSWORD;
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-      if (token !== expected) return res.status(401).json({ error: "Unauthorized" });
+      if (!(await authorizeAdmin(tenant, token))) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const keys = await storage.list(`config:${tenant}:v`);
       const versions = keys
         .map((k) => Number(k.split(":v")[1]))

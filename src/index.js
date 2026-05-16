@@ -2,12 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import KYCAgent from "./App";
 import AdminRoot from "./admin/AdminRoot";
+import SuperAdminRoot from "./superadmin/SuperAdminRoot";
 
 const path = window.location.pathname;
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 let tree;
-if (path === "/admin" || path.startsWith("/admin/")) {
+if (path === "/super-admin" || path.startsWith("/super-admin/")) {
+  tree = <SuperAdminRoot />;
+} else if (path === "/admin" || path.startsWith("/admin/")) {
   tree = <AdminRoot />;
 } else if (path === "/preview" || path.startsWith("/preview/")) {
   // Preview mode loads the customer flow with the unsaved admin config
