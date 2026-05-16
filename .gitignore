@@ -7,3 +7,4 @@ build
 
 .vercel
 .config-store.json
+.claude/
