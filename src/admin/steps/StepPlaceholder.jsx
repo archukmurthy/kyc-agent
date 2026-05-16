@@ -33,7 +33,7 @@ export default function StepPlaceholder({ stepNumber, stepName, config }) {
 }
 
 function stepIcon(n) {
-  return { 4: "📝", 5: "🔍", 6: "📄", 7: "🚀" }[n] || "🧭";
+  return { 4: "📝", 5: "📄", 6: "🔍", 7: "🚀" }[n] || "🧭";
 }
 
 function renderSummary(stepNumber, config) {
@@ -76,18 +76,6 @@ function renderSummary(stepNumber, config) {
   }
 
   if (stepNumber === 5) {
-    const p = config.sourceTiers?.primary?.length || 0;
-    const s = config.sourceTiers?.secondary?.length || 0;
-    return (
-      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
-        <li>Primary sources: <strong>{p}</strong></li>
-        <li>Secondary sources: <strong>{s}</strong></li>
-        <li>Uploaded documents treated as primary: <strong>{config.sourceTiers?.documentsArePrimary ? "Yes" : "No"}</strong></li>
-      </ul>
-    );
-  }
-
-  if (stepNumber === 6) {
     const entityTypes = (config.entityTypes || []).filter((e) => e.active);
     return (
       <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -105,6 +93,18 @@ function renderSummary(stepNumber, config) {
             </li>
           );
         })}
+      </ul>
+    );
+  }
+
+  if (stepNumber === 6) {
+    const p = config.sourceTiers?.primary?.length || 0;
+    const s = config.sourceTiers?.secondary?.length || 0;
+    return (
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
+        <li>Primary sources: <strong>{p}</strong></li>
+        <li>Secondary sources: <strong>{s}</strong></li>
+        <li>Uploaded documents treated as primary: <strong>{config.sourceTiers?.documentsArePrimary ? "Yes" : "No"}</strong></li>
       </ul>
     );
   }

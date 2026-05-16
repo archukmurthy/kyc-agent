@@ -4,27 +4,33 @@ import AdminStepIndicator from "./components/AdminStepIndicator";
 import StepCompany from "./steps/StepCompany";
 import StepLicences from "./steps/StepLicences";
 import StepEntityTypes from "./steps/StepEntityTypes";
-import StepPlaceholder from "./steps/StepPlaceholder";
+import StepSchemas from "./steps/StepSchemas";
+import StepDocuments from "./steps/StepDocuments";
+import StepSources from "./steps/StepSources";
+import StepPublish from "./steps/StepPublish";
 
 const STEPS = [
   { n: 1, label: "Company",      Component: StepCompany,      title: "Company Setup" },
   { n: 2, label: "Licences",     Component: StepLicences,     title: "Licences" },
   { n: 3, label: "Entity Types", Component: StepEntityTypes,  title: "Entity Types" },
-  { n: 4, label: "Schemas",      Component: StepPlaceholder,  title: "Field Schemas" },
-  { n: 5, label: "Sources",      Component: StepPlaceholder,  title: "Source Classification" },
-  { n: 6, label: "Documents",    Component: StepPlaceholder,  title: "Document Collection" },
-  { n: 7, label: "Publish",      Component: StepPlaceholder,  title: "Review & Publish" },
+  { n: 4, label: "Schemas",      Component: StepSchemas,      title: "Field Schemas" },
+  { n: 5, label: "Documents",    Component: StepDocuments,    title: "Document Collection" },
+  { n: 6, label: "Sources",      Component: StepSources,      title: "Source Classification" },
+  { n: 7, label: "Publish",      Component: StepPublish,      title: "Review & Publish" },
 ];
 
-// 7-step wizard shell. Manages step navigation; each step component receives
-// the live localConfig and an onChange function that lifts updates into the
-// parent AdminDashboard. The bottom nav also publishes on the final step.
+// 7-step wizard shell. Each step receives the live config + onChange. Step 7
+// also gets the admin token so it can POST the publish itself; on success it
+// calls onPublishSuccess to let the dashboard close out.
 export default function AdminWizard({
   localConfig,
   onConfigChange,
   onExit,
   onPublish,
   startAtStep = 1,
+  adminToken,
+  onPublishSuccess,
+  resumed = false,
 }) {
   const [currentStep, setCurrentStep] = useState(
     Math.min(Math.max(startAtStep, 1), STEPS.length)
@@ -32,12 +38,14 @@ export default function AdminWizard({
 
   const step = STEPS[currentStep - 1];
   const StepComponent = step.Component;
-  const isPlaceholder = StepComponent === StepPlaceholder;
+  const isPublishStep = currentStep === 7;
 
   function next() {
     if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
     } else if (onPublish) {
+      // Fallback: if the publish step itself can't run, defer to the dashboard
+      // publish handler. With Step 7 wired, this path is rarely hit.
       onPublish();
     }
   }
@@ -80,9 +88,20 @@ export default function AdminWizard({
 
       <AdminStepIndicator currentStep={currentStep} steps={STEPS.map((s) => s.label)} />
 
+      {resumed && currentStep === startAtStep && (
+        <div style={{ textAlign: "center", padding: "6px 16px 0", fontSize: 12, color: adminColors.niumBlue, fontWeight: 600 }}>
+          Resuming from where you left off — Step {currentStep} of {STEPS.length}
+        </div>
+      )}
+
       <div style={{ flex: 1, padding: "16px 16px 96px" }}>
-        {isPlaceholder ? (
-          <StepComponent stepNumber={step.n} stepName={step.title} config={localConfig} />
+        {isPublishStep ? (
+          <StepPublish
+            config={localConfig}
+            onChange={onConfigChange}
+            adminToken={adminToken}
+            onPublishSuccess={onPublishSuccess}
+          />
         ) : (
           <StepComponent
             config={localConfig}
@@ -122,9 +141,11 @@ export default function AdminWizard({
               </button>
             )}
           </div>
-          <button type="button" onClick={next} style={adminStyles.btnPrimary}>
-            {currentStep === STEPS.length ? "Publish Configuration" : "Continue →"}
-          </button>
+          {!isPublishStep && (
+            <button type="button" onClick={next} style={adminStyles.btnPrimary}>
+              Continue →
+            </button>
+          )}
         </div>
         <div style={{ fontSize: 11, color: adminColors.textMuted }}>
           Your progress is saved automatically

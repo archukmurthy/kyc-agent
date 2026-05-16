@@ -6,8 +6,8 @@ const STEP_LABELS = [
   "Licences",
   "Entity Types",
   "Schemas",
-  "Sources",
   "Documents",
+  "Sources",
   "Publish",
 ];
 

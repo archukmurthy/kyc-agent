@@ -3,9 +3,12 @@ import AdminHeader from "./components/AdminHeader";
 import QuickActionCard from "./components/QuickActionCard";
 import AdminWizard from "./AdminWizard";
 import StepCompany from "./steps/StepCompany";
-import StepLicences from "./steps/StepLicences";
-import StepEntityTypes from "./steps/StepEntityTypes";
-import StepPlaceholder from "./steps/StepPlaceholder";
+import StepDocuments from "./steps/StepDocuments";
+import StepSources from "./steps/StepSources";
+import StepSchemas from "./steps/StepSchemas";
+import MiniWizardAddLicence from "./miniwizards/MiniWizardAddLicence";
+import MiniWizardAddEntity from "./miniwizards/MiniWizardAddEntity";
+import MiniWizardAddSchema from "./miniwizards/MiniWizardAddSchema";
 import { adminColors, adminStyles } from "./adminDesign";
 
 const PREVIEW_KEY = "preview_config";
@@ -57,6 +60,8 @@ export default function AdminDashboard({
   const [showWelcome, setShowWelcome] = useState(!!firstLogin);
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [wizardStartStep, setWizardStartStep] = useState(1);
 
   useEffect(() => {
     setLocalConfig(tenantConfig);
@@ -64,20 +69,24 @@ export default function AdminDashboard({
 
   const status = useMemo(() => computeStatus(localConfig), [localConfig]);
 
-  // First incomplete step for "Continue Setup"
   function firstIncompleteStep() {
     if (!status.company) return 1;
     if (!status.licences) return 2;
     if (!status.entityTypes) return 3;
     if (status.schemas !== true) return 4;
-    if (!status.sources) return 5;
-    if (!status.documents) return 6;
+    if (!status.documents) return 5;
+    if (!status.sources) return 6;
     return 7;
   }
 
   function onConfigChange(patch) {
     setLocalConfig((prev) => ({ ...(prev || {}), ...patch }));
     setHasUnpublishedChanges(true);
+  }
+
+  function showToast(text, ok = true) {
+    setToast({ text, ok });
+    setTimeout(() => setToast(null), 3000);
   }
 
   async function handlePublish() {
@@ -94,7 +103,6 @@ export default function AdminDashboard({
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setPublishMsg({ ok: true, text: `Published — v${data.version} is live` });
       setHasUnpublishedChanges(false);
-      // Pull canonical config back so _version reflects what we just published.
       const cfgRes = await fetch("/api/config", { cache: "no-store" });
       if (cfgRes.ok) {
         const cfg = await cfgRes.json();
@@ -121,20 +129,43 @@ export default function AdminDashboard({
     setActiveView(v);
   }
 
+  function runFullWizard() {
+    setWizardStartStep(firstIncompleteStep());
+    goView("wizard");
+  }
+
+  function exitToDashboard() {
+    goView("dashboard");
+    setWizardStartStep(1);
+  }
+
+  function miniwizardComplete(updatedConfig, message) {
+    setLocalConfig(updatedConfig);
+    setHasUnpublishedChanges(true);
+    exitToDashboard();
+    showToast("✅ " + message);
+  }
+
   // Wizard takes over the whole viewport
   if (activeView === "wizard") {
     return (
       <AdminWizard
         localConfig={localConfig}
         onConfigChange={onConfigChange}
-        onExit={() => goView("dashboard")}
+        onExit={exitToDashboard}
         onPublish={handlePublish}
-        startAtStep={1}
+        startAtStep={wizardStartStep}
+        adminToken={token}
+        onPublishSuccess={() => {
+          setHasUnpublishedChanges(false);
+          showToast("✅ Configuration published");
+        }}
+        resumed={wizardStartStep > 1}
       />
     );
   }
 
-  // Sub-views (standalone forms / mini-wizards)
+  // Sub-views: mini-wizards and standalone forms
   if (activeView !== "dashboard") {
     return (
       <div style={adminStyles.pageWrapper}>
@@ -150,14 +181,25 @@ export default function AdminDashboard({
         <div style={adminStyles.pageInner}>
           <button
             type="button"
-            onClick={() => goView("dashboard")}
+            onClick={exitToDashboard}
             style={{ ...adminStyles.btnGhost, color: adminColors.textMuted, marginBottom: 12, fontSize: 13 }}
           >
             ← Back to Dashboard
           </button>
           {publishMsg && <PublishToast msg={publishMsg} />}
-          <SubView view={activeView} config={localConfig} onChange={onConfigChange} />
+          <SubView
+            view={activeView}
+            config={localConfig}
+            onChange={onConfigChange}
+            onCompleteMini={miniwizardComplete}
+            onCancelMini={exitToDashboard}
+            onStandaloneSave={() => {
+              showToast("✅ Saved");
+              exitToDashboard();
+            }}
+          />
         </div>
+        {toast && <Toast {...toast} />}
       </div>
     );
   }
@@ -179,7 +221,7 @@ export default function AdminDashboard({
         <WelcomeModal
           onWizard={() => {
             setShowWelcome(false);
-            goView("wizard");
+            runFullWizard();
           }}
           onDashboard={() => setShowWelcome(false)}
         />
@@ -204,17 +246,7 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        <ConfigStatusCard
-          status={status}
-          onContinue={() => {
-            const step = firstIncompleteStep();
-            goView("wizard");
-            // AdminWizard reads startAtStep on mount; we restart it. To jump to
-            // the first incomplete step we'd need a small refactor (passing
-            // startAtStep through state). For Session A this lands at step 1.
-            void step;
-          }}
-        />
+        <ConfigStatusCard status={status} onContinue={runFullWizard} />
 
         <div
           style={{
@@ -234,7 +266,7 @@ export default function AdminDashboard({
 
         <button
           type="button"
-          onClick={() => goView("wizard")}
+          onClick={runFullWizard}
           style={{
             marginTop: 18,
             width: "100%",
@@ -254,6 +286,7 @@ export default function AdminDashboard({
 
         <RecentActivity config={localConfig} />
       </div>
+      {toast && <Toast {...toast} />}
     </div>
   );
 }
@@ -271,8 +304,8 @@ function ConfigStatusCard({ status, onContinue }) {
           : `${status.schemaDone || 0} of ${status.schemaCells || 0} schemas`,
       ok: status.schemas === true,
     },
-    { key: "sources",     label: "Sources",     ok: status.sources },
     { key: "documents",   label: "Documents",   ok: status.documents },
+    { key: "sources",     label: "Sources",     ok: status.sources },
   ];
   const allOk = items.every((i) => i.ok);
 
@@ -309,22 +342,59 @@ function ConfigStatusCard({ status, onContinue }) {
   );
 }
 
-function SubView({ view, config, onChange }) {
-  if (view === "company")
-    return <StepCompany config={config} onChange={onChange} isStandalone />;
-  if (view === "add-licence")
-    return <StepLicences config={config} onChange={onChange} isStandalone addMode />;
-  if (view === "add-entity")
-    return <StepEntityTypes config={config} onChange={onChange} isStandalone addMode />;
-  if (view === "add-schema")
-    return <StepPlaceholder stepNumber={4} stepName="Field Schemas" config={config} />;
-  if (view === "documents")
-    return <StepPlaceholder stepNumber={6} stepName="Document Collection" config={config} />;
-  if (view === "sources")
-    return <StepPlaceholder stepNumber={5} stepName="Source Classification" config={config} />;
-  if (view === "publish")
-    return <StepPlaceholder stepNumber={7} stepName="Review & Publish" config={config} />;
+function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStandaloneSave }) {
+  if (view === "company") {
+    return (
+      <>
+        <StepCompany config={config} onChange={onChange} isStandalone />
+        <StandaloneSaveBar onSave={onStandaloneSave} />
+      </>
+    );
+  }
+  if (view === "documents") {
+    return (
+      <>
+        <StepDocuments config={config} onChange={onChange} isStandalone />
+        <StandaloneSaveBar onSave={onStandaloneSave} />
+      </>
+    );
+  }
+  if (view === "sources") {
+    return (
+      <>
+        <StepSources config={config} onChange={onChange} isStandalone />
+        <StandaloneSaveBar onSave={onStandaloneSave} />
+      </>
+    );
+  }
+  if (view === "schemas") {
+    return (
+      <>
+        <StepSchemas config={config} onChange={onChange} isStandalone />
+        <StandaloneSaveBar onSave={onStandaloneSave} />
+      </>
+    );
+  }
+  if (view === "add-licence") {
+    return <MiniWizardAddLicence config={config} onComplete={onCompleteMini} onCancel={onCancelMini} />;
+  }
+  if (view === "add-entity") {
+    return <MiniWizardAddEntity config={config} onComplete={onCompleteMini} onCancel={onCancelMini} />;
+  }
+  if (view === "add-schema") {
+    return <MiniWizardAddSchema config={config} onComplete={onCompleteMini} onCancel={onCancelMini} />;
+  }
   return null;
+}
+
+function StandaloneSaveBar({ onSave }) {
+  return (
+    <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+      <button type="button" onClick={onSave} style={adminStyles.btnPrimary}>
+        Save Changes
+      </button>
+    </div>
+  );
 }
 
 function WelcomeModal({ onWizard, onDashboard }) {
@@ -434,12 +504,38 @@ function PublishToast({ msg }) {
   );
 }
 
+function Toast({ text, ok }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        zIndex: 250,
+        padding: "12px 18px",
+        background: ok ? adminColors.statusComplete : adminColors.danger,
+        color: "#fff",
+        borderRadius: 10,
+        fontSize: 13,
+        fontWeight: 600,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+        maxWidth: 360,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 function RecentActivity({ config }) {
   const items = [];
   if (config?._publishedAt) {
     items.push({ when: config._publishedAt, what: `Published v${config._version || 1}` });
   } else if (config?._seededAt) {
     items.push({ when: config._seededAt, what: "Seeded default configuration" });
+  }
+  if (config?._rolledBackFrom) {
+    items.unshift({ when: config._publishedAt, what: `Rolled back from v${config._rolledBackFrom}` });
   }
 
   return (
