@@ -69,6 +69,20 @@ export default function AdminDashboard({
     setLocalConfig(tenantConfig);
   }, [tenantConfig]);
 
+  // Browser-level guard so closing the tab / navigating away with unpublished
+  // changes prompts the standard "leave site?" confirmation. The message text
+  // is controlled by the browser; setting returnValue is the modern API.
+  useEffect(() => {
+    if (!hasUnpublishedChanges) return undefined;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnpublishedChanges]);
+
   const status = useMemo(() => computeStatus(localConfig), [localConfig]);
 
   // Resume target for "Run Full Setup Wizard".

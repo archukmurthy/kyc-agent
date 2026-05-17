@@ -1806,11 +1806,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
-  const jurisdictionBadge = activeSchema ? (
-    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", background: activeSchema.region === "UK" ? "#1a3a4a" : "#4a9e8e", color: "#fff", marginLeft: 8 }}>
-      {activeSchema.region === "UK" ? "🇬🇧 UK Licence" : "🇸🇬 SG Licence"}
-    </span>
-  ) : null;
+  const jurisdictionBadge = activeSchema ? (() => {
+    // Region drives only the colour; the label comes from the resolved
+    // licence so tenants with non-UK/SG licences show the real jurisdiction.
+    const flag = activeSchema.jurisdiction === "GB" ? "🇬🇧 "
+      : activeSchema.jurisdiction === "SG" ? "🇸🇬 "
+      : "";
+    const text = activeSchema.label ? `${flag}${activeSchema.label}` : (activeSchema.region === "UK" ? "🇬🇧 UK Licence" : "🇸🇬 SG Licence");
+    const bg = activeSchema.region === "UK" ? "#1a3a4a" : "#4a9e8e";
+    return (
+      <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", background: bg, color: "#fff", marginLeft: 8 }}>
+        {text}
+      </span>
+    );
+  })() : null;
 
   const entityBadge = entityType ? (
     <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", background: "#e0a040", color: "#fff", marginLeft: 8 }}>
@@ -2007,20 +2016,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </select>
             </div>
             {countryCode && (() => {
-              const lic = getApplicableLicence(countryCode);
-              const isLicensed = LICENSED_MARKETS.includes(countryCode);
+              // Resolve the licence from the tenant's configured licences,
+              // not the hardcoded UK/SG fallback. If tenantConfig is missing
+              // (offline fallback) fall back to the old hardcoded helper.
+              const resolved = tenantConfig ? pickLicence(countryCode, tenantConfig) : null;
+              const primary = tenantConfig ? (tenantConfig.licences || []).find(l => l.isPrimary) || (tenantConfig.licences || [])[0] : null;
+              const isLicensedHere = !!resolved && Array.isArray(resolved.countriesCovered) && resolved.countriesCovered.includes(countryCode);
+              const licenceLabel = resolved
+                ? `${resolved.jurisdictionCode === "GB" ? "🇬🇧 " : resolved.jurisdictionCode === "SG" ? "🇸🇬 " : ""}${resolved.jurisdictionName || resolved.id}${resolved.regulatoryAuthority ? ` (${resolved.regulatoryAuthority})` : ""}${!isLicensedHere ? " — default for non-licensed markets" : ""}`
+                : (getApplicableLicence(countryCode) === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) — default for non-licensed markets");
               const isFiFlow = entityType === "FI" || entityType === "Platform";
               const routesNote = entityType === "Platform" || entityType === "Direct"
                 ? ` (${entityType} routes to ${isFiFlow ? "FI" : "Corporate"} schema)`
                 : "";
+              const primaryName = primary?.jurisdictionName || "the default licence";
               return (
-                <div style={{ padding: "10px 14px", borderRadius: 8, background: isLicensed ? "#f0f3f8" : "#fff8ed", fontSize: 12, marginBottom: 14, borderLeft: isLicensed ? "3px solid #1a3a4a" : "3px solid #e0a040" }}>
+                <div style={{ padding: "10px 14px", borderRadius: 8, background: isLicensedHere ? "#f0f3f8" : "#fff8ed", fontSize: 12, marginBottom: 14, borderLeft: isLicensedHere ? "3px solid #1a3a4a" : "3px solid #e0a040" }}>
                   <div style={{ marginBottom: 4 }}><strong>🌍 Researching in:</strong> {countryObj?.name} ({countryCode})</div>
-                  <div><strong>📋 Applicable licence:</strong> {lic === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) — default for non-licensed markets"}</div>
+                  <div><strong>📋 Applicable licence:</strong> {licenceLabel}</div>
                   {entityType && (
                     <div style={{ marginTop: 4 }}><strong>📑 Form set:</strong> {isFiFlow ? "FI version" : "Corporate version"}{routesNote}</div>
                   )}
-                  {!isLicensed && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>{companyName_} has no licence in {countryObj?.name}, so this customer is onboarded under the Singapore licence. Public records will be searched in {countryObj?.name}, but SG requirements apply.</div>}
+                  {!isLicensedHere && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>{companyName_} has no licence in {countryObj?.name}, so this customer is onboarded under {primaryName}. Public records will be searched in {countryObj?.name}, but {primaryName} requirements apply.</div>}
                 </div>
               );
             })()}

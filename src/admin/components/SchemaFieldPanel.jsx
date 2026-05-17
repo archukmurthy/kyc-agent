@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { adminColors, adminStyles } from "../adminDesign";
 
 const TYPES = [
@@ -10,6 +10,8 @@ const TYPES = [
   { value: "file", label: "File Upload" },
 ];
 
+const HINT_MAX = 200;
+
 function slugifyId(label) {
   return label
     .trim()
@@ -20,9 +22,13 @@ function slugifyId(label) {
     .slice(0, 60);
 }
 
-// Slide-in panel for adding/editing a single schema field. `tab` controls which
-// extras show (AI search hint only for Research fields). On save, validates
-// label/id/type and that the id is unique within the cell's combined fields.
+// Slide-in panel for adding/editing a single schema field.
+//
+// Layout uses a flex column with a fixed footer so the Save / Cancel buttons
+// are never hidden behind the scrolling form, regardless of viewport height
+// or number of fields. The scrollable body and the footer are siblings of a
+// flex container with overflow:hidden, which is the only reliable way to
+// pin a footer in a fixed-height panel.
 export default function SchemaFieldPanel({
   open,
   tab,
@@ -37,6 +43,9 @@ export default function SchemaFieldPanel({
   const [idTouched, setIdTouched] = useState(!!field);
   const [error, setError] = useState(null);
   const [optionsText, setOptionsText] = useState(() => optionsToText(field?.options || []));
+  const [saving, setSaving] = useState(false);
+  const optionsRef = useRef(null);
+  const initialSnapshot = useRef(snapshot(field, optionsToText(field?.options || [])));
 
   useEffect(() => {
     setForm(ensureDefaults(field));
@@ -44,7 +53,48 @@ export default function SchemaFieldPanel({
     setIdTouched(!!field);
     setError(null);
     setNewSection("");
+    setSaving(false);
+    initialSnapshot.current = snapshot(field, optionsToText(field?.options || []));
   }, [field, open]);
+
+  // Auto-focus the dropdown values textarea when the admin switches type to select
+  // so they immediately see where to type the values.
+  useEffect(() => {
+    if (open && form.inputType === "select" && optionsRef.current) {
+      const t = setTimeout(() => {
+        try { optionsRef.current.focus(); } catch (_) {}
+      }, 50);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [open, form.inputType]);
+
+  const isDirty = useMemo(
+    () => open && !sameSnapshot(initialSnapshot.current, snapshot({ ...form }, optionsText)),
+    [open, form, optionsText],
+  );
+
+  function attemptClose() {
+    if (isDirty) {
+      const ok = window.confirm("Discard unsaved changes to this field?");
+      if (!ok) return;
+    }
+    onClose();
+  }
+
+  // ESC closes the panel (with the unsaved-changes guard).
+  useEffect(() => {
+    if (!open) return undefined;
+    const handler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        attemptClose();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isDirty]);
 
   function patch(p) {
     setForm((prev) => ({ ...prev, ...p }));
@@ -63,6 +113,11 @@ export default function SchemaFieldPanel({
     } else {
       patch({ section: v });
     }
+  }
+
+  function handleHintChange(v) {
+    const clipped = v.length > HINT_MAX ? v.slice(0, HINT_MAX) : v;
+    patch({ searchHint: clipped });
   }
 
   function handleSave() {
@@ -111,12 +166,21 @@ export default function SchemaFieldPanel({
       delete next.showWhen;
     }
 
-    onSave(next);
+    setSaving(true);
+    // Synchronously hand the field up. The parent closes the panel on its own
+    // tick, but we keep the button disabled until then so a rapid double-click
+    // can't fire two saves.
+    try {
+      onSave(next);
+    } finally {
+      setTimeout(() => setSaving(false), 250);
+    }
   }
 
   if (!open) return null;
 
   const sections = Array.from(new Set([...(existingSections || []), form.section].filter(Boolean)));
+  const hintLen = (form.searchHint || "").length;
 
   return (
     <div
@@ -128,7 +192,7 @@ export default function SchemaFieldPanel({
         display: "flex",
         justifyContent: "flex-end",
       }}
-      onClick={onClose}
+      onClick={attemptClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -137,157 +201,220 @@ export default function SchemaFieldPanel({
           maxWidth: 480,
           background: "#fff",
           height: "100%",
-          overflowY: "auto",
-          padding: 24,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
           boxShadow: "-8px 0 30px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
-            {field ? "Edit Field" : "Add Field"}
-          </h3>
-          <button type="button" onClick={onClose} style={{ ...adminStyles.btnGhost, fontSize: 18 }}>✕</button>
+        {/* Fixed header */}
+        <div style={{ flexShrink: 0, padding: "20px 24px 14px", borderBottom: `1px solid ${adminColors.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+              {field ? "Edit Field" : "Add Field"}
+            </h3>
+            {isDirty && (
+              <span
+                title="You have unsaved changes in this panel"
+                style={{ fontSize: 11, fontWeight: 700, color: adminColors.statusIncomplete, display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: adminColors.amber || "#e0a040" }} />
+                Unsaved
+              </span>
+            )}
+          </div>
+          <button type="button" onClick={attemptClose} style={{ ...adminStyles.btnGhost, fontSize: 18 }} aria-label="Close panel">
+            ✕
+          </button>
         </div>
 
-        {error && (
-          <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#fef2f2", color: adminColors.danger, fontSize: 12, fontWeight: 600 }}>
-            {error}
-          </div>
-        )}
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+          {error && (
+            <div style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 8, background: "#fef2f2", color: adminColors.danger, fontSize: 12, fontWeight: 600 }}>
+              {error}
+            </div>
+          )}
 
-        <Field label="Section">
-          <select
-            style={adminStyles.input}
-            value={form.section && sections.includes(form.section) ? form.section : (form.section === "" ? "__new__" : form.section || "")}
-            onChange={(e) => handleSectionChange(e.target.value)}
-          >
-            <option value="">— Select section —</option>
-            {sections.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-            <option value="__new__">+ New section…</option>
-          </select>
-          {(!form.section || !sections.includes(form.section)) && (
+          <Field label="Section">
+            <select
+              style={adminStyles.input}
+              value={form.section && sections.includes(form.section) ? form.section : (form.section === "" ? "__new__" : form.section || "")}
+              onChange={(e) => handleSectionChange(e.target.value)}
+            >
+              <option value="">— Select section —</option>
+              {sections.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value="__new__">+ New section…</option>
+            </select>
+            {(!form.section || !sections.includes(form.section)) && (
+              <input
+                type="text"
+                placeholder="New section name"
+                value={form.section || newSection}
+                onChange={(e) => {
+                  setNewSection(e.target.value);
+                  patch({ section: e.target.value });
+                }}
+                style={{ ...adminStyles.input, marginTop: 8 }}
+              />
+            )}
+          </Field>
+
+          <Field label="UI Label" helper="Be clear and specific — this is exactly what appears on the form">
             <input
               type="text"
-              placeholder="New section name"
-              value={form.section || newSection}
-              onChange={(e) => {
-                setNewSection(e.target.value);
-                patch({ section: e.target.value });
-              }}
-              style={{ ...adminStyles.input, marginTop: 8 }}
+              value={form.label || ""}
+              onChange={(e) => handleLabelChange(e.target.value)}
+              style={adminStyles.input}
             />
-          )}
-        </Field>
-
-        <Field label="UI Label" helper="Be clear and specific — this is exactly what appears on the form">
-          <input
-            type="text"
-            value={form.label || ""}
-            onChange={(e) => handleLabelChange(e.target.value)}
-            style={adminStyles.input}
-          />
-        </Field>
-
-        <Field label="Field ID" helper="System identifier — must be unique">
-          <input
-            type="text"
-            value={form.field || ""}
-            onChange={(e) => {
-              setIdTouched(true);
-              patch({ field: e.target.value.replace(/[^a-zA-Z0-9_]/g, "_") });
-            }}
-            style={{ ...adminStyles.input, fontFamily: "monospace", fontSize: 13 }}
-          />
-        </Field>
-
-        <Field label="Field Type">
-          <select
-            style={adminStyles.input}
-            value={form.inputType || "text"}
-            onChange={(e) => patch({ inputType: e.target.value })}
-          >
-            {TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-        </Field>
-
-        {form.inputType === "select" && (
-          <Field
-            label="Dropdown Values"
-            helper="One value per line. Format: display_label|stored_value"
-          >
-            <textarea
-              value={optionsText}
-              placeholder={"Private Limited Company|private_limited\nPublic Limited Company|public_limited"}
-              onChange={(e) => setOptionsText(e.target.value)}
-              style={{ ...adminStyles.input, minHeight: 90, fontFamily: "monospace", fontSize: 12 }}
-            />
-            <Preview options={parseOptions(optionsText)} />
           </Field>
-        )}
 
-        <Field label={null}>
-          <Toggle
-            label="Required field"
-            body="Customer cannot submit without completing this field"
-            on={!!form.required}
-            onChange={(v) => patch({ required: v })}
-          />
-        </Field>
+          <Field label="Field ID" helper="System identifier — must be unique">
+            <input
+              type="text"
+              value={form.field || ""}
+              onChange={(e) => {
+                setIdTouched(true);
+                patch({ field: e.target.value.replace(/[^a-zA-Z0-9_]/g, "_") });
+              }}
+              style={{ ...adminStyles.input, fontFamily: "monospace", fontSize: 13 }}
+            />
+          </Field>
 
-        {tab === "research" && (
-          <>
-            <Field label={null}>
-              <Toggle
-                label="AI should search for this"
-                body="The research agent will attempt to find this value from public sources"
-                on={form.aiSearch !== false}
-                onChange={(v) => patch({ aiSearch: v })}
+          <Field label="Field Type">
+            <select
+              style={adminStyles.input}
+              value={form.inputType || "text"}
+              onChange={(e) => patch({ inputType: e.target.value })}
+            >
+              {TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </Field>
+
+          {form.inputType === "select" && (
+            <Field
+              label="Dropdown Values"
+              helper="One value per line. Format: display_label|stored_value"
+            >
+              <textarea
+                ref={optionsRef}
+                value={optionsText}
+                placeholder={"Private Limited Company|private_limited\nPublic Limited Company|public_limited"}
+                onChange={(e) => setOptionsText(e.target.value)}
+                style={{ ...adminStyles.input, minHeight: 90, fontFamily: "monospace", fontSize: 12 }}
               />
+              <Preview options={parseOptions(optionsText)} />
             </Field>
-            {form.aiSearch !== false && (
-              <Field label="Search guidance for AI" helper="Tell the AI where to look and what format to return">
-                <textarea
-                  value={form.searchHint || ""}
-                  placeholder="e.g. Find the company registration number from Companies House or equivalent official registry"
-                  onChange={(e) => patch({ searchHint: e.target.value })}
-                  style={{ ...adminStyles.input, minHeight: 70 }}
+          )}
+
+          <Field label={null}>
+            <Toggle
+              label="Required field"
+              body="Customer cannot submit without completing this field"
+              on={!!form.required}
+              onChange={(v) => patch({ required: v })}
+            />
+          </Field>
+
+          {tab === "research" && (
+            <>
+              <Field label={null}>
+                <Toggle
+                  label="AI should search for this"
+                  body="The research agent will attempt to find this value from public sources"
+                  on={form.aiSearch !== false}
+                  onChange={(v) => patch({ aiSearch: v })}
                 />
               </Field>
-            )}
-          </>
-        )}
+              {form.aiSearch !== false && (
+                <Field label="Search guidance for AI" helper="Tell the AI where to look and what format to return">
+                  <textarea
+                    value={form.searchHint || ""}
+                    placeholder="e.g. Find the company registration number from Companies House or equivalent official registry"
+                    onChange={(e) => handleHintChange(e.target.value)}
+                    maxLength={HINT_MAX}
+                    style={{ ...adminStyles.input, minHeight: 70 }}
+                  />
+                  <div style={{ marginTop: 4, fontSize: 11, color: hintLen >= HINT_MAX ? adminColors.danger : adminColors.textMuted, textAlign: "right" }}>
+                    {hintLen}/{HINT_MAX} characters
+                  </div>
+                </Field>
+              )}
+            </>
+          )}
 
-        <Field label="Show only when..." helper="Field ID that must have a specific value for this field to appear">
-          <input
-            type="text"
-            value={form.showIf || ""}
-            placeholder="e.g. has_licence"
-            onChange={(e) => patch({ showIf: e.target.value })}
-            style={adminStyles.input}
-          />
-        </Field>
+          <Field label="Show only when..." helper="Field ID that must have a specific value for this field to appear">
+            <input
+              type="text"
+              value={form.showIf || ""}
+              placeholder="e.g. has_licence"
+              onChange={(e) => patch({ showIf: e.target.value })}
+              style={adminStyles.input}
+            />
+          </Field>
 
-        <Field label="...equals this value">
-          <input
-            type="text"
-            value={form.showWhen || ""}
-            placeholder="e.g. Yes"
-            onChange={(e) => patch({ showWhen: e.target.value })}
-            style={adminStyles.input}
-          />
-        </Field>
+          <Field label="...equals this value">
+            <input
+              type="text"
+              value={form.showWhen || ""}
+              placeholder="e.g. Yes"
+              onChange={(e) => patch({ showWhen: e.target.value })}
+              style={adminStyles.input}
+            />
+          </Field>
+        </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24, paddingTop: 16, borderTop: `1px solid ${adminColors.border}` }}>
-          <button type="button" onClick={onClose} style={{ ...adminStyles.btnGhost, color: adminColors.textMuted }}>
+        {/* Fixed footer — Save is always reachable */}
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "14px 24px",
+            borderTop: `1px solid ${adminColors.border}`,
+            background: "#fff",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+          }}
+        >
+          <button
+            type="button"
+            onClick={attemptClose}
+            style={{ ...adminStyles.btnGhost, color: adminColors.textMuted }}
+            disabled={saving}
+          >
             Cancel
           </button>
-          <button type="button" onClick={handleSave} style={adminStyles.btnPrimary}>
-            Save Field
+          <button
+            type="button"
+            onClick={handleSave}
+            style={{
+              ...adminStyles.btnPrimary,
+              opacity: saving ? 0.7 : 1,
+              cursor: saving ? "wait" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            disabled={saving}
+          >
+            {saving && (
+              <span
+                style={{
+                  width: 12, height: 12, borderRadius: "50%",
+                  border: "2px solid rgba(255,255,255,0.4)",
+                  borderTopColor: "#fff",
+                  display: "inline-block",
+                  animation: "schemaFieldPanelSpin 0.7s linear infinite",
+                }}
+              />
+            )}
+            {saving ? "Saving…" : "Save Field"}
           </button>
+          <style>{`@keyframes schemaFieldPanelSpin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     </div>
@@ -322,6 +449,26 @@ function ensureDefaults(field) {
     showWhen: "",
     options: [],
   };
+}
+
+function snapshot(f, optsText) {
+  const base = f || {};
+  return JSON.stringify({
+    field: base.field || "",
+    label: base.label || "",
+    inputType: base.inputType || "text",
+    required: !!base.required,
+    section: base.section || "",
+    aiSearch: base.aiSearch !== false,
+    searchHint: base.searchHint || "",
+    showIf: base.showIf || "",
+    showWhen: base.showWhen || "",
+    optionsText: optsText || "",
+  });
+}
+
+function sameSnapshot(a, b) {
+  return a === b;
 }
 
 function optionsToText(opts) {
