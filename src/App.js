@@ -365,9 +365,39 @@ const pickLicence = (countryCode, tenantConfig) => {
   return match || primary;
 };
 
+// Normalise a single field definition coming out of admin/seed config so the
+// customer flow can consume it uniformly. Two things change:
+//   1. showIf/showWhen (admin SchemaFieldPanel's representation) is translated
+//      to dependsOn:{ [key]: value } — what dependsOnSatisfied() expects.
+//   2. options are coerced to { value, label } objects so the renderer can
+//      treat string and object option shapes the same way downstream. Legacy
+//      hardcoded gap fields use plain strings (e.g. ["Yes","No"]); admin-saved
+//      fields use { value, label } objects.
+const normaliseField = (f) => {
+  if (!f) return f;
+  const out = { ...f };
+  if (!out.dependsOn && out.showIf && out.showWhen) {
+    out.dependsOn = { [out.showIf]: out.showWhen };
+  }
+  if (out.inputType === "select" && Array.isArray(out.options)) {
+    out.options = out.options.map((o) => {
+      if (typeof o === "string") return { value: o, label: o };
+      if (o && typeof o === "object") {
+        const value = o.value !== undefined && o.value !== null ? o.value : o.label;
+        const label = o.label !== undefined && o.label !== null ? o.label : String(value);
+        return { value, label };
+      }
+      return { value: String(o), label: String(o) };
+    });
+  }
+  return out;
+};
+
 // Look up the schema for an entity-type + customer-country combination.
 // Returns a fully-formed schema object compatible with the rest of the app
-// (label, region, flow, jurisdiction, researchFields, gapFields).
+// (label, region, flow, jurisdiction, researchFields, gapFields). Every
+// field is run through normaliseField so the customer renderers can rely on
+// a single shape regardless of which source (admin/seed/legacy) wrote it.
 const getSchemaFromConfig = (countryCode, entityTypeId, tenantConfig) => {
   if (!tenantConfig) return getSchema(countryCode, entityTypeId);
   const licence = pickLicence(countryCode, tenantConfig);
@@ -381,10 +411,71 @@ const getSchemaFromConfig = (countryCode, entityTypeId, tenantConfig) => {
     label: `${licence.jurisdictionName || licence.id}${flow === "fi" ? " (FI)" : ""}`,
     region: licence.jurisdictionCode === "GB" ? "UK" : (licence.jurisdictionCode || "SG"),
     jurisdiction: licence.jurisdictionCode || licence.id,
+    licenceId: licence.id,
     flow,
-    researchFields: stored.researchFields || [],
-    gapFields: stored.gapFields || [],
+    researchFields: (stored.researchFields || []).map(normaliseField),
+    gapFields: (stored.gapFields || []).map(normaliseField),
   };
+};
+
+// Find the active definition for a research/gap field id, used by Confirm and
+// FillGaps so the renderer can resolve inputType, options, dependsOn etc.
+const findFieldDef = (schema, fieldId) => {
+  if (!schema || !fieldId) return null;
+  return (
+    (schema.researchFields || []).find((f) => f.field === fieldId) ||
+    (schema.gapFields || []).find((f) => f.field === fieldId) ||
+    null
+  );
+};
+
+// Display value resolver for the Confirm page. For dropdown fields, the AI
+// (or document extraction) may return either the option value, the option
+// label, or a free-text variant — collapse all three to the option label so
+// the customer sees a sensible string.
+const resolveDisplayValue = (fieldDef, rawValue) => {
+  const v = rawValue == null ? "" : String(rawValue);
+  if (!fieldDef || fieldDef.inputType !== "select") return v || "—";
+  const opts = Array.isArray(fieldDef.options) ? fieldDef.options : [];
+  if (!opts.length) return v || "—";
+  const lc = v.toLowerCase();
+  const exact = opts.find((o) => String(o.value).toLowerCase() === lc);
+  if (exact) return exact.label;
+  const byLabel = opts.find((o) => String(o.label).toLowerCase() === lc);
+  if (byLabel) return byLabel.label;
+  const partial = opts.find((o) => {
+    const ol = String(o.label).toLowerCase();
+    return ol && (ol.includes(lc) || lc.includes(ol));
+  });
+  if (partial) return partial.label;
+  return v || "—";
+};
+
+// Coerce free-text AI values into one of the configured option values for any
+// research field that is a dropdown. Mirrors resolveDisplayValue's matching
+// strategy but rewrites item.value to the canonical option.value so the gap
+// form's select can pre-select correctly when the customer unchecks. Keeps a
+// breadcrumb (originalAIValue / unmappedDropdown) for audit/debug.
+const mapAIValuesToOptions = (foundItems, schema) => {
+  if (!Array.isArray(foundItems)) return foundItems;
+  return foundItems.map((item) => {
+    const def = findFieldDef(schema, item && item.field);
+    if (!def || def.inputType !== "select") return item;
+    const opts = Array.isArray(def.options) ? def.options : [];
+    if (!opts.length) return item;
+    const raw = item.value == null ? "" : String(item.value);
+    const lc = raw.toLowerCase();
+    const exact = opts.find((o) => String(o.value).toLowerCase() === lc);
+    if (exact) return { ...item, value: exact.value };
+    const byLabel = opts.find((o) => String(o.label).toLowerCase() === lc);
+    if (byLabel) return { ...item, value: byLabel.value, originalAIValue: raw };
+    const partial = opts.find((o) => {
+      const ol = String(o.label).toLowerCase();
+      return ol && (ol.includes(lc) || lc.includes(ol));
+    });
+    if (partial) return { ...item, value: partial.value, originalAIValue: raw };
+    return { ...item, unmappedDropdown: true };
+  });
 };
 
 // Classify a source string (e.g. "Companies House" or a URL) using the
@@ -496,6 +587,28 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
     ? `\nFIELD SEARCH GUIDE — for each field, here is where/what to look for:\n${fieldGuide}\n`
     : "";
 
+  // Dropdown fields are stricter than free-text: the AI must return one of
+  // the configured option values verbatim so the customer-side select can
+  // pre-select. List every dropdown's options explicitly so the model
+  // doesn't have to guess at the wire format.
+  const dropdownGuide = schema.researchFields
+    .filter(f => f.inputType === "select" && Array.isArray(f.options) && f.options.length)
+    .map(f => {
+      const opts = f.options
+        .map(o => {
+          const isObj = o && typeof o === "object";
+          const val = isObj ? (o.value !== undefined ? o.value : o.label) : o;
+          const lbl = isObj ? (o.label !== undefined ? o.label : o.value) : o;
+          return `"${lbl}" → "${val}"`;
+        })
+        .join(", ");
+      return `- ${f.field}: dropdown. Match the closest option and return the VALUE string exactly (left side is the customer-facing label, right side is the value to put in "value"). Options: ${opts}`;
+    })
+    .join("\n");
+  const dropdownGuideBlock = dropdownGuide
+    ? `\nDROPDOWN FIELDS — these fields have a fixed list of allowed values:\n${dropdownGuide}\n`
+    : "";
+
   const hasWolfsberg = wolfsbergFields && Object.keys(wolfsbergFields).length > 0;
   const wolfsbergBlock = hasWolfsberg
     ? `\nWOLFSBERG CBDDQ DATA ALREADY EXTRACTED:
@@ -538,7 +651,7 @@ WHERE TO SEARCH:
 
 LABEL MAPPING:
 - The schema labels below are generic. Map each one to the ${country}-specific equivalent in your search and citation. Examples: "Company Registration Number" → CIN (India), CNPJ (Brazil), KvK number (Netherlands), HRB number (Germany), CNPC (China), Sirene (France), etc. "Industry Classification Code" → NIC (India), CNAE (Brazil), NAICS (US/CA), SIC (UK), JSIC (Japan), etc.
-${fieldGuideBlock}${fiPrioritySources}
+${fieldGuideBlock}${dropdownGuideBlock}${fiPrioritySources}
 Research "${name}" registered in ${country} using web search. Return ONLY valid JSON (no markdown, no backticks, no preamble).
 
 {
@@ -1081,7 +1194,20 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
       {type === "select" ? (
         <select ref={ref} value={local} onChange={handleChange} style={{ ...sty, cursor: "pointer" }}>
           <option value="">Select...</option>
-          {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
+          {(options || []).map((o, i) => {
+            // Support both shapes: legacy hardcoded gap fields use plain
+            // strings (e.g. ["Yes","No"]); admin-saved fields use
+            // { value, label } objects. Normalise here so a config-driven
+            // dropdown renders correctly without a separate adapter.
+            const isObj = o && typeof o === "object";
+            const optValue = isObj
+              ? (o.value !== undefined && o.value !== null ? o.value : o.label)
+              : o;
+            const optLabel = isObj
+              ? (o.label !== undefined && o.label !== null ? o.label : String(o.value))
+              : o;
+            return <option key={`${optValue}-${i}`} value={optValue}>{optLabel}</option>;
+          })}
         </select>
       ) : type === "textarea" ? (
         <textarea ref={ref} value={local} onChange={handleChange} placeholder={placeholder} rows={3} style={{ ...sty, resize: "vertical" }} />
@@ -1300,18 +1426,42 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const getCombinedGaps = () => {
     if (!research || !activeSchema) return [];
     const apiGaps = research.gaps || activeSchema.gapFields;
+
+    // Corrections — fields the user unchecked on Confirm. We must preserve
+    // the original field's inputType and (for selects) options so the
+    // correction is collected with the same UI as the original; defaulting
+    // to "text" would mean a dropdown loses its option list at this point.
     const unchecked = (research.found || [])
       .filter((item, i) => !checks[i])
-      .map(item => ({
-        field: "corrected_" + item.field, label: item.label + " (correction needed)",
-        reason: "Original: " + item.value, inputType: "text", required: true, section: "corrections"
-      }));
+      .map(item => {
+        const def = findFieldDef(activeSchema, item.field) || {};
+        return {
+          field: "corrected_" + item.field,
+          label: item.label + " (correction needed)",
+          reason: "Original: " + resolveDisplayValue(def, item.value),
+          inputType: def.inputType || "text",
+          options: def.options || undefined,
+          dependsOn: def.dependsOn || undefined,
+          required: true,
+          section: "corrections",
+        };
+      });
+
+    // Missing research — fields the AI couldn't find. Same principle: keep
+    // the configured inputType/options so a dropdown stays a dropdown.
     const foundIds = new Set((research.found || []).map(i => i.field));
     const missingResearch = (activeSchema.researchFields || [])
       .filter(rf => !foundIds.has(rf.field))
       .map(rf => ({
-        field: rf.field, label: rf.label, inputType: "text", required: false, section: "missing_research",
+        field: rf.field,
+        label: rf.label,
+        inputType: rf.inputType || "text",
+        options: rf.options || undefined,
+        dependsOn: rf.dependsOn || undefined,
+        required: false,
+        section: "missing_research",
       }));
+
     return [...unchecked, ...missingResearch, ...apiGaps];
   };
 
@@ -1486,7 +1636,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
       // Doc-extracted rows take priority over anything web returned for the same field.
       const docFieldIds = new Set(docFound.map(f => f.field));
-      const merged = [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))];
+      const mergedRaw = [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))];
+      // Coerce free-text values for dropdown fields onto one of the configured
+      // option values (e.g. "Private Limited Company" → "private_limited") so
+      // the gap form can pre-select correctly on correction.
+      const merged = mapAIValuesToOptions(mergedRaw, schema);
 
       setResearch({ ...parsed, found: merged });
       setResearchTimestamp(webFetchTs);
@@ -1572,14 +1726,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     const dummyTs = new Date().toISOString();
-    const found = schema.researchFields.map((f, i) => {
+    const foundRaw = schema.researchFields.map((f, i) => {
       const docHit = docExtractedByField[f.field];
       const isSecondary = !docHit && f.tier === 2 && i % 4 === 0;
       const source = docHit
         ? docHit.sourceName
         : (isSecondary ? secondarySources[i % secondarySources.length] : authSource);
       const sourceTier = docHit ? "document" : (isSecondary ? "tier2" : "tier1");
-      const value = DUMMY_RESEARCH_VALUES[f.field] || ("Sample " + f.label);
+      // For dropdown fields, pick the first configured option's label so the
+      // mapping step downstream produces a real option.value. Falls back to
+      // the test data table for free-text fields.
+      let value = DUMMY_RESEARCH_VALUES[f.field];
+      if (value === undefined) {
+        if (f.inputType === "select" && Array.isArray(f.options) && f.options.length) {
+          const first = f.options[0];
+          value = (first && typeof first === "object")
+            ? (first.label || first.value)
+            : first;
+        } else {
+          value = "Sample " + f.label;
+        }
+      }
       return {
         field: f.field, label: f.label, value, source,
         sourceUrl: null,
@@ -1592,6 +1759,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
         wolfsberg: docHit && docHit.docKey === "wolfsberg",
       };
     });
+    // Same dropdown-value coercion the live research path uses, so dummy and
+    // live results render identically on Confirm and Fill Gaps.
+    const found = mapAIValuesToOptions(foundRaw, schema);
 
     const tagged = {
       companyName,
@@ -1884,21 +2054,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
         {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
       </div>
-      {items.map(({ item, idx }, n) => (
-        <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
-          <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
-          <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
-          <span style={{ fontSize: 11, wordBreak: "break-word" }}>
-            {item.value}
-            {item.sourceTier === "tier2" && (
-              <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-                From an unverified source — please confirm this is correct
-              </div>
-            )}
-          </span>
-          {renderSourceBadge(item, idx)}
-        </div>
-      ))}
+      {items.map(({ item, idx }, n) => {
+        // Look up the live field definition so dropdowns display their option
+        // label rather than the raw option value the AI returned. Free-text
+        // fields fall through to the raw value.
+        const fieldDef = findFieldDef(activeSchema, item.field);
+        const displayValue = resolveDisplayValue(fieldDef, item.value);
+        const isUnmappedDropdown =
+          fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
+        return (
+          <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
+            <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+            <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
+            <span style={{ fontSize: 11, wordBreak: "break-word" }}>
+              {displayValue}
+              {item.originalAIValue && item.originalAIValue !== displayValue && (
+                <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
+                  AI returned "{item.originalAIValue}" — mapped to dropdown option
+                </div>
+              )}
+              {isUnmappedDropdown && (
+                <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
+                  Doesn't match any dropdown option — please correct on the next page
+                </div>
+              )}
+              {item.sourceTier === "tier2" && (
+                <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
+                  From an unverified source — please confirm this is correct
+                </div>
+              )}
+            </span>
+            {renderSourceBadge(item, idx)}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -2456,6 +2645,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
               >Contact</a>
             </>
           )}
+          {(() => {
+            // Tiny config/version readout for dev or ?debug=true. Helps confirm
+            // during testing which config version is live and which schema cell
+            // was resolved. Production users never see it.
+            const isDev = process.env.NODE_ENV === "development";
+            let isDebug = false;
+            try {
+              isDebug = new URLSearchParams(window.location.search).get("debug") === "true";
+            } catch (_) { /* noop */ }
+            if (!isDev && !isDebug) return null;
+            const cellKey = activeSchema && entityType && activeSchema.licenceId
+              ? `${entityType}:${activeSchema.licenceId}`
+              : "(no schema active)";
+            return (
+              <div style={{ marginTop: 8, fontSize: 10, color: "#1a3a4a55", fontFamily: "monospace" }}>
+                Config v{tenantConfig?._version ?? "?"} · Tenant: {tenantId} · Schema: {cellKey}
+              </div>
+            );
+          })()}
         </footer>
 
       </div>
