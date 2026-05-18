@@ -1335,7 +1335,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   useEffect(() => {
     let cancelled = false;
-    if (previewMode) {
+    // Preview can be triggered two ways: index.js route /preview (sets the
+    // previewMode prop) OR admin Preview button which opens /?preview=true
+    // (detected by isPreviewMode()). Both should load the staged config
+    // from localStorage, not the live /api/config.
+    const previewActive = previewMode || isPreviewMode();
+    if (previewActive) {
       try {
         // Try localStorage first (set by admin's Preview button), then
         // sessionStorage (legacy), before falling back to local defaults.
