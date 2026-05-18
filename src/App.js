@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getTenantId, isPreviewMode } from "./utils/tenant";
+import SearchableSelect from "./components/SearchableSelect";
 
 /* ═══════════════════════════════════════════
    APP-LEVEL CONSTANTS
@@ -1309,6 +1310,89 @@ function PreviewBanner({ missing, timestamp }) {
   );
 }
 
+// Fixed-top amber strip shown while demo mode is on. Stacks below the
+// Preview banner via the offsetTop prop so both can coexist (admin running
+// a preview of a demo flow).
+function DemoBanner({ offsetTop = 0 }) {
+  return (
+    <div style={{
+      position: "fixed",
+      top: offsetTop,
+      left: 0,
+      right: 0,
+      zIndex: 9998,
+      background: "#FCD34D",
+      color: "#92400E",
+      textAlign: "center",
+      padding: "6px",
+      fontSize: 12,
+      fontWeight: 700,
+      letterSpacing: "0.3px",
+      fontFamily: "inherit",
+    }}>
+      🧪 DEMO MODE — Sample data only. Not real company information.
+    </div>
+  );
+}
+
+// Small unobtrusive chip-shaped toggle used on the journey-selection screen.
+// Only mounted when demoToggleVisible is true (localhost / ?demo / ?tenant).
+function DemoToggle({ on, onChange }) {
+  return (
+    <label
+      title="Skip API calls and pre-fill the flow with sample data — for demos and testing"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "5px 10px",
+        border: `1.5px dashed ${on ? "#92400E" : "rgba(26,58,74,0.18)"}`,
+        background: on ? "#FEF3C7" : "transparent",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 600,
+        color: on ? "#92400E" : "#1a3a4a90",
+        cursor: "pointer",
+        userSelect: "none",
+        fontFamily: "inherit",
+      }}
+    >
+      <span>🧪 Demo mode</span>
+      <span
+        aria-hidden="true"
+        style={{
+          width: 26,
+          height: 14,
+          borderRadius: 999,
+          background: on ? "#FCD34D" : "rgba(26,58,74,0.25)",
+          position: "relative",
+          transition: "background 0.15s",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 1,
+            left: on ? 13 : 1,
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            background: "#fff",
+            transition: "left 0.15s",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+          }}
+        />
+      </span>
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
+      />
+    </label>
+  );
+}
+
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
   const ref = useRef(null);
   // Normalise the type so case/whitespace differences (e.g. "Date", " date ")
@@ -1419,6 +1503,42 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // found — banner switches to amber + "go to admin" link.
   const [previewMissing, setPreviewMissing] = useState(false);
 
+  // Demo mode — when on, all journeys short-circuit to doDummyResearch so the
+  // flow renders instantly with sample data. Initialised from ?demo=true or
+  // a prior sessionStorage opt-in so it survives step navigation.
+  const [demoMode, setDemoModeState] = useState(() => {
+    try {
+      const params = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search)
+        : null;
+      if (params && params.get("demo") === "true") return true;
+      if (typeof sessionStorage !== "undefined"
+          && sessionStorage.getItem("demo_mode") === "true") return true;
+    } catch (_) { /* ignore */ }
+    return false;
+  });
+  const setDemoMode = useCallback((next) => {
+    setDemoModeState(next);
+    try {
+      if (next) sessionStorage.setItem("demo_mode", "true");
+      else sessionStorage.removeItem("demo_mode");
+    } catch (_) { /* ignore */ }
+  }, []);
+  // Visibility gate — the toggle is hidden on production end-customer URLs.
+  // Surfaces when ?demo=true is in the URL, on localhost, or when a ?tenant=
+  // override is being used (admin/dev/testing contexts).
+  const demoToggleVisible = (() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("demo") === "true") return true;
+      if (p.get("tenant")) return true;
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") return true;
+    } catch (_) { /* ignore */ }
+    return false;
+  })();
+
   useEffect(() => {
     let cancelled = false;
     // Preview can be triggered two ways: index.js route /preview (sets the
@@ -1463,6 +1583,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }, [previewMode, tenantId]);
 
   const [step, setStep] = useState(0);
+  // Scroll to top on every step transition. React keeps the previous scroll
+  // position by default — undesirable for a stepped wizard where the new
+  // page's heading should be visible immediately. The smooth scroll here
+  // is the catch-all; for user-triggered Next clicks we also scroll
+  // instantly before the new step renders (see scrollAndSetStep below) so
+  // there is no flash of the previous page's bottom.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
+  const scrollAndSetStep = useCallback((next) => {
+    if (typeof window !== "undefined") {
+      try { window.scrollTo({ top: 0, behavior: "instant" }); }
+      catch (_) { window.scrollTo(0, 0); }
+    }
+    setStep(next);
+  }, []);
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [entityType, setEntityType] = useState("");
@@ -1974,9 +2111,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
 
   // Continue handler from Documents step → triggers research with whatever
-  // was uploaded (zero docs is fine; web search runs alone).
+  // was uploaded (zero docs is fine; web search runs alone). In demo mode
+  // we skip the API entirely and synthesise sample data.
   const proceedFromDocuments = () => {
     setError("");
+    if (demoMode) { doDummyResearch("ai_documents"); return; }
     doResearch();
   };
 
@@ -2005,12 +2144,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setJourneyType("ai_documents");
       setJourneyOpen(false);
       setManualOpened(false);
-      setStep(1); // documents step
+      // Demo: skip docs upload (no point uploading) and go straight to dummy.
+      if (demoMode) { doDummyResearch("ai_documents"); return; }
+      scrollAndSetStep(1); // documents step
     } else if (selectedJourneyCard === "B") {
       setJourneyType("ai_only");
       setJourneyOpen(false);
       setManualOpened(false);
       // STEPS in this branch is { input:0, research:1, ... }
+      if (demoMode) { doDummyResearch("ai_only"); return; }
       doResearch("ai_only");
     } else if (selectedJourneyCard === "C") {
       setJourneyType("manual");
@@ -2331,7 +2473,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
           timestamp={previewTimestamp}
         />
       )}
-      <div style={{ maxWidth: 780, margin: "0 auto", padding: `${inPreview ? 64 : 24}px 16px 60px` }}>
+      {demoMode && <DemoBanner offsetTop={inPreview ? 40 : 0} />}
+      <div style={{ maxWidth: 780, margin: "0 auto", padding: `${(inPreview ? 40 : 0) + (demoMode ? 32 : 0) + 24}px 16px 60px` }}>
 
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           {companyLogo_ ? (
@@ -2358,20 +2501,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
             <StableInput id="companyName" label="Company Legal Name" type="text" value={companyName} onUpdate={(_, v) => setCompanyName(v)} required placeholder="e.g. Tesco PLC, DBS Group Holdings" />
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
-              <select value={entityType} onChange={e => setEntityType(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
-                <option value="">Select entity type...</option>
-                {activeEntityTypes.map(e => (
-                  <option key={e.id} value={e.id}>{e.icon ? `${e.icon} ` : ""}{e.label || e.id}</option>
-                ))}
-              </select>
+              <label htmlFor="entity-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
+              <SearchableSelect
+                id="entity-type"
+                value={entityType}
+                onChange={setEntityType}
+                placeholder="Select or type entity type…"
+                options={activeEntityTypes.map(e => ({
+                  value: e.id,
+                  label: `${e.icon ? e.icon + " " : ""}${e.label || e.id}`,
+                  description: e.description || undefined,
+                }))}
+              />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
-              <select value={countryCode} onChange={e => setCountryCode(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
-                <option value="">Select country...</option>
-                {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
-              </select>
+              <label htmlFor="country-reg" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
+              <SearchableSelect
+                id="country-reg"
+                value={countryCode}
+                onChange={setCountryCode}
+                placeholder="Select or type country…"
+                options={COUNTRIES.map(c => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
+              />
             </div>
             {countryCode && (() => {
               // Resolve the licence from the tenant's configured licences,
@@ -2491,12 +2642,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
 
+            {demoMode && (
+              <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#92400E", borderLeft: "3px solid #FCD34D" }}>
+                Demo mode active — using sample data. Document extraction and web research are simulated.
+              </div>
+            )}
+
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
 
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
               <Btn variant="secondary" onClick={() => { setJourneyOpen(false); setManualOpened(false); setError(""); }}>← Back</Btn>
               <Btn variant="primary" onClick={proceedFromJourney}>Continue →</Btn>
             </div>
+
+            {demoToggleVisible && (
+              <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+                <DemoToggle on={demoMode} onChange={setDemoMode} />
+              </div>
+            )}
           </div>
         )}
 
@@ -2572,7 +2735,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <Btn variant="secondary" onClick={() => { setError(""); setJourneyOpen(true); setStep(STEPS.input); }}>← Back</Btn>
+                <Btn variant="secondary" onClick={() => { setError(""); setJourneyOpen(true); scrollAndSetStep(STEPS.input); }}>← Back</Btn>
                 <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
               </div>
             </div>
@@ -2664,7 +2827,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={resetAll}>← Start Over</Btn>
-              <Btn variant="green" onClick={() => { setStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
+              <Btn variant="green" onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
             </div>
           </div>
         )}
@@ -2698,8 +2861,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => setStep(STEPS.confirm)}>← Back to Review</Btn>
-              <Btn variant="primary" onClick={() => { if (allGapsFilled()) { setStep(STEPS.declare); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.confirm)}>← Back to Review</Btn>
+              <Btn variant="primary" onClick={() => { if (allGapsFilled()) { scrollAndSetStep(STEPS.declare); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
             </div>
             {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
           </div>
@@ -2758,7 +2921,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => setStep(STEPS.fillGaps)}>← Back</Btn>
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.fillGaps)}>← Back</Btn>
               <Btn
                 variant="green"
                 onClick={inPreview ? undefined : submitApplication}

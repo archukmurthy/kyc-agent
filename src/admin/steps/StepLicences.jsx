@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import WizardCard from "../components/WizardCard";
 import { adminColors, adminStyles } from "../adminDesign";
 import { COUNTRIES, flagFor } from "../countries";
+import SearchableSelect from "../../components/SearchableSelect";
 
 // Note: the persisted config uses `isPrimary` to mark the default licence
 // (kept for compatibility with src/App.js). The UI labels this as "Default"
@@ -400,23 +401,19 @@ function LicenceFields({ licence, onPatch }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
       <div>
         <label style={adminStyles.label}>Jurisdiction Country</label>
-        <select
+        <SearchableSelect
           value={licence.jurisdictionCode || ""}
-          onChange={(e) => {
-            const code = e.target.value;
-            onPatch({
-              jurisdictionCode: code,
-              jurisdictionName: COUNTRIES.find((c) => c.code === code)?.name || code,
-            });
-          }}
-          style={adminStyles.input}
-        >
-          {COUNTRIES.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={(code) => onPatch({
+            jurisdictionCode: code,
+            jurisdictionName: COUNTRIES.find((c) => c.code === code)?.name || code,
+          })}
+          placeholder="Select or type country…"
+          options={COUNTRIES.map((c) => ({
+            value: c.code,
+            label: `${flagFor(c.code)} ${c.name}`,
+            description: c.code,
+          }))}
+        />
       </div>
       <div>
         <label style={adminStyles.label}>Regulatory Authority</label>
@@ -452,6 +449,7 @@ function LicenceFields({ licence, onPatch }) {
         <div style={adminStyles.helper}>
           Customers registered in these countries will use this licence&apos;s schemas. Leave empty to use as catch-all (only valid for the default licence).
         </div>
+        {/* TODO: optionally swap the chip grid for <SearchableSelect multiple /> if 50-country browsing proves slow in practice. Chip grid is preferred today because it shows all selections at once without needing to open a dropdown. */}
         <div
           style={{
             display: "flex",
