@@ -48,8 +48,9 @@ export default function SchemaImportModal({
 
   const importedSchema = useMemo(() => {
     if (!parseResult) return { researchFields: [], gapFields: [] };
+    // Mirror the admin's field-id policy: any case letters, digits, underscores.
     return rowsToSchema(
-      parseResult.rows.filter((r) => r.label && r.id && /^[a-z0-9_]+$/.test(r.id))
+      parseResult.rows.filter((r) => r.label && r.id && /^[a-zA-Z0-9_]+$/.test(r.id))
     );
   }, [parseResult]);
 

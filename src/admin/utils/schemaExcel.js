@@ -273,6 +273,8 @@ function parseRow(row, columnMap, rowNumber) {
   const labelRaw = get("label");
   let id = get("id");
   if (!id && labelRaw) {
+    // Only used when admin left Field ID blank. Mirrors slugifyId() in
+    // SchemaFieldPanel: lowercase, snake_case, ASCII alnum + underscore.
     id = labelRaw.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "").slice(0, 50);
   }
 
@@ -300,7 +302,11 @@ function parseRow(row, columnMap, rowNumber) {
 export function validateParsedRows(rows) {
   const errors = [];
   const warnings = [];
-  const seenIds = new Set();
+  // Uniqueness is per-tab. Research and gap arrays live separately on the
+  // schema, and the same logical field can legitimately appear in both
+  // (AI tries to find it; if it can't, the gap form collects it manually).
+  const seenResearch = new Set();
+  const seenGap = new Set();
 
   rows.forEach((row) => {
     if (!row.label) {
@@ -314,23 +320,28 @@ export function validateParsedRows(rows) {
         severity: "error",
       });
     } else {
-      if (!/^[a-z0-9_]+$/.test(row.id)) {
+      // Match the admin's SchemaFieldPanel policy: letters (any case), digits
+      // and underscores. The codebase has plenty of pre-existing camelCase
+      // ids (applicantFirstName, addressLine1, …) so lowercasing the regex
+      // would break every round-trip.
+      if (!/^[a-zA-Z0-9_]+$/.test(row.id)) {
         errors.push({
           row: row._rowNumber,
           field: "Field ID",
-          message: `Field ID '${row.id}' contains invalid characters. Use lowercase letters, numbers and underscores only.`,
+          message: `Field ID '${row.id}' contains invalid characters. Use letters, numbers and underscores only — no spaces or punctuation.`,
           severity: "error",
         });
       }
-      if (seenIds.has(row.id)) {
+      const seen = row.aiResearch ? seenResearch : seenGap;
+      if (seen.has(row.id)) {
         errors.push({
           row: row._rowNumber,
           field: "Field ID",
-          message: `Duplicate Field ID '${row.id}'. Each field must have a unique ID.`,
+          message: `Duplicate Field ID '${row.id}' in ${row.aiResearch ? "Research" : "Gap"} tab. Each ID must be unique within its tab.`,
           severity: "error",
         });
       }
-      seenIds.add(row.id);
+      seen.add(row.id);
     }
     if (row._rawType && !VALID_FIELD_TYPES.includes(row._rawType.toLowerCase())) {
       warnings.push({
