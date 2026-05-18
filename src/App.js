@@ -429,13 +429,53 @@ const findFieldDef = (schema, fieldId) => {
   );
 };
 
+// Coerce a date value (any common AI/free-text format) into the strict
+// YYYY-MM-DD shape that <input type="date"> requires. Returns "" when the
+// value is unparseable, so an invalid date doesn't show as a stale string
+// in the date picker.
+const normaliseDate = (value) => {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  if (isNaN(parsed.getTime())) return "";
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, "0");
+  const d = String(parsed.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+// Normalise a stored inputType to a canonical lowercase token. The admin
+// SchemaFieldPanel writes lowercase already, but this acts as a safety net
+// against hand-edited config / legacy data using "Date" / "  date " etc.
+const fieldTypeOf = (field) => {
+  const raw = (field && (field.inputType || field.type)) || "text";
+  return String(raw).toLowerCase().trim();
+};
+
 // Display value resolver for the Confirm page. For dropdown fields, the AI
 // (or document extraction) may return either the option value, the option
 // label, or a free-text variant — collapse all three to the option label so
-// the customer sees a sensible string.
+// the customer sees a sensible string. Date fields are reformatted to a
+// human-readable string (e.g. "12 January 2005") rather than leaving the
+// YYYY-MM-DD wire format on display.
 const resolveDisplayValue = (fieldDef, rawValue) => {
   const v = rawValue == null ? "" : String(rawValue);
-  if (!fieldDef || fieldDef.inputType !== "select") return v || "—";
+  const t = fieldTypeOf(fieldDef);
+  if (t === "date") {
+    if (!v) return "—";
+    const iso = normaliseDate(v);
+    if (iso) {
+      try {
+        return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", {
+          day: "numeric", month: "long", year: "numeric",
+        });
+      } catch (_) { /* fall through to raw value */ }
+    }
+    return v;
+  }
+  if (t !== "select") return v || "—";
   const opts = Array.isArray(fieldDef.options) ? fieldDef.options : [];
   if (!opts.length) return v || "—";
   const lc = v.toLowerCase();
@@ -460,7 +500,14 @@ const mapAIValuesToOptions = (foundItems, schema) => {
   if (!Array.isArray(foundItems)) return foundItems;
   return foundItems.map((item) => {
     const def = findFieldDef(schema, item && item.field);
-    if (!def || def.inputType !== "select") return item;
+    const defType = fieldTypeOf(def);
+    if (defType === "date") {
+      const raw = item.value == null ? "" : String(item.value);
+      const iso = normaliseDate(raw);
+      if (iso && iso !== raw) return { ...item, value: iso, originalAIValue: raw };
+      return iso ? { ...item, value: iso } : item;
+    }
+    if (!def || defType !== "select") return item;
     const opts = Array.isArray(def.options) ? def.options : [];
     if (!opts.length) return item;
     const raw = item.value == null ? "" : String(item.value);
@@ -1184,51 +1231,90 @@ const DUMMY_RESEARCH_VALUES = {
 
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
   const ref = useRef(null);
-  const [local, setLocal] = useState(value || "");
-  useEffect(() => { setLocal(value || ""); }, [value]);
+  // Normalise the type so case/whitespace differences (e.g. "Date", " date ")
+  // don't cause the wrong branch to render. Empty / unknown types fall back
+  // to "text".
+  const t = String(type || "text").toLowerCase().trim();
+  // For date inputs, the browser requires YYYY-MM-DD; coerce here so an AI-
+  // returned value like "12 January 2005" populates the picker correctly.
+  const initial = t === "date" ? (normaliseDate(value) || "") : (value || "");
+  const [local, setLocal] = useState(initial);
+  useEffect(() => {
+    setLocal(t === "date" ? (normaliseDate(value) || "") : (value || ""));
+  }, [value, t]);
   const handleChange = useCallback((e) => { const v = e.target.value; setLocal(v); onUpdate(id, v); }, [id, onUpdate]);
   const sty = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", outline: "none", boxSizing: "border-box" };
+
+  const renderInput = () => {
+    switch (t) {
+      case "select":
+        return (
+          <select ref={ref} value={local} onChange={handleChange} style={{ ...sty, cursor: "pointer" }}>
+            <option value="">Select...</option>
+            {(options || []).map((o, i) => {
+              // Support both shapes: legacy hardcoded gap fields use plain
+              // strings (e.g. ["Yes","No"]); admin-saved fields use
+              // { value, label } objects.
+              const isObj = o && typeof o === "object";
+              const optValue = isObj
+                ? (o.value !== undefined && o.value !== null ? o.value : o.label)
+                : o;
+              const optLabel = isObj
+                ? (o.label !== undefined && o.label !== null ? o.label : String(o.value))
+                : o;
+              return <option key={`${optValue}-${i}`} value={optValue}>{optLabel}</option>;
+            })}
+          </select>
+        );
+      case "textarea":
+        return (
+          <textarea ref={ref} value={local} onChange={handleChange} placeholder={placeholder} rows={3} style={{ ...sty, resize: "vertical" }} />
+        );
+      case "file":
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <input
+              ref={ref}
+              type="file"
+              onChange={(e) => {
+                const f = e.target.files && e.target.files[0];
+                const name = f ? f.name : "";
+                setLocal(name);
+                onUpdate(id, name);
+              }}
+              style={{ ...sty, padding: "8px 10px", cursor: "pointer" }}
+            />
+            {local && <span style={{ fontSize: 11, color: "#4a9e8e", fontWeight: 600, whiteSpace: "nowrap" }}>✓ {local}</span>}
+          </div>
+        );
+      case "date":
+        return (
+          <input ref={ref} type="date" value={local} onChange={handleChange} style={sty} />
+        );
+      case "number":
+        return (
+          <input ref={ref} type="number" value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
+        );
+      case "email":
+        return (
+          <input ref={ref} type="email" value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
+        );
+      case "tel":
+        return (
+          <input ref={ref} type="tel" value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
+        );
+      case "text":
+      default:
+        return (
+          <input ref={ref} type="text" value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
+        );
+    }
+  };
+
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>{label} {required && <span style={{ color: "#d44" }}>*</span>}</label>
-      {type === "select" ? (
-        <select ref={ref} value={local} onChange={handleChange} style={{ ...sty, cursor: "pointer" }}>
-          <option value="">Select...</option>
-          {(options || []).map((o, i) => {
-            // Support both shapes: legacy hardcoded gap fields use plain
-            // strings (e.g. ["Yes","No"]); admin-saved fields use
-            // { value, label } objects. Normalise here so a config-driven
-            // dropdown renders correctly without a separate adapter.
-            const isObj = o && typeof o === "object";
-            const optValue = isObj
-              ? (o.value !== undefined && o.value !== null ? o.value : o.label)
-              : o;
-            const optLabel = isObj
-              ? (o.label !== undefined && o.label !== null ? o.label : String(o.value))
-              : o;
-            return <option key={`${optValue}-${i}`} value={optValue}>{optLabel}</option>;
-          })}
-        </select>
-      ) : type === "textarea" ? (
-        <textarea ref={ref} value={local} onChange={handleChange} placeholder={placeholder} rows={3} style={{ ...sty, resize: "vertical" }} />
-      ) : type === "file" ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <input
-            ref={ref}
-            type="file"
-            onChange={(e) => {
-              const f = e.target.files && e.target.files[0];
-              const name = f ? f.name : "";
-              setLocal(name);
-              onUpdate(id, name);
-            }}
-            style={{ ...sty, padding: "8px 10px", cursor: "pointer" }}
-          />
-          {local && <span style={{ fontSize: 11, color: "#4a9e8e", fontWeight: 600, whiteSpace: "nowrap" }}>✓ {local}</span>}
-        </div>
-      ) : (
-        <input ref={ref} type={type || "text"} value={local} onChange={handleChange} placeholder={placeholder} style={sty} />
-      )}
+      {renderInput()}
     </div>
   );
 }
