@@ -196,8 +196,23 @@ export function parseSchemaExcel(file) {
 
         const headerRow = rows[0].map((h) => String(h || "").trim());
         const columnMap = mapColumns(headerRow);
-        const dataRows = rows.slice(1).filter((r) => r.some((cell) => String(cell || "").trim() !== ""));
-        const parsed = dataRows.map((row, idx) => parseRow(row, columnMap, idx + 2));
+        // Only treat a row as a field row when it has a meaningful identifier:
+        // either a label OR a field id. Excel often leaves trailing rows with
+        // formatting artefacts (stray styles, deleted-but-not-cleared cells)
+        // that have something tiny in some column — those are not fields.
+        // We track the original sheet row number so error messages stay
+        // accurate even after filtering.
+        const labelIdx = columnMap.label;
+        const idIdx = columnMap.id;
+        const parsed = [];
+        rows.slice(1).forEach((row, idx) => {
+          const sheetRow = idx + 2;
+          const labelCell = labelIdx === undefined ? "" : String(row[labelIdx] ?? "").trim();
+          const idCell = idIdx === undefined ? "" : String(row[idIdx] ?? "").trim();
+          if (!labelCell && !idCell) return;
+          parsed.push(parseRow(row, columnMap, sheetRow));
+        });
+        const dataRows = parsed;
 
         resolve({
           rows: parsed,
@@ -334,11 +349,17 @@ export function validateParsedRows(rows) {
       }
       const seen = row.aiResearch ? seenResearch : seenGap;
       if (seen.has(row.id)) {
-        errors.push({
+        // Downgraded to warning. The existing codebase tolerates duplicate
+        // field ids within the same tab (later occurrences shadow earlier
+        // ones via findFieldDef + array-find), and several seeded schemas
+        // genuinely have repeated short ids like addressLine1 for both
+        // registered and trading addresses. Blocking import on this would
+        // make round-tripping any current schema impossible.
+        warnings.push({
           row: row._rowNumber,
           field: "Field ID",
-          message: `Duplicate Field ID '${row.id}' in ${row.aiResearch ? "Research" : "Gap"} tab. Each ID must be unique within its tab.`,
-          severity: "error",
+          message: `Duplicate Field ID '${row.id}' in ${row.aiResearch ? "Research" : "Gap"} tab. The later row will replace the earlier one on save — consider renaming to keep both.`,
+          severity: "warning",
         });
       }
       seen.add(row.id);
