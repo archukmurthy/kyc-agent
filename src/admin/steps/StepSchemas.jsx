@@ -3,6 +3,7 @@ import WizardCard from "../components/WizardCard";
 import SchemaFieldRow from "../components/SchemaFieldRow";
 import SchemaFieldPanel from "../components/SchemaFieldPanel";
 import CopyFieldModal from "../components/CopyFieldModal";
+import SchemaImportButton from "../components/SchemaImportButton";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
 
@@ -144,6 +145,30 @@ export default function StepSchemas({
     setShowCopyModal(true);
   }
 
+  function handleSchemaImport(cellKey, schema /* { researchFields, gapFields } */, mode) {
+    if (!cellKey) return;
+    const existing = (config?.schemas || {})[cellKey] || { researchFields: [], gapFields: [] };
+    const finalSchema = mode === "merge"
+      ? {
+          researchFields: mergeArrays(existing.researchFields, schema.researchFields, "field"),
+          gapFields: mergeArrays(existing.gapFields, schema.gapFields, "field"),
+        }
+      : schema;
+    onChange({
+      schemas: {
+        ...(config?.schemas || {}),
+        [cellKey]: {
+          ...finalSchema,
+          configuredAt: new Date().toISOString(),
+          configuredBy: "excel_import",
+        },
+      },
+    });
+    const total = (finalSchema.researchFields?.length || 0) + (finalSchema.gapFields?.length || 0);
+    setCopyToast(`✅ Schema imported — ${total} field${total === 1 ? "" : "s"} (${mode})`);
+    setTimeout(() => setCopyToast(null), 3500);
+  }
+
   function handleCopyApply(result) {
     const { schemaChanges, updates = [], additions = [] } = result || {};
     if (schemaChanges && Object.keys(schemaChanges).length > 0) {
@@ -242,25 +267,41 @@ export default function StepSchemas({
 
       {selected && (
         <>
-          <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>
               Configuring: {selected.ent?.label || selected.entityId}{" "}
               <span style={{ color: adminColors.textMuted, fontWeight: 500 }}>×</span>{" "}
               {flagFor(selected.lic?.jurisdictionCode)} {selected.lic?.jurisdictionName || selected.licenceId}
             </div>
-            {savedFlash && (
-              <span style={{ fontSize: 12, color: adminColors.statusComplete, fontWeight: 600 }}>✅ Saved</span>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {savedFlash && (
+                <span style={{ fontSize: 12, color: adminColors.statusComplete, fontWeight: 600 }}>✅ Saved</span>
+              )}
+              <SchemaImportButton
+                existingSchema={hasSchema ? cellSchema : null}
+                entityTypeName={selected.ent?.label || selected.entityId}
+                licenceName={selected.lic?.jurisdictionName || selected.licenceId}
+                onImport={(schema, mode) => handleSchemaImport(selectedCell, schema, mode)}
+                variant={hasSchema ? "full" : "importOnly"}
+              />
+            </div>
           </div>
 
           {!hasSchema ? (
-            <NoSchemaOptions
-              schemas={schemas}
-              entityId={selected.entityId}
-              onCopy={copyFromCell}
-              onTemplate={applyTemplate}
-              onScratch={startBlank}
-            />
+            <>
+              <BannerImportCallout
+                entityTypeName={selected.ent?.label || selected.entityId}
+                licenceName={selected.lic?.jurisdictionName || selected.licenceId}
+                onImport={(schema, mode) => handleSchemaImport(selectedCell, schema, mode)}
+              />
+              <NoSchemaOptions
+                schemas={schemas}
+                entityId={selected.entityId}
+                onCopy={copyFromCell}
+                onTemplate={applyTemplate}
+                onScratch={startBlank}
+              />
+            </>
           ) : (
             <SchemaEditor
               schema={cellSchema}
@@ -692,4 +733,50 @@ function extractIds(schema) {
 
 function deepCopy(arr) {
   return JSON.parse(JSON.stringify(arr || []));
+}
+
+// Eye-catching banner shown above the Copy/Template/Scratch option cards on
+// blank cells, so admins who already have their fields in Excel see the
+// fastest path right at the top.
+function BannerImportCallout({ entityTypeName, licenceName, onImport }) {
+  return (
+    <div style={{
+      marginTop: 16,
+      padding: 14,
+      borderRadius: 10,
+      background: "#F0F9FF",
+      border: `1px solid #BAE6FD`,
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      flexWrap: "wrap",
+    }}>
+      <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#0369A1" }}>
+          Already have your fields in a spreadsheet?
+        </div>
+        <div style={{ fontSize: 12, color: "#0369A1", marginTop: 3 }}>
+          Import an Excel file with all your fields — fastest way to set this schema up.
+        </div>
+      </div>
+      <SchemaImportButton
+        existingSchema={null}
+        entityTypeName={entityTypeName}
+        licenceName={licenceName}
+        onImport={onImport}
+      />
+    </div>
+  );
+}
+
+// Merge two field arrays by stable id ("field"). Existing fields with the
+// same id are replaced; new ids are appended. Used by Excel-import-merge.
+function mergeArrays(existing, incoming, idKey = "field") {
+  const out = [...(existing || [])];
+  (incoming || []).forEach((f) => {
+    const idx = out.findIndex((x) => x[idKey] === f[idKey]);
+    if (idx >= 0) out[idx] = f;
+    else out.push(f);
+  });
+  return out;
 }
