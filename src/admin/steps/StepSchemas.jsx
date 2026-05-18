@@ -435,7 +435,12 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                 const has = cfg && ((cfg.researchFields?.length || 0) + (cfg.gapFields?.length || 0)) > 0;
                 const isSel = selected === key;
 
-                if (!associated) {
+                // Cells that aren't in the entity's associatedLicenceIds AND
+                // have no configured schema are truly "not applicable" and
+                // render as "—". Cells with a schema but no association are
+                // orphan schemas — still surface them as ✅ with a hint so the
+                // admin can find and clean up the inconsistency.
+                if (!associated && !has) {
                   return (
                     <td key={l.id} style={notAssoc}>
                       —
@@ -444,11 +449,13 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                 }
 
                 const justUpdated = updatedSet.has(key);
+                const isOrphan = !associated && has;
                 return (
                   <td key={l.id}>
                     <button
                       type="button"
                       onClick={() => onSelect(key)}
+                      title={isOrphan ? "Schema configured but this entity is not associated with this licence. Click to review." : undefined}
                       style={{
                         width: "100%",
                         padding: "8px 10px",
@@ -462,9 +469,10 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                         fontSize: 14,
                         boxShadow: justUpdated ? "0 0 0 3px #93C5FD" : "none",
                         transition: "box-shadow 0.3s",
+                        opacity: isOrphan ? 0.85 : 1,
                       }}
                     >
-                      {has ? "✅" : "⚠"}
+                      {has ? "✅" : "⚠"}{isOrphan ? " ⚠️" : ""}
                     </button>
                     {justUpdated && (
                       <div style={{
@@ -475,6 +483,17 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                         marginTop: 2,
                       }}>
                         ✓ Updated
+                      </div>
+                    )}
+                    {isOrphan && !justUpdated && (
+                      <div style={{
+                        fontSize: 10,
+                        color: "#92400E",
+                        fontWeight: 700,
+                        textAlign: "center",
+                        marginTop: 2,
+                      }}>
+                        Not linked
                       </div>
                     )}
                   </td>

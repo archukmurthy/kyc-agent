@@ -44,13 +44,40 @@ export default function MiniWizardAddSchema({ config, preselectedCell = null, on
   }, [entityTypes, licences, config.schemas]);
 
   function commitSelection() {
-    if (selectedCell) return setStep(2);
+    if (selectedCell) {
+      ensureAssociation(selectedCell);
+      return setStep(2);
+    }
     if (!pickedEntity || !pickedLicence) {
       alert("Pick a cell or use the dropdowns to select entity and licence.");
       return;
     }
-    setSelectedCell(`${pickedEntity}:${pickedLicence}`);
+    const cellKey = `${pickedEntity}:${pickedLicence}`;
+    ensureAssociation(cellKey);
+    setSelectedCell(cellKey);
     setStep(2);
+  }
+
+  // If the chosen entity isn't yet associated with the chosen licence, add
+  // the association now. Otherwise the schema saves into config.schemas but
+  // the matrix won't show it (associatedLicenceIds gates cell visibility).
+  function ensureAssociation(cellKey) {
+    const [entityId, licenceId] = cellKey.split(":");
+    setWorkingConfig((prev) => {
+      const types = prev?.entityTypes || [];
+      const ent = types.find((e) => e.id === entityId);
+      if (!ent) return prev;
+      const lids = ent.associatedLicenceIds || [];
+      if (lids.includes(licenceId)) return prev;
+      return {
+        ...prev,
+        entityTypes: types.map((e) =>
+          e.id === entityId
+            ? { ...e, associatedLicenceIds: [...lids, licenceId] }
+            : e
+        ),
+      };
+    });
   }
 
   function next() {

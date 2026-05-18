@@ -2267,6 +2267,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return <button style={v[variant] || v.primary} onClick={disabled ? undefined : onClick}>{children}</button>;
   };
 
+  // Friendly title for an admin-defined section key (e.g. "registered_address"
+  // → "Registered Address", "uboAnalysis" → "UBO Analysis"). Used as a
+  // fallback for sections that aren't in the hardcoded sectionConfig.
+  const humaniseSection = (s) => {
+    if (!s) return "Other";
+    return String(s)
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  };
+
   const sectionConfig = {
     corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
     missing_research: { title: "Missing Research Fields", icon: "❓", sub: "We could not find these from any source — fill in if you have the data (all optional).", twoCol: true },
@@ -2282,12 +2294,50 @@ export default function KYCAgent({ previewMode = false } = {}) {
     documents: { title: "Additional Documents", icon: "📄", sub: "Upload supporting documentation", twoCol: false },
   };
 
+  // Discover the section keys to render on Fill Gaps. Two-tier order:
+  //   1. Pinned sections from sectionConfig (so well-known sections like
+  //      Corrections / Missing Research / Applicant / Business / ... keep
+  //      their canonical order at the top).
+  //   2. Any *additional* sections present in the gap data (e.g. custom
+  //      admin-defined sections like "Registered Address" / "Business
+  //      Address" / anything else) appended in the order they first appear
+  //      in the schema definitions, then by gap-item order.
+  // This replaces the previous hardcoded list, which silently dropped any
+  // section it didn't recognise.
+  const gapSectionOrder = () => {
+    const pinned = ["corrections", "missing_research", "applicant", "business", "nature", "fi", "stakeholders", "disclosures", "account", "usage", "bank", "documents"];
+    const seen = new Set();
+    const out = [];
+    const pinnedSet = new Set(pinned);
+    pinned.forEach((s) => out.push(s));
+    pinned.forEach((s) => seen.add(s));
+    // Walk the schema in definition order so admin-defined sections show
+    // up in the order the admin laid them out.
+    if (activeSchema) {
+      const walk = (arr) => (arr || []).forEach((f) => {
+        const s = f.section;
+        if (!s || pinnedSet.has(s) || seen.has(s)) return;
+        seen.add(s);
+        out.push(s);
+      });
+      walk(activeSchema.researchFields);
+      walk(activeSchema.gapFields);
+    }
+    // Catch any leftover sections present in the live gap list but not in
+    // the schema (e.g. fields the AI returned with an unfamiliar section).
+    getCombinedGaps().forEach((g) => {
+      const s = g.section;
+      if (s && !seen.has(s)) { seen.add(s); out.push(s); }
+    });
+    return out;
+  };
+
   const renderGapSection = (sectionKey) => {
     const items = getCombinedGaps()
       .filter(g => g.section === sectionKey)
       .filter(dependsOnSatisfied);
     if (items.length === 0) return null;
-    const cfg = sectionConfig[sectionKey] || { title: sectionKey, icon: "📋", sub: "", twoCol: false };
+    const cfg = sectionConfig[sectionKey] || { title: humaniseSection(sectionKey), icon: "📋", sub: "", twoCol: true };
 
     return (
       <div style={card} key={sectionKey}>
@@ -2369,51 +2419,98 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
-  // One unified table grouped by source tier, sorted within group by
-  // schema research-field order.
-  const renderUnifiedFoundTable = (items, title, subtitle) => (
-    <div style={card}>
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{title}</h3>
-      <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>{subtitle}</p>
-      <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
-        {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
+  // Render one row of the Confirm table — extracted so the section-grouped
+  // and ungrouped paths share the same DOM.
+  const renderFoundRow = ({ item, idx }, n) => {
+    const fieldDef = findFieldDef(activeSchema, item.field);
+    const displayValue = resolveDisplayValue(fieldDef, item.value);
+    const isUnmappedDropdown =
+      fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
+    return (
+      <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
+        <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+        <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
+        <span style={{ fontSize: 11, wordBreak: "break-word" }}>
+          {displayValue}
+          {item.originalAIValue && item.originalAIValue !== displayValue && (
+            <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
+              AI returned "{item.originalAIValue}" — mapped to dropdown option
+            </div>
+          )}
+          {isUnmappedDropdown && (
+            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
+              Doesn't match any dropdown option — please correct on the next page
+            </div>
+          )}
+          {item.sourceTier === "tier2" && (
+            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
+              From an unverified source — please confirm this is correct
+            </div>
+          )}
+        </span>
+        {renderSourceBadge(item, idx)}
       </div>
-      {items.map(({ item, idx }, n) => {
-        // Look up the live field definition so dropdowns display their option
-        // label rather than the raw option value the AI returned. Free-text
-        // fields fall through to the raw value.
-        const fieldDef = findFieldDef(activeSchema, item.field);
-        const displayValue = resolveDisplayValue(fieldDef, item.value);
-        const isUnmappedDropdown =
-          fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
-        return (
-          <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
-            <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
-            <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
-            <span style={{ fontSize: 11, wordBreak: "break-word" }}>
-              {displayValue}
-              {item.originalAIValue && item.originalAIValue !== displayValue && (
-                <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
-                  AI returned "{item.originalAIValue}" — mapped to dropdown option
-                </div>
-              )}
-              {isUnmappedDropdown && (
-                <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-                  Doesn't match any dropdown option — please correct on the next page
-                </div>
-              )}
-              {item.sourceTier === "tier2" && (
-                <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-                  From an unverified source — please confirm this is correct
-                </div>
-              )}
-            </span>
-            {renderSourceBadge(item, idx)}
+    );
+  };
+
+  // Group rows by their schema-defined section so related fields (e.g.
+  // Registered Address fields) appear together with a heading. Within each
+  // section, rows preserve the caller's sort (typically: documents → tier1
+  // → tier2, then schema field order). Returns an array of [section, rows]
+  // pairs in the same order the sections appear in the schema, so the page
+  // reads like the admin's schema layout.
+  const groupFoundBySection = (items) => {
+    const groups = new Map();
+    items.forEach(({ item, idx }) => {
+      const def = findFieldDef(activeSchema, item.field);
+      const section = def?.section || item.section || "Other";
+      if (!groups.has(section)) groups.set(section, []);
+      groups.get(section).push({ item, idx });
+    });
+    // Order sections by their first appearance in the schema.
+    const sectionOrder = new Map();
+    let pos = 0;
+    if (activeSchema) {
+      [...(activeSchema.researchFields || []), ...(activeSchema.gapFields || [])].forEach((f) => {
+        const s = f.section;
+        if (s && !sectionOrder.has(s)) sectionOrder.set(s, pos++);
+      });
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      const oa = sectionOrder.has(a) ? sectionOrder.get(a) : 9999;
+      const ob = sectionOrder.has(b) ? sectionOrder.get(b) : 9999;
+      return oa - ob;
+    });
+  };
+
+  // One unified table grouped by source tier, sorted within group by
+  // schema research-field order — then wrapped into per-section blocks so
+  // the customer sees a clear heading for each logical group (e.g.
+  // Registered Address vs Business Address rather than interleaved rows).
+  const renderUnifiedFoundTable = (items, title, subtitle) => {
+    const groups = groupFoundBySection(items);
+    return (
+      <div style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{title}</h3>
+        <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>{subtitle}</p>
+        {groups.map(([section, rows], gi) => (
+          <div key={section} style={{ marginBottom: gi < groups.length - 1 ? 14 : 0 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+              textTransform: "uppercase", color: "#1a3a4a80",
+              marginBottom: 6,
+            }}>
+              {humaniseSection(section)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
+              {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
+            </div>
+            {rows.map((r, n) => renderFoundRow(r, n))}
           </div>
-        );
-      })}
-    </div>
-  );
+        ))}
+      </div>
+    );
+  };
 
   // Sort key per spec: documents first, tier1 next, tier2 last; within group
   // by the schema researchFields order.
@@ -2843,7 +2940,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </div>
               </div>
             </div>
-            {["corrections", "missing_research", "applicant", "business", "nature", "fi", "stakeholders", "disclosures", "account", "usage", "bank", "documents"].map(s => renderGapSection(s))}
+            {gapSectionOrder().map(s => renderGapSection(s))}
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <button
