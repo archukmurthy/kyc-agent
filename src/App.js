@@ -1229,6 +1229,86 @@ const DUMMY_RESEARCH_VALUES = {
   administration_proceedings: "No",
 };
 
+// Fixed-top banner shown to the customer flow whenever ?preview=true is set
+// (or path is /preview). Two modes:
+//   - normal blue: staged config loaded from sessionStorage; shows capture
+//     timestamp and Close + Refresh controls
+//   - amber: preview requested but no staged config in sessionStorage (e.g.
+//     someone shared a /?preview=true link). Falls back to the published
+//     config and offers a link into /admin to stage a real preview.
+function PreviewBanner({ missing, timestamp }) {
+  const bg = missing ? "#B45309" : "#0B3D91";
+  const btnBase = {
+    background: "rgba(255,255,255,0.2)",
+    border: "1px solid rgba(255,255,255,0.4)",
+    color: "#fff",
+    borderRadius: 6,
+    padding: "4px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  };
+  let capturedAt = "";
+  if (timestamp) {
+    try { capturedAt = ` — captured at ${new Date(timestamp).toLocaleTimeString()}`; }
+    catch (_) { capturedAt = ""; }
+  }
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+      background: bg, color: "#FFFFFF",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "8px 20px",
+      fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{
+          background: "#FFFFFF", color: bg,
+          fontSize: 11, fontWeight: 800,
+          padding: "2px 8px", borderRadius: 99, letterSpacing: "0.5px",
+        }}>PREVIEW</span>
+        <span>
+          {missing
+            ? "No preview config found — showing published version instead."
+            : `Previewing unpublished changes${capturedAt}`}
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{ fontSize: 12, opacity: 0.85, fontWeight: 400 }}>
+          {missing
+            ? "Use the admin Preview button to stage your changes."
+            : "This is not the live version. Submissions are disabled."}
+        </span>
+        {missing && (
+          <button
+            type="button"
+            onClick={() => window.open("/admin", "_blank")}
+            style={btnBase}
+          >
+            Go to admin →
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={btnBase}
+          title="Reload to pick up the latest staged config"
+        >
+          ↻ Refresh
+        </button>
+        <button
+          type="button"
+          onClick={() => window.close()}
+          style={btnBase}
+        >
+          Close Preview ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {
   const ref = useRef(null);
   // Normalise the type so case/whitespace differences (e.g. "Date", " date ")
@@ -1332,29 +1412,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
   const inPreview = previewMode || isPreviewMode();
+  // Timestamp the staged preview config was captured (admin click time). Shown
+  // in the preview banner so the admin can tell whether the tab is stale.
+  const [previewTimestamp, setPreviewTimestamp] = useState(null);
+  // True when /?preview=true is set but no sessionStorage staged config was
+  // found — banner switches to amber + "go to admin" link.
+  const [previewMissing, setPreviewMissing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     // Preview can be triggered two ways: index.js route /preview (sets the
     // previewMode prop) OR admin Preview button which opens /?preview=true
     // (detected by isPreviewMode()). Both should load the staged config
-    // from localStorage, not the live /api/config.
+    // from sessionStorage, not the live /api/config.
     const previewActive = previewMode || isPreviewMode();
     if (previewActive) {
       try {
-        // Try localStorage first (set by admin's Preview button), then
-        // sessionStorage (legacy), before falling back to local defaults.
-        const raw = localStorage.getItem("preview_config")
-          || sessionStorage.getItem("preview_config");
+        // sessionStorage is the canonical channel (written by the admin Preview
+        // button). Fall back to legacy localStorage for tabs opened before the
+        // sessionStorage migration.
+        const raw = sessionStorage.getItem("preview_config")
+          || localStorage.getItem("preview_config");
+        const ts = sessionStorage.getItem("preview_timestamp")
+          || localStorage.getItem("preview_config_ts");
         if (raw) {
           setTenantConfig(JSON.parse(raw));
+          setPreviewTimestamp(ts || null);
+          setPreviewMissing(false);
           setConfigLoading(false);
           return () => {};
         }
       } catch (_) { /* fall through */ }
-      setTenantConfig(buildLocalDefaultConfig());
-      setConfigLoading(false);
-      return () => {};
+      // No staged config — surface this in the banner and fall through to the
+      // normal API fetch so the page still has SOMETHING to render.
+      setPreviewMissing(true);
     }
     const url = `/api/config?tenant=${encodeURIComponent(tenantId)}`;
     fetch(url, { cache: "no-store" })
@@ -2234,26 +2325,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
-      {previewMode && (
-        <div style={{
-          background: "#0B3D91", color: "#fff", padding: "10px 16px",
-          textAlign: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-        }}>
-          ⚠ Preview Mode — Showing unpublished admin config from this session
-        </div>
+      {inPreview && (
+        <PreviewBanner
+          missing={previewMissing}
+          timestamp={previewTimestamp}
+        />
       )}
-      {!previewMode && inPreview && (
-        <div style={{
-          background: "#FCD34D", color: "#7C2D12",
-          padding: "8px 16px",
-          textAlign: "center", fontSize: 12, fontWeight: 700,
-          position: "sticky", top: 0, zIndex: 1000,
-          minHeight: 32, display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          ⚠ Preview Mode — submissions are not saved
-        </div>
-      )}
-      <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 16px 60px" }}>
+      <div style={{ maxWidth: 780, margin: "0 auto", padding: `${inPreview ? 64 : 24}px 16px 60px` }}>
 
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           {companyLogo_ ? (
@@ -2665,9 +2743,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </div>
               </div>
             </div>
+            {inPreview && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#EFF6FF",
+                border: "1px solid #BFDBFE",
+                borderRadius: 8,
+                fontSize: 13, color: "#1E40AF",
+                marginBottom: 16,
+                display: "flex", gap: 8, alignItems: "flex-start",
+              }}>
+                <span>ℹ</span>
+                <span>Submission is disabled in preview mode. Publish your configuration to enable the live form.</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => setStep(STEPS.fillGaps)}>← Back</Btn>
-              <Btn variant="green" onClick={submitApplication} disabled={!declared}>✓ Submit Application</Btn>
+              <Btn
+                variant="green"
+                onClick={inPreview ? undefined : submitApplication}
+                disabled={!declared || inPreview}
+              >
+                ✓ Submit Application
+              </Btn>
             </div>
           </div>
         )}

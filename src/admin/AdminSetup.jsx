@@ -19,6 +19,8 @@ const MODULES = [
 ];
 
 const PREVIEW_KEY = "preview_config";
+const PREVIEW_TENANT_KEY = "preview_tenant_id";
+const PREVIEW_TS_KEY = "preview_timestamp";
 
 export default function AdminSetup({ token, onLogout }) {
   const [config, setConfig] = useState(null);
@@ -106,6 +108,12 @@ export default function AdminSetup({ token, onLogout }) {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setPublishResult({ ok: true, message: `Published successfully — Version ${data.version} is now live` });
+      // Clear the staged preview now that this exact config is live.
+      try {
+        sessionStorage.removeItem(PREVIEW_KEY);
+        sessionStorage.removeItem(PREVIEW_TENANT_KEY);
+        sessionStorage.removeItem(PREVIEW_TS_KEY);
+      } catch (_) { /* ignore */ }
       loadVersions();
       // Reload the canonical config so _version reflects what we just published.
       const cfgRes = await fetch("/api/config");
@@ -121,15 +129,17 @@ export default function AdminSetup({ token, onLogout }) {
   function handlePreview() {
     if (!config) return;
     try {
-      // localStorage so the new tab can read it regardless of how it was
-      // opened (sessionStorage isn't reliably inherited across tabs).
-      localStorage.setItem(PREVIEW_KEY, JSON.stringify(config));
-      localStorage.setItem(PREVIEW_KEY + "_ts", String(Date.now()));
+      // sessionStorage inherits to new tab on same-origin window.open. Three
+      // keys keep config, tenant, and capture-timestamp paired so the preview
+      // banner can show when the snapshot was taken.
+      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(config));
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, "nium");
+      sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.warn("Could not write preview config to localStorage", e);
+      console.warn("Could not write preview config to sessionStorage", e);
     }
-    window.open("/preview", "_blank");
+    window.open("/?preview=true", "_blank");
   }
 
   const activeModule = useMemo(() => MODULES.find((m) => m.id === active), [active]);
@@ -247,7 +257,12 @@ export default function AdminSetup({ token, onLogout }) {
               title="Wipe stored config and re-seed Nium defaults"
               style={{ ...btnSecondary, color: tokens.danger, borderColor: tokens.danger, opacity: publishing ? 0.6 : 1 }}
             >↺ Reset to default</button>
-            <button onClick={handlePreview} style={btnSecondary}>👁 Preview</button>
+            <button
+              onClick={handlePreview}
+              disabled={!config}
+              title={config ? "Opens a preview with your current unsaved changes. If the preview tab is already open, click Refresh in the preview tab to see your latest changes." : "Loading configuration…"}
+              style={{ ...btnSecondary, opacity: config ? 1 : 0.5, cursor: config ? "pointer" : "not-allowed" }}
+            >👁 {config ? "Preview current changes ↗" : "Preview"}</button>
             <button onClick={handlePublish} disabled={publishing} style={{ ...btnPrimary, opacity: publishing ? 0.6 : 1 }}>
               {publishing ? "Publishing…" : "Publish"}
             </button>

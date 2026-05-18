@@ -67,6 +67,13 @@ export default function StepPublish({
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      // Clear staged preview — same config is now live, so an open preview tab
+      // refreshing should fetch the published version, not the pre-publish snapshot.
+      try {
+        sessionStorage.removeItem("preview_config");
+        sessionStorage.removeItem("preview_tenant_id");
+        sessionStorage.removeItem("preview_timestamp");
+      } catch (_) { /* ignore */ }
       setPublishSuccess(true);
       setPublishedVersion(data.version);
       if (onPublishSuccess) onPublishSuccess(data.version);
@@ -75,6 +82,22 @@ export default function StepPublish({
     } finally {
       setPublishing(false);
     }
+  }
+
+  function handlePreview() {
+    if (!config) return;
+    try {
+      sessionStorage.setItem("preview_config", JSON.stringify(config));
+      sessionStorage.setItem("preview_tenant_id", activeTenant || "nium");
+      sessionStorage.setItem("preview_timestamp", new Date().toISOString());
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("Could not write preview config:", e);
+    }
+    const tenantParam = activeTenant && activeTenant !== "nium"
+      ? `&tenant=${encodeURIComponent(activeTenant)}`
+      : "";
+    window.open(`/?preview=true${tenantParam}`, "_blank");
   }
 
   if (publishSuccess) {
@@ -112,6 +135,44 @@ export default function StepPublish({
       <MatrixOverview config={config} onCellClick={() => { /* navigation handled by wizard */ }} />
 
       <SectionHeading style={{ marginTop: 22 }}>Publish</SectionHeading>
+      <div style={{
+        padding: 16,
+        background: "#F0F9FF",
+        borderRadius: 8,
+        border: "1px solid #BAE6FD",
+        marginBottom: 16,
+      }}>
+        <p style={{ fontSize: 14, fontWeight: 600, margin: "0 0 6px", color: "#0369A1" }}>
+          Before you publish
+        </p>
+        <p style={{ fontSize: 13, color: "#0369A1", margin: "0 0 12px" }}>
+          Preview your current configuration in the customer flow before making it live.
+          Submissions are disabled in preview mode.
+        </p>
+        <button
+          type="button"
+          onClick={handlePreview}
+          disabled={!config}
+          title="Opens a new tab with your current unsaved changes. Click Refresh in the preview tab to re-stage after further edits."
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "9px 18px",
+            background: "#0369A1",
+            color: "#fff",
+            border: "none",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: config ? "pointer" : "not-allowed",
+            opacity: config ? 1 : 0.5,
+            fontFamily: "inherit",
+          }}
+        >
+          👁 Preview current changes ↗
+        </button>
+      </div>
       {canPublish ? (
         <div style={{ background: "#fff", border: `1px solid ${adminColors.border}`, borderRadius: 10, padding: 16 }}>
           <div style={{ fontSize: 13, marginBottom: 12, color: adminColors.text, lineHeight: 1.55 }}>

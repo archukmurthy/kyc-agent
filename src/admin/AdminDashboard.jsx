@@ -12,6 +12,8 @@ import MiniWizardAddSchema from "./miniwizards/MiniWizardAddSchema";
 import { adminColors, adminStyles } from "./adminDesign";
 
 const PREVIEW_KEY = "preview_config";
+const PREVIEW_TENANT_KEY = "preview_tenant_id";
+const PREVIEW_TS_KEY = "preview_timestamp";
 
 // Compute readiness status for each configuration area. Mirrors the spec's
 // definitions; rendered both as the pill row and as the "incomplete" callout.
@@ -124,6 +126,9 @@ export default function AdminDashboard({
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setPublishMsg({ ok: true, text: `Published — v${data.version} is live` });
       setHasUnpublishedChanges(false);
+      // Clear staged preview now that the same config is live — prevents an
+      // open preview tab from continuing to show pre-publish state on refresh.
+      clearPreviewSession();
       const cfgRes = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
       if (cfgRes.ok) {
         const cfg = await cfgRes.json();
@@ -140,14 +145,28 @@ export default function AdminDashboard({
   function handlePreview() {
     if (!localConfig) return;
     try {
-      localStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
-      localStorage.setItem(PREVIEW_KEY + "_ts", String(Date.now()));
-    } catch (_) {}
-    // Open the customer flow scoped to this tenant with a preview banner.
-    const path = tenantId && tenantId !== "nium"
-      ? `/?tenant=${encodeURIComponent(tenantId)}&preview=true`
-      : `/?preview=true`;
-    window.open(path, "_blank");
+      // sessionStorage is inherited by the new tab when opened via window.open
+      // from the same origin (modern Chrome/Firefox/Safari). Each tab gets its
+      // own session, so this does not leak between unrelated tabs.
+      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId || "nium");
+      sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("Could not write preview config:", e);
+    }
+    const tenantParam = tenantId && tenantId !== "nium"
+      ? `&tenant=${encodeURIComponent(tenantId)}`
+      : "";
+    window.open(`/?preview=true${tenantParam}`, "_blank");
+  }
+
+  function clearPreviewSession() {
+    try {
+      sessionStorage.removeItem(PREVIEW_KEY);
+      sessionStorage.removeItem(PREVIEW_TENANT_KEY);
+      sessionStorage.removeItem(PREVIEW_TS_KEY);
+    } catch (_) { /* ignore */ }
   }
 
   function goView(v) {

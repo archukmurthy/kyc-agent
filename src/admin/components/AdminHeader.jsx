@@ -14,6 +14,7 @@ export default function AdminHeader({
   onPreview,
   onSignOut,
 }) {
+  const previewReady = !!tenantConfig;
   const companyName = tenantConfig?.company?.name || "Nium";
   const logo = tenantConfig?.company?.logo;
 
@@ -89,8 +90,22 @@ export default function AdminHeader({
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <StatusIndicator hasUnpublished={hasUnpublishedChanges} />
 
-        <button type="button" onClick={onPreview} style={adminStyles.btnSecondary}>
-          Preview
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={!previewReady}
+          title={
+            previewReady
+              ? "Opens a preview with your current unsaved changes — before publishing. If the preview tab is already open, click Refresh in the preview tab to see your latest changes."
+              : "Loading configuration…"
+          }
+          style={{
+            ...adminStyles.btnSecondary,
+            opacity: previewReady ? 1 : 0.5,
+            cursor: previewReady ? "pointer" : "not-allowed",
+          }}
+        >
+          {previewReady ? "Preview current changes ↗" : "Preview"}
         </button>
 
         <button
