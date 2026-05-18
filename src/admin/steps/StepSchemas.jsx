@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import WizardCard from "../components/WizardCard";
 import SchemaFieldRow from "../components/SchemaFieldRow";
 import SchemaFieldPanel from "../components/SchemaFieldPanel";
+import CopyFieldModal from "../components/CopyFieldModal";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
 
@@ -29,6 +30,14 @@ export default function StepSchemas({
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingField, setEditingField] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Copy-to-other-schemas modal — opened immediately after a successful field
+  // save when more than one schema is configured.
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [lastSavedField, setLastSavedField] = useState(null);
+  // Cells that just received a copy — surfaced as a pulsing blue ring + label
+  // on the matrix so the admin can see what got touched. Cleared after 5s.
+  const [recentlyUpdated, setRecentlyUpdated] = useState(() => new Set());
+  const [copyToast, setCopyToast] = useState(null);
 
   const entityTypes = useMemo(
     () => (config?.entityTypes || []).filter((e) => e.active),
@@ -114,6 +123,47 @@ export default function StepSchemas({
     });
     setPanelOpen(false);
     setEditingField(null);
+
+    // After the field is saved into the current schema, offer to copy the same
+    // change to other schemas. Skipped when only one schema exists, or when
+    // the field id is unusable (defensive — SchemaFieldPanel validates this
+    // upstream but we don't want to crash here either way).
+    const totalSchemas = Object.keys(config?.schemas || {}).length;
+    if (totalSchemas <= 1) return;
+    if (!updated || !updated.field) {
+      // eslint-disable-next-line no-console
+      console.warn("Copy modal: skipping — saved field has no id", updated);
+      return;
+    }
+    if (!selectedCell || !(config?.schemas || {})[selectedCell]) {
+      // eslint-disable-next-line no-console
+      console.warn("Copy modal: skipping — sourceCell not found", selectedCell);
+      return;
+    }
+    setLastSavedField(updated);
+    setShowCopyModal(true);
+  }
+
+  function handleCopyApply(result) {
+    const { schemaChanges, updates = [], additions = [] } = result || {};
+    if (schemaChanges && Object.keys(schemaChanges).length > 0) {
+      onChange({ schemas: { ...(config?.schemas || {}), ...schemaChanges } });
+    }
+    const touched = new Set([
+      ...updates.map((u) => u.cellKey),
+      ...additions.map((a) => a.cellKey),
+    ]);
+    if (touched.size > 0) {
+      setRecentlyUpdated(touched);
+      setTimeout(() => setRecentlyUpdated(new Set()), 5000);
+    }
+    let msg = "";
+    if (updates.length) msg += `Updated ${updates.length} schema${updates.length === 1 ? "" : "s"}`;
+    if (additions.length) msg += (msg ? " · " : "") + `Added to ${additions.length} schema${additions.length === 1 ? "" : "s"}`;
+    if (msg) {
+      setCopyToast("✅ " + msg);
+      setTimeout(() => setCopyToast(null), 3500);
+    }
   }
 
   function deleteField(f) {
@@ -181,6 +231,7 @@ export default function StepSchemas({
         schemas={schemas}
         selected={selectedCell}
         onSelect={setSelectedCell}
+        recentlyUpdated={recentlyUpdated}
       />
 
       {!selectedCell && (
@@ -239,6 +290,45 @@ export default function StepSchemas({
         }}
         onSave={saveFieldFromPanel}
       />
+
+      {showCopyModal && lastSavedField && (
+        <CopyFieldModal
+          field={lastSavedField}
+          sourceCell={selectedCell}
+          allSchemas={config?.schemas || {}}
+          entityTypes={config?.entityTypes || []}
+          licences={config?.licences || []}
+          onApply={(result) => {
+            handleCopyApply(result);
+          }}
+          onClose={() => {
+            setShowCopyModal(false);
+            setLastSavedField(null);
+          }}
+        />
+      )}
+
+      {copyToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            zIndex: 400,
+            background: adminColors.text,
+            color: "#fff",
+            padding: "10px 16px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: "0 6px 18px rgba(0,0,0,0.2)",
+          }}
+        >
+          {copyToast}
+        </div>
+      )}
     </WizardCard>
   );
 }
@@ -251,7 +341,8 @@ function SectionHeading({ text }) {
   );
 }
 
-function CellMatrix({ entityTypes, licences, schemas, selected, onSelect }) {
+function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recentlyUpdated }) {
+  const updatedSet = recentlyUpdated instanceof Set ? recentlyUpdated : new Set();
   if (!entityTypes.length || !licences.length) {
     return (
       <div style={{ padding: 14, border: `1px dashed ${adminColors.border}`, borderRadius: 10, color: adminColors.textMuted, fontSize: 13 }}>
@@ -311,6 +402,7 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect }) {
                   );
                 }
 
+                const justUpdated = updatedSet.has(key);
                 return (
                   <td key={l.id}>
                     <button
@@ -327,10 +419,23 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect }) {
                         fontFamily: "inherit",
                         fontWeight: 700,
                         fontSize: 14,
+                        boxShadow: justUpdated ? "0 0 0 3px #93C5FD" : "none",
+                        transition: "box-shadow 0.3s",
                       }}
                     >
                       {has ? "✅" : "⚠"}
                     </button>
+                    {justUpdated && (
+                      <div style={{
+                        fontSize: 10,
+                        color: "#2563EB",
+                        fontWeight: 700,
+                        textAlign: "center",
+                        marginTop: 2,
+                      }}>
+                        ✓ Updated
+                      </div>
+                    )}
                   </td>
                 );
               })}
