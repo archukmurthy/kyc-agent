@@ -196,20 +196,19 @@ export function parseSchemaExcel(file) {
 
         const headerRow = rows[0].map((h) => String(h || "").trim());
         const columnMap = mapColumns(headerRow);
-        // Only treat a row as a field row when it has a meaningful identifier:
-        // either a label OR a field id. Excel often leaves trailing rows with
-        // formatting artefacts (stray styles, deleted-but-not-cleared cells)
-        // that have something tiny in some column — those are not fields.
-        // We track the original sheet row number so error messages stay
-        // accurate even after filtering.
+        // Only treat a row as a field row when it has a UI Label. Without one
+        // there is nothing to render to the customer (and the parser would
+        // auto-generate the Field ID from the label anyway). Excel often
+        // leaves trailing rows with stray content in some column from
+        // formatting / copy-paste leftovers — those are not fields.
+        // Preserve the original sheet row number through filtering so error
+        // messages stay accurate.
         const labelIdx = columnMap.label;
-        const idIdx = columnMap.id;
         const parsed = [];
         rows.slice(1).forEach((row, idx) => {
           const sheetRow = idx + 2;
           const labelCell = labelIdx === undefined ? "" : String(row[labelIdx] ?? "").trim();
-          const idCell = idIdx === undefined ? "" : String(row[idIdx] ?? "").trim();
-          if (!labelCell && !idCell) return;
+          if (!labelCell) return;
           parsed.push(parseRow(row, columnMap, sheetRow));
         });
         const dataRows = parsed;
