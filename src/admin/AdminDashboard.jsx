@@ -66,6 +66,10 @@ export default function AdminDashboard({
   const [publishMsg, setPublishMsg] = useState(null);
   const [toast, setToast] = useState(null);
   const [wizardStartStep, setWizardStartStep] = useState(1);
+  // Bumped each time the standalone Documents view is opened from the
+  // dashboard so the StepDocuments component re-mounts and re-initialises
+  // its selected-entity tab from the freshest config.
+  const [documentsViewKey, setDocumentsViewKey] = useState(0);
 
   useEffect(() => {
     setLocalConfig(tenantConfig);
@@ -171,6 +175,9 @@ export default function AdminDashboard({
 
   function goView(v) {
     setActiveView(v);
+    // Re-mount the standalone Documents view each time so it picks up the
+    // latest entity types (e.g. one just added via the mini-wizard).
+    if (v === "documents") setDocumentsViewKey((k) => k + 1);
   }
 
   function runFullWizard() {
@@ -237,6 +244,7 @@ export default function AdminDashboard({
             view={activeView}
             config={localConfig}
             onChange={onConfigChange}
+            documentsViewKey={documentsViewKey}
             onCompleteMini={miniwizardComplete}
             onCancelMini={exitToDashboard}
             onStandaloneSave={() => {
@@ -389,7 +397,7 @@ function ConfigStatusCard({ status, onContinue }) {
   );
 }
 
-function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStandaloneSave }) {
+function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStandaloneSave, documentsViewKey = 0 }) {
   if (view === "company") {
     return (
       <>
@@ -401,7 +409,7 @@ function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStand
   if (view === "documents") {
     return (
       <>
-        <StepDocuments config={config} onChange={onChange} isStandalone />
+        <StepDocuments key={documentsViewKey} config={config} onChange={onChange} isStandalone />
         <StandaloneSaveBar onSave={onStandaloneSave} />
       </>
     );

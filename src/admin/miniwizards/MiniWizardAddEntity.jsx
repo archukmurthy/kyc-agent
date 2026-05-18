@@ -161,32 +161,46 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
             Pick which documents you&apos;ll collect for {draft.label}. You can change this anytime later.
           </div>
           <StepDocuments
-            config={{
-              ...workingConfig,
-              // Force the docs step to default to the new entity type by listing
-              // it first; StepDocuments picks the first active entity type.
-              entityTypes: workingConfig.entityTypes
-                .slice()
-                .sort((a, b) => (a.id === draft.id ? -1 : b.id === draft.id ? 1 : 0)),
-            }}
+            config={workingConfig}
             onChange={(p) => setWorkingConfig((prev) => ({ ...prev, ...p }))}
+            initialEntityTypeId={draft.id}
           />
         </div>
       )}
 
-      {step === 5 && (
-        <Card title="Review">
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 13, lineHeight: 1.7 }}>
-            <li><strong>Entity type:</strong> {draft.icon} {draft.label}</li>
-            <li><strong>Licences:</strong> {(draft.associatedLicenceIds || []).map((id) => licences.find((l) => l.id === id)?.jurisdictionName || id).join(", ")}</li>
-            <li><strong>Schemas configured:</strong> {configuredCount} of {newCells.length}</li>
-            <li>
-              <strong>Documents:</strong>{" "}
-              {(workingConfig?.documents?.[draft.id] || []).length} configured
-            </li>
-          </ul>
-        </Card>
-      )}
+      {step === 5 && (() => {
+        const newDocs = workingConfig?.documents?.[draft.id] || [];
+        return (
+          <Card title="Review">
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 13, lineHeight: 1.7 }}>
+              <li><strong>Entity type:</strong> {draft.icon} {draft.label}</li>
+              <li><strong>Licences:</strong> {(draft.associatedLicenceIds || []).map((id) => licences.find((l) => l.id === id)?.jurisdictionName || id).join(", ")}</li>
+              <li><strong>Schemas configured:</strong> {configuredCount} of {newCells.length}</li>
+              <li>
+                <strong>Documents:</strong> {newDocs.length} configured
+              </li>
+            </ul>
+            {newDocs.length > 0 ? (
+              <ul style={{ margin: "10px 0 0 0", padding: "0 0 0 20px", fontSize: 12, color: adminColors.textMuted, lineHeight: 1.7 }}>
+                {newDocs.map((d) => (
+                  <li key={d.id}>{d.icon || "📄"} {d.name}{d.required ? " (required)" : ""}</li>
+                ))}
+              </ul>
+            ) : (
+              <div style={{ marginTop: 10, padding: 10, background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 8, fontSize: 12, color: "#92400E", display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
+                <span>⚠ No documents configured for {draft.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  style={{ ...adminStyles.btnGhost, fontSize: 12, color: "#92400E", padding: "4px 10px" }}
+                >
+                  Configure documents →
+                </button>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
     </MiniWizardShell>
   );
 }

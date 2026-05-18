@@ -33,22 +33,44 @@ export default function StepDocuments({
   config,
   onChange,
   isStandalone = false,
+  // When provided, the documents tab auto-selects this entity type on mount
+  // and whenever the prop changes. Used by the add-entity mini-wizard so the
+  // newly-created entity's tab is showing as soon as Step 4 opens.
+  initialEntityTypeId = null,
 }) {
   const entityTypes = (config?.entityTypes || []).filter((e) => e.active);
-  const [selectedEntityType, setSelectedEntityType] = useState(entityTypes[0]?.id || null);
+  const [selectedEntityType, setSelectedEntityType] = useState(
+    initialEntityTypeId || entityTypes[0]?.id || null
+  );
   const [showAllDocs, setShowAllDocs] = useState(false);
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [draft, setDraft] = useState(BLANK_DOC());
   const [savedFlash, setSavedFlash] = useState(false);
   const [copyFromId, setCopyFromId] = useState("");
+  const [copySuccess, setCopySuccess] = useState(null);
 
+  // Follow initialEntityTypeId when the wizard hands it to us late (e.g. after
+  // the entity-create step completes). Without this, the tab would stay on
+  // whatever was selected at mount time.
   useEffect(() => {
-    if (!selectedEntityType && entityTypes.length) {
-      setSelectedEntityType(entityTypes[0].id);
+    if (initialEntityTypeId && initialEntityTypeId !== selectedEntityType) {
+      setSelectedEntityType(initialEntityTypeId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEntityTypeId]);
+
+  // Defensive: if the currently-selected entity disappears from config (e.g.
+  // it was deleted in another tab), fall back to the first active entity.
+  useEffect(() => {
+    if (!entityTypes.length) return;
+    const exists = entityTypes.some((e) => e.id === selectedEntityType);
+    if (!exists) setSelectedEntityType(entityTypes[0].id);
   }, [entityTypes, selectedEntityType]);
 
-  const documentsForEntity = (config?.documents?.[selectedEntityType] || []);
+  const documentsForEntity = useMemo(
+    () => (config?.documents?.[selectedEntityType] || []),
+    [config?.documents, selectedEntityType]
+  );
 
   // The library may be missing on old configs — synthesize it from the
   // documents map so the UI has something to work with regardless.
@@ -60,8 +82,16 @@ export default function StepDocuments({
 
   const visibleDocs = useMemo(() => {
     if (showAllDocs) return effectiveLibrary;
-    return effectiveLibrary.filter((d) => (d.defaultForEntityTypes || []).includes(selectedEntityType));
-  }, [effectiveLibrary, showAllDocs, selectedEntityType]);
+    // A library doc is visible in "suggested" view if either:
+    //   - it's tagged as a default for this entity type, OR
+    //   - it's already in this entity's collection (e.g. just copied from
+    //     another entity type) — otherwise the just-copied docs would vanish.
+    const included = new Set((documentsForEntity || []).map((d) => d.id));
+    return effectiveLibrary.filter((d) =>
+      (d.defaultForEntityTypes || []).includes(selectedEntityType)
+      || included.has(d.id)
+    );
+  }, [effectiveLibrary, showAllDocs, selectedEntityType, documentsForEntity]);
 
   function flash() {
     setSavedFlash(true);
@@ -157,6 +187,12 @@ export default function StepDocuments({
     const docsMap = { ...(config.documents || {}) };
     docsMap[selectedEntityType] = src.map((d, i) => ({ ...d, sortOrder: i + 1 }));
     onChange({ documents: docsMap });
+    const sourceLabel = labelFor(copyFromId, entityTypes);
+    const targetLabel = labelFor(selectedEntityType, entityTypes);
+    setCopySuccess(
+      `✅ Copied ${src.length} document${src.length === 1 ? "" : "s"} from ${sourceLabel} to ${targetLabel}`
+    );
+    setTimeout(() => setCopySuccess(null), 4000);
     setCopyFromId("");
     flash();
   }
@@ -221,6 +257,24 @@ export default function StepDocuments({
           </span>
         )}
       </div>
+
+      {copySuccess && (
+        <div style={{
+          padding: "10px 14px",
+          background: adminColors.statusCompleteBg || "#ECFDF5",
+          border: `1px solid ${adminColors.statusComplete || "#10B981"}`,
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          color: adminColors.statusComplete || "#047857",
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}>
+          {copySuccess}
+        </div>
+      )}
 
       {/* Document grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
