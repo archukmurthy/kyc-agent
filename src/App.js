@@ -1874,6 +1874,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [rejectedStakeholders, setRejectedStakeholders] = useState({});
   const [revealedTs, setRevealedTs] = useState({});
   const gapRef = useRef({});
+  // Per-person stakeholder data on Fill Gaps. Parallel to gapRef, but each
+  // field id maps to an array of stakeholder records (objects with full_name,
+  // nationality, date_of_birth, is_pep, etc). Kept in a ref so text-field
+  // edits don't churn the whole tree every keystroke. setStakeholderVersion
+  // is the explicit re-render trigger for changes that need to surface to
+  // the UI (add/remove/select/toggle/text).
+  const stakeholdersRef = useRef({});
+  const [, setStakeholderVersion] = useState(0);
+  const [stakeholderErrors, setStakeholderErrors] = useState([]);
   // bumped whenever we mutate gapRef from outside the input (e.g. test-data fill)
   // so StableInput components re-sync from the new ref values.
   const [, setFormVersion] = useState(0);
@@ -1977,6 +1986,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRejectedStakeholders({}); setRevealedTs({}); setResearchTimestamp("");
     gapRef.current = {}; setFormVersion(v => v + 1);
+    stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
     setError(""); setDeclared(false);
     setUploadedDocs(initialUploadedDocs());
     setJourneyType(""); setJourneyOpen(false); setSelectedJourneyCard(null); setManualOpened(false);
@@ -1998,6 +2008,96 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
+  // Read + write helpers for per-person stakeholder data on Fill Gaps. The
+  // ref is the source of truth; setStakeholderVersion bumps the explicit
+  // re-render counter so completion badges, PEP-details visibility, and
+  // validation messaging stay in sync with what's in the ref.
+  const getStakeholders = (fieldId) => stakeholdersRef.current[fieldId] || [];
+  const setStakeholders = (fieldId, arr) => {
+    stakeholdersRef.current = { ...stakeholdersRef.current, [fieldId]: arr };
+    setStakeholderErrors([]);
+    setStakeholderVersion((v) => v + 1);
+  };
+  const updateStakeholderField = (fieldId, stakeholderId, key, value) => {
+    const current = getStakeholders(fieldId);
+    const next = current.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
+    setStakeholders(fieldId, next);
+  };
+  const addStakeholder = (fieldId) => {
+    const current = getStakeholders(fieldId);
+    setStakeholders(fieldId, [...current, makeStakeholder({ customer_added: true })]);
+  };
+  const removeStakeholder = (fieldId, stakeholderId) => {
+    const current = getStakeholders(fieldId);
+    setStakeholders(fieldId, current.filter((s) => s.id !== stakeholderId));
+  };
+
+  // Initialise / re-sync stakeholdersRef from research.found whenever we
+  // enter Fill Gaps. Preserves user edits across navigation: any
+  // stakeholder id that's already in the ref keeps its existing fields and
+  // only has its customer_rejected flag re-applied from the current
+  // rejectedStakeholders set. New ids from research get seeded; manually
+  // added (customer_added=true) entries are preserved verbatim.
+  const initStakeholdersForFillGaps = useCallback(() => {
+    if (!research || !Array.isArray(research.found)) return;
+    const nextMap = { ...stakeholdersRef.current };
+    research.found.forEach((result) => {
+      if (!isStakeholderField(result.field)) return;
+      if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
+      const fieldId = result.field;
+      const existing = nextMap[fieldId] || [];
+      const existingById = new Map(existing.map((s) => [s.id, s]));
+      const rejectedIds = rejectedStakeholders[fieldId] || new Set();
+      const aiIds = new Set(result.stakeholders.map((s) => s.id));
+
+      const seeded = result.stakeholders.map((ai) => {
+        const prior = existingById.get(ai.id);
+        const isRejected = rejectedIds.has(ai.id);
+        if (prior) {
+          // Preserve customer edits; only re-apply the rejection flag and the
+          // name-clearing behaviour for newly-rejected entries.
+          if (isRejected && !prior.customer_rejected) {
+            return {
+              ...prior,
+              customer_rejected: true,
+              full_name_original: prior.full_name_original || ai.full_name,
+              full_name: "",
+            };
+          }
+          if (!isRejected && prior.customer_rejected) {
+            return {
+              ...prior,
+              customer_rejected: false,
+              full_name: prior.full_name || prior.full_name_original || ai.full_name,
+            };
+          }
+          return { ...prior, customer_rejected: isRejected };
+        }
+        // First seed for this person.
+        if (isRejected) {
+          return {
+            ...ai,
+            customer_rejected: true,
+            full_name_original: ai.full_name,
+            full_name: "",
+          };
+        }
+        return { ...ai, customer_rejected: false };
+      });
+
+      // Keep customer-added persons that aren't part of the AI list.
+      const customerAdded = existing.filter((s) => s.customer_added && !aiIds.has(s.id));
+      nextMap[fieldId] = [...seeded, ...customerAdded];
+    });
+    stakeholdersRef.current = nextMap;
+    setStakeholderVersion((v) => v + 1);
+  }, [research, rejectedStakeholders]);
+
+  useEffect(() => {
+    if (step === STEPS.fillGaps) initStakeholdersForFillGaps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, research, rejectedStakeholders]);
+
   const fillTestData = () => {
     getCombinedGaps().forEach(g => {
       const current = gapRef.current[g.field];
@@ -2013,6 +2113,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
       gapRef.current[g.field] = val;
     });
     setFormVersion(v => v + 1);
+
+    // Also fill stakeholder compliance fields for any per-person cards
+    // currently in stakeholdersRef. Doesn't add new people, doesn't overwrite
+    // already-filled fields — keeps existing edits intact and just paints
+    // sensible demo values into the blanks.
+    const demoCountry = countryObj ? countryObj.name : "United Kingdom";
+    const demoIdType = "passport";
+    const demoIdNum = "GB1234567";
+    const demoDob = "1980-05-15";
+    const demoNationality = countryCode === "GB" ? "British" : countryCode === "SG" ? "Singaporean" : "British";
+    let touched = false;
+    Object.keys(stakeholdersRef.current || {}).forEach((fieldId) => {
+      const list = stakeholdersRef.current[fieldId] || [];
+      const next = list.map((s) => {
+        const out = { ...s };
+        if (!out.full_name && out.customer_rejected && out.full_name_original) {
+          out.full_name = out.full_name_original;
+        }
+        if (!out.full_name && out.customer_added) out.full_name = "Demo Person";
+        if (!out.nationality) out.nationality = demoNationality;
+        if (!out.date_of_birth) out.date_of_birth = demoDob;
+        if (!out.residential_country) out.residential_country = demoCountry;
+        if (!out.id_type) out.id_type = demoIdType;
+        if (!out.id_number) out.id_number = demoIdNum;
+        if (out.is_pep === null || out.is_pep === undefined) out.is_pep = false;
+        return out;
+      });
+      stakeholdersRef.current[fieldId] = next;
+      touched = true;
+    });
+    if (touched) {
+      setStakeholderErrors([]);
+      setStakeholderVersion(v => v + 1);
+    }
   };
 
   // Unified post-Confirm gap list.
@@ -2259,6 +2393,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
       setRejectedStakeholders({});
+      stakeholdersRef.current = {};
+      setStakeholderVersion(v => v + 1);
+      setStakeholderErrors([]);
       setRevealedTs({});
       gapRef.current = {};
       setFormVersion(v => v + 1);
@@ -2383,6 +2520,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     found.forEach((_, i) => { c[i] = true; });
     setChecks(c);
     setRejectedStakeholders({});
+    stakeholdersRef.current = {};
+    setStakeholderVersion(v => v + 1);
+    setStakeholderErrors([]);
     setRevealedTs({});
     gapRef.current = {};
     setFormVersion(v => v + 1);
@@ -2492,6 +2632,39 @@ export default function KYCAgent({ previewMode = false } = {}) {
       fieldValues[key] = String(value);
     });
 
+    // Build structured stakeholder payload from stakeholdersRef. Each
+    // stakeholder field id maps to an array of person records with both
+    // the AI-found provenance (source/sourceUrl/sourceTier/fetchedAt) and
+    // the customer-completed compliance fields. Empty fields are kept so
+    // the downstream consumer can see which gaps were left blank.
+    const stakeholderPayload = {};
+    (research?.found || []).forEach((result) => {
+      if (!isStakeholderField(result.field)) return;
+      const list = getStakeholders(result.field);
+      if (!list || list.length === 0) return;
+      stakeholderPayload[result.field] = list.map((s) => ({
+        id: s.id,
+        full_name: s.full_name || "",
+        role: s.role || "",
+        share_percentage: s.share_percentage != null ? s.share_percentage : null,
+        nationality: s.nationality || "",
+        date_of_birth: s.date_of_birth || "",
+        residential_country: s.residential_country || "",
+        id_type: s.id_type || "",
+        id_number: s.id_number || "",
+        is_pep: s.is_pep,
+        pep_details: s.pep_details || null,
+        source: s.source || "",
+        sourceUrl: s.sourceUrl || "",
+        sourceTier: s.sourceTier || "",
+        fetchedAt: s.fetchedAt || null,
+        customer_confirmed: !s.customer_rejected,
+        customer_added: !!s.customer_added,
+        customer_rejected: !!s.customer_rejected,
+        full_name_original: s.full_name_original || null,
+      }));
+    });
+
     const payload = {
       submissionId: genUUID(),
       submittedAt,
@@ -2508,6 +2681,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       fromCache: false,
       fieldValues,
       fieldMetadata: finalMeta,
+      stakeholders: stakeholderPayload,
       declaration: {
         ipAddress: device.ipAddress,
         userAgent: device.userAgent,
@@ -2906,6 +3080,358 @@ export default function KYCAgent({ previewMode = false } = {}) {
         })}
       </div>
     );
+  };
+
+  // ── Per-person stakeholder forms on Fill Gaps ────────────────────────
+  // Each accepted/rejected/customer-added person renders as an accordion
+  // card with name, role, nationality, DOB, residential country, ID type
+  // & number, and PEP toggle + details. Reads/writes through the
+  // stakeholdersRef helpers — explicit re-render on every change so
+  // completion badges and the conditional PEP-details textarea stay
+  // synced with the underlying data.
+
+  const stakeholderLabelStyle = {
+    display: "block", fontSize: 12, fontWeight: 600,
+    color: "#1a3a4a", marginBottom: 5,
+  };
+
+  const stakeholderLockedStyle = {
+    padding: "10px 14px", background: "#f2f1ed", borderRadius: 8,
+    border: "1.5px solid rgba(26,58,74,0.14)", fontSize: 14,
+    color: "#1a3a4a80", display: "flex", alignItems: "center",
+    justifyContent: "space-between",
+  };
+
+  const stakeholderRequiredKeys = (s) => {
+    const keys = ["full_name", "nationality", "date_of_birth", "is_pep"];
+    if (s && s.is_pep === true) keys.push("pep_details");
+    return keys;
+  };
+
+  const stakeholderMissingFields = (s) => {
+    return stakeholderRequiredKeys(s).filter((k) => {
+      if (k === "is_pep") return s.is_pep === null || s.is_pep === undefined;
+      const v = s[k];
+      return v == null || String(v).trim() === "";
+    });
+  };
+
+  const renderStakeholderCard = (fieldId, stakeholder, index) => {
+    const ubo = isUboLikeField(fieldId);
+    const isRejected = !!stakeholder.customer_rejected;
+    const isAdded = !!stakeholder.customer_added;
+    const isAIFound = !isRejected && !isAdded;
+    const missing = stakeholderMissingFields(stakeholder);
+    const isComplete = missing.length === 0;
+
+    const nameLocked = isAIFound;
+    const roleLocked = isAIFound && stakeholder.role;
+
+    return (
+      <div
+        key={stakeholder.id}
+        style={{
+          borderRadius: 10,
+          border: `1.5px solid ${isComplete ? "#4a9e8e" : isRejected ? "#fecaca" : "rgba(26,58,74,0.14)"}`,
+          background: isRejected ? "#fef9f9" : "#fff",
+          marginBottom: 12, overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px", background: "#fafcfb",
+          borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
+                {stakeholder.full_name || `Person ${index + 1}`}
+              </div>
+              {(stakeholder.role || stakeholder.share_percentage != null) && (
+                <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>
+                  {stakeholder.role || ""}
+                  {stakeholder.role && stakeholder.share_percentage != null ? " · " : ""}
+                  {stakeholder.share_percentage != null ? `${stakeholder.share_percentage}%` : ""}
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+              background: isComplete ? "#dff2ec" : "#fff8ed",
+              color: isComplete ? "#1a6b56" : "#8c5500",
+              border: `1px solid ${isComplete ? "#4a9e8e" : "#e0a040"}40`,
+            }}>
+              {isComplete
+                ? "✅ Complete"
+                : `⚠ ${missing.length} field${missing.length > 1 ? "s" : ""} needed`}
+            </span>
+            {isAIFound && stakeholder.source && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 4,
+                background: "#dff2ec", color: "#1a6b56",
+              }}>
+                ✓ {stakeholder.source}
+              </span>
+            )}
+            {isRejected && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 4,
+                background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca",
+              }}>
+                Correction needed
+              </span>
+            )}
+            {(isAdded || isRejected) && (
+              <button
+                type="button"
+                onClick={() => removeStakeholder(fieldId, stakeholder.id)}
+                style={{
+                  background: "none", border: "none", color: "#1a3a4a70",
+                  cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px",
+                  fontFamily: "inherit",
+                }}
+                title="Remove this person"
+                aria-label="Remove"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 0 }}>
+          {/* Name */}
+          {nameLocked ? (
+            <div style={{ marginBottom: 14 }}>
+              <label style={stakeholderLabelStyle}>Full Legal Name <span style={{ color: "#d44" }}>*</span></label>
+              <div style={stakeholderLockedStyle}>
+                <span>{stakeholder.full_name}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#1a6b56" }}>✓ Verified</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              {isRejected && stakeholder.full_name_original && (
+                <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 4px" }}>
+                  AI found: "{stakeholder.full_name_original}" — please enter the correct name
+                </p>
+              )}
+              <StableInput
+                id={`stk_${fieldId}_${stakeholder.id}_full_name`}
+                label={`Full Legal Name`}
+                type="text"
+                value={stakeholder.full_name || ""}
+                onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "full_name", v)}
+                required
+                placeholder="Full legal name"
+              />
+            </>
+          )}
+
+          {/* Role */}
+          {roleLocked ? (
+            <div style={{ marginBottom: 14 }}>
+              <label style={stakeholderLabelStyle}>Role / Position</label>
+              <div style={stakeholderLockedStyle}>
+                <span>{stakeholder.role}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#1a6b56" }}>✓ Verified</span>
+              </div>
+            </div>
+          ) : (
+            <StableInput
+              id={`stk_${fieldId}_${stakeholder.id}_role`}
+              label="Role / Position"
+              type="text"
+              value={stakeholder.role || ""}
+              onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "role", v)}
+              placeholder={ubo ? "e.g. Shareholder, UBO" : "e.g. CEO, Director, CFO"}
+            />
+          )}
+
+          {/* Nationality */}
+          <StableInput
+            id={`stk_${fieldId}_${stakeholder.id}_nationality`}
+            label="Nationality"
+            type="text"
+            value={stakeholder.nationality || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "nationality", v)}
+            required
+            placeholder="e.g. British, American, Singaporean"
+          />
+
+          {/* Date of birth */}
+          <StableInput
+            id={`stk_${fieldId}_${stakeholder.id}_dob`}
+            label="Date of Birth"
+            type="date"
+            value={stakeholder.date_of_birth || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "date_of_birth", v)}
+            required
+            placeholder="YYYY-MM-DD"
+          />
+
+          {/* Residential country */}
+          <StableInput
+            id={`stk_${fieldId}_${stakeholder.id}_country`}
+            label="Country of Residence"
+            type="select"
+            value={stakeholder.residential_country || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "residential_country", v)}
+            options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+          />
+
+          {/* ID type */}
+          <StableInput
+            id={`stk_${fieldId}_${stakeholder.id}_id_type`}
+            label="Identity Document Type"
+            type="select"
+            value={stakeholder.id_type || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "id_type", v)}
+            options={[
+              { value: "passport", label: "Passport" },
+              { value: "national_id", label: "National ID Card" },
+              { value: "driving_licence", label: "Driving Licence" },
+              { value: "other", label: "Other" },
+            ]}
+          />
+
+          {/* ID number */}
+          <StableInput
+            id={`stk_${fieldId}_${stakeholder.id}_id_number`}
+            label="Identity Document Number"
+            type="text"
+            value={stakeholder.id_number || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "id_number", v)}
+            placeholder="Passport or ID number"
+          />
+
+          {/* PEP three-button toggle */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={stakeholderLabelStyle}>
+              Politically Exposed Person (PEP)? <span style={{ color: "#d44" }}>*</span>
+            </label>
+            <p style={{ fontSize: 11, color: "#1a3a4a80", lineHeight: 1.4, margin: "0 0 8px" }}>
+              A PEP holds or has held a prominent public function, or is closely associated with someone who does.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { val: false, label: "No", c: "#4a9e8e", bg: "#dff2ec" },
+                { val: true, label: "Yes", c: "#dc2626", bg: "#fef2f2" },
+                { val: null, label: "Not Sure", c: "#1a3a4a", bg: "#e0e8f4" },
+              ].map((opt) => {
+                const selected = stakeholder.is_pep === opt.val;
+                return (
+                  <button
+                    key={String(opt.val)}
+                    type="button"
+                    onClick={() => updateStakeholderField(fieldId, stakeholder.id, "is_pep", opt.val)}
+                    style={{
+                      flex: 1, padding: "10px 0", borderRadius: 8,
+                      border: `1.5px solid ${selected ? opt.c : "rgba(26,58,74,0.14)"}`,
+                      background: selected ? opt.bg : "transparent",
+                      color: selected ? opt.c : "#1a3a4a80",
+                      fontWeight: selected ? 700 : 500, fontSize: 13,
+                      fontFamily: "inherit", cursor: "pointer", transition: "all .15s",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Conditional PEP details */}
+          {stakeholder.is_pep === true && (
+            <StableInput
+              id={`stk_${fieldId}_${stakeholder.id}_pep_details`}
+              label="PEP Details"
+              type="textarea"
+              value={stakeholder.pep_details || ""}
+              onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "pep_details", v)}
+              required
+              placeholder="Please describe the political position, function, or connection"
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Section block for one stakeholder field (e.g. directors, ubo_names).
+  // Renders an intro / empty-state, then per-person cards, then an "+ Add"
+  // affordance.
+  const renderStakeholderGapBlock = (researchItem) => {
+    const fieldId = researchItem.field;
+    const ubo = isUboLikeField(fieldId);
+    const personLabel = ubo ? "beneficial owner" : "director";
+    const fieldDef = findFieldDef(activeSchema, fieldId);
+    const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
+    const list = getStakeholders(fieldId);
+    return (
+      <div key={`stk-gap-${fieldId}`} style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
+        {list.length > 0 ? (
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
+            Complete the required details for each {personLabel} below. Names and roles marked
+            "Verified" came from the research on the previous page; everything else needs your input.
+          </p>
+        ) : (
+          <div style={{
+            margin: "0 0 14px", padding: "10px 14px", borderRadius: 8,
+            background: "#fff8ed", border: "1px solid #e0a040",
+            fontSize: 12, color: "#8c5500",
+          }}>
+            No {personLabel}s were found automatically. Please add at least one {personLabel} below.
+          </div>
+        )}
+        {list.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+        <button
+          type="button"
+          onClick={() => addStakeholder(fieldId)}
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+            marginTop: list.length > 0 ? 4 : 0, padding: "10px 18px",
+            background: "transparent", color: "#1a3a4a",
+            border: "1.5px dashed #4a9e8e", borderRadius: 8,
+            fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            cursor: "pointer", width: "100%",
+          }}
+        >
+          + Add {list.length > 0 ? "another " : ""}{personLabel}
+        </button>
+      </div>
+    );
+  };
+
+  const validateStakeholders = () => {
+    const errors = [];
+    (research?.found || []).forEach((result) => {
+      if (!isStakeholderField(result.field)) return;
+      if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
+      const list = getStakeholders(result.field);
+      const ubo = isUboLikeField(result.field);
+      const personLabel = ubo ? "beneficial owner" : "director";
+      if (list.length === 0) {
+        errors.push(`Please add at least one ${personLabel}.`);
+        return;
+      }
+      list.forEach((s, idx) => {
+        const display = (s.full_name && s.full_name.trim()) || `Person ${idx + 1}`;
+        const missing = stakeholderMissingFields(s);
+        missing.forEach((k) => {
+          if (k === "full_name") errors.push(`Please enter the full name for person ${idx + 1}.`);
+          else if (k === "nationality") errors.push(`Please enter nationality for ${display}.`);
+          else if (k === "date_of_birth") errors.push(`Please enter date of birth for ${display}.`);
+          else if (k === "is_pep") errors.push(`Please answer the PEP question for ${display}.`);
+          else if (k === "pep_details") errors.push(`Please provide PEP details for ${display}.`);
+        });
+      });
+    });
+    return errors;
   };
 
   // Sort key per spec: documents first, tier1 next, tier2 last; within group
@@ -3356,6 +3882,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </div>
               </div>
             </div>
+
+            {stakeholderErrors.length > 0 && (
+              <div style={{
+                background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10,
+                padding: "14px 16px", marginBottom: 16,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
+                  Please fix the following before continuing:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {stakeholderErrors.map((msg, i) => (
+                    <li key={i} style={{ fontSize: 12, color: "#dc2626", marginBottom: 3 }}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Per-person stakeholder cards (Phase 3+4) — rendered above the
+                regular gap sections so people-related work lives in one block. */}
+            {(research?.found || []).filter((r) =>
+              isStakeholderField(r.field) && Array.isArray(r.stakeholders) && r.stakeholders.length > 0
+            ).map((r) => renderStakeholderGapBlock(r))}
+
             {gapSectionOrder().map(s => renderGapSection(s))}
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
@@ -3375,7 +3924,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.confirm)}>← Back to Review</Btn>
-              <Btn variant="primary" onClick={() => { if (allGapsFilled()) { scrollAndSetStep(STEPS.declare); setError(""); } else setError("Please fill all required fields."); }}>Continue to Declaration →</Btn>
+              <Btn variant="primary" onClick={() => {
+                const stkErrors = validateStakeholders();
+                if (stkErrors.length > 0) {
+                  setStakeholderErrors(stkErrors);
+                  setError("");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  return;
+                }
+                if (allGapsFilled()) {
+                  setStakeholderErrors([]);
+                  scrollAndSetStep(STEPS.declare);
+                  setError("");
+                } else {
+                  setError("Please fill all required fields.");
+                }
+              }}>Continue to Declaration →</Btn>
             </div>
             {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
           </div>
