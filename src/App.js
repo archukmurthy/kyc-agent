@@ -107,6 +107,13 @@ const UK_SCHEMA = {
     { field: "applicantNationality", label: "Applicant Nationality (2-letter code)", inputType: "text", required: true, section: "applicant" },
     { field: "applicantBirthCountry", label: "Applicant Birth Country", inputType: "text", required: true, section: "applicant" },
     { field: "applicantIsPEP", label: "Is Applicant a PEP?", inputType: "select", required: true, section: "applicant", options: ["Yes", "No"] },
+    // Stakeholder collection for Corporate flow. Mirrors fiStakeholderFields'
+    // stakeholder_note pattern. directors_full_details uses a distinct id
+    // because the research field "directors" is already populated by the AI.
+    { field: "directors_full_details", label: "Directors / Officers — full details", inputType: "textarea", required: true, section: "stakeholders",
+      placeholder: "For each director or officer, include: Full Name, Position, Date of Birth, Nationality, Email, PEP status (Yes/No), and Residential Address." },
+    { field: "stakeholder_note", label: "Other Stakeholder Details (UBOs, Signatories)", inputType: "textarea", required: true, section: "stakeholders",
+      placeholder: "List all UBOs (>25% ownership) and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
     ...accountSection("GBP"),
   ],
 };
@@ -158,6 +165,13 @@ const SG_SCHEMA = {
     { field: "natureIndustryDescription", label: "Business Description (2-3 sentences)", inputType: "textarea", required: false, section: "nature" },
     { field: "sizeTotalEmployees", label: "Total Employees (range)", inputType: "select", required: true, section: "nature", options: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5000+"] },
     { field: "sizeAnnualTurnover", label: "Annual Turnover (range)", inputType: "select", required: true, section: "nature", options: ["Under 100K", "100K - 500K", "500K - 1M", "1M - 5M", "5M - 25M", "25M - 100M", "Over 100M"] },
+    // Stakeholder collection for Corporate flow. Mirrors fiStakeholderFields'
+    // stakeholder_note pattern. directors_full_details uses a distinct id
+    // because the research field "directors" is already populated by the AI.
+    { field: "directors_full_details", label: "Directors / Officers — full details", inputType: "textarea", required: true, section: "stakeholders",
+      placeholder: "For each director or officer, include: Full Name, Position, Date of Birth, Nationality, Email, PEP status (Yes/No), and Residential Address." },
+    { field: "stakeholder_note", label: "Other Stakeholder Details (UBOs, Signatories)", inputType: "textarea", required: true, section: "stakeholders",
+      placeholder: "List all UBOs (>25% ownership) and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
     ...accountSection("SGD"),
   ],
 };
