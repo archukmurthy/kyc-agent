@@ -359,6 +359,187 @@ const getSchema = (code, entityType) => {
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
 /* ═══════════════════════════════════════════
+   STAKEHOLDER DATA — Phase 1 scaffolding
+
+   Stakeholder research fields (directors, UBOs, shareholders, signatories)
+   are special: they describe people, not single values. The AI is asked
+   to return a JSON array per person; legacy values stored as plain
+   strings are migrated at render-time via parseStakeholdersFromString.
+   ═══════════════════════════════════════════ */
+
+const STAKEHOLDER_FIELD_IDS = new Set([
+  "directors",
+  "director_names",
+  "ubo_names",
+  "ubo_parent_company",
+  "shareholders",
+  "beneficial_owners",
+  "authorised_signatories",
+  "key_controllers",
+]);
+
+const isStakeholderField = (fieldId) => {
+  if (!fieldId) return false;
+  if (STAKEHOLDER_FIELD_IDS.has(fieldId)) return true;
+  const lower = String(fieldId).toLowerCase();
+  return (
+    lower.includes("director") ||
+    lower.includes("officer") ||
+    lower.includes("ubo") ||
+    lower.includes("beneficial_owner") ||
+    lower.includes("shareholder") ||
+    lower.includes("controller") ||
+    lower.includes("signator")
+  );
+};
+
+const isUboLikeField = (fieldId) => {
+  const lower = String(fieldId || "").toLowerCase();
+  return lower.includes("ubo") || lower.includes("beneficial") || lower.includes("shareholder");
+};
+
+let _stakeholderIdSeq = 0;
+const makeStakeholder = (overrides = {}) => {
+  _stakeholderIdSeq += 1;
+  return {
+    id: `sh_${Date.now().toString(36)}_${_stakeholderIdSeq}`,
+    // AI-found fields
+    full_name: "",
+    role: "",
+    share_percentage: null,
+    source: "",
+    sourceUrl: "",
+    sourceTier: "tier1",
+    fetchedAt: null,
+    // Gap fields — customer fills (Phase 3)
+    nationality: "",
+    date_of_birth: "",
+    residential_country: "",
+    id_type: "",
+    id_number: "",
+    is_pep: null,
+    pep_details: "",
+    // Metadata
+    customer_confirmed: false,
+    customer_rejected: false,
+    customer_added: false,
+    ...overrides,
+  };
+};
+
+// Parse a legacy free-text stakeholder string ("John Smith (CEO), Jane Doe (CFO)")
+// into structured stakeholder records. Handles a JSON-encoded array as well, so
+// the same parser covers both "string from old KV" and "JSON string the model
+// returned despite the array instruction".
+const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, fetchedAt) => {
+  if (rawString == null) return [];
+  if (Array.isArray(rawString)) {
+    return rawString
+      .map((p) => makeStakeholder({
+        full_name: p.full_name || p.name || "",
+        role: p.role || p.position || p.title || "",
+        share_percentage: p.share_percentage != null ? p.share_percentage : (p.percentage != null ? p.percentage : null),
+        source: source || p.source || "",
+        sourceUrl: sourceUrl || p.sourceUrl || "",
+        sourceTier: sourceTier || p.sourceTier || "tier1",
+        fetchedAt: fetchedAt || p.fetchedAt || null,
+      }))
+      .filter((s) => s.full_name);
+  }
+  if (typeof rawString !== "string") return [];
+  const trimmed = rawString.trim();
+  if (!trimmed) return [];
+
+  // JSON-encoded array fallback (some models return the array as a string).
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parseStakeholdersFromString(parsed, source, sourceUrl, sourceTier, fetchedAt);
+      }
+    } catch (_) { /* fall through to plain-text parser */ }
+  }
+
+  // Split on newlines / semicolons first; if it's a single line, split on
+  // ", " followed by an uppercase letter (a likely name boundary). This avoids
+  // breaking "Smith, Jr." style fragments mid-name.
+  const lines = trimmed.split(/\n|;/).map((l) => l.trim()).filter(Boolean);
+  const entries = lines.length > 1 ? lines : trimmed.split(/,\s*(?=[A-Z])/).map((l) => l.trim()).filter(Boolean);
+
+  return entries.map((entry) => {
+    // Remove leading numbering: "1. " "1) " "- "
+    const cleaned = entry.replace(/^[\d]+[.)]\s*/, "").replace(/^[-•]\s*/, "").trim();
+
+    // "Name (45%)" — capture percentage
+    const pctMatch = cleaned.match(/^(.+?)\s*\((\d+(?:\.\d+)?)\s*%\)\s*$/);
+    if (pctMatch) {
+      return makeStakeholder({
+        full_name: pctMatch[1].trim(),
+        role: "",
+        share_percentage: parseFloat(pctMatch[2]),
+        source: source || "",
+        sourceUrl: sourceUrl || "",
+        sourceTier: sourceTier || "tier1",
+        fetchedAt: fetchedAt || null,
+      });
+    }
+
+    // "Name (Role)" — capture role from brackets
+    const bracketMatch = cleaned.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (bracketMatch) {
+      return makeStakeholder({
+        full_name: bracketMatch[1].trim(),
+        role: bracketMatch[2].trim(),
+        source: source || "",
+        sourceUrl: sourceUrl || "",
+        sourceTier: sourceTier || "tier1",
+        fetchedAt: fetchedAt || null,
+      });
+    }
+
+    // "Name — Role" or "Name - Role"
+    const dashMatch = cleaned.match(/^(.+?)\s*[—-]\s*(.+)$/);
+    if (dashMatch) {
+      return makeStakeholder({
+        full_name: dashMatch[1].trim(),
+        role: dashMatch[2].trim(),
+        source: source || "",
+        sourceUrl: sourceUrl || "",
+        sourceTier: sourceTier || "tier1",
+        fetchedAt: fetchedAt || null,
+      });
+    }
+
+    return makeStakeholder({
+      full_name: cleaned,
+      source: source || "",
+      sourceUrl: sourceUrl || "",
+      sourceTier: sourceTier || "tier1",
+      fetchedAt: fetchedAt || null,
+    });
+  }).filter((s) => s.full_name.length > 0);
+};
+
+// Augment a research-result list with parsed .stakeholders arrays for any
+// stakeholder field. Idempotent — items that already have a .stakeholders
+// array pass through unchanged.
+const enrichStakeholders = (items) => {
+  if (!Array.isArray(items)) return items;
+  return items.map((item) => {
+    if (!item || !isStakeholderField(item.field)) return item;
+    if (Array.isArray(item.stakeholders) && item.stakeholders.length > 0) return item;
+    const stakeholders = parseStakeholdersFromString(
+      item.value,
+      item.source,
+      item.sourceUrl,
+      item.sourceTier,
+      item.fetchedAt,
+    );
+    return { ...item, stakeholders };
+  });
+};
+
+/* ═══════════════════════════════════════════
    CONFIG-DRIVEN HELPERS
 
    The customer flow now reads its definitions from a tenant config
@@ -654,7 +835,35 @@ const buildLocalDefaultConfig = () => ({
 });
 
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
-  const fieldList = schema.researchFields.map(f => `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`).join(",\n");
+  // Stakeholder fields (directors / UBOs / shareholders / signatories) return
+  // a JSON array per person, not a string. Other fields keep the legacy
+  // "value": "..." string shape so the prompt and downstream parsing stay
+  // unchanged for them.
+  const fieldList = schema.researchFields.map((f) => {
+    if (isStakeholderField(f.field)) {
+      const example = isUboLikeField(f.field)
+        ? '[{"full_name": "Jane Smith", "role": "Shareholder", "share_percentage": 45}]'
+        : '[{"full_name": "Jane Smith", "role": "CEO"}]';
+      return `    {"field": "${f.field}", "label": "${f.label}", "value": ${example}, "source": "..."}`;
+    }
+    return `    {"field": "${f.field}", "label": "${f.label}", "value": "...", "source": "..."}`;
+  }).join(",\n");
+
+  // Per-field rules for stakeholder fields, appended after the schema guide so
+  // the model sees them next to the JSON template.
+  const stakeholderRules = schema.researchFields
+    .filter((f) => isStakeholderField(f.field))
+    .map((f) => {
+      const ubo = isUboLikeField(f.field);
+      const shape = ubo
+        ? '{ "full_name": string, "role": string, "share_percentage": number or null }'
+        : '{ "full_name": string, "role": string }';
+      return `- ${f.field}: return a JSON array of objects, one per person. Each: ${shape}. Include the name even when role/percentage is unknown. Never omit a person because DOB or nationality is not publicly available. Search ${country}'s official company registry (officers / PSC / beneficial ownership records).`;
+    })
+    .join("\n");
+  const stakeholderRulesBlock = stakeholderRules
+    ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n`
+    : "";
 
   const countryAuthoritative = SOURCE_TRUST[countryCode] || [];
   const countryMatchesFramework = countryCode === "GB" || countryCode === "SG";
@@ -734,7 +943,7 @@ WHERE TO SEARCH:
 
 LABEL MAPPING:
 - The schema labels below are generic. Map each one to the ${country}-specific equivalent in your search and citation. Examples: "Company Registration Number" → CIN (India), CNPJ (Brazil), KvK number (Netherlands), HRB number (Germany), CNPC (China), Sirene (France), etc. "Industry Classification Code" → NIC (India), CNAE (Brazil), NAICS (US/CA), SIC (UK), JSIC (Japan), etc.
-${fieldGuideBlock}${dropdownGuideBlock}${fiPrioritySources}
+${fieldGuideBlock}${dropdownGuideBlock}${stakeholderRulesBlock}${fiPrioritySources}
 Research "${name}" registered in ${country} using web search. Return ONLY valid JSON (no markdown, no backticks, no preamble).
 
 {
@@ -749,6 +958,7 @@ ${fieldList}
 OUTPUT RULES:
 - Only include a field in "found" if you have ACTUAL data with a real source. Omit fields you couldn't find rather than inventing values.
 - The "source" field must be the actual ${country} authority/source you used (e.g. for India: "Ministry of Corporate Affairs (MCA)", "BSE", "RBI"; for Brazil: "Receita Federal", "CVM"). Never cite a foreign registry that wouldn't have data for ${country}.
+- For stakeholder fields (directors / UBOs / shareholders / signatories) "value" MUST be a JSON array of person objects as specified above — NOT a string. For all other fields "value" stays a string.
 - Do NOT include a "gaps" array — the client already knows the gap fields from the schema.
 - Return ONLY the raw JSON object.`;
 };
@@ -1224,7 +1434,15 @@ const DUMMY_RESEARCH_VALUES = {
   industryDescription: "Software development and SaaS distribution to enterprise customers.",
   isMultiLayered: "No",
   uboAnalysis: "John Smith (40%), Jane Doe (35%), Trustees (25%)",
-  directors: "John Smith (UK), Jane Doe (UK), Mark Lee (SG)",
+  // directors / UBO research fields are parsed into structured stakeholder
+  // records on Confirm — value is a JSON-encoded array of {full_name, role,
+  // share_percentage} so the customer sees per-person cards instead of a
+  // single text blob.
+  directors: JSON.stringify([
+    { full_name: "John Smith", role: "CEO" },
+    { full_name: "Jane Doe", role: "CFO" },
+    { full_name: "Mark Lee", role: "CTO" },
+  ]),
   companySecretary: "Jane Doe",
   isPEP: "No",
   listedExchange: "Not listed",
@@ -1258,8 +1476,14 @@ const DUMMY_RESEARCH_VALUES = {
   issues_prepaid_cards: "No",
   non_resident_customers: "Yes",
   products_offered: "Cross-Border Payment Services",
-  director_names: "John Smith (CEO), Jane Doe (CFO), Mark Lee (CTO)",
-  ubo_parent_company: "ACME Group Holdings Ltd",
+  director_names: JSON.stringify([
+    { full_name: "John Smith", role: "CEO" },
+    { full_name: "Jane Doe", role: "CFO" },
+    { full_name: "Mark Lee", role: "CTO" },
+  ]),
+  ubo_parent_company: JSON.stringify([
+    { full_name: "ACME Group Holdings Ltd", role: "Parent Company", share_percentage: 100 },
+  ]),
   ubo_share_percentage: "100% (wholly-owned subsidiary)",
   licence_suspended: "No",
   administration_proceedings: "No",
@@ -1643,6 +1867,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [research, setResearch] = useState(null);
   const [researchTimestamp, setResearchTimestamp] = useState("");
   const [checks, setChecks] = useState({});
+  // Per-person rejection for stakeholder fields. Shape:
+  //   { [fieldId]: Set<stakeholderId> }
+  // A stakeholder id present in the set means the customer unchecked that
+  // person on Confirm. Sets are recreated immutably on every toggle.
+  const [rejectedStakeholders, setRejectedStakeholders] = useState({});
   const [revealedTs, setRevealedTs] = useState({});
   const gapRef = useRef({});
   // bumped whenever we mutate gapRef from outside the input (e.g. test-data fill)
@@ -1746,13 +1975,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
-    setChecks({}); setRevealedTs({}); setResearchTimestamp("");
+    setChecks({}); setRejectedStakeholders({}); setRevealedTs({}); setResearchTimestamp("");
     gapRef.current = {}; setFormVersion(v => v + 1);
     setError(""); setDeclared(false);
     setUploadedDocs(initialUploadedDocs());
     setJourneyType(""); setJourneyOpen(false); setSelectedJourneyCard(null); setManualOpened(false);
     setFieldMetadata([]);
     setLoaderPhase(0);
+  };
+
+  const isStakeholderRejected = (fieldId, stakeholderId) => {
+    const set = rejectedStakeholders[fieldId];
+    return set ? set.has(stakeholderId) : false;
+  };
+
+  const toggleStakeholderRejection = (fieldId, stakeholderId) => {
+    setRejectedStakeholders((prev) => {
+      const current = new Set(prev[fieldId] ? Array.from(prev[fieldId]) : []);
+      if (current.has(stakeholderId)) current.delete(stakeholderId);
+      else current.add(stakeholderId);
+      return { ...prev, [fieldId]: current };
+    });
   };
 
   const fillTestData = () => {
@@ -1994,7 +2237,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Coerce free-text values for dropdown fields onto one of the configured
       // option values (e.g. "Private Limited Company" → "private_limited") so
       // the gap form can pre-select correctly on correction.
-      const merged = mapAIValuesToOptions(mergedRaw, schema);
+      const merged = enrichStakeholders(mapAIValuesToOptions(mergedRaw, schema));
 
       setResearch({ ...parsed, found: merged });
       setResearchTimestamp(webFetchTs);
@@ -2015,6 +2258,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const c = {};
       merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
+      setRejectedStakeholders({});
       setRevealedTs({});
       gapRef.current = {};
       setFormVersion(v => v + 1);
@@ -2115,7 +2359,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
     // Same dropdown-value coercion the live research path uses, so dummy and
     // live results render identically on Confirm and Fill Gaps.
-    const found = mapAIValuesToOptions(foundRaw, schema);
+    const found = enrichStakeholders(mapAIValuesToOptions(foundRaw, schema));
 
     const tagged = {
       companyName,
@@ -2138,6 +2382,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const c = {};
     found.forEach((_, i) => { c[i] = true; });
     setChecks(c);
+    setRejectedStakeholders({});
     setRevealedTs({});
     gapRef.current = {};
     setFormVersion(v => v + 1);
@@ -2554,6 +2799,115 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // Stakeholder fields (directors / UBOs / shareholders / signatories) with
+  // structured per-person data render as a card-per-person block instead of
+  // a single grid row. Rendered as its own section above the unified table
+  // so the row layout for everything else stays untouched. Items without a
+  // populated stakeholders array fall through to the normal row renderer
+  // for backward compatibility with legacy stored values.
+  const renderStakeholderConfirmSection = (item, idx) => {
+    if (!item || !Array.isArray(item.stakeholders) || item.stakeholders.length === 0) {
+      return null;
+    }
+    const ubo = isUboLikeField(item.field);
+    const fieldDef = findFieldDef(activeSchema, item.field);
+    const heading = fieldDef?.label
+      || (ubo ? "Ultimate Beneficial Owners / Shareholders" : "Directors / Officers");
+    const count = item.stakeholders.length;
+    const tier = item.sourceTier;
+    const sourceBadge = tier === "tier1"
+      ? { bg: "#dff2ec", color: "#1a6b56", glyph: "✅" }
+      : tier === "document"
+      ? { bg: "#0B3D91", color: "#fff", glyph: "📄" }
+      : { bg: "#fff1d6", color: "#8c5500", glyph: "⚠️" };
+    return (
+      <div key={`stk-${item.field}-${idx}`} style={{ marginBottom: 14 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+          textTransform: "uppercase", color: "#1a3a4a80",
+          marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        }}>
+          <span>{heading}</span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, color: sourceBadge.color,
+            background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
+          }}>
+            {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 10px", lineHeight: 1.5 }}>
+          Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}.
+          Uncheck anyone whose name is wrong — you'll correct them on the next page. Nationality,
+          date of birth and compliance details are collected on the next page for everyone kept here.
+        </p>
+        {item.stakeholders.map((s) => {
+          const rejected = isStakeholderRejected(item.field, s.id);
+          return (
+            <div
+              key={s.id}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 12,
+                padding: "10px 14px", marginBottom: 8,
+                background: rejected ? "#fef2f2" : "#fafcfb",
+                border: `1.5px solid ${rejected ? "#fecaca" : "rgba(26,58,74,0.08)"}`,
+                borderRadius: 8, transition: "background .15s, border-color .15s",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!rejected}
+                onChange={() => toggleStakeholderRejection(item.field, s.id)}
+                style={{ width: 15, height: 15, marginTop: 3, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
+                aria-label={`Confirm ${s.full_name}`}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                  <span style={{
+                    fontSize: 14, fontWeight: 700,
+                    color: rejected ? "#1a3a4a70" : "#1a3a4a",
+                    textDecoration: rejected ? "line-through" : "none",
+                  }}>
+                    👤 {s.full_name}
+                  </span>
+                  {s.role && (
+                    <span style={{
+                      fontSize: 11, color: "#1a3a4a80", background: "#f2f1ed",
+                      padding: "2px 8px", borderRadius: 99,
+                      border: "1px solid rgba(26,58,74,0.08)",
+                    }}>
+                      {s.role}
+                    </span>
+                  )}
+                  {s.share_percentage != null && (
+                    <span style={{
+                      fontSize: 11, color: "#1a6b56", background: "#dff2ec",
+                      padding: "2px 8px", borderRadius: 99,
+                      border: "1px solid rgba(74,158,142,0.3)",
+                    }}>
+                      {s.share_percentage}%
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: "#1a3a4a70", fontStyle: "italic" }}>
+                  Nationality, date of birth and compliance details to be completed on the next page
+                </div>
+              </div>
+              {rejected && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
+                  border: "1px solid #fecaca", borderRadius: 99,
+                  padding: "2px 8px", flexShrink: 0, alignSelf: "center",
+                }}>
+                  ✗ Incorrect
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Sort key per spec: documents first, tier1 next, tier2 last; within group
   // by the schema researchFields order.
   const sourceTierRank = { document: 0, tier1: 1, tier2: 2 };
@@ -2568,6 +2922,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const fb = fieldOrderMap.has(b.item.field) ? fieldOrderMap.get(b.item.field) : 999;
       return fa - fb;
     });
+
+  // Split out stakeholder items with structured data so they render as cards
+  // above the regular pre-filled table. Anything without a populated
+  // .stakeholders array stays in the regular flow as a normal row.
+  const stakeholderFound = sortedFound.filter(({ item }) =>
+    isStakeholderField(item.field) && Array.isArray(item.stakeholders) && item.stakeholders.length > 0
+  );
+  const regularFound = sortedFound.filter(({ item }) =>
+    !(isStakeholderField(item.field) && Array.isArray(item.stakeholders) && item.stakeholders.length > 0)
+  );
 
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
@@ -2956,7 +3320,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             </div>
 
-            {sortedFound.length > 0 && renderUnifiedFoundTable(sortedFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
+            {stakeholderFound.length > 0 && (
+              <div style={card}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
+                <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>
+                  Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
+                </p>
+                {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
+              </div>
+            )}
+
+            {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
 
             {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
               <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
