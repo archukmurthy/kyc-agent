@@ -58,6 +58,24 @@ export default function MiniWizardAddSchema({ config, preselectedCell = null, on
     setStep(2);
   }
 
+  // Deep-merge nested maps (schemas, documents) so a partial patch from
+  // StepSchemas / StepDocuments adds to the existing set instead of
+  // overwriting it.
+  function mergePatch(p) {
+    if (!p) return;
+    setWorkingConfig((prev) => {
+      const base = prev || {};
+      const next = { ...base, ...p };
+      if (p.schemas) {
+        next.schemas = { ...(base.schemas || {}), ...p.schemas };
+      }
+      if (p.documents) {
+        next.documents = { ...(base.documents || {}), ...p.documents };
+      }
+      return next;
+    });
+  }
+
   // If the chosen entity isn't yet associated with the chosen licence, add
   // the association now. Otherwise the schema saves into config.schemas but
   // the matrix won't show it (associatedLicenceIds gates cell visibility).
@@ -162,7 +180,7 @@ export default function MiniWizardAddSchema({ config, preselectedCell = null, on
       {step === 2 && (
         <StepSchemas
           config={workingConfig}
-          onChange={(p) => setWorkingConfig((prev) => ({ ...prev, ...p }))}
+          onChange={mergePatch}
           preselectedCell={selectedCell}
         />
       )}

@@ -70,6 +70,10 @@ export default function AdminDashboard({
   // dashboard so the StepDocuments component re-mounts and re-initialises
   // its selected-entity tab from the freshest config.
   const [documentsViewKey, setDocumentsViewKey] = useState(0);
+  // Same for the standalone Schemas view: re-mount on entry so any newly
+  // added cells (entity types / licences / schemas) are present in the
+  // matrix derived state.
+  const [schemasViewKey, setSchemasViewKey] = useState(0);
 
   useEffect(() => {
     setLocalConfig(tenantConfig);
@@ -106,8 +110,24 @@ export default function AdminDashboard({
     return 1;
   }
 
+  // Deep-merge nested maps (schemas, documents) so a partial patch from a
+  // step / mini-wizard adds to the existing set instead of overwriting it.
+  // Without this, two siblings that each patch `schemas` would clobber each
+  // other's writes — and a single schema save that didn't pre-spread the
+  // full schemas map would silently drop every other configured schema.
   function onConfigChange(patch) {
-    setLocalConfig((prev) => ({ ...(prev || {}), ...patch }));
+    if (!patch) return;
+    setLocalConfig((prev) => {
+      const base = prev || {};
+      const next = { ...base, ...patch };
+      if (patch.schemas) {
+        next.schemas = { ...(base.schemas || {}), ...patch.schemas };
+      }
+      if (patch.documents) {
+        next.documents = { ...(base.documents || {}), ...patch.documents };
+      }
+      return next;
+    });
     setHasUnpublishedChanges(true);
   }
 
@@ -178,6 +198,10 @@ export default function AdminDashboard({
     // Re-mount the standalone Documents view each time so it picks up the
     // latest entity types (e.g. one just added via the mini-wizard).
     if (v === "documents") setDocumentsViewKey((k) => k + 1);
+    // Same for the schemas view — bumping the key forces StepSchemas to
+    // re-mount so its derived state (selected cell, tabs) starts from the
+    // freshest config.
+    if (v === "schemas") setSchemasViewKey((k) => k + 1);
   }
 
   function runFullWizard() {
@@ -208,8 +232,19 @@ export default function AdminDashboard({
         startAtStep={wizardStartStep}
         adminToken={token}
         tenantId={tenantId}
-        onPublishSuccess={() => {
+        onPublishSuccess={async () => {
           setHasUnpublishedChanges(false);
+          // Re-fetch the live config so localConfig matches what's in KV —
+          // including any new schemas and server-side metadata (_version,
+          // _publishedAt). Without this the wizard's in-step publish can
+          // leave the dashboard's matrix / status pills stale.
+          try {
+            const cfgRes = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
+            if (cfgRes.ok) {
+              const cfg = await cfgRes.json();
+              setLocalConfig(cfg);
+            }
+          } catch (_) { /* non-fatal */ }
           showToast("✅ Configuration published");
         }}
         resumed={wizardStartStep > 1}
@@ -245,6 +280,7 @@ export default function AdminDashboard({
             config={localConfig}
             onChange={onConfigChange}
             documentsViewKey={documentsViewKey}
+            schemasViewKey={schemasViewKey}
             onCompleteMini={miniwizardComplete}
             onCancelMini={exitToDashboard}
             onStandaloneSave={() => {
@@ -397,7 +433,7 @@ function ConfigStatusCard({ status, onContinue }) {
   );
 }
 
-function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStandaloneSave, documentsViewKey = 0 }) {
+function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStandaloneSave, documentsViewKey = 0, schemasViewKey = 0 }) {
   if (view === "company") {
     return (
       <>
@@ -425,7 +461,7 @@ function SubView({ view, config, onChange, onCompleteMini, onCancelMini, onStand
   if (view === "schemas") {
     return (
       <>
-        <StepSchemas config={config} onChange={onChange} isStandalone />
+        <StepSchemas key={schemasViewKey} config={config} onChange={onChange} isStandalone />
         <StandaloneSaveBar onSave={onStandaloneSave} />
       </>
     );

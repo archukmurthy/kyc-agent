@@ -38,6 +38,24 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
     setDraft({ ...draft, ...p });
   }
 
+  // Deep-merge nested maps (schemas, documents) — partial patches from the
+  // embedded StepSchemas / StepDocuments must add to the existing maps,
+  // not overwrite them.
+  function mergePatch(p) {
+    if (!p) return;
+    setWorkingConfig((prev) => {
+      const base = prev || {};
+      const next = { ...base, ...p };
+      if (p.schemas) {
+        next.schemas = { ...(base.schemas || {}), ...p.schemas };
+      }
+      if (p.documents) {
+        next.documents = { ...(base.documents || {}), ...p.documents };
+      }
+      return next;
+    });
+  }
+
   function toggleLicence(licId) {
     const cur = new Set(draft.associatedLicenceIds || []);
     if (cur.has(licId)) cur.delete(licId);
@@ -148,7 +166,7 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
           <div style={{ fontSize: 13, color: adminColors.textMuted, marginBottom: 10 }}>
             Configure schemas for the new {newCells.length} cell{newCells.length === 1 ? "" : "s"}. You can skip cells and configure them later.
           </div>
-          <StepSchemas config={workingConfig} onChange={(p) => setWorkingConfig((prev) => ({ ...prev, ...p }))} />
+          <StepSchemas config={workingConfig} onChange={mergePatch} />
           <div style={{ marginTop: 10, fontSize: 12, color: adminColors.textMuted }}>
             {configuredCount} of {newCells.length} new cells configured
           </div>
@@ -162,7 +180,7 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
           </div>
           <StepDocuments
             config={workingConfig}
-            onChange={(p) => setWorkingConfig((prev) => ({ ...prev, ...p }))}
+            onChange={mergePatch}
             initialEntityTypeId={draft.id}
           />
         </div>
