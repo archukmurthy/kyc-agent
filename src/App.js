@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getTenantId, isPreviewMode } from "./utils/tenant";
 import SearchableSelect from "./components/SearchableSelect";
 
@@ -537,6 +537,141 @@ const enrichStakeholders = (items) => {
     );
     return { ...item, stakeholders };
   });
+};
+
+// ── Publicly-listed detection ───────────────────────────────────────────
+// Decide whether the company being onboarded is publicly listed, from the
+// research.found rows. Strong signals (A, B) are each sufficient on their own;
+// medium signals (C–F) need at least two together. Note: research rows here
+// use `.field` (not `.fieldId`). The field-id lists below include both the
+// canonical ids from the spec and the real schema ids in this codebase
+// (e.g. corporate uses `stockListing` / `listedExchange`, `businessType`).
+const detectPubliclyListed = (research) => {
+  if (!research || !Array.isArray(research.found) || research.found.length === 0) return false;
+
+  const found = research.found;
+
+  // ── STRONG SIGNALS — either alone confirms ──
+  // Signal A: publicly_listed field = "Yes" from a tier1 source
+  const listedField = found.find((r) => r.field === "publicly_listed");
+  if (listedField) {
+    const val = (listedField.value || "").toLowerCase().trim();
+    if ((val === "yes" || val === "true") && listedField.sourceTier === "tier1") {
+      return true;
+    }
+    // Explicitly not listed — return false early so medium signals don't override.
+    if (val === "no" || val === "false" || val === "not listed" || val === "n/a") {
+      return false;
+    }
+  }
+
+  // Signal B: an exchange / listing field carries a real value
+  const exchangeField = found.find((r) =>
+    r.field === "listed_exchange" ||
+    r.field === "listed_where" ||
+    r.field === "stock_exchange" ||
+    r.field === "listedExchange" ||
+    r.field === "stockListing"
+  );
+  if (exchangeField) {
+    const val = (exchangeField.value || "").toLowerCase().trim();
+    const notListed = ["", "n/a", "not listed", "none", "not applicable", "private", "no", "—", "-"];
+    if (val && !notListed.includes(val)) {
+      return true;
+    }
+  }
+
+  // ── MEDIUM SIGNALS — need at least two together ──
+  let mediumSignals = 0;
+
+  // Signal C: a source URL / name matches a known exchange domain
+  const exchangeDomains = [
+    "londonstockexchange", "lseg.com", "nasdaq.com", "nyse.com", "sgx.com",
+    "hkex.com", "asx.com.au", "euronext.com", "deutsche-boerse", "six-group.com",
+    "jpx.co.jp", "krx.co.kr", "tse.com.tw", "bseindia.com", "nseindia.com",
+    "bursamalaysia.com", "idx.co.id",
+  ];
+  const hasExchangeSource = found.some((r) => {
+    const src = ((r.source || "") + " " + (r.sourceUrl || "")).toLowerCase();
+    return exchangeDomains.some((d) => src.includes(d));
+  });
+  if (hasExchangeSource) mediumSignals++;
+
+  // Signal D: legal_form / businessType indicates a public company
+  const legalFormField = found.find((r) => r.field === "legal_form" || r.field === "businessType");
+  if (legalFormField) {
+    const val = (legalFormField.value || "").toLowerCase();
+    const publicForms = ["plc", "public limited", "public limited company", "publicly traded", "listed company"];
+    if (publicForms.some((f) => val.includes(f))) {
+      mediumSignals++;
+    }
+  }
+
+  // Signal E: company name ends with PLC
+  const nameField = found.find((r) =>
+    r.field === "legal_name" ||
+    r.field === "company_name" ||
+    r.field === "business_name" ||
+    r.field === "tradeName"
+  );
+  const candidateName = (nameField && nameField.value) || research.companyName || "";
+  const nm = String(candidateName).trim();
+  if (nm.endsWith(" PLC") || nm.endsWith(" plc") || nm.endsWith(" Plc")) {
+    mediumSignals++;
+  }
+
+  // Signal F: legal_form stored as the dropdown value "public_limited"
+  if (legalFormField) {
+    const val = (legalFormField.value || "").toLowerCase();
+    if (val === "public_limited") {
+      mediumSignals++;
+    }
+  }
+
+  return mediumSignals >= 2;
+};
+
+// Determine whether a specific stakeholder needs the full gap form on Fill Gaps.
+//   Private company                       → always needs details
+//   Listed company + director/officer     → skip details
+//   Listed company + UBO with  < 25%      → skip
+//   Listed company + UBO with >= 25%      → needs details
+//   Listed company + UBO with unknown %   → needs details (conservative)
+const needsStakeholderDetails = (stakeholder, fieldId, isPubliclyListed) => {
+  if (!isPubliclyListed) return true;
+
+  // Listed company: only beneficial owners / shareholders can require details.
+  if (!isUboLikeField(fieldId)) return false;
+
+  const pct = stakeholder ? stakeholder.share_percentage : null;
+  if (pct === null || pct === undefined) return true; // unknown — conservative
+
+  return Number(pct) >= 25;
+};
+
+// Record which signals triggered the listed-company detection, for the
+// submission payload's audit trail.
+const detectListingEvidence = (research) => {
+  const evidence = [];
+  const found = (research && research.found) || [];
+
+  const listedField = found.find((r) => r.field === "publicly_listed");
+  if (listedField && (listedField.value || "").toLowerCase().trim() === "yes") {
+    evidence.push({ signal: "publicly_listed_field", value: listedField.value, source: listedField.source });
+  }
+
+  const exchangeField = found.find((r) =>
+    r.field === "listed_exchange" ||
+    r.field === "listed_where" ||
+    r.field === "stock_exchange" ||
+    r.field === "listedExchange" ||
+    r.field === "stockListing"
+  );
+  if (exchangeField && exchangeField.value) {
+    evidence.push({ signal: "exchange_field", value: exchangeField.value, source: exchangeField.source });
+  }
+
+  return evidence;
 };
 
 /* ═══════════════════════════════════════════
@@ -1463,6 +1598,10 @@ const DUMMY_RESEARCH_VALUES = {
   operating_countries: "UK, US, SG",
   payout_transaction_countries: "GB, US, EU",
   industry_sector: "Financial Services / Payments",
+  // Default demo company is private, so the full stakeholder gap forms show.
+  // To test listed-company stakeholder suppression, change publicly_listed to
+  // "Yes" (or add a listed_exchange / listedExchange result with a real
+  // exchange name). Detection lives in detectPubliclyListed().
   publicly_listed: "No",
   listed_where: "—",
   has_licence: "Yes",
@@ -1866,6 +2005,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [error, setError] = useState("");
   const [research, setResearch] = useState(null);
   const [researchTimestamp, setResearchTimestamp] = useState("");
+  // Derived: is the company being onboarded publicly listed? Drives the
+  // stakeholder-EDD suppression on Fill Gaps (listed-company directors and
+  // sub-25% UBOs skip the detailed gap form).
+  const isPubliclyListed = useMemo(() => detectPubliclyListed(research), [research]);
   const [checks, setChecks] = useState({});
   // Per-person rejection for stakeholder fields. Shape:
   //   { [fieldId]: Set<stakeholderId> }
@@ -2642,27 +2785,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (!isStakeholderField(result.field)) return;
       const list = getStakeholders(result.field);
       if (!list || list.length === 0) return;
-      stakeholderPayload[result.field] = list.map((s) => ({
-        id: s.id,
-        full_name: s.full_name || "",
-        role: s.role || "",
-        share_percentage: s.share_percentage != null ? s.share_percentage : null,
-        nationality: s.nationality || "",
-        date_of_birth: s.date_of_birth || "",
-        residential_country: s.residential_country || "",
-        id_type: s.id_type || "",
-        id_number: s.id_number || "",
-        is_pep: s.is_pep,
-        pep_details: s.pep_details || null,
-        source: s.source || "",
-        sourceUrl: s.sourceUrl || "",
-        sourceTier: s.sourceTier || "",
-        fetchedAt: s.fetchedAt || null,
-        customer_confirmed: !s.customer_rejected,
-        customer_added: !!s.customer_added,
-        customer_rejected: !!s.customer_rejected,
-        full_name_original: s.full_name_original || null,
-      }));
+      stakeholderPayload[result.field] = list.map((s) => {
+        const fullEddCollected = needsStakeholderDetails(s, result.field, isPubliclyListed);
+        return {
+          id: s.id,
+          full_name: s.full_name || "",
+          role: s.role || "",
+          share_percentage: s.share_percentage != null ? s.share_percentage : null,
+          // Was the full enhanced-due-diligence form collected for this person?
+          full_edd_collected: fullEddCollected,
+          edd_skip_reason: fullEddCollected ? null : "publicly_listed_company",
+          nationality: s.nationality || "",
+          date_of_birth: s.date_of_birth || "",
+          residential_country: s.residential_country || "",
+          id_type: s.id_type || "",
+          id_number: s.id_number || "",
+          is_pep: s.is_pep,
+          pep_details: s.pep_details || null,
+          source: s.source || "",
+          sourceUrl: s.sourceUrl || "",
+          sourceTier: s.sourceTier || "",
+          fetchedAt: s.fetchedAt || null,
+          customer_confirmed: !s.customer_rejected,
+          customer_added: !!s.customer_added,
+          customer_rejected: !!s.customer_rejected,
+          full_name_original: s.full_name_original || null,
+        };
+      });
     });
 
     const payload = {
@@ -2679,6 +2828,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       documentsUploaded: DOC_TYPES.filter(d => uploadedDocs[d.key]).map(d => d.key),
       researchTimestamp,
       fromCache: false,
+      isPubliclyListed,
+      listingDetectedFrom: isPubliclyListed ? detectListingEvidence(research) : null,
       fieldValues,
       fieldMetadata: finalMeta,
       stakeholders: stakeholderPayload,
@@ -3361,9 +3512,90 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // Read-only green summary shown for a listed company's stakeholders that
+  // don't require enhanced due diligence (directors/officers, and UBOs < 25%).
+  // `field` is the research row; `isPartial` renders it as a subsection above
+  // the >= 25% UBO forms.
+  const renderListedCompanyStakeholderSummary = (field, stakeholders, isPartial = false) => {
+    const ubo = isUboLikeField(field.field);
+    const fieldLabel = ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers";
+    const lower = fieldLabel.toLowerCase();
+    return (
+      <div style={{
+        borderRadius: 10,
+        border: "1px solid #4a9e8e",
+        background: "#f3faf8",
+        overflow: "hidden",
+        marginBottom: isPartial ? 16 : 0,
+      }}>
+        <div style={{
+          padding: "12px 16px",
+          borderBottom: "1px solid #cfe9e1",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 16 }}>✅</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a6b56" }}>
+                {isPartial ? `Other ${fieldLabel}` : fieldLabel}
+              </div>
+              <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
+                Publicly listed company — verified from official sources. No additional details required.
+              </div>
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 99,
+            background: "#4a9e8e", color: "#fff", whiteSpace: "nowrap",
+          }}>
+            🏛 Listed Company
+          </span>
+        </div>
+
+        <div style={{ padding: "12px 16px" }}>
+          {stakeholders.length === 0 ? (
+            <p style={{ fontSize: 13, color: "#1a6b56", fontStyle: "italic", margin: 0 }}>
+              No {lower} found in public records.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {stakeholders.map((s) => (
+                <div key={s.id} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px", background: "rgba(255,255,255,0.6)",
+                  borderRadius: 8, border: "1px solid #cfe9e1",
+                }}>
+                  <span style={{ fontSize: 16 }}>👤</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1a3a4a" }}>{s.full_name}</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", marginTop: 2 }}>
+                      {[s.role, s.share_percentage != null ? `${s.share_percentage}% shareholding` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#1a6b56", whiteSpace: "nowrap" }}>
+                    ✓ Verified
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ fontSize: 12, color: "#1a6b56", marginTop: 12, marginBottom: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+            As a publicly listed company, {lower} information is publicly disclosed through regulatory
+            filings. Enhanced due diligence details (nationality, date of birth, PEP status) are not
+            required for listed company {lower}.
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   // Section block for one stakeholder field (e.g. directors, ubo_names).
-  // Renders an intro / empty-state, then per-person cards, then an "+ Add"
-  // affordance.
+  // For a private company: intro / empty-state, then per-person cards, then an
+  // "+ Add" affordance (unchanged). For a listed company: directors and sub-25%
+  // UBOs collapse into a read-only summary; only >= 25% UBOs keep the gap form.
   const renderStakeholderGapBlock = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
@@ -3371,6 +3603,48 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const fieldDef = findFieldDef(activeSchema, fieldId);
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
+
+    // Listed-company suppression: split who still needs the full EDD form.
+    const needingDetails = list.filter((s) => needsStakeholderDetails(s, fieldId, isPubliclyListed));
+    const confirmedOnly = list.filter((s) => !needsStakeholderDetails(s, fieldId, isPubliclyListed));
+
+    // Listed company, no one >= 25% — show the confirmed summary only.
+    if (isPubliclyListed && needingDetails.length === 0) {
+      return (
+        <div key={`stk-gap-${fieldId}`} style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
+          {renderListedCompanyStakeholderSummary(researchItem, list)}
+        </div>
+      );
+    }
+
+    // Listed company with at least one >= 25% UBO — summary for the rest,
+    // then the enhanced-due-diligence forms for the >= 25% owners.
+    if (isPubliclyListed) {
+      return (
+        <div key={`stk-gap-${fieldId}`} style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
+          {confirmedOnly.length > 0 && renderListedCompanyStakeholderSummary(researchItem, confirmedOnly, true)}
+          {needingDetails.length > 0 && (
+            <div style={{
+              padding: "12px 16px", background: "#fff8ed", border: "1px solid #e0a040",
+              borderRadius: 8, fontSize: 13, color: "#8c5500",
+              marginBottom: 16, display: "flex", gap: 8,
+            }}>
+              <span>⚠</span>
+              <span>
+                Although this is a listed company, the following beneficial owner
+                {needingDetails.length > 1 ? "s hold" : " holds"} 25% or more of shares and requires
+                enhanced due diligence details.
+              </span>
+            </div>
+          )}
+          {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+        </div>
+      );
+    }
+
+    // Private company — original behaviour, unchanged.
     return (
       <div key={`stk-gap-${fieldId}`} style={card}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
@@ -3415,11 +3689,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const list = getStakeholders(result.field);
       const ubo = isUboLikeField(result.field);
       const personLabel = ubo ? "beneficial owner" : "director";
+
+      // Only validate stakeholders that still need the full gap form. For a
+      // listed company that's the >= 25% UBOs; for a private company it's
+      // everyone (so behaviour is unchanged).
+      const toValidate = list.filter((s) => needsStakeholderDetails(s, result.field, isPubliclyListed));
+
+      // Listed company where no one needs details — nothing to validate.
+      if (isPubliclyListed && toValidate.length === 0) return;
+
       if (list.length === 0) {
         errors.push(`Please add at least one ${personLabel}.`);
         return;
       }
-      list.forEach((s, idx) => {
+      toValidate.forEach((s, idx) => {
         const display = (s.full_name && s.full_name.trim()) || `Person ${idx + 1}`;
         const missing = stakeholderMissingFields(s);
         missing.forEach((k) => {
