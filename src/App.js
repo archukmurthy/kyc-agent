@@ -4031,8 +4031,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           {companyLogo_ ? (
-            <img src={companyLogo_} alt={companyName_} style={{ height: 40, marginBottom: 6 }} />
-          ) : null}
+            <img
+              src={companyLogo_}
+              alt={companyName_ || ""}
+              style={{ height: 32, maxWidth: 140, objectFit: "contain", display: "block", margin: "0 auto 6px" }}
+            />
+          ) : (
+            <div style={{
+              width: 36, height: 36, borderRadius: 9, margin: "0 auto 6px",
+              background: "linear-gradient(135deg,#1a3a4a,#4a9e8e)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontSize: 18, fontWeight: 800,
+            }}>
+              {(companyName_ || "N").trim().charAt(0).toUpperCase()}
+            </div>
+          )}
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#4a9e8e", marginBottom: 4 }}>{companyName_} Compliance</div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>KYC Onboarding Agent</h1>
           <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>AI-powered multi-jurisdiction company research and data collection</p>
