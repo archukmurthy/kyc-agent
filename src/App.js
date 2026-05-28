@@ -2084,6 +2084,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // A stakeholder id present in the set means the customer unchecked that
   // person on Confirm. Sets are recreated immutably on every toggle.
   const [rejectedStakeholders, setRejectedStakeholders] = useState({});
+  // Which stakeholder cards are expanded on Confirm, keyed by stakeholder id.
+  // Absent / false = collapsed. All cards start collapsed.
+  const [expandedStakeholders, setExpandedStakeholders] = useState({});
   const [revealedTs, setRevealedTs] = useState({});
   const gapRef = useRef({});
   // Per-person stakeholder data on Fill Gaps. Parallel to gapRef, but each
@@ -2196,7 +2199,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
-    setChecks({}); setRejectedStakeholders({}); setRevealedTs({}); setResearchTimestamp("");
+    setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setRevealedTs({}); setResearchTimestamp("");
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
     setError(""); setDeclared(false);
@@ -2217,6 +2220,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (current.has(stakeholderId)) current.delete(stakeholderId);
       else current.add(stakeholderId);
       return { ...prev, [fieldId]: current };
+    });
+  };
+
+  const isStakeholderExpanded = (id) => expandedStakeholders[id] === true;
+  const toggleStakeholderExpanded = (id) => {
+    setExpandedStakeholders((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+  const setStakeholdersExpanded = (ids, expanded) => {
+    setExpandedStakeholders((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => { next[id] = expanded; });
+      return next;
     });
   };
 
@@ -2608,6 +2623,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
       setRejectedStakeholders({});
+      setExpandedStakeholders({});
       stakeholdersRef.current = {};
       setStakeholderVersion(v => v + 1);
       setStakeholderErrors([]);
@@ -2735,6 +2751,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     found.forEach((_, i) => { c[i] = true; });
     setChecks(c);
     setRejectedStakeholders({});
+    setExpandedStakeholders({});
     stakeholdersRef.current = {};
     setStakeholderVersion(v => v + 1);
     setStakeholderErrors([]);
@@ -3222,20 +3239,35 @@ export default function KYCAgent({ previewMode = false } = {}) {
       : tier === "document"
       ? { bg: "#0B3D91", color: "#fff", glyph: "📄" }
       : { bg: "#fff1d6", color: "#8c5500", glyph: "⚠️" };
+    const allExpanded = realStakeholders.every((s) => isStakeholderExpanded(s.id));
     return (
       <div key={`stk-${item.field}-${idx}`} style={{ marginBottom: 14 }}>
         <div style={{
           fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
           textTransform: "uppercase", color: "#1a3a4a80",
-          marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid rgba(26,58,74,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap",
         }}>
-          <span>{heading}</span>
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: sourceBadge.color,
-            background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
-          }}>
-            {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
-          </span>
+          <span>{heading} · {count} found</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              type="button"
+              onClick={() => setStakeholdersExpanded(realStakeholders.map((s) => s.id), !allExpanded)}
+              style={{
+                background: "none", border: "none", fontSize: 11, color: "#1a3a4a",
+                fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: 0,
+                letterSpacing: "0.04em", textTransform: "uppercase",
+              }}
+            >
+              {allExpanded ? "Collapse all ▴" : "Expand all ▾"}
+            </button>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: sourceBadge.color,
+              background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
+            }}>
+              {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
+            </span>
+          </div>
         </div>
         <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 10px", lineHeight: 1.5 }}>
           Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}.
@@ -3244,64 +3276,111 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </p>
         {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
+          const expanded = isStakeholderExpanded(s.id);
           return (
             <div
               key={s.id}
               style={{
-                display: "flex", alignItems: "flex-start", gap: 12,
-                padding: "10px 14px", marginBottom: 8,
                 background: rejected ? "#fef2f2" : "#fafcfb",
                 border: `1.5px solid ${rejected ? "#fecaca" : "rgba(26,58,74,0.08)"}`,
-                borderRadius: 8, transition: "background .15s, border-color .15s",
+                borderRadius: 8, marginBottom: 8, overflow: "hidden",
+                transition: "border-color .15s",
               }}
             >
-              <input
-                type="checkbox"
-                checked={!rejected}
-                onChange={() => toggleStakeholderRejection(item.field, s.id)}
-                style={{ width: 15, height: 15, marginTop: 3, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
-                aria-label={`Confirm ${s.full_name}`}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+              {/* Header row — click anywhere to expand/collapse */}
+              <div
+                onClick={() => toggleStakeholderExpanded(s.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 16px", cursor: "pointer", userSelect: "none",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={!rejected}
+                  onChange={() => toggleStakeholderRejection(item.field, s.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
+                  aria-label={`Confirm ${s.full_name}`}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: 700,
+                      color: rejected ? "#1a3a4a70" : "#1a3a4a",
+                      textDecoration: rejected ? "line-through" : "none",
+                    }}>
+                      👤 {s.full_name}
+                    </span>
+                    {s.role && (
+                      <span style={{
+                        fontSize: 11, color: "#1a3a4a80", background: "#f2f1ed",
+                        padding: "2px 8px", borderRadius: 99,
+                        border: "1px solid rgba(26,58,74,0.08)",
+                      }}>
+                        {s.role}
+                      </span>
+                    )}
+                    {s.share_percentage != null && (
+                      <span style={{
+                        fontSize: 11, color: "#1a6b56", background: "#dff2ec",
+                        padding: "2px 8px", borderRadius: 99,
+                        border: "1px solid rgba(74,158,142,0.3)",
+                      }}>
+                        {s.share_percentage}%
+                      </span>
+                    )}
+                  </div>
+                  {!expanded && (
+                    <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 3 }}>
+                      {rejected ? "⚠ Marked as incorrect — tap to review" : "✓ Verified · tap to expand"}
+                    </div>
+                  )}
+                </div>
+                {rejected && (
                   <span style={{
-                    fontSize: 14, fontWeight: 700,
-                    color: rejected ? "#1a3a4a70" : "#1a3a4a",
-                    textDecoration: rejected ? "line-through" : "none",
+                    fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
+                    border: "1px solid #fecaca", borderRadius: 99,
+                    padding: "2px 8px", flexShrink: 0,
                   }}>
-                    👤 {s.full_name}
+                    ✗ Incorrect
                   </span>
-                  {s.role && (
-                    <span style={{
-                      fontSize: 11, color: "#1a3a4a80", background: "#f2f1ed",
-                      padding: "2px 8px", borderRadius: 99,
-                      border: "1px solid rgba(26,58,74,0.08)",
-                    }}>
-                      {s.role}
-                    </span>
-                  )}
-                  {s.share_percentage != null && (
-                    <span style={{
-                      fontSize: 11, color: "#1a6b56", background: "#dff2ec",
-                      padding: "2px 8px", borderRadius: 99,
-                      border: "1px solid rgba(74,158,142,0.3)",
-                    }}>
-                      {s.share_percentage}%
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 11, color: "#1a3a4a70", fontStyle: "italic" }}>
-                  Nationality, date of birth and compliance details to be completed on the next page
-                </div>
-              </div>
-              {rejected && (
+                )}
                 <span style={{
-                  fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
-                  border: "1px solid #fecaca", borderRadius: 99,
-                  padding: "2px 8px", flexShrink: 0, alignSelf: "center",
+                  fontSize: 14, color: "#1a3a4a70", flexShrink: 0,
+                  transition: "transform 0.2s", display: "inline-block",
+                  transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
                 }}>
-                  ✗ Incorrect
+                  ▾
                 </span>
+              </div>
+
+              {/* Expandable body */}
+              {expanded && (
+                <div style={{
+                  padding: "12px 16px 14px",
+                  borderTop: "1px solid rgba(26,58,74,0.08)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: sourceBadge.color,
+                      background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
+                    }}>
+                      {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
+                    </span>
+                    {(s.fetchedAt || item.fetchedAt) && (
+                      <span
+                        style={{ fontSize: 11, color: "#1a3a4a70", cursor: "default" }}
+                        title={`Fetched: ${s.fetchedAt || item.fetchedAt}`}
+                      >
+                        🕐 When?
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#1a3a4a70", fontStyle: "italic" }}>
+                    Nationality, date of birth and compliance details to be completed on the next page
+                  </div>
+                </div>
               )}
             </div>
           );
