@@ -2087,6 +2087,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Which stakeholder cards are expanded on Confirm, keyed by stakeholder id.
   // Absent / false = collapsed. All cards start collapsed.
   const [expandedStakeholders, setExpandedStakeholders] = useState({});
+  // Manual "this is a publicly listed company" toggle on Confirm. When on, it
+  // suppresses stakeholder EDD forms on Fill Gaps the same way auto-detection
+  // would (see effectivelyListed below).
+  const [isPubliclyListedOverride, setIsPubliclyListedOverride] = useState(false);
+  // Single source of truth for "treat as listed" — auto-detected OR manually
+  // declared on Confirm. Used by the gap forms, validation, the Fill Gaps
+  // caller, and the submission payload so the behaviour stays consistent.
+  const effectivelyListed = isPubliclyListed || isPubliclyListedOverride;
   const [revealedTs, setRevealedTs] = useState({});
   const gapRef = useRef({});
   // Per-person stakeholder data on Fill Gaps. Parallel to gapRef, but each
@@ -2199,7 +2207,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
-    setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setRevealedTs({}); setResearchTimestamp("");
+    setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
     setError(""); setDeclared(false);
@@ -2624,6 +2632,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setChecks(c);
       setRejectedStakeholders({});
       setExpandedStakeholders({});
+      setIsPubliclyListedOverride(false);
       stakeholdersRef.current = {};
       setStakeholderVersion(v => v + 1);
       setStakeholderErrors([]);
@@ -2752,6 +2761,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setChecks(c);
     setRejectedStakeholders({});
     setExpandedStakeholders({});
+    // Demo mode: pre-check "publicly listed" so stakeholder EDD forms are hidden
+    // on Fill Gaps automatically. The customer can uncheck it on Confirm.
+    setIsPubliclyListedOverride(true);
     stakeholdersRef.current = {};
     setStakeholderVersion(v => v + 1);
     setStakeholderErrors([]);
@@ -2875,7 +2887,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const list = getStakeholders(result.field);
       if (!list || list.length === 0) return;
       stakeholderPayload[result.field] = list.map((s) => {
-        const fullEddCollected = needsStakeholderDetails(s, result.field, isPubliclyListed);
+        const fullEddCollected = needsStakeholderDetails(s, result.field, effectivelyListed);
         return {
           id: s.id,
           full_name: s.full_name || "",
@@ -2917,8 +2929,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       documentsUploaded: DOC_TYPES.filter(d => uploadedDocs[d.key]).map(d => d.key),
       researchTimestamp,
       fromCache: false,
-      isPubliclyListed,
-      listingDetectedFrom: isPubliclyListed ? detectListingEvidence(research) : null,
+      isPubliclyListed: effectivelyListed,
+      listingDetectedFrom: effectivelyListed ? detectListingEvidence(research) : null,
       fieldValues,
       fieldMetadata: finalMeta,
       stakeholders: stakeholderPayload,
@@ -3767,7 +3779,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Listed company with no real owners (e.g. PSC-exempt — the only "owner" was
     // an exemption notice): show a clean "No action required" summary, nothing
     // to fill in.
-    if (isPubliclyListed && validStakeholders.length === 0) {
+    if (effectivelyListed && validStakeholders.length === 0) {
       return (
         <div key={`stk-gap-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
@@ -3791,7 +3803,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     // Private company with no real people found: prompt the customer to add one.
-    if (!isPubliclyListed && validStakeholders.length === 0) {
+    if (!effectivelyListed && validStakeholders.length === 0) {
       return (
         <div key={`stk-gap-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
@@ -3820,11 +3832,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     // Listed-company suppression: split who still needs the full EDD form.
-    const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, isPubliclyListed));
-    const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, isPubliclyListed));
+    const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
+    const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, effectivelyListed));
 
     // Listed company, no one >= 25% — show the confirmed summary only.
-    if (isPubliclyListed && needingDetails.length === 0) {
+    if (effectivelyListed && needingDetails.length === 0) {
       return (
         <div key={`stk-gap-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
@@ -3835,7 +3847,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     // Listed company with at least one >= 25% UBO — summary for the rest,
     // then the enhanced-due-diligence forms for the >= 25% owners.
-    if (isPubliclyListed) {
+    if (effectivelyListed) {
       return (
         <div key={`stk-gap-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
@@ -3900,10 +3912,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Only validate stakeholders that still need the full gap form. For a
       // listed company that's the >= 25% UBOs; for a private company it's
       // everyone (so behaviour is unchanged).
-      const toValidate = validStakeholders.filter((s) => needsStakeholderDetails(s, result.field, isPubliclyListed));
+      const toValidate = validStakeholders.filter((s) => needsStakeholderDetails(s, result.field, effectivelyListed));
 
       // Listed company where no one needs details — nothing to validate.
-      if (isPubliclyListed && toValidate.length === 0) return;
+      if (effectivelyListed && toValidate.length === 0) return;
 
       if (validStakeholders.length === 0) {
         errors.push(`Please add at least one ${personLabel}.`);
@@ -4337,6 +4349,55 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             </div>
 
+            {/* Manual "publicly listed company" toggle — hides stakeholder EDD
+                forms on the next page. */}
+            <div
+              onClick={() => setIsPubliclyListedOverride(v => !v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "12px 16px",
+                background: isPubliclyListedOverride ? "#f3faf8" : "#f2f1ed",
+                border: `1.5px solid ${isPubliclyListedOverride ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
+                borderRadius: 10, marginBottom: 16,
+                cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isPubliclyListedOverride}
+                onChange={() => setIsPubliclyListedOverride(v => !v)}
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: 16, height: 16, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
+                aria-label="This is a publicly listed company"
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 14, fontWeight: 600,
+                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a",
+                }}>
+                  🏛 This is a publicly listed company
+                </div>
+                <div style={{
+                  fontSize: 12, marginTop: 2,
+                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a70",
+                }}>
+                  {isPubliclyListedOverride
+                    ? "✓ Stakeholder compliance details will not be collected on the next page"
+                    : "Check this box to skip detailed stakeholder forms on the next page"}
+                </div>
+              </div>
+              {isPubliclyListedOverride && (
+                <span style={{
+                  fontSize: 12, fontWeight: 700, color: "#1a6b56",
+                  background: "#f3faf8", border: "1px solid #4a9e8e",
+                  borderRadius: 99, padding: "3px 10px",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  Listed ✓
+                </span>
+              )}
+            </div>
+
             {stakeholderFound.length > 0 && (
               <div style={card}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
@@ -4399,7 +4460,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               // Listed company whose only "owners" were registry exemption
               // notices (filtered out of .stakeholders): still render so the
               // "No action required" summary explains why nothing is asked.
-              return isPubliclyListed && typeof r.value === "string" && r.value.trim().length > 0;
+              return effectivelyListed && typeof r.value === "string" && r.value.trim().length > 0;
             }).map((r) => renderStakeholderGapBlock(r))}
 
             {gapSectionOrder().map(s => renderGapSection(s))}
