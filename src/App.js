@@ -398,6 +398,72 @@ const isUboLikeField = (fieldId) => {
   return lower.includes("ubo") || lower.includes("beneficial") || lower.includes("shareholder");
 };
 
+// Registry exemption-notice patterns. When a PSC / beneficial-owner register
+// has no individual to declare (e.g. a publicly listed company exempt from the
+// PSC regime), it returns descriptive notice text in place of a person's name.
+// That text must never be treated as a real stakeholder.
+const REGISTRY_EXEMPTION_PATTERNS = [
+  // UK Companies House PSC patterns
+  "no individual ubos",
+  "no individual psc",
+  "publicly listed company",
+  "exempt from psc",
+  "psc exempt",
+  "traded on a regulated market",
+  "listed on a regulated market",
+  "shares are traded",
+  "shares traded on",
+  "uk regulated market",
+  "london stock exchange",
+  "majority stake held by",
+  "registered with companies house",
+  // Generic registry exemption patterns
+  "no registrable person",
+  "no registrable psc",
+  "exemption notice",
+  "no beneficial owner",
+  "no individual beneficial",
+  "not applicable",
+  "exempt entity",
+  "listed entity",
+  "publicly traded",
+  "no pscs to declare",
+  "information not available",
+  "no persons with significant control",
+  // Singapore ACRA patterns
+  "exempt private company",
+  "no registrable controller",
+  // Generic non-person indicators
+  "n/a",
+  "not found",
+  "none identified",
+  "no data",
+];
+
+// True when a parsed "stakeholder" is really a registry exemption notice rather
+// than a real person or corporate owner. Matches on name OR role text, plus a
+// structural heuristic (a long, punctuated "name" is a sentence, not a person).
+// NOTE: a genuine corporate UBO like "Barclays PLC" is NOT a notice — none of
+// the patterns match a plain company name, and it is short with no sentence
+// punctuation, so it passes through.
+const isRegistryExemptionNotice = (stakeholder) => {
+  if (!stakeholder) return false;
+  const rawName = stakeholder.full_name || "";
+  const name = rawName.toLowerCase().trim();
+  const role = (stakeholder.role || "").toLowerCase().trim();
+
+  const nameIsExemption = REGISTRY_EXEMPTION_PATTERNS.some((p) => name.includes(p));
+  const roleIsExemption = REGISTRY_EXEMPTION_PATTERNS.some((p) => role.includes(p));
+
+  // Real names are typically 2-4 words. A "name" with more than 6 words is
+  // almost certainly a descriptive notice, especially with sentence punctuation.
+  const nameWordCount = rawName.trim() ? rawName.trim().split(/\s+/).length : 0;
+  const nameTooLong = nameWordCount > 6;
+  const hasNoticePunctuation = /[-–—/]/.test(rawName) && nameWordCount > 4;
+
+  return nameIsExemption || roleIsExemption || (nameTooLong && hasNoticePunctuation);
+};
+
 let _stakeholderIdSeq = 0;
 const makeStakeholder = (overrides = {}) => {
   _stakeholderIdSeq += 1;
@@ -444,7 +510,8 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
         sourceTier: sourceTier || p.sourceTier || "tier1",
         fetchedAt: fetchedAt || p.fetchedAt || null,
       }))
-      .filter((s) => s.full_name);
+      .filter((s) => s.full_name)
+      .filter((s) => !isRegistryExemptionNotice(s));
   }
   if (typeof rawString !== "string") return [];
   const trimmed = rawString.trim();
@@ -517,7 +584,9 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
       sourceTier: sourceTier || "tier1",
       fetchedAt: fetchedAt || null,
     });
-  }).filter((s) => s.full_name.length > 0);
+  })
+    .filter((s) => s.full_name.length > 0)
+    .filter((s) => !isRegistryExemptionNotice(s));
 };
 
 // Augment a research-result list with parsed .stakeholders arrays for any
@@ -2188,12 +2257,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (!isStakeholderField(result.field)) return;
       if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
       const fieldId = result.field;
+      // Registry exemption notices are not people — keep them out of the ref so
+      // they can never become a person card or EDD form.
+      const aiStakeholders = result.stakeholders.filter((s) => !isRegistryExemptionNotice(s));
       const existing = nextMap[fieldId] || [];
       const existingById = new Map(existing.map((s) => [s.id, s]));
       const rejectedIds = rejectedStakeholders[fieldId] || new Set();
-      const aiIds = new Set(result.stakeholders.map((s) => s.id));
+      const aiIds = new Set(aiStakeholders.map((s) => s.id));
 
-      const seeded = result.stakeholders.map((ai) => {
+      const seeded = aiStakeholders.map((ai) => {
         const prior = existingById.get(ai.id);
         const isRejected = rejectedIds.has(ai.id);
         if (prior) {
@@ -3134,11 +3206,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!item || !Array.isArray(item.stakeholders) || item.stakeholders.length === 0) {
       return null;
     }
+    // Exclude registry exemption notices — they are not people. If nothing real
+    // remains, render nothing here so the field falls through to the normal
+    // confirm row showing the raw registry value.
+    const realStakeholders = item.stakeholders.filter((s) => !isRegistryExemptionNotice(s));
+    if (realStakeholders.length === 0) return null;
     const ubo = isUboLikeField(item.field);
     const fieldDef = findFieldDef(activeSchema, item.field);
     const heading = fieldDef?.label
       || (ubo ? "Ultimate Beneficial Owners / Shareholders" : "Directors / Officers");
-    const count = item.stakeholders.length;
+    const count = realStakeholders.length;
     const tier = item.sourceTier;
     const sourceBadge = tier === "tier1"
       ? { bg: "#dff2ec", color: "#1a6b56", glyph: "✅" }
@@ -3165,7 +3242,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           Uncheck anyone whose name is wrong — you'll correct them on the next page. Nationality,
           date of birth and compliance details are collected on the next page for everyone kept here.
         </p>
-        {item.stakeholders.map((s) => {
+        {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
           return (
             <div
@@ -3604,16 +3681,75 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
 
+    // Drop any registry exemption notices that slipped past parsing — they are
+    // not people and must never render as a person card or EDD form.
+    const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
+
+    // Listed company with no real owners (e.g. PSC-exempt — the only "owner" was
+    // an exemption notice): show a clean "No action required" summary, nothing
+    // to fill in.
+    if (isPubliclyListed && validStakeholders.length === 0) {
+      return (
+        <div key={`stk-gap-${fieldId}`} style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
+          <div style={{
+            padding: "14px 16px", background: "#f3faf8", border: "1px solid #4a9e8e",
+            borderRadius: 10, display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>✅</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a6b56" }}>
+                {heading} — No action required
+              </div>
+              <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
+                This is a publicly listed company. Ownership information is publicly disclosed through
+                regulatory filings. No additional details required.
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Private company with no real people found: prompt the customer to add one.
+    if (!isPubliclyListed && validStakeholders.length === 0) {
+      return (
+        <div key={`stk-gap-${fieldId}`} style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
+          <div style={{
+            margin: "0 0 14px", padding: "10px 14px", borderRadius: 8,
+            background: "#fff8ed", border: "1px solid #e0a040",
+            fontSize: 12, color: "#8c5500",
+          }}>
+            No {personLabel}s were found automatically. Please add at least one {personLabel} below.
+          </div>
+          <button
+            type="button"
+            onClick={() => addStakeholder(fieldId)}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "10px 18px", background: "transparent", color: "#1a3a4a",
+              border: "1.5px dashed #4a9e8e", borderRadius: 8,
+              fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+              cursor: "pointer", width: "100%",
+            }}
+          >
+            + Add {personLabel}
+          </button>
+        </div>
+      );
+    }
+
     // Listed-company suppression: split who still needs the full EDD form.
-    const needingDetails = list.filter((s) => needsStakeholderDetails(s, fieldId, isPubliclyListed));
-    const confirmedOnly = list.filter((s) => !needsStakeholderDetails(s, fieldId, isPubliclyListed));
+    const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, isPubliclyListed));
+    const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, isPubliclyListed));
 
     // Listed company, no one >= 25% — show the confirmed summary only.
     if (isPubliclyListed && needingDetails.length === 0) {
       return (
         <div key={`stk-gap-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
-          {renderListedCompanyStakeholderSummary(researchItem, list)}
+          {renderListedCompanyStakeholderSummary(researchItem, validStakeholders)}
         </div>
       );
     }
@@ -3644,38 +3780,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
       );
     }
 
-    // Private company — original behaviour, unchanged.
+    // Private company — per-person cards plus an "+ Add another" affordance.
     return (
       <div key={`stk-gap-${fieldId}`} style={card}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
-        {list.length > 0 ? (
-          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
-            Complete the required details for each {personLabel} below. Names and roles marked
-            "Verified" came from the research on the previous page; everything else needs your input.
-          </p>
-        ) : (
-          <div style={{
-            margin: "0 0 14px", padding: "10px 14px", borderRadius: 8,
-            background: "#fff8ed", border: "1px solid #e0a040",
-            fontSize: 12, color: "#8c5500",
-          }}>
-            No {personLabel}s were found automatically. Please add at least one {personLabel} below.
-          </div>
-        )}
-        {list.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
+          Complete the required details for each {personLabel} below. Names and roles marked
+          "Verified" came from the research on the previous page; everything else needs your input.
+        </p>
+        {validStakeholders.map((s, i) => renderStakeholderCard(fieldId, s, i))}
         <button
           type="button"
           onClick={() => addStakeholder(fieldId)}
           style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            marginTop: list.length > 0 ? 4 : 0, padding: "10px 18px",
+            marginTop: 4, padding: "10px 18px",
             background: "transparent", color: "#1a3a4a",
             border: "1.5px dashed #4a9e8e", borderRadius: 8,
             fontSize: 13, fontWeight: 600, fontFamily: "inherit",
             cursor: "pointer", width: "100%",
           }}
         >
-          + Add {list.length > 0 ? "another " : ""}{personLabel}
+          + Add another {personLabel}
         </button>
       </div>
     );
@@ -3687,18 +3813,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (!isStakeholderField(result.field)) return;
       if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
       const list = getStakeholders(result.field);
+      // Registry exemption notices are not people — never validate them.
+      const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
       const ubo = isUboLikeField(result.field);
       const personLabel = ubo ? "beneficial owner" : "director";
 
       // Only validate stakeholders that still need the full gap form. For a
       // listed company that's the >= 25% UBOs; for a private company it's
       // everyone (so behaviour is unchanged).
-      const toValidate = list.filter((s) => needsStakeholderDetails(s, result.field, isPubliclyListed));
+      const toValidate = validStakeholders.filter((s) => needsStakeholderDetails(s, result.field, isPubliclyListed));
 
       // Listed company where no one needs details — nothing to validate.
       if (isPubliclyListed && toValidate.length === 0) return;
 
-      if (list.length === 0) {
+      if (validStakeholders.length === 0) {
         errors.push(`Please add at least one ${personLabel}.`);
         return;
       }
@@ -3732,15 +3860,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return fa - fb;
     });
 
-  // Split out stakeholder items with structured data so they render as cards
-  // above the regular pre-filled table. Anything without a populated
-  // .stakeholders array stays in the regular flow as a normal row.
-  const stakeholderFound = sortedFound.filter(({ item }) =>
-    isStakeholderField(item.field) && Array.isArray(item.stakeholders) && item.stakeholders.length > 0
-  );
-  const regularFound = sortedFound.filter(({ item }) =>
-    !(isStakeholderField(item.field) && Array.isArray(item.stakeholders) && item.stakeholders.length > 0)
-  );
+  // Split out stakeholder items with real people so they render as cards above
+  // the regular pre-filled table. A field whose only entries are registry
+  // exemption notices has no real people, so it stays in the regular flow as a
+  // normal row (showing the raw registry value).
+  const hasRealStakeholders = (item) =>
+    isStakeholderField(item.field) &&
+    Array.isArray(item.stakeholders) &&
+    item.stakeholders.some((s) => !isRegistryExemptionNotice(s));
+  const stakeholderFound = sortedFound.filter(({ item }) => hasRealStakeholders(item));
+  const regularFound = sortedFound.filter(({ item }) => !hasRealStakeholders(item));
 
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
@@ -4184,9 +4313,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
             {/* Per-person stakeholder cards (Phase 3+4) — rendered above the
                 regular gap sections so people-related work lives in one block. */}
-            {(research?.found || []).filter((r) =>
-              isStakeholderField(r.field) && Array.isArray(r.stakeholders) && r.stakeholders.length > 0
-            ).map((r) => renderStakeholderGapBlock(r))}
+            {(research?.found || []).filter((r) => {
+              if (!isStakeholderField(r.field) || !Array.isArray(r.stakeholders)) return false;
+              // Real people present → render forms / summary as usual.
+              if (r.stakeholders.some((s) => !isRegistryExemptionNotice(s))) return true;
+              // Listed company whose only "owners" were registry exemption
+              // notices (filtered out of .stakeholders): still render so the
+              // "No action required" summary explains why nothing is asked.
+              return isPubliclyListed && typeof r.value === "string" && r.value.trim().length > 0;
+            }).map((r) => renderStakeholderGapBlock(r))}
 
             {gapSectionOrder().map(s => renderGapSection(s))}
 
