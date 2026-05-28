@@ -3760,11 +3760,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
-  // Section block for one stakeholder field (e.g. directors, ubo_names).
-  // For a private company: intro / empty-state, then per-person cards, then an
-  // "+ Add" affordance (unchanged). For a listed company: directors and sub-25%
-  // UBOs collapse into a read-only summary; only >= 25% UBOs keep the gap form.
-  const renderStakeholderGapBlock = (researchItem) => {
+  // ── Fill Gaps stakeholder rendering, split in two ───────────────────────
+  // renderStakeholderForms  → only people who need customer input (rendered
+  //   in the "additional details needed" section, near the other gap inputs).
+  // renderStakeholderSummary → read-only confirmed info / "no action required"
+  //   (rendered in the "verified — for reference" section at the bottom).
+  // Both return null when they have nothing to show, so the caller can hide
+  // the section divider when a field contributes no content.
+
+  const renderStakeholderForms = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
     const personLabel = ubo ? "beneficial owner" : "director";
@@ -3772,40 +3776,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
 
-    // Drop any registry exemption notices that slipped past parsing — they are
-    // not people and must never render as a person card or EDD form.
+    // Drop registry exemption notices — never real people / EDD forms.
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
+    const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
 
-    // Listed company with no real owners (e.g. PSC-exempt — the only "owner" was
-    // an exemption notice): show a clean "No action required" summary, nothing
-    // to fill in.
-    if (effectivelyListed && validStakeholders.length === 0) {
-      return (
-        <div key={`stk-gap-${fieldId}`} style={card}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
-          <div style={{
-            padding: "14px 16px", background: "#f3faf8", border: "1px solid #4a9e8e",
-            borderRadius: 10, display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <span style={{ fontSize: 18 }}>✅</span>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a6b56" }}>
-                {heading} — No action required
-              </div>
-              <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
-                This is a publicly listed company. Ownership information is publicly disclosed through
-                regulatory filings. No additional details required.
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Private company with no real people found: prompt the customer to add one.
+    // Private company with no real people found yet: prompt to add one. This is
+    // a customer action, so it belongs in the forms section.
     if (!effectivelyListed && validStakeholders.length === 0) {
       return (
-        <div key={`stk-gap-${fieldId}`} style={card}>
+        <div key={`stk-forms-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
           <div style={{
             margin: "0 0 14px", padding: "10px 14px", borderRadius: 8,
@@ -3831,69 +3810,95 @@ export default function KYCAgent({ previewMode = false } = {}) {
       );
     }
 
-    // Listed-company suppression: split who still needs the full EDD form.
-    const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
+    // Nobody needs input → nothing in the forms section (summary handles the
+    // read-only reference at the bottom of the page).
+    if (needingDetails.length === 0) return null;
+
+    return (
+      <div key={`stk-forms-${fieldId}`} style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
+        {effectivelyListed ? (
+          <div style={{
+            padding: "12px 16px", background: "#fff8ed", border: "1px solid #e0a040",
+            borderRadius: 8, fontSize: 13, color: "#8c5500",
+            marginBottom: 16, display: "flex", gap: 8,
+          }}>
+            <span>⚠</span>
+            <span>
+              Although this is a listed company, the following beneficial owner
+              {needingDetails.length > 1 ? "s hold" : " holds"} 25% or more of shares and requires
+              enhanced due diligence details.
+            </span>
+          </div>
+        ) : (
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
+            Complete the required details for each {personLabel} below. Names and roles marked
+            "Verified" came from the research on the previous page; everything else needs your input.
+          </p>
+        )}
+        {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+        {!effectivelyListed && (
+          <button
+            type="button"
+            onClick={() => addStakeholder(fieldId)}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              marginTop: 4, padding: "10px 18px",
+              background: "transparent", color: "#1a3a4a",
+              border: "1.5px dashed #4a9e8e", borderRadius: 8,
+              fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+              cursor: "pointer", width: "100%",
+            }}
+          >
+            + Add another {personLabel}
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderStakeholderSummary = (researchItem) => {
+    const fieldId = researchItem.field;
+    const ubo = isUboLikeField(fieldId);
+    const fieldDef = findFieldDef(activeSchema, fieldId);
+    const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
+    const list = getStakeholders(fieldId);
+    const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
     const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, effectivelyListed));
 
-    // Listed company, no one >= 25% — show the confirmed summary only.
-    if (effectivelyListed && needingDetails.length === 0) {
+    // Listed company with no real owners (e.g. PSC-exempt — only an exemption
+    // notice): clean "No action required" reference card.
+    if (validStakeholders.length === 0 && effectivelyListed) {
       return (
-        <div key={`stk-gap-${fieldId}`} style={card}>
+        <div key={`stk-summary-${fieldId}`} style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
-          {renderListedCompanyStakeholderSummary(researchItem, validStakeholders)}
-        </div>
-      );
-    }
-
-    // Listed company with at least one >= 25% UBO — summary for the rest,
-    // then the enhanced-due-diligence forms for the >= 25% owners.
-    if (effectivelyListed) {
-      return (
-        <div key={`stk-gap-${fieldId}`} style={card}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
-          {confirmedOnly.length > 0 && renderListedCompanyStakeholderSummary(researchItem, confirmedOnly, true)}
-          {needingDetails.length > 0 && (
-            <div style={{
-              padding: "12px 16px", background: "#fff8ed", border: "1px solid #e0a040",
-              borderRadius: 8, fontSize: 13, color: "#8c5500",
-              marginBottom: 16, display: "flex", gap: 8,
-            }}>
-              <span>⚠</span>
-              <span>
-                Although this is a listed company, the following beneficial owner
-                {needingDetails.length > 1 ? "s hold" : " holds"} 25% or more of shares and requires
-                enhanced due diligence details.
-              </span>
+          <div style={{
+            padding: "14px 16px", background: "#f3faf8", border: "1px solid #4a9e8e",
+            borderRadius: 10, display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>✅</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a6b56" }}>
+                {heading} — No action required
+              </div>
+              <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
+                This is a publicly listed company. Ownership information is publicly disclosed through
+                regulatory filings. No additional details required.
+              </div>
             </div>
-          )}
-          {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+          </div>
         </div>
       );
     }
 
-    // Private company — per-person cards plus an "+ Add another" affordance.
+    // Nothing read-only to show (e.g. a private company — everyone is in the
+    // forms section above, so no duplicate rendering here).
+    if (confirmedOnly.length === 0) return null;
+
     return (
-      <div key={`stk-gap-${fieldId}`} style={card}>
-        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
-        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
-          Complete the required details for each {personLabel} below. Names and roles marked
-          "Verified" came from the research on the previous page; everything else needs your input.
-        </p>
-        {validStakeholders.map((s, i) => renderStakeholderCard(fieldId, s, i))}
-        <button
-          type="button"
-          onClick={() => addStakeholder(fieldId)}
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            marginTop: 4, padding: "10px 18px",
-            background: "transparent", color: "#1a3a4a",
-            border: "1.5px dashed #4a9e8e", borderRadius: 8,
-            fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-            cursor: "pointer", width: "100%",
-          }}
-        >
-          + Add another {personLabel}
-        </button>
+      <div key={`stk-summary-${fieldId}`} style={card}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>👥 {heading}</h3>
+        {renderListedCompanyStakeholderSummary(researchItem, confirmedOnly, false)}
       </div>
     );
   };
@@ -3961,6 +3966,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
     item.stakeholders.some((s) => !isRegistryExemptionNotice(s));
   const stakeholderFound = sortedFound.filter(({ item }) => hasRealStakeholders(item));
   const regularFound = sortedFound.filter(({ item }) => !hasRealStakeholders(item));
+
+  // Fill Gaps stakeholder rendering, split into two sections. Forms (input
+  // needed) render with the other gap inputs; summaries (read-only) render at
+  // the bottom for reference. Render functions return null when empty, so the
+  // section dividers below only appear when there's actual content.
+  const stakeholderGapRows = (research?.found || []).filter((r) => {
+    if (!isStakeholderField(r.field) || !Array.isArray(r.stakeholders)) return false;
+    if (r.stakeholders.some((s) => !isRegistryExemptionNotice(s))) return true;
+    // Listed company whose only "owners" were exemption notices (filtered out
+    // of .stakeholders): still surface the "no action required" summary.
+    return effectivelyListed && typeof r.value === "string" && r.value.trim().length > 0;
+  });
+  const stakeholderFormNodes = stakeholderGapRows.map((r) => renderStakeholderForms(r)).filter(Boolean);
+  const stakeholderSummaryNodes = stakeholderGapRows.map((r) => renderStakeholderSummary(r)).filter(Boolean);
+  const hasStakeholderForms = stakeholderFormNodes.length > 0;
+  const hasStakeholderSummary = stakeholderSummaryNodes.length > 0;
 
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
@@ -4451,19 +4472,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
 
-            {/* Per-person stakeholder cards (Phase 3+4) — rendered above the
-                regular gap sections so people-related work lives in one block. */}
-            {(research?.found || []).filter((r) => {
-              if (!isStakeholderField(r.field) || !Array.isArray(r.stakeholders)) return false;
-              // Real people present → render forms / summary as usual.
-              if (r.stakeholders.some((s) => !isRegistryExemptionNotice(s))) return true;
-              // Listed company whose only "owners" were registry exemption
-              // notices (filtered out of .stakeholders): still render so the
-              // "No action required" summary explains why nothing is asked.
-              return effectivelyListed && typeof r.value === "string" && r.value.trim().length > 0;
-            }).map((r) => renderStakeholderGapBlock(r))}
-
+            {/* 1. Corrections required + 2. Missing gap fields — corrections
+                come first inside gapSectionOrder(), then missing fields. */}
             {gapSectionOrder().map(s => renderGapSection(s))}
+
+            {/* 3. Stakeholder forms — only people who need customer input
+                (private directors/UBOs, or listed-company >= 25% UBOs). */}
+            {hasStakeholderForms && (
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: "#1a3a4a80",
+                textTransform: "uppercase", letterSpacing: "0.08em",
+                marginTop: 8, marginBottom: 12, paddingTop: 16,
+                borderTop: "1px solid rgba(26,58,74,0.08)",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span>👥</span>
+                <span>People — additional details needed</span>
+              </div>
+            )}
+            {stakeholderFormNodes}
+
+            {/* 4. Verified stakeholder summary — read-only reference, last. */}
+            {hasStakeholderSummary && (
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: "#1a3a4a80",
+                textTransform: "uppercase", letterSpacing: "0.08em",
+                marginTop: 8, marginBottom: 12, paddingTop: 16,
+                borderTop: "1px solid rgba(26,58,74,0.08)",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span>✅</span>
+                <span>Verified information — for reference</span>
+              </div>
+            )}
+            {stakeholderSummaryNodes}
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <button
