@@ -15,6 +15,8 @@ const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.j
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
+const niumPublicDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "public-details.js"));
+const niumExhaustiveDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "exhaustive-details.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -92,4 +94,22 @@ module.exports = function (app) {
   app.post("/api/admin-auth", adapt(adminAuthHandler));
   app.post("/api/super-admin-auth", adapt(superAdminAuthHandler));
   app.all("/api/tenants", adapt(tenantsHandler));
+
+  // Nium registry lookup. GET uses Express's req.query directly; POST needs
+  // the JSON body parsed into req.body, since the dev server (unlike Vercel)
+  // doesn't auto-parse it.
+  app.get("/api/nium/public-details", adapt(niumPublicDetailsHandler));
+  app.post("/api/nium/exhaustive-details", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(niumExhaustiveDetailsHandler)(req, res);
+    });
+  });
 };
