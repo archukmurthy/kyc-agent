@@ -1,6 +1,37 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getTenantId, isPreviewMode } from "./utils/tenant";
 import SearchableSelect from "./components/SearchableSelect";
+import {
+  OWNERSHIP_TYPE_LIBRARY,
+  getResearchStrategy,
+  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  ownershipTypeLabel,
+} from "./utils/ownershipTypes";
+
+/* ═══════════════════════════════════════════
+   COLOUR PALETTE
+   Named tokens used by the enhanced research-pipeline UI (coverage bar,
+   three-tier badges, low-data banner). Maps the spec's semantic colour names
+   onto this app's existing hex values so the Confirm-page UX reads
+   consistently with the rest of the flow.
+   ═══════════════════════════════════════════ */
+const C = {
+  niumBlue: "#1a3a4a",
+  text: "#1a3a4a",
+  textMuted: "#1a3a4a90",
+  border: "rgba(26,58,74,0.14)",
+  surfaceAlt: "#fafcfb",
+  success: "#1a6b56",
+  successBg: "#dff2ec",
+  successBorder: "#9fd8c8",
+  warning: "#8c5500",
+  warningBg: "#fff1d6",
+  warningBorder: "#e8c98a",
+  error: "#d44",
+  info: "#1a4a7a",
+  infoBg: "#f0f3f8",
+  infoBorder: "#bcd0e8",
+};
 
 /* ═══════════════════════════════════════════
    APP-LEVEL CONSTANTS
@@ -348,6 +379,90 @@ const SG_FI_SCHEMA = {
     ...fiDocumentFields,
   ],
 };
+
+/* ═══════════════════════════════════════════
+   OWNERSHIP TYPE + RESEARCH STRATEGY (Phase 0)
+   The ownership-type library + strategy tables live in
+   src/utils/ownershipTypes.js (shared with the admin). These helpers adapt
+   them to the customer flow's config + prompt.
+   ═══════════════════════════════════════════ */
+
+// Options for the Step 1 ownership-type dropdown, scoped to the entity type's
+// configured list (falls back to the Nium defaults when the live config has no
+// explicit ownershipTypes for that entity type).
+function getOwnershipTypeOptions(entityTypeId, tenantConfig) {
+  const entityTypeDef = (tenantConfig?.entityTypes || []).find((e) => e.id === entityTypeId);
+  const enabledIds = (entityTypeDef?.ownershipTypes && entityTypeDef.ownershipTypes.length)
+    ? entityTypeDef.ownershipTypes
+    : NIUM_DEFAULT_OWNERSHIP_TYPES;
+  return enabledIds
+    .map((id) => OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === id))
+    .filter(Boolean)
+    .map((o) => ({ value: o.id, label: o.label }));
+}
+
+// Map a country code to its primary company registry name (for prompt copy).
+function getRegistriesForCountry(countryCode) {
+  const registries = {
+    GB: "Companies House",
+    SG: "ACRA BizFile+",
+    US: "SEC EDGAR, Delaware Division of Corporations",
+    AU: "ASIC",
+    HK: "Companies Registry",
+    DE: "Handelsregister",
+    FR: "Registre du Commerce",
+    NL: "KVK Handelsregister",
+    JP: "Legal Affairs Bureau",
+    MY: "SSM",
+    ID: "AHU",
+    IN: "MCA21",
+  };
+  return registries[countryCode] || "the official company registry";
+}
+
+// Phase 0: turn the ownership type into a strategy object + a natural-language
+// strategy-notes block that gets injected at the top of the research prompt.
+function computeResearchStrategy(ownershipTypeId, countryCode /*, entityTypeId */) {
+  const base = getResearchStrategy(ownershipTypeId);
+  const strategyNotes = [];
+
+  if (base.useStockExchangeQueries) {
+    strategyNotes.push(
+      "This is a publicly listed company. Prioritise stock exchange filings, annual reports, and investor relations pages. Search for LSE, NYSE, NASDAQ, SGX or equivalent exchange listings."
+    );
+  } else {
+    strategyNotes.push(
+      "This is a private company. Do NOT search stock exchanges — focus on official company registries (" +
+        getRegistriesForCountry(countryCode) +
+        ") and the company's own website."
+    );
+  }
+
+  if (base.useCorporateWebsite) {
+    strategyNotes.push(
+      "Search the company's own website for: business description, operating countries, management team, office locations, products and services. Treat corporate website as a secondary (tier 2) source."
+    );
+  }
+
+  if (base.useCharityRegistry) {
+    strategyNotes.push(
+      "Search charity commission or non-profit registries for this organisation. In the UK: charitycommission.gov.uk. In Singapore: Commissioner of Charities registry."
+    );
+  }
+
+  if (base.searchParentCompanyToo) {
+    strategyNotes.push(
+      "This is a branch of a foreign company. Search both the local registry for the branch AND the parent company's home country registry for group information."
+    );
+  }
+
+  return {
+    ...base,
+    strategyNotes: strategyNotes.join(" "),
+    ownershipTypeId,
+    ownershipTypeLabel: ownershipTypeLabel(ownershipTypeId),
+  };
+}
 
 const getSchema = (code, entityType) => {
   if (entityType === "FI") return code === "GB" ? UK_FI_SCHEMA : SG_FI_SCHEMA;
@@ -950,21 +1065,177 @@ const mapAIValuesToOptions = (foundItems, schema) => {
 // tenant's primary/secondary patterns. Falls back to the hardcoded
 // SOURCE_TRUST tables when the config has no matching pattern, which keeps
 // jurisdiction-specific authoritative recognition working.
+// Known third-party domains/keywords — always tier 3 regardless of where they
+// sit in a (possibly stale) config, so e.g. LinkedIn never ranks as tier 2.
+const THIRD_PARTY_PATTERNS = [
+  "linkedin", "wikipedia", "crunchbase", "bloomberg", "reuters",
+  "news article", "business directory", "directory", "facebook", "twitter",
+];
+// Company-owned hints — tier 2 fallback when the config doesn't list them.
+const COMPANY_OWNED_PATTERNS = [
+  "corporate website", "investor relations", "annual report", "about us",
+  "own website", "company website", "press release", "careers",
+];
+
+// Three-tier source classification (tier1 official → tier2 company-owned →
+// tier3 third-party/unverified). Signature is kept as (source, countryCode,
+// tenantConfig) so existing call sites keep working; the countryCode feeds the
+// hardcoded authoritative fallback. Defaults to tier3 (indicative).
 const classifySourceFromConfig = (source, countryCode, tenantConfig) => {
-  if (!source || typeof source !== "string") return "tier2";
-  const s = source.toLowerCase();
+  if (!source || typeof source !== "string") return "tier3";
+  const s = source.toLowerCase().trim();
+
+  // Documents always count as tier 1 (verified).
+  if (s.includes("uploaded") || s.includes("wolfsberg") || s.includes("certificate") || s.includes("(document)")) {
+    return "tier1";
+  }
+
   const tiers = tenantConfig?.sourceTiers;
+
+  // Tier 1 — official registries/regulators/exchanges (config primary).
   if (tiers) {
     for (const entry of (tiers.primary || [])) {
-      if (entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier1";
-    }
-    for (const entry of (tiers.secondary || [])) {
-      if (entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier2";
+      if (entry.active !== false && entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier1";
     }
   }
-  // Fallback to original SOURCE_TRUST + UNIVERSAL_AUTHORITATIVE rules.
-  return classifySource(source, countryCode) === "authoritative" ? "tier1" : "tier2";
+  // Hardcoded authoritative fallback so a stale config still flags tier 1.
+  if (classifySource(source, countryCode) === "authoritative") return "tier1";
+
+  // Tier 3 — known third-party domains, checked BEFORE config secondary so a
+  // stale config that still lists these as "secondary" can't mis-rank them.
+  if (THIRD_PARTY_PATTERNS.some((p) => s.includes(p))) return "tier3";
+  if (tiers) {
+    for (const entry of (tiers.tertiary || [])) {
+      if (entry.active !== false && entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier3";
+    }
+  }
+
+  // Tier 2 — company-owned (config secondary, skipping any stale third-party).
+  if (tiers) {
+    for (const entry of (tiers.secondary || [])) {
+      const p = entry.pattern ? String(entry.pattern).toLowerCase() : "";
+      if (!p || entry.active === false) continue;
+      if (THIRD_PARTY_PATTERNS.some((tp) => p.includes(tp))) continue;
+      if (s.includes(p)) return "tier2";
+    }
+  }
+  if (COMPANY_OWNED_PATTERNS.some((p) => s.includes(p))) return "tier2";
+
+  // Default: tier 3 (indicative).
+  return "tier3";
 };
+
+// Map a source tier to the customer-facing verification status.
+const getVerificationStatus = (sourceTier) => {
+  switch (sourceTier) {
+    case "document":
+    case "tier1": return "verified";
+    case "tier2": return "probable";
+    case "tier3": return "indicative";
+    default: return "indicative";
+  }
+};
+
+/* ═══════════════════════════════════════════
+   PHASE 2 — COVERAGE ANALYSIS
+   Research rows carry `.field` (not `.fieldId`) in this codebase, and schema
+   research fields key off `.field` too — the helpers below use those.
+   ═══════════════════════════════════════════ */
+function computeCoverage(found, schema) {
+  const list = Array.isArray(found) ? found : [];
+  const researchFields = (schema && schema.researchFields) || [];
+  const totalResearchFields = researchFields.length;
+  const populatedFields = list.length;
+
+  const verifiedFields = list.filter((r) => r.verificationStatus === "verified").length;
+  const probableFields = list.filter((r) => r.verificationStatus === "probable").length;
+  const indicativeFields = list.filter((r) => r.verificationStatus === "indicative").length;
+
+  const foundIds = new Set(list.map((r) => r.field));
+  const missingFields = researchFields.filter((f) => !foundIds.has(f.field));
+
+  const fillRate = totalResearchFields > 0 ? populatedFields / totalResearchFields : 0;
+  const verifiedFillRate = totalResearchFields > 0 ? verifiedFields / totalResearchFields : 0;
+
+  return {
+    totalResearchFields,
+    populatedFields,
+    verifiedFields,
+    probableFields,
+    indicativeFields,
+    missingFieldCount: missingFields.length,
+    missingFields,
+    fillRate,
+    verifiedFillRate,
+  };
+}
+
+// Fields likely findable at tier1/tier2 if searched more specifically — used to
+// pick tier3 rows worth re-attempting in the gap-recovery pass. Covers both the
+// FI and corporate schema field ids in this codebase.
+const UPGRADEABLE_FIELDS = new Set([
+  "business_name", "legal_name", "company_name", "tradeName", "trading_name",
+  "registration_number", "businessRegistrationNumber",
+  "incorporation_date", "registeredDate",
+  "registered_address_line1", "addressLine1", "registered_address_country",
+  "legal_form", "businessType",
+  "regulatory_authority", "has_licence", "licence_number",
+  "annual_turnover", "annualRevenue", "employee_count", "employees",
+  "director_names", "directors_full_details", "ubo_parent_company", "ubo_names", "shareholders",
+  "business_activity_description", "industry_sector", "operating_countries",
+]);
+function hasPlausibleHigherTierSource(fieldId) {
+  return UPGRADEABLE_FIELDS.has(fieldId);
+}
+
+// Targeted Phase 3 prompt — only the gap-recovery fields.
+function buildGapRecoveryPrompt(company, missingFields, upgradeableFields, strategy) {
+  const allTargets = [...missingFields, ...upgradeableFields];
+  return (
+    `GAP RECOVERY RESEARCH\n` +
+    `Company: ${company.name} (${company.countryName})\n` +
+    `Ownership: ${strategy ? strategy.ownershipTypeLabel : "Unknown"}\n` +
+    `\n` +
+    `The initial research pass found limited data. Please make targeted searches for the following specific fields only.\n` +
+    `\n` +
+    `For private companies: prioritise the company website, about page, legal page, and careers page.\n` +
+    `\n` +
+    `Fields to find:\n` +
+    allTargets
+      .map((f) => {
+        let desc = `- "${f.label}" (id: ${f.field})`;
+        if (f.searchHint) desc += `\n  Hint: ${f.searchHint}`;
+        return desc;
+      })
+      .join("\n") +
+    `\n\nReturn ONLY valid JSON of the form {"found":[{"field":"<id>","label":"...","value":"...","source":"...","sourceUrl":"..."}]}. ` +
+    `Return ONLY fields you can find with reasonable confidence. Do not guess or fabricate values. No markdown, no backticks.`
+  );
+}
+
+// Merge gap-recovery results into the existing set: brand-new fields are added;
+// a field already present is replaced ONLY when the new row has a strictly
+// higher source tier (records the upgrade for the audit trail).
+function mergeResearchResults(existing, newResults) {
+  const merged = [...existing];
+  const tierRank = { document: 4, tier1: 3, tier2: 2, tier3: 1 };
+  (newResults || []).forEach((newResult) => {
+    const existingIdx = merged.findIndex((r) => r.field === newResult.field);
+    if (existingIdx === -1) {
+      merged.push(newResult);
+    } else {
+      const prev = merged[existingIdx];
+      if ((tierRank[newResult.sourceTier] || 0) > (tierRank[prev.sourceTier] || 0)) {
+        merged[existingIdx] = {
+          ...newResult,
+          upgradedFrom: prev.sourceTier,
+          previousSource: prev.source,
+        };
+      }
+    }
+  });
+  return merged;
+}
 
 // Merge the configured per-entity-type document list with the hardcoded
 // DOC_TYPES (which carry the extraction prompts and source-name strings).
@@ -1038,7 +1309,7 @@ const buildLocalDefaultConfig = () => ({
   documents: {},
 });
 
-const buildPrompt = (name, country, countryCode, schema, wolfsbergFields) => {
+const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, ownershipType) => {
   // Stakeholder fields (directors / UBOs / shareholders / signatories) return
   // a JSON array per person, not a string. Other fields keep the legacy
   // "value": "..." string shape so the prompt and downstream parsing stay
@@ -1133,8 +1404,24 @@ Map Wolfsberg keys onto our schema field ids by name similarity (e.g. legal_name
 Do NOT leave any of these fields blank without having checked all 5 sources above.\n`
     : "";
 
+  // Phase 0: ownership-type-driven research strategy, injected at the very top
+  // so the model tailors its searches (listed vs private vs charity vs branch)
+  // before it reads the field list.
+  const strategy = ownershipType
+    ? computeResearchStrategy(ownershipType, countryCode)
+    : null;
+  const strategyBlock = strategy
+    ? `\nRESEARCH STRATEGY FOR THIS COMPANY:
+Company: ${name}
+Country: ${country}
+Ownership Type: ${strategy.ownershipTypeLabel}
+
+${strategy.strategyNotes}
+\n`
+    : "";
+
   return `You are a KYC research agent for Nium.
-${wolfsbergBlock}
+${strategyBlock}${wolfsbergBlock}
 JURISDICTION CONTEXT (read carefully, this is two separate things):
 1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
 2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Nium has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
@@ -2070,9 +2357,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [entityType, setEntityType] = useState("");
+  // Ownership type (Step 1) — drives the Phase 0 research strategy. Reset to ""
+  // whenever the entity type changes, since each entity type exposes a
+  // different set of allowed ownership types.
+  const [ownershipType, setOwnershipType] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [research, setResearch] = useState(null);
+  // Coverage analysis (Phase 2) for the current research result. Null until the
+  // first research pass completes.
+  const [coverage, setCoverage] = useState(null);
+  // Whether the Phase 3 gap-recovery second pass ran for the current result.
+  const [gapRecoveryRan, setGapRecoveryRan] = useState(false);
+  // Transient status line shown on the research loader between/within passes.
+  const [researchStatus, setResearchStatus] = useState("");
   const [researchTimestamp, setResearchTimestamp] = useState("");
   // Derived: is the company being onboarded publicly listed? Drives the
   // stakeholder-EDD suppression on Fill Gaps (listed-company directors and
@@ -2215,6 +2513,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setJourneyType(""); setJourneyOpen(false); setSelectedJourneyCard(null); setManualOpened(false);
     setFieldMetadata([]);
     setLoaderPhase(0);
+    setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
   };
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
@@ -2501,7 +2800,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         docFound.push({
           field: mapped, label: sf.label, value: String(entry.value),
           source: docType.sourceName, sourceUrl: null,
-          sourceTier: "document", documentType: docType.key,
+          sourceTier: "document", verificationStatus: "verified", documentType: docType.key,
           fetchedAt: fetchTs, method: "document_extract", confidence: "high",
           trust: "authoritative", wolfsberg: false,
         });
@@ -2556,7 +2855,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields)
+          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType)
         })
       });
       if (!resp.ok) {
@@ -2585,23 +2884,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
         throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens — see browser console for the full response.`);
       }
       const webFetchTs = new Date().toISOString();
-      const webFound = (parsed.found || []).map(item => {
+      // Classify one raw research row into our tiered/verification shape.
+      // Shared by the first pass and the Phase 3 gap-recovery pass.
+      const classifyWebRow = (item, ts) => {
         const isWolfsbergSrc = !!(item.source && /wolfsberg/i.test(item.source));
         const tier = isWolfsbergSrc
           ? "document"
-          : classifySourceFromConfig(item.source, countryCode, tenantConfig);
+          : classifySourceFromConfig([item.source, item.sourceUrl].filter(Boolean).join(" "), countryCode, tenantConfig);
         return {
           ...item,
           sourceUrl: item.sourceUrl || null,
           sourceTier: tier,
+          verificationStatus: getVerificationStatus(tier),
           documentType: isWolfsbergSrc ? "wolfsberg" : null,
-          fetchedAt: webFetchTs,
+          fetchedAt: ts,
           method: isWolfsbergSrc ? "document_extract" : "web_search",
-          confidence: tier === "tier2" ? "low" : "high",
-          trust: tier === "tier2" ? "secondary" : "authoritative",
+          confidence: tier === "tier1" || tier === "document" ? "high" : "low",
+          trust: tier === "tier1" || tier === "document" ? "authoritative" : "secondary",
           wolfsberg: isWolfsbergSrc,
         };
-      });
+      };
+      const webFound = (parsed.found || []).map((item) => classifyWebRow(item, webFetchTs));
 
       // Doc-extracted rows take priority over anything web returned for the same field.
       const docFieldIds = new Set(docFound.map(f => f.field));
@@ -2609,24 +2912,80 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Coerce free-text values for dropdown fields onto one of the configured
       // option values (e.g. "Private Limited Company" → "private_limited") so
       // the gap form can pre-select correctly on correction.
-      const merged = enrichStakeholders(mapAIValuesToOptions(mergedRaw, schema));
+      let merged = enrichStakeholders(mapAIValuesToOptions(mergedRaw, schema));
+
+      // ─── Phase 2: coverage analysis ───
+      let cov = computeCoverage(merged, schema);
+
+      // ─── Phase 3: gap-recovery second pass ───
+      const recoveryStrategy = ownershipType ? computeResearchStrategy(ownershipType, countryCode) : null;
+      const upgradeable = merged.filter(
+        (r) => r.verificationStatus === "indicative" && hasPlausibleHigherTierSource(r.field)
+      );
+      const shouldRunGapRecovery =
+        (cov.fillRate < 0.60 || cov.verifiedFillRate < 0.40) && cov.missingFields.length > 0;
+      let ranGapRecovery = false;
+      if (shouldRunGapRecovery) {
+        ranGapRecovery = true;
+        setResearchStatus(`Found ${cov.populatedFields} fields — running targeted search for ${cov.missingFieldCount} more…`);
+        try {
+          const gapResp = await fetch("/api/research", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt: buildGapRecoveryPrompt(
+                { name: companyName, countryName: countryObj ? countryObj.name : countryCode },
+                cov.missingFields,
+                upgradeable,
+                recoveryStrategy
+              ),
+            }),
+          });
+          if (gapResp.ok) {
+            const gapData = await gapResp.json();
+            let gapText = "";
+            for (const block of (gapData.content || [])) { if (block.type === "text" && block.text) gapText += block.text; }
+            gapText = gapText.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+            const gsi = gapText.indexOf("{"); const gei = gapText.lastIndexOf("}");
+            if (gsi !== -1 && gei !== -1) {
+              const gapParsed = JSON.parse(gapText.slice(gsi, gei + 1));
+              const gapTs = new Date().toISOString();
+              const gapRows = (gapParsed.found || [])
+                .map((item) => classifyWebRow(item, gapTs))
+                // Never let gap recovery override a document-sourced row.
+                .filter((r) => !docFieldIds.has(r.field));
+              const remerged = mergeResearchResults(merged, gapRows);
+              merged = enrichStakeholders(mapAIValuesToOptions(remerged, schema));
+              cov = computeCoverage(merged, schema);
+            }
+          }
+        } catch (gapErr) {
+          // Gap recovery is best-effort — keep the first-pass results on failure.
+          // eslint-disable-next-line no-console
+          console.warn("Gap recovery pass failed:", gapErr.message);
+        }
+        setResearchStatus("");
+      }
 
       setResearch({ ...parsed, found: merged });
       setResearchTimestamp(webFetchTs);
+      setCoverage(cov);
+      setGapRecoveryRan(ranGapRecovery);
 
       // Build silent metadata trail (Part 5).
       const meta = merged.map(item => ({
         fieldId: item.field, value: item.value,
         source: item.source || "Unknown", sourceUrl: item.sourceUrl || null,
-        sourceTier: item.sourceTier, documentType: item.documentType || null,
+        sourceTier: item.sourceTier, verificationStatus: item.verificationStatus,
+        documentType: item.documentType || null,
         fetchedAt: item.fetchedAt, method: item.method, confidence: item.confidence,
         customerAction: null, customerActionAt: null,
       }));
       setFieldMetadata(meta);
 
       // Unified pre-fill engine: pre-check every found item. Customer unchecks
-      // anything wrong, including tier-2 unverified items (which carry an
-      // inline warning on the Confirm page).
+      // anything wrong, including tier-2/tier-3 items (which carry an inline
+      // warning on the Confirm page).
       const c = {};
       merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
@@ -2641,7 +3000,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setFormVersion(v => v + 1);
       setStep(S.confirm);
     } catch (err) { setError("Research failed: " + err.message); setStep(S.input); }
-    finally { setLoading(false); setLoaderPhase(0); }
+    finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
   };
 
   // Bypasses /api/research and synthesises a plausible result using
@@ -2653,6 +3012,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
+    // Demo: default the ownership type if the tester skipped it on Step 1.
+    if (!ownershipType) setOwnershipType("public_listed");
     const journey = journeyOverride || journeyType || "ai_only";
     const S = stepsFor(journey);
     const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
@@ -2674,7 +3035,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     const authPattern = (SOURCE_TRUST[countryCode] || ["public registry"])[0];
     const authSource = authPattern.replace(/\b\w/g, c => c.toUpperCase());
-    const secondarySources = ["Wikipedia", "LinkedIn", "Company website"];
 
     // Build a mock "doc-extracted" set: pick representative fields for each
     // uploaded doc so the navy badge gets exercised on Confirm.
@@ -2703,11 +3063,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const dummyTs = new Date().toISOString();
     const foundRaw = schema.researchFields.map((f, i) => {
       const docHit = docExtractedByField[f.field];
-      const isSecondary = !docHit && f.tier === 2 && i % 4 === 0;
+      // Exercise all three tiers in the demo: most rows tier1 (official), a
+      // slice tier2 (company-owned), a slice tier3 (third-party/unverified).
+      const isCompanyOwned = !docHit && f.tier === 2 && i % 4 === 0;
+      const isThirdParty = !docHit && f.tier === 2 && i % 4 === 2;
+      const tier2Sources = ["Company website", "Annual Report", "Investor Relations"];
+      const tier3Sources = ["Wikipedia", "LinkedIn", "Crunchbase"];
       const source = docHit
         ? docHit.sourceName
-        : (isSecondary ? secondarySources[i % secondarySources.length] : authSource);
-      const sourceTier = docHit ? "document" : (isSecondary ? "tier2" : "tier1");
+        : (isThirdParty ? tier3Sources[i % tier3Sources.length]
+          : isCompanyOwned ? tier2Sources[i % tier2Sources.length]
+          : authSource);
+      const sourceTier = docHit ? "document" : (isThirdParty ? "tier3" : isCompanyOwned ? "tier2" : "tier1");
       // For dropdown fields, pick the first configured option's label so the
       // mapping step downstream produces a real option.value. Falls back to
       // the test data table for free-text fields.
@@ -2726,11 +3093,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
         field: f.field, label: f.label, value, source,
         sourceUrl: null,
         sourceTier,
+        verificationStatus: getVerificationStatus(sourceTier),
         documentType: docHit ? docHit.docKey : null,
         fetchedAt: dummyTs,
         method: docHit ? "document_extract" : "web_search",
-        confidence: sourceTier === "tier2" ? "low" : "high",
-        trust: sourceTier === "tier2" ? "secondary" : "authoritative",
+        confidence: sourceTier === "tier1" || sourceTier === "document" ? "high" : "low",
+        trust: sourceTier === "tier1" || sourceTier === "document" ? "authoritative" : "secondary",
         wolfsberg: docHit && docHit.docKey === "wolfsberg",
       };
     });
@@ -2748,10 +3116,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setResearch(tagged);
     setResearchTimestamp(dummyTs);
 
+    // Demo coverage (Part 14). Gap recovery is skipped in demo mode.
+    setCoverage({
+      totalResearchFields: 35,
+      populatedFields: 28,
+      verifiedFields: 20,
+      probableFields: 5,
+      indicativeFields: 3,
+      missingFieldCount: 7,
+      missingFields: [],
+      fillRate: 0.80,
+      verifiedFillRate: 0.57,
+    });
+    setGapRecoveryRan(false);
+
     setFieldMetadata(found.map(item => ({
       fieldId: item.field, value: item.value,
       source: item.source, sourceUrl: null,
-      sourceTier: item.sourceTier, documentType: item.documentType,
+      sourceTier: item.sourceTier, verificationStatus: item.verificationStatus, documentType: item.documentType,
       fetchedAt: item.fetchedAt, method: item.method, confidence: item.confidence,
       customerAction: null, customerActionAt: null,
     })));
@@ -2923,6 +3305,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         countryCode,
         countryName: countryObj ? countryObj.name : countryCode,
         entityType,
+        ownershipType,
+        ownershipTypeLabel: ownershipTypeLabel(ownershipType),
         schemaJurisdiction: activeSchema?.region === "UK" ? "GB" : "SG",
       },
       journeyType,
@@ -2931,8 +3315,30 @@ export default function KYCAgent({ previewMode = false } = {}) {
       fromCache: false,
       isPubliclyListed: effectivelyListed,
       listingDetectedFrom: effectivelyListed ? detectListingEvidence(research) : null,
+      // Enhanced research pipeline: ownership-type strategy + coverage metrics.
+      research: {
+        ownershipType,
+        ownershipTypeLabel: ownershipTypeLabel(ownershipType),
+        researchStrategy: (OWNERSHIP_TYPE_LIBRARY.find(o => o.id === ownershipType) || {}).researchStrategy || null,
+        gapRecoveryRan,
+        coverage: coverage ? {
+          totalResearchFields: coverage.totalResearchFields,
+          populatedFields: coverage.populatedFields,
+          verifiedFields: coverage.verifiedFields,
+          probableFields: coverage.probableFields,
+          indicativeFields: coverage.indicativeFields,
+          missingFieldCount: coverage.missingFieldCount,
+          fillRate: Math.round(coverage.fillRate * 100),
+          verifiedFillRate: Math.round(coverage.verifiedFillRate * 100),
+        } : null,
+      },
       fieldValues,
-      fieldMetadata: finalMeta,
+      fieldMetadata: finalMeta.map(m => ({
+        ...m,
+        verificationStatus: m.verificationStatus
+          || (research?.found || []).find(r => r.field === m.fieldId)?.verificationStatus
+          || "manual",
+      })),
       stakeholders: stakeholderPayload,
       declaration: {
         ipAddress: device.ipAddress,
@@ -3120,14 +3526,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </span>
       );
     }
-    // tier2
+    // tier3 (indicative) — third-party / unverified source.
+    if (item.sourceTier === "tier3") {
+      return (
+        <span
+          onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
+          title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence — from unverified source"}
+          style={{ fontSize: 10, fontWeight: 700, color: "#C2410C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+        >
+          {revealedTs[idx] ? `🕒 ${ts}` : `⚠ ${item.source}`}
+        </span>
+      );
+    }
+    // tier2 (probable) — company-owned source.
     return (
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-        title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+        title={revealedTs[idx] ? "Click to hide timestamp" : "Probable — from company source, please confirm"}
         style={{ fontSize: 10, fontWeight: 700, color: "#8c5500", background: "#fff1d6", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
       >
-        {revealedTs[idx] ? `🕒 ${ts}` : `⚠️ ${item.source}`}
+        {revealedTs[idx] ? `🕒 ${ts}` : `~ ${item.source}`}
       </span>
     );
   };
@@ -3157,7 +3575,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           )}
           {item.sourceTier === "tier2" && (
             <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-              From an unverified source — please confirm this is correct
+              From a company source — please confirm this is correct
+            </div>
+          )}
+          {item.sourceTier === "tier3" && (
+            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#C2410C" }}>
+              ⚠ From unverified source — please verify this is correct
             </div>
           )}
         </span>
@@ -3250,7 +3673,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       ? { bg: "#dff2ec", color: "#1a6b56", glyph: "✅" }
       : tier === "document"
       ? { bg: "#0B3D91", color: "#fff", glyph: "📄" }
-      : { bg: "#fff1d6", color: "#8c5500", glyph: "⚠️" };
+      : tier === "tier3"
+      ? { bg: "#FFF7ED", color: "#C2410C", glyph: "⚠" }
+      : { bg: "#fff1d6", color: "#8c5500", glyph: "~" };
     const allExpanded = realStakeholders.every((s) => isStakeholderExpanded(s.id));
     return (
       <div key={`stk-${item.field}-${idx}`} style={{ marginBottom: 14 }}>
@@ -3943,7 +4368,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Sort key per spec: documents first, tier1 next, tier2 last; within group
   // by the schema researchFields order.
-  const sourceTierRank = { document: 0, tier1: 1, tier2: 2 };
+  const sourceTierRank = { document: 0, tier1: 1, tier2: 2, tier3: 3 };
   const fieldOrderMap = activeSchema ? new Map(activeSchema.researchFields.map((f, i) => [f.field, i])) : new Map();
   const sortedFound = (research?.found || [])
     .map((item, idx) => ({ item, idx }))
@@ -3986,6 +4411,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
   const tier2Count = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
+  const tier3Count = (research?.found || []).filter(i => i.sourceTier === "tier3").length;
 
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
@@ -4071,7 +4497,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <SearchableSelect
                 id="entity-type"
                 value={entityType}
-                onChange={setEntityType}
+                onChange={(v) => { setEntityType(v); setOwnershipType(""); }}
                 placeholder="Select or type entity type…"
                 options={activeEntityTypes.map(e => ({
                   value: e.id,
@@ -4080,6 +4506,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 }))}
               />
             </div>
+            {entityType && (
+              <div style={{ marginBottom: 14 }}>
+                <label htmlFor="ownership-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 }}>
+                  Ownership Type <span style={{ color: C.error }}>*</span>
+                </label>
+                <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
+                  How is this company owned and structured?
+                </p>
+                <SearchableSelect
+                  id="ownership-type"
+                  value={ownershipType}
+                  onChange={setOwnershipType}
+                  placeholder="Select ownership type…"
+                  options={getOwnershipTypeOptions(entityType, tenantConfig)}
+                />
+              </div>
+            )}
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="country-reg" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
               <SearchableSelect
@@ -4119,15 +4562,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
               <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>
-              <Btn onClick={() => {
-                if (!companyName.trim()) { setError("Please enter a company name."); return; }
-                if (!entityType) { setError("Please select an entity type."); return; }
-                if (!countryCode) { setError("Please select a country."); return; }
-                setError("");
-                setSelectedJourneyCard(null);
-                setManualOpened(false);
-                setJourneyOpen(true);
-              }} variant="primary">Continue →</Btn>
+              <Btn
+                disabled={!companyName.trim() || !countryCode || !entityType || !ownershipType}
+                onClick={() => {
+                  if (!companyName.trim()) { setError("Please enter a company name."); return; }
+                  if (!entityType) { setError("Please select an entity type."); return; }
+                  if (!ownershipType) { setError("Please select an ownership type."); return; }
+                  if (!countryCode) { setError("Please select a country."); return; }
+                  setError("");
+                  setSelectedJourneyCard(null);
+                  setManualOpened(false);
+                  setJourneyOpen(true);
+                }} variant="primary">Continue →</Btn>
             </div>
           </div>
         )}
@@ -4329,9 +4775,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 {loaderPhase === 1 ? "Phase 1 of 2 — Documents" : "Phase 2 of 2 — Web research"}
               </div>
             )}
-            <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: 22, minHeight: 18 }}>
+            <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: researchStatus ? 6 : 22, minHeight: 18 }}>
               {loaderMsgs[Math.min(loaderIdx, loaderMsgs.length - 1)]}
             </div>
+            {researchStatus && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#0B3D91", marginBottom: 22 }}>
+                🔎 {researchStatus}
+              </div>
+            )}
 
             <div style={{ width: "100%", maxWidth: 420, height: 6, background: "rgba(74,158,142,0.12)", borderRadius: 3, overflow: "hidden", margin: "0 auto 18px" }}>
               <div style={{
@@ -4374,14 +4825,102 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
-                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count} need your attention
+                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} need your attention
                   </p>
                 </div>
               </div>
               <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
-                Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then unverified web sources. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
+                Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then company-owned sources, then unverified web. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
               </div>
             </div>
+
+            {/* Part 11 — low-data banner. Threshold is calibrated per ownership
+                type (private companies expect lower fill rates than listed). */}
+            {(() => {
+              if (!coverage) return null;
+              const strat = getResearchStrategy(ownershipType);
+              const showLowDataBanner = coverage.fillRate < strat.lowDataThreshold + 0.10;
+              if (!showLowDataBanner) return null;
+              const parentResult = (research.found || []).find(
+                (r) => r.field === "ubo_parent_company" || r.field === "parent_company" || r.field === "group_structure"
+              );
+              const isPrivateish = ownershipType === "private_limited" || ownershipType === "branch";
+              return (
+                <div style={{ padding: 16, background: C.infoBg, border: `1px solid ${C.infoBorder}`, borderRadius: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.info, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>ℹ</span>
+                    <span>Limited public information found for {research.companyName || companyName}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: C.info, marginBottom: 12, lineHeight: 1.5 }}>
+                    {coverage.populatedFields} of {coverage.totalResearchFields} fields were found from public sources.
+                    {isPrivateish
+                      ? " Private companies have limited publicly available information — this is expected."
+                      : " You can improve coverage by uploading documents."}
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {ownershipType === "branch" && (
+                      <div style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: `1px solid ${C.infoBorder}`, fontSize: 13, color: C.text }}>
+                        <strong>Try searching for the parent company:</strong> If this is a branch, searching for the parent entity may return more complete information.
+                        {parentResult && parentResult.value && (
+                          <button
+                            onClick={() => {
+                              setCompanyName(String(parentResult.value));
+                              setJourneyOpen(false);
+                              setSelectedJourneyCard(null);
+                              setError("");
+                              setStep(STEPS.input);
+                            }}
+                            style={{ marginLeft: 8, padding: "4px 12px", background: C.info, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            Search parent →
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {journeyType === "ai_only" && (
+                      <div style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: `1px solid ${C.infoBorder}`, fontSize: 13, color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <span>
+                          <strong>Upload documents</strong> to pre-fill more fields — Certificate of Incorporation, Annual Report, or Wolfsberg questionnaire.
+                        </span>
+                        <button
+                          onClick={() => { setJourneyType("ai_documents"); setJourneyOpen(false); setStep(stepsFor("ai_documents").documents); }}
+                          style={{ padding: "6px 14px", background: C.niumBlue, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}
+                        >
+                          📄 Upload docs
+                        </button>
+                      </div>
+                    )}
+                    <p style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", margin: 0 }}>
+                      Or continue below — you can complete the remaining fields manually on the next page.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Part 9 — coverage summary bar. */}
+            {coverage && (
+              <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ flex: 1, padding: "12px 16px", background: C.successBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.success, lineHeight: 1 }}>{coverage.verifiedFields}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.success, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified</div>
+                </div>
+                <div style={{ flex: 1, padding: "12px 16px", background: C.warningBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.warning, lineHeight: 1 }}>{coverage.probableFields}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.warning, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Confirm</div>
+                </div>
+                {coverage.indicativeFields > 0 && (
+                  <div style={{ flex: 1, padding: "12px 16px", background: "#FFF7ED", borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#C2410C", lineHeight: 1 }}>{coverage.indicativeFields}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#C2410C", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Low Confidence</div>
+                  </div>
+                )}
+                <div style={{ flex: 1, padding: "12px 16px", background: C.surfaceAlt, textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.textMuted, lineHeight: 1 }}>{coverage.missingFieldCount}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
+                </div>
+              </div>
+            )}
 
             {/* Manual "publicly listed company" toggle — hides stakeholder EDD
                 forms on the next page. */}
@@ -4658,7 +5197,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 ));
               })()}
             </div>
-            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
+            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
 

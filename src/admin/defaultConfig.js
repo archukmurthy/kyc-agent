@@ -42,16 +42,20 @@ export function buildDefaultConfig(tenantId = "nium") {
     entityTypes: [
       { id: "FI", label: "Financial Institution",
         description: "Banks, payment institutions, EMIs and other regulated financial entities",
-        icon: "🏦", active: true, sortOrder: 1, associatedLicenceIds: ["GB", "SG"] },
+        icon: "🏦", active: true, sortOrder: 1, associatedLicenceIds: ["GB", "SG"],
+        ownershipTypes: ["private_limited", "public_listed", "public_unlisted", "branch", "correspondent_bank", "payment_institution", "investment_fund", "insurance_company", "central_bank", "other"] },
       { id: "Platform", label: "Platform",
         description: "Technology platforms and marketplaces",
-        icon: "💻", active: true, sortOrder: 2, associatedLicenceIds: ["GB", "SG"] },
+        icon: "💻", active: true, sortOrder: 2, associatedLicenceIds: ["GB", "SG"],
+        ownershipTypes: ["private_limited", "public_listed", "public_unlisted", "llp", "other"] },
       { id: "Direct", label: "Direct",
         description: "Direct business customers",
-        icon: "🏢", active: true, sortOrder: 3, associatedLicenceIds: ["GB", "SG"] },
+        icon: "🏢", active: true, sortOrder: 3, associatedLicenceIds: ["GB", "SG"],
+        ownershipTypes: ["private_limited", "public_listed", "sole_trader", "llp", "general_partnership", "trust", "charity", "other"] },
       { id: "Corporate", label: "Corporate",
         description: "Corporate and commercial entities",
-        icon: "🏛", active: true, sortOrder: 4, associatedLicenceIds: ["GB", "SG"] },
+        icon: "🏛", active: true, sortOrder: 4, associatedLicenceIds: ["GB", "SG"],
+        ownershipTypes: ["private_limited", "public_listed", "public_unlisted", "holding_company", "spv", "joint_venture", "branch", "other"] },
     ],
 
     schemas: {
@@ -66,6 +70,7 @@ export function buildDefaultConfig(tenantId = "nium") {
     },
 
     sourceTiers: {
+      // Tier 1 — official registries, regulators, and stock exchanges.
       primary: [
         { name: "Companies House",   pattern: "companieshouse",      jurisdiction: "GB" },
         { name: "FCA Register",      pattern: "fca.org.uk",          jurisdiction: "GB" },
@@ -78,14 +83,28 @@ export function buildDefaultConfig(tenantId = "nium") {
         { name: "SGX",               pattern: "sgx.com",             jurisdiction: "SG" },
         { name: "NYSE",              pattern: "nyse.com",            jurisdiction: "US" },
         { name: "NASDAQ",            pattern: "nasdaq.com",          jurisdiction: "US" },
+        { name: "Charity Commission",pattern: "charitycommission.gov.uk", jurisdiction: "GB" },
       ],
+      // Tier 2 — company-owned sources (more reliable than third-party).
       secondary: [
-        { name: "LinkedIn",         pattern: "linkedin.com" },
-        { name: "Wikipedia",        pattern: "wikipedia.org" },
-        { name: "Crunchbase",       pattern: "crunchbase.com" },
-        { name: "Bloomberg",        pattern: "bloomberg.com" },
-        { name: "Reuters",          pattern: "reuters.com" },
-        { name: "Company website",  pattern: "own website" },
+        { name: "Corporate Website",     pattern: "corporate website" },
+        { name: "Investor Relations",    pattern: "investor relations" },
+        { name: "Annual Report",         pattern: "annual report" },
+        { name: "About Us Page",         pattern: "about us" },
+        { name: "Legal / Regulatory Page", pattern: "legal" },
+        { name: "Careers Page",          pattern: "careers" },
+        { name: "Press Release",         pattern: "press release" },
+        { name: "Company website",       pattern: "own website" },
+      ],
+      // Tier 3 — third-party, unverified sources.
+      tertiary: [
+        { name: "LinkedIn",          pattern: "linkedin.com" },
+        { name: "Wikipedia",         pattern: "wikipedia.org" },
+        { name: "Crunchbase",        pattern: "crunchbase.com" },
+        { name: "Bloomberg",         pattern: "bloomberg.com" },
+        { name: "Reuters",           pattern: "reuters.com" },
+        { name: "News Article",      pattern: "news" },
+        { name: "Business Directory",pattern: "directory" },
       ],
       documentsArePrimary: true,
     },

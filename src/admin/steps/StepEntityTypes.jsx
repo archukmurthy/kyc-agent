@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import WizardCard from "../components/WizardCard";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
+import { OWNERSHIP_TYPE_LIBRARY } from "../../utils/ownershipTypes";
 
 const BLANK = () => ({
   id: "",
@@ -11,6 +12,7 @@ const BLANK = () => ({
   active: true,
   sortOrder: 99,
   associatedLicenceIds: [],
+  ownershipTypes: [],
 });
 
 function slugId(label) {
@@ -105,6 +107,29 @@ export default function StepEntityTypes({
     }
   }
 
+  function toggleOwnershipType(entityId, ownershipId) {
+    const ent = entityTypes.find((e) => e.id === entityId);
+    if (!ent) return;
+    const current = ent.ownershipTypes || [];
+    const has = current.includes(ownershipId);
+    const next = has
+      ? current.filter((id) => id !== ownershipId)
+      : [...current, ownershipId];
+    if (next.length === 0) {
+      flash("At least one ownership type is required");
+      return;
+    }
+    pushEntities(entityTypes.map((e) => (e.id === entityId ? { ...e, ownershipTypes: next } : e)));
+  }
+
+  function setAllOwnershipTypes(entityId, all) {
+    const next = all
+      ? OWNERSHIP_TYPE_LIBRARY.map((o) => o.id)
+      : [OWNERSHIP_TYPE_LIBRARY[0].id];
+    pushEntities(entityTypes.map((e) => (e.id === entityId ? { ...e, ownershipTypes: next } : e)));
+    if (!all) flash("At least one ownership type is required");
+  }
+
   function moveEntity(id, direction) {
     const idx = entityTypes.findIndex((e) => e.id === id);
     if (idx < 0) return;
@@ -171,6 +196,8 @@ export default function StepEntityTypes({
             onPatch={(p) => updateEntity(ent.id, p)}
             onDelete={() => deleteEntity(ent.id)}
             onToggleLicence={(licId) => toggleLicenceAssociation(ent.id, licId)}
+            onToggleOwnership={(ownId) => toggleOwnershipType(ent.id, ownId)}
+            onSetAllOwnership={(all) => setAllOwnershipTypes(ent.id, all)}
             onMove={(dir) => moveEntity(ent.id, dir)}
           />
         ))}
@@ -272,7 +299,7 @@ export default function StepEntityTypes({
   );
 }
 
-function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, onDelete, onToggleLicence, onMove }) {
+function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, onDelete, onToggleLicence, onToggleOwnership, onSetAllOwnership, onMove }) {
   const active = entity.active !== false;
   const assigned = entity.associatedLicenceIds || [];
   const configuredSchemas = assigned.filter(
@@ -338,6 +365,57 @@ function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, on
                 );
               })}
             </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: adminColors.textMuted, marginBottom: 2 }}>
+              Ownership Types shown to customers
+            </div>
+            <div style={{ fontSize: 11, color: adminColors.textMuted, marginBottom: 8 }}>
+              Select which ownership types appear in the dropdown for this entity type
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={() => onSetAllOwnership(true)}
+                style={{ ...adminStyles.btnGhost, padding: "4px 8px", fontSize: 12, color: adminColors.niumBlue, border: `1px solid ${adminColors.border}` }}
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetAllOwnership(false)}
+                style={{ ...adminStyles.btnGhost, padding: "4px 8px", fontSize: 12, color: adminColors.textMuted, border: `1px solid ${adminColors.border}` }}
+              >
+                Clear All
+              </button>
+              <span style={{ fontSize: 11, color: adminColors.textMuted }}>
+                {(entity.ownershipTypes || []).length} of {OWNERSHIP_TYPE_LIBRARY.length} enabled
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {OWNERSHIP_TYPE_LIBRARY.map((item) => {
+                const on = (entity.ownershipTypes || []).includes(item.id);
+                return (
+                  <label
+                    key={item.id}
+                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: adminColors.text, cursor: "pointer" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => onToggleOwnership(item.id)}
+                    />
+                    {item.label}
+                  </label>
+                );
+              })}
+            </div>
+            {(entity.ownershipTypes || []).length === 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: adminColors.danger }}>
+                At least one ownership type is required
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: 10, fontSize: 12, color: adminColors.textMuted }}>
