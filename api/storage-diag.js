@@ -32,6 +32,7 @@ module.exports = async function handler(req, res) {
     roundTripError = e.message;
   }
 
+  const hasRedisUrl = !!(process.env.REDIS_URL || process.env.KV_URL);
   return res.status(200).json({
     isVercel: !!process.env.VERCEL,
     matchingEnvVarNames,
@@ -39,7 +40,8 @@ module.exports = async function handler(req, res) {
     hasToken: !!token,
     urlIsHttps,
     urlHostHint,
-    expectedBackend: urlIsHttps && token ? "kv" : "filesystem(ephemeral)",
+    hasRedisUrl,
+    activeBackend: typeof storage.backend === "function" ? storage.backend() : "unknown",
     storageRoundTrip: roundTrip,
     roundTripError,
   });
