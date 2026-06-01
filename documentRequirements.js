@@ -183,7 +183,7 @@ const PLATFORM_MODELS = [
  * Rule: if Nium is licensed in the incorp country → onboard there.
  * Otherwise → default to Singapore (MPI licence, broadest coverage).
  */
-export function deriveOnboardingCountry(incorporationCountry) {
+function deriveOnboardingCountry(incorporationCountry) {
   if (OPERATIONAL_COUNTRIES.includes(incorporationCountry)) {
     return incorporationCountry;
   }
@@ -201,7 +201,7 @@ export function deriveOnboardingCountry(incorporationCountry) {
  * The agent uses "Ownership Type" as the label; v26 calls it "Entity Type".
  * Extend this map as the agent's dropdown options evolve.
  */
-export function normaliseEntityType(ownershipType, entityType) {
+function normaliseEntityType(ownershipType, entityType) {
   // entityType from Step 1 is already close to v26 vocab — use it directly
   // if it matches; otherwise try to map from ownershipType
   const v26Types = [
@@ -232,7 +232,7 @@ export function normaliseEntityType(ownershipType, entityType) {
  * sector that won't suppress any documents.  Caller should pass real sector
  * when available (Step 4 recompute).
  */
-export function deriveSector(entityType, explicitSector) {
+function deriveSector(entityType, explicitSector) {
   if (explicitSector) return explicitSector;
   if (entityType === 'Financial Institution') return 'Financial Institution - EMI / PI / PSP / MSB';
   // Default — broadest non-FI bucket, no special suppressions
@@ -847,7 +847,7 @@ function buildRows(onboarding, incorp, entityType, sector){
  * @param {string} [params.sector]              - v26 sector string (optional at Step 1, send at Step 4)
  * @returns {ChecklistItem[]}
  */
-export function getRequirements({
+function getRequirements({
   incorporationCountry,
   onboardingCountry,
   entityType,
@@ -884,7 +884,18 @@ export function getRequirements({
  * @param {string[]} submittedKeys   - array of requirement names already submitted
  * @returns {ChecklistItem[]}        - mandatory gaps only
  */
-export function getMandatoryGaps(params, submittedKeys = []) {
+function getMandatoryGaps(params, submittedKeys = []) {
   const all = getRequirements(params);
   return all.filter(item => item.mandatory && !submittedKeys.includes(item.requirement));
 }
+
+// CommonJS exports — required directly by api/document-requirements.js and
+// src/setupProxy.js (local dev). Frontend never imports this module; it reaches
+// the engine over HTTP via the /api/document-requirements route.
+module.exports = {
+  getRequirements,
+  getMandatoryGaps,
+  deriveOnboardingCountry,
+  normaliseEntityType,
+  deriveSector,
+};

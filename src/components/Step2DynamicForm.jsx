@@ -13,7 +13,7 @@
  *   is derived from the live DRS checklist at runtime.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useDocumentRequirements } from '../hooks/useDocumentRequirements';
 
 // ─── Section renderers ───────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ function LoadingState() {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function Step2DynamicForm({ step1Data, researchData, onComplete }) {
+export default function Step2DynamicForm({ step1Data, onComplete }) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
   const { checklist, rfiItems, selfSourceItems, flags, onboardingCountry, loading, error } =

@@ -116,6 +116,9 @@ export function useDocumentRequirements(initialParams) {
       paramsRef.current = initialParams;
       fetchRequirements(initialParams);
     }
+    // Re-fires only when the three classifiers change; fetchRequirements is
+    // stable (useCallback) and initialParams is read via the keyed fields.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialParams?.incorporationCountry,
     initialParams?.entityType,

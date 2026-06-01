@@ -7,6 +7,38 @@ import {
   NIUM_DEFAULT_OWNERSHIP_TYPES,
   ownershipTypeLabel,
 } from "./utils/ownershipTypes";
+import Step2DynamicForm from "./components/Step2DynamicForm";
+import Step5Recompute from "./components/Step5Recompute";
+
+// Maps this app's ownership-type IDs to the key strings the DRS engine's
+// normaliseEntityType() recognises (it keys off labels like "Public Listed
+// Company" / "LLP", not our IDs). Unmapped IDs fall through to the engine's
+// safe "Privately owned" default. entityType is passed separately as the
+// entity LABEL (e.g. "Financial Institution") so the engine's FI/sector/
+// Wolfsberg detection works.
+const OWNERSHIP_ID_TO_DRS = {
+  public_listed: "Public Listed Company",
+  public_unlisted: "Private Limited",
+  private_limited: "Private Limited",
+  llp: "LLP",
+  general_partnership: "Partnership",
+  sole_trader: "Sole Trader",
+  trust: "Trust",
+  government: "State Owned",
+  central_bank: "State Owned",
+  charity: "Private Limited",
+  foundation: "Private Limited",
+  cooperative: "Private Limited",
+  branch: "Private Limited",
+  spv: "Private Limited",
+  holding_company: "Private Limited",
+  joint_venture: "Private Limited",
+  correspondent_bank: "Public Listed Company",
+  payment_institution: "Private Limited",
+  investment_fund: "Private Limited",
+  insurance_company: "Private Limited",
+  other: "Private Limited",
+};
 
 /* ═══════════════════════════════════════════
    COLOUR PALETTE
@@ -2372,6 +2404,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Transient status line shown on the research loader between/within passes.
   const [researchStatus, setResearchStatus] = useState("");
   const [researchTimestamp, setResearchTimestamp] = useState("");
+  // DRS (document requirements service) session state. Populated when the
+  // customer completes the dynamic documents step; consumed by the
+  // pre-declaration gap gate (Step5Recompute).
+  const [drsSubmitted, setDrsSubmitted] = useState([]);   // submittedRequirements[]
+  const [drsFlags, setDrsFlags] = useState({});           // feature flags from Step 2
+  const [drsGapsCleared, setDrsGapsCleared] = useState(false); // declaration gate
   // Derived: is the company being onboarded publicly listed? Drives the
   // stakeholder-EDD suppression on Fill Gaps (listed-company directors and
   // sub-25% UBOs skip the detailed gap form).
@@ -2431,13 +2469,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // correct step index without relying on a stale state closure (e.g. during
   // back-and-forth navigation between Documents and Journey).
   const stepsFor = (j) => j === "ai_documents"
-    ? { input: 0, documents: 1, research: 2, confirm: 3, fillGaps: 4, declare: 5 }
-    : { input: 0, research: 1, confirm: 2, fillGaps: 3, declare: 4 };
+    ? { input: 0, documents: 1, research: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 }
+    : { input: 0, research: 1, confirm: 2, fillGaps: 3, documentRequirements: 4, declare: 5 };
   const isAiDocs = journeyType === "ai_documents";
   const STEPS = stepsFor(journeyType);
   const stepNames = isAiDocs
-    ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Declare"]
-    : ["Company", "Research", "Confirm", "Fill Gaps", "Declare"];
+    ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
+    : ["Company", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
 
   // Loader messages — three modes: no docs (existing), doc-extraction phase, web phase.
   const loaderMsgs = loaderPhase === 1
@@ -2514,6 +2552,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setFieldMetadata([]);
     setLoaderPhase(0);
     setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
+    setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
   };
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
@@ -3331,6 +3370,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
           fillRate: Math.round(coverage.fillRate * 100),
           verifiedFillRate: Math.round(coverage.verifiedFillRate * 100),
         } : null,
+      },
+      // DRS — document requirements collected at the dynamic documents step.
+      documentRequirements: {
+        submittedRequirements: drsSubmitted,
+        flags: drsFlags,
       },
       fieldValues,
       fieldMetadata: finalMeta.map(m => ({
@@ -5086,18 +5130,89 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 }
                 if (allGapsFilled()) {
                   setStakeholderErrors([]);
-                  scrollAndSetStep(STEPS.declare);
+                  scrollAndSetStep(STEPS.documentRequirements);
                   setError("");
                 } else {
                   setError("Please fill all required fields.");
                 }
-              }}>Continue to Declaration →</Btn>
+              }}>Continue to Documents →</Btn>
             </div>
             {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
           </div>
         )}
 
-        {step === STEPS.declare && !done && (
+        {/* DRS — dynamic document-requirements step (Step 2 of the CDD brief),
+            placed after Fill Gaps so classifiers + research are settled. */}
+        {step === STEPS.documentRequirements && (
+          <div>
+            <div style={card}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>📄 Required Documents</h2>
+              <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 4px" }}>
+                Based on the company's country, entity and ownership type, here's exactly what we need.
+              </p>
+            </div>
+            <div style={card}>
+              {(() => {
+                const entLabel = (activeEntityTypes.find(e => e.id === entityType)?.label) || entityType;
+                const drsStep1Data = {
+                  companyName: research?.companyName || companyName,
+                  incorporationCountry: countryObj ? countryObj.name : countryCode,
+                  entityType: entLabel,
+                  ownershipType: OWNERSHIP_ID_TO_DRS[ownershipType] || ownershipType,
+                };
+                return (
+                  <Step2DynamicForm
+                    step1Data={drsStep1Data}
+                    researchData={research}
+                    onComplete={(data) => {
+                      setDrsSubmitted(data.submittedRequirements || []);
+                      setDrsFlags(data.flags || {});
+                      setDrsGapsCleared(false);
+                      scrollAndSetStep(STEPS.declare);
+                    }}
+                  />
+                );
+              })()}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.fillGaps)}>← Back to Fill Gaps</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* DRS pre-declaration gap gate (Step 5 of the CDD brief). Blocks the
+            declaration until every mandatory document is on file. */}
+        {step === STEPS.declare && !done && !drsGapsCleared && (
+          <div>
+            <div style={card}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 12px" }}>✅ Final document check</h2>
+              {(() => {
+                const entLabel = (activeEntityTypes.find(e => e.id === entityType)?.label) || entityType;
+                const drsStep1Data = {
+                  companyName: research?.companyName || companyName,
+                  incorporationCountry: countryObj ? countryObj.name : countryCode,
+                  entityType: entLabel,
+                  ownershipType: OWNERSHIP_ID_TO_DRS[ownershipType] || ownershipType,
+                };
+                return (
+                  <Step5Recompute
+                    step1Data={drsStep1Data}
+                    sector={null}
+                    submittedRequirements={drsSubmitted}
+                    extraFlags={{}}
+                    onGapsClear={() => setDrsGapsCleared(true)}
+                    onRequestDocument={() => scrollAndSetStep(STEPS.documentRequirements)}
+                  />
+                );
+              })()}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back to Documents</Btn>
+            </div>
+          </div>
+        )}
+
+        {step === STEPS.declare && !done && drsGapsCleared && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>

@@ -17,6 +17,7 @@ const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-a
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
 const niumPublicDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "public-details.js"));
 const niumExhaustiveDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "exhaustive-details.js"));
+const docRequirementsHandler = require(path.join(__dirname, "..", "api", "document-requirements.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -110,6 +111,22 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(niumExhaustiveDetailsHandler)(req, res);
+    });
+  });
+
+  // DRS — document requirements service. POST; parse the JSON body the dev
+  // server doesn't auto-parse (mirrors the Nium POST route above).
+  app.post("/api/document-requirements", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(docRequirementsHandler)(req, res);
     });
   });
 };

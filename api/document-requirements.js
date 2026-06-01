@@ -12,13 +12,13 @@
  *   2. Pre-declaration recompute (sector + nestedFlows + any EDD flags now known)
  */
 
-import {
+const {
   getRequirements,
   getMandatoryGaps,
   deriveOnboardingCountry,
-} from '../documentRequirements.js';
+} = require('../documentRequirements.js');
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

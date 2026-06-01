@@ -27,7 +27,7 @@ export default function Step5Recompute({
 }) {
   const { incorporationCountry, entityType, ownershipType } = step1Data;
 
-  const { mandatoryGaps, mandatoryCount, checklist, flags, loading, error, recompute } =
+  const { mandatoryGaps, checklist, loading, error, recompute } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
   // Trigger the enriched recompute on mount — sector + submitted now available
@@ -37,6 +37,8 @@ export default function Step5Recompute({
       submittedRequirements,
       ...extraFlags,
     });
+    // Mount-once enriched recompute; inputs are snapshotted intentionally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
