@@ -1567,10 +1567,11 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       desc += `  {\n`;
       desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" — the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
       desc += `    "role": "Director" or "Secretary" etc.\n`;
-      desc += `    "nationality": "British" or equivalent if available\n`;
-      desc += `    "date_of_birth": "YYYY-MM" format — ALWAYS include this when the registry shows a date of birth for the officer (Companies House shows it as "Month YYYY" for every person director; year and month only — do not guess the day)\n`;
-      desc += `    "country_of_residence": the officer's country of residence as shown on the registry (e.g. "United Kingdom", "England") if available\n`;
+      desc += `    "nationality": "British" or equivalent — OPTIONAL, include only if shown\n`;
+      desc += `    "date_of_birth": "YYYY-MM" — OPTIONAL. Include it when the registry shows a date of birth (Companies House shows "Month YYYY" for person directors; year and month only — do not guess the day)\n`;
+      desc += `    "country_of_residence": the officer's country of residence (e.g. "United Kingdom", "England") — OPTIONAL, include only if shown\n`;
       desc += `  }\n`;
+      desc += `  REQUIRED vs OPTIONAL: only "full_name" (and ideally "role") is required per officer. "nationality", "date_of_birth" and "country_of_residence" are OPTIONAL — include them when the registry shows them, otherwise simply omit that one key. NEVER drop an officer from the array just because their nationality, date of birth, or country of residence is missing. Always list the officer with whatever fields you do have.\n`;
       desc += `  SOURCE: ${country}'s official company officers register.`;
       if (countryCode === "GB") {
         desc += ` For the UK this is the Companies House officers page at:\n`;
@@ -1609,9 +1610,9 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       }
       desc += `  CRITICAL: The NAME field is always the person's actual name (e.g. "GLIDDON, Nicholas Francis" or "TAYLOR, Max"). It is NEVER a demographic description.\n`;
       desc += `  NEVER put appointment dates, addresses, status labels ("Active"/"Resigned"), or "Appointed on XX" in the full_name field.\n`;
-      desc += `  If you find demographic details (nationality, birth month) without finding the name, do NOT invent a name. Instead omit that person from the array entirely.\n`;
+      desc += `  NAME ONLY: if an officer entry shows demographic details (nationality, birth month) but you genuinely cannot determine the person's NAME, do NOT invent a name — omit just that one nameless entry. This rule is about a MISSING NAME only: never omit an officer who HAS a name but is missing other details.\n`;
       desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
-      desc += `  COMPLETENESS — this matters: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list — registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array.\n`;
+      desc += `  COMPLETENESS — this matters most: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see, and INCLUDE an officer even if all you have is their name and role. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list — registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array, and do not trade list completeness for per-officer detail.\n`;
       if (f.searchHint) {
         desc += `  Additional hint: ${f.searchHint}\n`;
       }
