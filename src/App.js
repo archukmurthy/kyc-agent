@@ -801,10 +801,12 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
         full_name: p.full_name || p.name || "",
         role: p.role || p.position || p.title || "",
         share_percentage: p.share_percentage != null ? p.share_percentage : (p.percentage != null ? p.percentage : null),
-        // Pre-populate nationality / DOB the AI returned alongside the name so
-        // the customer doesn't have to re-enter what was already found.
+        // Pre-populate nationality / DOB / country of residence the AI returned
+        // alongside the name so the customer doesn't have to re-enter what was
+        // already found on the registry.
         nationality: p.nationality || "",
         date_of_birth: p.date_of_birth ? normaliseDateOfBirth(p.date_of_birth) : "",
+        residential_country: p.country_of_residence || p.residential_country || p.residence || "",
         source: source || p.source || "",
         sourceUrl: sourceUrl || p.sourceUrl || "",
         sourceTier: sourceTier || p.sourceTier || "tier1",
@@ -1539,6 +1541,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         desc += `    "share_percentage": number if available (e.g. 75 for 75%)\n`;
         desc += `    "nationality": if person and available\n`;
         desc += `    "date_of_birth": "YYYY-MM" if person and available\n`;
+        desc += `    "country_of_residence": if person and shown on the register (e.g. "United Kingdom")\n`;
         desc += `  }\n`;
         desc += `  SOURCE: ${country}'s official register of persons with significant control / beneficial ownership.`;
         if (countryCode === "GB") {
@@ -1565,7 +1568,8 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" — the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
       desc += `    "role": "Director" or "Secretary" etc.\n`;
       desc += `    "nationality": "British" or equivalent if available\n`;
-      desc += `    "date_of_birth": "YYYY-MM" format if available (year and month only — do not guess the day)\n`;
+      desc += `    "date_of_birth": "YYYY-MM" format — ALWAYS include this when the registry shows a date of birth for the officer (Companies House shows it as "Month YYYY" for every person director; year and month only — do not guess the day)\n`;
+      desc += `    "country_of_residence": the officer's country of residence as shown on the registry (e.g. "United Kingdom", "England") if available\n`;
       desc += `  }\n`;
       desc += `  SOURCE: ${country}'s official company officers register.`;
       if (countryCode === "GB") {
@@ -1589,13 +1593,15 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         desc += `      "full_name": "GLIDDON, Nicholas Francis",\n`;
         desc += `      "role": "Director",\n`;
         desc += `      "nationality": "British",\n`;
-        desc += `      "date_of_birth": "1967-04"\n`;
+        desc += `      "date_of_birth": "1967-04",\n`;
+        desc += `      "country_of_residence": "United Kingdom"\n`;
         desc += `    },\n`;
         desc += `    {\n`;
         desc += `      "full_name": "TAYLOR, Max",\n`;
         desc += `      "role": "Director",\n`;
         desc += `      "nationality": "British",\n`;
-        desc += `      "date_of_birth": "1974-05"\n`;
+        desc += `      "date_of_birth": "1974-05",\n`;
+        desc += `      "country_of_residence": "England"\n`;
         desc += `    }\n`;
         desc += `  ]\n`;
       } else {
@@ -2519,7 +2525,7 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
 // "Edit" to override it. When the value is empty it falls straight through to
 // the editable input so nothing is pre-filled. Module-scoped so its `editing`
 // state survives parent re-renders (same reason StableInput lives out here).
-function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder }) {
+function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder, options }) {
   const [editing, setEditing] = useState(false);
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 };
 
@@ -2534,6 +2540,7 @@ function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sou
           onUpdate={onUpdate}
           required={required}
           placeholder={placeholder}
+          options={options}
         />
         {value && (
           <button
@@ -4369,17 +4376,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
             placeholder="YYYY-MM-DD"
           />
 
-          {/* Residential country */}
-          <StableInput
+          {/* Country of residence — pre-filled & locked (editable) when the AI
+              found it on the registry; falls through to a country picker when empty */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_country`}
             label="Country of Residence"
             type="select"
             value={stakeholder.residential_country || ""}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "residential_country", v)}
             options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+            sourceLabel={stakeholder.source}
           />
 
-          {/* ID type */}
+          {/* Identity Document Type and Identity Document Number are intentionally
+              hidden at Fill Gaps — these are collected later in the verification
+              flow, not from the registry. Uncomment to restore.
           <StableInput
             id={`stk_${fieldId}_${stakeholder.id}_id_type`}
             label="Identity Document Type"
@@ -4393,8 +4404,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               { value: "other", label: "Other" },
             ]}
           />
-
-          {/* ID number */}
           <StableInput
             id={`stk_${fieldId}_${stakeholder.id}_id_number`}
             label="Identity Document Number"
@@ -4403,6 +4412,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "id_number", v)}
             placeholder="Passport or ID number"
           />
+          */}
 
           {/* PEP three-button toggle */}
           <div style={{ marginBottom: 14 }}>
