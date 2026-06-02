@@ -640,6 +640,70 @@ const makeStakeholder = (overrides = {}) => {
   };
 };
 
+// True when a "name" is actually a demographic description rather than a real
+// person name — e.g. the model returns "Director (British national, born April
+// 1967)" instead of extracting "Nicholas Gliddon" from the same registry record.
+// Such entries must be dropped: we never want a demographic blurb sitting in the
+// name field, and inventing/keeping it would corrupt downstream KYC records.
+const isDescriptionNotName = (fullName) => {
+  if (!fullName) return true;
+
+  const name = String(fullName).trim();
+
+  // Pattern: starts with a role word followed by "(" introducing demographics
+  // e.g. "Director (British national...".
+  const rolePrefix = /^(director|officer|secretary|manager|trustee)\s*\(/i;
+
+  // Pattern: contains both "national" and "born" — a demographic description.
+  const demographicPattern = /national.*born|born.*national/i;
+
+  // Pattern: is just a bare role word with no actual name.
+  const justRole = /^(director|officer|secretary|manager)$/i;
+
+  return rolePrefix.test(name) || demographicPattern.test(name) || justRole.test(name);
+};
+
+// Normalise an AI-returned date of birth to "YYYY-MM" (year + month only — the
+// public registry never exposes the day). Accepts the formats the model tends
+// to emit: "YYYY-MM", "YYYY-MM-DD", or "April 1967".
+const normaliseDateOfBirth = (value) => {
+  if (!value) return "";
+  const v = String(value).trim();
+
+  // Already YYYY-MM.
+  if (/^\d{4}-\d{2}$/.test(v)) return v;
+
+  // YYYY-MM-DD — strip the day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.slice(0, 7);
+
+  // "April 1967" → "1967-04".
+  const monthNames = {
+    january: "01", february: "02", march: "03", april: "04",
+    may: "05", june: "06", july: "07", august: "08",
+    september: "09", october: "10", november: "11", december: "12",
+  };
+  const match = v.toLowerCase().match(/([a-z]+)\s+(\d{4})/);
+  if (match) {
+    const month = monthNames[match[1]];
+    if (month) return `${match[2]}-${month}`;
+  }
+
+  return "";
+};
+
+// Format a stored "YYYY-MM" (or "YYYY-MM-DD") date of birth as a human-readable
+// "April 1967" for display in the Fill Gaps locked field.
+const formatDOBForDisplay = (dobString) => {
+  if (!dobString) return "";
+  const [year, month] = String(dobString).split("-");
+  const months = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const monthName = months[parseInt(month, 10)] || month;
+  return year ? `${monthName} ${year}`.trim() : "";
+};
+
 // Parse a legacy free-text stakeholder string ("John Smith (CEO), Jane Doe (CFO)")
 // into structured stakeholder records. Handles a JSON-encoded array as well, so
 // the same parser covers both "string from old KV" and "JSON string the model
@@ -652,13 +716,20 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
         full_name: p.full_name || p.name || "",
         role: p.role || p.position || p.title || "",
         share_percentage: p.share_percentage != null ? p.share_percentage : (p.percentage != null ? p.percentage : null),
+        // Pre-populate nationality / DOB the AI returned alongside the name so
+        // the customer doesn't have to re-enter what was already found.
+        nationality: p.nationality || "",
+        date_of_birth: p.date_of_birth ? normaliseDateOfBirth(p.date_of_birth) : "",
         source: source || p.source || "",
         sourceUrl: sourceUrl || p.sourceUrl || "",
         sourceTier: sourceTier || p.sourceTier || "tier1",
         fetchedAt: fetchedAt || p.fetchedAt || null,
       }))
       .filter((s) => s.full_name)
-      .filter((s) => !isRegistryExemptionNotice(s));
+      .filter((s) => !isRegistryExemptionNotice(s))
+      // Drop entries where the "name" is a demographic description, e.g.
+      // "Director (British national, born April 1967)".
+      .filter((s) => !isDescriptionNotName(s.full_name));
   }
   if (typeof rawString !== "string") return [];
   const trimmed = rawString.trim();
@@ -733,7 +804,8 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
     });
   })
     .filter((s) => s.full_name.length > 0)
-    .filter((s) => !isRegistryExemptionNotice(s));
+    .filter((s) => !isRegistryExemptionNotice(s))
+    .filter((s) => !isDescriptionNotName(s.full_name));
 };
 
 // Augment a research-result list with parsed .stakeholders arrays for any
@@ -1361,11 +1433,61 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   const stakeholderRules = schema.researchFields
     .filter((f) => isStakeholderField(f.field))
     .map((f) => {
-      const ubo = isUboLikeField(f.field);
-      const shape = ubo
-        ? '{ "full_name": string, "role": string, "share_percentage": number or null }'
-        : '{ "full_name": string, "role": string }';
-      return `- ${f.field}: return a JSON array of objects, one per person. Each: ${shape}. Include the name even when role/percentage is unknown. Never omit a person because DOB or nationality is not publicly available. Search ${country}'s official company registry (officers / PSC / beneficial ownership records).`;
+      // UBO / beneficial-owner / shareholder fields: each entry may be a
+      // person OR a corporate entity. Pulled from the PSC register.
+      if (isUboLikeField(f.field)) {
+        let desc = `- "${f.label}" (id: ${f.field})\n`;
+        desc += `  IMPORTANT: Return as a JSON array.\n`;
+        desc += `  Each entry is either a PERSON or a CORPORATE ENTITY.\n`;
+        desc += `  Each object must have:\n`;
+        desc += `  {\n`;
+        desc += `    "full_name": the actual name — either a person's legal name OR a company name (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED"). NEVER use a demographic description.\n`;
+        desc += `    "role": "Person with Significant Control" or "Corporate Entity" or equivalent\n`;
+        desc += `    "share_percentage": number if available (e.g. 75 for 75%)\n`;
+        desc += `    "nationality": if person and available\n`;
+        desc += `    "date_of_birth": "YYYY-MM" if person and available\n`;
+        desc += `  }\n`;
+        desc += `  SOURCE: ${country}'s official register of persons with significant control / beneficial ownership.`;
+        if (countryCode === "GB") {
+          desc += ` For the UK this is the Companies House PSC register at:\n`;
+          desc += `  https://find-and-update.company-information.service.gov.uk/company/{COMPANY_NUMBER}/persons-with-significant-control\n`;
+        } else {
+          desc += `\n`;
+        }
+        desc += `  For corporate entities, the "full_name" is the company name.\n`;
+        desc += `  ONLY include current/active PSCs — ignore ceased ones.\n`;
+        if (f.searchHint) {
+          desc += `  Additional hint: ${f.searchHint}\n`;
+        }
+        return desc;
+      }
+
+      // Director / officer fields: actual person name extraction. The model
+      // must return the NAME, never the demographic description shown beside it.
+      let desc = `- "${f.label}" (id: ${f.field})\n`;
+      desc += `  IMPORTANT: Return as a JSON array.\n`;
+      desc += `  Each object must have:\n`;
+      desc += `  {\n`;
+      desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" — the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
+      desc += `    "role": "Director" or "Secretary" etc.\n`;
+      desc += `    "nationality": "British" or equivalent if available\n`;
+      desc += `    "date_of_birth": "YYYY-MM" format if available (year and month only — do not guess the day)\n`;
+      desc += `  }\n`;
+      desc += `  SOURCE: ${country}'s official company officers register.`;
+      if (countryCode === "GB") {
+        desc += ` For the UK this is the Companies House officers page at:\n`;
+        desc += `  https://find-and-update.company-information.service.gov.uk/company/{COMPANY_NUMBER}/officers\n`;
+        desc += `  Look for the "People" or "Officers" section. Each officer entry shows: NAME (in large text), Role, Date of birth, Nationality, Country of residence.\n`;
+      } else {
+        desc += `\n`;
+      }
+      desc += `  CRITICAL: The NAME field is always the person's actual name (e.g. "GLIDDON, Nicholas Francis" or "TAYLOR, Max"). It is NEVER a demographic description.\n`;
+      desc += `  If you find demographic details (nationality, birth month) without finding the name, do NOT invent a name. Instead omit that person from the array entirely.\n`;
+      desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
+      if (f.searchHint) {
+        desc += `  Additional hint: ${f.searchHint}\n`;
+      }
+      return desc;
     })
     .join("\n");
   const stakeholderRulesBlock = stakeholderRules
@@ -2265,6 +2387,65 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
     <div style={{ marginBottom: 14 }}>
       <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>{label} {required && <span style={{ color: "#d44" }}>*</span>}</label>
       {renderInput()}
+    </div>
+  );
+}
+
+// A field that was pre-populated from the AI research (e.g. nationality / date
+// of birth a director's registry record carried). Shown as a locked value with
+// a source badge — but, unlike the fully-locked name, the customer can click
+// "Edit" to override it. When the value is empty it falls straight through to
+// the editable input so nothing is pre-filled. Module-scoped so its `editing`
+// state survives parent re-renders (same reason StableInput lives out here).
+function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder }) {
+  const [editing, setEditing] = useState(false);
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 };
+
+  if (editing || !value) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <StableInput
+          id={id}
+          label={label}
+          type={type || "text"}
+          value={value || ""}
+          onUpdate={onUpdate}
+          required={required}
+          placeholder={placeholder}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            style={{ fontSize: 11, color: C.textMuted, background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}
+          >
+            Cancel edit
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={labelStyle}>{label} {required && <span style={{ color: "#d44" }}>*</span>}</label>
+      <div style={{
+        padding: "10px 14px", background: C.infoBg, borderRadius: 8,
+        border: `1px solid ${C.infoBorder}`, fontSize: 14, color: C.text,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+      }}>
+        <span>{displayValue || value}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.info, fontWeight: 600 }}>~ {sourceLabel || "Found"}</span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{ fontSize: 11, color: C.niumBlue, background: "none", border: `1px solid ${C.niumBlue}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Edit
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4039,24 +4220,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
             />
           )}
 
-          {/* Nationality */}
-          <StableInput
+          {/* Nationality — pre-filled & locked (editable) when the AI found it */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_nationality`}
             label="Nationality"
             type="text"
             value={stakeholder.nationality || ""}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "nationality", v)}
+            sourceLabel={stakeholder.source}
             required
             placeholder="e.g. British, American, Singaporean"
           />
 
-          {/* Date of birth */}
-          <StableInput
+          {/* Date of birth — pre-filled & locked (editable) when the AI found it */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_dob`}
             label="Date of Birth"
             type="date"
             value={stakeholder.date_of_birth || ""}
+            displayValue={formatDOBForDisplay(stakeholder.date_of_birth)}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "date_of_birth", v)}
+            sourceLabel={stakeholder.source}
             required
             placeholder="YYYY-MM-DD"
           />
