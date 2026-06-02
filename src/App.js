@@ -640,27 +640,112 @@ const makeStakeholder = (overrides = {}) => {
   };
 };
 
-// True when a "name" is actually a demographic description rather than a real
-// person name — e.g. the model returns "Director (British national, born April
-// 1967)" instead of extracting "Nicholas Gliddon" from the same registry record.
-// Such entries must be dropped: we never want a demographic blurb sitting in the
-// name field, and inventing/keeping it would corrupt downstream KYC records.
+// Positive test: does this string look like a genuine person name or a corporate
+// entity? Used as a safety override so the description filter below can be
+// aggressive without ever dropping a legitimate director/UBO name.
+//
+// A real person name on a registry is always at least two words (surname +
+// forename), 2-5 of them, each made only of letters / hyphens / apostrophes /
+// dots (and an optional trailing comma for the "SURNAME, Firstname" format).
+// Corporate owners (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED") are also valid
+// even though they contain non-name words, so a company-suffix check whitelists
+// them too.
+const looksLikeRealName = (fullName) => {
+  if (!fullName) return false;
+
+  const name = String(fullName).trim();
+
+  // Must be a sensible length for a name.
+  if (name.length < 2 || name.length > 60) return false;
+
+  // Must contain at least one letter.
+  if (!/[a-zA-Z]/.test(name)) return false;
+
+  const words = name.split(/\s+/).filter((w) => w.length > 0);
+  // A real person name is 2-5 words. A single bare word ("Director", "Active",
+  // "Verified") is a label, not a name, so it is NOT treated as a real name and
+  // is left for the description patterns below to filter.
+  if (words.length < 2 || words.length > 6) {
+    // Single-word entries can still be corporates in rare cases — fall through
+    // to the corporate-suffix check rather than rejecting outright.
+    if (words.length !== 1) return false;
+  }
+
+  // Each word should be mostly letters (allowing hyphenated names, apostrophes,
+  // initials with dots, and the trailing comma of "SURNAME, Firstname").
+  const wordsAreName =
+    words.length >= 2 &&
+    words.every(
+      (w) => /^[a-zA-Z\-'.]+$/.test(w) || /^[a-zA-Z\-'.]+,$/.test(w)
+    );
+
+  if (wordsAreName) return true;
+
+  // Corporate entities are valid even though they contain non-name words.
+  const corporateSuffixes = [
+    "LIMITED", "LTD", "PLC", "LLP", "HOLDINGS", "CORPORATION",
+    "CORP", "INC", "LLC", "GMBH", "BV",
+  ];
+  const isCorporate = corporateSuffixes.some((s) => name.toUpperCase().includes(s));
+
+  return isCorporate;
+};
+
+// True when a "name" is actually a description / metadata field rather than a
+// real person name — e.g. the model returns "Director (British national, born
+// April 1967)" or "Appointed: 25 May 2022" instead of extracting "Nicholas
+// Gliddon" from the same registry record. Such entries must be dropped: we never
+// want a metadata blurb sitting in the name field, and keeping it would corrupt
+// downstream KYC records.
 const isDescriptionNotName = (fullName) => {
   if (!fullName) return true;
 
   const name = String(fullName).trim();
 
-  // Pattern: starts with a role word followed by "(" introducing demographics
-  // e.g. "Director (British national...".
+  // Safety first: if it looks like a genuine person name or corporate entity,
+  // never filter it regardless of the patterns below.
+  if (looksLikeRealName(name)) return false;
+
+  // Role word followed by "(" introducing demographics, e.g. "Director
+  // (British national...".
   const rolePrefix = /^(director|officer|secretary|manager|trustee)\s*\(/i;
 
-  // Pattern: contains both "national" and "born" — a demographic description.
+  // Contains both "national" and "born" — a demographic description.
   const demographicPattern = /national.*born|born.*national/i;
 
-  // Pattern: is just a bare role word with no actual name.
+  // Just a bare role word with no actual name.
   const justRole = /^(director|officer|secretary|manager)$/i;
 
-  return rolePrefix.test(name) || demographicPattern.test(name) || justRole.test(name);
+  // Appointment date, e.g. "Appointed: 25 May 2022" / "Appointed on 25 May 2022".
+  const appointmentPattern = /^appointed[\s:]/i;
+
+  // Date-only strings, e.g. "25 May 2022" or "May 2022".
+  const dateOnlyPattern = /^\d{1,2}\s+\w+\s+\d{4}$|^\w+\s+\d{4}$/;
+
+  // Role followed by a date, e.g. "Director since May 2022".
+  const roleSinceDate = /^(director|officer|secretary)\s+since/i;
+
+  // Status labels, e.g. "Active", "Resigned", "Current", "Ceased".
+  const statusLabel = /^(active|resigned|current|ceased)$/i;
+
+  // Identity-verification strings the registry shows beside an officer.
+  const verificationPattern = /^(verified|identity verification|verification requirements)/i;
+
+  // NOTE: an address pattern is intentionally NOT included here — corporate
+  // entities like "VODAFONE HOUSE HOLDINGS LIMITED" would be wrongly filtered.
+  // Address strings (long, comma-laden) are already excluded because
+  // looksLikeRealName returns false for them, and they match none of the
+  // patterns below, so they get dropped without an explicit address rule.
+  return (
+    rolePrefix.test(name) ||
+    demographicPattern.test(name) ||
+    justRole.test(name) ||
+    appointmentPattern.test(name) ||
+    dateOnlyPattern.test(name) ||
+    roleSinceDate.test(name) ||
+    statusLabel.test(name) ||
+    verificationPattern.test(name)
+  );
 };
 
 // Normalise an AI-returned date of birth to "YYYY-MM" (year + month only — the
@@ -1478,10 +1563,37 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         desc += ` For the UK this is the Companies House officers page at:\n`;
         desc += `  https://find-and-update.company-information.service.gov.uk/company/{COMPANY_NUMBER}/officers\n`;
         desc += `  Look for the "People" or "Officers" section. Each officer entry shows: NAME (in large text), Role, Date of birth, Nationality, Country of residence.\n`;
+        desc += `\n  COMPANIES HOUSE PAGE STRUCTURE:\n`;
+        desc += `  Each officer entry on the page looks like this:\n`;
+        desc += `  ---\n`;
+        desc += `  [SURNAME, Firstname Middlename]  ← THIS is the full_name\n`;
+        desc += `  Correspondence address: [address]\n`;
+        desc += `  Role: Director / Secretary\n`;
+        desc += `  Date of birth: [Month YYYY]\n`;
+        desc += `  Appointed on: [date]          ← NOT the name\n`;
+        desc += `  Nationality: [nationality]    ← goes in nationality field\n`;
+        desc += `  Country of residence: [country]\n`;
+        desc += `  ---\n`;
+        desc += `  EXAMPLE correct output:\n`;
+        desc += `  [\n`;
+        desc += `    {\n`;
+        desc += `      "full_name": "GLIDDON, Nicholas Francis",\n`;
+        desc += `      "role": "Director",\n`;
+        desc += `      "nationality": "British",\n`;
+        desc += `      "date_of_birth": "1967-04"\n`;
+        desc += `    },\n`;
+        desc += `    {\n`;
+        desc += `      "full_name": "TAYLOR, Max",\n`;
+        desc += `      "role": "Director",\n`;
+        desc += `      "nationality": "British",\n`;
+        desc += `      "date_of_birth": "1974-05"\n`;
+        desc += `    }\n`;
+        desc += `  ]\n`;
       } else {
         desc += `\n`;
       }
       desc += `  CRITICAL: The NAME field is always the person's actual name (e.g. "GLIDDON, Nicholas Francis" or "TAYLOR, Max"). It is NEVER a demographic description.\n`;
+      desc += `  NEVER put appointment dates, addresses, status labels ("Active"/"Resigned"), or "Appointed on XX" in the full_name field.\n`;
       desc += `  If you find demographic details (nationality, birth month) without finding the name, do NOT invent a name. Instead omit that person from the array entirely.\n`;
       desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
       if (f.searchHint) {
