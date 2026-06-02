@@ -1498,6 +1498,14 @@ const buildLocalDefaultConfig = () => ({
   documents: {},
 });
 
+// Web-search tool config for the research calls. max_uses is deliberately
+// higher than the proxy/server default (5) so the model has budget to run a
+// dedicated search for the company's FULL officer/PSC list on top of the
+// per-field searches. Without this, large companies (many officers across
+// paginated registry pages) come back with only the handful of directors that
+// happened to appear in a single search snippet.
+const RESEARCH_TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
+
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, ownershipType) => {
   // Stakeholder fields (directors / UBOs / shareholders / signatories) return
   // a JSON array per person, not a string. Other fields keep the legacy
@@ -1541,6 +1549,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         }
         desc += `  For corporate entities, the "full_name" is the company name.\n`;
         desc += `  ONLY include current/active PSCs — ignore ceased ones.\n`;
+        desc += `  COMPLETENESS: return EVERY current PSC / beneficial owner you can find, not just the first. Read the full register before answering and do not truncate the array.\n`;
         if (f.searchHint) {
           desc += `  Additional hint: ${f.searchHint}\n`;
         }
@@ -1596,6 +1605,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       desc += `  NEVER put appointment dates, addresses, status labels ("Active"/"Resigned"), or "Appointed on XX" in the full_name field.\n`;
       desc += `  If you find demographic details (nationality, birth month) without finding the name, do NOT invent a name. Instead omit that person from the array entirely.\n`;
       desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
+      desc += `  COMPLETENESS — this matters: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list — registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array.\n`;
       if (f.searchHint) {
         desc += `  Additional hint: ${f.searchHint}\n`;
       }
@@ -3187,7 +3197,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType)
+          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType),
+          tools: RESEARCH_TOOLS,
         })
       });
       if (!resp.ok) {
@@ -3271,6 +3282,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 upgradeable,
                 recoveryStrategy
               ),
+              tools: RESEARCH_TOOLS,
             }),
           });
           if (gapResp.ok) {
