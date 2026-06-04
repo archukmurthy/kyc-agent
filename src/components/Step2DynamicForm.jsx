@@ -39,9 +39,12 @@ const C = {
   infoText: '#1a4a7a', infoBg: '#f0f3f8', infoBorder: '#bcd0e8',
 };
 
-// Testing-only affordance (Upload all). CRA inlines process.env.NODE_ENV at
-// build time, so this is stripped from the deployed/customer build.
-const SHOW_TEST_TOOLS = process.env.NODE_ENV !== 'production';
+// Testing-only affordance (Upload all). Shown in local dev, and on the deployed
+// site only when the URL carries ?test=1 (matches App.js SHOW_TEST_TOOLS).
+const TEST_FLAG =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('test') === '1';
+const SHOW_TEST_TOOLS = process.env.NODE_ENV !== 'production' || TEST_FLAG;
 
 const isSelfSourced = (item) => /self-source/i.test(item.selfSource || '');
 const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');

@@ -70,10 +70,14 @@ const C = {
    Edit here when product config changes.
    ═══════════════════════════════════════════ */
 // Testing-only affordances (Dummy Research, Demo mode, Fill with test data,
-// Upload-all). CRA inlines process.env.NODE_ENV at build time: it's
-// "development" under `npm start` and "production" under `npm run build`, so
-// these controls are automatically stripped from the deployed/customer build.
-const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production";
+// Upload-all). Shown automatically in local dev (`npm start`), and on the
+// deployed/production site ONLY when the URL carries ?test=1 — so normal
+// customers never see them, but you can enable them on Vercel for QA by
+// visiting e.g. https://kyc-agent-deploy.vercel.app/?test=1
+const TEST_FLAG =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("test") === "1";
+const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
 const MANUAL_FORM_URL = "https://nium.com/apply";
 // TODO: replace with actual product form URL
@@ -5036,7 +5040,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <Btn variant="primary" onClick={proceedFromJourney}>Continue →</Btn>
             </div>
 
-            {SHOW_TEST_TOOLS && demoToggleVisible && (
+            {SHOW_TEST_TOOLS && (demoToggleVisible || TEST_FLAG) && (
               <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
                 <DemoToggle on={demoMode} onChange={setDemoMode} />
               </div>
