@@ -69,6 +69,12 @@ const C = {
    APP-LEVEL CONSTANTS
    Edit here when product config changes.
    ═══════════════════════════════════════════ */
+// Testing-only affordances (Dummy Research, Demo mode, Fill with test data,
+// Upload-all). CRA inlines process.env.NODE_ENV at build time: it's
+// "development" under `npm start` and "production" under `npm run build`, so
+// these controls are automatically stripped from the deployed/customer build.
+const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production";
+
 const MANUAL_FORM_URL = "https://nium.com/apply";
 // TODO: replace with actual product form URL
 
@@ -4924,7 +4930,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             })()}
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-              <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>
+              {SHOW_TEST_TOOLS && <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>}
               <Btn
                 disabled={!companyName.trim() || !countryCode || !entityType || !ownershipType}
                 onClick={() => {
@@ -5030,7 +5036,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <Btn variant="primary" onClick={proceedFromJourney}>Continue →</Btn>
             </div>
 
-            {demoToggleVisible && (
+            {SHOW_TEST_TOOLS && demoToggleVisible && (
               <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
                 <DemoToggle on={demoMode} onChange={setDemoMode} />
               </div>
@@ -5422,20 +5428,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
             {stakeholderSummaryNodes}
 
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-              <button
-                type="button"
-                onClick={fillTestData}
-                style={{
-                  padding: "10px 20px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "inherit",
-                  background: "transparent", color: "#4a9e8e",
-                  border: "2px dashed #4a9e8e",
-                }}
-              >
-                ✨ Fill with test data
-              </button>
-            </div>
+            {SHOW_TEST_TOOLS && (
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <button
+                  type="button"
+                  onClick={fillTestData}
+                  style={{
+                    padding: "10px 20px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                    background: "transparent", color: "#4a9e8e",
+                    border: "2px dashed #4a9e8e",
+                  }}
+                >
+                  ✨ Fill with test data
+                </button>
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.confirm)}>← Back to Review</Btn>

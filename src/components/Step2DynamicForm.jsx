@@ -1,99 +1,173 @@
 /**
  * components/Step2DynamicForm.jsx
  *
- * Step 2 of the KYC Onboarding Agent — dynamically shaped by the DRS checklist.
+ * Required Documents step of the KYC Onboarding Agent — dynamically shaped by
+ * the DRS checklist (live POST /api/document-requirements, computed from the
+ * bundled documentRequirements.js engine).
  *
  * Props:
  *   step1Data        — { companyName, entityType, ownershipType, incorporationCountry }
+ *   researchData     — (optional) research result, currently unused here
  *   onComplete(data) — called when customer advances; data includes submittedRequirements[]
  *
- * What this replaces:
- *   The previous hardcoded document list per entity type.
- *   Now every section, upload card, and conditional questionnaire (Wolfsberg etc.)
- *   is derived from the live DRS checklist at runtime.
+ * IMPORTANT — render the WHOLE checklist, drop nothing:
+ *   Each checklist item carries a `selfSource` tag, one of:
+ *     - "Client-provided only"      → customer must upload it
+ *     - "Preferred self-source"     → Nium retrieves it
+ *     - "Supplementary self-source" → Nium retrieves it
+ *   and an `rfi` tag ("Required from client" | "Request if self-source insufficient").
+ *   The previous version only showed items where rfi === "Required from client"
+ *   (cards) or selfSource === "Preferred self-source" (a banner) — so anything
+ *   tagged "Supplementary self-source" (e.g. Regulatory status, Business
+ *   activity, UK signatory authority evidence) was dropped entirely, and the
+ *   "Preferred self-source" items (Legal existence, Constitution) were buried in
+ *   a one-line banner. We now partition the FULL checklist into client-provided
+ *   vs Nium-sourced and render every item.
+ *
+ * Styling uses the app's inline palette (Nium navy + teal), matching App.js.
  */
 
 import { useState } from 'react';
 import { useDocumentRequirements } from '../hooks/useDocumentRequirements';
 
-// ─── Section renderers ───────────────────────────────────────────────────────
+const C = {
+  navy: '#1a3a4a', navy70: '#1a3a4a70', navy80: '#1a3a4a80',
+  teal: '#4a9e8e',
+  border: 'rgba(26,58,74,0.14)', borderSoft: 'rgba(26,58,74,0.08)', surface: '#fafcfb',
+  successText: '#1a6b56', successBg: '#f0f9f6', successBorder: '#4a9e8e',
+  dangerText: '#dc2626', dangerBg: '#fef2f2', dangerBorder: '#fecaca',
+  infoText: '#1a4a7a', infoBg: '#f0f3f8', infoBorder: '#bcd0e8',
+};
 
-function DocumentUploadCard({ item, onUpload, uploaded }) {
-  return (
-    <div style={styles.docCard}>
-      <div style={styles.docCardHeader}>
-        <span style={styles.docTitle}>{item.requirement}</span>
-        {item.mandatory && <span style={styles.mandatoryBadge}>Required</span>}
-        {!item.mandatory && <span style={styles.optionalBadge}>Optional</span>}
-      </div>
+// Testing-only affordance (Upload all). CRA inlines process.env.NODE_ENV at
+// build time, so this is stripped from the deployed/customer build.
+const SHOW_TEST_TOOLS = process.env.NODE_ENV !== 'production';
 
-      <p style={styles.docWhy}>{item.localEquivalent || item.standardDocument}</p>
-      <p style={styles.docHint}>{item.why}</p>
+const isSelfSourced = (item) => /self-source/i.test(item.selfSource || '');
+const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');
 
-      {item.selfSource === 'Preferred self-source' ? (
-        <div style={styles.selfSourceNote}>
-          <span>🔍</span>
-          <span>Nium will retrieve this automatically — no upload needed</span>
-        </div>
-      ) : (
-        <div style={styles.uploadArea}>
-          {uploaded ? (
-            <div style={styles.uploadedState}>
-              <span>✓</span>
-              <span>{uploaded.name}</span>
-            </div>
-          ) : (
-            <label style={styles.uploadLabel}>
-              <input
-                type="file"
-                style={{ display: 'none' }}
-                onChange={(e) => onUpload(item.requirement, e.target.files[0])}
-                accept=".pdf,.jpg,.jpeg,.png"
-              />
-              <span>Upload document</span>
-            </label>
+// ─── Upload card ─────────────────────────────────────────────────────────────
+
+function DocumentUploadCard({ item, onUpload, onRemove, uploaded }) {
+  const selfSource = isSelfSourced(item);
+  const done = !!uploaded;
+  const regUrl = item.regulatoryUrl || item.sourceUrl;
+
+  const uploadedRow = (
+    <div style={styles.uploadedState}>
+      <div style={styles.uploadedFile}>
+        <span style={styles.uploadedTick}>✓</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={styles.uploadedName}>{uploaded?.name}</div>
+          {typeof uploaded?.size === 'number' && (
+            <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>
           )}
         </div>
-      )}
+      </div>
+      <div style={styles.uploadedActions}>
+        <label style={styles.linkBtn}>
+          <input type="file" style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png"
+            onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])} />
+          Change
+        </label>
+        <button type="button" style={styles.removeBtn} onClick={() => onRemove(item.requirement)}>Remove</button>
+      </div>
+    </div>
+  );
 
-      {item.fallback && (
+  const uploadBox = (label, hint) => (
+    <label style={styles.uploadLabel}>
+      <input type="file" style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png"
+        onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])} />
+      <span style={{ fontWeight: 600, color: C.teal }}>{label}</span>
+      <span style={styles.uploadHint}>{hint}</span>
+    </label>
+  );
+
+  // Badge: client-provided → Required/Optional; Nium-sourced → auto badge.
+  const badge = selfSource
+    ? <span style={styles.autoBadge}>Nium-sourced</span>
+    : <span style={item.mandatory ? styles.mandatoryBadge : styles.optionalBadge}>{item.mandatory ? 'Required' : 'Optional'}</span>;
+
+  return (
+    <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
+      <div style={styles.docCardHeader}>
+        <span style={styles.docTitle}>{item.requirement}</span>
+        {badge}
+      </div>
+
+      <p style={styles.docWhat}>{item.localEquivalent || item.standardDocument}</p>
+      {item.why && <p style={styles.docHint}>{item.why}</p>}
+
+      {selfSource ? (
+        <>
+          <div style={styles.selfSourceNote}>
+            <span>🔍</span>
+            <span>
+              Nium retrieves this automatically.{' '}
+              {clientMayAlsoProvide(item)
+                ? 'Upload only if you already have it — it can speed up review.'
+                : 'No action needed.'}
+            </span>
+          </div>
+          {done ? uploadedRow
+            : clientMayAlsoProvide(item) ? uploadBox('Upload if you have it (optional)', 'PDF, JPG or PNG') : null}
+        </>
+      ) : done ? uploadedRow : uploadBox('Click to upload', 'PDF, JPG or PNG')}
+
+      {(item.fallback || item.regulatoryRationale || regUrl) && (
         <details style={styles.fallbackToggle}>
-          <summary style={styles.fallbackSummary}>Can't provide this?</summary>
-          <p style={styles.fallbackText}>{item.fallback}</p>
+          <summary style={styles.fallbackSummary}>Why this is required / can't provide it?</summary>
+          {item.regulatoryRationale && <p style={styles.fallbackText}>{item.regulatoryRationale}</p>}
+          {item.fallback && <p style={styles.fallbackText}><strong>Alternative:</strong> {item.fallback}</p>}
+          {regUrl && <a href={regUrl} target="_blank" rel="noopener noreferrer" style={styles.regLink}>View regulatory source ↗</a>}
         </details>
       )}
     </div>
   );
 }
 
-function WolfsbergSection({ onComplete }) {
-  // Wolfsberg CBDDQ — shown only when flags.showWolfsberg === true
-  // In production: render the actual Wolfsberg questionnaire fields
-  // For now: upload card for the completed CBDDQ PDF
+function WolfsbergSection({ uploaded, onComplete, onRemove }) {
+  const done = !!uploaded;
   return (
     <div style={styles.section}>
       <h3 style={styles.sectionTitle}>Wolfsberg CBDDQ</h3>
       <p style={styles.sectionDesc}>
-        As a Financial Institution, Nium requires a completed Correspondent Banking
-        Due Diligence Questionnaire (CBDDQ). You may upload your most recent completed
-        version or complete one now at wolfsberg-group.com.
+        As a Financial Institution, Nium requires a completed Correspondent Banking Due Diligence
+        Questionnaire (CBDDQ). Upload your most recent completed version, or complete one at
+        wolfsberg-group.com.
       </p>
-      <div style={styles.docCard}>
+      <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
         <div style={styles.docCardHeader}>
           <span style={styles.docTitle}>Wolfsberg CBDDQ</span>
           <span style={styles.mandatoryBadge}>Required</span>
         </div>
-        <div style={styles.uploadArea}>
+        {done ? (
+          <div style={styles.uploadedState}>
+            <div style={styles.uploadedFile}>
+              <span style={styles.uploadedTick}>✓</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={styles.uploadedName}>{uploaded.name}</div>
+                {typeof uploaded.size === 'number' && <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>}
+              </div>
+            </div>
+            <div style={styles.uploadedActions}>
+              <label style={styles.linkBtn}>
+                <input type="file" style={{ display: 'none' }} accept=".pdf"
+                  onChange={(e) => e.target.files[0] && onComplete('Wolfsberg CBDDQ', e.target.files[0])} />
+                Change
+              </label>
+              <button type="button" style={styles.removeBtn} onClick={() => onRemove('Wolfsberg CBDDQ')}>Remove</button>
+            </div>
+          </div>
+        ) : (
           <label style={styles.uploadLabel}>
-            <input
-              type="file"
-              style={{ display: 'none' }}
-              onChange={(e) => onComplete('Wolfsberg CBDDQ', e.target.files[0])}
-              accept=".pdf"
-            />
-            <span>Upload completed CBDDQ</span>
+            <input type="file" style={{ display: 'none' }} accept=".pdf"
+              onChange={(e) => e.target.files[0] && onComplete('Wolfsberg CBDDQ', e.target.files[0])} />
+            <span style={{ fontWeight: 600, color: C.teal }}>Upload completed CBDDQ</span>
+            <span style={styles.uploadHint}>PDF</span>
           </label>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -102,10 +176,9 @@ function WolfsbergSection({ onComplete }) {
 function LoadingState() {
   return (
     <div style={styles.loadingState}>
+      <style>{`@keyframes drsSpin { to { transform: rotate(360deg); } }`}</style>
       <div style={styles.spinner} />
-      <p style={{ color: 'var(--color-text-secondary)', marginTop: 12 }}>
-        Determining document requirements…
-      </p>
+      <p style={{ color: C.navy80, marginTop: 12, fontSize: 14 }}>Determining document requirements…</p>
     </div>
   );
 }
@@ -115,111 +188,128 @@ function LoadingState() {
 export default function Step2DynamicForm({ step1Data, onComplete }) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
-  const { checklist, rfiItems, selfSourceItems, flags, onboardingCountry, loading, error } =
+  const { checklist, flags, onboardingCountry, loading, error } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
-  // Track what has been uploaded this session
   const [uploads, setUploads] = useState({});
+  const handleUpload = (key, file) => setUploads(prev => ({ ...prev, [key]: file }));
+  const handleRemove = (key) => setUploads(prev => { const n = { ...prev }; delete n[key]; return n; });
 
-  const handleUpload = (requirementKey, file) => {
-    setUploads(prev => ({ ...prev, [requirementKey]: file }));
+  // Partition the FULL checklist — nothing is dropped.
+  const selfSourced = checklist.filter(isSelfSourced);
+  const provide     = checklist.filter(i => !isSelfSourced(i));
+  const coreItems   = provide.filter(i => !isPersonItem(i.requirement));
+  const personItems = provide.filter(i => isPersonItem(i.requirement));
+
+  // Test-only: fill every client-provided card (+ Wolfsberg) with a dummy file
+  // so the step can be completed without manually picking files.
+  const handleUploadAll = () => {
+    const targets = [...provide];
+    if (flags.showWolfsberg) targets.push({ requirement: 'Wolfsberg CBDDQ' });
+    setUploads(prev => {
+      const next = { ...prev };
+      targets.forEach(i => {
+        if (!next[i.requirement]) {
+          const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
+          try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
+          catch { next[i.requirement] = { name: fname, size: 13 }; }
+        }
+      });
+      return next;
+    });
   };
 
-  // Group RFI items into logical sections
-  const coreItems     = rfiItems.filter(i => !isPersonItem(i.requirement));
-  const personItems   = rfiItems.filter(i => isPersonItem(i.requirement));
+  // Progress = mandatory, client-provided items the customer must upload.
+  const requiredItems = provide.filter(i => i.mandatory);
+  const requiredDone  = requiredItems.filter(i => uploads[i.requirement]).length;
+  const requiredTotal = requiredItems.length;
+  const allDone       = requiredTotal === 0 || requiredDone === requiredTotal;
+  const pct           = requiredTotal === 0 ? 100 : Math.round((requiredDone / requiredTotal) * 100);
 
   const handleContinue = () => {
     const submittedRequirements = [
       ...Object.keys(uploads),
-      // Self-source items are considered "submitted" — Nium will retrieve them
-      ...selfSourceItems.map(i => i.requirement),
+      // Nium-sourced items count as submitted — Nium will retrieve them.
+      ...selfSourced.map(i => i.requirement),
     ];
     onComplete({ uploads, submittedRequirements, checklist, flags });
   };
 
-  const mandatoryUploaded = rfiItems
-    .filter(i => i.mandatory && i.selfSource !== 'Preferred self-source')
-    .every(i => uploads[i.requirement]);
-
   if (loading) return <LoadingState />;
-
-  if (error) return (
-    <div style={styles.errorState}>
-      <p>Could not load document requirements: {error}</p>
-    </div>
-  );
+  if (error) return <div style={styles.errorState}>Could not load document requirements: {error}</div>;
 
   return (
     <div style={styles.container}>
-      {/* Jurisdiction banner */}
-      {onboardingCountry && (
-        <div style={styles.jurisdictionBanner}>
-          <span>📋</span>
-          <span>
-            Requirements for <strong>{companyName}</strong> — onboarding via{' '}
-            <strong>Nium {onboardingCountry}</strong>
-          </span>
-        </div>
-      )}
+      <div>
+        {onboardingCountry && (
+          <div style={styles.jurisdictionBanner}>
+            <span>📋</span>
+            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Nium {onboardingCountry}</strong></span>
+          </div>
+        )}
+        {requiredTotal > 0 && (
+          <div style={styles.progressWrap}>
+            <div style={styles.progressRow}>
+              <span style={styles.progressLabel}>{requiredDone} of {requiredTotal} required document{requiredTotal > 1 ? 's' : ''} provided</span>
+              {allDone && <span style={styles.progressDone}>✓ All required items in</span>}
+            </div>
+            <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${pct}%` }} /></div>
+          </div>
+        )}
+        {SHOW_TEST_TOOLS && (
+          <div style={styles.testRow}>
+            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all uploads with dummy files">
+              🧪 Upload all (test)
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Self-source notice */}
-      {selfSourceItems.length > 0 && (
-        <div style={styles.selfSourceBanner}>
-          <strong>Nium will retrieve automatically:</strong>{' '}
-          {selfSourceItems.map(i => i.requirement).join(' · ')}
-        </div>
-      )}
-
-      {/* Wolfsberg — FI only */}
       {flags.showWolfsberg && (
-        <WolfsbergSection onComplete={handleUpload} />
+        <WolfsbergSection uploaded={uploads['Wolfsberg CBDDQ']} onComplete={handleUpload} onRemove={handleRemove} />
       )}
 
-      {/* Core company documents */}
       {coreItems.length > 0 && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Company documents</h3>
           {coreItems.map(item => (
-            <DocumentUploadCard
-              key={item.requirement}
-              item={item}
-              onUpload={handleUpload}
-              uploaded={uploads[item.requirement]}
-            />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
           ))}
         </div>
       )}
 
-      {/* Person-level documents (UBO, Director, Signatory) */}
       {personItems.length > 0 && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Individual verification</h3>
           <p style={styles.sectionDesc}>
-            {flags.showUboSection && 'Required for each beneficial owner (25%+ threshold). '}
+            {flags.showUboSection && 'Required for each beneficial owner (25%+ holding). '}
             {flags.showDirectorSection && 'Required for each relevant director. '}
           </p>
           {personItems.map(item => (
-            <DocumentUploadCard
-              key={item.requirement}
-              item={item}
-              onUpload={handleUpload}
-              uploaded={uploads[item.requirement]}
-            />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
           ))}
         </div>
       )}
 
-      {/* Continue */}
+      {selfSourced.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
+          <p style={styles.sectionDesc}>
+            We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
+          </p>
+          {selfSourced.map(item => (
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+          ))}
+        </div>
+      )}
+
       <div style={styles.footer}>
         <p style={styles.footerNote}>
-          {mandatoryUploaded
+          {allDone
             ? 'All required documents provided — you can continue.'
-            : `You can continue with missing documents and complete them later, but all required items must be provided before declaration.`}
+            : `${requiredTotal - requiredDone} required item${requiredTotal - requiredDone > 1 ? 's' : ''} still needed. You can continue and complete them before declaration.`}
         </p>
-        <button style={styles.continueBtn} onClick={handleContinue}>
-          Continue →
-        </button>
+        <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>
       </div>
     </div>
   );
@@ -228,93 +318,61 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isPersonItem(requirement) {
-  const personKeys = ['UBO', 'Director', 'Signatory', 'signatory'];
-  return personKeys.some(k => requirement.includes(k));
+  return ['UBO', 'Director', 'Signatory', 'signatory'].some(k => requirement.includes(k));
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = {
-  container: { display: 'flex', flexDirection: 'column', gap: 24 },
+  container: { display: 'flex', flexDirection: 'column', gap: 22 },
   section: { display: 'flex', flexDirection: 'column', gap: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: 500, margin: '0 0 4px', color: 'var(--color-text-primary)' },
-  sectionDesc: { fontSize: 14, color: 'var(--color-text-secondary)', margin: '0 0 8px' },
-  jurisdictionBanner: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '10px 14px', borderRadius: 8,
-    background: 'var(--color-background-info)',
-    color: 'var(--color-text-info)', fontSize: 14,
-  },
-  selfSourceBanner: {
-    padding: '10px 14px', borderRadius: 8, fontSize: 13,
-    background: 'var(--color-background-secondary)',
-    color: 'var(--color-text-secondary)',
-    borderLeft: '3px solid var(--color-border-secondary)',
-  },
-  docCard: {
-    border: '1px solid var(--color-border-tertiary)',
-    borderRadius: 8, padding: 16,
-    display: 'flex', flexDirection: 'column', gap: 8,
-    background: 'var(--color-background-primary)',
-  },
-  docCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  docTitle: { fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' },
-  mandatoryBadge: {
-    fontSize: 11, padding: '2px 8px', borderRadius: 12,
-    background: 'var(--color-background-danger)',
-    color: 'var(--color-text-danger)',
-  },
-  optionalBadge: {
-    fontSize: 11, padding: '2px 8px', borderRadius: 12,
-    background: 'var(--color-background-secondary)',
-    color: 'var(--color-text-secondary)',
-  },
-  docWhy: { fontSize: 13, color: 'var(--color-text-primary)', margin: 0 },
-  docHint: { fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 },
-  selfSourceNote: {
-    display: 'flex', gap: 6, alignItems: 'center',
-    fontSize: 13, color: 'var(--color-text-secondary)',
-    padding: '6px 10px', borderRadius: 6,
-    background: 'var(--color-background-secondary)',
-  },
-  uploadArea: {
-    border: '1px dashed var(--color-border-secondary)',
-    borderRadius: 6, padding: '12px 16px',
-    display: 'flex', justifyContent: 'center',
-  },
-  uploadLabel: {
-    fontSize: 13, cursor: 'pointer',
-    color: 'var(--color-text-info)',
-  },
-  uploadedState: {
-    display: 'flex', gap: 8, alignItems: 'center',
-    fontSize: 13, color: 'var(--color-text-success)',
-  },
-  fallbackToggle: { marginTop: 4 },
-  fallbackSummary: { fontSize: 12, cursor: 'pointer', color: 'var(--color-text-secondary)' },
-  fallbackText: { fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 },
-  loadingState: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    padding: 48,
-  },
-  spinner: {
-    width: 24, height: 24, borderRadius: '50%',
-    border: '2px solid var(--color-border-secondary)',
-    borderTopColor: 'var(--color-text-info)',
-    animation: 'spin 0.8s linear infinite',
-  },
-  errorState: { padding: 24, color: 'var(--color-text-danger)', fontSize: 14 },
-  footer: {
-    display: 'flex', alignItems: 'center',
-    justifyContent: 'space-between', gap: 16,
-    padding: '16px 0', borderTop: '1px solid var(--color-border-tertiary)',
-  },
-  footerNote: { fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, flex: 1 },
-  continueBtn: {
-    padding: '10px 24px', borderRadius: 8,
-    background: '#1a1a2e', color: '#fff',
-    border: 'none', cursor: 'pointer',
-    fontSize: 14, fontWeight: 500,
-    whiteSpace: 'nowrap',
-  },
+  sectionTitle: { fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: C.navy },
+  sectionDesc: { fontSize: 13, color: C.navy80, margin: '0 0 4px', lineHeight: 1.5 },
+
+  jurisdictionBanner: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: C.infoBg, border: `1px solid ${C.infoBorder}`, color: C.infoText, fontSize: 13 },
+
+  progressWrap: { marginTop: 10 },
+  progressRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  progressLabel: { fontSize: 12, fontWeight: 600, color: C.navy },
+  progressDone: { fontSize: 11, fontWeight: 700, color: C.successText },
+  progressTrack: { height: 6, borderRadius: 3, background: 'rgba(74,158,142,0.15)', overflow: 'hidden' },
+  progressFill: { height: '100%', background: `linear-gradient(90deg, ${C.teal}, ${C.navy})`, transition: 'width 0.4s ease' },
+  testRow: { display: 'flex', justifyContent: 'flex-end', marginTop: 10 },
+  testBtn: { fontSize: 11, fontWeight: 600, color: C.navy70, background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit' },
+
+  docCard: { borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 },
+  docCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  docTitle: { fontSize: 14, fontWeight: 700, color: C.navy },
+  mandatoryBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.dangerBg, color: C.dangerText, border: `1px solid ${C.dangerBorder}` },
+  optionalBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.surface, color: C.navy70, border: `1px solid ${C.border}` },
+  autoBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.infoBg, color: C.infoText, border: `1px solid ${C.infoBorder}` },
+  docWhat: { fontSize: 13, fontWeight: 600, color: C.navy, margin: 0 },
+  docHint: { fontSize: 12, color: C.navy80, margin: 0, lineHeight: 1.5 },
+
+  selfSourceNote: { display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 13, color: C.navy80, padding: '8px 12px', borderRadius: 6, background: C.surface, lineHeight: 1.5 },
+
+  uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, border: `1.5px dashed ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: '#fff' },
+  uploadHint: { fontSize: 10, color: C.navy70 },
+
+  uploadedState: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: '#fff', borderRadius: 8, border: `1px solid rgba(74,158,142,0.3)` },
+  uploadedFile: { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 },
+  uploadedTick: { color: C.successText, fontWeight: 700, fontSize: 14 },
+  uploadedName: { fontSize: 12, fontWeight: 600, color: C.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  uploadedSize: { fontSize: 10, color: C.navy70 },
+  uploadedActions: { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
+  linkBtn: { fontSize: 12, fontWeight: 600, color: C.teal, cursor: 'pointer' },
+  removeBtn: { fontSize: 12, fontWeight: 600, color: C.dangerText, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 },
+
+  fallbackToggle: { marginTop: 2 },
+  fallbackSummary: { fontSize: 12, cursor: 'pointer', color: C.teal, fontWeight: 600 },
+  fallbackText: { fontSize: 12, color: C.navy80, marginTop: 6, lineHeight: 1.5 },
+  regLink: { fontSize: 12, color: C.infoText, fontWeight: 600, display: 'inline-block', marginTop: 6 },
+
+  loadingState: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48 },
+  spinner: { width: 26, height: 26, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.teal, animation: 'drsSpin 0.8s linear infinite' },
+  errorState: { padding: 20, color: C.dangerText, fontSize: 14, background: C.dangerBg, border: `1px solid ${C.dangerBorder}`, borderRadius: 8 },
+
+  footer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '16px 0 0', borderTop: `1px solid ${C.borderSoft}` },
+  footerNote: { fontSize: 12, color: C.navy80, margin: 0, flex: 1, lineHeight: 1.5 },
+  continueBtn: { padding: '11px 26px', borderRadius: 8, background: C.navy, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', fontFamily: 'inherit' },
 };
