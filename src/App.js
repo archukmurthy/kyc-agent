@@ -640,6 +640,155 @@ const makeStakeholder = (overrides = {}) => {
   };
 };
 
+// Positive test: does this string look like a genuine person name or a corporate
+// entity? Used as a safety override so the description filter below can be
+// aggressive without ever dropping a legitimate director/UBO name.
+//
+// A real person name on a registry is always at least two words (surname +
+// forename), 2-5 of them, each made only of letters / hyphens / apostrophes /
+// dots (and an optional trailing comma for the "SURNAME, Firstname" format).
+// Corporate owners (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED") are also valid
+// even though they contain non-name words, so a company-suffix check whitelists
+// them too.
+const looksLikeRealName = (fullName) => {
+  if (!fullName) return false;
+
+  const name = String(fullName).trim();
+
+  // Must be a sensible length for a name.
+  if (name.length < 2 || name.length > 60) return false;
+
+  // Must contain at least one letter.
+  if (!/[a-zA-Z]/.test(name)) return false;
+
+  const words = name.split(/\s+/).filter((w) => w.length > 0);
+  // A real person name is 2-5 words. A single bare word ("Director", "Active",
+  // "Verified") is a label, not a name, so it is NOT treated as a real name and
+  // is left for the description patterns below to filter.
+  if (words.length < 2 || words.length > 6) {
+    // Single-word entries can still be corporates in rare cases — fall through
+    // to the corporate-suffix check rather than rejecting outright.
+    if (words.length !== 1) return false;
+  }
+
+  // Each word should be mostly letters (allowing hyphenated names, apostrophes,
+  // initials with dots, and the trailing comma of "SURNAME, Firstname").
+  const wordsAreName =
+    words.length >= 2 &&
+    words.every(
+      (w) => /^[a-zA-Z\-'.]+$/.test(w) || /^[a-zA-Z\-'.]+,$/.test(w)
+    );
+
+  if (wordsAreName) return true;
+
+  // Corporate entities are valid even though they contain non-name words.
+  const corporateSuffixes = [
+    "LIMITED", "LTD", "PLC", "LLP", "HOLDINGS", "CORPORATION",
+    "CORP", "INC", "LLC", "GMBH", "BV",
+  ];
+  const isCorporate = corporateSuffixes.some((s) => name.toUpperCase().includes(s));
+
+  return isCorporate;
+};
+
+// True when a "name" is actually a description / metadata field rather than a
+// real person name — e.g. the model returns "Director (British national, born
+// April 1967)" or "Appointed: 25 May 2022" instead of extracting "Nicholas
+// Gliddon" from the same registry record. Such entries must be dropped: we never
+// want a metadata blurb sitting in the name field, and keeping it would corrupt
+// downstream KYC records.
+const isDescriptionNotName = (fullName) => {
+  if (!fullName) return true;
+
+  const name = String(fullName).trim();
+
+  // Safety first: if it looks like a genuine person name or corporate entity,
+  // never filter it regardless of the patterns below.
+  if (looksLikeRealName(name)) return false;
+
+  // Role word followed by "(" introducing demographics, e.g. "Director
+  // (British national...".
+  const rolePrefix = /^(director|officer|secretary|manager|trustee)\s*\(/i;
+
+  // Contains both "national" and "born" — a demographic description.
+  const demographicPattern = /national.*born|born.*national/i;
+
+  // Just a bare role word with no actual name.
+  const justRole = /^(director|officer|secretary|manager)$/i;
+
+  // Appointment date, e.g. "Appointed: 25 May 2022" / "Appointed on 25 May 2022".
+  const appointmentPattern = /^appointed[\s:]/i;
+
+  // Date-only strings, e.g. "25 May 2022" or "May 2022".
+  const dateOnlyPattern = /^\d{1,2}\s+\w+\s+\d{4}$|^\w+\s+\d{4}$/;
+
+  // Role followed by a date, e.g. "Director since May 2022".
+  const roleSinceDate = /^(director|officer|secretary)\s+since/i;
+
+  // Status labels, e.g. "Active", "Resigned", "Current", "Ceased".
+  const statusLabel = /^(active|resigned|current|ceased)$/i;
+
+  // Identity-verification strings the registry shows beside an officer.
+  const verificationPattern = /^(verified|identity verification|verification requirements)/i;
+
+  // NOTE: an address pattern is intentionally NOT included here — corporate
+  // entities like "VODAFONE HOUSE HOLDINGS LIMITED" would be wrongly filtered.
+  // Address strings (long, comma-laden) are already excluded because
+  // looksLikeRealName returns false for them, and they match none of the
+  // patterns below, so they get dropped without an explicit address rule.
+  return (
+    rolePrefix.test(name) ||
+    demographicPattern.test(name) ||
+    justRole.test(name) ||
+    appointmentPattern.test(name) ||
+    dateOnlyPattern.test(name) ||
+    roleSinceDate.test(name) ||
+    statusLabel.test(name) ||
+    verificationPattern.test(name)
+  );
+};
+
+// Normalise an AI-returned date of birth to "YYYY-MM" (year + month only — the
+// public registry never exposes the day). Accepts the formats the model tends
+// to emit: "YYYY-MM", "YYYY-MM-DD", or "April 1967".
+const normaliseDateOfBirth = (value) => {
+  if (!value) return "";
+  const v = String(value).trim();
+
+  // Already YYYY-MM.
+  if (/^\d{4}-\d{2}$/.test(v)) return v;
+
+  // YYYY-MM-DD — strip the day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.slice(0, 7);
+
+  // "April 1967" → "1967-04".
+  const monthNames = {
+    january: "01", february: "02", march: "03", april: "04",
+    may: "05", june: "06", july: "07", august: "08",
+    september: "09", october: "10", november: "11", december: "12",
+  };
+  const match = v.toLowerCase().match(/([a-z]+)\s+(\d{4})/);
+  if (match) {
+    const month = monthNames[match[1]];
+    if (month) return `${match[2]}-${month}`;
+  }
+
+  return "";
+};
+
+// Format a stored "YYYY-MM" (or "YYYY-MM-DD") date of birth as a human-readable
+// "April 1967" for display in the Fill Gaps locked field.
+const formatDOBForDisplay = (dobString) => {
+  if (!dobString) return "";
+  const [year, month] = String(dobString).split("-");
+  const months = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const monthName = months[parseInt(month, 10)] || month;
+  return year ? `${monthName} ${year}`.trim() : "";
+};
+
 // Parse a legacy free-text stakeholder string ("John Smith (CEO), Jane Doe (CFO)")
 // into structured stakeholder records. Handles a JSON-encoded array as well, so
 // the same parser covers both "string from old KV" and "JSON string the model
@@ -652,13 +801,22 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
         full_name: p.full_name || p.name || "",
         role: p.role || p.position || p.title || "",
         share_percentage: p.share_percentage != null ? p.share_percentage : (p.percentage != null ? p.percentage : null),
+        // Pre-populate nationality / DOB / country of residence the AI returned
+        // alongside the name so the customer doesn't have to re-enter what was
+        // already found on the registry.
+        nationality: p.nationality || "",
+        date_of_birth: p.date_of_birth ? normaliseDateOfBirth(p.date_of_birth) : "",
+        residential_country: p.country_of_residence || p.residential_country || p.residence || "",
         source: source || p.source || "",
         sourceUrl: sourceUrl || p.sourceUrl || "",
         sourceTier: sourceTier || p.sourceTier || "tier1",
         fetchedAt: fetchedAt || p.fetchedAt || null,
       }))
       .filter((s) => s.full_name)
-      .filter((s) => !isRegistryExemptionNotice(s));
+      .filter((s) => !isRegistryExemptionNotice(s))
+      // Drop entries where the "name" is a demographic description, e.g.
+      // "Director (British national, born April 1967)".
+      .filter((s) => !isDescriptionNotName(s.full_name));
   }
   if (typeof rawString !== "string") return [];
   const trimmed = rawString.trim();
@@ -733,7 +891,8 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
     });
   })
     .filter((s) => s.full_name.length > 0)
-    .filter((s) => !isRegistryExemptionNotice(s));
+    .filter((s) => !isRegistryExemptionNotice(s))
+    .filter((s) => !isDescriptionNotName(s.full_name));
 };
 
 // Augment a research-result list with parsed .stakeholders arrays for any
@@ -1341,6 +1500,14 @@ const buildLocalDefaultConfig = () => ({
   documents: {},
 });
 
+// Web-search tool config for the research calls. max_uses is deliberately
+// higher than the proxy/server default (5) so the model has budget to run a
+// dedicated search for the company's FULL officer/PSC list on top of the
+// per-field searches. Without this, large companies (many officers across
+// paginated registry pages) come back with only the handful of directors that
+// happened to appear in a single search snippet.
+const RESEARCH_TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
+
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, ownershipType) => {
   // Stakeholder fields (directors / UBOs / shareholders / signatories) return
   // a JSON array per person, not a string. Other fields keep the legacy
@@ -1361,11 +1528,95 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   const stakeholderRules = schema.researchFields
     .filter((f) => isStakeholderField(f.field))
     .map((f) => {
-      const ubo = isUboLikeField(f.field);
-      const shape = ubo
-        ? '{ "full_name": string, "role": string, "share_percentage": number or null }'
-        : '{ "full_name": string, "role": string }';
-      return `- ${f.field}: return a JSON array of objects, one per person. Each: ${shape}. Include the name even when role/percentage is unknown. Never omit a person because DOB or nationality is not publicly available. Search ${country}'s official company registry (officers / PSC / beneficial ownership records).`;
+      // UBO / beneficial-owner / shareholder fields: each entry may be a
+      // person OR a corporate entity. Pulled from the PSC register.
+      if (isUboLikeField(f.field)) {
+        let desc = `- "${f.label}" (id: ${f.field})\n`;
+        desc += `  IMPORTANT: Return as a JSON array.\n`;
+        desc += `  Each entry is either a PERSON or a CORPORATE ENTITY.\n`;
+        desc += `  Each object must have:\n`;
+        desc += `  {\n`;
+        desc += `    "full_name": the actual name — either a person's legal name OR a company name (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED"). NEVER use a demographic description.\n`;
+        desc += `    "role": "Person with Significant Control" or "Corporate Entity" or equivalent\n`;
+        desc += `    "share_percentage": number if available (e.g. 75 for 75%)\n`;
+        desc += `    "nationality": if person and available\n`;
+        desc += `    "date_of_birth": "YYYY-MM" if person and available\n`;
+        desc += `    "country_of_residence": if person and shown on the register (e.g. "United Kingdom")\n`;
+        desc += `  }\n`;
+        desc += `  SOURCE: ${country}'s official register of persons with significant control / beneficial ownership.`;
+        if (countryCode === "GB") {
+          desc += ` For the UK this is the Companies House PSC register at:\n`;
+          desc += `  https://find-and-update.company-information.service.gov.uk/company/{COMPANY_NUMBER}/persons-with-significant-control\n`;
+        } else {
+          desc += `\n`;
+        }
+        desc += `  For corporate entities, the "full_name" is the company name.\n`;
+        desc += `  ONLY include current/active PSCs — ignore ceased ones.\n`;
+        desc += `  COMPLETENESS: return EVERY current PSC / beneficial owner you can find, not just the first. Read the full register before answering and do not truncate the array.\n`;
+        if (f.searchHint) {
+          desc += `  Additional hint: ${f.searchHint}\n`;
+        }
+        return desc;
+      }
+
+      // Director / officer fields: actual person name extraction. The model
+      // must return the NAME, never the demographic description shown beside it.
+      let desc = `- "${f.label}" (id: ${f.field})\n`;
+      desc += `  IMPORTANT: Return as a JSON array.\n`;
+      desc += `  Each object must have:\n`;
+      desc += `  {\n`;
+      desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" — the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
+      desc += `    "role": "Director" or "Secretary" etc.\n`;
+      desc += `    "nationality": "British" or equivalent — OPTIONAL, include only if shown\n`;
+      desc += `    "date_of_birth": "YYYY-MM" — OPTIONAL. Include it when the registry shows a date of birth (Companies House shows "Month YYYY" for person directors; year and month only — do not guess the day)\n`;
+      desc += `    "country_of_residence": the officer's country of residence (e.g. "United Kingdom", "England") — OPTIONAL, include only if shown\n`;
+      desc += `  }\n`;
+      desc += `  REQUIRED vs OPTIONAL: only "full_name" (and ideally "role") is required per officer. "nationality", "date_of_birth" and "country_of_residence" are OPTIONAL — include them when the registry shows them, otherwise simply omit that one key. NEVER drop an officer from the array just because their nationality, date of birth, or country of residence is missing. Always list the officer with whatever fields you do have.\n`;
+      desc += `  SOURCE: ${country}'s official company officers register.`;
+      if (countryCode === "GB") {
+        desc += ` For the UK this is the Companies House officers page at:\n`;
+        desc += `  https://find-and-update.company-information.service.gov.uk/company/{COMPANY_NUMBER}/officers\n`;
+        desc += `  Look for the "People" or "Officers" section. Each officer entry shows: NAME (in large text), Role, Date of birth, Nationality, Country of residence.\n`;
+        desc += `\n  COMPANIES HOUSE PAGE STRUCTURE:\n`;
+        desc += `  Each officer entry on the page looks like this:\n`;
+        desc += `  ---\n`;
+        desc += `  [SURNAME, Firstname Middlename]  ← THIS is the full_name\n`;
+        desc += `  Correspondence address: [address]\n`;
+        desc += `  Role: Director / Secretary\n`;
+        desc += `  Date of birth: [Month YYYY]\n`;
+        desc += `  Appointed on: [date]          ← NOT the name\n`;
+        desc += `  Nationality: [nationality]    ← goes in nationality field\n`;
+        desc += `  Country of residence: [country]\n`;
+        desc += `  ---\n`;
+        desc += `  EXAMPLE correct output:\n`;
+        desc += `  [\n`;
+        desc += `    {\n`;
+        desc += `      "full_name": "GLIDDON, Nicholas Francis",\n`;
+        desc += `      "role": "Director",\n`;
+        desc += `      "nationality": "British",\n`;
+        desc += `      "date_of_birth": "1967-04",\n`;
+        desc += `      "country_of_residence": "United Kingdom"\n`;
+        desc += `    },\n`;
+        desc += `    {\n`;
+        desc += `      "full_name": "TAYLOR, Max",\n`;
+        desc += `      "role": "Director",\n`;
+        desc += `      "nationality": "British",\n`;
+        desc += `      "date_of_birth": "1974-05",\n`;
+        desc += `      "country_of_residence": "England"\n`;
+        desc += `    }\n`;
+        desc += `  ]\n`;
+      } else {
+        desc += `\n`;
+      }
+      desc += `  CRITICAL: The NAME field is always the person's actual name (e.g. "GLIDDON, Nicholas Francis" or "TAYLOR, Max"). It is NEVER a demographic description.\n`;
+      desc += `  NEVER put appointment dates, addresses, status labels ("Active"/"Resigned"), or "Appointed on XX" in the full_name field.\n`;
+      desc += `  NAME ONLY: if an officer entry shows demographic details (nationality, birth month) but you genuinely cannot determine the person's NAME, do NOT invent a name — omit just that one nameless entry. This rule is about a MISSING NAME only: never omit an officer who HAS a name but is missing other details.\n`;
+      desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
+      desc += `  COMPLETENESS — this matters most: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see, and INCLUDE an officer even if all you have is their name and role. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list — registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array, and do not trade list completeness for per-officer detail.\n`;
+      if (f.searchHint) {
+        desc += `  Additional hint: ${f.searchHint}\n`;
+      }
+      return desc;
     })
     .join("\n");
   const stakeholderRulesBlock = stakeholderRules
@@ -2269,6 +2520,66 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
   );
 }
 
+// A field that was pre-populated from the AI research (e.g. nationality / date
+// of birth a director's registry record carried). Shown as a locked value with
+// a source badge — but, unlike the fully-locked name, the customer can click
+// "Edit" to override it. When the value is empty it falls straight through to
+// the editable input so nothing is pre-filled. Module-scoped so its `editing`
+// state survives parent re-renders (same reason StableInput lives out here).
+function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder, options }) {
+  const [editing, setEditing] = useState(false);
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 };
+
+  if (editing || !value) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <StableInput
+          id={id}
+          label={label}
+          type={type || "text"}
+          value={value || ""}
+          onUpdate={onUpdate}
+          required={required}
+          placeholder={placeholder}
+          options={options}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            style={{ fontSize: 11, color: C.textMuted, background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}
+          >
+            Cancel edit
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={labelStyle}>{label} {required && <span style={{ color: "#d44" }}>*</span>}</label>
+      <div style={{
+        padding: "10px 14px", background: C.infoBg, borderRadius: 8,
+        border: `1px solid ${C.infoBorder}`, fontSize: 14, color: C.text,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+      }}>
+        <span>{displayValue || value}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: C.info, fontWeight: 600 }}>~ {sourceLabel || "Found"}</span>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{ fontSize: 11, color: C.niumBlue, background: "none", border: `1px solid ${C.niumBlue}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function KYCAgent({ previewMode = false } = {}) {
   // Tenant config — loaded from /api/config on mount, or from sessionStorage
   // when running in preview mode (the admin "Preview" button stages the
@@ -2894,7 +3205,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType)
+          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType),
+          tools: RESEARCH_TOOLS,
         })
       });
       if (!resp.ok) {
@@ -2978,6 +3290,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 upgradeable,
                 recoveryStrategy
               ),
+              tools: RESEARCH_TOOLS,
             }),
           });
           if (gapResp.ok) {
@@ -4039,39 +4352,46 @@ export default function KYCAgent({ previewMode = false } = {}) {
             />
           )}
 
-          {/* Nationality */}
-          <StableInput
+          {/* Nationality — pre-filled & locked (editable) when the AI found it */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_nationality`}
             label="Nationality"
             type="text"
             value={stakeholder.nationality || ""}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "nationality", v)}
+            sourceLabel={stakeholder.source}
             required
             placeholder="e.g. British, American, Singaporean"
           />
 
-          {/* Date of birth */}
-          <StableInput
+          {/* Date of birth — pre-filled & locked (editable) when the AI found it */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_dob`}
             label="Date of Birth"
             type="date"
             value={stakeholder.date_of_birth || ""}
+            displayValue={formatDOBForDisplay(stakeholder.date_of_birth)}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "date_of_birth", v)}
+            sourceLabel={stakeholder.source}
             required
             placeholder="YYYY-MM-DD"
           />
 
-          {/* Residential country */}
-          <StableInput
+          {/* Country of residence — pre-filled & locked (editable) when the AI
+              found it on the registry; falls through to a country picker when empty */}
+          <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_country`}
             label="Country of Residence"
             type="select"
             value={stakeholder.residential_country || ""}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "residential_country", v)}
             options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+            sourceLabel={stakeholder.source}
           />
 
-          {/* ID type */}
+          {/* Identity Document Type and Identity Document Number are intentionally
+              hidden at Fill Gaps — these are collected later in the verification
+              flow, not from the registry. Uncomment to restore.
           <StableInput
             id={`stk_${fieldId}_${stakeholder.id}_id_type`}
             label="Identity Document Type"
@@ -4085,8 +4405,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               { value: "other", label: "Other" },
             ]}
           />
-
-          {/* ID number */}
           <StableInput
             id={`stk_${fieldId}_${stakeholder.id}_id_number`}
             label="Identity Document Number"
@@ -4095,6 +4413,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "id_number", v)}
             placeholder="Passport or ID number"
           />
+          */}
 
           {/* PEP three-button toggle */}
           <div style={{ marginBottom: 14 }}>
