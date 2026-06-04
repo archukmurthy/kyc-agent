@@ -10,114 +10,113 @@
  *   researchData     — (optional) research result, currently unused here
  *   onComplete(data) — called when customer advances; data includes submittedRequirements[]
  *
- * Styling note: this component previously referenced `var(--color-*)` tokens
- * that are not defined anywhere in the project, so it rendered unstyled. It now
- * uses the same inline palette as App.js (Nium navy + teal) so it matches the
- * rest of the wizard.
+ * IMPORTANT — render the WHOLE checklist, drop nothing:
+ *   Each checklist item carries a `selfSource` tag, one of:
+ *     - "Client-provided only"      → customer must upload it
+ *     - "Preferred self-source"     → Nium retrieves it
+ *     - "Supplementary self-source" → Nium retrieves it
+ *   and an `rfi` tag ("Required from client" | "Request if self-source insufficient").
+ *   The previous version only showed items where rfi === "Required from client"
+ *   (cards) or selfSource === "Preferred self-source" (a banner) — so anything
+ *   tagged "Supplementary self-source" (e.g. Regulatory status, Business
+ *   activity, UK signatory authority evidence) was dropped entirely, and the
+ *   "Preferred self-source" items (Legal existence, Constitution) were buried in
+ *   a one-line banner. We now partition the FULL checklist into client-provided
+ *   vs Nium-sourced and render every item.
+ *
+ * Styling uses the app's inline palette (Nium navy + teal), matching App.js.
  */
 
 import { useState } from 'react';
 import { useDocumentRequirements } from '../hooks/useDocumentRequirements';
 
-// Palette aligned with App.js (the `C` object there).
 const C = {
-  navy: '#1a3a4a',
-  navy70: '#1a3a4a70',
-  navy80: '#1a3a4a80',
+  navy: '#1a3a4a', navy70: '#1a3a4a70', navy80: '#1a3a4a80',
   teal: '#4a9e8e',
-  border: 'rgba(26,58,74,0.14)',
-  borderSoft: 'rgba(26,58,74,0.08)',
-  surface: '#fafcfb',
-  successText: '#1a6b56',
-  successBg: '#f0f9f6',
-  successBorder: '#4a9e8e',
-  dangerText: '#dc2626',
-  dangerBg: '#fef2f2',
-  dangerBorder: '#fecaca',
-  infoText: '#1a4a7a',
-  infoBg: '#f0f3f8',
-  infoBorder: '#bcd0e8',
+  border: 'rgba(26,58,74,0.14)', borderSoft: 'rgba(26,58,74,0.08)', surface: '#fafcfb',
+  successText: '#1a6b56', successBg: '#f0f9f6', successBorder: '#4a9e8e',
+  dangerText: '#dc2626', dangerBg: '#fef2f2', dangerBorder: '#fecaca',
+  infoText: '#1a4a7a', infoBg: '#f0f3f8', infoBorder: '#bcd0e8',
 };
+
+const isSelfSourced = (item) => /self-source/i.test(item.selfSource || '');
+const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');
 
 // ─── Upload card ─────────────────────────────────────────────────────────────
 
 function DocumentUploadCard({ item, onUpload, onRemove, uploaded }) {
-  const isSelfSource = item.selfSource === 'Preferred self-source';
+  const selfSource = isSelfSourced(item);
   const done = !!uploaded;
   const regUrl = item.regulatoryUrl || item.sourceUrl;
 
+  const uploadedRow = (
+    <div style={styles.uploadedState}>
+      <div style={styles.uploadedFile}>
+        <span style={styles.uploadedTick}>✓</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={styles.uploadedName}>{uploaded?.name}</div>
+          {typeof uploaded?.size === 'number' && (
+            <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>
+          )}
+        </div>
+      </div>
+      <div style={styles.uploadedActions}>
+        <label style={styles.linkBtn}>
+          <input type="file" style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png"
+            onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])} />
+          Change
+        </label>
+        <button type="button" style={styles.removeBtn} onClick={() => onRemove(item.requirement)}>Remove</button>
+      </div>
+    </div>
+  );
+
+  const uploadBox = (label, hint) => (
+    <label style={styles.uploadLabel}>
+      <input type="file" style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png"
+        onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])} />
+      <span style={{ fontWeight: 600, color: C.teal }}>{label}</span>
+      <span style={styles.uploadHint}>{hint}</span>
+    </label>
+  );
+
+  // Badge: client-provided → Required/Optional; Nium-sourced → auto badge.
+  const badge = selfSource
+    ? <span style={styles.autoBadge}>Nium-sourced</span>
+    : <span style={item.mandatory ? styles.mandatoryBadge : styles.optionalBadge}>{item.mandatory ? 'Required' : 'Optional'}</span>;
+
   return (
-    <div
-      style={{
-        ...styles.docCard,
-        border: `1.5px solid ${done ? C.successBorder : C.border}`,
-        background: done ? C.successBg : '#fff',
-      }}
-    >
+    <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
       <div style={styles.docCardHeader}>
         <span style={styles.docTitle}>{item.requirement}</span>
-        <span style={item.mandatory ? styles.mandatoryBadge : styles.optionalBadge}>
-          {item.mandatory ? 'Required' : 'Optional'}
-        </span>
+        {badge}
       </div>
 
       <p style={styles.docWhat}>{item.localEquivalent || item.standardDocument}</p>
       {item.why && <p style={styles.docHint}>{item.why}</p>}
 
-      {isSelfSource ? (
-        <div style={styles.selfSourceNote}>
-          <span>🔍</span>
-          <span>Nium will retrieve this automatically — no upload needed</span>
-        </div>
-      ) : done ? (
-        <div style={styles.uploadedState}>
-          <div style={styles.uploadedFile}>
-            <span style={styles.uploadedTick}>✓</span>
-            <div style={{ minWidth: 0 }}>
-              <div style={styles.uploadedName}>{uploaded.name}</div>
-              {typeof uploaded.size === 'number' && (
-                <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>
-              )}
-            </div>
+      {selfSource ? (
+        <>
+          <div style={styles.selfSourceNote}>
+            <span>🔍</span>
+            <span>
+              Nium retrieves this automatically.{' '}
+              {clientMayAlsoProvide(item)
+                ? 'Upload only if you already have it — it can speed up review.'
+                : 'No action needed.'}
+            </span>
           </div>
-          <div style={styles.uploadedActions}>
-            <label style={styles.linkBtn}>
-              <input
-                type="file"
-                style={{ display: 'none' }}
-                onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])}
-                accept=".pdf,.jpg,.jpeg,.png"
-              />
-              Change
-            </label>
-            <button type="button" style={styles.removeBtn} onClick={() => onRemove(item.requirement)} title="Remove">
-              Remove
-            </button>
-          </div>
-        </div>
-      ) : (
-        <label style={styles.uploadLabel}>
-          <input
-            type="file"
-            style={{ display: 'none' }}
-            onChange={(e) => e.target.files[0] && onUpload(item.requirement, e.target.files[0])}
-            accept=".pdf,.jpg,.jpeg,.png"
-          />
-          <span style={{ fontWeight: 600, color: C.teal }}>Click to upload</span>
-          <span style={styles.uploadHint}>PDF, JPG or PNG</span>
-        </label>
-      )}
+          {done ? uploadedRow
+            : clientMayAlsoProvide(item) ? uploadBox('Upload if you have it (optional)', 'PDF, JPG or PNG') : null}
+        </>
+      ) : done ? uploadedRow : uploadBox('Click to upload', 'PDF, JPG or PNG')}
 
-      {(item.fallback || regUrl) && (
+      {(item.fallback || item.regulatoryRationale || regUrl) && (
         <details style={styles.fallbackToggle}>
           <summary style={styles.fallbackSummary}>Why this is required / can't provide it?</summary>
           {item.regulatoryRationale && <p style={styles.fallbackText}>{item.regulatoryRationale}</p>}
           {item.fallback && <p style={styles.fallbackText}><strong>Alternative:</strong> {item.fallback}</p>}
-          {regUrl && (
-            <a href={regUrl} target="_blank" rel="noopener noreferrer" style={styles.regLink}>
-              View regulatory source ↗
-            </a>
-          )}
+          {regUrl && <a href={regUrl} target="_blank" rel="noopener noreferrer" style={styles.regLink}>View regulatory source ↗</a>}
         </details>
       )}
     </div>
@@ -134,13 +133,7 @@ function WolfsbergSection({ uploaded, onComplete, onRemove }) {
         Questionnaire (CBDDQ). Upload your most recent completed version, or complete one at
         wolfsberg-group.com.
       </p>
-      <div
-        style={{
-          ...styles.docCard,
-          border: `1.5px solid ${done ? C.successBorder : C.border}`,
-          background: done ? C.successBg : '#fff',
-        }}
-      >
+      <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
         <div style={styles.docCardHeader}>
           <span style={styles.docTitle}>Wolfsberg CBDDQ</span>
           <span style={styles.mandatoryBadge}>Required</span>
@@ -151,9 +144,7 @@ function WolfsbergSection({ uploaded, onComplete, onRemove }) {
               <span style={styles.uploadedTick}>✓</span>
               <div style={{ minWidth: 0 }}>
                 <div style={styles.uploadedName}>{uploaded.name}</div>
-                {typeof uploaded.size === 'number' && (
-                  <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>
-                )}
+                {typeof uploaded.size === 'number' && <div style={styles.uploadedSize}>{(uploaded.size / 1024).toFixed(0)} KB</div>}
               </div>
             </div>
             <div style={styles.uploadedActions}>
@@ -193,20 +184,21 @@ function LoadingState() {
 export default function Step2DynamicForm({ step1Data, onComplete }) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
-  const { rfiItems, selfSourceItems, flags, onboardingCountry, checklist, loading, error } =
+  const { checklist, flags, onboardingCountry, loading, error } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
   const [uploads, setUploads] = useState({});
+  const handleUpload = (key, file) => setUploads(prev => ({ ...prev, [key]: file }));
+  const handleRemove = (key) => setUploads(prev => { const n = { ...prev }; delete n[key]; return n; });
 
-  const handleUpload = (requirementKey, file) => setUploads(prev => ({ ...prev, [requirementKey]: file }));
-  const handleRemove = (requirementKey) =>
-    setUploads(prev => { const next = { ...prev }; delete next[requirementKey]; return next; });
+  // Partition the FULL checklist — nothing is dropped.
+  const selfSourced = checklist.filter(isSelfSourced);
+  const provide     = checklist.filter(i => !isSelfSourced(i));
+  const coreItems   = provide.filter(i => !isPersonItem(i.requirement));
+  const personItems = provide.filter(i => isPersonItem(i.requirement));
 
-  const coreItems   = rfiItems.filter(i => !isPersonItem(i.requirement));
-  const personItems = rfiItems.filter(i => isPersonItem(i.requirement));
-
-  // Progress over mandatory, customer-supplied (non-self-source) items.
-  const requiredItems = rfiItems.filter(i => i.mandatory && i.selfSource !== 'Preferred self-source');
+  // Progress = mandatory, client-provided items the customer must upload.
+  const requiredItems = provide.filter(i => i.mandatory);
   const requiredDone  = requiredItems.filter(i => uploads[i.requirement]).length;
   const requiredTotal = requiredItems.length;
   const allDone       = requiredTotal === 0 || requiredDone === requiredTotal;
@@ -215,7 +207,8 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
   const handleContinue = () => {
     const submittedRequirements = [
       ...Object.keys(uploads),
-      ...selfSourceItems.map(i => i.requirement),
+      // Nium-sourced items count as submitted — Nium will retrieve them.
+      ...selfSourced.map(i => i.requirement),
     ];
     onComplete({ uploads, submittedRequirements, checklist, flags });
   };
@@ -225,39 +218,23 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
 
   return (
     <div style={styles.container}>
-      {/* Jurisdiction + progress header */}
       <div>
         {onboardingCountry && (
           <div style={styles.jurisdictionBanner}>
             <span>📋</span>
-            <span>
-              Requirements for <strong>{companyName}</strong> — onboarding via{' '}
-              <strong>Nium {onboardingCountry}</strong>
-            </span>
+            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Nium {onboardingCountry}</strong></span>
           </div>
         )}
         {requiredTotal > 0 && (
           <div style={styles.progressWrap}>
             <div style={styles.progressRow}>
-              <span style={styles.progressLabel}>
-                {requiredDone} of {requiredTotal} required document{requiredTotal > 1 ? 's' : ''} provided
-              </span>
+              <span style={styles.progressLabel}>{requiredDone} of {requiredTotal} required document{requiredTotal > 1 ? 's' : ''} provided</span>
               {allDone && <span style={styles.progressDone}>✓ All required items in</span>}
             </div>
-            <div style={styles.progressTrack}>
-              <div style={{ ...styles.progressFill, width: `${pct}%` }} />
-            </div>
+            <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${pct}%` }} /></div>
           </div>
         )}
       </div>
-
-      {/* Self-source notice */}
-      {selfSourceItems.length > 0 && (
-        <div style={styles.selfSourceBanner}>
-          <strong>🔍 Nium retrieves these automatically:</strong>{' '}
-          {selfSourceItems.map(i => i.requirement).join(' · ')}
-        </div>
-      )}
 
       {flags.showWolfsberg && (
         <WolfsbergSection uploaded={uploads['Wolfsberg CBDDQ']} onComplete={handleUpload} onRemove={handleRemove} />
@@ -267,8 +244,7 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Company documents</h3>
           {coreItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item}
-              onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
           ))}
         </div>
       )}
@@ -281,13 +257,23 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
             {flags.showDirectorSection && 'Required for each relevant director. '}
           </p>
           {personItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item}
-              onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
           ))}
         </div>
       )}
 
-      {/* Continue */}
+      {selfSourced.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
+          <p style={styles.sectionDesc}>
+            We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
+          </p>
+          {selfSourced.map(item => (
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+          ))}
+        </div>
+      )}
+
       <div style={styles.footer}>
         <p style={styles.footerNote}>
           {allDone
@@ -314,12 +300,7 @@ const styles = {
   sectionTitle: { fontSize: 15, fontWeight: 700, margin: '0 0 4px', color: C.navy },
   sectionDesc: { fontSize: 13, color: C.navy80, margin: '0 0 4px', lineHeight: 1.5 },
 
-  jurisdictionBanner: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '10px 14px', borderRadius: 8,
-    background: C.infoBg, border: `1px solid ${C.infoBorder}`,
-    color: C.infoText, fontSize: 13,
-  },
+  jurisdictionBanner: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: C.infoBg, border: `1px solid ${C.infoBorder}`, color: C.infoText, fontSize: 13 },
 
   progressWrap: { marginTop: 10 },
   progressRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
@@ -328,36 +309,18 @@ const styles = {
   progressTrack: { height: 6, borderRadius: 3, background: 'rgba(74,158,142,0.15)', overflow: 'hidden' },
   progressFill: { height: '100%', background: `linear-gradient(90deg, ${C.teal}, ${C.navy})`, transition: 'width 0.4s ease' },
 
-  selfSourceBanner: {
-    padding: '10px 14px', borderRadius: 8, fontSize: 13,
-    background: C.surface, color: C.navy80,
-    borderLeft: `3px solid ${C.teal}`,
-  },
-
   docCard: { borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 },
   docCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   docTitle: { fontSize: 14, fontWeight: 700, color: C.navy },
-  mandatoryBadge: {
-    fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap',
-    background: C.dangerBg, color: C.dangerText, border: `1px solid ${C.dangerBorder}`,
-  },
-  optionalBadge: {
-    fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap',
-    background: C.surface, color: C.navy70, border: `1px solid ${C.border}`,
-  },
+  mandatoryBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.dangerBg, color: C.dangerText, border: `1px solid ${C.dangerBorder}` },
+  optionalBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.surface, color: C.navy70, border: `1px solid ${C.border}` },
+  autoBadge: { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap', background: C.infoBg, color: C.infoText, border: `1px solid ${C.infoBorder}` },
   docWhat: { fontSize: 13, fontWeight: 600, color: C.navy, margin: 0 },
   docHint: { fontSize: 12, color: C.navy80, margin: 0, lineHeight: 1.5 },
 
-  selfSourceNote: {
-    display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: C.navy80,
-    padding: '8px 12px', borderRadius: 6, background: C.surface,
-  },
+  selfSourceNote: { display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 13, color: C.navy80, padding: '8px 12px', borderRadius: 6, background: C.surface, lineHeight: 1.5 },
 
-  uploadLabel: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-    border: `1.5px dashed ${C.border}`, borderRadius: 8, padding: '14px 16px',
-    cursor: 'pointer', background: '#fff',
-  },
+  uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, border: `1.5px dashed ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: '#fff' },
   uploadHint: { fontSize: 10, color: C.navy70 },
 
   uploadedState: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', background: '#fff', borderRadius: 8, border: `1px solid rgba(74,158,142,0.3)` },
@@ -380,8 +343,5 @@ const styles = {
 
   footer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '16px 0 0', borderTop: `1px solid ${C.borderSoft}` },
   footerNote: { fontSize: 12, color: C.navy80, margin: 0, flex: 1, lineHeight: 1.5 },
-  continueBtn: {
-    padding: '11px 26px', borderRadius: 8, background: C.navy, color: '#fff',
-    border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', fontFamily: 'inherit',
-  },
+  continueBtn: { padding: '11px 26px', borderRadius: 8, background: C.navy, color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', fontFamily: 'inherit' },
 };
