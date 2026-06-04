@@ -19,6 +19,7 @@ const niumConstantsHandler = require(path.join(__dirname, "..", "api", "nium", "
 const niumPublicDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "public-details.js"));
 const niumExhaustiveDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "exhaustive-details.js"));
 const docRequirementsHandler = require(path.join(__dirname, "..", "api", "document-requirements.js"));
+const benchmarkHandler = require(path.join(__dirname, "..", "api", "benchmark.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -129,6 +130,23 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(docRequirementsHandler)(req, res);
+    });
+  });
+
+  // Read-only benchmark endpoint. GET uses req.query; POST needs the JSON body
+  // parsed (the dev server doesn't auto-parse it).
+  app.get("/api/benchmark", adapt(benchmarkHandler));
+  app.post("/api/benchmark", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(benchmarkHandler)(req, res);
     });
   });
 };
