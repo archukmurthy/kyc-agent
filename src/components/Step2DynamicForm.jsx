@@ -39,6 +39,10 @@ const C = {
   infoText: '#1a4a7a', infoBg: '#f0f3f8', infoBorder: '#bcd0e8',
 };
 
+// Testing-only affordance (Upload all). CRA inlines process.env.NODE_ENV at
+// build time, so this is stripped from the deployed/customer build.
+const SHOW_TEST_TOOLS = process.env.NODE_ENV !== 'production';
+
 const isSelfSourced = (item) => /self-source/i.test(item.selfSource || '');
 const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');
 
@@ -252,11 +256,13 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
             <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${pct}%` }} /></div>
           </div>
         )}
-        <div style={styles.testRow}>
-          <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all uploads with dummy files">
-            🧪 Upload all (test)
-          </button>
-        </div>
+        {SHOW_TEST_TOOLS && (
+          <div style={styles.testRow}>
+            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all uploads with dummy files">
+              🧪 Upload all (test)
+            </button>
+          </div>
+        )}
       </div>
 
       {flags.showWolfsberg && (
