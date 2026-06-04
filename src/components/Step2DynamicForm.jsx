@@ -197,6 +197,24 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
   const coreItems   = provide.filter(i => !isPersonItem(i.requirement));
   const personItems = provide.filter(i => isPersonItem(i.requirement));
 
+  // Test-only: fill every client-provided card (+ Wolfsberg) with a dummy file
+  // so the step can be completed without manually picking files.
+  const handleUploadAll = () => {
+    const targets = [...provide];
+    if (flags.showWolfsberg) targets.push({ requirement: 'Wolfsberg CBDDQ' });
+    setUploads(prev => {
+      const next = { ...prev };
+      targets.forEach(i => {
+        if (!next[i.requirement]) {
+          const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
+          try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
+          catch { next[i.requirement] = { name: fname, size: 13 }; }
+        }
+      });
+      return next;
+    });
+  };
+
   // Progress = mandatory, client-provided items the customer must upload.
   const requiredItems = provide.filter(i => i.mandatory);
   const requiredDone  = requiredItems.filter(i => uploads[i.requirement]).length;
@@ -234,6 +252,11 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
             <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${pct}%` }} /></div>
           </div>
         )}
+        <div style={styles.testRow}>
+          <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all uploads with dummy files">
+            🧪 Upload all (test)
+          </button>
+        </div>
       </div>
 
       {flags.showWolfsberg && (
@@ -308,6 +331,8 @@ const styles = {
   progressDone: { fontSize: 11, fontWeight: 700, color: C.successText },
   progressTrack: { height: 6, borderRadius: 3, background: 'rgba(74,158,142,0.15)', overflow: 'hidden' },
   progressFill: { height: '100%', background: `linear-gradient(90deg, ${C.teal}, ${C.navy})`, transition: 'width 0.4s ease' },
+  testRow: { display: 'flex', justifyContent: 'flex-end', marginTop: 10 },
+  testBtn: { fontSize: 11, fontWeight: 600, color: C.navy70, background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit' },
 
   docCard: { borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 },
   docCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
