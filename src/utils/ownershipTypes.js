@@ -1,3 +1,4 @@
+/* eslint-env node */
 // Ownership-type library + research-strategy definitions.
 //
 // Single source of truth for the customer flow (src/App.js) and the admin
@@ -8,8 +9,14 @@
 // Each ownership type maps to a `researchStrategy` key in RESEARCH_STRATEGIES,
 // which Phase 0 of the research pipeline uses to set search flags and tune the
 // expected/low-data fill-rate thresholds.
+//
+// NOTE: written as CommonJS (module.exports) rather than ESM so it can be
+// require()'d from Node (api/benchmark.js -> src/pipeline.js) as well as
+// imported by webpack (App.js / admin). Webpack maps the named imports onto
+// module.exports via its CJS interop, so the existing `import { X }` consumers
+// keep working unchanged.
 
-export const OWNERSHIP_TYPE_LIBRARY = [
+const OWNERSHIP_TYPE_LIBRARY = [
   { id: "private_limited", label: "Private Limited Company", aliases: ["Ltd", "Pte Ltd", "GmbH", "SARL", "Sdn Bhd"], researchStrategy: "private" },
   { id: "public_listed", label: "Public Listed Company", aliases: ["PLC", "AG", "SA", "Corp"], researchStrategy: "listed" },
   { id: "public_unlisted", label: "Public Unlisted Company", aliases: [], researchStrategy: "private" },
@@ -35,7 +42,7 @@ export const OWNERSHIP_TYPE_LIBRARY = [
 
 // Research strategy definitions. Used in Phase 0 to set research flags and to
 // calibrate the low-data banner threshold per ownership type.
-export const RESEARCH_STRATEGIES = {
+const RESEARCH_STRATEGIES = {
   listed: {
     useStockExchangeQueries: true,
     useInvestorRelations: true,
@@ -93,7 +100,7 @@ export const RESEARCH_STRATEGIES = {
   },
 };
 
-export function getResearchStrategy(ownershipTypeId) {
+function getResearchStrategy(ownershipTypeId) {
   const ownershipType = OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === ownershipTypeId);
   const strategyKey = ownershipType?.researchStrategy || "private";
   return RESEARCH_STRATEGIES[strategyKey] || RESEARCH_STRATEGIES.private;
@@ -101,7 +108,7 @@ export function getResearchStrategy(ownershipTypeId) {
 
 // The Nium default enabled ownership types — used as the fallback when an
 // entity type in the live config has no explicit `ownershipTypes` array.
-export const NIUM_DEFAULT_OWNERSHIP_TYPES = [
+const NIUM_DEFAULT_OWNERSHIP_TYPES = [
   "private_limited",
   "public_listed",
   "trust",
@@ -113,6 +120,14 @@ export const NIUM_DEFAULT_OWNERSHIP_TYPES = [
 ];
 
 // Convenience: label lookup.
-export function ownershipTypeLabel(id) {
+function ownershipTypeLabel(id) {
   return OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === id)?.label || id || "";
 }
+
+module.exports = {
+  OWNERSHIP_TYPE_LIBRARY,
+  RESEARCH_STRATEGIES,
+  getResearchStrategy,
+  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  ownershipTypeLabel,
+};
