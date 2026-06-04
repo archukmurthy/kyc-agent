@@ -15,6 +15,7 @@ const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.j
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
+const niumConstantsHandler = require(path.join(__dirname, "..", "api", "nium", "constants.js"));
 const niumPublicDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "public-details.js"));
 const niumExhaustiveDetailsHandler = require(path.join(__dirname, "..", "api", "nium", "exhaustive-details.js"));
 const docRequirementsHandler = require(path.join(__dirname, "..", "api", "document-requirements.js"));
@@ -99,6 +100,7 @@ module.exports = function (app) {
   // Nium registry lookup. GET uses Express's req.query directly; POST needs
   // the JSON body parsed into req.body, since the dev server (unlike Vercel)
   // doesn't auto-parse it.
+  app.get("/api/nium/constants", adapt(niumConstantsHandler));
   app.get("/api/nium/public-details", adapt(niumPublicDetailsHandler));
   app.post("/api/nium/exhaustive-details", (req, res) => {
     let raw = "";
