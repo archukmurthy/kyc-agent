@@ -1,0 +1,11 @@
+name,country,segment,entityType,ownershipType,sector,repeat
+Sarah Smith Graphic Design,GB,sole_trader,Corporate,sole_trader,,
+Lee Wei Food Catering,SG,sole_trader,Corporate,sole_trader,,
+HSBC Holdings,GB,FI,FI,public_listed,,
+Shell plc,GB,public,Corporate,public_listed,,2
+Trafigura,SG,private,Corporate,private_limited,,
+Shein,SG,private,Corporate,private_limited,,
+Santander UK PLC,GB,FI,FI,public_listed,,
+Monzo Bank Limited,GB,FI,FI,private_limited,,
+DBS Bank Limited,SG,FI,FI,public_listed,,2
+Oversea-Chinese Banking Corporation Limited (OCBC),SG,FI,FI,public_listed,,
