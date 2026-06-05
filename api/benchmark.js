@@ -24,6 +24,7 @@ const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { runResearchPipeline } = require("../src/pipeline");
 const { getRequirements } = require("../documentRequirements.js");
+const { persistBenchmarkEntity } = require("../lib/persist");
 
 const MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 16000;
@@ -257,14 +258,36 @@ module.exports = async function handler(req, res) {
       truncated = true;
     }
 
+    // runId ties every entity in this batch to one benchmark_runs row. Absent
+    // (e.g. plain GET / no harness) → persistence is skipped entirely.
+    const runId = (companies[0] && companies[0].runId) || null;
+
     // Sequential — research calls are slow and rate-limited; one failure
     // per company is isolated and reported, the batch continues.
     const results = [];
     for (const company of companies) {
+      let result;
       try {
-        results.push(await benchmarkCompany(company, tenantConfig));
+        result = await benchmarkCompany(company, tenantConfig);
       } catch (e) {
-        results.push({ input: company, ok: false, error: e.message, details: e.details || null });
+        result = { input: company, ok: false, error: e.message, details: e.details || null };
+      }
+      results.push(result);
+
+      // Persist to Neon (best-effort). A DB error must NEVER break the
+      // benchmark response — log and carry on.
+      if (runId && result.ok) {
+        try {
+          await persistBenchmarkEntity(result, {
+            runId,
+            entityName: result.input.companyName,
+            segment: company.segment || null,
+            ownershipType: result.input.ownershipType,
+          });
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("benchmark persistence failed:", e.message);
+        }
       }
     }
 
