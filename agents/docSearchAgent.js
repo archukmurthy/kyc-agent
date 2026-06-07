@@ -24,9 +24,12 @@ const path = require("path");
 
 const client = new Anthropic();
 
-// ─── Pricing constants (Sonnet 4, per million tokens) ────────────────────────
+// ─── Pricing constants (Sonnet 4.6, per million tokens) ──────────────────────
+// claude-sonnet-4-20250514 was retired by Anthropic (API returns 404
+// not_found_error). claude-sonnet-4-6 is the drop-in replacement at the
+// same per-token rates.
 const PRICING = {
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   inputPerMillion: 3.0,
   outputPerMillion: 15.0,
 };

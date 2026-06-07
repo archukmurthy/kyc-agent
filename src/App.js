@@ -685,7 +685,7 @@ function buildDemoDocSearchResults(
       total: documents.length,
     },
     cost: {
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       totals: {
         inputTokens: 6495,
         outputTokens: 390,
