@@ -16,3 +16,6 @@ migrate.sql
 
 # Doc search agent downloads (audit copies of fetched PDFs — local dev only)
 downloads/
+
+# Local notification helper (run by Claude Code after task completion)
+alert.ps1
