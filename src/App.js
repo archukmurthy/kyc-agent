@@ -2511,6 +2511,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // document → dark navy badge with the document type label
   // tier1    → green pill with the source name
   // tier2    → amber pill with "From an unverified source — please confirm"
+  //
+  // Badges live in a fixed 180px cell on each confirm row; text WRAPS inside
+  // the badge (whiteSpace: normal) rather than pushing the cell wider — a
+  // nowrap badge with a long source string was collapsing the value column.
+  const badgeBaseStyle = {
+    fontSize: 11,
+    fontWeight: 600,
+    padding: "3px 8px",
+    borderRadius: 6,
+    maxWidth: 175,
+    width: "100%",
+    boxSizing: "border-box",
+    whiteSpace: "normal",
+    wordWrap: "break-word",
+    overflowWrap: "break-word",
+    lineHeight: 1.3,
+    textAlign: "right",
+    cursor: "pointer",
+    display: "inline-block",
+  };
   const renderSourceBadge = (item, idx) => {
     const m = metaFor(item.field);
     const ts = (m && m.fetchedAt) || researchTimestamp || "";
@@ -2521,7 +2541,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? `🕒 ${ts}` : `From uploaded ${label}`}
-          style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#0B3D91", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+          style={{ ...badgeBaseStyle, color: "#fff", background: "#0B3D91" }}
         >
           {revealedTs[idx] ? `🕒 ${tsShort}` : `📄 ${label}`}
         </span>
@@ -2532,7 +2552,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
-          style={{ fontSize: 10, fontWeight: 700, color: "#1a6b56", background: "#dff2ec", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+          style={{ ...badgeBaseStyle, color: "#1a6b56", background: "#dff2ec" }}
         >
           {revealedTs[idx] ? `🕒 ${ts}` : `✅ ${item.source}`}
         </span>
@@ -2544,7 +2564,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence — from unverified source"}
-          style={{ fontSize: 10, fontWeight: 700, color: "#C2410C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+          style={{ ...badgeBaseStyle, color: "#C2410C", background: "#FFF7ED", border: "1px solid #FED7AA" }}
         >
           {revealedTs[idx] ? `🕒 ${ts}` : `⚠ ${item.source}`}
         </span>
@@ -2555,26 +2575,111 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
         title={revealedTs[idx] ? "Click to hide timestamp" : "Probable — from company source, please confirm"}
-        style={{ fontSize: 10, fontWeight: 700, color: "#8c5500", background: "#fff1d6", padding: "3px 8px", borderRadius: 4, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "start", whiteSpace: "nowrap" }}
+        style={{ ...badgeBaseStyle, color: "#8c5500", background: "#fff1d6" }}
       >
         {revealedTs[idx] ? `🕒 ${ts}` : `~ ${item.source}`}
       </span>
     );
   };
 
+  // Prevent "[object Object]" rendering when an object/array sneaks into a
+  // field value (e.g. structured UBO data) where a string is expected.
+  const safeRenderValue = (value) => {
+    if (value === null || value === undefined) {
+      return "—";
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  };
+
   // Render one row of the Confirm table — extracted so the section-grouped
   // and ungrouped paths share the same DOM.
+  //
+  // Layout: flex row with FIXED-width label (180px) and source-badge (180px)
+  // cells and a flex:1 value cell with minWidth:0. The previous grid used
+  // fr-unit columns with whiteSpace:nowrap badges — a long source string
+  // forced the source column to its content width and squeezed the value
+  // column to near-zero, rendering values vertically.
   const renderFoundRow = ({ item, idx }, n) => {
     const fieldDef = findFieldDef(activeSchema, item.field);
-    const displayValue = resolveDisplayValue(fieldDef, item.value);
+    const displayValue =
+      item.value !== null && typeof item.value === "object"
+        ? safeRenderValue(item.value)
+        : safeRenderValue(resolveDisplayValue(fieldDef, item.value));
     const isUnmappedDropdown =
       fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
     return (
-      <div key={item.field + idx} style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "9px 10px", background: n % 2 === 0 ? "#fafcfb" : "#fff", borderBottom: "1px solid rgba(26,58,74,0.04)", opacity: checks[idx] ? 1 : 0.3 }}>
-        <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
-        <span style={{ fontSize: 11, fontWeight: 600 }}>{item.label}</span>
-        <span style={{ fontSize: 11, wordBreak: "break-word" }}>
-          {displayValue}
+      <div key={item.field + idx} style={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 12,
+        width: "100%",
+        padding: "12px 10px",
+        boxSizing: "border-box",
+        background: n % 2 === 0 ? "#fafcfb" : "#fff",
+        borderBottom: "1px solid rgba(26,58,74,0.04)",
+        opacity: checks[idx] ? 1 : 0.3,
+      }}>
+        {/* Checkbox */}
+        <div style={{ flexShrink: 0, width: 20, paddingTop: 2 }}>
+          <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+        </div>
+        {/* Label cell — fixed width */}
+        <span style={{
+          flexShrink: 0,
+          width: 180,
+          minWidth: 180,
+          maxWidth: 180,
+          fontSize: 13,
+          color: C.textMuted,
+          fontWeight: 500,
+          lineHeight: 1.4,
+          wordWrap: "break-word",
+          overflowWrap: "break-word",
+        }}>{item.label}</span>
+        {/* Value cell — takes remaining space; minWidth:0 prevents collapse */}
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: 14,
+          color: C.text,
+          lineHeight: 1.5,
+          wordWrap: "break-word",
+          overflowWrap: "break-word",
+          whiteSpace: "normal",
+        }}>
+          {displayValue.length > 150 ? (
+            <div style={{
+              fontSize: 12,
+              color: C.text,
+              lineHeight: 1.6,
+              padding: "8px 10px",
+              background: C.surfaceAlt,
+              borderRadius: 6,
+              border: `1px solid ${C.border}`,
+              wordWrap: "break-word",
+              overflowWrap: "break-word",
+              whiteSpace: "pre-wrap",
+              marginTop: 2,
+            }}>
+              {displayValue}
+            </div>
+          ) : (
+            <span style={{
+              fontSize: 14,
+              color: C.text,
+              wordWrap: "break-word",
+              overflowWrap: "break-word",
+              whiteSpace: "normal",
+              lineHeight: 1.5,
+              display: "block",
+            }}>
+              {displayValue}
+            </span>
+          )}
           {item.originalAIValue && item.originalAIValue !== displayValue && (
             <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
               AI returned "{item.originalAIValue}" — mapped to dropdown option
@@ -2595,8 +2700,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
               ⚠ From unverified source — please verify this is correct
             </div>
           )}
-        </span>
-        {renderSourceBadge(item, idx)}
+        </div>
+        {/* Source badge cell — FIXED width so long source text can never
+            squeeze the value column. Badge text wraps inside. */}
+        <div style={{
+          flexShrink: 0,
+          width: 180,
+          minWidth: 180,
+          maxWidth: 180,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 4,
+        }}>
+          {renderSourceBadge(item, idx)}
+        </div>
       </div>
     );
   };
@@ -2650,8 +2768,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
             }}>
               {humaniseSection(section)}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "30px 1fr 1.5fr 1fr", gap: 8, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
-              {["✓", "FIELD", "VALUE", "SOURCE"].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{h}</span>)}
+            {/* Header — column geometry mirrors renderFoundRow: 20px checkbox,
+                180px label, flex:1 value, 180px source (gap 12). */}
+            <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
+              <span style={{ flexShrink: 0, width: 20, fontSize: 10, fontWeight: 700, color: "#fff" }}>✓</span>
+              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff" }}>FIELD</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: "#fff" }}>VALUE</span>
+              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff", textAlign: "right" }}>SOURCE</span>
             </div>
             {rows.map((r, n) => renderFoundRow(r, n))}
           </div>
