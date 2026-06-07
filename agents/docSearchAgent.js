@@ -189,13 +189,21 @@ function downloadFile(url, destPath) {
         } else {
           file.close();
           fs.unlink(destPath, () => {});
-          resolve({ success: false, statusCode: res.statusCode });
+          resolve({
+            success: false,
+            statusCode: res.statusCode,
+            reason: `HTTP ${res.statusCode}`,
+          });
         }
       })
       .on("error", (err) => {
         file.close();
         fs.unlink(destPath, () => {});
-        resolve({ success: false, error: err.message });
+        resolve({
+          success: false,
+          statusCode: null,
+          reason: err.message,
+        });
       });
   });
 }
@@ -275,12 +283,20 @@ Return the most recent version as a direct PDF link if possible.`;
 
     let downloadStatus = "url_found";
     let localPath = null;
+    let dl = null;
 
     if (parsed.found && parsed.url) {
       const destPath = path.join(outputDir, filename);
-      const dl = await downloadFile(parsed.url, destPath);
-      downloadStatus = dl.success ? "downloaded" : "download_failed";
-      if (dl.success) localPath = dl.path;
+      dl = await downloadFile(parsed.url, destPath);
+      if (dl.success) {
+        downloadStatus = "downloaded";
+        localPath = dl.path;
+      } else {
+        // Download attempted but failed (404, 403, redirect, network).
+        // The URL itself WAS found and verified via search — so this is
+        // url_found, not an error. The failure reason goes in notes.
+        downloadStatus = "url_found";
+      }
     } else {
       downloadStatus = "not_found";
     }
@@ -294,7 +310,9 @@ Return the most recent version as a direct PDF link if possible.`;
       sourceUrl: parsed.url || null,
       sourceLabel: parsed.sourceLabel || null,
       confidence: parsed.confidence || null,
-      notes: parsed.notes || null,
+      notes: dl && dl.reason
+        ? `URL found. Download failed: ${dl.reason}`
+        : parsed.notes || null,
       localPath,
       searchAttempts: parsed.searchAttempts || sources,
       cost: costTracker.calls.at(-1),
@@ -316,18 +334,38 @@ Return the most recent version as a direct PDF link if possible.`;
 
 // ─── Build summary table ───────────────────────────────────────────────────────
 
+// Human-readable status for the customer-facing summary table.
+function formatStatus(status) {
+  switch (status) {
+    case "downloaded":
+      return "✅ Downloaded";
+    case "url_found":
+      return "🔗 URL found (not downloaded)";
+    case "not_found":
+      return "❌ Not found";
+    case "download_failed":
+      return "⚠ Download failed";
+    case "error":
+      return "⚠ Error";
+    default:
+      return status || "—";
+  }
+}
+
+// NOTE: this table is customer-facing (rendered in Step 2 of the KYC flow).
+// Token and cost data deliberately stay OUT of it — they live only on the
+// per-document cost object (r.cost) and the overall cost summary, which are
+// for database storage and internal use.
 function buildSummaryTable(companyName, results) {
   const rows = results.map((r) => ({
     "Company Name": companyName,
     "Document Type": r.label,
-    "Publication Year": r.year || "—",
-    "Source URL": r.sourceUrl || "Not found",
-    "Download Status": r.status,
-    "File Name": r.filename || "—",
-    "Input Tokens": r.cost?.inputTokens ?? "—",
-    "Output Tokens": r.cost?.outputTokens ?? "—",
-    "Cost (USD)": r.cost ? `$${r.cost.totalCostUSD.toFixed(5)}` : "—",
-    Notes: r.notes || "",
+    "Year": r.year || "—",
+    "Source": r.sourceLabel || "—",
+    "Source URL": r.sourceUrl || r.url || r.documentUrl || "Not found",
+    "Status": formatStatus(r.status),
+    "File": r.filename || "—",
+    "Notes": r.notes || "",
   }));
 
   const found = results.filter(

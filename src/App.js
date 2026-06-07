@@ -3,7 +3,7 @@ import { getTenantId, isPreviewMode } from "./utils/tenant";
 import SearchableSelect from "./components/SearchableSelect";
 import {
   OWNERSHIP_TYPE_LIBRARY,
-  getResearchStrategy,
+  getResearchStrategy,
   ownershipTypeLabel,
 } from "./utils/ownershipTypes";
 import Step2DynamicForm from "./components/Step2DynamicForm";
@@ -545,6 +545,158 @@ const mapExtractedKey = (flow, key) => {
   const m = EXTRACTION_KEY_TO_SCHEMA[flow] || {};
   return key in m ? m[key] : null;
 };
+
+/* ═══════════════════════════════════════════
+   DOC SEARCH AGENT (Step 2 — Document Intelligence)
+   Browser-side helpers for the doc search sub-agent
+   (agents/docSearchAgent.js, called via /api/doc-search).
+   mapToDocAgentOwnershipType is copied inline from
+   agents/docSearchAgentCall.js — that file is a Node.js module and cannot
+   be imported into the browser bundle.
+   ═══════════════════════════════════════════ */
+
+// HARDCODED — see PRODUCTION_READINESS.md PR-001
+function mapToDocAgentOwnershipType(
+  ownershipTypeId,
+  entityTypeId,
+  effectivelyListed
+) {
+  const entityIsFI = entityTypeId === "FI";
+
+  const fiOwnershipTypes = new Set([
+    "payment_institution",
+    "correspondent_bank",
+    "investment_fund",
+    "insurance_company",
+    "central_bank",
+  ]);
+
+  const ownershipIsFI =
+    fiOwnershipTypes.has(ownershipTypeId);
+
+  const isFI = entityIsFI || ownershipIsFI;
+
+  const isListed =
+    effectivelyListed ||
+    ownershipTypeId === "public_listed";
+
+  if (isFI && isListed)  return "public_fi";
+  if (isFI && !isListed) return "fi_only";
+  if (!isFI && isListed) return "public_only";
+  return "corporate";
+}
+
+// Realistic demo doc-search results built from the actual Step 1 inputs.
+// Used in demo mode / local dev so Section A renders without spending API
+// tokens. Mirrors the response shape of /api/doc-search.
+function buildDemoDocSearchResults(
+  companyName,
+  ownershipType,
+  entityType
+) {
+  const now = new Date().toISOString();
+  const year = new Date().getFullYear();
+  const prevYear = year - 1;
+
+  const isFI = entityType === "FI" ||
+    ["payment_institution",
+     "correspondent_bank"].includes(ownershipType);
+
+  const isListed =
+    ownershipType === "public_listed";
+
+  const slug = companyName
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_.]/g, "");
+
+  const documents = [];
+
+  // Wolfsberg for FI entities
+  if (isFI) {
+    documents.push({
+      type: "wolfsberg_questionnaire",
+      label: "Wolfsberg Questionnaire",
+      filename: `${slug}_Wolfsberg_Questionnaire_${year}.pdf`,
+      year,
+      status: "downloaded",
+      sourceUrl: `https://www.${slug.toLowerCase()}.com/compliance/wolfsberg`,
+      sourceLabel: `${companyName} compliance page`,
+      confidence: "high",
+      localPath: `./downloads/${slug}_demo/wolfsberg.pdf`,
+      searchAttempts: [
+        `"${companyName}" Wolfsberg questionnaire PDF ${year}`,
+        `"${companyName}" AML questionnaire correspondent banking`,
+      ],
+      cost: {
+        inputTokens: 2841,
+        outputTokens: 187,
+        totalCostUSD: 0.01133,
+      },
+    });
+  }
+
+  // Annual report for listed or corporate
+  if (isListed || !isFI) {
+    documents.push({
+      type: "annual_report",
+      label: "Annual Report",
+      filename: `${slug}_Annual_Report_${prevYear}.pdf`,
+      year: prevYear,
+      status: "downloaded",
+      sourceUrl: `https://www.${slug.toLowerCase()}.com/investors/annual-report-${prevYear}`,
+      sourceLabel: `${companyName} investor relations`,
+      confidence: "high",
+      localPath: `./downloads/${slug}_demo/annual_report.pdf`,
+      searchAttempts: [
+        `"${companyName}" annual report ${prevYear} PDF`,
+        `"${companyName}" annual report filetype:pdf investor relations`,
+      ],
+      cost: {
+        inputTokens: 3654,
+        outputTokens: 203,
+        totalCostUSD: 0.01397,
+      },
+    });
+  }
+
+  const found = documents.filter(
+    d => d.status === "downloaded"
+  ).length;
+
+  return {
+    documents,
+    // Mirrors the customer-facing column shape of the agent's
+    // buildSummaryTable — no token/cost columns (internal-only data).
+    summaryTable: documents.map(d => ({
+      "Company Name": companyName,
+      "Document Type": d.label,
+      "Year": d.year,
+      "Source": d.sourceLabel,
+      "Source URL": d.sourceUrl,
+      "Status": d.status === "downloaded"
+        ? "✅ Downloaded"
+        : "🔗 URL found (not downloaded)",
+      "File": d.filename,
+      "Notes": "",
+    })),
+    summary: {
+      found,
+      notFound: documents.length - found,
+      total: documents.length,
+    },
+    cost: {
+      model: "claude-sonnet-4-20250514",
+      totals: {
+        inputTokens: 6495,
+        outputTokens: 390,
+        totalTokens: 6885,
+        totalCostUSD: 0.0253,
+      },
+    },
+    searchedAt: now,
+    isDemo: true,
+  };
+}
 
 
 /* ═══════════════════════════════════════════
@@ -1179,6 +1331,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // being processed. Phase 0 = web only, Phase 1 = doc extraction, Phase 2 = web.
   const [phase1Msgs, setPhase1Msgs] = useState(LOADER_MSGS_WOLFSBERG_PHASE1);
 
+  // Doc search agent state (Step 2 — Document Intelligence, Section A).
+  // null = not yet run; otherwise the /api/doc-search response shape
+  // { documents, summaryTable, summary, cost, searchedAt, isDemo? }.
+  const [docSearchResults, setDocSearchResults] = useState(null);
+  const [docSearchLoading, setDocSearchLoading] = useState(false);
+  const [docSearchError, setDocSearchError] = useState(null);
+  // Which auto-found documents the customer has accepted for use in research.
+  // Shape: Set of document types, e.g. Set(["wolfsberg_questionnaire"]).
+  const [acceptedDocTypes, setAcceptedDocTypes] = useState(new Set());
+
   // Step routing: ai_documents flow inserts a Documents step between Input and Research.
   // stepsFor() takes a journey explicitly so async handlers can compute the
   // correct step index without relying on a stale state closure (e.g. during
@@ -1268,6 +1430,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setLoaderPhase(0);
     setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
+    setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setAcceptedDocTypes(new Set());
   };
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
@@ -1605,11 +1768,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
       }
 
       // ─── Phase 2: web research, optionally seeded with Wolfsberg fields ───
+      // Accepted auto-sourced documents (Step 2 Section A) are appended to the
+      // prompt so the research engine fetches and extracts fields from their
+      // URLs — same as customer uploads, but via sourceUrl. Appended here
+      // rather than inside buildPrompt so the shared src/pipeline.js (also
+      // used by api/benchmark.js) stays unchanged.
+      let researchPrompt = buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType);
+      const acceptedDocs = (docSearchResults?.documents || [])
+        .filter(d => acceptedDocTypes.has(d.type));
+      if (acceptedDocs.length > 0) {
+        researchPrompt += `\n\nAUTOMATICALLY SOURCED DOCUMENTS:\n`;
+        researchPrompt += `The following documents have been ` +
+          `sourced automatically and are available ` +
+          `for field extraction:\n\n`;
+        acceptedDocs.forEach(doc => {
+          researchPrompt += `- ${doc.label} (${doc.year})\n`;
+          researchPrompt += `  URL: ${doc.sourceUrl}\n`;
+          researchPrompt += `  Source: ${doc.sourceLabel}\n`;
+          researchPrompt += `  Please extract all relevant ` +
+            `compliance fields from this document.\n\n`;
+        });
+      }
       const resp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType),
+          prompt: researchPrompt,
           tools: RESEARCH_TOOLS,
         })
       });
@@ -1920,6 +2104,73 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (demoMode) { doDummyResearch("ai_documents"); return; }
     doResearch();
   };
+
+  // ─── Doc search agent (Step 2 — Document Intelligence, Section A) ───
+  // Calls the real sub-agent via /api/doc-search. Demo mode and local dev /
+  // ?test=1 default to buildDemoDocSearchResults instead (no API spend);
+  // the testing-mode toggle on Step 2 can trigger this explicitly.
+  const runRealDocSearch = () => {
+    setDocSearchResults(null);
+    setDocSearchLoading(true);
+    setDocSearchError(null);
+
+    const docOwnershipType = mapToDocAgentOwnershipType(
+      ownershipType,
+      entityType,
+      false // effectivelyListed not known yet — research hasn't run
+    );
+
+    fetch("/api/doc-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyName,
+        country: countryObj ? countryObj.name : countryCode,
+        ownershipType: docOwnershipType,
+        niumEntityType: (entityType || "").toLowerCase(),
+        tenantId,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setDocSearchResults(data);
+        } else {
+          setDocSearchError(data.error || "Doc search failed");
+        }
+        setDocSearchLoading(false);
+      })
+      .catch(err => {
+        setDocSearchError(err.message);
+        setDocSearchLoading(false);
+      });
+  };
+
+  // Kick off the doc search once when the Documents step is entered.
+  useEffect(() => {
+    if (!isAiDocs || step !== STEPS.documents) return;
+    if (docSearchResults !== null || docSearchLoading) return;
+    if (!companyName.trim()) return;
+    if (demoMode || SHOW_TEST_TOOLS) {
+      setDocSearchResults(buildDemoDocSearchResults(companyName, ownershipType, entityType));
+      setDocSearchLoading(false);
+    } else {
+      runRealDocSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, isAiDocs]);
+
+  // Stale-result guard: clear doc search state whenever the customer is back
+  // on Step 1 (Back navigation or Start Over), so a changed company name
+  // triggers a fresh search on the next visit to the Documents step.
+  useEffect(() => {
+    if (step !== STEPS.input) return;
+    setDocSearchResults(null);
+    setDocSearchLoading(false);
+    setDocSearchError(null);
+    setAcceptedDocTypes(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // Generic per-doc file handler. Clears the slot on null.
   const handleDocFile = (key) => (e) => {
@@ -3445,9 +3696,396 @@ export default function KYCAgent({ previewMode = false } = {}) {
         {isAiDocs && step === STEPS.documents && (() => {
           const docs = docTypesForEntity(entityType, tenantConfig);
           const uploadedCount = docs.reduce((n, d) => n + (uploadedDocs[d.key] ? 1 : 0), 0);
+          // Section A (Document Intelligence) — auto-sourced documents from
+          // the doc search agent. Only usable docs render as cards.
+          const foundDocs = (docSearchResults?.documents || [])
+            .filter(d => d.status === "downloaded" || d.status === "url_found");
+          const sectionAVisible = docSearchLoading || !!docSearchError ||
+            (docSearchResults !== null && docSearchResults.documents.length > 0);
           return (
             <div>
               <div style={card}>
+                <style>{`@keyframes kspin { to { transform: rotate(360deg); } }`}</style>
+
+                {/* Testing-mode toggle — demo data vs real agent call */}
+                {(demoMode || SHOW_TEST_TOOLS) && (
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 16,
+                    padding: "8px 12px",
+                    background: C.surfaceAlt,
+                    borderRadius: 8,
+                    border: `1px dashed ${C.border}`,
+                  }}>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>
+                      🧪 Testing mode:
+                    </span>
+                    <button
+                      onClick={() => {
+                        setDocSearchResults(
+                          buildDemoDocSearchResults(companyName, ownershipType, entityType)
+                        );
+                        setDocSearchError(null);
+                        setDocSearchLoading(false);
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "3px 10px",
+                        background: "transparent",
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        color: C.text,
+                      }}
+                    >
+                      Use demo data
+                    </button>
+                    <button
+                      onClick={runRealDocSearch}
+                      style={{
+                        fontSize: 11,
+                        padding: "3px 10px",
+                        background: C.niumBlue,
+                        border: "none",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        color: "#fff",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Run real agent
+                    </button>
+                  </div>
+                )}
+
+                {/* Section A loading state */}
+                {docSearchLoading && (
+                  <div style={{
+                    padding: "20px 16px",
+                    background: C.infoBg,
+                    border: `1px solid ${C.infoBorder}`,
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}>
+                    <div style={{
+                      width: 18, height: 18,
+                      border: `2px solid ${C.info}`,
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "kspin 0.8s linear infinite",
+                      flexShrink: 0,
+                    }}/>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.info }}>
+                        Searching for compliance documents...
+                      </div>
+                      <div style={{ fontSize: 12, color: C.info, opacity: 0.8, marginTop: 2 }}>
+                        Looking for Wolfsberg questionnaire and annual reports for {companyName}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section A error — subtle, never blocks progress */}
+                {!docSearchLoading && docSearchError && (
+                  <div style={{
+                    padding: "12px 16px",
+                    background: C.warningBg,
+                    border: `1px solid ${C.warningBorder}`,
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    fontSize: 13,
+                    color: C.warning,
+                  }}>
+                    ⚠ Could not automatically source documents for {companyName}. Please upload documents below.
+                  </div>
+                )}
+
+                {/* Section A — documents we found */}
+                {!docSearchLoading && docSearchResults !== null && docSearchResults.documents.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+
+                    {/* Section header */}
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: C.textMuted,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.8px",
+                      marginBottom: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                      <span>📄 Documents sourced automatically</span>
+                      {docSearchResults.isDemo && (
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: C.textMuted,
+                          background: C.surfaceAlt,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 99,
+                          padding: "2px 8px",
+                        }}>
+                          DEMO DATA
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Intro text */}
+                    <p style={{
+                      fontSize: 13,
+                      color: C.textMuted,
+                      marginBottom: 12,
+                      lineHeight: 1.5,
+                    }}>
+                      We found {foundDocs.length}{" "}document
+                      {foundDocs.length !== 1 ? "s" : ""} for{" "}
+                      <strong>{companyName}</strong> from public sources. Accept
+                      any you would like to use — we will extract compliance
+                      fields from them automatically.
+                    </p>
+
+                    {/* Document cards */}
+                    {foundDocs.map(doc => {
+                      const isAccepted = acceptedDocTypes.has(doc.type);
+                      return (
+                        <div
+                          key={doc.type}
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 12,
+                            padding: "14px 16px",
+                            background: isAccepted ? C.successBg : "#fff",
+                            border: `1.5px solid ${isAccepted ? C.successBorder : C.border}`,
+                            borderRadius: 10,
+                            marginBottom: 8,
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          {/* Doc icon */}
+                          <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>
+                            {doc.type === "wolfsberg_questionnaire" ? "📋" : "📊"}
+                          </span>
+
+                          {/* Doc details */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: 15,
+                              fontWeight: 600,
+                              color: C.text,
+                              marginBottom: 4,
+                            }}>
+                              {doc.label}
+                              <span style={{
+                                fontSize: 12,
+                                fontWeight: 400,
+                                color: C.textMuted,
+                                marginLeft: 8,
+                              }}>
+                                {doc.year}
+                              </span>
+                            </div>
+
+                            <div style={{
+                              fontSize: 12,
+                              color: C.textMuted,
+                              marginBottom: 6,
+                            }}>
+                              {doc.sourceLabel}
+                            </div>
+
+                            {/* Confidence + source badges */}
+                            <div style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              flexWrap: "wrap",
+                            }}>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                padding: "2px 8px",
+                                borderRadius: 99,
+                                background: doc.confidence === "high" ? C.successBg : C.warningBg,
+                                color: doc.confidence === "high" ? C.success : C.warning,
+                                border: `1px solid ${doc.confidence === "high" ? C.successBorder : C.warningBorder}`,
+                              }}>
+                                {doc.confidence === "high" ? "✓ High confidence" : "~ Medium confidence"}
+                              </span>
+
+                              {doc.status === "downloaded" && (
+                                <span style={{
+                                  fontSize: 11,
+                                  color: C.success,
+                                  fontWeight: 600,
+                                }}>
+                                  ✅ Downloaded
+                                </span>
+                              )}
+
+                              {doc.status === "url_found" && (
+                                <span style={{
+                                  fontSize: 11,
+                                  color: C.warning,
+                                  fontWeight: 600,
+                                }}>
+                                  🔗 URL found
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Accept / Remove button */}
+                          <div style={{ flexShrink: 0 }}>
+                            {isAccepted ? (
+                              <button
+                                onClick={() => {
+                                  setAcceptedDocTypes(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(doc.type);
+                                    return next;
+                                  });
+                                }}
+                                style={{
+                                  padding: "7px 14px",
+                                  background: C.success,
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  fontFamily: "inherit",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                ✓ Using this
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setAcceptedDocTypes(prev =>
+                                    new Set([...prev, doc.type])
+                                  );
+                                }}
+                                style={{
+                                  padding: "7px 14px",
+                                  background: "transparent",
+                                  color: C.niumBlue,
+                                  border: `1.5px solid ${C.niumBlue}`,
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  fontFamily: "inherit",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Use this document
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Summary table — collapsible */}
+                    <details style={{ marginTop: 12 }}>
+                      <summary style={{
+                        fontSize: 12,
+                        color: C.textMuted,
+                        cursor: "pointer",
+                        userSelect: "none",
+                        listStyle: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}>
+                        <span>▾</span>
+                        <span>View search details</span>
+                      </summary>
+
+                      <div style={{ marginTop: 10, overflowX: "auto" }}>
+                        <table style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          fontSize: 11,
+                        }}>
+                          <thead>
+                            <tr>
+                              {Object.keys(docSearchResults.summaryTable[0] || {}).map(col => (
+                                <th key={col} style={{
+                                  padding: "6px 10px",
+                                  background: C.surfaceAlt,
+                                  border: `1px solid ${C.border}`,
+                                  textAlign: "left",
+                                  fontWeight: 700,
+                                  color: C.textMuted,
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  {col}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {docSearchResults.summaryTable.map((row, i) => (
+                              <tr key={i}>
+                                {/* entries (not values) so the Notes column can be
+                                    detected and allowed to wrap to its full text */}
+                                {Object.entries(row).map(([col, val], j) => (
+                                  <td key={j} style={{
+                                    padding: "6px 10px",
+                                    border: `1px solid ${C.border}`,
+                                    color: C.text,
+                                    maxWidth: col === "Notes" ? 300 : 200,
+                                    whiteSpace: col === "Notes" ? "normal" : "nowrap",
+                                    overflow: col === "Notes" ? "visible" : "hidden",
+                                    textOverflow: col === "Notes" ? "unset" : "ellipsis",
+                                    wordBreak: col === "Notes" ? "break-word" : "normal",
+                                    fontSize: 11,
+                                    verticalAlign: "top",
+                                  }}>
+                                    {String(val)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  </div>
+                )}
+
+                {/* Section divider between A (found) and B (uploads) */}
+                {sectionAVisible && (
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: C.textMuted,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.8px",
+                    marginBottom: 12,
+                    marginTop: 4,
+                    paddingTop: 20,
+                    borderTop: `1px solid ${C.border}`,
+                  }}>
+                    📤 Documents we need from you
+                  </div>
+                )}
+
                 <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Upload your documents</h2>
                 <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
                   All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.

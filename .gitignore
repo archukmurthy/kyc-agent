@@ -13,3 +13,6 @@ build
 *-benchmark.json
 benchmark/out/
 migrate.sql
+
+# Doc search agent downloads (audit copies of fetched PDFs — local dev only)
+downloads/
