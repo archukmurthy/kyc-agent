@@ -187,6 +187,11 @@ function metricsFor(res, csvRow, timeMin) {
     segment,
     jurisdiction: (res.schema && (res.schema.region || res.schema.licenceId)) || 'unknown',
     onboardingCoverage: cov.fillRate ?? null,                 // #1
+    // Fields flagged customerSupplied (benchmark/fi-schema-fields-patch.js) —
+    // excluded from the researchable denominator by computeCoverage, reported
+    // here so the scorecard shows the human-half / agent-half split.
+    customerSuppliedFields: cov.customerSuppliedFieldCount ?? 0,
+    researchableFields: cov.totalResearchFields ?? null,
     questionsAvoided: populated,                              // #2
     questionsRemaining: cov.missingFieldCount ?? null,
     researchReductionPct: BASELINE ? (BASELINE - timeMin) / BASELINE : null, // #3
@@ -215,6 +220,8 @@ function aggregate(ms) {
   return {
     n: ms.length,
     onboardingCoverage: { mean: mean(v('onboardingCoverage')) },
+    customerSuppliedFields: { mean: mean(v('customerSuppliedFields')) },
+    researchableFields: { mean: mean(v('researchableFields')) },
     questionsAvoided:   { mean: mean(v('questionsAvoided')), total: sum('questionsAvoided') },
     questionsRemaining: { mean: mean(v('questionsRemaining')) },
     researchReductionPct: { mean: mean(v('researchReductionPct')) },
@@ -302,6 +309,10 @@ for (const s of SEGMENTS) if (perSeg[s].n) trow(s, perSeg[s]);
 trow('ALL', overall);
 console.log(`\nHeadlines:`);
 console.log(`  1. Onboarding coverage ...... ${fp(overall.onboardingCoverage.mean)}  (answerable before contacting the customer)`);
+if ((overall.customerSuppliedFields.mean || 0) > 0) {
+  console.log(`     Denominator: ${f1(overall.researchableFields.mean)} researchable fields`
+    + ` (${f1(overall.customerSuppliedFields.mean)} customer-supplied fields excluded)`);
+}
 console.log(`  2. Customer questions avoided ${f1(overall.questionsAvoided.mean)} per entity (${overall.questionsAvoided.total} total)`);
 console.log(`  3. Analyst research reduction ${fp(overall.researchReductionPct.mean)}`);
 console.log(`  4. Evidence coverage ........ ${fp(overall.evidenceCoverage.mean)}`);

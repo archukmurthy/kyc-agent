@@ -1324,15 +1324,29 @@ const getVerificationStatus = (sourceTier) => {
    ═══════════════════════════════════════════ */
 function computeCoverage(found, schema) {
   const list = Array.isArray(found) ? found : [];
-  const researchFields = (schema && schema.researchFields) || [];
+  const allResearchFields = (schema && schema.researchFields) || [];
+  // Customer-supplied fields (forward-looking projections, private
+  // counterparties, declarations — flagged customerSupplied:true, see
+  // benchmark/fi-schema-fields-patch.js) belong to the "human half" of the
+  // form. They are excluded from the researchable denominator so they don't
+  // depress fill rates, excluded from missingFields so the gap-recovery pass
+  // never auto-researches them, and any row that somehow lands on one is
+  // excluded from the numerator so fillRate can't exceed 1.
+  const researchFields = allResearchFields.filter((f) => !f.customerSupplied);
+  const customerSuppliedIds = new Set(
+    allResearchFields.filter((f) => f.customerSupplied).map((f) => f.field)
+  );
   const totalResearchFields = researchFields.length;
-  const populatedFields = list.length;
+  const customerSuppliedFieldCount = allResearchFields.length - totalResearchFields;
 
-  const verifiedFields = list.filter((r) => r.verificationStatus === "verified").length;
-  const probableFields = list.filter((r) => r.verificationStatus === "probable").length;
-  const indicativeFields = list.filter((r) => r.verificationStatus === "indicative").length;
+  const relevant = list.filter((r) => !customerSuppliedIds.has(r.field));
+  const populatedFields = relevant.length;
 
-  const foundIds = new Set(list.map((r) => r.field));
+  const verifiedFields = relevant.filter((r) => r.verificationStatus === "verified").length;
+  const probableFields = relevant.filter((r) => r.verificationStatus === "probable").length;
+  const indicativeFields = relevant.filter((r) => r.verificationStatus === "indicative").length;
+
+  const foundIds = new Set(relevant.map((r) => r.field));
   const missingFields = researchFields.filter((f) => !foundIds.has(f.field));
 
   const fillRate = totalResearchFields > 0 ? populatedFields / totalResearchFields : 0;
@@ -1340,6 +1354,7 @@ function computeCoverage(found, schema) {
 
   return {
     totalResearchFields,
+    customerSuppliedFieldCount,
     populatedFields,
     verifiedFields,
     probableFields,
@@ -1427,11 +1442,19 @@ function mergeResearchResults(existing, newResults) {
 const RESEARCH_TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
 
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, ownershipType) => {
+  // Customer-supplied fields (customerSupplied / doNotAutoResearch — see
+  // benchmark/fi-schema-fields-patch.js) are never auto-researched. They are
+  // omitted from the JSON template and every guide block below, so the agent
+  // is never even asked for them. This matters most for declaration fields
+  // like criminal-conviction status, which must stay self-declared.
+  const researchableFields = schema.researchFields.filter(
+    (f) => !f.customerSupplied && !f.doNotAutoResearch
+  );
   // Stakeholder fields (directors / UBOs / shareholders / signatories) return
   // a JSON array per person, not a string. Other fields keep the legacy
   // "value": "..." string shape so the prompt and downstream parsing stay
   // unchanged for them.
-  const fieldList = schema.researchFields.map((f) => {
+  const fieldList = researchableFields.map((f) => {
     if (isStakeholderField(f.field)) {
       const example = isUboLikeField(f.field)
         ? '[{"full_name": "Jane Smith", "role": "Shareholder", "share_percentage": 45}]'
@@ -1443,7 +1466,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
 
   // Per-field rules for stakeholder fields, appended after the schema guide so
   // the model sees them next to the JSON template.
-  const stakeholderRules = schema.researchFields
+  const stakeholderRules = researchableFields
     .filter((f) => isStakeholderField(f.field))
     .map((f) => {
       // UBO / beneficial-owner / shareholder fields: each entry may be a
@@ -1547,7 +1570,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
     ? `Preferred authoritative sources for ${country}: ${countryAuthoritative.slice(0, 8).join(", ")}.`
     : `No specific registry list provided for ${country} — use the country's national company registry, securities regulator, and tax authority.`;
 
-  const fieldGuide = schema.researchFields
+  const fieldGuide = researchableFields
     .filter(f => f.searchHint)
     .map(f => `- ${f.field}: ${f.searchHint}`)
     .join("\n");
@@ -1559,7 +1582,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   // the configured option values verbatim so the customer-side select can
   // pre-select. List every dropdown's options explicitly so the model
   // doesn't have to guess at the wire format.
-  const dropdownGuide = schema.researchFields
+  const dropdownGuide = researchableFields
     .filter(f => f.inputType === "select" && Array.isArray(f.options) && f.options.length)
     .map(f => {
       const opts = f.options
