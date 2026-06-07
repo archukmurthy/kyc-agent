@@ -249,28 +249,47 @@ ${queries.map((q, i) => `${i + 1}. ${q}`).join("\n")}
 Return the most recent version as a direct PDF link if possible.`;
 
   try {
-    const response = await client.messages.create({
-      model: PRICING.model,
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
-    });
-
-    costTracker.record(
-      `search:${docType} (${companyName})`, response.usage
-    );
+    // Server-side web search can pause mid-turn (stop_reason "pause_turn").
+    // Re-send the conversation to let the API resume where it left off.
+    const messages = [{ role: "user", content: userPrompt }];
+    let response;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      response = await client.messages.create({
+        model: PRICING.model,
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+      });
+      costTracker.record(
+        `search:${docType} (${companyName})`, response.usage
+      );
+      if (response.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: response.content });
+    }
 
     const textContent = response.content
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("");
 
+    // The response interleaves search narration with the final JSON, so
+    // extract from the first "{" to the last "}" (same approach as the
+    // main research pipeline) rather than parsing the whole text.
     let parsed;
     try {
       const clean = textContent.replace(/```json|```/g, "").trim();
-      parsed = JSON.parse(clean);
-    } catch {
+      const si = clean.indexOf("{");
+      const ei = clean.lastIndexOf("}");
+      if (si === -1 || ei === -1 || ei <= si) {
+        throw new Error("no JSON object in response");
+      }
+      parsed = JSON.parse(clean.slice(si, ei + 1));
+    } catch (parseErr) {
+      console.error(
+        `[DocSearchAgent] Parse error for ${docType}: ${parseErr.message}\n` +
+        `Raw response text: ${textContent.slice(0, 500)}`
+      );
       return {
         type: docType,
         label: def.label,
