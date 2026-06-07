@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.102.0",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/kv": "^3.0.0",
     "ioredis": "^5.11.0",
