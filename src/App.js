@@ -1179,8 +1179,8 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
 // "Edit" to override it. When the value is empty it falls straight through to
 // the editable input so nothing is pre-filled. Module-scoped so its `editing`
 // state survives parent re-renders (same reason StableInput lives out here).
-function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder, options }) {
-  const [editing, setEditing] = useState(false);
+function PrePopulatedField({ id, label, value, displayValue, type, onUpdate, sourceLabel, required, placeholder, options, startEditing }) {
+  const [editing, setEditing] = useState(!!startEditing);
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 };
 
   if (editing || !value) {
@@ -1406,6 +1406,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const stakeholdersRef = useRef({});
   const [, setStakeholderVersion] = useState(0);
   const [stakeholderErrors, setStakeholderErrors] = useState([]);
+  // Per-granular-field green ticks for stakeholders on Confirm, mirroring the
+  // per-field `checks` design for regular rows. Shape: { [stakeholderId]:
+  // { [fieldKey]: boolean } }. A found field defaults to confirmed (ticked);
+  // unticking routes that field to the next page for editing.
+  const [stakeholderFieldChecks, setStakeholderFieldChecks] = useState({});
   // bumped whenever we mutate gapRef from outside the input (e.g. test-data fill)
   // so StableInput components re-sync from the new ref values.
   const [, setFormVersion] = useState(0);
@@ -1531,6 +1536,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
+    setStakeholderFieldChecks({});
     setError(""); setDeclared(false);
     setUploadedDocs(initialUploadedDocs());
     setJourneyType(""); setJourneyOpen(false); setSelectedJourneyCard(null); setManualOpened(false);
@@ -1553,6 +1559,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (current.has(stakeholderId)) current.delete(stakeholderId);
       else current.add(stakeholderId);
       return { ...prev, [fieldId]: current };
+    });
+  };
+
+  // Per-granular-field green-tick state for a stakeholder. Found fields default
+  // to confirmed (true); unticking routes the field to the next page for edit.
+  const isStkFieldConfirmed = (stakeholderId, key) => {
+    const m = stakeholderFieldChecks[stakeholderId];
+    return m && key in m ? m[key] : true;
+  };
+  const toggleStkFieldConfirm = (stakeholderId, key) => {
+    setStakeholderFieldChecks((prev) => {
+      const cur = prev[stakeholderId] || {};
+      const curVal = key in cur ? cur[key] : true;
+      return { ...prev, [stakeholderId]: { ...cur, [key]: !curVal } };
     });
   };
 
@@ -2103,6 +2123,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       merged.forEach((_, i) => { c[i] = true; });
       setChecks(c);
       setRejectedStakeholders({});
+      setStakeholderFieldChecks({});
       setExpandedStakeholders({});
       setIsPubliclyListedOverride(false);
       stakeholdersRef.current = {};
@@ -2255,6 +2276,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     found.forEach((_, i) => { c[i] = true; });
     setChecks(c);
     setRejectedStakeholders({});
+    setStakeholderFieldChecks({});
     setExpandedStakeholders({});
     // Leave the manual "publicly listed" override OFF by default — the user
     // ticks it on Confirm only if they want to override and skip stakeholder
@@ -3044,6 +3066,77 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // so the row layout for everything else stays untouched. Items without a
   // populated stakeholders array fall through to the normal row renderer
   // for backward compatibility with legacy stored values.
+  // Granular data points shown per stakeholder on Confirm. Each found point
+  // gets a green tick (untick → routes to next page for edit); each missing
+  // required point shows a "next page" tag. Mirrors the per-row green-tick
+  // design used for regular confirm rows.
+  const stkConfirmFields = (ubo) => [
+    { key: "full_name", label: "Full legal name", required: true },
+    { key: "role", label: "Role / position", required: false },
+    ...(ubo ? [{ key: "share_percentage", label: "Shareholding", required: false }] : []),
+    { key: "nationality", label: "Nationality", required: true },
+    { key: "date_of_birth", label: "Date of birth", required: true },
+    { key: "residential_country", label: "Country of residence", required: false },
+    { key: "is_pep", label: "PEP status", required: true },
+  ];
+  const stkFieldFound = (s, key) => {
+    if (key === "is_pep") return s.is_pep === true || s.is_pep === false;
+    if (key === "share_percentage") return s.share_percentage != null && String(s.share_percentage).trim() !== "";
+    return s[key] != null && String(s[key]).trim() !== "";
+  };
+  const stkFieldDisplay = (s, key) => {
+    if (key === "date_of_birth") return formatDOBForDisplay(s.date_of_birth) || s.date_of_birth || "";
+    if (key === "share_percentage") return s.share_percentage != null ? `${s.share_percentage}%` : "";
+    if (key === "is_pep") return s.is_pep === true ? "Yes" : s.is_pep === false ? "No" : "";
+    return s[key] != null ? String(s[key]) : "";
+  };
+  // Field labels that will land on the next page for this person: any found
+  // field the customer unticked, plus any missing required field.
+  const stkNextPageFields = (s, ubo) =>
+    stkConfirmFields(ubo)
+      .filter((f) => {
+        const found = stkFieldFound(s, f.key);
+        if (found) return !isStkFieldConfirmed(s.id, f.key);
+        return f.required;
+      })
+      .map((f) => f.label);
+
+  // Render a customer-added (pending) stakeholder card on Confirm. The blank
+  // person already lives in stakeholdersRef and will surface on the next page
+  // for the customer to complete; here we just show it + allow removal.
+  const renderPendingAddedStakeholder = (fieldId, s, ubo) => (
+    <div
+      key={s.id}
+      style={{
+        background: "#f3faf8", border: "1.5px dashed #4a9e8e",
+        borderRadius: 8, marginBottom: 8, padding: "12px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+      }}
+    >
+      <span style={{ fontSize: 16, flexShrink: 0 }}>➕</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
+          New {ubo ? "beneficial owner" : "director"} added
+        </div>
+        <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
+          You'll complete their details on the next page.
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => removeStakeholder(fieldId, s.id)}
+        title="Remove"
+        aria-label="Remove"
+        style={{
+          background: "none", border: "none", color: "#1a3a4a70",
+          cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px", fontFamily: "inherit",
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+
   const renderStakeholderConfirmSection = (item, idx) => {
     if (!item || !Array.isArray(item.stakeholders) || item.stakeholders.length === 0) {
       return null;
@@ -3097,13 +3190,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         </div>
         <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 10px", lineHeight: 1.5 }}>
-          Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}.
-          Uncheck anyone whose name is wrong — you'll correct them on the next page. Nationality,
-          date of birth and compliance details are collected on the next page for everyone kept here.
+          Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}. Expand each
+          person to review the details we found — keep the green tick on anything correct, or untick a
+          field to edit it on the next page. Anything we couldn't find is collected on the next page too.
         </p>
         {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
           const expanded = isStakeholderExpanded(s.id);
+          // Listed-company shortcut: people who don't need EDD stay a simple
+          // verified card (no granular routing ticks).
+          const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
+          const nextPageFields = needsEDD && !rejected ? stkNextPageFields(s, ubo) : [];
           return (
             <div
               key={s.id}
@@ -3160,7 +3257,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   </div>
                   {!expanded && (
                     <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 3 }}>
-                      {rejected ? "⚠ Marked as incorrect — tap to review" : "✓ Verified · tap to expand"}
+                      {rejected
+                        ? "⚠ Marked as incorrect — tap to review"
+                        : nextPageFields.length > 0
+                        ? `${nextPageFields.length} field${nextPageFields.length > 1 ? "s" : ""} to complete on next page · tap to expand`
+                        : "✓ All details confirmed · tap to expand"}
                     </div>
                   )}
                 </div>
@@ -3188,7 +3289,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   padding: "12px 16px 14px",
                   borderTop: "1px solid rgba(26,58,74,0.08)",
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
                     <span style={{
                       fontSize: 10, fontWeight: 700, color: sourceBadge.color,
                       background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
@@ -3204,14 +3305,85 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: "#1a3a4a70", fontStyle: "italic" }}>
-                    Nationality, date of birth and compliance details to be completed on the next page
-                  </div>
+
+                  {rejected ? (
+                    <div style={{ fontSize: 12, color: "#1a3a4a70", fontStyle: "italic" }}>
+                      This person is marked incorrect — you'll enter the correct details on the next page.
+                    </div>
+                  ) : !needsEDD ? (
+                    <div style={{ fontSize: 12, color: "#1a6b56", fontStyle: "italic" }}>
+                      ✓ Verified from official sources. No additional details required for a listed company.
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {stkConfirmFields(ubo).map((f) => {
+                          const amberTag = {
+                            fontSize: 10, fontWeight: 700, color: "#8c5500",
+                            background: "#fff8ed", border: "1px solid #e0a040",
+                            borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                          };
+                          if (stkFieldFound(s, f.key)) {
+                            const confirmed = isStkFieldConfirmed(s.id, f.key);
+                            return (
+                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={confirmed}
+                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
+                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
+                                  aria-label={`Confirm ${f.label}`}
+                                />
+                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
+                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
+                              </label>
+                            );
+                          }
+                          if (!f.required) return null;
+                          return (
+                            <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                              <span style={{ width: 14, textAlign: "center", color: "#e0a040", flexShrink: 0 }}>＋</span>
+                              <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+                              <span style={{ color: "#1a3a4a70", flex: 1, fontStyle: "italic" }}>Not found</span>
+                              <span style={amberTag}>added on next page</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 10, fontStyle: "italic" }}>
+                        {nextPageFields.length > 0
+                          ? `On the next page you'll complete: ${nextPageFields.join(", ")}.`
+                          : "All details confirmed — nothing further needed on the next page."}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
+
+        {/* Customer-added people (pending) — created here, completed next page */}
+        {getStakeholders(item.field)
+          .filter((s) => s.customer_added && !isRegistryExemptionNotice(s))
+          .map((s) => renderPendingAddedStakeholder(item.field, s, ubo))}
+
+        {/* Add-a-person button — the blank person is created now and surfaces on
+            the next page (Fill Gaps) for the customer to complete. */}
+        <button
+          type="button"
+          onClick={() => addStakeholder(item.field)}
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+            marginTop: 2, padding: "9px 16px", width: "100%",
+            background: "transparent", color: "#1a3a4a",
+            border: "1.5px dashed #4a9e8e", borderRadius: 8,
+            fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+          }}
+        >
+          + Add another {ubo ? "beneficial owner" : "director"} (you'll fill details on the next page)
+        </button>
       </div>
     );
   };
@@ -3258,8 +3430,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const missing = stakeholderMissingFields(stakeholder);
     const isComplete = missing.length === 0;
 
-    const nameLocked = isAIFound;
-    const roleLocked = isAIFound && stakeholder.role;
+    // A found field stays locked/verified only while its Confirm-page green tick
+    // is still on; unticking it on Confirm opens it for editing here.
+    const nameLocked = isAIFound && isStkFieldConfirmed(stakeholder.id, "full_name");
+    const roleLocked = isAIFound && stakeholder.role && isStkFieldConfirmed(stakeholder.id, "role");
 
     return (
       <div
@@ -3393,6 +3567,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             value={stakeholder.nationality || ""}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "nationality", v)}
             sourceLabel={stakeholder.source}
+            startEditing={!isStkFieldConfirmed(stakeholder.id, "nationality")}
             required
             placeholder="e.g. British, American, Singaporean"
           />
@@ -3406,6 +3581,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             displayValue={formatDOBForDisplay(stakeholder.date_of_birth)}
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "date_of_birth", v)}
             sourceLabel={stakeholder.source}
+            startEditing={!isStkFieldConfirmed(stakeholder.id, "date_of_birth")}
             required
             placeholder="YYYY-MM-DD"
           />
@@ -3420,6 +3596,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             onUpdate={(_, v) => updateStakeholderField(fieldId, stakeholder.id, "residential_country", v)}
             options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
             sourceLabel={stakeholder.source}
+            startEditing={!isStkFieldConfirmed(stakeholder.id, "residential_country")}
           />
 
           {/* Identity Document Type and Identity Document Number are intentionally
