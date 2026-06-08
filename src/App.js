@@ -4075,6 +4075,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
             .filter(d => d.status === "downloaded" || d.status === "url_found");
           const sectionAVisible = docSearchLoading || !!docSearchError ||
             (docSearchResults !== null && docSearchResults.documents.length > 0);
+
+          // ── Section B filter: hide documents already auto-sourced in Section A ──
+          // Only exclude when the agent actually has the document (downloaded or
+          // url_found); a failed search still asks the customer to provide it.
+          const autoSourcedDocTypes = new Set(
+            (docSearchResults?.documents || [])
+              .filter(d => d.status === "downloaded" || d.status === "url_found")
+              .map(d => d.type)
+          );
+          // Map doc-search agent type IDs → the DOC_TYPES `key` values that
+          // Section B's upload list is keyed by (read from DOC_TYPES above:
+          // Wolfsberg = "wolfsberg", Annual Report = "annualReport").
+          const docTypeMapping = {
+            wolfsberg_questionnaire: ["wolfsberg"],
+            annual_report: ["annualReport"],
+          };
+          const excludedDocIds = new Set();
+          autoSourcedDocTypes.forEach(agentType => {
+            (docTypeMapping[agentType] || []).forEach(id => excludedDocIds.add(id));
+          });
+          // Section B items carry their id on `.key`, so filter on that.
+          const customerDocuments = docs.filter(d => !excludedDocIds.has(d.key));
+
           return (
             <div>
               <div style={card}>
@@ -4512,11 +4535,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 )}
 
                 <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Upload your documents</h2>
-                <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
-                  All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.
-                </p>
+                {customerDocuments.length > 0 && (
+                  <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
+                    All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.
+                  </p>
+                )}
+                {autoSourcedDocTypes.size > 0 && customerDocuments.length > 0 && (
+                  <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 12, fontStyle: "italic" }}>
+                    {autoSourcedDocTypes.size} document{autoSourcedDocTypes.size !== 1 ? "s were" : " was"} sourced automatically above. Please provide the following additional document{customerDocuments.length !== 1 ? "s" : ""}:
+                  </p>
+                )}
+                {customerDocuments.length === 0 ? (
+                  <div style={{
+                    padding: "16px",
+                    background: C.successBg,
+                    border: `1px solid ${C.successBorder}`,
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginTop: 8,
+                  }}>
+                    <span style={{ fontSize: 20 }}>✅</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.success }}>
+                        All required documents sourced
+                      </div>
+                      <div style={{ fontSize: 12, color: C.success, opacity: 0.8, marginTop: 2 }}>
+                        We found all the documents we need automatically. No uploads required — click Continue to proceed.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-                  {docs.map(d => {
+                  {customerDocuments.map(d => {
                     const file = uploadedDocs[d.key];
                     const inputId = `upload-${d.key}`;
                     return (
@@ -4566,6 +4618,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     );
                   })}
                 </div>
+                )}
 
                 {error && <div style={{ marginTop: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
 
