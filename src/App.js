@@ -4890,6 +4890,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Additional Information Required {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>{getCombinedGaps().filter(g => g.section !== "documents").length} fields need your input</p>
                 </div>
+                {SHOW_TEST_TOOLS && (
+                  <button
+                    type="button"
+                    onClick={fillTestData}
+                    title="Testing only — fills all visible fields with sample data"
+                    style={{
+                      marginLeft: "auto", flexShrink: 0,
+                      padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                      background: "transparent", color: "#4a9e8e",
+                      border: "2px dashed #4a9e8e",
+                    }}
+                  >
+                    ✨ Fill with test data
+                  </button>
+                )}
               </div>
             </div>
 
@@ -4943,23 +4959,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
             {stakeholderSummaryNodes}
-
-            {SHOW_TEST_TOOLS && (
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                <button
-                  type="button"
-                  onClick={fillTestData}
-                  style={{
-                    padding: "10px 20px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "inherit",
-                    background: "transparent", color: "#4a9e8e",
-                    border: "2px dashed #4a9e8e",
-                  }}
-                >
-                  ✨ Fill with test data
-                </button>
-              </div>
-            )}
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.confirm)}>← Back to Review</Btn>

@@ -338,8 +338,8 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         )}
         {SHOW_TEST_TOOLS && (
           <div style={styles.testRow}>
-            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all uploads with dummy files">
-              🧪 Upload all (test)
+            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all required uploads with sample documents">
+              ✨ Fill with test data
             </button>
           </div>
         )}
@@ -450,7 +450,7 @@ const styles = {
   progressTrack: { height: 6, borderRadius: 3, background: 'rgba(74,158,142,0.15)', overflow: 'hidden' },
   progressFill: { height: '100%', background: `linear-gradient(90deg, ${C.teal}, ${C.navy})`, transition: 'width 0.4s ease' },
   testRow: { display: 'flex', justifyContent: 'flex-end', marginTop: 10 },
-  testBtn: { fontSize: 11, fontWeight: 600, color: C.navy70, background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit' },
+  testBtn: { fontSize: 12, fontWeight: 600, color: C.teal, background: 'transparent', border: `2px dashed ${C.teal}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 
   docCard: { borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 },
   docCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
