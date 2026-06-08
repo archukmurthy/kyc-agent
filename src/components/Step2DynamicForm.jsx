@@ -397,6 +397,11 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         </div>
       )}
 
+      {/* "Nium will retrieve these for you" (self-sourced) section — hidden for
+          now per request, but kept here for future use. `selfSourced` is still
+          computed above and still counted as submitted in handleContinue, so the
+          downstream document gate is unaffected; only the UI is hidden. To
+          restore, un-comment this block.
       {selfSourced.length > 0 && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
@@ -408,6 +413,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
           ))}
         </div>
       )}
+      */}
 
       <div style={styles.footer}>
         <p style={styles.footerNote}>
