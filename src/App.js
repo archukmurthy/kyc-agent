@@ -200,7 +200,7 @@ const TEST_FLAG =
   new URLSearchParams(window.location.search).get("test") === "1";
 const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
-const MANUAL_FORM_URL = "https://nium.com/apply";
+const MANUAL_FORM_URL = "https://app.nium.com";
 // TODO: replace with actual product form URL
 
 // eslint-disable-next-line no-unused-vars
