@@ -4076,27 +4076,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
           const sectionAVisible = docSearchLoading || !!docSearchError ||
             (docSearchResults !== null && docSearchResults.documents.length > 0);
 
-          // ── Section B filter: hide documents already auto-sourced in Section A ──
-          // Only exclude when the agent actually has the document (downloaded or
+          // ── Section B: flag (but do not hide) documents already auto-sourced
+          // in Section A. Only count docs the agent actually has (downloaded or
           // url_found); a failed search still asks the customer to provide it.
           const autoSourcedDocTypes = new Set(
             (docSearchResults?.documents || [])
               .filter(d => d.status === "downloaded" || d.status === "url_found")
               .map(d => d.type)
           );
-          // Map doc-search agent type IDs → the DOC_TYPES `key` values that
-          // Section B's upload list is keyed by (read from DOC_TYPES above:
-          // Wolfsberg = "wolfsberg", Annual Report = "annualReport").
+          // Map doc-search agent type IDs → the DOC_TYPES `key` values used by
+          // Section B (Wolfsberg = "wolfsberg", Annual Report = "annualReport"),
+          // plus a range of aliases so the match is robust to either source.
           const docTypeMapping = {
-            wolfsberg_questionnaire: ["wolfsberg"],
-            annual_report: ["annualReport"],
+            wolfsberg_questionnaire: [
+              "doc_wolfsberg", "wolfsberg", "wolfsberg_questionnaire", "cbddq", "fccq",
+            ],
+            annual_report: [
+              "doc_annual", "annual_report", "annual_report_accounts",
+              "audited_financial_statements", "audited_accounts", "annualReport",
+            ],
           };
-          const excludedDocIds = new Set();
-          autoSourcedDocTypes.forEach(agentType => {
-            (docTypeMapping[agentType] || []).forEach(id => excludedDocIds.add(id));
-          });
-          // Section B items carry their id on `.key`, so filter on that.
-          const customerDocuments = docs.filter(d => !excludedDocIds.has(d.key));
+          function isAutoSourced(docId, docType) {
+            for (const [agentType, mappedIds] of Object.entries(docTypeMapping)) {
+              if (autoSourcedDocTypes.has(agentType)) {
+                if (mappedIds.includes(docId) || mappedIds.includes(docType)) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          }
 
           return (
             <div>
@@ -4535,40 +4544,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 )}
 
                 <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>Upload your documents</h2>
-                {customerDocuments.length > 0 && (
-                  <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
-                    All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.
-                  </p>
-                )}
-                {autoSourcedDocTypes.size > 0 && customerDocuments.length > 0 && (
-                  <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 12, fontStyle: "italic" }}>
-                    {autoSourcedDocTypes.size} document{autoSourcedDocTypes.size !== 1 ? "s were" : " was"} sourced automatically above. Please provide the following additional document{customerDocuments.length !== 1 ? "s" : ""}:
-                  </p>
-                )}
-                {customerDocuments.length === 0 ? (
-                  <div style={{
-                    padding: "16px",
-                    background: C.successBg,
-                    border: `1px solid ${C.successBorder}`,
-                    borderRadius: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginTop: 8,
-                  }}>
-                    <span style={{ fontSize: 20 }}>✅</span>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.success }}>
-                        All required documents sourced
-                      </div>
-                      <div style={{ fontSize: 12, color: C.success, opacity: 0.8, marginTop: 2 }}>
-                        We found all the documents we need automatically. No uploads required — click Continue to proceed.
-                      </div>
-                    </div>
-                  </div>
-                ) : (
+                <p style={{ fontSize: 13, color: "#1a3a4a90", margin: "0 0 18px", lineHeight: 1.5 }}>
+                  All documents are optional. Upload as many or as few as you have available. The more you provide, the less you'll need to fill in manually.
+                </p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-                  {customerDocuments.map(d => {
+                  {docs.map(d => {
                     const file = uploadedDocs[d.key];
                     const inputId = `upload-${d.key}`;
                     return (
@@ -4585,6 +4565,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 10 }}>{d.helper}</div>
+                        {isAutoSourced(d.key, d.key) && (
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            marginBottom: 6,
+                            padding: "6px 10px",
+                            background: C.successBg,
+                            border: `1px solid ${C.successBorder}`,
+                            borderRadius: 6,
+                            fontSize: 12,
+                            color: C.success,
+                          }}>
+                            <span>✓</span>
+                            <span>
+                              We sourced this automatically — upload here only if you prefer to provide your own version.
+                            </span>
+                          </div>
+                        )}
                         {file ? (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid rgba(74,158,142,0.25)" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -4618,7 +4617,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     );
                   })}
                 </div>
-                )}
 
                 {error && <div style={{ marginTop: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
 
