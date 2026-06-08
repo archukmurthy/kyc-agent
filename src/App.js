@@ -5003,6 +5003,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   <Step2DynamicForm
                     step1Data={drsStep1Data}
                     researchData={research}
+                    docSearchResults={docSearchResults}
                     onComplete={(data) => {
                       setDrsSubmitted(data.submittedRequirements || []);
                       setDrsFlags(data.flags || {});

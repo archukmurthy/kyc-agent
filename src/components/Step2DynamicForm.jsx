@@ -49,9 +49,58 @@ const SHOW_TEST_TOOLS = process.env.NODE_ENV !== 'production' || TEST_FLAG;
 const isSelfSourced = (item) => /self-source/i.test(item.selfSource || '');
 const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');
 
+// The doc-search agent (Step 2) sources two document types. The DRS checklist
+// keys items by human-readable `requirement` strings (no doc IDs), and Wolfsberg
+// is rendered in its own section — so we match an auto-sourced agent doc to a
+// checklist card by keyword on the card title rather than by an ID lookup.
+const AUTO_SOURCED_MATCHERS = {
+  wolfsberg_questionnaire: /wolfsberg|cbddq|fccq/i,
+  annual_report: /annual report|annual accounts|financial statement|audited account/i,
+};
+
+// Returns the doc-search result already covering this checklist item (matched by
+// title keyword), or null if it was not auto-sourced. Only docs the agent
+// actually has (downloaded / url_found) count — a failed search still asks.
+function getAutoSourcedResult(title, docSearchResults) {
+  if (!title || !docSearchResults?.documents?.length) return null;
+  for (const agentDoc of docSearchResults.documents) {
+    if (agentDoc.status !== 'downloaded' && agentDoc.status !== 'url_found') continue;
+    const matcher = AUTO_SOURCED_MATCHERS[agentDoc.type];
+    if (matcher && matcher.test(title)) return agentDoc;
+  }
+  return null;
+}
+
+// "Sourced automatically" banner shown at the top of a document card when the
+// doc search agent already found that document.
+function AutoSourcedBanner({ result }) {
+  if (!result) return null;
+  return (
+    <div style={styles.autoSourcedBanner}>
+      <span style={styles.autoSourcedIcon}>✅</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={styles.autoSourcedTitle}>Sourced automatically</div>
+        <div style={styles.autoSourcedDesc}>
+          We found this from {result.sourceLabel || result.source || 'a public source'}.
+          {result.sourceUrl && (
+            <>{' '}
+              <a href={result.sourceUrl} target="_blank" rel="noopener noreferrer" style={styles.autoSourcedLink}>
+                View document →
+              </a>
+            </>
+          )}
+        </div>
+        <div style={styles.autoSourcedHint}>
+          Upload below only if you prefer to provide your own version.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Upload card ─────────────────────────────────────────────────────────────
 
-function DocumentUploadCard({ item, onUpload, onRemove, uploaded }) {
+function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult }) {
   const selfSource = isSelfSourced(item);
   const done = !!uploaded;
   const regUrl = item.regulatoryUrl || item.sourceUrl;
@@ -94,6 +143,7 @@ function DocumentUploadCard({ item, onUpload, onRemove, uploaded }) {
 
   return (
     <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
+      <AutoSourcedBanner result={autoSourcedResult} />
       <div style={styles.docCardHeader}>
         <span style={styles.docTitle}>{item.requirement}</span>
         {badge}
@@ -130,7 +180,7 @@ function DocumentUploadCard({ item, onUpload, onRemove, uploaded }) {
   );
 }
 
-function WolfsbergSection({ uploaded, onComplete, onRemove }) {
+function WolfsbergSection({ uploaded, onComplete, onRemove, autoSourcedResult }) {
   const done = !!uploaded;
   return (
     <div style={styles.section}>
@@ -141,6 +191,7 @@ function WolfsbergSection({ uploaded, onComplete, onRemove }) {
         wolfsberg-group.com.
       </p>
       <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
+        <AutoSourcedBanner result={autoSourcedResult} />
         <div style={styles.docCardHeader}>
           <span style={styles.docTitle}>Wolfsberg CBDDQ</span>
           <span style={styles.mandatoryBadge}>Required</span>
@@ -188,7 +239,7 @@ function LoadingState() {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function Step2DynamicForm({ step1Data, onComplete }) {
+export default function Step2DynamicForm({ step1Data, onComplete, docSearchResults }) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
   const { checklist, flags, onboardingCountry, loading, error } =
@@ -223,9 +274,15 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
   };
 
   // Progress = mandatory, client-provided items the customer must upload.
+  // An item also counts as provided if the doc search agent already sourced it.
   const requiredItems = provide.filter(i => i.mandatory);
-  const requiredDone  = requiredItems.filter(i => uploads[i.requirement]).length;
   const requiredTotal = requiredItems.length;
+  const requiredUploaded   = requiredItems.filter(i => uploads[i.requirement]);
+  const requiredAutoSourced = requiredItems.filter(
+    i => !uploads[i.requirement] && getAutoSourcedResult(i.requirement, docSearchResults)
+  );
+  const autoSourcedCount = requiredAutoSourced.length;
+  const requiredDone  = Math.min(requiredTotal, requiredUploaded.length + autoSourcedCount);
   const allDone       = requiredTotal === 0 || requiredDone === requiredTotal;
   const pct           = requiredTotal === 0 ? 100 : Math.round((requiredDone / requiredTotal) * 100);
 
@@ -253,7 +310,10 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
         {requiredTotal > 0 && (
           <div style={styles.progressWrap}>
             <div style={styles.progressRow}>
-              <span style={styles.progressLabel}>{requiredDone} of {requiredTotal} required document{requiredTotal > 1 ? 's' : ''} provided</span>
+              <span style={styles.progressLabel}>
+                {requiredDone} of {requiredTotal} required document{requiredTotal > 1 ? 's' : ''} provided
+                {autoSourcedCount > 0 ? ` (${autoSourcedCount} sourced automatically)` : ''}
+              </span>
               {allDone && <span style={styles.progressDone}>✓ All required items in</span>}
             </div>
             <div style={styles.progressTrack}><div style={{ ...styles.progressFill, width: `${pct}%` }} /></div>
@@ -269,14 +329,19 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
       </div>
 
       {flags.showWolfsberg && (
-        <WolfsbergSection uploaded={uploads['Wolfsberg CBDDQ']} onComplete={handleUpload} onRemove={handleRemove} />
+        <WolfsbergSection
+          uploaded={uploads['Wolfsberg CBDDQ']}
+          onComplete={handleUpload}
+          onRemove={handleRemove}
+          autoSourcedResult={getAutoSourcedResult('Wolfsberg CBDDQ', docSearchResults)}
+        />
       )}
 
       {coreItems.length > 0 && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Company documents</h3>
           {coreItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
           ))}
         </div>
       )}
@@ -289,7 +354,7 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
             {flags.showDirectorSection && 'Required for each relevant director. '}
           </p>
           {personItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
           ))}
         </div>
       )}
@@ -301,7 +366,7 @@ export default function Step2DynamicForm({ step1Data, onComplete }) {
             We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
           </p>
           {selfSourced.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
           ))}
         </div>
       )}
@@ -353,6 +418,13 @@ const styles = {
   docHint: { fontSize: 12, color: C.navy80, margin: 0, lineHeight: 1.5 },
 
   selfSourceNote: { display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 13, color: C.navy80, padding: '8px 12px', borderRadius: 6, background: C.surface, lineHeight: 1.5 },
+
+  autoSourcedBanner: { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 8, marginBottom: 12 },
+  autoSourcedIcon: { fontSize: 16, flexShrink: 0, marginTop: 1 },
+  autoSourcedTitle: { fontSize: 13, fontWeight: 700, color: C.successText, marginBottom: 2 },
+  autoSourcedDesc: { fontSize: 12, color: C.successText, opacity: 0.85, lineHeight: 1.4 },
+  autoSourcedHint: { fontSize: 11, color: C.successText, opacity: 0.7, marginTop: 4, fontStyle: 'italic' },
+  autoSourcedLink: { color: C.successText, fontWeight: 600, textDecoration: 'underline' },
 
   uploadLabel: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, border: `1.5px dashed ${C.border}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: '#fff' },
   uploadHint: { fontSize: 10, color: C.navy70 },
