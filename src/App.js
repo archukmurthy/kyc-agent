@@ -3902,23 +3902,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 }))}
               />
             </div>
-            {entityType && (
-              <div style={{ marginBottom: 14 }}>
-                <label htmlFor="ownership-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 }}>
-                  Ownership Type <span style={{ color: C.error }}>*</span>
-                </label>
-                <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
-                  How is this company owned and structured?
-                </p>
-                <SearchableSelect
-                  id="ownership-type"
-                  value={ownershipType}
-                  onChange={setOwnershipType}
-                  placeholder="Select ownership type…"
-                  options={getOwnershipTypeOptions(entityType, tenantConfig)}
-                />
-              </div>
-            )}
+            {/* Ownership Type is always visible; its options are populated from
+                the selected entity type. Until an entity type is chosen it shows
+                disabled with a guiding placeholder. */}
+            <div style={{ marginBottom: 14 }}>
+              <label htmlFor="ownership-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 }}>
+                Ownership Type <span style={{ color: C.error }}>*</span>
+              </label>
+              <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
+                How is this company owned and structured?
+              </p>
+              <SearchableSelect
+                id="ownership-type"
+                value={ownershipType}
+                onChange={setOwnershipType}
+                disabled={!entityType}
+                placeholder={entityType ? "Select ownership type…" : "Select an entity type first…"}
+                options={entityType ? getOwnershipTypeOptions(entityType, tenantConfig) : []}
+              />
+            </div>
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="country-reg" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
               <SearchableSelect
