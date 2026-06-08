@@ -698,6 +698,14 @@ function buildDemoDocSearchResults(
     .replace(/\s+/g, "_")
     .replace(/[^a-zA-Z0-9_.]/g, "");
 
+  // Domain-friendly slug for realistic, company-specific demo source URLs
+  // (no underscores, lowercased, alphanumeric only — e.g. "hsbcholdings").
+  const domainSlug = companyName
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 20);
+
   const documents = [];
 
   // Wolfsberg for FI entities
@@ -708,7 +716,7 @@ function buildDemoDocSearchResults(
       filename: `${slug}_Wolfsberg_Questionnaire_${year}.pdf`,
       year,
       status: "downloaded",
-      sourceUrl: `https://www.${slug.toLowerCase()}.com/compliance/wolfsberg`,
+      sourceUrl: `https://www.${domainSlug}.com/compliance/wolfsberg-questionnaire`,
       sourceLabel: `${companyName} compliance page`,
       confidence: "high",
       localPath: `./downloads/${slug}_demo/wolfsberg.pdf`,
@@ -732,7 +740,7 @@ function buildDemoDocSearchResults(
       filename: `${slug}_Annual_Report_${prevYear}.pdf`,
       year: prevYear,
       status: "downloaded",
-      sourceUrl: `https://www.${slug.toLowerCase()}.com/investors/annual-report-${prevYear}`,
+      sourceUrl: `https://www.${domainSlug}.com/investors/results-and-announcements/annual-results-${prevYear}`,
       sourceLabel: `${companyName} investor relations`,
       confidence: "high",
       localPath: `./downloads/${slug}_demo/annual_report.pdf`,
@@ -4308,6 +4316,45 @@ export default function KYCAgent({ previewMode = false } = {}) {
                                 </span>
                               )}
                             </div>
+
+                            {/* View document link */}
+                            {doc.sourceUrl ? (
+                              <a
+                                href={doc.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  fontSize: 12,
+                                  color: C.niumBlue,
+                                  fontWeight: 600,
+                                  textDecoration: "none",
+                                  marginTop: 6,
+                                  padding: "4px 0",
+                                }}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.textDecoration = "underline";
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.textDecoration = "none";
+                                }}
+                              >
+                                <span style={{ fontSize: 14 }}>📄</span>
+                                View document →
+                              </a>
+                            ) : (
+                              <span style={{
+                                display: "block",
+                                fontSize: 11,
+                                color: C.textMuted,
+                                fontStyle: "italic",
+                                marginTop: 6,
+                              }}>
+                                Direct link not available
+                              </span>
+                            )}
                           </div>
 
                           {/* Accept / Remove button */}
@@ -4360,6 +4407,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
                                 Use this document
                               </button>
                             )}
+                            <p style={{
+                              fontSize: 11,
+                              color: C.textMuted,
+                              marginTop: 4,
+                              textAlign: "center",
+                              fontStyle: "italic",
+                              whiteSpace: "pre-line",
+                            }}>
+                              {isAccepted
+                                ? "Fields will be extracted automatically"
+                                : "We will extract compliance fields\nfrom this document"
+                              }
+                            </p>
                           </div>
                         </div>
                       );
