@@ -2256,9 +2256,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setChecks(c);
     setRejectedStakeholders({});
     setExpandedStakeholders({});
-    // Demo mode: pre-check "publicly listed" so stakeholder EDD forms are hidden
-    // on Fill Gaps automatically. The customer can uncheck it on Confirm.
-    setIsPubliclyListedOverride(true);
+    // Leave the manual "publicly listed" override OFF by default — the user
+    // ticks it on Confirm only if they want to override and skip stakeholder
+    // EDD forms. (Previously demo mode pre-checked this; now it starts unticked.)
+    setIsPubliclyListedOverride(false);
     stakeholdersRef.current = {};
     setStakeholderVersion(v => v + 1);
     setStakeholderErrors([]);
