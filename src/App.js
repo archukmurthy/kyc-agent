@@ -42,6 +42,95 @@ import {
   buildPrompt,
 } from "./pipeline";
 
+// ── API pricing (Anthropic, June 2026) ──
+// Unit prices used to calculate ACTUAL cost from REAL token counts. Token
+// counts come from response.usage on every Anthropic API call — these are
+// not estimates. Mirrors lib/persist.js#estimateCostUsd ($3 / $15 per Mtok)
+// so the live submit path and the benchmark path price tokens identically.
+const API_PRICING = {
+  model: "claude-sonnet-4-20250514",
+  inputCostPerMillionTokens: 3.0, // USD
+  outputCostPerMillionTokens: 15.0, // USD
+};
+
+// Calculate real dollar cost from real token counts returned by the API.
+function calcCostUsd(inputTokens, outputTokens) {
+  return (
+    (inputTokens / 1_000_000) * API_PRICING.inputCostPerMillionTokens +
+    (outputTokens / 1_000_000) * API_PRICING.outputCostPerMillionTokens
+  );
+}
+
+// Aggregate the per-phase costTracker into a single summary object for
+// persistence. Totals are recomputed from summed REAL token counts (not from
+// summing pre-rounded per-phase dollar figures) to avoid float drift.
+function buildCostSummary(tracker, company, entityType, ownershipType, coverage) {
+  // Collect only phases that actually ran
+  const phases = [
+    tracker.docSearch,
+    tracker.researchPass1,
+    tracker.researchPass2,
+    tracker.docExtraction,
+  ].filter(Boolean);
+
+  // Sum real token counts across all phases
+  const totalInputTokens = phases.reduce(
+    (sum, p) => sum + (p.inputTokens || 0),
+    0
+  );
+  const totalOutputTokens = phases.reduce(
+    (sum, p) => sum + (p.outputTokens || 0),
+    0
+  );
+  // Recalculate total cost from tokens for accuracy (avoid float rounding
+  // from summing pre-calculated per-phase costs)
+  const totalCostUsd = calcCostUsd(totalInputTokens, totalOutputTokens);
+
+  return {
+    model: API_PRICING.model,
+    pricingUsed: {
+      inputCostPerMillionTokens: API_PRICING.inputCostPerMillionTokens,
+      outputCostPerMillionTokens: API_PRICING.outputCostPerMillionTokens,
+    },
+
+    // Per-phase breakdown with real counts
+    breakdown: {
+      docSearch: tracker.docSearch,
+      researchPass1: tracker.researchPass1,
+      researchPass2: tracker.researchPass2,
+      docExtraction: tracker.docExtraction,
+    },
+
+    // Totals across all phases
+    totals: {
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      totalTokens: totalInputTokens + totalOutputTokens,
+      totalCostUsd,
+      apiCallCount: phases.reduce((sum, p) => sum + (p.apiCallCount || 1), 0),
+      phasesRan: phases.length,
+    },
+
+    // Coverage context
+    coverage: coverage
+      ? {
+          fillRate: coverage.fillRate,
+          verifiedFillRate: coverage.verifiedFillRate,
+          totalResearchFields: coverage.totalResearchFields,
+          populatedFields: coverage.populatedFields,
+          verifiedFields: coverage.verifiedFields,
+          // Cost per field found
+          costPerFieldUsd:
+            coverage.populatedFields > 0
+              ? totalCostUsd / coverage.populatedFields
+              : null,
+        }
+      : null,
+
+    computedAt: new Date().toISOString(),
+  };
+}
+
 // Maps this app's ownership-type IDs to the key strings the DRS engine's
 // normaliseEntityType() recognises (it keys off labels like "Public Listed
 // Company" / "LLP", not our IDs). Unmapped IDs fall through to the engine's
@@ -111,7 +200,7 @@ const TEST_FLAG =
   new URLSearchParams(window.location.search).get("test") === "1";
 const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
-const MANUAL_FORM_URL = "https://nium.com/apply";
+const MANUAL_FORM_URL = "https://app.nium.com";
 // TODO: replace with actual product form URL
 
 // eslint-disable-next-line no-unused-vars
@@ -1337,6 +1426,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [docSearchResults, setDocSearchResults] = useState(null);
   const [docSearchLoading, setDocSearchLoading] = useState(false);
   const [docSearchError, setDocSearchError] = useState(null);
+
+  // Tracks real token counts and costs from every API call in this journey.
+  // Null for a phase means that phase did not run yet. Captured from the
+  // Anthropic `usage` object (research/extraction) and the doc-search agent's
+  // own CostTracker (doc search).
+  const [costTracker, setCostTracker] = useState({
+    docSearch: null,
+    researchPass1: null,
+    researchPass2: null,
+    docExtraction: null,
+  });
   // Which auto-found documents the customer has accepted for use in research.
   // Shape: Set of document types, e.g. Set(["wolfsberg_questionnaire"]).
   const [acceptedDocTypes, setAcceptedDocTypes] = useState(new Set());
@@ -1431,6 +1531,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setAcceptedDocTypes(new Set());
+    setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
   };
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
@@ -1686,9 +1787,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!resp.ok) {
       // eslint-disable-next-line no-console
       console.warn(`Extraction call failed for ${docType.key}`, resp.status);
-      return { docFound: [], wolfsbergFields: {}, raw: null };
+      return { docFound: [], wolfsbergFields: {}, raw: null, usage: null };
     }
     const respData = await resp.json();
+    const usage = respData.usage || null;
     const txt = (respData.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = txt.replace(/^```json\s*/i, "").replace(/^```/i, "").replace(/```\s*$/i, "").trim();
     if (docType.returnsObject) {
@@ -1696,16 +1798,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       try {
         const parsed = JSON.parse(cleaned);
         const filtered = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== null && v !== ""));
-        return { docFound: [], wolfsbergFields: filtered, raw: filtered };
+        return { docFound: [], wolfsbergFields: filtered, raw: filtered, usage };
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn(`Could not parse Wolfsberg extraction`, e, txt);
-        return { docFound: [], wolfsbergFields: {}, raw: null };
+        return { docFound: [], wolfsbergFields: {}, raw: null, usage };
       }
     }
     try {
       const arr = JSON.parse(cleaned);
-      if (!Array.isArray(arr)) return { docFound: [], wolfsbergFields: {}, raw: arr };
+      if (!Array.isArray(arr)) return { docFound: [], wolfsbergFields: {}, raw: arr, usage };
       const docFound = [];
       for (const entry of arr) {
         if (!entry || !entry.fieldId || entry.value === null || entry.value === undefined || entry.value === "") continue;
@@ -1722,11 +1824,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
           trust: "authoritative", wolfsberg: false,
         });
       }
-      return { docFound, wolfsbergFields: {}, raw: arr };
+      return { docFound, wolfsbergFields: {}, raw: arr, usage };
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn(`Could not parse extraction for ${docType.key}`, e, txt);
-      return { docFound: [], wolfsbergFields: {}, raw: null };
+      return { docFound: [], wolfsbergFields: {}, raw: null, usage };
     }
   };
 
@@ -1735,6 +1837,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
+    // Fresh research run: clear prior research/extraction costs but keep the
+    // doc-search cost captured earlier on Step 2.
+    setCostTracker(prev => ({ ...prev, researchPass1: null, researchPass2: null, docExtraction: null }));
     const journey = journeyOverride || journeyType || "ai_only";
     const S = stepsFor(journey);
     const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
@@ -1752,17 +1857,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (runDocPhase) {
         setPhase1Msgs(buildPhase1Msgs(uploadedDocs));
         setLoaderPhase(1); setLoaderIdx(0);
+        // Accumulate real token counts across every per-document extraction call.
+        let docExtractIn = 0, docExtractOut = 0, docExtractCalls = 0;
         for (let i = 0; i < DOC_TYPES.length; i++) {
           const dt = DOC_TYPES[i];
           const file = uploadedDocs[dt.key];
           if (!file) continue;
           const fetchTs = new Date().toISOString();
-          const { docFound: dFound, wolfsbergFields: wFields } = await extractFromDoc(dt, file, schema, flow, fetchTs);
+          const { docFound: dFound, wolfsbergFields: wFields, usage: dUsage } = await extractFromDoc(dt, file, schema, flow, fetchTs);
+          if (dUsage) {
+            docExtractIn += dUsage.input_tokens || 0;
+            docExtractOut += dUsage.output_tokens || 0;
+            docExtractCalls += 1;
+          }
           if (dt.key === "wolfsberg") wolfsbergFields = wFields;
           // Dedup: keep first source (which respects DOC_TYPES priority order).
           for (const row of dFound) {
             if (!docFound.some(f => f.field === row.field)) docFound.push(row);
           }
+        }
+        if (docExtractCalls > 0) {
+          setCostTracker(prev => ({
+            ...prev,
+            docExtraction: {
+              inputTokens: docExtractIn,
+              outputTokens: docExtractOut,
+              totalTokens: docExtractIn + docExtractOut,
+              costUsd: calcCostUsd(docExtractIn, docExtractOut),
+              apiCallCount: docExtractCalls,
+            },
+          }));
         }
         setLoaderPhase(2); setLoaderIdx(0);
       }
@@ -1845,6 +1969,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
       };
       const webFound = (parsed.found || []).map((item) => classifyWebRow(item, webFetchTs));
 
+      // ─── Capture research pass-1 cost from the Anthropic usage object ───
+      // api/research.js passes the response through verbatim, so data.usage
+      // holds the real token counts for this call.
+      if (data?.usage) {
+        const inputTokens = data.usage.input_tokens || 0;
+        const outputTokens = data.usage.output_tokens || 0;
+        setCostTracker(prev => ({
+          ...prev,
+          researchPass1: {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            costUsd: calcCostUsd(inputTokens, outputTokens),
+            fieldsFound: (parsed.found || []).length,
+            // web search calls used in this response
+            webSearchCalls: (data.content || []).filter(
+              b => b.type === "server_tool_use" && b.name === "web_search"
+            ).length,
+          },
+        }));
+      }
+
       // Doc-extracted rows take priority over anything web returned for the same field.
       const docFieldIds = new Set(docFound.map(f => f.field));
       const mergedRaw = [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))];
@@ -1890,6 +2036,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
             if (gsi !== -1 && gei !== -1) {
               const gapParsed = JSON.parse(gapText.slice(gsi, gei + 1));
               const gapTs = new Date().toISOString();
+              // ─── Capture research pass-2 cost from the Anthropic usage object ───
+              if (gapData?.usage) {
+                const inputTokens = gapData.usage.input_tokens || 0;
+                const outputTokens = gapData.usage.output_tokens || 0;
+                setCostTracker(prev => ({
+                  ...prev,
+                  researchPass2: {
+                    inputTokens,
+                    outputTokens,
+                    totalTokens: inputTokens + outputTokens,
+                    costUsd: calcCostUsd(inputTokens, outputTokens),
+                    fieldsFound: (gapParsed.found || []).length,
+                    webSearchCalls: (gapData.content || []).filter(
+                      b => b.type === "server_tool_use" && b.name === "web_search"
+                    ).length,
+                    ran: true,
+                  },
+                }));
+              }
               const gapRows = (gapParsed.found || [])
                 .map((item) => classifyWebRow(item, gapTs))
                 // Never let gap recovery override a document-sourced row.
@@ -2109,6 +2274,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Calls the real sub-agent via /api/doc-search. Demo mode and local dev /
   // ?test=1 default to buildDemoDocSearchResults instead (no API spend);
   // the testing-mode toggle on Step 2 can trigger this explicitly.
+  // Capture doc-search cost from the agent's CostTracker totals. Works for
+  // both the real /api/doc-search response and the demo builder (both expose
+  // data.cost.totals with real-shaped token counts).
+  const captureDocSearchCost = (data) => {
+    if (!data?.cost?.totals) return;
+    const t = data.cost.totals;
+    setCostTracker(prev => ({
+      ...prev,
+      docSearch: {
+        inputTokens: t.inputTokens,
+        outputTokens: t.outputTokens,
+        totalTokens: t.totalTokens,
+        costUsd: calcCostUsd(t.inputTokens, t.outputTokens),
+        apiCallCount: data.cost.calls?.length || 1,
+        documentsSearched: data.summary?.total || 0,
+        documentsFound: data.summary?.found || 0,
+        // Per-call detail for JSONB storage
+        callDetail: data.cost.calls || [],
+      },
+    }));
+  };
+
   const runRealDocSearch = () => {
     setDocSearchResults(null);
     setDocSearchLoading(true);
@@ -2135,6 +2322,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .then(data => {
         if (data.success) {
           setDocSearchResults(data);
+          captureDocSearchCost(data);
         } else {
           setDocSearchError(data.error || "Doc search failed");
         }
@@ -2152,7 +2340,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (docSearchResults !== null || docSearchLoading) return;
     if (!companyName.trim()) return;
     if (demoMode || SHOW_TEST_TOOLS) {
-      setDocSearchResults(buildDemoDocSearchResults(companyName, ownershipType, entityType));
+      const demo = buildDemoDocSearchResults(companyName, ownershipType, entityType);
+      setDocSearchResults(demo);
+      captureDocSearchCost(demo);
       setDocSearchLoading(false);
     } else {
       runRealDocSearch();
@@ -2225,8 +2415,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
-  // Final submission: build the metadata + payload, log, advance to Done.
-  const submitApplication = () => {
+  // Final submission: build the metadata + payload, log, persist to Neon via
+  // /api/submit, advance to Done. The DB write is best-effort — a failure
+  // never blocks the customer from reaching the success screen.
+  const submitApplication = async () => {
     const submittedAt = new Date().toISOString();
     setSubmitTs(submittedAt);
 
@@ -2363,8 +2555,58 @@ export default function KYCAgent({ previewMode = false } = {}) {
         certifiedAt: submittedAt,
       },
     };
+
+    // Per-phase real-token cost summary for this journey (doc search, research
+    // pass 1 & 2, doc extraction). Totals are recomputed from summed real
+    // token counts inside buildCostSummary.
+    const submitCompany = { name: payload.company.name, code: countryCode };
+    const costSummary = buildCostSummary(
+      costTracker,
+      submitCompany,
+      entityType,
+      ownershipType,
+      coverage || null
+    );
+    payload.costSummary = costSummary;
+
     // eslint-disable-next-line no-console
     console.log("APPLICATION_SUBMISSION", payload);
+
+    // Persist to Neon via /api/submit. Best-effort: a DB failure must never
+    // block the customer from reaching the success screen.
+    try {
+      const resp = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId,
+          company: submitCompany,
+          entityType,
+          ownershipType,
+          journeyType,
+          fieldValues,
+          stakeholders: stakeholderPayload,
+          documents: docSearchResults?.documents || [],
+          costSummary,
+          coverage: coverage || null,
+          declaration: payload.declaration,
+          submittedAt,
+        }),
+      });
+      const result = await resp.json();
+      if (result.sessionId) {
+        // eslint-disable-next-line no-console
+        console.log(`[Submit] ✅ Saved — session: ${result.sessionId}`);
+      }
+      if (result.warning) {
+        // eslint-disable-next-line no-console
+        console.warn(`[Submit] ⚠ ${result.warning}`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[Submit] ❌ Failed:", err);
+    }
+
     setDone(true);
   };
 

@@ -21,6 +21,7 @@ const niumExhaustiveDetailsHandler = require(path.join(__dirname, "..", "api", "
 const docRequirementsHandler = require(path.join(__dirname, "..", "api", "document-requirements.js"));
 const benchmarkHandler = require(path.join(__dirname, "..", "api", "benchmark.js"));
 const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.js"));
+const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -164,6 +165,22 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(docSearchHandler)(req, res);
+    });
+  });
+
+  // Live customer onboarding submission → Neon Postgres. POST; parse the JSON
+  // body the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/submit", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(submitHandler)(req, res);
     });
   });
 };
