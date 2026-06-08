@@ -73,7 +73,7 @@ function getAutoSourcedResult(title, docSearchResults) {
 
 // "Sourced automatically" banner shown at the top of a document card when the
 // doc search agent already found that document.
-function AutoSourcedBanner({ result }) {
+function AutoSourcedBanner({ result, showUploadHint = true }) {
   if (!result) return null;
   return (
     <div style={styles.autoSourcedBanner}>
@@ -90,9 +90,11 @@ function AutoSourcedBanner({ result }) {
             </>
           )}
         </div>
-        <div style={styles.autoSourcedHint}>
-          Upload below only if you prefer to provide your own version.
-        </div>
+        {showUploadHint && (
+          <div style={styles.autoSourcedHint}>
+            Upload below only if you prefer to provide your own version.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -255,6 +257,21 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
   const coreItems   = provide.filter(i => !isPersonItem(i.requirement));
   const personItems = provide.filter(i => isPersonItem(i.requirement));
 
+  // Auto-sourced docs (from the Step 2 doc search agent) that DON'T map to any
+  // checklist card — e.g. an Annual Report for a Corporate entity, where the DRS
+  // checklist has no Annual Report requirement. These would otherwise be
+  // invisible on Step 6, so we surface them in their own "Already sourced" panel.
+  const renderedTitles = [
+    ...checklist.map(i => i.requirement),
+    ...(flags.showWolfsberg ? ['Wolfsberg CBDDQ'] : []),
+  ];
+  const uncoveredAutoSourced = (docSearchResults?.documents || []).filter(d => {
+    if (d.status !== 'downloaded' && d.status !== 'url_found') return false;
+    const matcher = AUTO_SOURCED_MATCHERS[d.type];
+    if (!matcher) return false;
+    return !renderedTitles.some(t => matcher.test(t));
+  });
+
   // Test-only: fill every client-provided card (+ Wolfsberg) with a dummy file
   // so the step can be completed without manually picking files.
   const handleUploadAll = () => {
@@ -327,6 +344,27 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
           </div>
         )}
       </div>
+
+      {uncoveredAutoSourced.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Already sourced for you</h3>
+          <p style={styles.sectionDesc}>
+            We found {uncoveredAutoSourced.length === 1 ? 'this document' : 'these documents'} automatically — no action needed.
+          </p>
+          {uncoveredAutoSourced.map(d => (
+            <div
+              key={`${d.type}-${d.label || d.sourceUrl || ''}`}
+              style={{ ...styles.docCard, border: `1.5px solid ${C.successBorder}`, background: C.successBg }}
+            >
+              <div style={styles.docCardHeader}>
+                <span style={styles.docTitle}>{d.label || 'Document'}{d.year ? ` (${d.year})` : ''}</span>
+                <span style={styles.autoBadge}>Auto-sourced</span>
+              </div>
+              <AutoSourcedBanner result={d} showUploadHint={false} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {flags.showWolfsberg && (
         <WolfsbergSection
