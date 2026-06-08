@@ -4808,7 +4808,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
 
             {/* Manual "publicly listed company" toggle — hides stakeholder EDD
-                forms on the next page. */}
+                forms on the next page. Test-mode only (gated by SHOW_TEST_TOOLS):
+                hidden for real customers, shown in local dev / ?test=1. */}
+            {SHOW_TEST_TOOLS && (
             <div
               onClick={() => setIsPubliclyListedOverride(v => !v)}
               style={{
@@ -4855,6 +4857,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </span>
               )}
             </div>
+            )}
 
             {stakeholderFound.length > 0 && (
               <div style={card}>
