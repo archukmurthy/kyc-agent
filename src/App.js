@@ -2714,6 +2714,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
 
   const renderGapSection = (sectionKey) => {
+    // "Additional Documents" (documents) section hidden on the Fill Gaps page
+    // for all flows (FI / Corporate, AI-only / document+AI) per request. Kept
+    // restorable: remove this guard to bring the section back.
+    if (sectionKey === "documents") return null;
     const items = getCombinedGaps()
       .filter(g => g.section === sectionKey)
       .filter(dependsOnSatisfied);
