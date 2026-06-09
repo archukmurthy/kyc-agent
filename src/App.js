@@ -4369,8 +4369,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {step === STEPS.input && journeyOpen && (
           <div style={card}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>How would you like to complete your application?</h2>
-            <p style={{ fontSize: 13, color: "#1a3a4a80", margin: "0 0 18px" }}>Choose the option that works best for you. You can always go back and change this.</p>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>How would you like to complete your application?</h2>
+                <p style={{ fontSize: 13, color: "#1a3a4a80", margin: "0 0 18px" }}>Choose the option that works best for you. You can always go back and change this.</p>
+              </div>
+              {SHOW_TEST_TOOLS && (demoToggleVisible || TEST_FLAG) && (
+                <div style={{ flexShrink: 0 }}>
+                  <DemoToggle on={demoMode} onChange={setDemoMode} />
+                </div>
+              )}
+            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 }}>
               {/* Card A */}
@@ -4455,12 +4464,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <Btn variant="secondary" onClick={() => { setJourneyOpen(false); setManualOpened(false); setError(""); }}>← Back</Btn>
               <Btn variant="primary" onClick={proceedFromJourney}>Continue →</Btn>
             </div>
-
-            {SHOW_TEST_TOOLS && (demoToggleVisible || TEST_FLAG) && (
-              <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
-                <DemoToggle on={demoMode} onChange={setDemoMode} />
-              </div>
-            )}
           </div>
         )}
 
