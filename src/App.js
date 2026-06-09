@@ -3688,7 +3688,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <span style={{ fontSize: 18 }}>{isCorporateStakeholder(stakeholder) ? "🏢" : "👤"}</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
-                {stakeholder.full_name || `Person ${index + 1}`}
+                {stakeholder.full_name || `${isCorporateStakeholder(stakeholder) ? "Company" : "Person"} ${index + 1}`}
               </div>
               {(stakeholder.role || stakeholder.share_percentage != null) && (
                 <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>
