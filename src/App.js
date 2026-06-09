@@ -1603,13 +1603,35 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const next = current.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
     setStakeholders(fieldId, next);
   };
-  const addStakeholder = (fieldId) => {
+  const addStakeholder = (fieldId, overrides = {}) => {
     const current = getStakeholders(fieldId);
-    setStakeholders(fieldId, [...current, makeStakeholder({ customer_added: true })]);
+    setStakeholders(fieldId, [...current, makeStakeholder({ customer_added: true, ...overrides })]);
   };
   const removeStakeholder = (fieldId, stakeholderId) => {
     const current = getStakeholders(fieldId);
     setStakeholders(fieldId, current.filter((s) => s.id !== stakeholderId));
+  };
+
+  // True when a stakeholder is a company rather than a natural person. Set by
+  // enrichStakeholders (heuristic for AI-found) or explicitly when the customer
+  // adds a company. Drives the corporate vs person field shape everywhere.
+  const isCorporateStakeholder = (s) => !!(s && s.is_company);
+
+  // Repeatable positions ([{ title, start_date }]) for corporate stakeholders.
+  const addStkPosition = (fieldId, sid) => {
+    const s = getStakeholders(fieldId).find((x) => x.id === sid);
+    const positions = [...((s && s.positions) || []), { title: "", start_date: "" }];
+    updateStakeholderField(fieldId, sid, "positions", positions);
+  };
+  const updateStkPosition = (fieldId, sid, idx, key, value) => {
+    const s = getStakeholders(fieldId).find((x) => x.id === sid);
+    const positions = ((s && s.positions) || []).map((p, i) => (i === idx ? { ...p, [key]: value } : p));
+    updateStakeholderField(fieldId, sid, "positions", positions);
+  };
+  const removeStkPosition = (fieldId, sid, idx) => {
+    const s = getStakeholders(fieldId).find((x) => x.id === sid);
+    const positions = ((s && s.positions) || []).filter((_, i) => i !== idx);
+    updateStakeholderField(fieldId, sid, "positions", positions);
   };
 
   // Initialise / re-sync stakeholdersRef from research.found whenever we
@@ -2500,6 +2522,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (!list || list.length === 0) return;
       stakeholderPayload[result.field] = list.map((s) => {
         const fullEddCollected = needsStakeholderDetails(s, result.field, effectivelyListed);
+        // Corporate stakeholder — emit the KYB shape (businessName, businessType,
+        // businessRegistrationNumber, registeredCountry, sharePercentage,
+        // positions[]) rather than the person EDD fields.
+        if (s.is_company) {
+          return {
+            id: s.id,
+            is_company: true,
+            businessName: s.full_name || "",
+            businessType: s.business_type || "",
+            businessRegistrationNumber: s.business_registration_number || "",
+            registeredCountry: s.registered_country || "",
+            sharePercentage: s.share_percentage != null ? s.share_percentage : null,
+            positions: (s.positions || [])
+              .filter((p) => p && (p.title || p.start_date))
+              .map((p) => ({ title: p.title || "", startDate: p.start_date || "" })),
+            source: s.source || "",
+            sourceUrl: s.sourceUrl || "",
+            sourceTier: s.sourceTier || "",
+            fetchedAt: s.fetchedAt || null,
+            customer_confirmed: !s.customer_rejected,
+            customer_added: !!s.customer_added,
+            customer_rejected: !!s.customer_rejected,
+            full_name_original: s.full_name_original || null,
+          };
+        }
         return {
           id: s.id,
           full_name: s.full_name || "",
@@ -3070,30 +3117,50 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // gets a green tick (untick → routes to next page for edit); each missing
   // required point shows a "next page" tag. Mirrors the per-row green-tick
   // design used for regular confirm rows.
-  const stkConfirmFields = (ubo) => [
-    { key: "full_name", label: "Full legal name", required: true },
-    { key: "role", label: "Role / position", required: false },
-    ...(ubo ? [{ key: "share_percentage", label: "Shareholding", required: false }] : []),
-    { key: "nationality", label: "Nationality", required: true },
-    { key: "date_of_birth", label: "Date of birth", required: true },
-    { key: "residential_country", label: "Country of residence", required: false },
-    { key: "is_pep", label: "PEP status", required: true },
-  ];
+  const stkConfirmFields = (s, ubo) => {
+    if (s && s.is_company) {
+      // Corporate stakeholder field set.
+      return [
+        { key: "full_name", label: "Business name", required: true },
+        { key: "business_type", label: "Business type", required: true },
+        { key: "business_registration_number", label: "Registration number", required: true },
+        { key: "registered_country", label: "Registered country", required: true },
+        { key: "share_percentage", label: "Shareholding", required: false },
+        { key: "positions", label: "Position(s)", required: false },
+      ];
+    }
+    return [
+      { key: "full_name", label: "Full legal name", required: true },
+      { key: "role", label: "Role / position", required: false },
+      ...(ubo ? [{ key: "share_percentage", label: "Shareholding", required: false }] : []),
+      { key: "nationality", label: "Nationality", required: true },
+      { key: "date_of_birth", label: "Date of birth", required: true },
+      { key: "residential_country", label: "Country of residence", required: false },
+      { key: "is_pep", label: "PEP status", required: true },
+    ];
+  };
   const stkFieldFound = (s, key) => {
     if (key === "is_pep") return s.is_pep === true || s.is_pep === false;
     if (key === "share_percentage") return s.share_percentage != null && String(s.share_percentage).trim() !== "";
+    if (key === "positions") return Array.isArray(s.positions) && s.positions.some((p) => p && p.title);
     return s[key] != null && String(s[key]).trim() !== "";
   };
   const stkFieldDisplay = (s, key) => {
     if (key === "date_of_birth") return formatDOBForDisplay(s.date_of_birth) || s.date_of_birth || "";
     if (key === "share_percentage") return s.share_percentage != null ? `${s.share_percentage}%` : "";
     if (key === "is_pep") return s.is_pep === true ? "Yes" : s.is_pep === false ? "No" : "";
+    if (key === "positions") {
+      return (s.positions || [])
+        .filter((p) => p && p.title)
+        .map((p) => (p.start_date ? `${p.title} (since ${p.start_date})` : p.title))
+        .join(", ");
+    }
     return s[key] != null ? String(s[key]) : "";
   };
-  // Field labels that will land on the next page for this person: any found
-  // field the customer unticked, plus any missing required field.
+  // Field labels that will land on the next page for this person/company: any
+  // found field the customer unticked, plus any missing required field.
   const stkNextPageFields = (s, ubo) =>
-    stkConfirmFields(ubo)
+    stkConfirmFields(s, ubo)
       .filter((f) => {
         const found = stkFieldFound(s, f.key);
         if (found) return !isStkFieldConfirmed(s.id, f.key);
@@ -3113,10 +3180,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
         display: "flex", alignItems: "center", gap: 12,
       }}
     >
-      <span style={{ fontSize: 16, flexShrink: 0 }}>➕</span>
+      <span style={{ fontSize: 16, flexShrink: 0 }}>{isCorporateStakeholder(s) ? "🏢" : "➕"}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
-          New {ubo ? "beneficial owner" : "director"} added
+          New {isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added
         </div>
         <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
           You'll complete their details on the next page.
@@ -3234,7 +3301,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       color: rejected ? "#1a3a4a70" : "#1a3a4a",
                       textDecoration: rejected ? "line-through" : "none",
                     }}>
-                      👤 {s.full_name}
+                      {isCorporateStakeholder(s) ? "🏢" : "👤"} {s.full_name}
                     </span>
                     {s.role && (
                       <span style={{
@@ -3317,7 +3384,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   ) : (
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {stkConfirmFields(ubo).map((f) => {
+                        {stkConfirmFields(s, ubo).map((f) => {
                           const amberTag = {
                             fontSize: 10, fontWeight: 700, color: "#8c5500",
                             background: "#fff8ed", border: "1px solid #e0a040",
@@ -3369,21 +3436,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
           .filter((s) => s.customer_added && !isRegistryExemptionNotice(s))
           .map((s) => renderPendingAddedStakeholder(item.field, s, ubo))}
 
-        {/* Add-a-person button — the blank person is created now and surfaces on
-            the next page (Fill Gaps) for the customer to complete. */}
-        <button
-          type="button"
-          onClick={() => addStakeholder(item.field)}
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            marginTop: 2, padding: "9px 16px", width: "100%",
-            background: "transparent", color: "#1a3a4a",
-            border: "1.5px dashed #4a9e8e", borderRadius: 8,
-            fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
-          }}
-        >
-          + Add another {ubo ? "beneficial owner" : "director"} (you'll fill details on the next page)
-        </button>
+        {/* Add-a-stakeholder buttons — the blank person/company is created now
+            and surfaces on the next page (Fill Gaps) for the customer to
+            complete. Individual vs company picks the right field shape. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+          {[
+            { label: `+ Add ${ubo ? "individual owner" : "individual"}`, overrides: {} },
+            { label: "+ Add company", overrides: { is_company: true } },
+          ].map((b) => (
+            <button
+              key={b.label}
+              type="button"
+              onClick={() => addStakeholder(item.field, b.overrides)}
+              style={{
+                flex: "1 1 0", minWidth: 140,
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "9px 16px",
+                background: "transparent", color: "#1a3a4a",
+                border: "1.5px dashed #4a9e8e", borderRadius: 8,
+                fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+              }}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "6px 0 0", fontStyle: "italic" }}>
+          You'll fill in their details on the next page.
+        </p>
       </div>
     );
   };
@@ -3409,6 +3489,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
 
   const stakeholderRequiredKeys = (s) => {
+    if (s && s.is_company) {
+      // Corporate stakeholder: KYB fields, no person EDD.
+      return ["full_name", "business_type", "business_registration_number", "registered_country"];
+    }
     const keys = ["full_name", "nationality", "date_of_birth", "is_pep"];
     if (s && s.is_pep === true) keys.push("pep_details");
     return keys;
@@ -3420,6 +3504,156 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const v = s[k];
       return v == null || String(v).trim() === "";
     });
+  };
+
+  // Common legal/business types for a corporate stakeholder.
+  const BUSINESS_TYPE_OPTIONS = [
+    "Private Limited Company",
+    "Public Limited Company (PLC)",
+    "Limited Liability Partnership (LLP)",
+    "Partnership",
+    "Sole Proprietorship",
+    "Trust",
+    "Fund",
+    "Foundation",
+    "Government / State-owned",
+    "Other",
+  ];
+
+  // Next-page (Fill Gaps) body for a CORPORATE stakeholder — KYB fields plus a
+  // repeatable positions list. A found field stays verified while its Confirm
+  // green tick is on; unticking opens it for edit (same as the person form).
+  const renderStakeholderCardCorporateBody = (fieldId, s) => {
+    const aiFound = !s.customer_rejected && !s.customer_added;
+    const nameLocked = aiFound && isStkFieldConfirmed(s.id, "full_name");
+    const positions = s.positions || [];
+    return (
+      <>
+        {/* Business name */}
+        {nameLocked ? (
+          <div style={{ marginBottom: 14 }}>
+            <label style={stakeholderLabelStyle}>Business Name <span style={{ color: "#d44" }}>*</span></label>
+            <div style={stakeholderLockedStyle}>
+              <span>{s.full_name}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#1a6b56" }}>✓ Verified</span>
+            </div>
+          </div>
+        ) : (
+          <StableInput
+            id={`stk_${fieldId}_${s.id}_business_name`}
+            label="Business Name"
+            type="text"
+            value={s.full_name || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "full_name", v)}
+            required
+            placeholder="Registered / legal name"
+          />
+        )}
+
+        {/* Business type */}
+        <StableInput
+          id={`stk_${fieldId}_${s.id}_business_type`}
+          label="Business Type"
+          type="select"
+          value={s.business_type || ""}
+          onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "business_type", v)}
+          required
+          options={BUSINESS_TYPE_OPTIONS}
+        />
+
+        {/* Business registration number */}
+        <StableInput
+          id={`stk_${fieldId}_${s.id}_brn`}
+          label="Business Registration Number"
+          type="text"
+          value={s.business_registration_number || ""}
+          onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "business_registration_number", v)}
+          required
+          placeholder="e.g. Companies House / ACRA number"
+        />
+
+        {/* Registered country — pre-filled & verified when the AI found it */}
+        <PrePopulatedField
+          id={`stk_${fieldId}_${s.id}_reg_country`}
+          label="Registered Country"
+          type="select"
+          value={s.registered_country || ""}
+          onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "registered_country", v)}
+          options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+          sourceLabel={s.source}
+          startEditing={!isStkFieldConfirmed(s.id, "registered_country")}
+          required
+        />
+
+        {/* Shareholding (optional) */}
+        <StableInput
+          id={`stk_${fieldId}_${s.id}_share`}
+          label="Shareholding %"
+          type="text"
+          value={s.share_percentage != null ? String(s.share_percentage) : ""}
+          onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "share_percentage", v === "" ? null : v)}
+          placeholder="e.g. 100"
+        />
+
+        {/* Positions — repeatable { title, start_date } */}
+        <div style={{ marginBottom: 4 }}>
+          <label style={stakeholderLabelStyle}>Position(s)</label>
+          {positions.length === 0 && (
+            <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 8px", fontStyle: "italic" }}>
+              No positions added yet.
+            </p>
+          )}
+          {positions.map((p, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 8 }}>
+              <div style={{ flex: 2, minWidth: 0 }}>
+                <StableInput
+                  id={`stk_${fieldId}_${s.id}_pos_${i}_title`}
+                  label="Title"
+                  type="text"
+                  value={p.title || ""}
+                  onUpdate={(_, v) => updateStkPosition(fieldId, s.id, i, "title", v)}
+                  placeholder="e.g. Parent Company, Corporate Director"
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <StableInput
+                  id={`stk_${fieldId}_${s.id}_pos_${i}_start`}
+                  label="Start date"
+                  type="date"
+                  value={p.start_date || ""}
+                  onUpdate={(_, v) => updateStkPosition(fieldId, s.id, i, "start_date", v)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeStkPosition(fieldId, s.id, i)}
+                title="Remove position"
+                aria-label="Remove position"
+                style={{
+                  background: "none", border: "none", color: "#1a3a4a70",
+                  cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px 10px",
+                  fontFamily: "inherit",
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => addStkPosition(fieldId, s.id)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14,
+              padding: "8px 14px", background: "transparent", color: "#1a3a4a",
+              border: "1.5px dashed #4a9e8e", borderRadius: 8,
+              fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+            }}
+          >
+            + Add position
+          </button>
+        </div>
+      </>
+    );
   };
 
   const renderStakeholderCard = (fieldId, stakeholder, index) => {
@@ -3451,7 +3685,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 18 }}>👤</span>
+            <span style={{ fontSize: 18 }}>{isCorporateStakeholder(stakeholder) ? "🏢" : "👤"}</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
                 {stakeholder.full_name || `Person ${index + 1}`}
@@ -3511,6 +3745,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </div>
 
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 0 }}>
+          {isCorporateStakeholder(stakeholder) ? renderStakeholderCardCorporateBody(fieldId, stakeholder) : (
+          <>
           {/* Name */}
           {nameLocked ? (
             <div style={{ marginBottom: 14 }}>
@@ -3672,6 +3908,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
               required
               placeholder="Please describe the political position, function, or connection"
             />
+          )}
+          </>
           )}
         </div>
       </div>
@@ -3925,10 +4163,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
         return;
       }
       toValidate.forEach((s, idx) => {
-        const display = (s.full_name && s.full_name.trim()) || `Person ${idx + 1}`;
+        const isCo = !!s.is_company;
+        const display = (s.full_name && s.full_name.trim()) || (isCo ? `Company ${idx + 1}` : `Person ${idx + 1}`);
         const missing = stakeholderMissingFields(s);
         missing.forEach((k) => {
-          if (k === "full_name") errors.push(`Please enter the full name for person ${idx + 1}.`);
+          if (k === "full_name") errors.push(isCo ? `Please enter the business name for company ${idx + 1}.` : `Please enter the full name for person ${idx + 1}.`);
+          else if (k === "business_type") errors.push(`Please select the business type for ${display}.`);
+          else if (k === "business_registration_number") errors.push(`Please enter the registration number for ${display}.`);
+          else if (k === "registered_country") errors.push(`Please select the registered country for ${display}.`);
           else if (k === "nationality") errors.push(`Please enter nationality for ${display}.`);
           else if (k === "date_of_birth") errors.push(`Please enter date of birth for ${display}.`);
           else if (k === "is_pep") errors.push(`Please answer the PEP question for ${display}.`);

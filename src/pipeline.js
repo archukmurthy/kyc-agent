@@ -614,7 +614,7 @@ const makeStakeholder = (overrides = {}) => {
     sourceUrl: "",
     sourceTier: "tier1",
     fetchedAt: null,
-    // Gap fields — customer fills (Phase 3)
+    // Gap fields — customer fills (Phase 3). PERSON stakeholders.
     nationality: "",
     date_of_birth: "",
     residential_country: "",
@@ -622,6 +622,16 @@ const makeStakeholder = (overrides = {}) => {
     id_number: "",
     is_pep: null,
     pep_details: "",
+    // CORPORATE stakeholders. When is_company is true the person fields above
+    // are not collected; these are used instead. full_name doubles as the
+    // business/legal name and share_percentage as the shareholding, so existing
+    // name-detection / Confirm / validation keep working. `positions` is a
+    // repeatable [{ title, start_date }] (e.g. "Parent Company" since a date).
+    is_company: false,
+    business_type: "",
+    business_registration_number: "",
+    registered_country: "",
+    positions: [],
     // Metadata
     customer_confirmed: false,
     customer_rejected: false,
@@ -888,18 +898,50 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
 // Augment a research-result list with parsed .stakeholders arrays for any
 // stakeholder field. Idempotent — items that already have a .stakeholders
 // array pass through unchanged.
+// Heuristic: is this stakeholder a company rather than a natural person?
+// Matches a corporate suffix in the name OR a company-ish role word.
+const looksLikeCompany = (name, role) => {
+  const n = String(name || "").toUpperCase();
+  const r = String(role || "").toLowerCase();
+  const suffix = /\b(LIMITED|LTD|PLC|LLP|LLC|HOLDINGS?|CORPORATION|CORP|INC|GMBH|B\.?V\.?|S\.?A\.?|PTE|PTY|AG|NV|OY|GROUP|COMPANY|CO)\b/.test(n);
+  const roleHit = /compan|holding|parent|corporat|entity|trust|fund|partnership|\bllp\b|subsidiary/.test(r);
+  return suffix || roleHit;
+};
+
+// Normalise a stakeholder's type: set is_company (heuristic for AI-found,
+// honoured verbatim for customer-added), and for companies seed `positions`
+// from the legacy single `role` so the corporate form has something to show.
+// Idempotent — safe to run on every re-enrichment.
+const normalizeStakeholderType = (s) => {
+  if (!s) return s;
+  const isCompany =
+    s.is_company === true ||
+    (!s.customer_added && looksLikeCompany(s.full_name, s.role));
+  if (!isCompany) return { ...s, is_company: false };
+  const positions =
+    Array.isArray(s.positions) && s.positions.length > 0
+      ? s.positions
+      : s.role
+      ? [{ title: s.role, start_date: "" }]
+      : [];
+  return { ...s, is_company: true, positions };
+};
+
 const enrichStakeholders = (items) => {
   if (!Array.isArray(items)) return items;
   return items.map((item) => {
     if (!item || !isStakeholderField(item.field)) return item;
-    if (Array.isArray(item.stakeholders) && item.stakeholders.length > 0) return item;
-    const stakeholders = parseStakeholdersFromString(
-      item.value,
-      item.source,
-      item.sourceUrl,
-      item.sourceTier,
-      item.fetchedAt,
-    );
+    const base =
+      Array.isArray(item.stakeholders) && item.stakeholders.length > 0
+        ? item.stakeholders
+        : parseStakeholdersFromString(
+            item.value,
+            item.source,
+            item.sourceUrl,
+            item.sourceTier,
+            item.fetchedAt,
+          );
+    const stakeholders = base.map(normalizeStakeholderType);
     return { ...item, stakeholders };
   });
 };
