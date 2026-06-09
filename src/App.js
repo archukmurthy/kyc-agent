@@ -3436,34 +3436,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
           .filter((s) => s.customer_added && !isRegistryExemptionNotice(s))
           .map((s) => renderPendingAddedStakeholder(item.field, s, ubo))}
 
-        {/* Add-a-stakeholder buttons — the blank person/company is created now
-            and surfaces on the next page (Fill Gaps) for the customer to
-            complete. Individual vs company picks the right field shape. */}
-        <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
-          {[
-            { label: `+ Add ${ubo ? "individual owner" : "individual"}`, overrides: {} },
-            { label: "+ Add company", overrides: { is_company: true } },
-          ].map((b) => (
-            <button
-              key={b.label}
-              type="button"
-              onClick={() => addStakeholder(item.field, b.overrides)}
-              style={{
-                flex: "1 1 0", minWidth: 140,
-                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "9px 16px",
-                background: "transparent", color: "#1a3a4a",
-                border: "1.5px dashed #4a9e8e", borderRadius: 8,
-                fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
-              }}
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
-        <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "6px 0 0", fontStyle: "italic" }}>
-          You'll fill in their details on the next page.
-        </p>
       </div>
     );
   };
@@ -4004,6 +3976,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Both return null when they have nothing to show, so the caller can hide
   // the section divider when a field contributes no content.
 
+  // Split "add a stakeholder" buttons (individual vs company) for the Fill Gaps
+  // people sections. The blank record is created in the ref and renders its
+  // person/company form immediately below.
+  const renderAddStakeholderButtons = (fieldId, ubo) => (
+    <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+      {[
+        { label: `+ Add ${ubo ? "individual owner" : "individual"}`, overrides: {} },
+        { label: "+ Add company", overrides: { is_company: true } },
+      ].map((b) => (
+        <button
+          key={b.label}
+          type="button"
+          onClick={() => addStakeholder(fieldId, b.overrides)}
+          style={{
+            flex: "1 1 0", minWidth: 150,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "10px 18px", background: "transparent", color: "#1a3a4a",
+            border: "1.5px dashed #4a9e8e", borderRadius: 8,
+            fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+          }}
+        >
+          {b.label}
+        </button>
+      ))}
+    </div>
+  );
+
   const renderStakeholderForms = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
@@ -4029,19 +4028,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           }}>
             No {personLabel}s were found automatically. Please add at least one {personLabel} below.
           </div>
-          <button
-            type="button"
-            onClick={() => addStakeholder(fieldId)}
-            style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-              padding: "10px 18px", background: "transparent", color: "#1a3a4a",
-              border: "1.5px dashed #4a9e8e", borderRadius: 8,
-              fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-              cursor: "pointer", width: "100%",
-            }}
-          >
-            + Add {personLabel}
-          </button>
+          {renderAddStakeholderButtons(fieldId, ubo)}
         </div>
       );
     }
@@ -4073,22 +4060,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </p>
         )}
         {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
-        {!effectivelyListed && (
-          <button
-            type="button"
-            onClick={() => addStakeholder(fieldId)}
-            style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-              marginTop: 4, padding: "10px 18px",
-              background: "transparent", color: "#1a3a4a",
-              border: "1.5px dashed #4a9e8e", borderRadius: 8,
-              fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-              cursor: "pointer", width: "100%",
-            }}
-          >
-            + Add another {personLabel}
-          </button>
-        )}
+        {!effectivelyListed && renderAddStakeholderButtons(fieldId, ubo)}
       </div>
     );
   };
