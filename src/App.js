@@ -1347,6 +1347,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [preboardingUnlocked, setPreboardingUnlocked] = useState(false);
   const [preboardingPassword, setPreboardingPassword] = useState("");
   const [preboardingPasswordError, setPreboardingPasswordError] = useState(false);
+  // Pre-boarding: gap fields the analyst excluded from the customer request.
+  const [excludedGapFields, setExcludedGapFields] = useState(new Set());
+  // Pre-boarding: analyst-authored custom questions (see shape in renderAskMorePanel).
+  const [customQuestions, setCustomQuestions] = useState([]);
+  // Pre-boarding: which section's "Ask for more" panel is open (sectionName|null).
+  const [askMoreOpenSection, setAskMoreOpenSection] = useState(null);
+  // Pre-boarding: the custom question currently being built in the open panel.
+  const [newQuestion, setNewQuestion] = useState({
+    text: "",
+    fieldType: "text",
+    required: true,
+    options: "",
+  });
   // Scroll to top on every step transition. React keeps the previous scroll
   // position by default — undesirable for a stepped wizard where the new
   // page's heading should be visible immediately. The smooth scroll here
@@ -1565,6 +1578,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setPreboardingUnlocked(false);
     setPreboardingPassword("");
     setPreboardingPasswordError(false);
+    setExcludedGapFields(new Set());
+    setCustomQuestions([]);
+    setAskMoreOpenSection(null);
+    setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
   };
 
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
@@ -2888,6 +2905,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
           {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
         </div>
+        {/* Part 8 — analyst custom questions (from pre-boarding) wired into the
+            customer's Fill Gaps for this section, rendered as fillable fields. */}
+        {customQuestions.filter(q => q.section === sectionKey).map(q => (
+          <div key={q.id} style={{ marginBottom: 4 }}>
+            <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "1px 6px", marginBottom: 4, textTransform: "uppercase" }}>Additional</span>
+            <StableInput
+              id={`custom_${q.id}`}
+              label={q.question}
+              required={q.required}
+              type={q.fieldType === "yesno" ? "select" : q.fieldType}
+              options={q.fieldType === "yesno" ? [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] : q.fieldType === "select" ? (q.options || []).map(o => ({ value: o, label: o })) : undefined}
+              value={gapRef.current[`custom_${q.id}`] || ""}
+              onUpdate={updateGap}
+              placeholder={q.fieldType === "textarea" ? "Enter your response..." : `Enter ${String(q.question).toLowerCase()}`}
+            />
+          </div>
+        ))}
       </div>
     );
   };
@@ -4464,6 +4498,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         });
         setPreboardingUnlocked(true);
         setPreboardingPasswordError(false);
+        setStep(0); // start the pre-boarding flow at the company-input step
+        setError("");
       } else {
         trackEvent("preboarding_password_failed", {
           attemptedAt: new Date().toISOString(),
@@ -4558,85 +4594,385 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   }
 
-  function renderPreboardingComingSoon() {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        background: C.background,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "40px 20px",
-        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
-        color: C.text,
-      }}>
-        <div style={{ width: "100%", maxWidth: 560, textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 24 }}>🔍</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.text, margin: "0 0 12px 0" }}>
-            Pre-boarding Agent
-          </h1>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
-            color: "#7C3AED", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 99,
-            padding: "4px 12px", marginBottom: 20, textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>
-            Under Development
-          </div>
-          <p style={{ fontSize: 15, color: C.textSec, lineHeight: 1.7, maxWidth: 460, margin: "0 auto 32px" }}>
-            The pre-boarding agent will enable intelligence-led due diligence before customer contact — building a complete entity dossier, identifying gaps, and generating a targeted customer request automatically.
-          </p>
+  // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
+  // Reuse the onboarding research / schema / stakeholder / coverage logic; only
+  // the presentation differs. Purple accent (#7C3AED) replaces niumBlue. These
+  // are called from inside the main return (agentType === "preboarding"), so
+  // they close over all the confirm/fill-gaps render vars.
 
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
-            padding: "24px 28px", textAlign: "left", marginBottom: 32,
-          }}>
-            <div style={{
-              fontSize: 13, fontWeight: 700, color: C.textMuted,
-              textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 16,
-            }}>
-              Coming in this agent
+  // Shared confirm field content (coverage bar, listed toggle, people found,
+  // pre-filled fields, unchecked warning). Called by BOTH onboarding confirm and
+  // pre-boarding confirm — reused, not duplicated.
+  const renderConfirmFields = () => (
+    <>
+      {/* Part 9 — coverage summary bar. */}
+      {coverage && (
+        <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ flex: 1, padding: "12px 16px", background: C.successBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.success, lineHeight: 1 }}>{coverage.verifiedFields}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.success, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified</div>
+          </div>
+          <div style={{ flex: 1, padding: "12px 16px", background: C.warningBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.warning, lineHeight: 1 }}>{coverage.probableFields}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.warning, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Confirm</div>
+          </div>
+          {coverage.indicativeFields > 0 && (
+            <div style={{ flex: 1, padding: "12px 16px", background: "#FFF7ED", borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#C2410C", lineHeight: 1 }}>{coverage.indicativeFields}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#C2410C", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Low Confidence</div>
             </div>
-            {[
-              "Entity dossier generation from public and API sources",
-              "Verification-aware field classification",
-              "Gap analysis with targeted customer request generation",
-              "Custom question and document request builder",
-              "AI-reviewed dossier with analyst oversight option",
-              "Dossier saved to database for downstream onboarding handoff",
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10,
-                fontSize: 14, color: C.textSec, lineHeight: 1.4,
-              }}>
-                <span style={{ color: "#7C3AED", fontWeight: 700, flexShrink: 0, marginTop: 1 }}>○</span>
-                {item}
-              </div>
-            ))}
+          )}
+          <div style={{ flex: 1, padding: "12px 16px", background: C.surfaceAlt, textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.textMuted, lineHeight: 1 }}>{coverage.missingFieldCount}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
           </div>
+        </div>
+      )}
 
-          <button
-            onClick={() => {
-              trackEvent("returned_to_landing", {
-                fromAgent: agentType,
-                returnedAt: new Date().toISOString(),
-              });
-              setAgentType(null);
-              setPreboardingUnlocked(false);
-              setPreboardingPassword("");
-            }}
-            style={{
-              padding: "12px 28px", background: "transparent", color: C.niumBlue,
-              border: `1.5px solid ${C.niumBlue}`, borderRadius: 8, fontSize: 14,
-              fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
-            }}
-          >
-            ← Back to agent selection
-          </button>
+      {SHOW_TEST_TOOLS && (
+        <div
+          onClick={() => setIsPubliclyListedOverride(v => !v)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "12px 16px",
+            background: isPubliclyListedOverride ? "#f3faf8" : "#f2f1ed",
+            border: `1.5px solid ${isPubliclyListedOverride ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
+            borderRadius: 10, marginBottom: 16,
+            cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isPubliclyListedOverride}
+            onChange={() => setIsPubliclyListedOverride(v => !v)}
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 16, height: 16, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
+            aria-label="This is a publicly listed company"
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a" }}>
+              🏛 This is a publicly listed company
+            </div>
+            <div style={{ fontSize: 12, marginTop: 2, color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a70" }}>
+              {isPubliclyListedOverride
+                ? "✓ Stakeholder compliance details will not be collected on the next page"
+                : "Check this box to skip detailed stakeholder forms on the next page"}
+            </div>
+          </div>
+          {isPubliclyListedOverride && (
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#1a6b56", background: "#f3faf8", border: "1px solid #4a9e8e", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap", flexShrink: 0 }}>
+              Listed ✓
+            </span>
+          )}
+        </div>
+      )}
+
+      {stakeholderFound.length > 0 && (
+        <div style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
+          <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>
+            Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
+          </p>
+          {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
+        </div>
+      )}
+
+      {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
+
+      {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
+        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
+          ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
+        </div>
+      )}
+    </>
+  );
+
+  const preboardingBanner = (icon, title, subtitle) => (
+    <div style={{ padding: "12px 16px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 20 }}>{icon}</span>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>{title}</div>
+        <div style={{ fontSize: 12, color: "#7C3AED", opacity: 0.8, marginTop: 2 }}>{subtitle}</div>
+      </div>
+      <div style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap", flexShrink: 0 }}>
+        🔒 Analyst View
+      </div>
+    </div>
+  );
+
+  const renderPreboardingConfirm = () => (
+    <div>
+      <div style={card}>
+        {preboardingBanner("🔍", "Pre-boarding Intelligence Review", "Review what we found. Uncheck anything that needs further investigation or clarification.")}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#7C3AED,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🔍</div>
+          <div>
+            <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
+            <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
+              {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources
+            </p>
+          </div>
         </div>
       </div>
+
+      {renderConfirmFields()}
+
+      <button
+        onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
+        style={{ width: "100%", padding: "14px 0", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginTop: 24 }}
+      >
+        Review Gaps →
+      </button>
+    </div>
+  );
+
+  // Gap fields grouped by section, in the same order onboarding uses.
+  const getGapSections = () =>
+    gapSectionOrder()
+      .filter((key) => key !== "documents")
+      .map((key) => {
+        const fields = getCombinedGaps().filter((g) => g.section === key).filter(dependsOnSatisfied);
+        if (fields.length === 0) return null;
+        const cfg = sectionConfig[key] || {};
+        return { name: key, label: cfg.title || humaniseSection(key), fields };
+      })
+      .filter(Boolean);
+
+  // Gap fields the analyst is still requesting (not excluded). Used in dossier.
+  const getIncludedGapFields = () =>
+    getCombinedGaps()
+      .filter((g) => g.section !== "documents")
+      .filter(dependsOnSatisfied)
+      .filter((g) => !excludedGapFields.has(g.field))
+      .map((g) => g.field);
+
+  // Single gap field input — reuses the exact StableInput the onboarding fill
+  // gaps step renders (label + input).
+  const renderGapField = (field) => (
+    <StableInput
+      id={field.field}
+      label={field.label}
+      type={field.inputType}
+      value={gapRef.current[field.field] || ""}
+      onUpdate={updateGap}
+      required={field.required}
+      options={field.options}
+      placeholder={field.placeholder || ("Enter " + String(field.label || "").toLowerCase())}
+    />
+  );
+
+  const renderCustomQuestion = (question) => (
+    <div
+      key={question.id}
+      style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12, padding: "12px 14px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 8 }}
+    >
+      <input type="checkbox" checked readOnly style={{ width: 16, height: 16, marginTop: 3, flexShrink: 0, accentColor: "#7C3AED" }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#7C3AED" }}>{question.question}</span>
+          {question.required && <span style={{ fontSize: 11, color: C.error }}>*</span>}
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "1px 6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>Custom</span>
+        </div>
+        <div style={{ fontSize: 11, color: "#7C3AED", opacity: 0.7 }}>
+          Answer type: {question.fieldType}
+          {question.options?.length > 0 && ` · Options: ${question.options.join(", ")}`}
+        </div>
+      </div>
+      <button
+        onClick={() => setCustomQuestions((prev) => prev.filter((q) => q.id !== question.id))}
+        style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 4px", flexShrink: 0 }}
+        title="Remove question"
+      >
+        ×
+      </button>
+    </div>
+  );
+
+  const renderAskMorePanel = (sectionName) => (
+    <div style={{ marginTop: 12, padding: "16px", background: "#F3F0FF", border: "1.5px solid #7C3AED", borderRadius: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 12 }}>
+        Add a custom question to this section
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <StableInput
+          id={`pb_q_text_${sectionName}`}
+          label="Question *"
+          type="text"
+          value={newQuestion.text}
+          onUpdate={(_, v) => setNewQuestion((prev) => ({ ...prev, text: v }))}
+          placeholder="e.g. Please provide your primary banking relationship"
+        />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#7C3AED", marginBottom: 4 }}>Answer type</label>
+        <select
+          value={newQuestion.fieldType}
+          onChange={(e) => setNewQuestion((prev) => ({ ...prev, fieldType: e.target.value }))}
+          style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #DDD6FE", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer" }}
+        >
+          <option value="text">Text (free form)</option>
+          <option value="yesno">Yes / No</option>
+          <option value="date">Date</option>
+          <option value="number">Number</option>
+          <option value="select">Select (multiple choice)</option>
+          <option value="textarea">Long text</option>
+        </select>
+      </div>
+
+      {newQuestion.fieldType === "select" && (
+        <div style={{ marginBottom: 10 }}>
+          <StableInput
+            id={`pb_q_opts_${sectionName}`}
+            label="Options (comma separated)"
+            type="text"
+            value={newQuestion.options}
+            onUpdate={(_, v) => setNewQuestion((prev) => ({ ...prev, options: v }))}
+            placeholder="Option 1, Option 2, Option 3"
+          />
+        </div>
+      )}
+
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer" }}
+        onClick={() => setNewQuestion((prev) => ({ ...prev, required: !prev.required }))}
+      >
+        <input type="checkbox" checked={newQuestion.required} onChange={() => {}} style={{ accentColor: "#7C3AED", width: 14, height: 14 }} />
+        <span style={{ fontSize: 12, color: "#7C3AED", fontWeight: 500 }}>Required field</span>
+      </div>
+
+      <button
+        onClick={() => {
+          if (!newQuestion.text.trim()) return;
+          const question = {
+            id: Math.random().toString(36).slice(2, 10),
+            section: sectionName,
+            question: newQuestion.text.trim(),
+            fieldType: newQuestion.fieldType,
+            required: newQuestion.required,
+            options: newQuestion.fieldType === "select"
+              ? newQuestion.options.split(",").map((o) => o.trim()).filter(Boolean)
+              : [],
+            addedAt: new Date().toISOString(),
+            source: "analyst",
+          };
+          setCustomQuestions((prev) => [...prev, question]);
+          setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
+          setAskMoreOpenSection(null);
+        }}
+        disabled={!newQuestion.text.trim()}
+        style={{ padding: "9px 20px", background: newQuestion.text.trim() ? "#7C3AED" : C.border, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: newQuestion.text.trim() ? "pointer" : "not-allowed" }}
+      >
+        Add question
+      </button>
+    </div>
+  );
+
+  const renderAskMoreButton = (sectionName) => {
+    const isOpen = askMoreOpenSection === sectionName;
+    return (
+      <div style={{ marginTop: 8 }}>
+        <button
+          onClick={() => setAskMoreOpenSection(isOpen ? null : sectionName)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "transparent", color: "#7C3AED", border: "1.5px dashed #7C3AED", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", transition: "all 0.15s" }}
+        >
+          <span>{isOpen ? "✕" : "+"}</span>
+          {isOpen ? "Cancel" : "Ask for more information"}
+        </button>
+        {isOpen && renderAskMorePanel(sectionName)}
+      </div>
     );
-  }
+  };
+
+  const renderPreboardingGapSections = () => {
+    const sections = getGapSections();
+    if (sections.length === 0) {
+      return <div style={{ padding: "16px", color: C.textMuted, fontSize: 13 }}>No outstanding gaps — every required field was found.</div>;
+    }
+    return sections.map((section) => {
+      const selectedCount = section.fields.filter((f) => !excludedGapFields.has(f.field)).length;
+      return (
+        <div key={section.name} style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12, paddingBottom: 8, borderBottom: "2px solid #DDD6FE", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>{section.label || section.name}</span>
+            <span style={{ fontSize: 10, color: "#7C3AED", opacity: 0.6, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              {selectedCount} of {section.fields.length} selected
+            </span>
+          </div>
+
+          {section.fields.map((field) => {
+            const isExcluded = excludedGapFields.has(field.field);
+            return (
+              <div key={field.field} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12, opacity: isExcluded ? 0.45 : 1, transition: "opacity 0.15s" }}>
+                <input
+                  type="checkbox"
+                  checked={!isExcluded}
+                  onChange={() => {
+                    setExcludedGapFields((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(field.field)) next.delete(field.field);
+                      else next.add(field.field);
+                      return next;
+                    });
+                  }}
+                  style={{ width: 16, height: 16, marginTop: 3, flexShrink: 0, accentColor: "#7C3AED", cursor: "pointer" }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ pointerEvents: isExcluded ? "none" : "auto" }}>
+                    {renderGapField(field)}
+                  </div>
+                  {isExcluded && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, color: C.textMuted, background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: 99, padding: "2px 8px" }}>
+                      ✕ Not requesting
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {customQuestions.filter((q) => q.section === section.name).map((q) => renderCustomQuestion(q))}
+
+          {renderAskMoreButton(section.name)}
+        </div>
+      );
+    });
+  };
+
+  const renderPreboardingFillGaps = () => (
+    <div>
+      <div style={card}>
+        {preboardingBanner("📋", "Gap Analysis — What We Still Need", "Check the fields you want to request from the customer. Uncheck to exclude. Add custom questions using the button below each section.")}
+      </div>
+
+      <div style={card}>
+        {renderPreboardingGapSections()}
+      </div>
+
+      <button
+        onClick={() => {
+          const dossier = {
+            includedFields: getIncludedGapFields(),
+            excludedFields: Array.from(excludedGapFields),
+            customQuestions,
+            research: research?.found,
+            coverage,
+            company: { name: research?.companyName || companyName, code: countryCode },
+            entityType,
+            ownershipType,
+          };
+          // eslint-disable-next-line no-console
+          console.log("PRE_BOARDING_DOSSIER", JSON.stringify(dossier, null, 2));
+          // TODO: advance to dossier view when Part 7 (dossier persistence) is built.
+          alert("Dossier generation coming soon. Check the console for the dossier payload.");
+        }}
+        style={{ width: "100%", padding: "14px 0", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginTop: 24 }}
+      >
+        Generate Customer Request →
+      </button>
+    </div>
+  );
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
@@ -4646,9 +4982,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
   if (agentType === "preboarding" && !preboardingUnlocked) {
     return renderPreboardingGate();
   }
-  if (agentType === "preboarding" && preboardingUnlocked) {
-    return renderPreboardingComingSoon();
-  }
+  // Pre-boarding (unlocked) and onboarding share the main render below. The
+  // pre-boarding flow swaps in its own Confirm / Fill Gaps presentation
+  // (gated by agentType) and uses the purple step indicator.
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
@@ -4678,19 +5014,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
               {(companyName_ || "N").trim().charAt(0).toUpperCase()}
             </div>
           )}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#4a9e8e", marginBottom: 4 }}>{companyName_} Compliance</div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>KYC Onboarding Agent</h1>
-          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>AI-powered multi-jurisdiction company research and data collection</p>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: agentType === "preboarding" ? "#7C3AED" : "#4a9e8e", marginBottom: 4 }}>{companyName_} {agentType === "preboarding" ? "Pre-boarding" : "Compliance"}</div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>{agentType === "preboarding" ? "Pre-boarding Agent" : "KYC Onboarding Agent"}</h1>
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>{agentType === "preboarding" ? "Intelligence-led due diligence — build the entity dossier and customer request before contact" : "AI-powered multi-jurisdiction company research and data collection"}</p>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24, flexWrap: "wrap" }}>
-          {stepNames.map((s, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < step ? "#4a9e8e" : i === step ? "#1a3a4a" : "#e0e4e8", color: i <= step ? "#fff" : "#999", boxShadow: i === step ? "0 0 0 3px rgba(74,158,142,0.2)" : "none" }}>{i + 1}</div>
-              <span style={{ fontSize: 11, fontWeight: i === step ? 700 : 400, color: i <= step ? "#1a3a4a" : "#aaa" }}>{s}</span>
-              {i < stepNames.length - 1 && <div style={{ width: 14, height: 2, background: i < step ? "#4a9e8e" : "#e0e4e8" }} />}
-            </div>
-          ))}
+          {(agentType === "preboarding" ? ["Company", "Research", "Review", "Gaps", "Dossier"] : stepNames).map((s, i, arr) => {
+            const pb = agentType === "preboarding";
+            const doneBg = pb ? "#7C3AED" : "#4a9e8e";
+            const activeBg = pb ? "#6D28D9" : "#1a3a4a";
+            const ring = pb ? "0 0 0 3px rgba(124,58,237,0.2)" : "0 0 0 3px rgba(74,158,142,0.2)";
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < step ? doneBg : i === step ? activeBg : "#e0e4e8", color: i <= step ? "#fff" : "#999", boxShadow: i === step ? ring : "none" }}>{i + 1}</div>
+                <span style={{ fontSize: 11, fontWeight: i === step ? 700 : 400, color: i <= step ? "#1a3a4a" : "#aaa" }}>{s}</span>
+                {i < arr.length - 1 && <div style={{ width: 14, height: 2, background: i < step ? doneBg : "#e0e4e8" }} />}
+              </div>
+            );
+          })}
         </div>
 
         {step === STEPS.input && !journeyOpen && (
@@ -5518,7 +5860,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         )}
 
-        {step === STEPS.confirm && research && (
+        {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
@@ -5700,7 +6042,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         )}
 
-        {step === STEPS.fillGaps && research && activeSchema && (
+        {/* Pre-boarding Confirm — analyst review (reuses renderConfirmFields). */}
+        {step === STEPS.confirm && research && agentType === "preboarding" && renderPreboardingConfirm()}
+
+        {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -5801,6 +6146,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
             {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
           </div>
         )}
+
+        {/* Pre-boarding Fill Gaps — exclude checkboxes + ask-for-more builder. */}
+        {step === STEPS.fillGaps && research && activeSchema && agentType === "preboarding" && renderPreboardingFillGaps()}
 
         {/* DRS — dynamic document-requirements step (Step 2 of the CDD brief),
             placed after Fill Gaps so classifiers + research are settled. */}
