@@ -1176,6 +1176,52 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
   );
 }
 
+// Collapsible dossier field list (pre-boarding Dossier View). A real component
+// (not a render-helper) so its collapse useState is hook-safe even when some
+// tiers are conditionally rendered. Stakeholder fields are skipped (they have
+// their own section). `getLabel` resolves a field id → human label.
+function DossierSection({ title, subtitle, items, bg, borderColor, color, startCollapsed = false, getLabel }) {
+  const [collapsed, setCollapsed] = useState(startCollapsed);
+  if (!items || items.length === 0) return null;
+  const rows = items.filter((it) => !isStakeholderField(it.field || it.fieldId));
+  return (
+    <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${borderColor}`, overflow: "hidden" }}>
+      <div
+        onClick={() => setCollapsed((p) => !p)}
+        style={{ padding: "12px 16px", background: bg, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none" }}
+      >
+        <div>
+          <span style={{ fontSize: 14, fontWeight: 700, color }}>{title}</span>
+          <span style={{ fontSize: 12, color, opacity: 0.7, marginLeft: 8 }}>{subtitle}</span>
+        </div>
+        <span style={{ fontSize: 14, color, transform: collapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s", display: "inline-block" }}>▾</span>
+      </div>
+      {!collapsed && (
+        <div style={{ padding: "12px 16px" }}>
+          {rows.map((item, i) => {
+            const fieldId = item.field || item.fieldId;
+            const label = item.label || (getLabel ? getLabel(fieldId) : fieldId) || fieldId;
+            const displayValue = typeof item.value === "object" ? JSON.stringify(item.value) : String(item.value || "—");
+            return (
+              <div key={fieldId || i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "8px 0", borderBottom: i < rows.length - 1 ? `1px solid ${borderColor}` : "none" }}>
+                <div style={{ width: 200, flexShrink: 0, fontSize: 12, fontWeight: 600, color, opacity: 0.8, lineHeight: 1.4, paddingTop: 1 }}>{label}</div>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: "#1a3a4a", lineHeight: 1.5, wordWrap: "break-word", overflowWrap: "break-word" }}>
+                  {displayValue.length > 200 ? (
+                    <div style={{ fontSize: 12, background: "#fafcfb", borderRadius: 6, padding: "6px 10px", whiteSpace: "pre-wrap", wordWrap: "break-word" }}>{displayValue}</div>
+                  ) : displayValue}
+                </div>
+                {item.source && (
+                  <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color, opacity: 0.7, maxWidth: 120, textAlign: "right", lineHeight: 1.3 }}>{item.source}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A field that was pre-populated from the AI research (e.g. nationality / date
 // of birth a director's registry record carried). Shown as a locked value with
 // a source badge — but, unlike the fully-locked name, the customer can click
@@ -1360,6 +1406,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     required: true,
     options: "",
   });
+  // Pre-boarding dossier (Part 7).
+  const [dossierId, setDossierId] = useState(null);
+  const [dossierSaving, setDossierSaving] = useState(false);
+  const [dossierSaved, setDossierSaved] = useState(false);
+  const [showDossierView, setShowDossierView] = useState(false);
   // Scroll to top on every step transition. React keeps the previous scroll
   // position by default — undesirable for a stepped wizard where the new
   // page's heading should be visible immediately. The smooth scroll here
@@ -1582,6 +1633,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
+    setDossierId(null);
+    setDossierSaving(false);
+    setDossierSaved(false);
+    setShowDossierView(false);
   };
 
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
@@ -5006,28 +5061,323 @@ export default function KYCAgent({ previewMode = false } = {}) {
       </div>
 
       <button
-        onClick={() => {
-          const dossier = {
-            includedFields: getIncludedGapFields(),
-            excludedFields: Array.from(excludedGapFields),
-            customQuestions,
-            research: research?.found,
-            coverage,
-            company: { name: research?.companyName || companyName, code: countryCode },
-            entityType,
-            ownershipType,
-          };
-          // eslint-disable-next-line no-console
-          console.log("PRE_BOARDING_DOSSIER", JSON.stringify(dossier, null, 2));
-          // TODO: advance to dossier view when Part 7 (dossier persistence) is built.
-          alert("Dossier generation coming soon. Check the console for the dossier payload.");
-        }}
+        onClick={() => saveDossier()}
         style={{ width: "100%", padding: "14px 0", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginTop: 24 }}
       >
         Generate Customer Request →
       </button>
     </div>
   );
+
+  // ─── Pre-boarding dossier (Part 7) ───────────────────────────────────────
+
+  // Resolve a field id → human label from the active schema.
+  const getFieldLabel = (fieldId) => {
+    if (!fieldId) return fieldId;
+    const allFields = [
+      ...((activeSchema && activeSchema.researchFields) || []),
+      ...((activeSchema && activeSchema.gapFields) || []),
+    ];
+    const def = allFields.find((f) => f.field === fieldId || f.id === fieldId);
+    return (def && def.label) || fieldId;
+  };
+
+  // The company identity object used across the dossier.
+  const dossierCompany = () => ({
+    name: research?.companyName || companyName,
+    code: countryCode,
+    countryName: countryObj ? countryObj.name : countryCode,
+  });
+
+  // Gap field objects the analyst is still requesting (not excluded).
+  const includedGapFieldObjs = () =>
+    getCombinedGaps()
+      .filter((g) => g.section !== "documents")
+      .filter(dependsOnSatisfied)
+      .filter((g) => !excludedGapFields.has(g.field));
+
+  const buildDossierPayload = () => {
+    const found = research?.found || [];
+    const mapItem = (r) => ({
+      fieldId: r.field,
+      field: r.field,
+      label: getFieldLabel(r.field),
+      value: r.value,
+      source: r.source,
+      sourceUrl: r.sourceUrl,
+      sourceTier: r.sourceTier,
+    });
+    const verifiedData = found.filter((r) => r.verificationStatus === "verified").map(mapItem);
+    const probableData = found.filter((r) => r.verificationStatus === "probable").map(mapItem);
+    const indicativeData = found.filter((r) => r.verificationStatus === "indicative").map(mapItem);
+
+    const stakeholderData = {};
+    found.filter((r) => isStakeholderField(r.field)).forEach((r) => {
+      stakeholderData[r.field] = r.stakeholders || [];
+    });
+
+    const costSummary = buildCostSummary(costTracker, dossierCompany(), entityType, ownershipType, coverage || null);
+
+    return {
+      tenantId,
+      company: dossierCompany(),
+      entityType,
+      ownershipType,
+      coverage,
+      includedFields: getIncludedGapFields(),
+      excludedFields: Array.from(excludedGapFields),
+      customQuestions,
+      verifiedData,
+      probableData,
+      indicativeData,
+      stakeholders: stakeholderData,
+      requiredDocuments: docSearchResults?.documents || [],
+      costSummary,
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp },
+    };
+  };
+
+  const saveDossier = async () => {
+    setDossierSaving(true);
+    const payload = buildDossierPayload();
+    // eslint-disable-next-line no-console
+    console.log("PRE_BOARDING_DOSSIER", JSON.stringify(payload, null, 2));
+
+    let savedId = null;
+    try {
+      const response = await fetch("/api/save-dossier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (result.dossierId) {
+        savedId = result.dossierId;
+        setDossierId(result.dossierId);
+        setDossierSaved(true);
+        // eslint-disable-next-line no-console
+        console.log(`[Dossier] ✅ Saved: ${result.dossierId}`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn("[Dossier] ⚠ Save failed:", result.warning);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[Dossier] ❌", err);
+    }
+
+    setDossierSaving(false);
+    setShowDossierView(true);
+
+    trackEvent("dossier_generated", {
+      dossierId: savedId,
+      companyName: dossierCompany().name,
+      verifiedFields: coverage?.verifiedFields || 0,
+      totalToRequest: includedGapFieldObjs().length + customQuestions.length,
+      customQuestionsAdded: customQuestions.length,
+      excludedFields: excludedGapFields.size || 0,
+      costUsd: payload.costSummary?.totals?.totalCostUsd || null,
+    });
+  };
+
+  const renderCustomerRequestSection = (includedFields, qs) => {
+    const totalRequests = includedFields.length + qs.length;
+    if (totalRequests === 0) {
+      return (
+        <div style={{ padding: "16px", background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 10, marginBottom: 16, fontSize: 13, color: C.success, fontWeight: 600 }}>
+          ✅ No fields to request — all information was collected automatically.
+        </div>
+      );
+    }
+    return (
+      <div style={{ marginBottom: 16, borderRadius: 10, border: "1px solid #DDD6FE", overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", background: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>📋 Customer Request</span>
+            <span style={{ fontSize: 12, color: "#7C3AED", opacity: 0.7, marginLeft: 8 }}>
+              {totalRequests} question{totalRequests !== 1 ? "s" : ""} will be sent to the customer
+            </span>
+          </div>
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          {includedFields.map((field, i) => (
+            <div key={field.field} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < includedFields.length - 1 || qs.length > 0 ? "1px solid #EDE9FE" : "none" }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>○</span>
+              <span style={{ fontSize: 13, color: C.text, flex: 1 }}>{field.label}</span>
+              {field.required && <span style={{ fontSize: 10, fontWeight: 700, color: C.error, flexShrink: 0 }}>Required</span>}
+            </div>
+          ))}
+          {qs.map((q, i) => (
+            <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < qs.length - 1 ? "1px solid #EDE9FE" : "none" }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>✦</span>
+              <span style={{ fontSize: 13, color: "#4C1D95", flex: 1, fontWeight: 500 }}>{q.question}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "2px 6px", flexShrink: 0 }}>Custom</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDossierStakeholders = (stakeholderResults) => (
+    <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", background: C.surfaceAlt, fontSize: 14, fontWeight: 700, color: C.text }}>👥 Stakeholders Found</div>
+      <div style={{ padding: "12px 16px" }}>
+        {stakeholderResults.map((result) => {
+          const realStakeholders = (result.stakeholders || []).filter((s) => !isRegistryExemptionNotice(s));
+          if (realStakeholders.length === 0) return null;
+          const fieldId = result.field;
+          const isUBO = String(fieldId).includes("ubo") || String(fieldId).includes("beneficial");
+          return (
+            <div key={fieldId} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>
+                {isUBO ? "Beneficial Owners" : "Directors / Officers"}
+              </div>
+              {realStakeholders.map((s) => (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <span>👤</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.full_name}</span>
+                    {s.role && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{s.role}</span>}
+                    {s.share_percentage != null && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{s.share_percentage}%</span>}
+                  </div>
+                  {s.source && <span style={{ fontSize: 11, color: C.success, fontWeight: 600 }}>✓ {s.source}</span>}
+                </div>
+              ))}
+            </div>
+          );
+        }).filter(Boolean)}
+      </div>
+    </div>
+  );
+
+  const renderDossierDocuments = () => {
+    const docs = (docSearchResults?.documents || []).filter((d) => d.status === "downloaded" || d.status === "url_found");
+    if (docs.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", background: C.surfaceAlt, fontSize: 14, fontWeight: 700, color: C.text }}>📄 Documents Sourced</div>
+        <div style={{ padding: "12px 16px" }}>
+          {docs.map((doc, i) => (
+            <div key={doc.type || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < docs.length - 1 ? `1px solid ${C.border}` : "none" }}>
+              <span>{doc.type === "wolfsberg_questionnaire" ? "📋" : "📊"}</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{doc.label || doc.type}</span>
+                {doc.year && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{doc.year}</span>}
+              </div>
+              {doc.sourceUrl && (
+                <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none" }}>View →</a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDossierView = () => {
+    const found = research?.found || [];
+    const verifiedItems = found.filter((r) => r.verificationStatus === "verified");
+    const probableItems = found.filter((r) => r.verificationStatus === "probable");
+    const indicativeItems = found.filter((r) => r.verificationStatus === "indicative");
+    const includedFields = includedGapFieldObjs();
+    const stakeholderResults = found.filter((r) => isStakeholderField(r.field) && r.stakeholders?.length > 0);
+    const company = dossierCompany();
+
+    return (
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 20px 60px", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: C.text }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 12, marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 20 }}>🔍</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.8px" }}>Intelligence Dossier</span>
+                {dossierSaved && dossierId && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "2px 8px" }}>✓ Saved</span>
+                )}
+              </div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: "#4C1D95", margin: "0 0 4px 0" }}>{company.name}</h1>
+              <div style={{ fontSize: 13, color: "#7C3AED", opacity: 0.8 }}>
+                {company.countryName}
+                {entityType && ` · ${entityType}`}
+                {ownershipType && ` · ${(OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === ownershipType)?.label || ownershipType)}`}
+              </div>
+              <div style={{ fontSize: 11, color: "#7C3AED", opacity: 0.6, marginTop: 4 }}>
+                {dossierId && `ID: ${String(dossierId).slice(0, 8)}…`}
+              </div>
+            </div>
+            {!dossierSaved && (
+              <button
+                onClick={() => saveDossier()}
+                disabled={dossierSaving}
+                style={{ padding: "10px 20px", background: dossierSaving ? "#DDD6FE" : "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: dossierSaving ? "not-allowed" : "pointer", flexShrink: 0 }}
+              >
+                {dossierSaving ? "Saving…" : "💾 Save Dossier"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Coverage summary */}
+        {coverage && (
+          <div style={{ display: "flex", gap: 0, marginBottom: 24, borderRadius: 10, border: "1px solid #DDD6FE", overflow: "hidden" }}>
+            {[
+              { count: coverage.verifiedFields || 0, label: "Verified", bg: C.successBg, color: C.success, border: C.successBorder },
+              { count: coverage.probableFields || 0, label: "Probable", bg: C.warningBg, color: C.warning, border: C.warningBorder },
+              { count: coverage.indicativeFields || 0, label: "Indicative", bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+              { count: includedFields.length + customQuestions.length, label: "To Request", bg: "#F3F0FF", color: "#7C3AED", border: "#DDD6FE" },
+            ].map((tile, i) => (
+              <div key={i} style={{ flex: 1, padding: "14px 12px", background: tile.bg, borderRight: i < 3 ? `1px solid ${tile.border}` : "none", textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: tile.color, lineHeight: 1 }}>{tile.count}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: tile.color, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>{tile.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DossierSection title="✅ Verified" subtitle={`${verifiedItems.length} fields from official sources`} items={verifiedItems} bg={C.successBg} borderColor={C.successBorder} color={C.success} getLabel={getFieldLabel} />
+        {probableItems.length > 0 && <DossierSection title="~ Probable" subtitle={`${probableItems.length} fields from company sources`} items={probableItems} bg={C.warningBg} borderColor={C.warningBorder} color={C.warning} getLabel={getFieldLabel} />}
+        {indicativeItems.length > 0 && <DossierSection title="⚠ Indicative" subtitle={`${indicativeItems.length} fields from unverified sources`} items={indicativeItems} bg="#FFF7ED" borderColor="#FED7AA" color="#C2410C" getLabel={getFieldLabel} />}
+
+        {renderCustomerRequestSection(includedFields, customQuestions)}
+        {stakeholderResults.length > 0 && renderDossierStakeholders(stakeholderResults)}
+        {renderDossierDocuments()}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 12, marginTop: 32, flexWrap: "wrap" }}>
+          <button
+            onClick={() => {
+              setAgentType("onboarding");
+              setShowDossierView(false);
+              setStep(stepsFor(journeyType || "ai_only").confirm);
+              trackEvent("preboarding_to_onboarding", {
+                dossierId,
+                companyName: company.name,
+                includedFields: includedFields.length,
+                customQuestions: customQuestions.length,
+              });
+            }}
+            style={{ flex: 1, padding: "14px 0", background: C.niumBlue, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
+          >
+            Prepare Onboarding →
+          </button>
+          <button
+            onClick={() => {
+              setShowDossierView(false);
+              setDossierId(null);
+              setDossierSaved(false);
+              setStep(0);
+              trackEvent("preboarding_new_dossier", { previousDossierId: dossierId });
+            }}
+            style={{ padding: "14px 24px", background: "transparent", color: "#7C3AED", border: "1.5px solid #7C3AED", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
+          >
+            + New Dossier
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
@@ -5036,6 +5386,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }
   if (agentType === "preboarding" && !preboardingUnlocked) {
     return renderPreboardingGate();
+  }
+  // Dossier view is the final pre-boarding screen — takes priority over the
+  // confirm/fill-gaps render below when showDossierView is set.
+  if (agentType === "preboarding" && preboardingUnlocked && showDossierView) {
+    return renderDossierView();
   }
   // Pre-boarding (unlocked) and onboarding share the main render below. The
   // pre-boarding flow swaps in its own Confirm / Fill Gaps presentation
