@@ -172,8 +172,11 @@ const C = {
   niumBlue: "#1a3a4a",
   text: "#1a3a4a",
   textMuted: "#1a3a4a90",
+  textSec: "#1a3a4aaa",
   border: "rgba(26,58,74,0.14)",
   surfaceAlt: "#fafcfb",
+  surface: "#ffffff",
+  background: "#f1f4f3",
   success: "#1a6b56",
   successBg: "#dff2ec",
   successBorder: "#9fd8c8",
@@ -1333,6 +1336,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }, [previewMode, tenantId]);
 
   const [step, setStep] = useState(0);
+
+  // ─── Landing page / agent selection ───
+  // The correct pre-boarding access code (kept as a constant, not inlined).
+  const PREBOARDING_PASSWORD = "ARCH";
+  // Which agent the user selected.
+  //   null = on landing page · "onboarding" = existing flow · "preboarding" = pre-boarding agent
+  const [agentType, setAgentType] = useState(null);
+  // Pre-boarding password gate state.
+  const [preboardingUnlocked, setPreboardingUnlocked] = useState(false);
+  const [preboardingPassword, setPreboardingPassword] = useState("");
+  const [preboardingPasswordError, setPreboardingPasswordError] = useState(false);
   // Scroll to top on every step transition. React keeps the previous scroll
   // position by default — undesirable for a stepped wizard where the new
   // page's heading should be visible immediately. The smooth scroll here
@@ -1546,6 +1560,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
+    // Return to the landing page (agent selection) on a full reset.
+    setAgentType(null);
+    setPreboardingUnlocked(false);
+    setPreboardingPassword("");
+    setPreboardingPasswordError(false);
   };
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
@@ -4229,6 +4248,310 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </div>
       </div>
     );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // LANDING PAGE — agent selection. Renders before Step 1. Onboarding Agent
+  // routes into the existing flow; Pre-boarding Agent is password-gated (ARCH)
+  // and shows a coming-soon screen after a correct code.
+  // ───────────────────────────────────────────────────────────────────────
+  function renderLandingPage() {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: C.background,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 20px",
+        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
+        color: C.text,
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>
+            {tenantConfig?.company?.logo ? (
+              <img
+                src={tenantConfig.company.logo}
+                alt={tenantConfig.company.name}
+                style={{ height: 40, objectFit: "contain" }}
+              />
+            ) : (
+              <div style={{
+                width: 48, height: 48, borderRadius: 12, background: C.niumBlue,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, fontWeight: 800, color: "#fff",
+              }}>
+                N
+              </div>
+            )}
+          </div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px 0", letterSpacing: "-0.5px" }}>
+            {tenantConfig?.company?.name || "Nium"} Intelligence Platform
+          </h1>
+          <p style={{ fontSize: 16, color: C.textSec, margin: 0, maxWidth: 480, lineHeight: 1.5 }}>
+            Select the agent you would like to work with today.
+          </p>
+        </div>
+
+        {/* Agent cards */}
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", maxWidth: 720, width: "100%" }}>
+          {/* Onboarding Agent */}
+          <div
+            onClick={() => setAgentType("onboarding")}
+            style={{
+              flex: "1 1 280px", maxWidth: 320, padding: "32px 28px",
+              background: C.surface, border: `2px solid ${C.border}`, borderRadius: 16,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = C.niumBlue;
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = C.border;
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            <div style={{ fontSize: 36, marginBottom: 16 }}>✅</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+              Onboarding Agent
+            </div>
+            <div style={{ fontSize: 14, color: C.textSec, lineHeight: 1.6, marginBottom: 20 }}>
+              AI-powered KYC/KYB onboarding. Research, confirm, fill gaps and submit a complete application.
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.niumBlue }}>
+              Start onboarding →
+            </div>
+          </div>
+
+          {/* Pre-boarding Agent */}
+          <div
+            onClick={() => setAgentType("preboarding")}
+            style={{
+              flex: "1 1 280px", maxWidth: 320, padding: "32px 28px",
+              background: C.surface, border: `2px solid ${C.border}`, borderRadius: 16,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left", position: "relative",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = "#7C3AED";
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = C.border;
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 16, right: 16, fontSize: 10, fontWeight: 700,
+              color: "#7C3AED", background: "#F3F0FF", border: "1px solid #DDD6FE",
+              borderRadius: 99, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.5px",
+            }}>
+              Coming Soon
+            </div>
+            <div style={{ fontSize: 36, marginBottom: 16 }}>🔍</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+              Pre-boarding Agent
+            </div>
+            <div style={{ fontSize: 14, color: C.textSec, lineHeight: 1.6, marginBottom: 20 }}>
+              Intelligence-led due diligence before customer contact. Build a complete entity dossier and generate a targeted customer request.
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#7C3AED" }}>
+              Access pre-boarding →
+            </div>
+          </div>
+        </div>
+
+        {/* Footer note */}
+        <p style={{ marginTop: 40, fontSize: 12, color: C.textMuted, textAlign: "center" }}>
+          Powered by Nium Intelligence Platform
+        </p>
+      </div>
+    );
+  }
+
+  function renderPreboardingGate() {
+    const handlePasswordSubmit = () => {
+      if (preboardingPassword === PREBOARDING_PASSWORD) {
+        setPreboardingUnlocked(true);
+        setPreboardingPasswordError(false);
+      } else {
+        setPreboardingPasswordError(true);
+        setPreboardingPassword("");
+      }
+    };
+
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: C.background,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 20px",
+        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
+        color: C.text,
+      }}>
+        <div style={{
+          width: "100%", maxWidth: 400, background: C.surface, borderRadius: 16,
+          padding: "40px 36px", border: `1px solid ${C.border}`,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.06)", textAlign: "center",
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 20 }}>🔒</div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "0 0 8px 0" }}>
+            Pre-boarding Agent
+          </h2>
+          <p style={{ fontSize: 14, color: C.textSec, marginBottom: 28, lineHeight: 1.5 }}>
+            This feature is currently under development and restricted to authorised access only.
+          </p>
+
+          <div style={{ marginBottom: 16 }}>
+            <input
+              type="password"
+              value={preboardingPassword}
+              onChange={e => {
+                setPreboardingPassword(e.target.value);
+                setPreboardingPasswordError(false);
+              }}
+              onKeyDown={e => { if (e.key === "Enter") handlePasswordSubmit(); }}
+              placeholder="Enter access code"
+              autoFocus
+              style={{
+                width: "100%", padding: "12px 16px", fontSize: 15,
+                border: `1.5px solid ${preboardingPasswordError ? C.error : C.border}`,
+                borderRadius: 8, outline: "none", fontFamily: "inherit",
+                background: C.surface, color: C.text, boxSizing: "border-box",
+                textAlign: "center", letterSpacing: "0.2em",
+              }}
+            />
+            {preboardingPasswordError && (
+              <p style={{ fontSize: 12, color: C.error, marginTop: 6, textAlign: "center" }}>
+                Incorrect access code. Please try again.
+              </p>
+            )}
+          </div>
+
+          <button
+            onClick={handlePasswordSubmit}
+            style={{
+              width: "100%", padding: "12px 0", background: "#7C3AED", color: "#fff",
+              border: "none", borderRadius: 8, fontSize: 15, fontWeight: 700,
+              fontFamily: "inherit", cursor: "pointer", marginBottom: 16,
+            }}
+          >
+            Access Pre-boarding Agent
+          </button>
+
+          <button
+            onClick={() => {
+              setAgentType(null);
+              setPreboardingPassword("");
+              setPreboardingPasswordError(false);
+            }}
+            style={{
+              background: "none", border: "none", fontSize: 13,
+              color: C.textMuted, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            ← Back to agent selection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderPreboardingComingSoon() {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: C.background,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 20px",
+        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
+        color: C.text,
+      }}>
+        <div style={{ width: "100%", maxWidth: 560, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 24 }}>🔍</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: C.text, margin: "0 0 12px 0" }}>
+            Pre-boarding Agent
+          </h1>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
+            color: "#7C3AED", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 99,
+            padding: "4px 12px", marginBottom: 20, textTransform: "uppercase", letterSpacing: "0.5px",
+          }}>
+            Under Development
+          </div>
+          <p style={{ fontSize: 15, color: C.textSec, lineHeight: 1.7, maxWidth: 460, margin: "0 auto 32px" }}>
+            The pre-boarding agent will enable intelligence-led due diligence before customer contact — building a complete entity dossier, identifying gaps, and generating a targeted customer request automatically.
+          </p>
+
+          <div style={{
+            background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: "24px 28px", textAlign: "left", marginBottom: 32,
+          }}>
+            <div style={{
+              fontSize: 13, fontWeight: 700, color: C.textMuted,
+              textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 16,
+            }}>
+              Coming in this agent
+            </div>
+            {[
+              "Entity dossier generation from public and API sources",
+              "Verification-aware field classification",
+              "Gap analysis with targeted customer request generation",
+              "Custom question and document request builder",
+              "AI-reviewed dossier with analyst oversight option",
+              "Dossier saved to database for downstream onboarding handoff",
+            ].map((item, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10,
+                fontSize: 14, color: C.textSec, lineHeight: 1.4,
+              }}>
+                <span style={{ color: "#7C3AED", fontWeight: 700, flexShrink: 0, marginTop: 1 }}>○</span>
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => {
+              setAgentType(null);
+              setPreboardingUnlocked(false);
+              setPreboardingPassword("");
+            }}
+            style={{
+              padding: "12px 28px", background: "transparent", color: C.niumBlue,
+              border: `1.5px solid ${C.niumBlue}`, borderRadius: 8, fontSize: 14,
+              fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+            }}
+          >
+            ← Back to agent selection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Agent routing — order matters. The existing onboarding flow (the main
+  // return below) is reached only when agentType === "onboarding".
+  if (agentType === null) {
+    return renderLandingPage();
+  }
+  if (agentType === "preboarding" && !preboardingUnlocked) {
+    return renderPreboardingGate();
+  }
+  if (agentType === "preboarding" && preboardingUnlocked) {
+    return renderPreboardingComingSoon();
   }
 
   return (
