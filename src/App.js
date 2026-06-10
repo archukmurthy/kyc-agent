@@ -1613,10 +1613,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentType]);
 
-  // Pre-boarding coming-soon screen viewed (after a correct password).
+  // Pre-boarding agent unlocked (correct password entered).
   useEffect(() => {
     if (agentType === "preboarding" && preboardingUnlocked) {
-      trackEvent("preboarding_coming_soon_viewed", {
+      trackEvent("preboarding_agent_unlocked", {
         viewedAt: new Date().toISOString(),
       });
     }
