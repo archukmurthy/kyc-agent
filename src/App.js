@@ -1567,6 +1567,45 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setPreboardingPasswordError(false);
   };
 
+  // Fire-and-forget event tracking → /api/track-event. Never awaited, never
+  // blocks the UI. Failures are swallowed (tracking must never break the flow).
+  function trackEvent(eventType, eventData = {}) {
+    fetch("/api/track-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenantId,
+        eventType,
+        eventData,
+        sessionId: null, // no session yet at the landing page
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch((err) => console.warn("[trackEvent] Failed:", err));
+  }
+
+  // Landing page viewed — fires on mount and whenever the user returns to the
+  // agent-selection screen (agentType back to null).
+  useEffect(() => {
+    if (agentType === null) {
+      trackEvent("landing_page_viewed", {
+        url: window.location.href,
+        referrer: document.referrer || null,
+        isDemo: demoMode || false,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentType]);
+
+  // Pre-boarding coming-soon screen viewed (after a correct password).
+  useEffect(() => {
+    if (agentType === "preboarding" && preboardingUnlocked) {
+      trackEvent("preboarding_coming_soon_viewed", {
+        viewedAt: new Date().toISOString(),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentType, preboardingUnlocked]);
+
   const isStakeholderRejected = (fieldId, stakeholderId) => {
     const set = rejectedStakeholders[fieldId];
     return set ? set.has(stakeholderId) : false;
@@ -1910,6 +1949,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // doc-search cost captured earlier on Step 2.
     setCostTracker(prev => ({ ...prev, researchPass1: null, researchPass2: null, docExtraction: null }));
     const journey = journeyOverride || journeyType || "ai_only";
+    const researchStartTime = Date.now();
+    trackEvent("research_started", {
+      companyName,
+      countryCode,
+      entityType,
+      ownershipType,
+      journeyType: journey,
+      agentType: agentType || "onboarding",
+      startedAt: new Date().toISOString(),
+    });
     const S = stepsFor(journey);
     const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
     setActiveSchema(schema);
@@ -2145,6 +2194,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
+
+      trackEvent("research_completed", {
+        companyName,
+        fieldsFound: merged?.length || 0,
+        fillRate: cov?.fillRate ?? null,
+        verifiedFields: cov?.verifiedFields ?? null,
+        totalCostUsd: costTracker?.researchPass1?.costUsd || null,
+        durationMs: Date.now() - researchStartTime,
+        agentType: agentType || "onboarding",
+      });
 
       // Build silent metadata trail (Part 5).
       const meta = merged.map(item => ({
@@ -2694,6 +2753,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (result.sessionId) {
         // eslint-disable-next-line no-console
         console.log(`[Submit] ✅ Saved — session: ${result.sessionId}`);
+        trackEvent("application_submitted", {
+          companyName: submitCompany.name,
+          sessionId: result.sessionId,
+          totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
+          totalTokens: costSummary?.totals?.totalTokens ?? null,
+          fillRate: coverage?.fillRate ?? null,
+          agentType: agentType || "onboarding",
+          submittedAt: new Date().toISOString(),
+        });
       }
       if (result.warning) {
         // eslint-disable-next-line no-console
@@ -4299,7 +4367,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", maxWidth: 720, width: "100%" }}>
           {/* Onboarding Agent */}
           <div
-            onClick={() => setAgentType("onboarding")}
+            onClick={() => {
+              trackEvent("agent_selected", {
+                agentType: "onboarding",
+                selectedAt: new Date().toISOString(),
+              });
+              setAgentType("onboarding");
+            }}
             style={{
               flex: "1 1 280px", maxWidth: 320, padding: "32px 28px",
               background: C.surface, border: `2px solid ${C.border}`, borderRadius: 16,
@@ -4330,7 +4404,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
           {/* Pre-boarding Agent */}
           <div
-            onClick={() => setAgentType("preboarding")}
+            onClick={() => {
+              trackEvent("agent_selected", {
+                agentType: "preboarding",
+                selectedAt: new Date().toISOString(),
+                note: "password gate shown",
+              });
+              setAgentType("preboarding");
+            }}
             style={{
               flex: "1 1 280px", maxWidth: 320, padding: "32px 28px",
               background: C.surface, border: `2px solid ${C.border}`, borderRadius: 16,
@@ -4378,9 +4459,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   function renderPreboardingGate() {
     const handlePasswordSubmit = () => {
       if (preboardingPassword === PREBOARDING_PASSWORD) {
+        trackEvent("preboarding_password_correct", {
+          unlockedAt: new Date().toISOString(),
+        });
         setPreboardingUnlocked(true);
         setPreboardingPasswordError(false);
       } else {
+        trackEvent("preboarding_password_failed", {
+          attemptedAt: new Date().toISOString(),
+          // Never log the actual password attempt.
+        });
         setPreboardingPasswordError(true);
         setPreboardingPassword("");
       }
@@ -4450,6 +4538,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
           <button
             onClick={() => {
+              trackEvent("returned_to_landing", {
+                fromAgent: agentType,
+                returnedAt: new Date().toISOString(),
+              });
               setAgentType(null);
               setPreboardingPassword("");
               setPreboardingPasswordError(false);
@@ -4525,6 +4617,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
           <button
             onClick={() => {
+              trackEvent("returned_to_landing", {
+                fromAgent: agentType,
+                returnedAt: new Date().toISOString(),
+              });
               setAgentType(null);
               setPreboardingUnlocked(false);
               setPreboardingPassword("");

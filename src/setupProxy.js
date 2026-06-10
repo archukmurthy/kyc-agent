@@ -22,6 +22,7 @@ const docRequirementsHandler = require(path.join(__dirname, "..", "api", "docume
 const benchmarkHandler = require(path.join(__dirname, "..", "api", "benchmark.js"));
 const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.js"));
 const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
+const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -181,6 +182,22 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(submitHandler)(req, res);
+    });
+  });
+
+  // Lightweight event tracking → session_timeline. POST; parse the JSON body
+  // the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/track-event", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(trackEventHandler)(req, res);
     });
   });
 };

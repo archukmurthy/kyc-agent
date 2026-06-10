@@ -15,6 +15,7 @@ async function migrate() {
 
   const migrations = [
     "db/migrations/002_cost_breakdown.sql",
+    "db/migrations/004_session_timeline_update.sql",
   ];
 
   for (const file of migrations) {
