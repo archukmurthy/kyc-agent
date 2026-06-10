@@ -4300,6 +4300,60 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const stakeholderFound = sortedFound.filter(({ item }) => hasRealStakeholders(item));
   const regularFound = sortedFound.filter(({ item }) => !hasRealStakeholders(item));
 
+  // Pre-boarding confirm only: a stakeholder field can fall into regularFound
+  // when its .stakeholders array is empty/exemption-only — the plain field table
+  // would then show the raw JSON-array value. Split these out so renderConfirmFields
+  // can parse them into cards (or a clean message) instead of raw JSON. Onboarding
+  // confirm is untouched (it renders stakeholderFound/regularFound directly).
+  const stakeholderRegular = regularFound.filter(({ item }) => isStakeholderField(item.field));
+  const trueRegular = regularFound.filter(({ item }) => !isStakeholderField(item.field));
+
+  // Render a stakeholder field that fell through to the regular list. Parse a
+  // JSON-array value into stakeholder cards; if no real persons remain, show a
+  // clean message rather than raw JSON; non-JSON values render as a labelled row.
+  const renderStakeholderFallback = (item, idx) => {
+    const val = typeof item.value === "string" ? item.value.trim() : "";
+    const niceLabel = String(item.label || item.field || "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+    if (val.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) {
+          const stakeholders = parsed
+            .map((p) => makeStakeholder({
+              full_name: p.full_name || p.name || "",
+              role: p.role || p.position || "",
+              share_percentage: p.share_percentage ?? p.ownership_percentage ?? null,
+              source: item.source,
+              sourceUrl: item.sourceUrl,
+              sourceTier: item.sourceTier,
+              fetchedAt: item.fetchedAt,
+            }))
+            .filter((s) => s.full_name)
+            .filter((s) => !isRegistryExemptionNotice(s));
+          if (stakeholders.length > 0) {
+            return renderStakeholderConfirmSection({ ...item, stakeholders }, idx);
+          }
+        }
+      } catch (_) {
+        // not valid JSON — fall through to the labelled row below
+      }
+      // JSON array but no registrable persons (e.g. publicly listed company).
+      return (
+        <div key={`stk-fallback-${item.field}-${idx}`} style={{ padding: "10px 14px", background: C.surfaceAlt, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, color: C.textMuted, fontStyle: "italic", marginBottom: 12 }}>
+          {niceLabel}: No registrable persons found (publicly listed company)
+        </div>
+      );
+    }
+    // Non-JSON stakeholder value — show a clean labelled row, never raw JSON.
+    return (
+      <div key={`stk-fallback-${item.field}-${idx}`} style={{ padding: "10px 14px", background: C.surfaceAlt, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, color: C.text, marginBottom: 12 }}>
+        <strong>{niceLabel}:</strong> {safeRenderValue(item.value)}
+      </div>
+    );
+  };
+
   // Fill Gaps stakeholder rendering, split into two sections. Forms (input
   // needed) render with the other gap inputs; summaries (read-only) render at
   // the bottom for reference. Render functions return null when empty, so the
@@ -4667,17 +4721,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </div>
       )}
 
-      {stakeholderFound.length > 0 && (
+      {(stakeholderFound.length > 0 || stakeholderRegular.length > 0) && (
         <div style={card}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
           <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>
             Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
           </p>
           {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
+          {stakeholderRegular.map(({ item, idx }) => renderStakeholderFallback(item, idx))}
         </div>
       )}
 
-      {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
+      {trueRegular.length > 0 && renderUnifiedFoundTable(trueRegular, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
 
       {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
