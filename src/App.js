@@ -1431,6 +1431,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [entityType, setEntityType] = useState("");
+  // Registration number for the Nium API Lookup journey (test mode only). The
+  // Nium eKYB publicDetails endpoint searches registries by registration number
+  // — a name-only search returns HTTP 400 — so this is required for that one
+  // journey. Not used by the AI/manual journeys.
+  const [niumRegNumber, setNiumRegNumber] = useState("");
   // Ownership type (Step 1) — drives the Phase 0 research strategy. Reset to ""
   // whenever the entity type changes, since each entity type exposes a
   // different set of allowed ownership types.
@@ -2523,6 +2528,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
+    // The Nium eKYB registry searches by registration number (a name-only
+    // search returns HTTP 400), so require it for this journey. The input lives
+    // just below the journey cards in test mode.
+    if (!niumRegNumber.trim()) {
+      setError("Nium API Lookup needs a company registration number — enter it in the field below the journey cards, then click the Nium card again.");
+      return;
+    }
     setError("");
     setJourneyOpen(false);
     setManualOpened(false);
@@ -2543,7 +2555,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const response = await fetch("/api/kyc-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, countryCode, registrationNumber: null }),
+        body: JSON.stringify({ companyName, countryCode, registrationNumber: niumRegNumber.trim() }),
       });
       const data = await response.json();
 
@@ -5970,6 +5982,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 );
               })()}
             </div>
+
+            {/* Registration number for the Nium API Lookup card (test mode only).
+                The eKYB registry searches by registration number, so this is
+                required for that journey. Other journeys ignore it. */}
+            {(demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
+              <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
+                <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
+                  🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
+                </label>
+                <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
+                  The Nium KYB registry searches by registration number (a name-only search isn't supported). Enter it, then click the Nium API Lookup card above. <em>Preprod test value: 00445790 (GB).</em>
+                </p>
+                <StableInput
+                  id="niumRegNumber"
+                  label=""
+                  type="text"
+                  value={niumRegNumber}
+                  onUpdate={(_, v) => setNiumRegNumber(v)}
+                  placeholder="e.g. 00445790"
+                />
+              </div>
+            )}
 
             {manualOpened && (
               <div style={{ marginTop: 4, marginBottom: 12, padding: "10px 14px", background: "#f0f3f8", borderRadius: 8, fontSize: 12, color: "#1a3a4a", borderLeft: "3px solid #1a3a4a" }}>
