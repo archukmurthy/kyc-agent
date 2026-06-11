@@ -1688,6 +1688,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentType, preboardingUnlocked]);
 
+  // Auto-save dossier when research completes in pre-boarding mode. The
+  // simplified 3-screen flow (Company → Research → Dossier) skips the
+  // Confirm / Fill Gaps steps, so the dossier is persisted automatically the
+  // moment research returns and the Dossier View renders without a click.
+  useEffect(() => {
+    if (
+      agentType === "preboarding" &&
+      preboardingUnlocked &&
+      research?.found?.length > 0 &&
+      !showDossierView &&
+      !dossierSaving &&
+      !dossierSaved
+    ) {
+      // Small delay to ensure all state is settled after research.
+      const timer = setTimeout(() => {
+        saveDossier();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentType, preboardingUnlocked, research?.found]);
+
   const isStakeholderRejected = (fieldId, stakeholderId) => {
     const set = rejectedStakeholders[fieldId];
     return set ? set.has(stakeholderId) : false;
@@ -4475,7 +4497,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // LANDING PAGE — agent selection. Renders before Step 1. Onboarding Agent
   // routes into the existing flow; Pre-boarding Agent is password-gated (ARCH)
   // and shows a coming-soon screen after a correct code.
+  // Currently unrouted: the landing page is hidden for the stakeholder review
+  // weekend (see the agentType === null routing block). Kept for restore.
   // ───────────────────────────────────────────────────────────────────────
+  // eslint-disable-next-line no-unused-vars
   function renderLandingPage() {
     return (
       <div style={{
@@ -4820,6 +4845,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     </div>
   );
 
+  // Kept for reference — replaced by unified dossier view (June 2026).
+  // No longer routed; pre-boarding goes Company → Research → Dossier.
+  // eslint-disable-next-line no-unused-vars
   const renderPreboardingConfirm = () => (
     <div>
       <div style={card}>
@@ -5060,6 +5088,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
+  // Kept for reference — replaced by unified dossier view (June 2026).
+  // No longer routed; exclude checkboxes + ask-for-more now live inline in the
+  // Customer Request section of renderDossierView().
+  // eslint-disable-next-line no-unused-vars
   const renderPreboardingFillGaps = () => (
     <div>
       <div style={card}>
@@ -5105,6 +5137,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .filter((g) => g.section !== "documents")
       .filter(dependsOnSatisfied)
       .filter((g) => !excludedGapFields.has(g.field));
+
+  // Every candidate gap field (excluded or not) — the interactive Customer
+  // Request list in the dossier renders all of these so the analyst can toggle
+  // exclusions in place.
+  const allRequestableGapFields = () =>
+    getCombinedGaps()
+      .filter((g) => g.section !== "documents")
+      .filter(dependsOnSatisfied);
 
   const buildDossierPayload = () => {
     const found = research?.found || [];
@@ -5190,40 +5230,98 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
-  const renderCustomerRequestSection = (includedFields, qs) => {
-    const totalRequests = includedFields.length + qs.length;
-    if (totalRequests === 0) {
+  // Interactive Customer Request — each gap field carries an exclude checkbox
+  // (strike-through + "✕ Excluded" badge when off), custom questions can be
+  // removed, and "Ask for more" adds analyst questions inline. `allFields` is
+  // the full candidate list (excluded or not); the live count reflects only
+  // active (non-excluded) fields plus custom questions.
+  const renderCustomerRequestSection = (allFields, qs) => {
+    if (allFields.length === 0 && qs.length === 0) {
       return (
         <div style={{ padding: "16px", background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 10, marginBottom: 16, fontSize: 13, color: C.success, fontWeight: 600 }}>
           ✅ No fields to request — all information was collected automatically.
         </div>
       );
     }
+    const activeRequestCount =
+      allFields.filter((f) => !excludedGapFields.has(f.field)).length + qs.length;
     return (
       <div style={{ marginBottom: 16, borderRadius: 10, border: "1px solid #DDD6FE", overflow: "hidden" }}>
         <div style={{ padding: "12px 16px", background: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>📋 Customer Request</span>
             <span style={{ fontSize: 12, color: "#7C3AED", opacity: 0.7, marginLeft: 8 }}>
-              {totalRequests} question{totalRequests !== 1 ? "s" : ""} will be sent to the customer
+              {activeRequestCount} question{activeRequestCount !== 1 ? "s" : ""} will be sent to the customer
             </span>
           </div>
         </div>
         <div style={{ padding: "12px 16px" }}>
-          {includedFields.map((field, i) => (
-            <div key={field.field} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < includedFields.length - 1 || qs.length > 0 ? "1px solid #EDE9FE" : "none" }}>
-              <span style={{ fontSize: 14, flexShrink: 0 }}>○</span>
-              <span style={{ fontSize: 13, color: C.text, flex: 1 }}>{field.label}</span>
-              {field.required && <span style={{ fontSize: 10, fontWeight: 700, color: C.error, flexShrink: 0 }}>Required</span>}
-            </div>
-          ))}
+          {allFields.map((field, i) => {
+            const isExcluded = excludedGapFields.has(field.field);
+            return (
+              <div
+                key={field.field}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderBottom: i < allFields.length - 1 || qs.length > 0 ? "1px solid #EDE9FE" : "none",
+                  opacity: isExcluded ? 0.4 : 1,
+                  transition: "opacity 0.15s",
+                }}
+              >
+                {/* Exclude checkbox */}
+                <input
+                  type="checkbox"
+                  checked={!isExcluded}
+                  onChange={() => {
+                    setExcludedGapFields((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(field.field)) next.delete(field.field);
+                      else next.add(field.field);
+                      return next;
+                    });
+                  }}
+                  style={{ width: 15, height: 15, accentColor: "#7C3AED", cursor: "pointer", flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13, color: isExcluded ? C.textMuted : C.text, flex: 1, textDecoration: isExcluded ? "line-through" : "none" }}>
+                  {field.label}
+                </span>
+                {field.required && !isExcluded && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: C.error, flexShrink: 0 }}>Required</span>
+                )}
+                {isExcluded && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: 99, padding: "1px 6px", flexShrink: 0 }}>
+                    ✕ Excluded
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {qs.map((q, i) => (
-            <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < qs.length - 1 ? "1px solid #EDE9FE" : "none" }}>
-              <span style={{ fontSize: 14, flexShrink: 0 }}>✦</span>
+            <div
+              key={q.id}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < qs.length - 1 ? "1px solid #EDE9FE" : "none" }}
+            >
+              <input type="checkbox" checked readOnly style={{ width: 15, height: 15, accentColor: "#7C3AED", flexShrink: 0 }} />
               <span style={{ fontSize: 13, color: "#4C1D95", flex: 1, fontWeight: 500 }}>{q.question}</span>
               <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "2px 6px", flexShrink: 0 }}>Custom</span>
+              {/* Remove button */}
+              <button
+                onClick={() => setCustomQuestions((prev) => prev.filter((cq) => cq.id !== q.id))}
+                style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                title="Remove question"
+              >
+                ×
+              </button>
             </div>
           ))}
+          {/* Ask for more — inline in dossier. Section "customer_request" is the
+              bucket for all questions added from the dossier view. */}
+          <div style={{ marginTop: 12 }}>
+            {renderAskMoreButton("customer_request")}
+          </div>
         </div>
       </div>
     );
@@ -5291,6 +5389,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const probableItems = found.filter((r) => r.verificationStatus === "probable");
     const indicativeItems = found.filter((r) => r.verificationStatus === "indicative");
     const includedFields = includedGapFieldObjs();
+    const allGapFields = allRequestableGapFields();
     const stakeholderResults = found.filter((r) => isStakeholderField(r.field) && r.stakeholders?.length > 0);
     const company = dossierCompany();
 
@@ -5303,9 +5402,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 20 }}>🔍</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.8px" }}>Intelligence Dossier</span>
-                {dossierSaved && dossierId && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "2px 8px" }}>✓ Saved</span>
-                )}
               </div>
               <h1 style={{ fontSize: 22, fontWeight: 800, color: "#4C1D95", margin: "0 0 4px 0" }}>{company.name}</h1>
               <div style={{ fontSize: 13, color: "#7C3AED", opacity: 0.8 }}>
@@ -5317,15 +5413,45 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 {dossierId && `ID: ${String(dossierId).slice(0, 8)}…`}
               </div>
             </div>
-            {!dossierSaved && (
-              <button
-                onClick={() => saveDossier()}
-                disabled={dossierSaving}
-                style={{ padding: "10px 20px", background: dossierSaving ? "#DDD6FE" : "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: dossierSaving ? "not-allowed" : "pointer", flexShrink: 0 }}
-              >
-                {dossierSaving ? "Saving…" : "💾 Save Dossier"}
-              </button>
-            )}
+            {/* Save state — the dossier auto-saves on research complete, so by
+                the time the analyst lands here it is normally already saved.
+                After adjusting exclusions / questions, "Update" re-saves with
+                the current state. */}
+            <div style={{ flexShrink: 0 }}>
+              {dossierSaving && (
+                <span style={{ fontSize: 12, color: "#7C3AED", fontStyle: "italic" }}>
+                  Saving dossier…
+                </span>
+              )}
+
+              {!dossierSaving && dossierSaved && dossierId && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "3px 10px" }}>
+                    ✓ Dossier Saved
+                  </span>
+                  <button
+                    onClick={() => {
+                      setDossierSaved(false);
+                      setDossierId(null);
+                      saveDossier();
+                    }}
+                    disabled={dossierSaving}
+                    style={{ fontSize: 11, color: "#7C3AED", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}
+                  >
+                    Update
+                  </button>
+                </div>
+              )}
+
+              {!dossierSaving && !dossierSaved && (
+                <button
+                  onClick={() => saveDossier()}
+                  style={{ padding: "8px 16px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}
+                >
+                  💾 Save Dossier
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5350,7 +5476,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         {probableItems.length > 0 && <DossierSection title="~ Probable" subtitle={`${probableItems.length} fields from company sources`} items={probableItems} bg={C.warningBg} borderColor={C.warningBorder} color={C.warning} getLabel={getFieldLabel} />}
         {indicativeItems.length > 0 && <DossierSection title="⚠ Indicative" subtitle={`${indicativeItems.length} fields from unverified sources`} items={indicativeItems} bg="#FFF7ED" borderColor="#FED7AA" color="#C2410C" getLabel={getFieldLabel} />}
 
-        {renderCustomerRequestSection(includedFields, customQuestions)}
+        {renderCustomerRequestSection(allGapFields, customQuestions)}
         {stakeholderResults.length > 0 && renderDossierStakeholders(stakeholderResults)}
         {renderDossierDocuments()}
 
@@ -5374,9 +5500,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </button>
           <button
             onClick={() => {
+              // Start a genuinely fresh dossier. Clearing research is essential:
+              // the auto-save effect watches research?.found, so leaving it
+              // populated would immediately re-save and bounce back here.
+              // (preboardingUnlocked is left intact — no re-prompting the gate.)
               setShowDossierView(false);
               setDossierId(null);
               setDossierSaved(false);
+              setResearch(null);
+              setActiveSchema(null);
+              setCoverage(null);
+              setExcludedGapFields(new Set());
+              setCustomQuestions([]);
+              setAskMoreOpenSection(null);
+              gapRef.current = {};
+              setFormVersion((v) => v + 1);
+              setCompanyName("");
+              setEntityType("");
+              setOwnershipType("");
+              setCountryCode("");
+              setError("");
               setStep(0);
               trackEvent("preboarding_new_dossier", { previousDossierId: dossierId });
             }}
@@ -5464,19 +5607,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24, flexWrap: "wrap" }}>
-          {(agentType === "preboarding" ? ["Company", "Research", "Review", "Gaps", "Dossier"] : stepNames).map((s, i, arr) => {
+          {(() => {
             const pb = agentType === "preboarding";
+            // Pre-boarding is a 3-screen flow: Company → Research → Dossier.
+            // Active step maps: input(step 0)→Company, research(step 1)→Research,
+            // showDossierView→Dossier (covers the confirm-step window while the
+            // dossier auto-saves).
+            const pbActive = showDossierView ? 2 : (step >= 1 ? 1 : 0);
+            const names = pb ? ["Company", "Research", "Dossier"] : stepNames;
+            const activeIdx = pb ? pbActive : step;
             const doneBg = pb ? "#7C3AED" : "#4a9e8e";
             const activeBg = pb ? "#6D28D9" : "#1a3a4a";
             const ring = pb ? "0 0 0 3px rgba(124,58,237,0.2)" : "0 0 0 3px rgba(74,158,142,0.2)";
-            return (
+            return names.map((s, i, arr) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < step ? doneBg : i === step ? activeBg : "#e0e4e8", color: i <= step ? "#fff" : "#999", boxShadow: i === step ? ring : "none" }}>{i + 1}</div>
-                <span style={{ fontSize: 11, fontWeight: i === step ? 700 : 400, color: i <= step ? "#1a3a4a" : "#aaa" }}>{s}</span>
-                {i < arr.length - 1 && <div style={{ width: 14, height: 2, background: i < step ? doneBg : "#e0e4e8" }} />}
+                <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < activeIdx ? doneBg : i === activeIdx ? activeBg : "#e0e4e8", color: i <= activeIdx ? "#fff" : "#999", boxShadow: i === activeIdx ? ring : "none" }}>{i + 1}</div>
+                <span style={{ fontSize: 11, fontWeight: i === activeIdx ? 700 : 400, color: i <= activeIdx ? "#1a3a4a" : "#aaa" }}>{s}</span>
+                {i < arr.length - 1 && <div style={{ width: 14, height: 2, background: i < activeIdx ? doneBg : "#e0e4e8" }} />}
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
 
         {step === STEPS.input && !journeyOpen && (
@@ -5566,6 +5716,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   setError("");
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
+                  // Pre-boarding skips the journey-selection cards entirely —
+                  // it always runs full AI research (the doc-search agent runs
+                  // automatically in the background). Go straight to research.
+                  if (agentType === "preboarding") {
+                    setJourneyType("ai_only");
+                    if (demoMode) { doDummyResearch("ai_only"); return; }
+                    doResearch("ai_only");
+                    return;
+                  }
                   setJourneyOpen(true);
                 }} variant="primary">Continue →</Btn>
             </div>
@@ -6486,8 +6645,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         )}
 
-        {/* Pre-boarding Confirm — analyst review (reuses renderConfirmFields). */}
-        {step === STEPS.confirm && research && agentType === "preboarding" && renderPreboardingConfirm()}
+        {/* Pre-boarding Confirm — Kept for reference — replaced by unified
+            dossier view (June 2026). No longer routed: pre-boarding goes
+            Company → Research → Dossier (auto-saved on research complete). */}
+        {/* {step === STEPS.confirm && research && agentType === "preboarding" && renderPreboardingConfirm()} */}
+
+        {/* Pre-boarding: brief "building dossier" state covering the short
+            window between research completing and the auto-saved Dossier View
+            rendering (saveDossier flips showDossierView → true). */}
+        {agentType === "preboarding" && research && !showDossierView && step >= STEPS.confirm && (
+          <div style={{ ...card, textAlign: "center", padding: "48px 28px" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#4C1D95" }}>Building intelligence dossier…</div>
+            <div style={{ fontSize: 13, color: "#7C3AED", opacity: 0.8, marginTop: 6 }}>Compiling findings and saving.</div>
+          </div>
+        )}
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
@@ -6591,8 +6763,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         )}
 
-        {/* Pre-boarding Fill Gaps — exclude checkboxes + ask-for-more builder. */}
-        {step === STEPS.fillGaps && research && activeSchema && agentType === "preboarding" && renderPreboardingFillGaps()}
+        {/* Pre-boarding Fill Gaps — Kept for reference — replaced by unified
+            dossier view (June 2026). Exclude checkboxes + ask-for-more now live
+            inline in the Customer Request section of renderDossierView(). */}
+        {/* {step === STEPS.fillGaps && research && activeSchema && agentType === "preboarding" && renderPreboardingFillGaps()} */}
 
         {/* DRS — dynamic document-requirements step (Step 2 of the CDD brief),
             placed after Fill Gaps so classifiers + research are settled. */}
