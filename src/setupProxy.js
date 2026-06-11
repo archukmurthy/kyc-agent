@@ -24,6 +24,7 @@ const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.j
 const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
+const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -214,6 +215,22 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(saveDossierHandler)(req, res);
+    });
+  });
+
+  // KYC Lookup Agent → Nium eKYB. POST; parse the JSON body the dev server
+  // doesn't auto-parse (mirrors the routes above).
+  app.post("/api/kyc-lookup", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(kycLookupHandler)(req, res);
     });
   });
 };

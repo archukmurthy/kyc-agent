@@ -2496,6 +2496,113 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setStep(S.confirm);
   };
 
+  // KYC Lookup Agent journey (TEST MODE ONLY) — pulls verified registry data
+  // from the Nium eKYB API (POST /api/kyc-lookup → agents/kycLookupAgent.js)
+  // instead of AI research. The agent returns the SAME found-item shape as AI
+  // research (tier1 / verified, stakeholders with nationality + DOB
+  // pre-populated), so the result flows into the exact same Confirm step and
+  // the rest of the wizard is identical. Mirrors the doDummyResearch tail so
+  // Confirm/Fill-Gaps render identically regardless of data source.
+  const startNiumApiLookup = async () => {
+    if (!companyName.trim()) { setError("Please enter a company name."); return; }
+    if (!entityType) { setError("Please select an entity type."); return; }
+    if (!countryCode) { setError("Please select a country."); return; }
+    setError("");
+    setJourneyOpen(false);
+    setManualOpened(false);
+
+    const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
+    setActiveSchema(schema);
+    const S = stepsFor("ai_only");
+    setLoading(true); setStep(S.research); setLoaderIdx(0); setLoaderPhase(0);
+    setResearchStatus("Calling Nium KYB API…");
+
+    const startedAt = Date.now();
+    trackEvent("nium_api_lookup_started", {
+      companyName, countryCode, entityType, ownershipType,
+      agentType: agentType || "onboarding", startedAt: new Date().toISOString(),
+    });
+
+    try {
+      const response = await fetch("/api/kyc-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName, countryCode, registrationNumber: null }),
+      });
+      const data = await response.json();
+
+      if (data.success && data.fields?.length) {
+        const ts = data.searchedAt || new Date().toISOString();
+        // Same dropdown-value coercion + stakeholder enrichment the AI paths
+        // use, so Nium results render identically on Confirm and Fill Gaps.
+        const found = enrichStakeholders(mapAIValuesToOptions(data.fields, schema));
+        const tagged = {
+          companyName,
+          jurisdiction: schema.region,
+          countryOfRegistration: countryCode,
+          found,
+          gaps: schema.gapFields.map(f => ({ ...f, reason: "Not in Nium registry response" })),
+        };
+        setResearch(tagged);
+        setResearchTimestamp(ts);
+
+        const cov = computeCoverage(found, schema);
+        setCoverage(cov);
+        setGapRecoveryRan(false);
+
+        setFieldMetadata(found.map(item => ({
+          fieldId: item.field, value: item.value,
+          source: item.source, sourceUrl: item.sourceUrl || null,
+          sourceTier: item.sourceTier, verificationStatus: item.verificationStatus,
+          documentType: null,
+          fetchedAt: item.fetchedAt || ts, method: "nium_api", confidence: "high",
+          customerAction: null, customerActionAt: null,
+        })));
+
+        const c = {};
+        found.forEach((_, i) => { c[i] = true; });
+        setChecks(c);
+        setRejectedStakeholders({});
+        setStakeholderFieldChecks({});
+        setExpandedStakeholders({});
+        setIsPubliclyListedOverride(false);
+        stakeholdersRef.current = {};
+        setStakeholderVersion(v => v + 1);
+        setStakeholderErrors([]);
+        setRevealedTs({});
+        gapRef.current = {};
+        setFormVersion(v => v + 1);
+
+        trackEvent("nium_api_lookup_complete", {
+          companyName,
+          fieldsFound: data.fields.length,
+          stakeholders: data.stakeholders?.all?.length || 0,
+          durationMs: data.durationMs ?? (Date.now() - startedAt),
+          publicDetailsId: data.publicDetailsId,
+        });
+
+        setLoading(false); setLoaderPhase(0); setResearchStatus("");
+        setStep(S.confirm);
+      } else {
+        // No match / agent error — return to the journey screen with the
+        // message and let the user fall back to AI research.
+        const msg = data.error || "No data found via Nium API. Try AI research instead.";
+        trackEvent("nium_api_lookup_failed", { companyName, error: data.error || "no_results" });
+        setLoading(false); setLoaderPhase(0); setResearchStatus("");
+        setStep(S.input);
+        setJourneyOpen(true);
+        setError(msg);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[startNiumApiLookup] Error:", err);
+      setLoading(false); setLoaderPhase(0); setResearchStatus("");
+      setStep(stepsFor("ai_only").input);
+      setJourneyOpen(true);
+      setError("Nium API lookup failed: " + err.message);
+    }
+  };
+
   // Continue handler from Documents step → triggers research with whatever
   // was uploaded (zero docs is fine; web search runs alone). In demo mode
   // we skip the API entirely and synthesise sample data.
@@ -5805,6 +5912,39 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>I'll complete the form myself</div>
                     <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Skip the AI research and fill everything manually using your own records. You'll be redirected to our standard application form.</div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "#1a3a4a90" }}>Full control · No AI · ~15 minutes</div>
+                  </div>
+                );
+              })()}
+
+              {/* Card D — Nium API Lookup. TEST MODE ONLY: visible when demoMode
+                  is on OR ?test=1 is in the URL. Pulls verified registry data
+                  straight from the Nium eKYB API (the KYC Lookup Agent) instead
+                  of AI research, then flows into the same Confirm step. Clicking
+                  starts the lookup immediately (no Continue needed). */}
+              {(demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (() => {
+                const sel = selectedJourneyCard === "nium_api";
+                return (
+                  <div
+                    onClick={() => {
+                      setSelectedJourneyCard("nium_api");
+                      setJourneyType("nium_api");
+                      startNiumApiLookup();
+                    }}
+                    style={{
+                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      background: sel ? "#ECFEFF" : "#fafdfe",
+                      border: `2px solid ${sel ? "#0891B2" : C.border}`,
+                      boxShadow: sel ? "0 6px 18px rgba(8,145,178,0.12)" : "none",
+                    }}
+                  >
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>🔗</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nium API Lookup</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>
+                      Pull verified registry data directly from Nium's KYB infrastructure. Fastest and most accurate for supported markets.
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#0891B2", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 99, padding: "2px 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Test Mode Only
+                    </span>
                   </div>
                 );
               })()}
