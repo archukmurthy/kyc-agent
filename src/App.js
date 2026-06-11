@@ -1436,6 +1436,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // — a name-only search returns HTTP 400 — so this is required for that one
   // journey. Not used by the AI/manual journeys.
   const [niumRegNumber, setNiumRegNumber] = useState("");
+  // Companies House name → reg-number resolver state (test mode only).
+  const [niumSearchLoading, setNiumSearchLoading] = useState(false);
+  const [niumSearchResults, setNiumSearchResults] = useState(null);
+  const [niumSearchError, setNiumSearchError] = useState("");
   // Ownership type (Step 1) — drives the Phase 0 research strategy. Reset to ""
   // whenever the entity type changes, since each entity type exposes a
   // different set of allowed ownership types.
@@ -1668,6 +1672,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
+    setNiumRegNumber("");
+    setNiumSearchResults(null);
+    setNiumSearchError("");
+    setNiumSearchLoading(false);
   };
 
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
@@ -2515,6 +2523,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setFormVersion(v => v + 1);
     setLoading(false); setLoaderPhase(0);
     setStep(S.confirm);
+  };
+
+  // Resolve company name → registration number via Companies House (UK), so the
+  // analyst doesn't have to know the number. Auto-fills niumRegNumber with the
+  // top match and lists the rest to pick from. Test-mode tooling only.
+  const findNiumRegNumber = async () => {
+    if (!companyName.trim()) { setNiumSearchError("Enter a company name first."); return; }
+    setNiumSearchError("");
+    setNiumSearchResults(null);
+    setNiumSearchLoading(true);
+    try {
+      const r = await fetch(
+        `/api/company-search?q=${encodeURIComponent(companyName.trim())}&country=${encodeURIComponent(countryCode || "GB")}`
+      );
+      const data = await r.json();
+      if (data.error) {
+        setNiumSearchError(data.error);
+      } else if (!data.results || data.results.length === 0) {
+        setNiumSearchError(data.message || `No UK company found matching "${companyName}".`);
+      } else {
+        setNiumSearchResults(data.results);
+        // Convenience: auto-fill the top match; the user can pick another below.
+        setNiumRegNumber(data.results[0].registrationNumber);
+      }
+    } catch (err) {
+      setNiumSearchError("Lookup failed: " + err.message);
+    }
+    setNiumSearchLoading(false);
   };
 
   // KYC Lookup Agent journey (TEST MODE ONLY) — pulls verified registry data
@@ -5985,23 +6021,66 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
             {/* Registration number for the Nium API Lookup card (test mode only).
                 The eKYB registry searches by registration number, so this is
-                required for that journey. Other journeys ignore it. */}
+                required for that journey. Other journeys ignore it. The "Find"
+                button resolves it from the company name via Companies House (UK). */}
             {(demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
               <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
                 <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
                   🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
                 </label>
                 <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
-                  The Nium KYB registry searches by registration number (a name-only search isn't supported). Enter it, then click the Nium API Lookup card above. <em>Preprod test value: 00445790 (GB).</em>
+                  The Nium KYB registry searches by registration number (a name-only search isn't supported). Type it, or look it up from the company name (UK only). <em>Preprod test value: 00445790 (GB).</em>
                 </p>
-                <StableInput
-                  id="niumRegNumber"
-                  label=""
-                  type="text"
-                  value={niumRegNumber}
-                  onUpdate={(_, v) => setNiumRegNumber(v)}
-                  placeholder="e.g. 00445790"
-                />
+                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                  <input
+                    id="niumRegNumber"
+                    type="text"
+                    value={niumRegNumber}
+                    onChange={(e) => setNiumRegNumber(e.target.value)}
+                    placeholder="e.g. 00445790"
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1.5px solid #A5F3FC", fontSize: 14, fontFamily: "inherit", color: "#0E7490", background: "#fff" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={findNiumRegNumber}
+                    disabled={niumSearchLoading || !companyName.trim()}
+                    style={{ flexShrink: 0, padding: "0 14px", borderRadius: 8, border: "none", background: niumSearchLoading || !companyName.trim() ? "#A5F3FC" : "#0891B2", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: niumSearchLoading || !companyName.trim() ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                  >
+                    {niumSearchLoading ? "Searching…" : "🔍 Find from name"}
+                  </button>
+                </div>
+
+                {niumSearchError && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 6, padding: "6px 10px" }}>
+                    {niumSearchError}
+                  </div>
+                )}
+
+                {niumSearchResults && niumSearchResults.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
+                      {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} — top one filled in, pick another if needed:
+                    </div>
+                    {niumSearchResults.map((m) => {
+                      const picked = m.registrationNumber === niumRegNumber;
+                      return (
+                        <div
+                          key={m.registrationNumber}
+                          onClick={() => setNiumRegNumber(m.registrationNumber)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 4, borderRadius: 6, cursor: "pointer", background: picked ? "#CFFAFE" : "#fff", border: `1px solid ${picked ? "#0891B2" : "#A5F3FC"}` }}
+                        >
+                          <span style={{ fontSize: 12, flexShrink: 0 }}>{picked ? "✓" : "○"}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#0E7490" }}>{m.name}</div>
+                            <div style={{ fontSize: 10, color: "#0891B2" }}>
+                              {m.registrationNumber}{m.status ? ` · ${m.status}` : ""}{m.address ? ` · ${m.address}` : ""}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

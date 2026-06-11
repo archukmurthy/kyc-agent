@@ -25,6 +25,7 @@ const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
+const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -233,4 +234,8 @@ module.exports = function (app) {
       adapt(kycLookupHandler)(req, res);
     });
   });
+
+  // Companies House name → registration-number resolver (UK). GET uses
+  // req.query directly.
+  app.get("/api/company-search", adapt(companySearchHandler));
 };
