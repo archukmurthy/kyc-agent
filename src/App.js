@@ -1624,8 +1624,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
-    // Return to the landing page (agent selection) on a full reset.
-    setAgentType(null);
+    // Landing page hidden for stakeholder review weekend — instead of
+    // returning to agent selection, reset to the agent type implied by the URL
+    // so "Start New Application" keeps the user in the right flow.
+    const preboardingParam =
+      new URLSearchParams(
+        window.location.search
+      ).get("preboarding");
+    setAgentType(
+      preboardingParam === "1"
+        ? "preboarding"
+        : "onboarding"
+    );
     setPreboardingUnlocked(false);
     setPreboardingPassword("");
     setPreboardingPasswordError(false);
@@ -5381,8 +5391,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
+
+  // Check URL for preboarding param
+  const preboardingParam =
+    new URLSearchParams(
+      window.location.search
+    ).get("preboarding");
+
+  // Hidden for stakeholder review weekend
+  // Restore by re-adding:
+  // if (agentType === null) {
+  //   return renderLandingPage();
+  // }
   if (agentType === null) {
-    return renderLandingPage();
+    if (preboardingParam === "1") {
+      // Pre-boarding accessed via
+      // hidden URL — set agent type
+      // and show password gate
+      // Do this once on mount
+      setAgentType("preboarding");
+      return null;
+    } else {
+      // Everyone else goes straight
+      // to onboarding — no landing page
+      setAgentType("onboarding");
+      return null;
+    }
   }
   if (agentType === "preboarding" && !preboardingUnlocked) {
     return renderPreboardingGate();
