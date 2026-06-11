@@ -1545,12 +1545,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
     ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
     : ["Company", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
 
-  // Loader messages — three modes: no docs (existing), doc-extraction phase, web phase.
-  const loaderMsgs = loaderPhase === 1
-    ? phase1Msgs
-    : loaderPhase === 2
-      ? LOADER_MSGS_WOLFSBERG_PHASE2
-      : LOADER_MSGS;
+  // Loader messages — four modes: Nium API lookup, no docs (existing),
+  // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
+  // copy so the spinner reflects what's actually happening (a direct API call,
+  // not AI web research). Memoised because the Nium branch builds a fresh array
+  // (interpolating companyName) and loaderMsgs is a dependency of the loader
+  // interval effect below — a new reference every render would re-arm it.
+  const loaderMsgs = useMemo(() => {
+    if (journeyType === "nium_api") {
+      return [
+        "Connecting to Nium KYB registry…",
+        `Looking up ${companyName || "the company"}…`,
+        "Retrieving company details…",
+        "Loading stakeholder data…",
+        "Almost done…",
+      ];
+    }
+    return loaderPhase === 1
+      ? phase1Msgs
+      : loaderPhase === 2
+        ? LOADER_MSGS_WOLFSBERG_PHASE2
+        : LOADER_MSGS;
+  }, [journeyType, companyName, loaderPhase, phase1Msgs]);
 
   useEffect(() => {
     if (!loading) return;
@@ -2584,9 +2600,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
         setLoading(false); setLoaderPhase(0); setResearchStatus("");
         setStep(S.confirm);
       } else {
-        // No match / agent error — return to the journey screen with the
-        // message and let the user fall back to AI research.
-        const msg = data.error || "No data found via Nium API. Try AI research instead.";
+        // No data — surface a clear error and return to the journey screen.
+        // The analyst chose the Nium API journey deliberately; do NOT silently
+        // switch to AI research. They decide whether to retry or pick another
+        // journey type.
+        const base = `Nium API returned no results for ${companyName}. Check the API connection or try a different journey type.`;
+        const msg = data.error ? `${base} (${data.error})` : base;
         trackEvent("nium_api_lookup_failed", { companyName, error: data.error || "no_results" });
         setLoading(false); setLoaderPhase(0); setResearchStatus("");
         setStep(S.input);
@@ -2596,10 +2615,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[startNiumApiLookup] Error:", err);
+      // Network / unexpected failure — same rule: clear error, no AI fallback.
+      trackEvent("nium_api_lookup_failed", { companyName, error: err.message });
       setLoading(false); setLoaderPhase(0); setResearchStatus("");
       setStep(stepsFor("ai_only").input);
       setJourneyOpen(true);
-      setError("Nium API lookup failed: " + err.message);
+      setError(`Nium API lookup failed for ${companyName}: ${err.message}. Check the API connection or try a different journey type.`);
     }
   };
 

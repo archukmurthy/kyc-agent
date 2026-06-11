@@ -30,12 +30,72 @@
  * Owner: separate from the main KYC agent — can be extended independently.
  */
 
-const {
-  fetchPublicDetails,
-  fetchExhaustiveDetails,
-  NiumAPIError,
-} = require("../lib/niumClient");
+const { randomUUID } = require("crypto");
+// Step 2 (exhaustiveDetailsSearch) is reused from the verified shared client.
+// Step 1 (publicDetails) is done in-agent below so we can search by company
+// NAME (the shared client only searches by registration number).
+const { fetchExhaustiveDetails, NiumAPIError } = require("../lib/niumClient");
 const storage = require("../lib/storage");
+
+// eKYB host + credentials — identical resolution to lib/niumClient.js so auth
+// stays consistent (env names, preprod default, eKYB-specific keys falling back
+// to the shared gateway creds). No hardcoded secrets.
+const EKYB_BASE_URL =
+  process.env.NIUM_EKYB_BASE_URL ||
+  process.env.NIUM_CAAS_BASE_URL ||
+  "https://api.preprod.nium.com";
+const EKYB_CLIENT_HASH_ID =
+  process.env.NIUM_EKYB_CLIENT_HASH_ID || process.env.NIUM_CLIENT_HASH_ID;
+const EKYB_API_KEY = process.env.NIUM_EKYB_API_KEY || process.env.NIUM_API_KEY;
+
+// Same header shape as lib/niumClient.js#getHeaders (x-api-key + per-call
+// X_REQUEST_ID for tracing).
+function niumHeaders() {
+  return {
+    accept: "application/json",
+    "content-type": "application/json",
+    "x-api-key": EKYB_API_KEY,
+    X_REQUEST_ID: randomUUID(),
+  };
+}
+
+/**
+ * Step 1 — publicDetails by company NAME (+ country). Registration number is
+ * NOT required; when present it only narrows the search. Country is sent as
+ * registeredCountry + region (the verified param names from lib/niumClient.js).
+ *
+ * @param {object} p
+ * @param {string} p.businessName
+ * @param {string} p.countryCode             ISO 3166-1 alpha-2
+ * @param {string} [p.registrationNumber]    optional narrowing filter
+ * @param {string} [p.type]                  entity type (defaults below)
+ * @returns {Promise<object>} raw publicDetails response
+ */
+async function fetchPublicDetailsByName({ businessName, countryCode, registrationNumber, type }) {
+  if (!EKYB_CLIENT_HASH_ID) throw new Error("Missing env: NIUM_CLIENT_HASH_ID");
+  if (!EKYB_API_KEY) throw new Error("Missing env: NIUM_API_KEY");
+
+  const url = new URL(
+    `${EKYB_BASE_URL}/api/v5/client/${EKYB_CLIENT_HASH_ID}/corporate/publicDetails`
+  );
+  url.searchParams.set("businessName", businessName);
+  if (countryCode) {
+    url.searchParams.set("registeredCountry", countryCode);
+    url.searchParams.set("region", countryCode);
+  }
+  if (type) url.searchParams.set("type", type);
+  // Optional — only added when provided; never required.
+  if (registrationNumber) {
+    url.searchParams.set("businessRegistrationNumber", registrationNumber);
+  }
+
+  const response = await fetch(url.toString(), { method: "GET", headers: niumHeaders() });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new NiumAPIError(response.status, body, "publicDetails");
+  }
+  return response.json();
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -294,23 +354,14 @@ async function kycLookupAgent(params) {
 
   try {
     // ── Step 1: publicDetails ──
-    // The eKYB registry search keys on registration number. Without one the
-    // registry cannot match — surface a clear, actionable error rather than a
-    // confusing empty result.
-    if (!registrationNumber) {
-      result.error =
-        "Nium registry lookup requires a business registration number. " +
-        "Provide registrationNumber or use AI research instead.";
-      result.durationMs = Date.now() - startTime;
-      return result;
-    }
-
-    console.log("[KYCLookupAgent] Step 1: publicDetails");
-    const publicData = await fetchPublicDetails({
+    // Search by company NAME + country. Registration number is optional — when
+    // provided it narrows the search; when absent the name search still runs.
+    console.log("[KYCLookupAgent] Step 1: publicDetails (by name)");
+    const publicData = await fetchPublicDetailsByName({
+      businessName: companyName,
+      countryCode,
+      registrationNumber: registrationNumber || undefined,
       type: type || DEFAULT_TYPE,
-      businessRegistrationNumber: registrationNumber,
-      registeredCountry: countryCode,
-      region: countryCode,
     });
     result.raw.publicDetails = publicData;
 
