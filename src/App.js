@@ -61,6 +61,16 @@ function calcCostUsd(inputTokens, outputTokens) {
   );
 }
 
+// ── Nium API Lookup (test journey) — temporary demo wiring ──
+// The Companies House name→registration-number resolver is parked while its API
+// key is sorted out (returns 401 — see project memory). The Nium eKYB preprod
+// sandbox returns dummy data for ANY registration number, so to keep the test
+// journey working end-to-end we hide the reg-number panel and send a fixed
+// placeholder. To restore the resolver: set SHOW_NIUM_REG_PANEL = true and have
+// startNiumApiLookup use niumRegNumber again.
+const SHOW_NIUM_REG_PANEL = false;
+const NIUM_DEMO_REG_NUMBER = "00445790";
+
 // Aggregate the per-phase costTracker into a single summary object for
 // persistence. Totals are recomputed from summed REAL token counts (not from
 // summing pre-rounded per-phase dollar figures) to avoid float drift.
@@ -2565,12 +2575,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     // The Nium eKYB registry searches by registration number (a name-only
-    // search returns HTTP 400), so require it for this journey. The input lives
-    // just below the journey cards in test mode.
-    if (!niumRegNumber.trim()) {
-      setError("Nium API Lookup needs a company registration number — enter it in the field below the journey cards, then click the Nium card again.");
-      return;
-    }
+    // search returns HTTP 400). While the Companies House resolver is parked,
+    // use a fixed preprod placeholder — the sandbox returns dummy data for any
+    // registration number, so the journey always returns a result.
+    const lookupRegNumber = SHOW_NIUM_REG_PANEL ? niumRegNumber.trim() : NIUM_DEMO_REG_NUMBER;
     setError("");
     setJourneyOpen(false);
     setManualOpened(false);
@@ -2591,7 +2599,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const response = await fetch("/api/kyc-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, countryCode, registrationNumber: niumRegNumber.trim() }),
+        body: JSON.stringify({ companyName, countryCode, registrationNumber: lookupRegNumber }),
       });
       const data = await response.json();
 
@@ -6019,11 +6027,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
               })()}
             </div>
 
-            {/* Registration number for the Nium API Lookup card (test mode only).
-                The eKYB registry searches by registration number, so this is
-                required for that journey. Other journeys ignore it. The "Find"
-                button resolves it from the company name via Companies House (UK). */}
-            {(demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
+            {/* Registration number + Companies House "Find from name" resolver.
+                Hidden for now (SHOW_NIUM_REG_PANEL=false) while the CH API key is
+                sorted out; the Nium journey uses a fixed preprod reg number
+                meanwhile. Code kept wired so flipping the flag restores it. */}
+            {SHOW_NIUM_REG_PANEL && (demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
               <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
                 <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
                   🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
