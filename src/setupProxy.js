@@ -26,6 +26,7 @@ const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
+const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -169,6 +170,22 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(docSearchHandler)(req, res);
+    });
+  });
+
+  // Self-source registry agent (Step 2 — registry retrieval). POST; parse the
+  // JSON body the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/self-source", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(selfSourceHandler)(req, res);
     });
   });
 

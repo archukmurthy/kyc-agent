@@ -70,6 +70,10 @@ function calcCostUsd(inputTokens, outputTokens) {
 // startNiumApiLookup use niumRegNumber again.
 const SHOW_NIUM_REG_PANEL = false;
 const NIUM_DEMO_REG_NUMBER = "00445790";
+// The preprod sandbox fixture for that reg number only exists under SG, so the
+// demo lookup must query SG regardless of the country the analyst selected —
+// otherwise a GB/US selection returns "Company not found".
+const NIUM_DEMO_COUNTRY = "SG";
 
 // Aggregate the per-phase costTracker into a single summary object for
 // persistence. Totals are recomputed from summed REAL token counts (not from
@@ -688,6 +692,28 @@ function mapToDocAgentOwnershipType(
   return "corporate";
 }
 
+// Convert the /api/self-source `selfSourcedFields` object map into the array of
+// found-rows mergeResearchResults() expects: hoist the field id → `field`,
+// normalise the hyphenated tier → sourceTier ("tier1"/"tier2"), and stamp the
+// matching verificationStatus so registry fields render as verified tier-1 data
+// on the Confirm page (exactly like AI-researched fields).
+function selfSourcedToRows(selfSourcedFields, schema) {
+  return Object.entries(selfSourcedFields || {}).map(([field, f]) => {
+    const sourceTier = f.tier === "tier-1" ? "tier1" : "tier2";
+    const label = (schema && (findFieldDef(schema, field) || {}).label) || f.label || field;
+    return { field, label, ...f, sourceTier, verificationStatus: getVerificationStatus(sourceTier) };
+  });
+}
+
+// Documents-step loading messages — cycled every 8s while the doc-search and
+// registry agents run, so the ~30-40s wait has live feedback.
+const DOC_LOADER_MSGS = [
+  "Searching for Wolfsberg Questionnaire and Annual Report...",
+  "Checking Companies House registry...",
+  "Extracting company details...",
+  "Almost done — compiling results...",
+];
+
 // Realistic demo doc-search results built from the actual Step 1 inputs.
 // Used in demo mode / local dev so Section A renders without spending API
 // tokens. Mirrors the response shape of /api/doc-search.
@@ -805,6 +831,44 @@ function buildDemoDocSearchResults(
     },
     searchedAt: now,
     isDemo: true,
+  };
+}
+
+// Dummy registry (self-source) results for demo/test mode. Mirrors the exact
+// shape of the /api/self-source response so the Documents-step registry section,
+// the Confirm prefill, and the Required-Documents "already satisfied" logic all
+// behave the same as a live run — without spending API credits.
+function buildDemoSelfSourceResults(companyName) {
+  const now = new Date().toISOString();
+  const CH = "https://find-and-update.company-information.service.gov.uk";
+  const chField = {
+    tier: "tier-1", source: "registry-self-source",
+    sourceLabel: "Companies House", sourceUrl: CH, confidence: "high",
+  };
+  return {
+    success: true,
+    selfSourceItems: 5,
+    summary: { retrieved: 4, unverified: 0, failed: 0, manualRequired: 1, total: 5 },
+    searchedAt: now,
+    cost: { totals: { inputTokens: 5783, outputTokens: 1447, totalTokens: 7230, totalCostUSD: 0.0391 }, calls: [] },
+    manualReviewItems: [
+      { requirement: "Regulatory status", manualReviewReason: "FCA register requires manual search", sourceUrl: "https://register.fca.org.uk" },
+    ],
+    selfSourcedFields: {
+      business_name:               { value: companyName, ...chField },
+      registration_number:         { value: "08804411", ...chField },
+      incorporation_date:          { value: "2013-07-01", ...chField },
+      registered_address_line1:    { value: "7 Westferry Circus", ...chField },
+      registered_address_city:     { value: "London", ...chField },
+      registered_address_postcode: { value: "E14 4HD", ...chField },
+    },
+    results: [
+      { requirement: "Legal existence", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high", registeredName: companyName, registrationNumber: "08804411", incorporationDate: "2013-07-01", registeredAddress: "7 Westferry Circus, London, E14 4HD" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
+      { requirement: "Constitution", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/filing-history`, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
+      { requirement: "Business activity", selfSourceTier: "Supplementary self-source", status: "retrieved", extracted: { matchConfidence: "medium" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
+      { requirement: "Ownership / control", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/persons-with-significant-control`, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
+      { requirement: "Regulatory status", selfSourceTier: "Preferred self-source", status: "manual_retrieval_required", manualReviewFlag: true, manualReviewReason: "FCA register requires manual search — automated retrieval inconclusive", sourceLabel: "FCA Register", searchUrl: "https://register.fca.org.uk", sourceUrl: "https://register.fca.org.uk", files: [], retrievedAt: now },
+    ],
   };
 }
 
@@ -1536,6 +1600,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [docSearchResults, setDocSearchResults] = useState(null);
   const [docSearchLoading, setDocSearchLoading] = useState(false);
   const [docSearchError, setDocSearchError] = useState(null);
+  const [selfSourceResults, setSelfSourceResults] = useState(null);
+  const [selfSourceLoading, setSelfSourceLoading] = useState(false);
+  const [selfSourceError, setSelfSourceError] = useState(null);
+  // Documents-step unified loader: cycles DOC_LOADER_MSGS every 8s while either
+  // agent (doc search OR registry self-source) is running.
+  const [docLoaderIdx, setDocLoaderIdx] = useState(0);
+  // Test/demo only: true once the user clicks "Run real agent" on the Documents
+  // step, which hides the button and swaps dummy results for real ones.
+  const [hasRunRealAgent, setHasRunRealAgent] = useState(false);
+  // Test/demo only: a swallowed registry-agent API error (e.g. billing/credits)
+  // captured from the self-source response, so it isn't hidden as "manual".
+  const [selfSourceDiag, setSelfSourceDiag] = useState(null);
 
   // Tracks real token counts and costs from every API call in this journey.
   // Null for a phase means that phase did not run yet. Captured from the
@@ -1657,7 +1733,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setLoaderPhase(0);
     setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
-    setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setAcceptedDocTypes(new Set());
+    setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setHasRunRealAgent(false); setSelfSourceDiag(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
@@ -1914,7 +1990,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
         val = TEST_DATA[original] || "Corrected value";
       }
       if (val === undefined) {
-        val = g.inputType === "select" && g.options && g.options.length > 0 ? g.options[0] : "Sample value";
+        if (g.inputType === "select" && Array.isArray(g.options) && g.options.length > 0) {
+          // Options may be plain strings (hardcoded fields) or { value, label }
+          // objects (config-saved fields). The <select> option value is the
+          // extracted string, so set that — not the whole object — or it won't
+          // match and the dropdown stays on "Select...".
+          const first = g.options[0];
+          val = (first && typeof first === "object") ? (first.value ?? first.label) : first;
+        } else {
+          val = "Sample value";
+        }
       }
       gapRef.current[g.field] = val;
     });
@@ -1929,6 +2014,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const demoIdNum = "GB1234567";
     const demoDob = "1980-05-15";
     const demoNationality = countryCode === "GB" ? "British" : countryCode === "SG" ? "Singaporean" : "British";
+    // Corporate-stakeholder KYB demo values. business_type's option value is a
+    // string here, but extract defensively in case the source becomes {value,label}.
+    const demoBusinessType = (() => {
+      const first = Array.isArray(BUSINESS_TYPE_OPTIONS) ? BUSINESS_TYPE_OPTIONS[0] : null;
+      return (first && typeof first === "object") ? (first.value ?? first.label) : (first || "Private Limited Company");
+    })();
+    const demoBrn = "12345678";
     let touched = false;
     Object.keys(stakeholdersRef.current || {}).forEach((fieldId) => {
       const list = stakeholdersRef.current[fieldId] || [];
@@ -1937,13 +2029,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
         if (!out.full_name && out.customer_rejected && out.full_name_original) {
           out.full_name = out.full_name_original;
         }
-        if (!out.full_name && out.customer_added) out.full_name = "Demo Person";
-        if (!out.nationality) out.nationality = demoNationality;
-        if (!out.date_of_birth) out.date_of_birth = demoDob;
-        if (!out.residential_country) out.residential_country = demoCountry;
-        if (!out.id_type) out.id_type = demoIdType;
-        if (!out.id_number) out.id_number = demoIdNum;
-        if (out.is_pep === null || out.is_pep === undefined) out.is_pep = false;
+        if (!out.full_name && out.customer_added) out.full_name = out.is_company ? "Demo Company Ltd" : "Demo Person";
+        if (out.is_company) {
+          // Corporate stakeholder (UBO / parent company): KYB fields, no person EDD.
+          if (!out.business_type) out.business_type = demoBusinessType;
+          if (!out.business_registration_number) out.business_registration_number = demoBrn;
+          if (!out.registered_country) out.registered_country = demoCountry;
+        } else {
+          if (!out.nationality) out.nationality = demoNationality;
+          if (!out.date_of_birth) out.date_of_birth = demoDob;
+          if (!out.residential_country) out.residential_country = demoCountry;
+          if (!out.id_type) out.id_type = demoIdType;
+          if (!out.id_number) out.id_number = demoIdNum;
+          if (out.is_pep === null || out.is_pep === undefined) out.is_pep = false;
+        }
         return out;
       });
       stakeholdersRef.current[fieldId] = next;
@@ -2333,7 +2432,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
         setResearchStatus("");
       }
 
-      setResearch({ ...parsed, found: merged });
+      // Fold in registry self-sourced fields (retrieved on the Documents step)
+      // so tier-1 registry data survives this overwrite and reaches Confirm. The
+      // runRealSelfSource merge remains the backup for the case where self-source
+      // finishes AFTER this research pass.
+      const selfSourcedRows = selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema);
+      // Use this SAME list for research, metadata, and checks below — otherwise
+      // the appended registry rows get no checks entry and wrongly surface as
+      // "unchecked" corrections on Confirm / Fill Gaps.
+      const mergedFound = mergeResearchResults(merged, selfSourcedRows);
+      setResearch({ ...parsed, found: mergedFound });
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
@@ -2349,7 +2457,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       });
 
       // Build silent metadata trail (Part 5).
-      const meta = merged.map(item => ({
+      const meta = mergedFound.map(item => ({
         fieldId: item.field, value: item.value,
         source: item.source || "Unknown", sourceUrl: item.sourceUrl || null,
         sourceTier: item.sourceTier, verificationStatus: item.verificationStatus,
@@ -2363,7 +2471,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // anything wrong, including tier-2/tier-3 items (which carry an inline
       // warning on the Confirm page).
       const c = {};
-      merged.forEach((_, i) => { c[i] = true; });
+      mergedFound.forEach((_, i) => { c[i] = true; });
       setChecks(c);
       setRejectedStakeholders({});
       setStakeholderFieldChecks({});
@@ -2481,7 +2589,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
     // Same dropdown-value coercion the live research path uses, so dummy and
     // live results render identically on Confirm and Fill Gaps.
-    const found = enrichStakeholders(mapAIValuesToOptions(foundRaw, schema));
+    const found0 = enrichStakeholders(mapAIValuesToOptions(foundRaw, schema));
+    // Demo: fold in registry self-sourced fields so the registry → Confirm
+    // prefill is visible under ?test=1 too (mirrors the doResearch path).
+    const found = mergeResearchResults(found0, selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema));
 
     const tagged = {
       companyName,
@@ -2579,6 +2690,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // use a fixed preprod placeholder — the sandbox returns dummy data for any
     // registration number, so the journey always returns a result.
     const lookupRegNumber = SHOW_NIUM_REG_PANEL ? niumRegNumber.trim() : NIUM_DEMO_REG_NUMBER;
+    // Demo mode: force the country the fixture lives under (SG) so the lookup
+    // always resolves, even when the analyst picked GB/US on the previous screen.
+    const lookupCountryCode = SHOW_NIUM_REG_PANEL ? countryCode : NIUM_DEMO_COUNTRY;
     setError("");
     setJourneyOpen(false);
     setManualOpened(false);
@@ -2599,7 +2713,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const response = await fetch("/api/kyc-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, countryCode, registrationNumber: lookupRegNumber }),
+        body: JSON.stringify({ companyName, countryCode: lookupCountryCode, registrationNumber: lookupRegNumber }),
       });
       const data = await response.json();
 
@@ -2608,8 +2722,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // Same dropdown-value coercion + stakeholder enrichment the AI paths
         // use, so Nium results render identically on Confirm and Fill Gaps.
         const found = enrichStakeholders(mapAIValuesToOptions(data.fields, schema));
+        // Show the company name the registry actually returned (e.g. the demo
+        // fixture "STAR FINANCE PRIVATE LIMITED") rather than what was typed, so
+        // testers don't mistake the sample data for their searched company. Strip
+        // a trailing registration number the sandbox appends to the legal name.
+        const niumLegalName = (found.find(f => f.field === "legal_name") || {}).value;
+        const displayName = niumLegalName
+          ? String(niumLegalName).replace(/\s+\d{4,}$/, "").trim()
+          : companyName;
         const tagged = {
-          companyName,
+          companyName: displayName,
           jurisdiction: schema.region,
           countryOfRegistration: countryCode,
           found,
@@ -2715,6 +2837,79 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }));
   };
 
+  const runRealSelfSource = () => {
+    setSelfSourceResults(null);
+    setSelfSourceLoading(true);
+    setSelfSourceError(null);
+    setSelfSourceDiag(null);
+
+    fetch("/api/self-source", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyName,
+        incorporationCountry: countryObj ? countryObj.name : countryCode,
+        entityType,
+        ownershipType,
+        niumEntityType: (entityType || "").toLowerCase(),
+        companyRegistrationNumber: niumRegNumber || null,
+        tenantId,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setSelfSourceResults(data);
+
+          // ── PR-026: Merge registry-sourced fields into researchResults ────
+          // selfSourcedFields shape: { [fieldId]: { value, tier, source, ... } }
+          // mergeResearchResults() treats tier-1 registry sources as highest
+          // priority — they win over AI web search for the same field.
+          if (data.selfSourcedFields && Object.keys(data.selfSourcedFields).length > 0) {
+            const selfSourcedRows = selfSourcedToRows(data.selfSourcedFields, activeSchema);
+            // research is null until the Research step runs, so guard prev — at
+            // the Documents step we seed it; once research exists we merge.
+            setResearch(prev => prev
+              ? { ...prev, found: mergeResearchResults(prev.found || [], selfSourcedRows) }
+              : { found: selfSourcedRows });
+          }
+
+          // ── Cost tracking ─────────────────────────────────────────────────
+          if (data.cost?.totals) {
+            const t = data.cost.totals;
+            setCostTracker(prev => ({
+              ...prev,
+              selfSource: {
+                inputTokens: t.inputTokens,
+                outputTokens: t.outputTokens,
+                totalTokens: t.totalTokens,
+                costUsd: t.totalCostUSD,
+                apiCallCount: data.cost.calls?.length || 0,
+                itemsRetrieved: data.summary?.retrieved || 0,
+                fieldsMapped: Object.keys(data.selfSourcedFields || {}).length,
+                callDetail: data.cost.calls || [],
+              },
+            }));
+          }
+        } else {
+          setSelfSourceError(data.error || "Self-source failed");
+        }
+        // Test/demo diagnostic: the agent swallows AI extraction errors (e.g.
+        // billing/credits, rate limits) and falls back to "manual retrieval", so
+        // a genuine API failure looks like "document not found". Capture the first
+        // such error here; it is only ever rendered in test/demo mode.
+        const apiErr = (data.results || [])
+          .map(r => r && r.extracted && r.extracted.notes)
+          .find(n => n && /Extraction error|credit balance|invalid_request_error|rate_limit|authentication_error|overloaded/i.test(n));
+        setSelfSourceDiag(apiErr || null);
+        setSelfSourceLoading(false);
+      })
+      .catch(err => {
+        setSelfSourceError(err.message);
+        setSelfSourceLoading(false);
+      });
+  };
+
   const runRealDocSearch = () => {
     setDocSearchResults(null);
     setDocSearchLoading(true);
@@ -2759,15 +2954,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (docSearchResults !== null || docSearchLoading) return;
     if (!companyName.trim()) return;
     if (demoMode || SHOW_TEST_TOOLS) {
+      // Demo/test mode: show dummy doc-search AND dummy registry results
+      // immediately. The real agents are NOT auto-fired here — the "Run real
+      // agent" button (test mode only) lets the user trigger both on demand,
+      // which clears these dummies and replaces them with real results.
       const demo = buildDemoDocSearchResults(companyName, ownershipType, entityType);
       setDocSearchResults(demo);
       captureDocSearchCost(demo);
       setDocSearchLoading(false);
+      setSelfSourceResults(buildDemoSelfSourceResults(companyName));
     } else {
+      // Run both agents in parallel — doc search (Wolfsberg/Annual Report)
+      // and registry self-source (Companies House / ACRA / etc.)
       runRealDocSearch();
+      runRealSelfSource();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, isAiDocs]);
+
+  // Documents-step loader: cycle the progress message every 8s while either
+  // agent is running; reset to the first message once both finish.
+  useEffect(() => {
+    const loading = docSearchLoading || selfSourceLoading;
+    if (!loading) { setDocLoaderIdx(0); return; }
+    const id = setInterval(() => setDocLoaderIdx(i => (i + 1) % DOC_LOADER_MSGS.length), 8000);
+    return () => clearInterval(id);
+  }, [docSearchLoading, selfSourceLoading]);
 
   // Stale-result guard: clear doc search state whenever the customer is back
   // on Step 1 (Back navigation or Start Over), so a changed company name
@@ -2777,6 +2989,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDocSearchResults(null);
     setDocSearchLoading(false);
     setDocSearchError(null);
+    setSelfSourceResults(null);
+    setSelfSourceLoading(false);
+    setSelfSourceError(null);
+    setHasRunRealAgent(false);
+    setSelfSourceDiag(null);
     setAcceptedDocTypes(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -6003,6 +6220,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 return (
                   <div
                     onClick={() => {
+                      // The Nium KYB sandbox only holds one fixture (the STAR
+                      // FINANCE PRIVATE LIMITED / SG record), so the lookup ALWAYS
+                      // returns that sample data regardless of what was entered.
+                      // When the tester actually picked that fixture the result
+                      // matches their selection, so stay silent; for any other
+                      // selection, show a one-time informational notice that the
+                      // next page is sample (not real) data — then continue either
+                      // way (no need to go back/edit).
+                      const isFixtureSelection =
+                        companyName.trim().toLowerCase().includes("star finance") &&
+                        countryCode === "SG";
+                      if (!isFixtureSelection) {
+                        window.alert(
+                          "🔗 Nium API Lookup — Test Environment\n\n" +
+                          "This sandbox has limited data. The next screen will show " +
+                          "sample data for \"STAR FINANCE PRIVATE LIMITED\" — not live " +
+                          "data for the company you entered.\n\n" +
+                          "Click OK to continue with the demo."
+                        );
+                      }
                       setSelectedJourneyCard("nium_api");
                       setJourneyType("nium_api");
                       startNiumApiLookup();
@@ -6122,6 +6359,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
             .filter(d => d.status === "downloaded" || d.status === "url_found");
           const sectionAVisible = docSearchLoading || !!docSearchError ||
             (docSearchResults !== null && docSearchResults.documents.length > 0);
+          // Unified loading: hold ALL results until BOTH agents finish, then
+          // reveal together. Message cycles via the effect above.
+          const isLoading = docSearchLoading || selfSourceLoading;
+          const currentMessage = DOC_LOADER_MSGS[docLoaderIdx % DOC_LOADER_MSGS.length];
 
           // ── Section B: flag (but do not hide) documents already auto-sourced
           // in Section A. Only count docs the agent actually has (downloaded or
@@ -6159,8 +6400,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <div style={card}>
                 <style>{`@keyframes kspin { to { transform: rotate(360deg); } }`}</style>
 
-                {/* Testing-mode toggle — demo data vs real agent call */}
-                {(demoMode || SHOW_TEST_TOOLS) && (
+                {/* Testing-mode toggle — demo data vs real agent call. Hidden once
+                    the real agents have been triggered (test/demo only). */}
+                {(demoMode || SHOW_TEST_TOOLS) && !hasRunRealAgent && (
                   <div style={{
                     display: "flex",
                     alignItems: "center",
@@ -6196,7 +6438,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       Use demo data
                     </button>
                     <button
-                      onClick={runRealDocSearch}
+                      onClick={() => {
+                        // Test/demo only: trigger BOTH real agents in parallel and
+                        // hide this toggle. The unified loading panel (isLoading)
+                        // shows while they run; real results replace the dummy ones.
+                        setHasRunRealAgent(true);
+                        runRealDocSearch();
+                        runRealSelfSource();
+                      }}
                       style={{
                         fontSize: 11,
                         padding: "3px 10px",
@@ -6214,39 +6463,52 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   </div>
                 )}
 
-                {/* Section A loading state */}
-                {docSearchLoading && (
+                {/* Unified loading panel — held until BOTH agents finish, then
+                    all results + uploads reveal together below. */}
+                {isLoading && (
+                  <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <div style={{ fontSize: 24, marginBottom: 16 }}>⏳</div>
+                    <p style={{ fontWeight: 500 }}>{currentMessage}</p>
+                    <p style={{ fontSize: 13, color: "#666", marginTop: 8 }}>
+                      This takes about 30–40 seconds
+                    </p>
+                  </div>
+                )}
+
+                {/* Everything below is held back until both agents complete. */}
+                {!isLoading && (<>
+
+                {/* Empty state — both agents done, nothing found anywhere. */}
+                {foundDocs.length === 0 && !(selfSourceResults?.results?.length > 0) && (
                   <div style={{
-                    padding: "20px 16px",
-                    background: C.infoBg,
-                    border: `1px solid ${C.infoBorder}`,
-                    borderRadius: 10,
-                    marginBottom: 20,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
+                    padding: "16px", background: C.warningBg,
+                    border: `1px solid ${C.warningBorder}`, borderRadius: 10,
+                    marginBottom: 20, fontSize: 13, color: C.warning,
                   }}>
-                    <div style={{
-                      width: 18, height: 18,
-                      border: `2px solid ${C.info}`,
-                      borderTopColor: "transparent",
-                      borderRadius: "50%",
-                      animation: "kspin 0.8s linear infinite",
-                      flexShrink: 0,
-                    }}/>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.info }}>
-                        Searching for compliance documents...
-                      </div>
-                      <div style={{ fontSize: 12, color: C.info, opacity: 0.8, marginTop: 2 }}>
-                        Looking for Wolfsberg questionnaire and annual reports for {companyName}
-                      </div>
+                    No documents could be retrieved automatically. Please upload the required documents below.
+                  </div>
+                )}
+
+                {/* Test/demo-only diagnostic — surfaces a swallowed registry-agent
+                    API error (e.g. billing/credits) so it isn't hidden as "manual
+                    retrieval". NEVER shown in production (gated on test/demo). */}
+                {(demoMode || SHOW_TEST_TOOLS) && selfSourceDiag && (
+                  <div style={{
+                    padding: "12px 16px", background: "#fff1f0", border: "1px solid #ffa39e",
+                    borderRadius: 10, marginBottom: 20, fontSize: 12, color: "#a8071a",
+                  }}>
+                    <strong>🧪 Test diagnostic — registry agent AI call failed:</strong>
+                    <div style={{ marginTop: 4, fontFamily: "monospace", wordBreak: "break-word", lineHeight: 1.4 }}>
+                      {selfSourceDiag}
+                    </div>
+                    <div style={{ marginTop: 6, color: "#a8071a99" }}>
+                      Items below fell back to manual retrieval because the AI call didn't run — not because the documents are missing.
                     </div>
                   </div>
                 )}
 
                 {/* Section A error — subtle, never blocks progress */}
-                {!docSearchLoading && docSearchError && (
+                {docSearchError && (
                   <div style={{
                     padding: "12px 16px",
                     background: C.warningBg,
@@ -6257,6 +6519,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     color: C.warning,
                   }}>
                     ⚠ Could not automatically source documents for {companyName}. Please upload documents below.
+                  </div>
+                )}
+
+                {/* Registry self-source error — subtle, never blocks progress */}
+                {selfSourceError && (
+                  <div style={{
+                    padding: "12px 16px",
+                    background: C.warningBg,
+                    border: `1px solid ${C.warningBorder}`,
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    fontSize: 13,
+                    color: C.warning,
+                  }}>
+                    ⚠ Could not retrieve registry documents: {selfSourceError}
                   </div>
                 )}
 
@@ -6573,6 +6850,79 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   </div>
                 )}
 
+                {/* Company registry documents — retrieved by the self-source agent
+                    (Companies House / ACRA / etc.), shown alongside Section A docs. */}
+                {selfSourceResults?.results?.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{
+                      fontSize: 11, fontWeight: 700, color: C.textMuted,
+                      textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12,
+                    }}>
+                      🏛️ Company registry documents
+                    </div>
+                    <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+                      Retrieved directly from official registries for <strong>{companyName}</strong>
+                      {selfSourceResults.summary
+                        ? ` — ${selfSourceResults.summary.retrieved} of ${selfSourceResults.summary.total} sourced automatically.`
+                        : "."}
+                    </p>
+                    {selfSourceResults.results.map((item, i) => {
+                      const url = item.searchUrl || item.sourceUrl;
+                      let host = "";
+                      try { host = url ? new URL(url).hostname.replace(/^www\./, "") : ""; } catch (_) { host = url || ""; }
+                      const verified = item.status === "retrieved";
+                      const captcha = !!item.captchaBlocked;
+                      const manual = item.manualReviewFlag || item.status === "manual_retrieval_required";
+                      const failed = item.status === "fetch_failed";
+                      const badge = verified
+                        ? { t: "✓ Retrieved", bg: C.successBg, fg: C.success }
+                        : captcha
+                          ? { t: "🔒 Behind captcha", bg: C.warningBg, fg: C.warning }
+                          : failed
+                            ? { t: "✗ Not found", bg: C.surfaceAlt, fg: C.textMuted }
+                            : { t: manual ? "⚠ Manual retrieval" : "⚠ Unverified", bg: C.warningBg, fg: C.warning };
+                      return (
+                        <div key={i} style={{
+                          display: "flex", alignItems: "flex-start", gap: 12,
+                          padding: "14px 16px", background: verified ? C.successBg : "#fff",
+                          border: `1.5px solid ${verified ? C.successBorder : C.border}`,
+                          borderRadius: 10, marginBottom: 8,
+                        }}>
+                          <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>🏛️</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                              {item.localEquivalent || item.requirement}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>
+                              {item.requirement}{host ? ` · ${host}` : ""}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{
+                                fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                background: badge.bg, color: badge.fg,
+                              }}>{badge.t}</span>
+                            </div>
+                            {url && (
+                              <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                                display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
+                                color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
+                              }}>
+                                <span style={{ fontSize: 14 }}>🔗</span>
+                                {(manual || captcha) ? "Open registry →" : "View on registry →"}
+                              </a>
+                            )}
+                            {(item.status === "retrieved" || item.status === "retrieved_unverified") && (
+                              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                                📸 Snapshot captured as evidence
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Section divider between A (found) and B (uploads) */}
                 {sectionAVisible && (
                   <div style={{
@@ -6672,6 +7022,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     ? `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} ready to upload`
                     : "No documents selected — AI will use web search only"}
                 </div>
+                </>)}
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -7074,6 +7425,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     step1Data={drsStep1Data}
                     researchData={research}
                     docSearchResults={docSearchResults}
+                    selfSourceResults={selfSourceResults}
                     onComplete={(data) => {
                       setDrsSubmitted(data.submittedRequirements || []);
                       setDrsFlags(data.flags || {});
