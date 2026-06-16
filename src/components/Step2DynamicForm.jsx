@@ -61,13 +61,35 @@ const AUTO_SOURCED_MATCHERS = {
 // Returns the doc-search result already covering this checklist item (matched by
 // title keyword), or null if it was not auto-sourced. Only docs the agent
 // actually has (downloaded / url_found) count — a failed search still asks.
-function getAutoSourcedResult(title, docSearchResults) {
-  if (!title || !docSearchResults?.documents?.length) return null;
-  for (const agentDoc of docSearchResults.documents) {
-    if (agentDoc.status !== 'downloaded' && agentDoc.status !== 'url_found') continue;
-    const matcher = AUTO_SOURCED_MATCHERS[agentDoc.type];
-    if (matcher && matcher.test(title)) return agentDoc;
+function getAutoSourcedResult(requirementName, docSearchResults, selfSourceResults) {
+  if (!requirementName) return null;
+
+  // Doc-search agent match (keyword on the checklist title).
+  if (docSearchResults?.documents?.length) {
+    for (const agentDoc of docSearchResults.documents) {
+      if (agentDoc.status !== 'downloaded' && agentDoc.status !== 'url_found') continue;
+      const matcher = AUTO_SOURCED_MATCHERS[agentDoc.type];
+      if (matcher && matcher.test(requirementName)) return agentDoc;
+    }
   }
+
+  // Registry self-source match (selfSourceAgent). Registry items key off the
+  // exact `requirement` name, not a doc type / regex.
+  if (selfSourceResults?.results) {
+    const registryMatch = selfSourceResults.results.find(r =>
+      r.requirement === requirementName &&
+      (r.status === "retrieved" || r.status === "retrieved_unverified")
+    );
+    if (registryMatch) {
+      return {
+        status: "downloaded",
+        sourceLabel: registryMatch.sourceLabel || "Registry",
+        sourceUrl:   registryMatch.searchUrl || registryMatch.sourceUrl,
+        type:        "registry_self_source",
+      };
+    }
+  }
+
   return null;
 }
 
@@ -241,7 +263,7 @@ function LoadingState() {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function Step2DynamicForm({ step1Data, onComplete, docSearchResults }) {
+export default function Step2DynamicForm({ step1Data, onComplete, docSearchResults, selfSourceResults }) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
   const { checklist, flags, onboardingCountry, loading, error } =
@@ -296,7 +318,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
   const requiredTotal = requiredItems.length;
   const requiredUploaded   = requiredItems.filter(i => uploads[i.requirement]);
   const requiredAutoSourced = requiredItems.filter(
-    i => !uploads[i.requirement] && getAutoSourcedResult(i.requirement, docSearchResults)
+    i => !uploads[i.requirement] && getAutoSourcedResult(i.requirement, docSearchResults, selfSourceResults)
   );
   const autoSourcedCount = requiredAutoSourced.length;
   const requiredDone  = Math.min(requiredTotal, requiredUploaded.length + autoSourcedCount);
@@ -366,12 +388,41 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         </div>
       )}
 
+      {/* Company-registry documents retrieved by the self-source agent on the
+          Documents step — surfaced here too and marked auto-sourced. Only the
+          successfully retrieved items (not the manual/captcha ones). */}
+      {(selfSourceResults?.results || []).some(r => r.status === 'retrieved' || r.status === 'retrieved_unverified') && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Sourced from company registry</h3>
+          <p style={styles.sectionDesc}>
+            Retrieved automatically from official registries — no action needed.
+          </p>
+          {(selfSourceResults.results || [])
+            .filter(r => r.status === 'retrieved' || r.status === 'retrieved_unverified')
+            .map((r, i) => (
+              <div
+                key={`reg-${r.requirement}-${i}`}
+                style={{ ...styles.docCard, border: `1.5px solid ${C.successBorder}`, background: C.successBg }}
+              >
+                <div style={styles.docCardHeader}>
+                  <span style={styles.docTitle}>{r.localEquivalent || r.requirement}</span>
+                  <span style={styles.autoBadge}>Auto-sourced</span>
+                </div>
+                <AutoSourcedBanner
+                  result={{ sourceLabel: r.sourceLabel, source: r.sourceLabel, sourceUrl: r.searchUrl || r.sourceUrl }}
+                  showUploadHint={false}
+                />
+              </div>
+            ))}
+        </div>
+      )}
+
       {flags.showWolfsberg && (
         <WolfsbergSection
           uploaded={uploads['Wolfsberg CBDDQ']}
           onComplete={handleUpload}
           onRemove={handleRemove}
-          autoSourcedResult={getAutoSourcedResult('Wolfsberg CBDDQ', docSearchResults)}
+          autoSourcedResult={getAutoSourcedResult('Wolfsberg CBDDQ', docSearchResults, selfSourceResults)}
         />
       )}
 
@@ -379,7 +430,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Company documents</h3>
           {coreItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
           ))}
         </div>
       )}
@@ -392,7 +443,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
             {flags.showDirectorSection && 'Required for each relevant director. '}
           </p>
           {personItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
           ))}
         </div>
       )}
@@ -409,7 +460,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
             We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
           </p>
           {selfSourced.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults)} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
           ))}
         </div>
       )}
