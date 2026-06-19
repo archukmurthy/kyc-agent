@@ -3080,6 +3080,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setJourneyType("manual");
       window.open(manualFormUrl_, "_blank", "noopener,noreferrer");
       setManualOpened(true);
+    } else if (selectedJourneyCard === "E") {
+      // Max Prefill. TODO: implement the dedicated max-prefill pipeline that
+      // pulls from every source at once (documents + registries + web + Nium
+      // KYB). For now route through standard AI research so both the onboarding
+      // and pre-boarding demos flow end to end and land on Confirm / Dossier.
+      setJourneyType("max_prefill");
+      setJourneyOpen(false);
+      setManualOpened(false);
+      if (demoMode) { doDummyResearch("max_prefill"); return; }
+      doResearch("max_prefill");
     }
   };
 
@@ -6479,15 +6489,13 @@ Nium Onboarding Team`;
                   setError("");
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
-                  // Pre-boarding skips the journey-selection cards entirely —
-                  // it always runs full AI research (the doc-search agent runs
-                  // automatically in the background). Go straight to research.
-                  if (agentType === "preboarding") {
-                    setJourneyType("ai_only");
-                    if (demoMode) { doDummyResearch("ai_only"); return; }
-                    doResearch("ai_only");
-                    return;
-                  }
+                  // Both the onboarding AND pre-boarding flows now show the
+                  // journey-selection page ("How would you like to complete your
+                  // application?"). Pre-boarding previously skipped straight to
+                  // AI research; it now offers the same options so the analyst
+                  // can demo every journey. The pre-boarding auto-save effect
+                  // still folds the result into the dossier once research runs,
+                  // so any AI journey still lands on the Dossier view.
                   setJourneyOpen(true);
                 }} variant="primary">Continue →</Btn>
             </div>
@@ -6621,6 +6629,32 @@ Nium Onboarding Team`;
                     <span style={{ fontSize: 10, fontWeight: 700, color: "#0891B2", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 99, padding: "2px 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       Test Mode Only
                     </span>
+                  </div>
+                );
+              })()}
+
+              {/* Card E — Max Prefill. Runs every available source at once for
+                  the highest possible pre-fill. The dedicated pipeline is TBD
+                  (wired next); for now selecting it routes through standard AI
+                  research so both the onboarding and pre-boarding flows demo end
+                  to end. Always visible (prod + test versions of this page). */}
+              {(() => {
+                const sel = selectedJourneyCard === "E";
+                return (
+                  <div
+                    onClick={() => { setSelectedJourneyCard("E"); setError(""); }}
+                    style={{
+                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      background: sel ? "#F5F3FF" : "#fbfaff",
+                      border: `2px solid ${sel ? "#7C3AED" : "rgba(124,58,237,0.22)"}`,
+                      boxShadow: sel ? "0 6px 18px rgba(124,58,237,0.12)" : "none",
+                    }}
+                  >
+                    <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
+                    <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Nium's KYB data — to pre-fill as much of your application as possible.</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
                   </div>
                 );
               })()}
