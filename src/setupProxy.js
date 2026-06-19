@@ -27,6 +27,7 @@ const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossi
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
+const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -255,4 +256,20 @@ module.exports = function (app) {
   // Companies House name → registration-number resolver (UK). GET uses
   // req.query directly.
   app.get("/api/company-search", adapt(companySearchHandler));
+
+  // Customer onboarding invitation email + token persistence. POST; parse the
+  // JSON body the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/invite", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try {
+        req.body = raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        req.body = {};
+      }
+      adapt(inviteHandler)(req, res);
+    });
+  });
 };

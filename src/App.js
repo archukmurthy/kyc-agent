@@ -5888,22 +5888,40 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 12, marginTop: 32, flexWrap: "wrap" }}>
-          <button
-            onClick={() => {
-              setAgentType("onboarding");
-              setShowDossierView(false);
-              setStep(stepsFor(journeyType || "ai_only").confirm);
-              trackEvent("preboarding_to_onboarding", {
-                dossierId,
-                companyName: company.name,
-                includedFields: includedFields.length,
-                customQuestions: customQuestions.length,
-              });
-            }}
-            style={{ flex: 1, padding: "14px 0", background: C.niumBlue, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
-          >
-            Prepare Onboarding →
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+            <button
+              onClick={() => {
+                setAgentType("onboarding");
+                setShowDossierView(false);
+                setStep(stepsFor(journeyType || "ai_only").confirm);
+                trackEvent("preboarding_to_onboarding", {
+                  dossierId,
+                  companyName: company.name,
+                  includedFields: includedFields.length,
+                  customQuestions: customQuestions.length,
+                });
+              }}
+              style={{
+                padding: '10px 20px',
+                background: '#fff',
+                color: '#1a3a4a',
+                border: '2px dashed #1a3a4a',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                opacity: 0.85,
+              }}
+            >
+              🧪 Preview Customer Onboarding
+            </button>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              See exactly what your customer will see
+            </div>
+          </div>
           <button
             onClick={() => setShowInviteScreen(true)}
             style={{
@@ -5962,15 +5980,41 @@ export default function KYCAgent({ previewMode = false } = {}) {
     function generateLink() {
       const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
       const base = window.location.origin;
+      // "Preview Customer Onboarding" navigates via React state (sets agentType
+      // to "onboarding" + step), not a URL, so there is no path to point the
+      // invite at. We keep the token-based ?ref= link; resolving ?ref=<token>
+      // back to the onboarding step is handled server-side by /api/invite
+      // (PR-029, email send) — the persisted invite record carries the company
+      // and contact so the landing page can route to onboarding from the token.
       return `${base}/?ref=${token}`;
     }
 
-    function handleSendInvite() {
+    // Sends the invite for real via /api/invite (Resend). The server generates
+    // and persists the authoritative token/link; we fall back to a locally
+    // generated link only if the request fails, so the success screen always
+    // has a value to show.
+    async function handleSendInvite() {
       if (!inviteEmail || !inviteContactName) return;
-      const link = generateLink();
+      let link = generateLink();
+      try {
+        const resp = await fetch('/api/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: inviteEmail,
+            contactName: inviteContactName,
+            companyName: companyDisplayName,
+            origin: window.location.origin,
+          }),
+        });
+        const data = await resp.json();
+        if (data && data.link) link = data.link;
+        console.log('Invite dispatched:', { ...data, email: inviteEmail, contactName: inviteContactName });
+      } catch (err) {
+        console.warn('Invite send failed, using local link:', err);
+      }
       setInviteLink(link);
       setInviteSent(true);
-      console.log('Invite dispatched:', { inviteEmail, inviteContactName, link });
     }
 
     const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
