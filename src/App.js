@@ -1830,6 +1830,44 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentType, preboardingUnlocked, research?.found]);
 
+  // Customer invite landing. When the app is opened via an invite link
+  // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
+  // send-time (localStorage, keyed by token) and drop the customer straight
+  // onto the populated Confirm page — the exact view "Preview Customer
+  // Onboarding" shows. Without this, a fresh page load has no in-memory
+  // research and lands on a blank onboarding step. Runs once on mount; if no
+  // snapshot is found (e.g. a different browser/device) it quietly falls back
+  // to the normal onboarding entry. (Cross-device hydration from the
+  // server-persisted invite record is future work — PR-029.)
+  const inviteHydratedRef = useRef(false);
+  useEffect(() => {
+    if (inviteHydratedRef.current) return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) return;
+    inviteHydratedRef.current = true;
+    let snap = null;
+    try {
+      const raw = localStorage.getItem("nium_invite_" + ref);
+      if (raw) snap = JSON.parse(raw);
+    } catch (_) { /* ignore malformed/unavailable storage */ }
+    if (!snap || !snap.research) return;
+    const jt = snap.journeyType || "ai_only";
+    setCompanyName(snap.companyName || "");
+    setCountryCode(snap.countryCode || "");
+    setEntityType(snap.entityType || "");
+    setOwnershipType(snap.ownershipType || "");
+    setJourneyType(jt);
+    setActiveSchema(snap.activeSchema || null);
+    setResearch(snap.research);
+    setCoverage(snap.coverage || null);
+    setFieldMetadata(snap.fieldMetadata || []);
+    setChecks(snap.checks || {});
+    setAgentType("onboarding");
+    setStep(stepsFor(jt).confirm);
+    trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isStakeholderRejected = (fieldId, stakeholderId) => {
     const set = rejectedStakeholders[fieldId];
     return set ? set.has(stakeholderId) : false;
@@ -5980,12 +6018,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
     function generateLink() {
       const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
       const base = window.location.origin;
-      // "Preview Customer Onboarding" navigates via React state (sets agentType
-      // to "onboarding" + step), not a URL, so there is no path to point the
-      // invite at. We keep the token-based ?ref= link; resolving ?ref=<token>
-      // back to the onboarding step is handled server-side by /api/invite
-      // (PR-029, email send) — the persisted invite record carries the company
-      // and contact so the landing page can route to onboarding from the token.
+      // The `?ref=<token>` link lands the customer on the populated Confirm
+      // page — the same view "Preview Customer Onboarding" shows. handleSendInvite
+      // snapshots the dossier to localStorage under this token; the mount effect
+      // reads `?ref=` on load and rehydrates research + jumps to Confirm. (Same
+      // browser today; cross-device hydration from the server-persisted invite
+      // record is future work — PR-029.) This local token is only used if the
+      // /api/invite call fails; otherwise the server-issued token wins.
       return `${base}/?ref=${token}`;
     }
 
@@ -6013,6 +6052,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
       } catch (err) {
         console.warn('Invite send failed, using local link:', err);
       }
+
+      // Snapshot the dossier under the link's token so that opening the invite
+      // link (`?ref=<token>`) rehydrates the populated Confirm page — the same
+      // view "Preview Customer Onboarding" shows. Keyed by the FINAL token
+      // (server-issued if available, else the local one) so it matches the
+      // link that actually went out. See the mount effect that reads this.
+      const finalToken = (link.split('ref=')[1] || '').split('&')[0];
+      if (finalToken) {
+        try {
+          localStorage.setItem('nium_invite_' + finalToken, JSON.stringify({
+            research,
+            activeSchema,
+            coverage,
+            fieldMetadata,
+            checks,
+            companyName,
+            countryCode,
+            entityType,
+            ownershipType,
+            journeyType: journeyType || 'ai_only',
+          }));
+        } catch (e) {
+          console.warn('Could not snapshot dossier for invite link:', e && e.message);
+        }
+      }
+
       setInviteLink(link);
       setInviteSent(true);
     }
