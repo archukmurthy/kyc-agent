@@ -2752,10 +2752,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       agentType: agentType || "onboarding", startedAt: new Date().toISOString(),
     });
 
+    // Cap the lookup so a hung Nium API call can't leave the Research step
+    // spinning forever (niumClient's fetches have no timeout of their own).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120000);
     try {
       const response = await fetch("/api/kyc-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ companyName, countryCode: lookupCountryCode, registrationNumber: lookupRegNumber }),
       });
       const data = await response.json();
@@ -2837,11 +2842,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // eslint-disable-next-line no-console
       console.error("[startNiumApiLookup] Error:", err);
       // Network / unexpected failure — same rule: clear error, no AI fallback.
-      trackEvent("nium_api_lookup_failed", { companyName, error: err.message });
+      const reason = err.name === "AbortError"
+        ? "the request timed out after 120s"
+        : err.message;
+      trackEvent("nium_api_lookup_failed", { companyName, error: reason });
       setLoading(false); setLoaderPhase(0); setResearchStatus("");
       setStep(stepsFor("ai_only").input);
       setJourneyOpen(true);
-      setError(`Nium API lookup failed for ${companyName}: ${err.message}. Check the API connection or try a different journey type.`);
+      setError(`Nium API lookup failed for ${companyName}: ${reason}. Check the API connection or try a different journey type.`);
+    } finally {
+      clearTimeout(timer);
     }
   };
 

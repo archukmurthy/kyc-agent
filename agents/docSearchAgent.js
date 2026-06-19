@@ -22,7 +22,9 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
-const client = new Anthropic();
+// Bound every AI/web-search call: a 60s timeout with one retry stops a hung or
+// stalled Anthropic web-search turn from stalling document retrieval forever.
+const client = new Anthropic({ timeout: 60000, maxRetries: 1 });
 
 // ─── Pricing constants (Sonnet 4.6, per million tokens) ──────────────────────
 // claude-sonnet-4-20250514 was retired by Anthropic (API returns 404
@@ -178,36 +180,37 @@ function slugify(name) {
 
 // ─── Download helper ──────────────────────────────────────────────────────────
 
-function downloadFile(url, destPath) {
+function downloadFile(url, destPath, timeoutMs = 15000) {
   return new Promise((resolve) => {
     const file = fs.createWriteStream(destPath);
-    https
-      .get(url, (res) => {
-        if (res.statusCode === 200) {
-          res.pipe(file);
-          file.on("finish", () => {
-            file.close();
-            resolve({ success: true, path: destPath });
-          });
-        } else {
+    const cleanup = () => { try { file.close(); } catch (_) {} fs.unlink(destPath, () => {}); };
+    const request = https.get(url, { timeout: timeoutMs }, (res) => {
+      if (res.statusCode === 200) {
+        res.pipe(file);
+        file.on("finish", () => {
           file.close();
-          fs.unlink(destPath, () => {});
-          resolve({
-            success: false,
-            statusCode: res.statusCode,
-            reason: `HTTP ${res.statusCode}`,
-          });
-        }
-      })
-      .on("error", (err) => {
-        file.close();
-        fs.unlink(destPath, () => {});
+          resolve({ success: true, path: destPath });
+        });
+      } else {
+        cleanup();
         resolve({
           success: false,
-          statusCode: null,
-          reason: err.message,
+          statusCode: res.statusCode,
+          reason: `HTTP ${res.statusCode}`,
         });
-      });
+      }
+    });
+    request.on("error", (err) => {
+      cleanup();
+      resolve({ success: false, statusCode: null, reason: err.message });
+    });
+    // A server that accepts the connection but never responds would otherwise
+    // hang the download — and the whole doc-search request — indefinitely.
+    request.on("timeout", () => {
+      request.destroy();
+      cleanup();
+      resolve({ success: false, statusCode: null, reason: "timeout" });
+    });
   });
 }
 
