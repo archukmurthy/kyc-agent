@@ -2880,15 +2880,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }));
   };
 
+  // Safety timeout for the document/registry agents. The self-source agent
+  // retrieves registry items one-by-one (some behind captchas / screenshots)
+  // and can occasionally never return — locally there is no serverless
+  // max-duration to kill it, so without this the Documents step waits on
+  // `selfSourceLoading` forever. On timeout we abort the request, surface a
+  // note, and let the customer proceed (web research still covers the fields).
+  const AGENT_TIMEOUT_MS = 120000; // 2 minutes — matches the typical serverless cap.
+
   const runRealSelfSource = () => {
     setSelfSourceResults(null);
     setSelfSourceLoading(true);
     setSelfSourceError(null);
     setSelfSourceDiag(null);
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AGENT_TIMEOUT_MS);
+
     fetch("/api/self-source", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         companyName,
         incorporationCountry: countryObj ? countryObj.name : countryCode,
@@ -2948,9 +2960,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
         setSelfSourceLoading(false);
       })
       .catch(err => {
-        setSelfSourceError(err.message);
+        setSelfSourceError(
+          err.name === "AbortError"
+            ? "Registry self-source timed out — continuing without it. Web research and document upload still cover these fields."
+            : err.message
+        );
         setSelfSourceLoading(false);
-      });
+      })
+      .finally(() => clearTimeout(timer));
   };
 
   const runRealDocSearch = () => {
@@ -2964,9 +2981,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
       false // effectivelyListed not known yet — research hasn't run
     );
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AGENT_TIMEOUT_MS);
+
     fetch("/api/doc-search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         companyName,
         country: countryObj ? countryObj.name : countryCode,
@@ -2986,9 +3007,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
         setDocSearchLoading(false);
       })
       .catch(err => {
-        setDocSearchError(err.message);
+        setDocSearchError(
+          err.name === "AbortError"
+            ? "Document search timed out — you can upload documents manually below and continue."
+            : err.message
+        );
         setDocSearchLoading(false);
-      });
+      })
+      .finally(() => clearTimeout(timer));
   };
 
   // Kick off the doc search once when the Documents step is entered.
