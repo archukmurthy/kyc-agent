@@ -1809,13 +1809,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }, [agentType, preboardingUnlocked]);
 
   // Auto-save dossier when research completes in pre-boarding mode. The
-  // simplified 3-screen flow (Company → Research → Dossier) skips the
-  // Confirm / Fill Gaps steps, so the dossier is persisted automatically the
-  // moment research returns and the Dossier View renders without a click.
+  // simplified flow skips the Confirm / Fill Gaps steps, so the dossier is
+  // persisted automatically once research returns and the Dossier View renders
+  // without a click.
+  //
+  // IMPORTANT — only fire once the flow has reached the Confirm step. On the
+  // Documents journey (Card A) the self-source agent seeds research.found while
+  // the customer is still on the Documents step (to pick the Annual Report /
+  // Wolfsberg before running extraction). Without the step gate that partial
+  // seed would immediately auto-save and jump to the Dossier, skipping doc
+  // selection and the real extraction + AI research pass. doResearch /
+  // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
+  // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
     if (
       agentType === "preboarding" &&
       preboardingUnlocked &&
+      step === stepsFor(journeyType).confirm &&
       research?.found?.length > 0 &&
       !showDossierView &&
       !dossierSaving &&
@@ -1828,7 +1838,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, preboardingUnlocked, research?.found]);
+  }, [agentType, preboardingUnlocked, step, journeyType, research?.found]);
 
   // Customer invite landing. When the app is opened via an invite link
   // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
