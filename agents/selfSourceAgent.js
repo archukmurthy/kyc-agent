@@ -61,7 +61,9 @@ let playwright = null;
 try { playwright = require("playwright"); }
 catch { console.warn("[SelfSourceAgent] Playwright not installed — screenshots disabled."); }
 
-const client = new Anthropic();
+// Bound every AI extraction call: a 30s timeout with a single retry stops a
+// hung/slow Anthropic request from stalling a checklist item indefinitely.
+const client = new Anthropic({ timeout: 30000, maxRetries: 1 });
 const AGENT_VERSION = "1.2.0";
 
 // claude-sonnet-4-20250514 reached end-of-life (the API returns errors / empty
@@ -157,16 +159,21 @@ async function renderPage(url, screenshotPath, timeoutMs = 25000) {
 }
 
 // ─── PDF download ─────────────────────────────────────────────────────────────
-function downloadBinary(url, destPath) {
+function downloadBinary(url, destPath, timeoutMs = 15000) {
   return new Promise((resolve) => {
     const mod = url.startsWith("https") ? https : http;
     const file = fs.createWriteStream(destPath);
-    mod.get(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; NiumKYCAgent/1.2)" } }, (res) => {
+    const cleanup = () => { try { file.close(); } catch (_) {} fs.unlink(destPath, () => {}); };
+    const request = mod.get(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; NiumKYCAgent/1.2)" }, timeout: timeoutMs }, (res) => {
       if (res.statusCode === 200) {
         res.pipe(file);
         file.on("finish", () => { file.close(); resolve({ success: true, path: destPath }); });
-      } else { file.close(); fs.unlink(destPath, () => {}); resolve({ success: false, reason: `HTTP ${res.statusCode}` }); }
-    }).on("error", e => { file.close(); fs.unlink(destPath, () => {}); resolve({ success: false, reason: e.message }); });
+      } else { cleanup(); resolve({ success: false, reason: `HTTP ${res.statusCode}` }); }
+    });
+    request.on("error", e => { cleanup(); resolve({ success: false, reason: e.message }); });
+    // Without this a server that accepts the connection but never responds would
+    // leave the download (and the whole checklist item) hanging forever.
+    request.on("timeout", () => { request.destroy(); cleanup(); resolve({ success: false, reason: "timeout" }); });
   });
 }
 
@@ -362,6 +369,21 @@ async function retrieveChecklistItem(item, companyName, incorporationCountry, ou
   return { ...meta, metadataPath: metaPath, cost: costTracker.calls.at(-1) ?? null };
 }
 
+// ─── Per-item watchdog ────────────────────────────────────────────────────────
+// A single registry item can stall indefinitely (a socket that connects but
+// never responds, a Playwright launch that hangs, an AI call that never returns).
+// This races each item against a hard deadline so a stuck item is SKIPPED and
+// the agent finishes and returns, instead of leaving the whole request hanging.
+// 60s comfortably covers a normal render + AI extract (and most second passes);
+// anything beyond that is treated as stuck and flagged for manual retrieval.
+const PER_ITEM_TIMEOUT_MS = 60000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  const guard = new Promise((resolve) => { timer = setTimeout(() => resolve({ __timedOut: true }), ms); });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
 // ─── Main entry point ─────────────────────────────────────────────────────────
 async function selfSourceAgent(params) {
   const {
@@ -399,9 +421,37 @@ async function selfSourceAgent(params) {
   let knownRegNum = companyRegistrationNumber;
 
   for (const item of itemsToRetrieve) {
-    const result = await retrieveChecklistItem(
-      item, companyName, incorporationCountry, outputDir, costTracker, knownRegNum
-    );
+    let result;
+    try {
+      result = await withTimeout(
+        retrieveChecklistItem(item, companyName, incorporationCountry, outputDir, costTracker, knownRegNum),
+        PER_ITEM_TIMEOUT_MS
+      );
+    } catch (e) {
+      // Underlying retrieval threw — treat like a failure, keep going.
+      console.warn(`[SelfSourceAgent]   ✗ ${item.requirement} — error: ${e.message}`);
+      result = null;
+    }
+
+    // Watchdog fired (or threw): synthesise a "skip" result so the item is
+    // flagged for manual retrieval and the loop moves on instead of hanging.
+    if (!result || result.__timedOut) {
+      if (result && result.__timedOut) {
+        console.warn(`[SelfSourceAgent]   ⏱ ${item.requirement} — exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s, skipping`);
+      }
+      result = {
+        requirement: item.requirement, selfSourceTier: item.selfSource,
+        localEquivalent: item.localEquivalent, analystStep: item.analystStep,
+        sourceUrl: item.sourceUrl, companyName, incorporationCountry,
+        companyRegistrationNumber: knownRegNum || null,
+        retrievedAt: new Date().toISOString(), agentVersion: AGENT_VERSION,
+        status: "manual_retrieval_required", manualReviewFlag: true,
+        manualReviewReason: `Automated retrieval exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s and was skipped — manual retrieval required.`,
+        extracted: { companyFound: false, matchConfidence: "low", notes: "retrieval timed out" },
+        files: [], cost: null,
+      };
+    }
+
     // If this item discovered a registration number, carry it forward
     if (result.discoveredRegNum) knownRegNum = result.discoveredRegNum;
     results.push(result);
