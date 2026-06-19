@@ -1485,6 +1485,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
   const [showDossierView, setShowDossierView] = useState(false);
+  const [showInviteScreen, setShowInviteScreen] = useState(false);
+  const [inviteContactName, setInviteContactName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
   // Scroll to top on every step transition. React keeps the previous scroll
   // position by default — undesirable for a stepped wizard where the new
   // page's heading should be visible immediately. The smooth scroll here
@@ -5900,6 +5905,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
             Prepare Onboarding →
           </button>
           <button
+            onClick={() => setShowInviteScreen(true)}
+            style={{
+              padding: '10px 20px',
+              background: '#1a3a4a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            ✉ Invite Customer to Onboard
+          </button>
+          <button
             onClick={() => {
               // Start a genuinely fresh dossier. Clearing research is essential:
               // the auto-save effect watches research?.found, so leaving it
@@ -5933,6 +5956,231 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  function renderInviteScreen() {
+    const companyDisplayName = research?.companyName || companyName || 'the company';
+
+    function generateLink() {
+      const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
+      const base = window.location.origin;
+      return `${base}/?ref=${token}`;
+    }
+
+    function handleSendInvite() {
+      if (!inviteEmail || !inviteContactName) return;
+      const link = generateLink();
+      setInviteLink(link);
+      setInviteSent(true);
+      console.log('Invite dispatched:', { inviteEmail, inviteContactName, link });
+    }
+
+    const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
+
+Thank you for your interest in Nium. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
+
+Please complete your onboarding by clicking the link below:
+
+${inviteLink || '[Onboarding link will appear here]'}
+
+This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
+
+If you have any questions, please do not hesitate to reach out to your Nium contact.
+
+Best regards,
+Nium Onboarding Team`;
+
+    const stepLabels = ['Company Input', 'Research', 'Dossier Review', 'Invite Customer'];
+
+    if (inviteSent) {
+      return (
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32, fontSize: 13 }}>
+            {stepLabels.map((s, i) => (
+              <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: '50%', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600,
+                  background: '#1a3a4a', color: '#fff'
+                }}>✓</span>
+                <span style={{ color: i === 3 ? '#1a3a4a' : '#1a3a4a70', fontWeight: i === 3 ? 600 : 400 }}>{s}</span>
+                {i < 3 && <span style={{ color: '#ccc' }}>›</span>}
+              </span>
+            ))}
+          </div>
+
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '24px 28px', marginBottom: 24 }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#14532d', marginBottom: 6 }}>
+              Invite sent to {inviteContactName}
+            </div>
+            <div style={{ fontSize: 14, color: '#166534' }}>
+              An onboarding invitation has been dispatched to <strong>{inviteEmail}</strong>.
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px', marginBottom: 24 }}>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Onboarding link
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <code style={{
+                flex: 1, fontSize: 12, color: '#1a3a4a', wordBreak: 'break-all',
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px'
+              }}>
+                {inviteLink}
+              </code>
+              <button
+                onClick={() => navigator.clipboard.writeText(inviteLink)}
+                style={{
+                  padding: '8px 14px', background: '#1a3a4a', color: '#fff',
+                  border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap'
+                }}
+              >
+                Copy link
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              onClick={() => {
+                setInviteSent(false);
+                setInviteEmail('');
+                setInviteContactName('');
+                setInviteLink('');
+              }}
+              style={{
+                padding: '10px 20px', background: '#fff', color: '#1a3a4a',
+                border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
+              }}
+            >
+              Send another invite
+            </button>
+            <button
+              onClick={() => setShowInviteScreen(false)}
+              style={{
+                padding: '10px 20px', background: '#f1f5f9', color: '#1a3a4a',
+                border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
+              }}
+            >
+              ← Back to dossier
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 20px' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32, fontSize: 13 }}>
+          {stepLabels.map((s, i) => (
+            <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 22, height: 22, borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600,
+                background: i <= 3 ? '#1a3a4a' : '#e0e0e0',
+                color: i <= 3 ? '#fff' : '#999'
+              }}>{i < 3 ? '✓' : i + 1}</span>
+              <span style={{ color: i === 3 ? '#1a3a4a' : '#1a3a4a70', fontWeight: i === 3 ? 600 : 400 }}>{s}</span>
+              {i < 3 && <span style={{ color: '#ccc' }}>›</span>}
+            </span>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1a3a4a', margin: '0 0 8px' }}>
+            Invite customer to onboard
+          </h2>
+          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
+            The dossier for <strong>{companyDisplayName}</strong> is ready.
+            Send a personalised onboarding link to the customer contact.
+          </p>
+        </div>
+
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '24px 28px', marginBottom: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+              Contact name <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={inviteContactName}
+              onChange={e => setInviteContactName(e.target.value)}
+              placeholder="e.g. Sarah Chen"
+              style={{
+                width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
+                borderRadius: 8, fontSize: 14, color: '#1a3a4a', boxSizing: 'border-box', outline: 'none'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+              Customer email address <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              placeholder="e.g. sarah@company.com"
+              style={{
+                width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
+                borderRadius: 8, fontSize: 14, color: '#1a3a4a', boxSizing: 'border-box', outline: 'none'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+            Email preview
+          </div>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+              <strong>To:</strong> {inviteEmail || '[customer email]'}
+              &nbsp;·&nbsp;
+              <strong>Subject:</strong> Your Nium onboarding is ready — {companyDisplayName}
+            </div>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+              <pre style={{
+                fontSize: 13, color: '#374151', lineHeight: 1.7,
+                margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit'
+              }}>
+                {emailBody}
+              </pre>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowInviteScreen(false)}
+            style={{
+              padding: '10px 20px', background: '#fff', color: '#1a3a4a',
+              border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
+            }}
+          >
+            ← Back to dossier
+          </button>
+          <button
+            onClick={handleSendInvite}
+            disabled={!inviteEmail || !inviteContactName}
+            style={{
+              padding: '10px 24px',
+              background: (!inviteEmail || !inviteContactName) ? '#9ca3af' : '#1a3a4a',
+              color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
+              cursor: (!inviteEmail || !inviteContactName) ? 'not-allowed' : 'pointer'
+            }}
+          >
+            ✉ Send invite
+          </button>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>
+            Customer receives a unique onboarding link
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
 
@@ -5964,6 +6212,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }
   if (agentType === "preboarding" && !preboardingUnlocked) {
     return renderPreboardingGate();
+  }
+  // Invite screen is the 4th pre-boarding screen — takes priority over the
+  // dossier view when showInviteScreen is set.
+  if (agentType === "preboarding" && preboardingUnlocked && showInviteScreen) {
+    return renderInviteScreen();
   }
   // Dossier view is the final pre-boarding screen — takes priority over the
   // confirm/fill-gaps render below when showDossierView is set.
