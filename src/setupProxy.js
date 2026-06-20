@@ -91,25 +91,6 @@ module.exports = function (app) {
 
         const data = await r.json();
 
-        // DEBUG — mirror of api/research.js: log director/UBO fields locally so
-        // the three-rule fix can be verified under `npm start`. Remove before
-        // production (kept in sync with api/research.js).
-        try {
-          const responseText = typeof data === "string" ? data : JSON.stringify(data);
-          if (
-            responseText.includes("director") ||
-            responseText.includes("Prajit") ||
-            responseText.includes("Anupam")
-          ) {
-            console.log(
-              "=== DIRECTOR DEBUG ===",
-              JSON.stringify(typeof data === "string" ? JSON.parse(data) : data, null, 2).slice(0, 3000)
-            );
-          }
-        } catch (e) {
-          // Debug log failed — ignore.
-        }
-
         if (!r.ok) {
           return res.status(r.status).json({ error: "Claude API error", details: data });
         }
