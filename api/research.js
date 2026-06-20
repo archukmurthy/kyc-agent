@@ -53,6 +53,29 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+    // DEBUG — log director/UBO fields so we can verify the three-rule fix is
+    // working. Prints to local console + Vercel function logs whenever a
+    // research response mentions director data. Remove before production.
+    try {
+      const responseText = typeof data === "string" ? data : JSON.stringify(data);
+      if (
+        responseText.includes("director") ||
+        responseText.includes("Prajit") ||
+        responseText.includes("Anupam")
+      ) {
+        console.log(
+          "=== DIRECTOR DEBUG ===",
+          JSON.stringify(
+            typeof data === "string" ? JSON.parse(data) : data,
+            null,
+            2
+          ).slice(0, 3000) // First 3000 chars
+        );
+      }
+    } catch (e) {
+      // Debug log failed — ignore.
+    }
+
     if (!response.ok) {
       return res.status(response.status).json({
         error: "Claude API error",

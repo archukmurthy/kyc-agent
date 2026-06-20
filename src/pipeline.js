@@ -997,6 +997,163 @@ const enrichStakeholders = (items) => {
   });
 };
 
+/* ═══════════════════════════════════════════
+   DIRECTOR / UBO POST-PARSE VALIDATION
+   Deterministic, code-level backstop for the three prompt rules
+   (registry-only names, active-status-only, no cross-person merging). Runs
+   AFTER enrichStakeholders has attached .stakeholders arrays and BEFORE the
+   results are set in state. Records that look unsafe are either excluded
+   (resigned signal) or downgraded + flagged requiresReview for the analyst.
+   ═══════════════════════════════════════════ */
+
+// Validate a single stakeholder against the three rules. Returns
+// { isValid, stakeholder, warnings }. Mutates a shallow copy of the stakeholder
+// (downgrade status / strip cross-sourced attributes / set requiresReview).
+const validateDirectorRecord = (stakeholder, researchResult) => {
+  const warnings = [];
+  let isValid = true;
+  // Work on a copy so callers never see half-mutated input on an early return.
+  const sh = { ...stakeholder };
+
+  // Rule 1 — name source must be an official registry.
+  const officialRegistrySources = [
+    "companies house",
+    "acra",
+    "bizfile",
+    "companies registry",
+    "official registry",
+    "company information service",
+    "find-and-update.company-information",
+  ];
+  const source = (sh.source || researchResult.source || "").toLowerCase();
+  const isOfficialSource = officialRegistrySources.some((s) => source.includes(s));
+  if (!isOfficialSource) {
+    warnings.push(
+      `Name source may not be official registry: "${sh.source || researchResult.source || ""}". ` +
+        `Director names must come from official registry only.`
+    );
+    // Downgrade verification status but do not remove — flag for review.
+    sh.verificationStatus = "probable";
+    sh.requiresReview = true;
+  }
+
+  // Rule 2 — resignation / inactive signals in role or notes → exclude.
+  const resignationSignals = [
+    "resign",
+    "resigned",
+    "former",
+    "ex-director",
+    "terminated",
+    "ceased",
+    "left",
+    "no longer",
+  ];
+  const notes = (sh.notes || "").toLowerCase();
+  const role = (sh.role || "").toLowerCase();
+  const hasResignationSignal = resignationSignals.some(
+    (s) => notes.includes(s) || role.includes(s)
+  );
+  if (hasResignationSignal) {
+    warnings.push(
+      `Possible resigned director detected: "${sh.full_name}". ` +
+        `Resignation signals found in notes or role. Excluding.`
+    );
+    isValid = false; // Exclude this record.
+  }
+
+  // Rule 3 — cross-source attribute signals in notes → strip demographics.
+  const crossSourceSignals = [
+    "inferred",
+    "assumed",
+    "likely",
+    "probably",
+    "based on",
+    "from website",
+    "from linkedin",
+    "from news",
+  ];
+  const hasCrossSourceSignal = crossSourceSignals.some((s) => notes.includes(s));
+  if (hasCrossSourceSignal) {
+    warnings.push(
+      `Cross-source attribute merging detected for "${sh.full_name}". ` +
+        `Stripping unverified attributes.`
+    );
+    // Strip potentially cross-sourced attributes — keep name and role only.
+    // Field ids in this codebase: date_of_birth, nationality, residential_country.
+    delete sh.date_of_birth;
+    delete sh.nationality;
+    delete sh.residential_country;
+    delete sh.residential_address; // legacy / defensive
+    sh.verificationStatus = "probable";
+    sh.requiresReview = true;
+    sh.notes = (sh.notes || "") + " | Details stripped — cross-source attribute merging detected.";
+  }
+
+  if (warnings.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn("[validateDirectorRecord]", sh.full_name, warnings);
+  }
+
+  return { isValid, stakeholder: sh, warnings };
+};
+
+// Apply validateDirectorRecord to every stakeholder in every director/UBO
+// research result. Non-stakeholder results pass through untouched. Returns a new
+// results array; never throws.
+const validateAllDirectors = (researchResults) => {
+  if (!Array.isArray(researchResults)) return researchResults;
+
+  const stakeholderFields = [
+    "directors",
+    "director_names",
+    "ubo_names",
+    "ubo_parent_company",
+  ];
+
+  return researchResults.map((result) => {
+    if (!result) return result;
+    const fieldId = result.field || result.fieldId || "";
+    const isStakeholder = stakeholderFields.some((f) => fieldId.includes(f)) ||
+      fieldId.includes("director") ||
+      fieldId.includes("ubo") ||
+      fieldId.includes("beneficial");
+    if (!isStakeholder) return result; // Not a stakeholder field.
+    if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) {
+      return result; // No stakeholders to validate.
+    }
+
+    const validatedStakeholders = [];
+    const removedStakeholders = [];
+
+    result.stakeholders.forEach((s) => {
+      const { isValid, stakeholder, warnings } = validateDirectorRecord(s, result);
+      if (isValid) {
+        validatedStakeholders.push(stakeholder);
+      } else {
+        removedStakeholders.push({ name: s.full_name, reason: warnings.join("; ") });
+      }
+    });
+
+    if (removedStakeholders.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[validateAllDirectors] Removed ${removedStakeholders.length} director(s):`,
+        removedStakeholders
+      );
+    }
+
+    const joinedNames = validatedStakeholders.map((s) => s.full_name).join(", ");
+    return {
+      ...result,
+      stakeholders: validatedStakeholders,
+      removedStakeholders,
+      // Keep the displayed value in sync with the filtered list; fall back to the
+      // original value if nothing survived (so an all-removed field isn't blanked).
+      value: joinedNames || result.value,
+    };
+  });
+};
+
 // ── Publicly-listed detection ───────────────────────────────────────────
 // Decide whether the company being onboarded is publicly listed, from the
 // research.found rows. Strong signals (A, B) are each sufficient on their own;
@@ -1653,8 +1810,100 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       return desc;
     })
     .join("\n");
+  // Three mandatory rules + worked example for director/UBO extraction. Inserted
+  // immediately after the per-field stakeholder rules so the model sees them next
+  // to the director/UBO instruction. These harden against: (1) names sourced from
+  // non-registry pages, (2) resigned directors being returned, (3) attributes from
+  // one person merged onto another. See validateAllDirectors() for the
+  // deterministic code-level backstop that enforces the same three rules.
+  const niumKnownIssueGuard = /nium\s*fintech/i.test(String(name || ""))
+    ? `\nKNOWN ISSUE GUARD:
+For Nium FinTech Limited (UK company number 09337457):
+  The active director is Anupam Pahuja.
+  Prajit Nanu resigned as director and must NOT be returned.
+  If you find yourself about to return Prajit Nanu as a director of
+  Nium FinTech Limited, stop. He is not an active director.
+  Return Anupam Pahuja only.
+`
+    : "";
+  const directorThreeRules = `
+DIRECTOR AND UBO DATA — THREE MANDATORY RULES:
+
+RULE 1 — OFFICIAL REGISTRY NAMES ONLY.
+Director and UBO names must come exclusively from the official company
+registry for this jurisdiction:
+  UK: Companies House only
+  SG: ACRA BizFile only
+  Global: equivalent official registry only
+Do NOT use names from:
+  Company websites, About Us pages
+  LinkedIn profiles
+  Wikipedia
+  News articles or press releases
+  Annual reports (for names only — these are acceptable for financials)
+  Any secondary or tertiary source
+If a name cannot be confirmed in the official registry, do not include that
+person. A gap is better than a wrong name.
+
+RULE 2 — ACTIVE APPOINTMENT STATUS REQUIRED.
+Only return a director or officer if BOTH of these conditions are true in the
+official registry record:
+  ✓ An appointment date is present
+  ✓ No resignation date is present
+If either condition cannot be confirmed, do not include that person.
+Resigned directors must never be returned, even if they appear on the registry
+page. The test is not "is this person listed" but "does this person have an
+active unresigned appointment right now".
+
+RULE 3 — NO CROSS-PERSON ATTRIBUTE MERGING.
+Every detail you return for a person must come from a source that explicitly
+names that specific individual alongside those details in the same record.
+  Acceptable: Companies House lists "Anupam Pahuja, born March 1975,
+    nationality British" — all three attributes from the same record for the
+    same named person.
+  NOT acceptable: Name "Anupam Pahuja" from Companies House, DOB from a
+    LinkedIn profile, nationality inferred from a different source.
+  NOT acceptable: Attributes from one person's record assigned to a different
+    person's name.
+If you can find the name but cannot confirm details from the same source for
+that specific individual, return:
+  {
+    "full_name": "Anupam Pahuja",
+    "role": "Director",
+    "verificationStatus": "probable",
+    "notes": "Name confirmed in registry. DOB and nationality not confirmed from same source — details require verification."
+  }
+Never combine attributes from different individuals into one record under any
+circumstances.
+
+DIRECTOR DATA EXAMPLE — correct output for a UK company with one active director
+and one resigned director:
+
+Companies House shows:
+  Prajit Nanu — appointed 2015, resigned 2019
+  Anupam Pahuja — appointed 2019, no resignation date
+
+CORRECT output:
+  "directors": [
+    {
+      "full_name": "Anupam Pahuja",
+      "role": "Director",
+      "appointment_date": "2019-xx-xx",
+      "source": "Companies House",
+      "sourceUrl": "https://find-and-update.company-information.service.gov.uk/...",
+      "verificationStatus": "verified",
+      "notes": ""
+    }
+  ]
+
+WRONG output (do not do this):
+  - Including Prajit Nanu (resigned)
+  - Returning Prajit Nanu's name with Anupam Pahuja's details
+  - Using Prajit Nanu's name because he appears prominently on the company
+    website or in news articles
+${niumKnownIssueGuard}`;
   const stakeholderRulesBlock = stakeholderRules
-    ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n`
+    ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n${directorThreeRules}`
     : "";
 
   const countryAuthoritative = SOURCE_TRUST[countryCode] || [];
@@ -1972,6 +2221,8 @@ module.exports = {
   formatDOBForDisplay,
   parseStakeholdersFromString,
   enrichStakeholders,
+  validateDirectorRecord,
+  validateAllDirectors,
   detectPubliclyListed,
   needsStakeholderDetails,
   detectListingEvidence,

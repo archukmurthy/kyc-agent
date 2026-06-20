@@ -23,6 +23,7 @@ import {
   makeStakeholder,
   formatDOBForDisplay,
   enrichStakeholders,
+  validateAllDirectors,
   detectPubliclyListed,
   needsStakeholderDetails,
   detectListingEvidence,
@@ -943,9 +944,9 @@ const DUMMY_RESEARCH_VALUES = {
   // share_percentage} so the customer sees per-person cards instead of a
   // single text blob.
   directors: JSON.stringify([
-    { full_name: "John Smith", role: "CEO" },
-    { full_name: "Jane Doe", role: "CFO" },
-    { full_name: "Mark Lee", role: "CTO" },
+    { full_name: "John Smith", role: "CEO", nationality: "British", date_of_birth: "1965-08", country_of_residence: "United Kingdom" },
+    { full_name: "Jane Doe", role: "CFO", nationality: "British", date_of_birth: "1972-03", country_of_residence: "United Kingdom" },
+    { full_name: "Mark Lee", role: "CTO", nationality: "Singaporean", date_of_birth: "1980-11", country_of_residence: "Singapore" },
   ]),
   companySecretary: "Jane Doe",
   isPEP: "No",
@@ -985,9 +986,9 @@ const DUMMY_RESEARCH_VALUES = {
   non_resident_customers: "Yes",
   products_offered: "Cross-Border Payment Services",
   director_names: JSON.stringify([
-    { full_name: "John Smith", role: "CEO" },
-    { full_name: "Jane Doe", role: "CFO" },
-    { full_name: "Mark Lee", role: "CTO" },
+    { full_name: "John Smith", role: "CEO", nationality: "British", date_of_birth: "1965-08", country_of_residence: "United Kingdom" },
+    { full_name: "Jane Doe", role: "CFO", nationality: "British", date_of_birth: "1972-03", country_of_residence: "United Kingdom" },
+    { full_name: "Mark Lee", role: "CTO", nationality: "Singaporean", date_of_birth: "1980-11", country_of_residence: "Singapore" },
   ]),
   ubo_parent_company: JSON.stringify([
     { full_name: "ACME Group Holdings Ltd", role: "Parent Company", share_percentage: 100 },
@@ -1254,7 +1255,20 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
 // (not a render-helper) so its collapse useState is hook-safe even when some
 // tiers are conditionally rendered. Stakeholder fields are skipped (they have
 // their own section). `getLabel` resolves a field id → human label.
-function DossierSection({ title, subtitle, items, bg, borderColor, color, startCollapsed = false, getLabel }) {
+// Format an ISO fetch timestamp ("grabbed at" line) for the dossier. Returns ""
+// for missing/unparseable values so callers can render conditionally.
+function formatFetchedAt(ts) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch (_) {
+    return "";
+  }
+}
+
+function DossierSection({ title, subtitle, items, bg, borderColor, color, startCollapsed = false, getLabel, fallbackTs }) {
   const [collapsed, setCollapsed] = useState(startCollapsed);
   if (!items || items.length === 0) return null;
   const rows = items.filter((it) => !isStakeholderField(it.field || it.fieldId));
@@ -1284,8 +1298,15 @@ function DossierSection({ title, subtitle, items, bg, borderColor, color, startC
                     <div style={{ fontSize: 12, background: "#fafcfb", borderRadius: 6, padding: "6px 10px", whiteSpace: "pre-wrap", wordWrap: "break-word" }}>{displayValue}</div>
                   ) : displayValue}
                 </div>
-                {item.source && (
-                  <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color, opacity: 0.7, maxWidth: 120, textAlign: "right", lineHeight: 1.3 }}>{item.source}</div>
+                {(item.source || item.sourceUrl) && (
+                  <div style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color, opacity: 0.7, maxWidth: 140, textAlign: "right", lineHeight: 1.3 }}>
+                    {item.sourceUrl ? (
+                      <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color, textDecoration: "none", borderBottom: `1px dotted ${color}` }}>{item.source || "Source"}</a>
+                    ) : item.source}
+                    {formatFetchedAt(item.fetchedAt || fallbackTs) && (
+                      <div style={{ fontSize: 9, fontWeight: 500, opacity: 0.85, marginTop: 2 }} title="When this value was retrieved">🕒 {formatFetchedAt(item.fetchedAt || fallbackTs)}</div>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -2494,7 +2515,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // the appended registry rows get no checks entry and wrongly surface as
       // "unchecked" corrections on Confirm / Fill Gaps.
       const mergedFound = mergeResearchResults(merged, selfSourcedRows);
-      setResearch({ ...parsed, found: mergedFound });
+      // Deterministic director/UBO three-rule gate (registry-only names, active
+      // status only, no cross-person attribute merging). Runs after parsing /
+      // enrichment and before results reach state. See validateAllDirectors().
+      const validatedFound = validateAllDirectors(mergedFound);
+      setResearch({ ...parsed, found: validatedFound });
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
@@ -2560,6 +2585,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     const hasAnyDocs = DOC_TYPES.some(d => uploadedDocs[d.key]);
     const runDocPhase = journey === "ai_documents" && hasAnyDocs;
+
+    // Demo: document-based journeys (Upload+AI, Max Prefill) normally populate
+    // their doc-search + registry results on the Documents step. In demo mode
+    // that step is skipped, so seed the same dummy results here — otherwise the
+    // dossier's "Documents Sourced" section is empty. Reuse any results already
+    // present (e.g. tester walked through the Documents step) rather than
+    // clobbering them.
+    const wantsDocs = journey === "ai_documents" || journey === "max_prefill";
+    const effectiveOwnership = ownershipType || "public_listed";
+    const demoDocResults = wantsDocs
+      ? (docSearchResults || buildDemoDocSearchResults(companyName, effectiveOwnership, entityType))
+      : docSearchResults;
+    const demoSelfSource = wantsDocs
+      ? (selfSourceResults || buildDemoSelfSourceResults(companyName))
+      : selfSourceResults;
+    if (demoDocResults && demoDocResults !== docSearchResults) setDocSearchResults(demoDocResults);
+    if (demoSelfSource && demoSelfSource !== selfSourceResults) setSelfSourceResults(demoSelfSource);
 
     if (runDocPhase) {
       setPhase1Msgs(buildPhase1Msgs(uploadedDocs));
@@ -2645,7 +2687,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const found0 = enrichStakeholders(mapAIValuesToOptions(foundRaw, schema));
     // Demo: fold in registry self-sourced fields so the registry → Confirm
     // prefill is visible under ?test=1 too (mirrors the doResearch path).
-    const found = mergeResearchResults(found0, selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema));
+    const found = mergeResearchResults(found0, selfSourcedToRows(demoSelfSource?.selfSourcedFields, schema));
 
     const tagged = {
       companyName,
@@ -4057,6 +4099,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   ▾
                 </span>
               </div>
+
+              {/* Validation flag — director/UBO failed a three-rule check
+                  (non-official source or cross-source attribute merge). Always
+                  visible (independent of expand state) so the analyst sees it. */}
+              {s.requiresReview && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 12px",
+                  background: "#FEF3C7",
+                  border: "1px solid #FCD34D",
+                  borderRadius: 6,
+                  margin: "0 12px 10px",
+                  fontSize: 12,
+                  color: "#92400E",
+                  fontWeight: 500,
+                }}>
+                  <span style={{ flexShrink: 0 }}>⚠</span>
+                  <span>
+                    {s.notes?.includes("cross-source")
+                      ? "Details stripped — attributes from multiple sources detected. Verify details manually."
+                      : "Source not confirmed as official registry. Verify this director manually before proceeding."}
+                  </span>
+                </div>
+              )}
 
               {/* Expandable body */}
               {expanded && (
@@ -5841,17 +5909,45 @@ export default function KYCAgent({ previewMode = false } = {}) {
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>
                 {isUBO ? "Beneficial Owners" : "Directors / Officers"}
               </div>
-              {realStakeholders.map((s) => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <span>👤</span>
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.full_name}</span>
-                    {s.role && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{s.role}</span>}
-                    {s.share_percentage != null && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{s.share_percentage}%</span>}
+              {realStakeholders.map((s) => {
+                const positions = (s.positions || []).filter((p) => p && p.title);
+                // Detail chips mirroring the Fill Gaps stakeholder card: role,
+                // shareholding, nationality, DOB, positions, PEP status. Only
+                // render what the registry actually returned.
+                const details = s.is_company
+                  ? [
+                      s.role,
+                      s.share_percentage != null ? `${s.share_percentage}% shareholding` : null,
+                      s.business_registration_number ? `Reg: ${s.business_registration_number}` : null,
+                      s.registered_country ? `Registered in ${s.registered_country}` : null,
+                      ...positions.map((p) => p.start_date ? `${p.title} (since ${p.start_date})` : p.title),
+                    ].filter(Boolean)
+                  : [
+                      s.role,
+                      s.share_percentage != null ? `${s.share_percentage}% shareholding` : null,
+                      s.nationality ? `Nationality: ${s.nationality}` : null,
+                      formatDOBForDisplay(s.date_of_birth) || s.date_of_birth ? `DOB: ${formatDOBForDisplay(s.date_of_birth) || s.date_of_birth}` : null,
+                      s.residential_country ? `Residence: ${s.residential_country}` : null,
+                      s.is_pep === true ? "⚑ PEP" : s.is_pep === false ? "PEP: No" : null,
+                    ].filter(Boolean);
+                return (
+                  <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ marginTop: 1 }}>{s.is_company ? "🏢" : "👤"}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.full_name}</span>
+                      {details.length > 0 && (
+                        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.5 }}>
+                          {details.join(" · ")}
+                        </div>
+                      )}
+                      {s.is_pep === true && s.pep_details && (
+                        <div style={{ fontSize: 11, color: C.warning, marginTop: 2 }}>{s.pep_details}</div>
+                      )}
+                    </div>
+                    {s.source && <span style={{ fontSize: 11, color: C.success, fontWeight: 600, flexShrink: 0, whiteSpace: "nowrap" }}>✓ {s.source}</span>}
                   </div>
-                  {s.source && <span style={{ fontSize: 11, color: C.success, fontWeight: 600 }}>✓ {s.source}</span>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         }).filter(Boolean)}
@@ -5861,13 +5957,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   const renderDossierDocuments = () => {
     const docs = (docSearchResults?.documents || []).filter((d) => d.status === "downloaded" || d.status === "url_found");
-    if (docs.length === 0) return null;
+    // Registry documents retrieved by the self-source agent (Companies House /
+    // ACRA / etc.) — these were previously only shown on the Documents step.
+    const registryDocs = (selfSourceResults?.results || []).filter(
+      (r) => r.status === "retrieved" || r.status === "retrieved_unverified" || r.manualReviewFlag || r.status === "manual_retrieval_required"
+    );
+    if (docs.length === 0 && registryDocs.length === 0) return null;
     return (
       <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         <div style={{ padding: "12px 16px", background: C.surfaceAlt, fontSize: 14, fontWeight: 700, color: C.text }}>📄 Documents Sourced</div>
         <div style={{ padding: "12px 16px" }}>
           {docs.map((doc, i) => (
-            <div key={doc.type || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < docs.length - 1 ? `1px solid ${C.border}` : "none" }}>
+            <div key={doc.type || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: (i < docs.length - 1 || registryDocs.length > 0) ? `1px solid ${C.border}` : "none" }}>
               <span>{doc.type === "wolfsberg_questionnaire" ? "📋" : "📊"}</span>
               <div style={{ flex: 1 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{doc.label || doc.type}</span>
@@ -5878,6 +5979,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
               )}
             </div>
           ))}
+          {registryDocs.map((item, i) => {
+            const url = item.searchUrl || item.sourceUrl;
+            const retrieved = item.status === "retrieved" || item.status === "retrieved_unverified";
+            const ts = formatFetchedAt(item.retrievedAt);
+            const hasSnapshot = Array.isArray(item.files) && item.files.length > 0;
+            return (
+              <div key={`reg-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", borderBottom: i < registryDocs.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                <span style={{ marginTop: 1 }}>🏛️</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.localEquivalent || item.requirement}</span>
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                    {item.sourceLabel || item.requirement}
+                    {!retrieved && <span style={{ color: C.warning, fontWeight: 600 }}> · ⚠ manual retrieval required</span>}
+                    {ts && <span> · 🕒 {ts}</span>}
+                    {hasSnapshot && retrieved && <span> · 📸 snapshot captured</span>}
+                  </div>
+                </div>
+                {url && (
+                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View →</a>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -5972,9 +6096,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </div>
         )}
 
-        <DossierSection title="✅ Verified" subtitle={`${verifiedItems.length} fields from official sources`} items={verifiedItems} bg={C.successBg} borderColor={C.successBorder} color={C.success} getLabel={getFieldLabel} />
-        {probableItems.length > 0 && <DossierSection title="~ Probable" subtitle={`${probableItems.length} fields from company sources`} items={probableItems} bg={C.warningBg} borderColor={C.warningBorder} color={C.warning} getLabel={getFieldLabel} />}
-        {indicativeItems.length > 0 && <DossierSection title="⚠ Indicative" subtitle={`${indicativeItems.length} fields from unverified sources`} items={indicativeItems} bg="#FFF7ED" borderColor="#FED7AA" color="#C2410C" getLabel={getFieldLabel} />}
+        <DossierSection title="✅ Verified" subtitle={`${verifiedItems.length} fields from official sources`} items={verifiedItems} bg={C.successBg} borderColor={C.successBorder} color={C.success} getLabel={getFieldLabel} fallbackTs={researchTimestamp} />
+        {probableItems.length > 0 && <DossierSection title="~ Probable" subtitle={`${probableItems.length} fields from company sources`} items={probableItems} bg={C.warningBg} borderColor={C.warningBorder} color={C.warning} getLabel={getFieldLabel} fallbackTs={researchTimestamp} />}
+        {indicativeItems.length > 0 && <DossierSection title="⚠ Indicative" subtitle={`${indicativeItems.length} fields from unverified sources`} items={indicativeItems} bg="#FFF7ED" borderColor="#FED7AA" color="#C2410C" getLabel={getFieldLabel} fallbackTs={researchTimestamp} />}
 
         {renderCustomerRequestSection(allGapFields, customQuestions)}
         {stakeholderResults.length > 0 && renderDossierStakeholders(stakeholderResults)}
