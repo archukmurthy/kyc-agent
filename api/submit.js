@@ -15,6 +15,236 @@
 // api/benchmark.js, and api/doc-search.js. Vercel supports both forms.
 const { neon } = require("@neondatabase/serverless");
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Journey-model persistence (migration 003 tables). ADDITIVE — runs alongside
+// the legacy session-table writes and is fully non-fatal: any failure here is
+// caught and logged, and never changes the customer's submit response.
+//
+// Populates five NOW tables from the payload api/submit already receives:
+//   journeys · completion_choice · declaration · api_usage · field_provenance
+//
+// Event log + Vercel Blob document path are a LATER increment (not done here).
+//
+// KNOWN PAYLOAD GAP: the submit POST body carries `fieldValues` (final values)
+// but NOT `fieldMetadata`, so per-SCALAR-field agent_value / customer_action /
+// confidence / source are not transmitted today. Rich provenance (agent_value,
+// customer_action kept/unchecked/edited, source tier/url, retrieved_at) IS
+// available for STAKEHOLDERS (each carries full_name_original + source*), and is
+// written. Wiring fieldMetadata into the POST is a follow-on frontend change.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Accept only a syntactically valid IPv4/IPv6 literal for the inet column.
+function isInetLiteral(s) {
+  if (typeof s !== "string") return false;
+  const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const ipv6 = /^[0-9a-fA-F:]+:[0-9a-fA-F:]*$/;
+  return ipv4.test(s) || ipv6.test(s);
+}
+
+// journeyType (e.g. "ai_only", "ai_documents") → completion_choice.method enum.
+function mapMethod(journeyType) {
+  const j = String(journeyType || "").toLowerCase();
+  if (j.includes("doc")) return "documents_plus_ai";
+  if (j.includes("self") || j.includes("manual")) return "self_complete";
+  return "pure_ai";
+}
+
+// Best-effort default layer for SCALAR fields (the body doesn't carry per-field
+// provenance). self/manual journeys → customer layer; otherwise AI layer.
+function mapLayerFromJourney(journeyType) {
+  const j = String(journeyType || "").toLowerCase();
+  if (j.includes("self") || j.includes("manual")) return "L4_customer";
+  return "L3_ai";
+}
+
+// Only pass through a value the timestamptz column can parse; else null.
+function toTimestamp(v) {
+  if (!v) return null;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : v;
+}
+
+// Writes the five journey-model tables. Returns the journey_id, or null on
+// failure. Idempotent: the journey is keyed to the legacy session id (unique),
+// child tables upsert on journey_id or delete-then-insert per journey.
+async function persistJourneyModel(sql, d) {
+  // 1. Journey — one per legacy onboarding_sessions row (bridge via session_id)
+  const journeyRows = await sql`
+    INSERT INTO journeys (
+      tenant_id, session_id, entity_type, jurisdiction, segment, current_step, status, updated_at
+    )
+    VALUES (
+      ${d.tenantId},
+      ${d.sessionId},
+      ${d.entityType || "unknown"},
+      ${d.company?.code || "unknown"},
+      ${d.ownershipType || null},
+      'declaration',
+      'completed',
+      now()
+    )
+    ON CONFLICT (session_id) DO UPDATE SET
+      entity_type  = EXCLUDED.entity_type,
+      jurisdiction = EXCLUDED.jurisdiction,
+      segment      = EXCLUDED.segment,
+      current_step = EXCLUDED.current_step,
+      status       = EXCLUDED.status,
+      updated_at   = now()
+    RETURNING journey_id
+  `;
+  const journeyId = journeyRows[0].journey_id;
+
+  const cs = d.costSummary || null;
+  const chosenAt = toTimestamp(d.submittedAt) || new Date().toISOString();
+
+  // 2. Completion choice
+  await sql`
+    INSERT INTO completion_choice (journey_id, method, agent_mode, chosen_at)
+    VALUES (${journeyId}, ${mapMethod(d.journeyType)}, ${null}, ${chosenAt})
+    ON CONFLICT (journey_id) DO UPDATE SET
+      method = EXCLUDED.method, chosen_at = EXCLUDED.chosen_at
+  `;
+
+  // 3. Declaration — pulled out of the declaration JSON block
+  const dec = d.declaration || {};
+  const consentAt =
+    toTimestamp(dec.agreedAt) || toTimestamp(dec.certifiedAt) ||
+    toTimestamp(dec.timestamp) || chosenAt;
+  const consentGiven = !!(dec.agreedAt || dec.certifiedAt || dec.timestamp);
+  await sql`
+    INSERT INTO declaration (
+      journey_id, declaration_version, consent_given, consent_at,
+      ip_address, user_agent, geolocation, timezone, signed_at
+    )
+    VALUES (
+      ${journeyId},
+      ${dec.declarationVersion || "v1"},
+      ${consentGiven},
+      ${consentAt},
+      ${isInetLiteral(dec.ipAddress) ? dec.ipAddress : null},
+      ${dec.userAgent || null},
+      ${null},
+      ${dec.timezone || null},
+      ${toTimestamp(d.submittedAt) || consentAt}
+    )
+    ON CONFLICT (journey_id) DO UPDATE SET
+      declaration_version = EXCLUDED.declaration_version,
+      consent_given = EXCLUDED.consent_given,
+      consent_at    = EXCLUDED.consent_at,
+      ip_address    = EXCLUDED.ip_address,
+      user_agent    = EXCLUDED.user_agent,
+      timezone      = EXCLUDED.timezone,
+      signed_at     = EXCLUDED.signed_at
+  `;
+
+  // 4. api_usage — one row per cost phase. Cost is RECOMPUTED from the pricing
+  // table (by pricing_version), not taken from the payload's hardcoded figure.
+  await sql`DELETE FROM api_usage WHERE journey_id = ${journeyId}`;
+  if (cs && cs.breakdown) {
+    const model = cs.model || null;
+    let priceRow = null;
+    if (model) {
+      const pr = await sql`
+        SELECT pricing_version, input_per_mtok, output_per_mtok
+        FROM pricing WHERE model = ${model}
+        ORDER BY effective_from DESC LIMIT 1
+      `;
+      priceRow = pr[0] || null;
+    }
+    const phases = [
+      ["doc_search", "research", cs.breakdown.docSearch],
+      ["research_pass_1", "research", cs.breakdown.researchPass1],
+      ["research_pass_2", "research", cs.breakdown.researchPass2],
+      ["doc_extraction", "confirm", cs.breakdown.docExtraction],
+    ];
+    for (const [action, step, ph] of phases) {
+      if (!ph) continue;
+      const inTok = ph.inputTokens || 0;
+      const outTok = ph.outputTokens || 0;
+      let cost = null;
+      let pv = null;
+      if (priceRow) {
+        cost =
+          (inTok / 1e6) * Number(priceRow.input_per_mtok) +
+          (outTok / 1e6) * Number(priceRow.output_per_mtok);
+        pv = priceRow.pricing_version;
+      }
+      try {
+        await sql`
+          INSERT INTO api_usage (
+            journey_id, step, action, model, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, cost, pricing_version,
+            latency_ms, success
+          )
+          VALUES (
+            ${journeyId}, ${step}, ${action}, ${model || "unknown"},
+            ${inTok}, ${outTok}, ${null}, ${null}, ${cost}, ${pv}, ${null}, ${true}
+          )
+        `;
+      } catch (e) {
+        console.warn(`[api/submit] api_usage insert failed (${action}):`, e.message);
+      }
+    }
+  }
+
+  // 5. field_provenance — never overwrite agent_value. Baseline rows from scalar
+  // fields (layer heuristic; the body lacks per-field metadata) + rich rows from
+  // stakeholders (which DO carry agent_value via full_name_original + source*).
+  await sql`DELETE FROM field_provenance WHERE journey_id = ${journeyId}`;
+  const stake = d.stakeholders || {};
+  const scalarLayer = mapLayerFromJourney(d.journeyType);
+
+  for (const [k, v] of Object.entries(d.fieldValues || {})) {
+    if (v === null || v === undefined || v === "") continue;
+    if (stake[k]) continue; // handled as stakeholder rows below
+    const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+    try {
+      await sql`
+        INSERT INTO field_provenance (
+          journey_id, field_name, final_value, customer_value, layer, model_version
+        )
+        VALUES (
+          ${journeyId}, ${k}, ${val}, ${val}, ${scalarLayer},
+          ${scalarLayer === "L3_ai" ? cs?.model || null : null}
+        )
+      `;
+    } catch (e) {
+      console.warn(`[api/submit] field_provenance scalar insert failed (${k}):`, e.message);
+    }
+  }
+
+  for (const [field, list] of Object.entries(stake)) {
+    if (!Array.isArray(list)) continue;
+    for (const s of list) {
+      const finalVal = s.is_company ? s.businessName || "" : s.full_name || "";
+      const agentVal = s.full_name_original || (s.customer_added ? null : finalVal);
+      let action = "kept";
+      if (s.customer_rejected) action = "unchecked";
+      else if (s.customer_added) action = "edited";
+      else if (s.full_name_original && s.full_name_original !== finalVal) action = "edited";
+      const layer = s.customer_added ? "L4_customer" : "L3_ai";
+      try {
+        await sql`
+          INSERT INTO field_provenance (
+            journey_id, field_name, final_value, layer, source_tier, source_identity,
+            source_url, retrieved_at, model_version, agent_value, customer_action, customer_value
+          )
+          VALUES (
+            ${journeyId}, ${field + "." + (s.id || "unknown")}, ${finalVal}, ${layer},
+            ${s.sourceTier || null}, ${s.source || null}, ${s.sourceUrl || null},
+            ${toTimestamp(s.fetchedAt)}, ${layer === "L3_ai" ? cs?.model || null : null},
+            ${agentVal}, ${action}, ${finalVal}
+          )
+        `;
+      } catch (e) {
+        console.warn(`[api/submit] field_provenance stakeholder insert failed (${field}):`, e.message);
+      }
+    }
+  }
+
+  return journeyId;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -32,6 +262,7 @@ module.exports = async function handler(req, res) {
     costSummary,
     coverage,
     declaration,
+    submittedAt,
   } = req.body;
 
   if (!tenantId || !company?.name) {
@@ -227,10 +458,37 @@ module.exports = async function handler(req, res) {
         `cost: $${cs?.totals?.totalCostUsd?.toFixed(6) || "0.000000"}`
     );
 
+    // 5. ADDITIVE journey-model persistence (migration 003 tables). Fully
+    // non-fatal — a failure here must never change the customer's response.
+    let journeyId = null;
+    try {
+      journeyId = await persistJourneyModel(sql, {
+        tenantId,
+        company,
+        entityType,
+        ownershipType,
+        journeyType,
+        fieldValues,
+        stakeholders,
+        costSummary: cs,
+        coverage: cov,
+        declaration,
+        sessionId,
+        submittedAt,
+      });
+      console.log(`[api/submit] ✅ Journey-model persisted — journey ${journeyId}`);
+    } catch (journeyErr) {
+      console.error(
+        "[api/submit] ⚠ journey-model persistence failed (non-fatal):",
+        journeyErr.message
+      );
+    }
+
     return res.status(200).json({
       success: true,
       sessionId,
       clientId,
+      journeyId,
     });
   } catch (err) {
     console.error("[api/submit] ❌ DB error:", err);
@@ -242,4 +500,8 @@ module.exports = async function handler(req, res) {
       warning: "DB write failed: " + err.message,
     });
   }
-}
+};
+
+// Exported for testing (idempotency / unit checks). Not used by the request
+// path, which calls persistJourneyModel internally.
+module.exports.persistJourneyModel = persistJourneyModel;
