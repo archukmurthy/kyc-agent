@@ -22,6 +22,7 @@ import {
   isRegistryExemptionNotice,
   makeStakeholder,
   formatDOBForDisplay,
+  formatShareholding,
   enrichStakeholders,
   validateAllDirectors,
   detectPubliclyListed,
@@ -479,7 +480,7 @@ Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
 
 const ORG_CHART_EXTRACTION_PROMPT = `Extract the following from this ownership structure or org chart document:
 - ubo_names: names of ultimate beneficial owners
-- ubo_share_percentage: ownership percentages
+- ubo_share_percentage: ownership percentages — return the EXACT text as stated (e.g. "75% or more", "25% to 50%", "Significant influence or control"). Do not convert, round, average a range, or strip qualifiers like "or more"/"to".
 - group_structure: description of corporate structure
 - parent_company: immediate parent company name if shown
 
@@ -3774,6 +3775,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
               ⚠ From unverified source — please verify this is correct
             </div>
           )}
+          {item.sharePercentageWarning && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6,
+              padding: "6px 10px", background: "#FEF3C7", border: "1px solid #FCD34D",
+              borderRadius: 6, fontSize: 11, color: "#92400E", lineHeight: 1.4,
+            }}>
+              <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+              <div>
+                <div style={{ fontWeight: 600 }}>Ownership band — verify qualifier</div>
+                <div style={{ marginTop: 2 }}>
+                  {item.sharePercentageSuggested
+                    ? `Registry likely states "${item.sharePercentageSuggested}" — confirm exact wording.`
+                    : item.sharePercentageWarning}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         {/* Source badge cell — FIXED width so long source text can never
             squeeze the value column. Badge text wraps inside. */}
@@ -3897,7 +3915,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
   const stkFieldDisplay = (s, key) => {
     if (key === "date_of_birth") return formatDOBForDisplay(s.date_of_birth) || s.date_of_birth || "";
-    if (key === "share_percentage") return s.share_percentage != null ? `${s.share_percentage}%` : "";
+    if (key === "share_percentage") return formatShareholding(s.share_percentage);
     if (key === "is_pep") return s.is_pep === true ? "Yes" : s.is_pep === false ? "No" : "";
     if (key === "positions") {
       return (s.positions || [])
@@ -4068,7 +4086,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                         padding: "2px 8px", borderRadius: 99,
                         border: "1px solid rgba(74,158,142,0.3)",
                       }}>
-                        {s.share_percentage}%
+                        {formatShareholding(s.share_percentage)}
                       </span>
                     )}
                   </div>
@@ -4100,13 +4118,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </span>
               </div>
 
-              {/* Validation flag — director/UBO failed a three-rule check
-                  (non-official source or cross-source attribute merge). Always
-                  visible (independent of expand state) so the analyst sees it. */}
+              {/* Validation flag — director/UBO failed a check: stripped share
+                  band, non-official source, or cross-source attribute merge.
+                  Always visible (independent of expand state). The share-band
+                  case is prioritised and shown with its suggested registry band. */}
               {s.requiresReview && (
                 <div style={{
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: "flex-start",
                   gap: 8,
                   padding: "8px 12px",
                   background: "#FEF3C7",
@@ -4117,12 +4136,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   color: "#92400E",
                   fontWeight: 500,
                 }}>
-                  <span style={{ flexShrink: 0 }}>⚠</span>
-                  <span>
-                    {s.notes?.includes("cross-source")
-                      ? "Details stripped — attributes from multiple sources detected. Verify details manually."
-                      : "Source not confirmed as official registry. Verify this director manually before proceeding."}
-                  </span>
+                  <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+                  {s.sharePercentageWarning ? (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Ownership band — verify qualifier</div>
+                      <div style={{ marginTop: 2, fontWeight: 500 }}>
+                        {s.sharePercentageSuggested
+                          ? `Registry likely states "${s.sharePercentageSuggested}" — confirm exact wording.`
+                          : s.sharePercentageWarning}
+                      </div>
+                    </div>
+                  ) : (
+                    <span>
+                      {s.notes?.includes("cross-source")
+                        ? "Details stripped — attributes from multiple sources detected. Verify details manually."
+                        : "Source not confirmed as official registry. Verify this director manually before proceeding."}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -4442,7 +4472,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>
                   {stakeholder.role || ""}
                   {stakeholder.role && stakeholder.share_percentage != null ? " · " : ""}
-                  {stakeholder.share_percentage != null ? `${stakeholder.share_percentage}%` : ""}
+                  {formatShareholding(stakeholder.share_percentage)}
                 </div>
               )}
             </div>
@@ -4721,7 +4751,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#1a3a4a" }}>{s.full_name}</div>
                     <div style={{ fontSize: 12, color: "#1a3a4a80", marginTop: 2 }}>
-                      {[s.role, s.share_percentage != null ? `${s.share_percentage}% shareholding` : null]
+                      {[s.role, s.share_percentage != null ? `${formatShareholding(s.share_percentage)} shareholding` : null]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
@@ -5917,14 +5947,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 const details = s.is_company
                   ? [
                       s.role,
-                      s.share_percentage != null ? `${s.share_percentage}% shareholding` : null,
+                      s.share_percentage != null ? `${formatShareholding(s.share_percentage)} shareholding` : null,
                       s.business_registration_number ? `Reg: ${s.business_registration_number}` : null,
                       s.registered_country ? `Registered in ${s.registered_country}` : null,
                       ...positions.map((p) => p.start_date ? `${p.title} (since ${p.start_date})` : p.title),
                     ].filter(Boolean)
                   : [
                       s.role,
-                      s.share_percentage != null ? `${s.share_percentage}% shareholding` : null,
+                      s.share_percentage != null ? `${formatShareholding(s.share_percentage)} shareholding` : null,
                       s.nationality ? `Nationality: ${s.nationality}` : null,
                       formatDOBForDisplay(s.date_of_birth) || s.date_of_birth ? `DOB: ${formatDOBForDisplay(s.date_of_birth) || s.date_of_birth}` : null,
                       s.residential_country ? `Residence: ${s.residential_country}` : null,
@@ -5935,6 +5965,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <span style={{ marginTop: 1 }}>{s.is_company ? "🏢" : "👤"}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.full_name}</span>
+                      {s.sharePercentageWarning && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, color: "#92400E",
+                          background: "#FEF3C7", border: "1px solid #FCD34D",
+                          borderRadius: 4, padding: "1px 6px", marginLeft: 6,
+                        }}>
+                          ⚠ Verify band
+                        </span>
+                      )}
                       {details.length > 0 && (
                         <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.5 }}>
                           {details.join(" · ")}

@@ -840,6 +840,21 @@ const formatDOBForDisplay = (dobString) => {
   return year ? `${monthName} ${year}`.trim() : "";
 };
 
+// Format a stakeholder's shareholding for display. share_percentage may be a
+// plain number (45) OR exact registry text with a legally-significant qualifier
+// ("75% or more", "25% to 50%", "Significant influence or control"). A bare
+// number gets a "%" appended; anything that already carries a "%" or any
+// non-numeric qualifier is shown verbatim so the registry wording is preserved.
+const formatShareholding = (val) => {
+  if (val == null) return "";
+  const s = String(val).trim();
+  if (s === "") return "";
+  // Pure number (e.g. "45" or "37.5") → append the percent sign.
+  if (/^\d+(?:\.\d+)?$/.test(s)) return `${s}%`;
+  // Already a percentage or a qualified description → render exactly as given.
+  return s;
+};
+
 // Parse a legacy free-text stakeholder string ("John Smith (CEO), Jane Doe (CFO)")
 // into structured stakeholder records. Handles a JSON-encoded array as well, so
 // the same parser covers both "string from old KV" and "JSON string the model
@@ -1006,6 +1021,88 @@ const enrichStakeholders = (items) => {
    (resigned signal) or downgraded + flagged requiresReview for the analyst.
    ═══════════════════════════════════════════ */
 
+/**
+ * Validates a share percentage / ownership percentage value returned by the AI
+ * research agent.
+ *
+ * Official registries like Companies House use banded categories, not exact
+ * numbers:
+ *   "25% to 50%"
+ *   "50% to 75%"
+ *   "75% or more"
+ *   "Significant influence or control"
+ *
+ * The AI sometimes strips the qualifier and returns "75%" instead of
+ * "75% or more". This loses legally significant information.
+ *
+ * @param {string|number} value
+ * @returns {{ value: string|null, warning: string|null, isExactThreshold: boolean, suggestedValue?: string }}
+ */
+const validateSharePercentage = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return { value: null, warning: null, isExactThreshold: false };
+  }
+
+  const str = String(value).trim();
+
+  // Already contains a qualifier — registry language preserved correctly.
+  const qualifierPatterns = [
+    /or more/i,
+    /or above/i,
+    /or over/i,
+    /to \d/i, // "25% to 50%"
+    /\d+ to \d+/i, // "25 to 50"
+    /less than/i,
+    /under/i,
+    /above/i,
+    /significant influence/i,
+    /right to appoint/i,
+    /indirect/i,
+    /approximately/i,
+    /circa/i,
+    /approx/i,
+  ];
+
+  const hasQualifier = qualifierPatterns.some((p) => p.test(str));
+  if (hasQualifier) {
+    // Value already contains registry language — no warning needed.
+    return { value: str, warning: null, isExactThreshold: false };
+  }
+
+  // Extract numeric value for threshold check.
+  const numericMatch = str.match(/^(\d+(?:\.\d+)?)\s*%?$/);
+  const numericValue = numericMatch ? parseFloat(numericMatch[1]) : null;
+
+  // Known Companies House band thresholds. These exact values are suspicious
+  // when returned without a qualifier — they are the boundaries of ownership
+  // bands, not exact ownership figures.
+  const knownBandThresholds = [25, 50, 75];
+  const isExactThreshold =
+    numericValue !== null && knownBandThresholds.includes(numericValue);
+
+  if (isExactThreshold) {
+    // Map threshold to the most likely band that was stripped.
+    const bandMap = {
+      25: "25% to 50%",
+      50: "50% to 75%",
+      75: "75% or more",
+    };
+    return {
+      value: str,
+      warning:
+        `Value "${str}" matches a Companies House ownership band threshold. ` +
+        `The registry likely states "${bandMap[numericValue]}" — verify the ` +
+        `exact qualifier was not stripped from the source.`,
+      isExactThreshold: true,
+      suggestedValue: bandMap[numericValue],
+    };
+  }
+
+  // 100% is unambiguous — no warning needed. Any other numeric value is fine
+  // (not a known band threshold).
+  return { value: str, warning: null, isExactThreshold: false };
+};
+
 // Validate a single stakeholder against the three rules. Returns
 // { isValid, stakeholder, warnings }. Mutates a shallow copy of the stakeholder
 // (downgrade status / strip cross-sourced attributes / set requiresReview).
@@ -1113,6 +1210,29 @@ const validateAllDirectors = (researchResults) => {
   return researchResults.map((result) => {
     if (!result) return result;
     const fieldId = result.field || result.fieldId || "";
+
+    // Standalone share-percentage research field (scalar value, no stakeholders
+    // array) — e.g. ubo_share_percentage. Flag a stripped band qualifier without
+    // changing verificationStatus or removing the field.
+    const isShareField =
+      fieldId.includes("share_percentage") ||
+      fieldId.includes("ownership_pct") ||
+      fieldId.includes("ubo_share");
+    if (isShareField && !Array.isArray(result.stakeholders)) {
+      const shareValidation = validateSharePercentage(result.value);
+      if (!shareValidation.warning) return result;
+      // eslint-disable-next-line no-console
+      console.warn("[validateSharePercentage]", fieldId, shareValidation.warning);
+      return {
+        ...result,
+        sharePercentageWarning: shareValidation.warning,
+        sharePercentageSuggested: shareValidation.suggestedValue || null,
+        notes: result.notes
+          ? result.notes + " | " + shareValidation.warning
+          : shareValidation.warning,
+      };
+    }
+
     const isStakeholder = stakeholderFields.some((f) => fieldId.includes(f)) ||
       fieldId.includes("director") ||
       fieldId.includes("ubo") ||
@@ -1127,11 +1247,22 @@ const validateAllDirectors = (researchResults) => {
 
     result.stakeholders.forEach((s) => {
       const { isValid, stakeholder, warnings } = validateDirectorRecord(s, result);
-      if (isValid) {
-        validatedStakeholders.push(stakeholder);
-      } else {
+      if (!isValid) {
         removedStakeholders.push({ name: s.full_name, reason: warnings.join("; ") });
+        return;
       }
+      // Share-percentage band check — flag stakeholders whose ownership value
+      // looks like a stripped registry band (e.g. "75%" → likely "75% or more").
+      // Applied to the returned copy so it reaches the displayed object.
+      const shareValidation = validateSharePercentage(stakeholder.share_percentage);
+      if (shareValidation.warning) {
+        stakeholder.sharePercentageWarning = shareValidation.warning;
+        stakeholder.sharePercentageSuggested = shareValidation.suggestedValue || null;
+        stakeholder.requiresReview = true;
+        // eslint-disable-next-line no-console
+        console.warn("[validateSharePercentage]", stakeholder.full_name, shareValidation.warning);
+      }
+      validatedStakeholders.push(stakeholder);
     });
 
     if (removedStakeholders.length > 0) {
@@ -1259,9 +1390,15 @@ const needsStakeholderDetails = (stakeholder, fieldId, isPubliclyListed) => {
   if (!isUboLikeField(fieldId)) return false;
 
   const pct = stakeholder ? stakeholder.share_percentage : null;
-  if (pct === null || pct === undefined) return true; // unknown — conservative
+  if (pct === null || pct === undefined || String(pct).trim() === "") return true; // unknown — conservative
 
-  return Number(pct) >= 25;
+  // share_percentage may be a number OR exact registry text ("75% or more",
+  // "25% to 50%", "Significant influence or control"). Parse the leading number
+  // for the >= 25% test; pure-qualifier text with no number is treated
+  // conservatively as needing details.
+  const leading = String(pct).match(/\d+(?:\.\d+)?/);
+  if (!leading) return true; // e.g. "Significant influence or control"
+  return parseFloat(leading[0]) >= 25;
 };
 
 // Record which signals triggered the listed-company detection, for the
@@ -1707,7 +1844,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   const fieldList = researchableFields.map((f) => {
     if (isStakeholderField(f.field)) {
       const example = isUboLikeField(f.field)
-        ? '[{"full_name": "Jane Smith", "role": "Shareholder", "share_percentage": 45}]'
+        ? '[{"full_name": "Jane Smith", "role": "Shareholder", "share_percentage": "75% or more"}]'
         : '[{"full_name": "Jane Smith", "role": "CEO"}]';
       return `    {"field": "${f.field}", "label": "${f.label}", "value": ${example}, "source": "..."}`;
     }
@@ -1729,7 +1866,14 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         desc += `  {\n`;
         desc += `    "full_name": the actual name — either a person's legal name OR a company name (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED"). NEVER use a demographic description.\n`;
         desc += `    "role": "Person with Significant Control" or "Corporate Entity" or equivalent\n`;
-        desc += `    "share_percentage": number if available (e.g. 75 for 75%)\n`;
+        desc += `    "share_percentage": the EXACT ownership text as the official registry states it — a string. Return the registry's own wording verbatim; do NOT convert, round, average, or simplify it.\n`;
+        desc += `      Examples of correct behaviour:\n`;
+        desc += `        Registry says "75% or more"                        → return "75% or more"\n`;
+        desc += `        Registry says "25% to 50%"                         → return "25% to 50%"\n`;
+        desc += `        Registry says "Ownership of shares — 75% or more"  → return "75% or more"\n`;
+        desc += `        Registry says "100%"                               → return "100%"\n`;
+        desc += `        Registry says "Significant influence or control"   → return "Significant influence or control"\n`;
+        desc += `      Do NOT: convert "75% or more" to "75%"; convert "25% to 50%" to "37.5%"; average a range into a single number; or strip qualifiers like "or more", "to", "approximately". The qualifier is legally significant — losing it misrepresents what the registry actually states.\n`;
         desc += `    "nationality": if person and available\n`;
         desc += `    "date_of_birth": "YYYY-MM" if person and available\n`;
         desc += `    "country_of_residence": if person and shown on the register (e.g. "United Kingdom")\n`;
@@ -2219,10 +2363,12 @@ module.exports = {
   isDescriptionNotName,
   normaliseDateOfBirth,
   formatDOBForDisplay,
+  formatShareholding,
   parseStakeholdersFromString,
   enrichStakeholders,
   validateDirectorRecord,
   validateAllDirectors,
+  validateSharePercentage,
   detectPubliclyListed,
   needsStakeholderDetails,
   detectListingEvidence,
