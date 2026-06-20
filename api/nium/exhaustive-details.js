@@ -9,9 +9,11 @@
  *   - publicDetailsId (required) — from Route 1 result
  *
  * Returns:
- *   - searchId         Must be passed by KYC agent into Create Customer v5
- *   - directors[]      Pre-fill data for the onboarding form
- *   - shareholders[]   Pre-fill data for the onboarding form
+ *   - searchId            Must be passed by KYC agent into Create Customer v5
+ *   - businessName, businessRegistrationNumber, registeredCountry, registeredDate, website
+ *   - stakeholders        { individual[], corporate[] } — each with positions[]
+ *   - addresses           { registeredAddress }
+ *   - raw                 Full Nium response for anything else the agent needs
  *   - cached: true/false  Whether result came from cache
  *
  * CHARGEABLE API — the cache prevents duplicate charges.
@@ -61,9 +63,16 @@ module.exports = async function handler(req, res) {
 
     const payload = {
       searchId: data.searchId,
-      directors: data.directors || [],
-      shareholders: data.shareholders || [],
-      ownershipStructure: data.ownershipStructure || null,
+      businessName: data.businessName,
+      businessRegistrationNumber: data.businessRegistrationNumber,
+      registeredCountry: data.registeredCountry,
+      registeredDate: data.registeredDate,
+      website: data.website,
+      // Nium returns stakeholders split into individual + corporate, each with
+      // positions[] (and corporate with sharePercentage) — the exact shape the
+      // Confirm / Fill-Gaps corporate-stakeholder form already consumes.
+      stakeholders: data.stakeholders || { individual: [], corporate: [] },
+      addresses: data.addresses || null,
       // Pass through full raw data so KYC agent can extract anything else it needs
       raw: data,
       cached: false,

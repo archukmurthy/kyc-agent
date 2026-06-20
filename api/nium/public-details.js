@@ -18,12 +18,19 @@
 
 const { fetchPublicDetails, NiumAPIError } = require("../../lib/niumClient");
 
+// TODO(step1-mapping): `type` and `region` are hardcoded to the verified
+// working preprod test values for now. They must be derived from the Step 1
+// company-search logic (entity type + searching region) and passed through —
+// at which point these defaults become fallbacks only.
+const DEFAULT_TYPE = "PUBLIC_COMPANY";
+const DEFAULT_REGION = "GB";
+
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { businessRegistrationNumber, countryCode } = req.query;
+  const { businessRegistrationNumber, countryCode, type, region } = req.query;
 
   // --- Input validation ---
   if (!businessRegistrationNumber || !countryCode) {
@@ -39,10 +46,18 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const data = await fetchPublicDetails(businessRegistrationNumber, countryCode);
+    const data = await fetchPublicDetails({
+      type: type || DEFAULT_TYPE,
+      businessRegistrationNumber,
+      registeredCountry: countryCode,
+      region: region || DEFAULT_REGION,
+    });
 
-    // Normalise: if Nium returns empty array, signal to KYC agent to use manual KYB
-    const results = Array.isArray(data) ? data : data.results || [];
+    // Normalise: Nium returns matches under `matchResponses`. Empty → signal
+    // the KYC agent to fall back to manual KYB.
+    const results = Array.isArray(data)
+      ? data
+      : data.matchResponses || data.results || [];
 
     if (results.length === 0) {
       return res.status(200).json({
