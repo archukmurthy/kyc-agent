@@ -1657,6 +1657,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // applicantOverrides: [{ fieldId, fieldLabel, agentValue, customerValue, overriddenAt }].
   const [applicantSelectedPerson, setApplicantSelectedPerson] = useState(null);
   const [applicantAgentValues, setApplicantAgentValues] = useState({});
+  // Standalone Applicant page: inline required-field validation error, and the
+  // dossier stakeholders loaded when a customer arrives via an invite link
+  // (?dossierId=&journey=customer) without having run research in this session.
+  const [applicantValidationError, setApplicantValidationError] = useState(null);
+  const [dossierStakeholders, setDossierStakeholders] = useState(null);
   // Reserved for the future live locked/unlocked override UI; the authoritative
   // override list is recomputed deterministically at submit (buildApplicantProvenance).
   // eslint-disable-next-line no-unused-vars
@@ -1681,13 +1686,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // correct step index without relying on a stale state closure (e.g. during
   // back-and-forth navigation between Documents and Journey).
   const stepsFor = (j) => j === "ai_documents"
-    ? { input: 0, documents: 1, research: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 }
-    : { input: 0, research: 1, confirm: 2, fillGaps: 3, documentRequirements: 4, declare: 5 };
+    ? { input: 0, documents: 1, research: 2, applicant: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 }
+    : { input: 0, research: 1, applicant: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 };
   const isAiDocs = journeyType === "ai_documents";
   const STEPS = stepsFor(journeyType);
   const stepNames = isAiDocs
-    ? ["Company", "Documents", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
-    : ["Company", "Research", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
+    ? ["Company", "Documents", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
+    : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
 
   // Loader messages — four modes: Nium API lookup, no docs (existing),
   // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
@@ -1785,6 +1790,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setHasRunRealAgent(false); setSelfSourceDiag(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
+    setApplicantValidationError(null); setDossierStakeholders(null);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -1922,6 +1928,63 @@ export default function KYCAgent({ previewMode = false } = {}) {
     trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Customer invite landing (dossier-backed). When opened via the dossier link
+  // (`?dossierId=<id>&journey=customer`), fetch the dossier server-side and drop
+  // the customer straight onto the standalone Applicant page. Works cross-device
+  // (unlike the localStorage `?ref` path). Runs once on mount.
+  const dossierHydratedRef = useRef(false);
+  useEffect(() => {
+    if (dossierHydratedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const dId = params.get("dossierId");
+    const journey = params.get("journey");
+    const tenantParam = params.get("tenant");
+    if (!dId || journey !== "customer") return;
+    dossierHydratedRef.current = true;
+    loadDossierAndStartOnboarding(dId, tenantParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadDossierAndStartOnboarding(id, tenant) {
+    try {
+      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
+      const data = await res.json();
+      if (data.success && data.dossier) {
+        const d = data.dossier;
+        if (d.company_name) setCompanyName(d.company_name);
+        if (d.entity_type) setEntityType(d.entity_type);
+        if (d.country_code) setCountryCode(d.country_code);
+        // Resolve the schema so the Applicant gap fields (and the rest of the
+        // flow) have field definitions to render — the dossier stores entity
+        // type + country, not the schema itself.
+        if (d.entity_type && d.country_code) {
+          try { setActiveSchema(getSchemaFromConfig(d.country_code, d.entity_type, tenantConfig)); }
+          catch (_) { /* leave schema unset; page still renders the selector */ }
+        }
+        // Re-hydrate research from the dossier's tiered data so the Applicant
+        // person selector (and the later Confirm page) have context.
+        const found = [
+          ...(Array.isArray(d.verified_data) ? d.verified_data : []),
+          ...(Array.isArray(d.probable_data) ? d.probable_data : []),
+          ...(Array.isArray(d.indicative_data) ? d.indicative_data : []),
+        ];
+        if (found.length > 0) setResearch({ companyName: d.company_name, found });
+        if (d.stakeholders) setDossierStakeholders(d.stakeholders);
+        setDossierId(id);
+        trackEvent("invite_link_opened", { dossierId: id, companyName: d.company_name || null, via: "dossier_link" });
+      }
+    } catch (err) {
+      // Fail gracefully — land on the Applicant page with empty fields.
+      // eslint-disable-next-line no-console
+      console.error("[loadDossier] Failed:", err);
+    }
+    // Always advance to the Applicant step regardless of whether the dossier
+    // loaded (ai_only step map applies; documents step is analyst-only here).
+    setAgentType("onboarding");
+    setJourneyType("ai_only");
+    setStep(stepsFor("ai_only").applicant);
+  }
 
   const isStakeholderRejected = (fieldId, stakeholderId) => {
     const set = rejectedStakeholders[fieldId];
@@ -2602,7 +2665,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setRevealedTs({});
       gapRef.current = {};
       setFormVersion(v => v + 1);
-      setStep(S.confirm);
+      // Onboarding inserts the Applicant step between Research and Confirm;
+      // pre-boarding skips it (Company → Research → Dossier).
+      setStep(agentType === "preboarding" ? S.confirm : S.applicant);
     } catch (err) { setError("Research failed: " + err.message); setStep(S.input); }
     finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
   };
@@ -2779,7 +2844,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     gapRef.current = {};
     setFormVersion(v => v + 1);
     setLoading(false); setLoaderPhase(0);
-    setStep(S.confirm);
+    setStep(agentType === "preboarding" ? S.confirm : S.applicant);
   };
 
   // Resolve company name → registration number via Companies House (UK), so the
@@ -2917,7 +2982,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         });
 
         setLoading(false); setLoaderPhase(0); setResearchStatus("");
-        setStep(S.confirm);
+        setStep(agentType === "preboarding" ? S.confirm : S.applicant);
       } else {
         // No data — surface a clear error and return to the journey screen.
         // The analyst chose the Nium API journey deliberately; do NOT silently
@@ -3701,7 +3766,35 @@ export default function KYCAgent({ previewMode = false } = {}) {
         });
     }
 
-    return candidates;
+    if (candidates.length > 0) return candidates;
+
+    // Fallback: customer arrived via an invite link (no research in this
+    // session) — derive candidates from the dossier's saved stakeholders.
+    // dossierStakeholders may be an array, a { all: [...] } wrapper, or the
+    // research stakeholder-field map { directors: [...], ubo_names: [...] }.
+    const flat = Array.isArray(dossierStakeholders)
+      ? dossierStakeholders
+      : Array.isArray(dossierStakeholders?.all)
+      ? dossierStakeholders.all
+      : dossierStakeholders && typeof dossierStakeholders === "object"
+      ? Object.values(dossierStakeholders).flat().filter((x) => x && typeof x === "object" && x.full_name)
+      : [];
+    return flat
+      .filter((s) => !isRegistryExemptionNotice(s) && looksLikeRealName(s.full_name) && !isCorporateStakeholder(s))
+      .map((s) => {
+        const shareTxt = s.share_percentage != null ? formatShareholding(s.share_percentage) : "";
+        return {
+          id: s.id || s.full_name,
+          name: s.full_name,
+          role: s.role || (shareTxt ? `Owner (${shareTxt})` : "Director"),
+          jobTitle: s.role || (shareTxt ? "Owner" : "Director"),
+          nationality: s.nationality || "",
+          dob: s.date_of_birth || "",
+          source: s.source || "Companies House",
+          sourceTier: s.sourceTier || "tier1",
+          type: s.role && /owner|ubo|benefic|shareh/i.test(s.role) ? "ubo" : "director",
+        };
+      });
   };
 
   // Clear the applicant gap fields a person-selection had pre-filled (used when
@@ -3769,6 +3862,90 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // The applicant gap fields (first/last name, email, mobile, job title, DOB,
+  // nationality, PEP) rendered as a standalone block. Same StableInput rendering
+  // the Fill Gaps applicant section used — extracted here now that Applicant is
+  // its own step.
+  const renderApplicantFields = () => {
+    const items = getCombinedGaps()
+      .filter((g) => g.section === "applicant")
+      .filter(dependsOnSatisfied);
+    if (items.length === 0) return null;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
+        {items.map((g) => (
+          <StableInput
+            key={g.field}
+            id={g.field}
+            label={g.label}
+            type={g.inputType}
+            value={gapRef.current[g.field] || ""}
+            onUpdate={updateGap}
+            required={g.required}
+            options={g.options}
+            placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // Standalone Applicant page (step between Research and Confirm). Reuses the
+  // director/UBO person selector + the applicant gap fields, with its own
+  // header, required-field validation, and Continue → Confirm.
+  const renderApplicantPage = () => {
+    return (
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
+            Tell us about yourself
+          </h2>
+          <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
+            As the person completing this application, we need a few details about you.
+            We have pre-filled what we already know.
+          </p>
+        </div>
+
+        <div style={card}>
+          {renderApplicantPersonSelector()}
+          {renderApplicantFields()}
+        </div>
+
+        <button
+          onClick={() => {
+            const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
+            const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
+            if (missing.length > 0) {
+              setApplicantValidationError(
+                "Please fill in " + missing.length + " required field" +
+                (missing.length > 1 ? "s" : "") + " before continuing."
+              );
+              return;
+            }
+            setApplicantValidationError(null);
+            scrollAndSetStep(STEPS.confirm);
+          }}
+          style={{
+            width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
+            color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
+            fontFamily: "inherit", cursor: "pointer", marginTop: 24,
+          }}
+        >
+          Continue →
+        </button>
+
+        {applicantValidationError && (
+          <div style={{
+            marginTop: 12, padding: "10px 14px", background: "#FEF2F2",
+            border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 13, color: "#DC2626",
+          }}>
+            {applicantValidationError}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderGapSection = (sectionKey) => {
     // "Additional Documents" (documents) section hidden on the Fill Gaps page
     // for all flows (FI / Corporate, AI-only / document+AI) per request. Kept
@@ -3784,7 +3961,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <div style={card} key={sectionKey}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
         <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
-        {sectionKey === "applicant" && renderApplicantPersonSelector()}
         <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
           {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
         </div>
@@ -6403,9 +6579,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
               onClick={() => {
                 setAgentType("onboarding");
                 setShowDossierView(false);
-                setStep(stepsFor(journeyType || "ai_only").confirm);
+                setStep(stepsFor(journeyType || "ai_only").applicant);
                 trackEvent("preboarding_to_onboarding", {
                   dossierId,
+                  via: "preview_button",
                   companyName: company.name,
                   includedFields: includedFields.length,
                   customQuestions: customQuestions.length,
@@ -6488,15 +6665,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const companyDisplayName = research?.companyName || companyName || 'the company';
 
     function generateLink() {
-      const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
       const base = window.location.origin;
-      // The `?ref=<token>` link lands the customer on the populated Confirm
-      // page — the same view "Preview Customer Onboarding" shows. handleSendInvite
-      // snapshots the dossier to localStorage under this token; the mount effect
-      // reads `?ref=` on load and rehydrates research + jumps to Confirm. (Same
-      // browser today; cross-device hydration from the server-persisted invite
-      // record is future work — PR-029.) This local token is only used if the
-      // /api/invite call fails; otherwise the server-issued token wins.
+      // Preferred: a dossier-backed link. `?dossierId=&journey=customer` lands
+      // the customer on the standalone Applicant page; the mount effect fetches
+      // the dossier server-side (api/get-dossier) and pre-loads company context +
+      // research, so this works cross-device (unlike the legacy ?ref snapshot).
+      if (dossierId) {
+        return `${base}/?tenant=${tenantId}&dossierId=${dossierId}&journey=customer`;
+      }
+      // Fallback (no saved dossier yet): the legacy `?ref=<token>` link, which
+      // rehydrates from a same-browser localStorage snapshot taken at send time.
+      const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
       return `${base}/?ref=${token}`;
     }
 
@@ -6519,7 +6698,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
           }),
         });
         const data = await resp.json();
-        if (data && data.link) link = data.link;
+        // Keep the dossier-backed link when we have one; only adopt the
+        // server-issued ?ref link in the legacy (no-dossier) fallback path.
+        if (!dossierId && data && data.link) link = data.link;
         console.log('Invite dispatched:', { ...data, email: inviteEmail, contactName: inviteContactName });
       } catch (err) {
         console.warn('Invite send failed, using local link:', err);
@@ -8005,6 +8186,8 @@ Nium Onboarding Team`;
           </div>
         )}
 
+        {step === STEPS.applicant && agentType !== "preboarding" && renderApplicantPage()}
+
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <div>
             <div style={card}>
@@ -8259,7 +8442,7 @@ Nium Onboarding Team`;
 
             {/* 1. Corrections required + 2. Missing gap fields — corrections
                 come first inside gapSectionOrder(), then missing fields. */}
-            {gapSectionOrder().map(s => renderGapSection(s))}
+            {gapSectionOrder().filter(s => s !== "applicant").map(s => renderGapSection(s))}
 
             {/* 3. Stakeholder forms — only people who need customer input
                 (private directors/UBOs, or listed-company >= 25% UBOs). */}
