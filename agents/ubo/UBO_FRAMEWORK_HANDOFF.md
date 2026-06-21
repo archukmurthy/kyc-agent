@@ -7,6 +7,29 @@ the onboarding workflow, or existing KYC agents. Its public entry point is
 `runUboFramework` in `uboOrchestrator.js`; it can be moved into a separate
 service or called by an API layer without changing its core logic.
 
+## Try it interactively
+
+Run this from the repository root:
+
+```powershell
+node agents/ubo/playground.js
+```
+
+The playground asks for a customer company and then ownership links. It uses
+only the data typed into the terminal, so it is safe to use locally and does
+not make external requests. It prints UBOs, effective ownership, explanation
+chains, unresolved items, and budget use as JSON.
+
+## Live UBO Lab
+
+Start the application with `npm start`, then open
+`http://localhost:3000/ubo-lab.html`. This separate page calls
+`POST /api/ubo-discovery`, which uses the configured Nium KYB integration to
+retrieve direct disclosed stakeholders and recursively looks up corporate
+owners. The optional web-research checkbox supplements Nium with source-cited
+web research. These are real external lookups and may be chargeable; only use
+them for companies you are authorised to investigate.
+
 ## Agent modules
 
 | Module | Responsibility |

@@ -28,6 +28,8 @@ const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.j
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
+const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
+const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -52,9 +54,40 @@ module.exports = function (app) {
     req.on("end", async () => {
       try {
         const body = JSON.parse(raw || "{}");
-        const { prompt, messages, model, tools, max_tokens } = body;
+        const { prompt, messages, model, tools, max_tokens,
+                companyName, jurisdiction, entityType, forceRefresh } = body;
         if (!prompt && !messages) {
           return res.status(400).json({ error: "Missing prompt or messages in request body" });
+        }
+
+        // ─── CACHE LAYER (opt-in) ───
+        // Mirrors api/research.js so caching works under `npm start` too. Only
+        // the main research call passes `companyName`, so other callers (doc
+        // extraction, gap recovery) are untouched. researchCache.js is ESM, so
+        // it's loaded via dynamic import() from this CJS dev-server file. Cache
+        // failures always fall through to the live API.
+        const cacheEnabled = !!companyName;
+        let cacheMod = null;
+        if (cacheEnabled) {
+          try {
+            cacheMod = await import(path.join(__dirname, "..", "lib", "researchCache.js"));
+          } catch (err) {
+            console.error("[research-cache] Failed to load cache module:", err.message);
+          }
+        }
+        if (cacheMod && !forceRefresh) {
+          try {
+            const cached = await cacheMod.getCachedResearch(companyName, jurisdiction, entityType);
+            if (cached) {
+              console.log(`[research-cache] HIT for "${companyName}" — serving from DB`);
+              return res.status(200).json(cached);
+            }
+            console.log(`[research-cache] MISS for "${companyName}" — calling Anthropic API`);
+          } catch (err) {
+            console.error("[research-cache] Cache lookup error, falling through:", err.message);
+          }
+        } else if (cacheMod && forceRefresh) {
+          console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
         }
 
         const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -94,6 +127,16 @@ module.exports = function (app) {
         if (!r.ok) {
           return res.status(r.status).json({ error: "Claude API error", details: data });
         }
+
+        // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
+        if (cacheMod) {
+          try {
+            await cacheMod.saveResearchToCache(companyName, jurisdiction, entityType, data, finalModel);
+          } catch (err) {
+            console.error("[research-cache] Failed to save to cache:", err.message);
+          }
+        }
+
         res.status(200).json(data);
       } catch (err) {
         res.status(500).json({ error: "Server error", message: err.message });
@@ -258,6 +301,9 @@ module.exports = function (app) {
   // req.query directly.
   app.get("/api/company-search", adapt(companySearchHandler));
 
+  // Fetch a saved dossier by id for the customer invite link. GET uses req.query.
+  app.get("/api/get-dossier", adapt(getDossierHandler));
+
   // Customer onboarding invitation email + token persistence. POST; parse the
   // JSON body the dev server doesn't auto-parse (mirrors the routes above).
   app.post("/api/invite", (req, res) => {
@@ -271,6 +317,17 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(inviteHandler)(req, res);
+    });
+  });
+
+  // Standalone UBO discovery lab. POST; parse JSON like other serverless routes.
+  app.post("/api/ubo-discovery", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDiscoveryHandler)(req, res);
     });
   });
 };

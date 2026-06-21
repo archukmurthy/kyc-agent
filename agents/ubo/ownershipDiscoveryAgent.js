@@ -7,6 +7,7 @@ async function discoverOwnership({ entity, tenantConfig = {}, adapters = {}, bud
   const evidence = [];
   const statements = [];
   const missingInformation = [];
+  const searchEvents = [];
   for (const [name, adapter] of Object.entries(adapters)) {
     if (budget.exhausted()) break;
     budget.consume("searchIterations");
@@ -16,12 +17,13 @@ async function discoverOwnership({ entity, tenantConfig = {}, adapters = {}, bud
       evidence.push(...(result.evidence || []).map((item) => ({ ...item, source: item.source || name })));
       statements.push(...(result.statements || []));
       missingInformation.push(...(result.missingInformation || []));
+      searchEvents.push(...(result.searchEvents || []));
       for (let i = 0; i < (result.documentsDownloaded || 0); i += 1) budget.consume("documentsDownloaded");
     } catch (error) {
       missingInformation.push({ source: name, reason: error.message });
     }
   }
-  return { statements, evidence, missingInformation };
+  return { statements, evidence, missingInformation, searchEvents };
 }
 
 module.exports = { discoverOwnership };

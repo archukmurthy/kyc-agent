@@ -7,18 +7,23 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget 
   const statements = [];
   const evidence = [];
   const missingInformation = [];
+  const investigationLog = [];
+  const searchEvents = [];
   const queue = [{ entity: rootEntity, pathPercentage: 100, ancestry: new Set() }];
   while (queue.length && !budget.exhausted()) {
     const current = queue.shift();
     const entityId = current.entity.id || current.entity.registrationNumber || current.entity.name;
     if (current.ancestry.has(entityId)) { missingInformation.push({ entity: current.entity.name, reason: "Ownership cycle detected" }); continue; }
     if (TERMINAL_NODE_TYPES.has(current.entity.type)) {
+      investigationLog.push({ entity: current.entity.name, jurisdiction: current.entity.jurisdiction, outcome: `Terminal ${current.entity.type}` });
       if ([NODE_TYPES.TRUST, NODE_TYPES.FOUNDATION].includes(current.entity.type)) missingInformation.push({ entity: current.entity.name, reason: `${current.entity.type} workflow required` });
       continue;
     }
     if (!budget.consume("entitiesInvestigated")) break;
     const found = await discovery({ entity: current.entity, tenantConfig: rules.tenantConfig, adapters, budget });
+    investigationLog.push({ entity: current.entity.name, jurisdiction: current.entity.jurisdiction, outcome: found.statements.length ? `Found ${found.statements.length} direct ownership relationship${found.statements.length === 1 ? "" : "s"}` : "No usable direct ownership relationships found" });
     statements.push(...found.statements); evidence.push(...found.evidence); missingInformation.push(...found.missingInformation);
+    searchEvents.push(...(found.searchEvents || []));
     for (const statement of found.statements) {
       if (statement.type && statement.type !== EDGE_TYPES.OWNERSHIP) continue;
       const materiality = evaluateMateriality({ pathPercentage: current.pathPercentage, nextOwnershipPercentage: Number(statement.ownershipPercentage), discoveryThreshold: rules.discoveryThreshold });
@@ -27,7 +32,7 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget 
     }
   }
   if (budget.exhausted()) missingInformation.push({ reason: "search budget exhausted", status: "partial" });
-  return { statements, evidence, missingInformation };
+  return { statements, evidence, missingInformation, investigationLog, searchEvents };
 }
 
 module.exports = { expandOwnership };
