@@ -1,8 +1,11 @@
-// Fetch a saved entity dossier by id so a customer invite link
-// (`?dossierId=<id>&journey=customer`) can load dossier context (company,
-// tiered research data, stakeholders) and drop the customer onto the Applicant
-// page. Read-only. Best-effort: returns 200 with success:false on any failure
-// so the customer flow never hard-blocks.
+// Fetch a saved entity dossier by id so the Preview button and the customer
+// invite link (`?dossierId=<id>&journey=customer`) can reconstruct full
+// onboarding state from the DB — the dossier is the source of truth. Returns
+// raw_research (the complete research.found with .stakeholders + verificationStatus
+// intact) plus the tiered arrays and broken-out coverage counts. Read-only;
+// best-effort: returns 200 with success:false on any failure so the flow never
+// hard-blocks. There is no single `coverage` column — it's reconstructed
+// client-side from total_fields/verified_fields/fill_rate/etc.
 //
 // CommonJS (module.exports) so src/setupProxy.js can require() it for local dev,
 // mirroring api/submit.js, api/save-dossier.js, etc.
@@ -45,6 +48,14 @@ module.exports = async function handler(req, res) {
         included_fields,
         excluded_fields,
         custom_questions,
+        raw_research,
+        total_fields,
+        verified_fields,
+        probable_fields,
+        indicative_fields,
+        missing_fields,
+        fill_rate,
+        verified_fill_rate,
         status,
         saved_at AS generated_at
       FROM entity_dossiers

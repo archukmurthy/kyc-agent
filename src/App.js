@@ -1962,15 +1962,49 @@ export default function KYCAgent({ previewMode = false } = {}) {
           try { setActiveSchema(getSchemaFromConfig(d.country_code, d.entity_type, tenantConfig)); }
           catch (_) { /* leave schema unset; page still renders the selector */ }
         }
-        // Re-hydrate research from the dossier's tiered data so the Applicant
-        // person selector (and the later Confirm page) have context.
-        const found = [
-          ...(Array.isArray(d.verified_data) ? d.verified_data : []),
-          ...(Array.isArray(d.probable_data) ? d.probable_data : []),
-          ...(Array.isArray(d.indicative_data) ? d.indicative_data : []),
-        ];
+        // Primary source: raw_research.found — the complete, intact research
+        // data with .stakeholders arrays and verificationStatus on every row.
+        // Fallback: the stripped tiered arrays (older dossiers, or if
+        // raw_research is somehow missing) which lack .stakeholders.
+        let found = [];
+        if (d.raw_research?.found?.length) {
+          found = d.raw_research.found;
+          // eslint-disable-next-line no-console
+          console.log("[loadDossier] Using raw_research:", found.length, "fields");
+        } else if (d.verified_data?.length || d.probable_data?.length || d.indicative_data?.length) {
+          found = [
+            ...(Array.isArray(d.verified_data) ? d.verified_data : []),
+            ...(Array.isArray(d.probable_data) ? d.probable_data : []),
+            ...(Array.isArray(d.indicative_data) ? d.indicative_data : []),
+          ];
+          // eslint-disable-next-line no-console
+          console.log("[loadDossier] Fallback to tiered arrays:", found.length, "fields");
+        }
         if (found.length > 0) setResearch({ companyName: d.company_name, found });
+        // Belt-and-braces fallback for getApplicantCandidates if raw_research
+        // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
+
+        // Restore coverage so the Confirm-page coverage bar renders. There is no
+        // single `coverage` column — reconstruct it from the broken-out counts
+        // (fill_rate / verified_fill_rate are stored as 0–100 ints, so /100).
+        if (d.total_fields != null || d.verified_fields != null) {
+          const verified = d.verified_fields || 0;
+          const probable = d.probable_fields || 0;
+          const indicative = d.indicative_fields || 0;
+          setCoverage({
+            totalResearchFields: d.total_fields || 0,
+            populatedFields: verified + probable + indicative,
+            verifiedFields: verified,
+            probableFields: probable,
+            indicativeFields: indicative,
+            missingFieldCount: d.missing_fields || 0,
+            missingFields: [],
+            fillRate: d.fill_rate != null ? Number(d.fill_rate) / 100 : null,
+            verifiedFillRate: d.verified_fill_rate != null ? Number(d.verified_fill_rate) / 100 : null,
+          });
+        }
+
         setDossierId(id);
         trackEvent("invite_link_opened", { dossierId: id, companyName: d.company_name || null, via: "dossier_link" });
       }
@@ -3834,7 +3868,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   const renderApplicantPersonSelector = () => {
     const candidates = getApplicantCandidates();
-    if (candidates.length === 0) return null;
+    if (candidates.length === 0) {
+      // No individual directors/UBOs identified (e.g. registry returned only a
+      // corporate parent, or name extraction failed). Show a note rather than
+      // silently hiding the selector so the page doesn't look broken.
+      return (
+        <div style={{
+          padding: "12px 16px",
+          background: C.surfaceAlt,
+          border: `1px solid ${C.border}`,
+          borderRadius: 8,
+          fontSize: 13,
+          color: C.textSec,
+          marginBottom: 20,
+        }}>
+          We were not able to identify individual directors or owners for this
+          company from our research. Please fill in your details below.
+        </div>
+      );
+    }
     return (
       <div style={{ marginBottom: 20 }}>
         <label style={{ fontSize: 12, color: "#1a3a4a80", display: "block", marginBottom: 6, fontWeight: 600 }}>
@@ -6597,19 +6649,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <div style={{ display: "flex", gap: 12, marginTop: 32, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
             <button
-              onClick={() => {
-                // Pre-boarding never went through the Company-input step, so
-                // activeSchema is null — resolve it from entityType + countryCode
-                // (set during the pre-boarding research run) so the Applicant
-                // page's gap fields render. Signature is (countryCode, entityType,
-                // tenantConfig), matching the research handlers.
-                try {
-                  const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
-                  if (schema) setActiveSchema(schema);
-                } catch (_) { /* fall back to the hardcoded applicant fields */ }
-                setAgentType("onboarding");
-                setShowDossierView(false);
-                setStep(stepsFor(journeyType || "ai_only").applicant);
+              onClick={async () => {
+                // The dossier is the source of truth: always fetch fresh from the
+                // DB and reconstruct full research state (raw_research.found,
+                // schema, coverage, stakeholders) rather than relying on in-memory
+                // state — whether Preview is clicked immediately or hours later.
+                // loadDossierAndStartOnboarding handles agentType/step/navigation.
+                if (!dossierId) {
+                  // eslint-disable-next-line no-console
+                  console.warn("[Preview] No dossierId — cannot load from DB");
+                  return;
+                }
+                await loadDossierAndStartOnboarding(dossierId, tenantId);
                 trackEvent("preboarding_to_onboarding", {
                   dossierId,
                   via: "preview_button",
