@@ -193,10 +193,16 @@ async function persistJourneyModel(sql, d) {
   await sql`DELETE FROM field_provenance WHERE journey_id = ${journeyId}`;
   const stake = d.stakeholders || {};
   const scalarLayer = mapLayerFromJourney(d.journeyType);
+  // Applicant identity fields get their own rich provenance rows below (with
+  // agent_value + accepted/overridden/provided action), so skip them here to
+  // avoid duplicate field_provenance rows for the same field_name.
+  const applicantProv = Array.isArray(d.applicantProvenance) ? d.applicantProvenance : [];
+  const applicantFieldNames = new Set(applicantProv.map((p) => p.fieldId));
 
   for (const [k, v] of Object.entries(d.fieldValues || {})) {
     if (v === null || v === undefined || v === "") continue;
     if (stake[k]) continue; // handled as stakeholder rows below
+    if (applicantFieldNames.has(k)) continue; // handled as applicant rows below
     const val = typeof v === "object" ? JSON.stringify(v) : String(v);
     try {
       await sql`
@@ -242,6 +248,32 @@ async function persistJourneyModel(sql, d) {
     }
   }
 
+  // Applicant identity provenance — rich rows carrying agent_value + the
+  // customer's action (accepted / overridden / provided). Mapped onto the real
+  // (journey-keyed) field_provenance columns: field_name, agent_value,
+  // customer_value/final_value, customer_action, source_identity, source_tier,
+  // retrieved_at. layer = L3_ai when an agent value was shown, else L4_customer.
+  for (const prov of applicantProv) {
+    const layer = prov.agentValue ? "L3_ai" : "L4_customer";
+    try {
+      await sql`
+        INSERT INTO field_provenance (
+          journey_id, field_name, final_value, customer_value, layer,
+          source_tier, source_identity, retrieved_at, agent_value, customer_action,
+          model_version
+        )
+        VALUES (
+          ${journeyId}, ${prov.fieldId}, ${prov.customerValue || null}, ${prov.customerValue || null}, ${layer},
+          ${prov.sourceTier || null}, ${prov.source || null}, ${toTimestamp(prov.retrievedAt)},
+          ${prov.agentValue || null}, ${prov.customerAction || "provided"},
+          ${layer === "L3_ai" ? cs?.model || null : null}
+        )
+      `;
+    } catch (e) {
+      console.warn(`[api/submit] field_provenance applicant insert failed (${prov.fieldId}):`, e.message);
+    }
+  }
+
   return journeyId;
 }
 
@@ -262,6 +294,9 @@ module.exports = async function handler(req, res) {
     costSummary,
     coverage,
     declaration,
+    applicant,
+    applicantProvenance,
+    applicantOverrides,
     submittedAt,
   } = req.body;
 
@@ -407,6 +442,8 @@ module.exports = async function handler(req, res) {
           declaration: declaration || {},
           costSummary: cs || null,
           coverage: cov || null,
+          applicant: applicant || null,
+          applicantProvenance: applicantProvenance || [],
         })},
 
         NOW()
@@ -452,6 +489,50 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // 4b. Write applicant override events to session_timeline (audit trail).
+    // Session-keyed and independent of the journey-model write, so overrides are
+    // captured even if journey persistence fails. Non-fatal per event.
+    const overrides = Array.isArray(applicantOverrides) ? applicantOverrides : [];
+    for (const ov of overrides) {
+      try {
+        await sql`
+          INSERT INTO session_timeline (
+            session_id, event_type, event_data, tenant_id, occurred_at
+          )
+          VALUES (
+            ${sessionId},
+            'applicant_field_overridden',
+            ${JSON.stringify({
+              fieldId: ov.fieldId,
+              fieldLabel: ov.fieldLabel,
+              agentValue: ov.agentValue,
+              customerValue: ov.customerValue,
+              source: ov.source,
+              sourceTier: ov.sourceTier,
+              overriddenAt: ov.overriddenAt,
+            })},
+            ${tenantId},
+            NOW()
+          )
+        `;
+      } catch (evErr) {
+        console.warn(
+          `[api/submit] override event write failed for ${ov.fieldId}:`,
+          evErr.message
+        );
+      }
+    }
+
+    if (overrides.length > 0) {
+      console.log(
+        `[api/submit] ⚠ Applicant overrode ${overrides.length} pre-filled field(s) ` +
+          `for session ${sessionId}:`,
+        overrides
+          .map((o) => `${o.fieldId}: "${o.agentValue}" → "${o.customerValue}"`)
+          .join(", ")
+      );
+    }
+
     console.log(
       `[api/submit] ✅ Session ${sessionId} saved for ${company.name} ` +
         `(tenant: ${tenantId}) tokens: ${cs?.totals?.totalTokens || 0} ` +
@@ -473,6 +554,7 @@ module.exports = async function handler(req, res) {
         costSummary: cs,
         coverage: cov,
         declaration,
+        applicantProvenance,
         sessionId,
         submittedAt,
       });

@@ -20,6 +20,7 @@ import {
   isStakeholderField,
   isUboLikeField,
   isRegistryExemptionNotice,
+  looksLikeRealName,
   makeStakeholder,
   formatDOBForDisplay,
   formatShareholding,
@@ -1556,6 +1557,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Transient status line shown on the research loader between/within passes.
   const [researchStatus, setResearchStatus] = useState("");
   const [researchTimestamp, setResearchTimestamp] = useState("");
+  // Research result cache (cache-first with force-refresh override). See
+  // lib/researchCache.js + api/research.js. `forceRefresh` bypasses the cache;
+  // `servedFromCache`/`cachedAt` drive the "Served from cache" badge.
+  const [forceRefresh, setForceRefresh] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [servedFromCache, setServedFromCache] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [cachedAt, setCachedAt] = useState(null);
   // DRS (document requirements service) session state. Populated when the
   // customer completes the dynamic documents step; consumed by the
   // pre-declaration gap gate (Step5Recompute).
@@ -1639,6 +1648,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Test/demo only: a swallowed registry-agent API error (e.g. billing/credits)
   // captured from the self-source response, so it isn't hidden as "manual".
   const [selfSourceDiag, setSelfSourceDiag] = useState(null);
+
+  // Applicant identity wiring (Fill Gaps → DB). Tracks which director/UBO the
+  // applicant identified themselves as, the agent-sourced values shown for each
+  // applicant field, and which pre-filled fields the customer changed.
+  // applicantSelectedPerson shape: { id, name, role, source, sourceTier, ... };
+  // null = not listed / manual. applicantAgentValues: { fieldId: agentValue }.
+  // applicantOverrides: [{ fieldId, fieldLabel, agentValue, customerValue, overriddenAt }].
+  const [applicantSelectedPerson, setApplicantSelectedPerson] = useState(null);
+  const [applicantAgentValues, setApplicantAgentValues] = useState({});
+  // Reserved for the future live locked/unlocked override UI; the authoritative
+  // override list is recomputed deterministically at submit (buildApplicantProvenance).
+  // eslint-disable-next-line no-unused-vars
+  const [applicantOverrides, setApplicantOverrides] = useState([]);
 
   // Tracks real token counts and costs from every API call in this journey.
   // Null for a phase means that phase did not run yet. Captured from the
@@ -1762,6 +1784,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setHasRunRealAgent(false); setSelfSourceDiag(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
+    setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -2262,6 +2285,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
     setError("");
+    // Clear any prior cache badge; the response handler re-derives it.
+    setServedFromCache(false); setCachedAt(null);
     // Fresh research run: clear prior research/extraction costs but keep the
     // doc-search cost captured earlier on Step 2.
     setCostTracker(prev => ({ ...prev, researchPass1: null, researchPass2: null, docExtraction: null }));
@@ -2354,6 +2379,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
         body: JSON.stringify({
           prompt: researchPrompt,
           tools: RESEARCH_TOOLS,
+          // Cache key fields — presence of companyName enables the cache layer
+          // in api/research.js for this (main research) call only.
+          companyName,
+          jurisdiction: countryCode,
+          entityType,
+          forceRefresh,
         })
       });
       if (!resp.ok) {
@@ -2368,6 +2399,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
         throw new Error(errData.error || `HTTP ${resp.status}`);
       }
       const data = await resp.json();
+      // Cache status: api/research.js tags cache hits with _fromCache/_cachedAt.
+      if (data._fromCache) {
+        setServedFromCache(true);
+        setCachedAt(data._cachedAt);
+      } else {
+        setServedFromCache(false);
+        setCachedAt(null);
+        setForceRefresh(false); // reset force refresh after a live fetch
+      }
       let text = "";
       for (const block of (data.content || [])) { if (block.type === "text" && block.text) text += block.text; }
       text = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
@@ -3196,6 +3236,73 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Final submission: build the metadata + payload, log, persist to Neon via
   // /api/submit, advance to Done. The DB write is best-effort — a failure
   // never blocks the customer from reaching the success screen.
+  // Compute per-field applicant provenance at submit time: for each applicant
+  // identity field, classify the customer's value as accepted (matches the
+  // agent-sourced value), overridden (changed it), or provided (no agent value).
+  // When no registry person was selected, every field is customer-provided.
+  const buildApplicantProvenance = () => {
+    if (!applicantSelectedPerson) {
+      const manualFields = [
+        "applicantFirstName", "applicantLastName", "applicantEmail", "applicantMobile",
+        "applicantPosition", "applicantNationality", "applicantDateOfBirth", "applicantIsPEP",
+      ];
+      return manualFields
+        .filter((f) => gapRef.current[f])
+        .map((f) => ({
+          fieldId: f,
+          fieldLabel: f.replace("applicant", "").replace(/([A-Z])/g, " $1").trim(),
+          agentValue: null,
+          customerValue: gapRef.current[f] || null,
+          customerAction: "provided",
+          source: null,
+          sourceTier: null,
+          retrievedAt: null,
+          overriddenAt: null,
+        }));
+    }
+
+    const provenance = [];
+    const ts = new Date().toISOString();
+    const fieldMap = {
+      applicantFirstName: "First name",
+      applicantLastName: "Last name",
+      applicantPosition: "Job title",
+      applicantNationality: "Nationality",
+      applicantDateOfBirth: "Date of birth",
+      applicantEmail: "Email address",
+      applicantMobile: "Phone number",
+      applicantIsPEP: "PEP status",
+    };
+
+    Object.entries(fieldMap).forEach(([fieldId, fieldLabel]) => {
+      const agentVal = applicantAgentValues[fieldId] || null;
+      const customerVal = gapRef.current[fieldId] || null;
+      let action = "provided";
+      let overriddenAt = null;
+      if (agentVal && customerVal) {
+        if (customerVal === agentVal) action = "accepted";
+        else { action = "overridden"; overriddenAt = ts; }
+      } else if (!agentVal && customerVal) {
+        action = "provided";
+      } else if (agentVal && !customerVal) {
+        action = "accepted";
+      }
+      provenance.push({
+        fieldId,
+        fieldLabel,
+        agentValue: agentVal,
+        customerValue: customerVal,
+        customerAction: action,
+        source: agentVal ? applicantSelectedPerson.source : null,
+        sourceTier: agentVal ? applicantSelectedPerson.sourceTier : null,
+        retrievedAt: agentVal ? ts : null,
+        overriddenAt,
+      });
+    });
+
+    return provenance;
+  };
+
   const submitApplication = async () => {
     const submittedAt = new Date().toISOString();
     setSubmitTs(submittedAt);
@@ -3299,9 +3406,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
       });
     });
 
+    // Applicant identity + per-field provenance (accepted / overridden / provided).
+    const applicantProvenance = buildApplicantProvenance();
+    const applicantOverridesList = applicantProvenance.filter((p) => p.customerAction === "overridden");
+    const applicant = {
+      selectedPersonId: applicantSelectedPerson?.id || null,
+      selectedPersonName: applicantSelectedPerson?.name || null,
+      selectedPersonRole: applicantSelectedPerson?.role || null,
+      selectedFromResearch: !!applicantSelectedPerson,
+      firstName: gapRef.current.applicantFirstName || null,
+      lastName: gapRef.current.applicantLastName || null,
+      email: gapRef.current.applicantEmail || null,
+      phone: gapRef.current.applicantMobile || null,
+      jobTitle: gapRef.current.applicantPosition || null,
+      nationality: gapRef.current.applicantNationality || null,
+      dateOfBirth: gapRef.current.applicantDateOfBirth || null,
+      isPEP: gapRef.current.applicantIsPEP || null,
+    };
+
     const payload = {
       submissionId: genUUID(),
       submittedAt,
+      applicant,
+      applicantProvenance,
+      applicantOverrides: applicantOverridesList,
+      applicantDataAmended: applicantOverridesList.length > 0,
       company: {
         name: research?.companyName || companyName,
         countryCode,
@@ -3393,6 +3522,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           costSummary,
           coverage: coverage || null,
           declaration: payload.declaration,
+          applicant,
+          applicantProvenance,
+          applicantOverrides: applicantOverridesList,
+          applicantDataAmended: applicantOverridesList.length > 0,
           submittedAt,
         }),
       });
@@ -3517,6 +3650,125 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return out;
   };
 
+  // Build the "who is completing this application?" candidate list from the
+  // research results: every active director plus every individual (non-corporate)
+  // UBO, de-duplicated by name. Drives the applicant-section person selector.
+  const getApplicantCandidates = () => {
+    const found = research?.found || [];
+    const candidates = [];
+
+    const directorResult = found.find(
+      (r) => isStakeholderField(r.field || r.fieldId) && String(r.field || r.fieldId).includes("director")
+    );
+    if (directorResult?.stakeholders) {
+      directorResult.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s) && looksLikeRealName(s.full_name) && !isCorporateStakeholder(s))
+        .forEach((s) => {
+          candidates.push({
+            id: s.id,
+            name: s.full_name,
+            role: s.role || "Director",
+            jobTitle: s.role || "Director",
+            nationality: s.nationality || "",
+            dob: s.date_of_birth || "",
+            source: s.source || "Companies House",
+            sourceTier: s.sourceTier || "tier1",
+            type: "director",
+          });
+        });
+    }
+
+    const uboResult = found.find(
+      (r) => isStakeholderField(r.field || r.fieldId) && String(r.field || r.fieldId).includes("ubo")
+    );
+    if (uboResult?.stakeholders) {
+      uboResult.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s) && looksLikeRealName(s.full_name) && !isCorporateStakeholder(s))
+        .forEach((s) => {
+          if (candidates.find((c) => c.name === s.full_name)) return; // already a director
+          const shareTxt = s.share_percentage != null ? formatShareholding(s.share_percentage) : "";
+          candidates.push({
+            id: s.id,
+            name: s.full_name,
+            role: shareTxt ? `Owner (${shareTxt})` : "UBO",
+            jobTitle: shareTxt ? "Owner" : "UBO",
+            nationality: s.nationality || "",
+            dob: s.date_of_birth || "",
+            source: s.source || "Companies House",
+            sourceTier: s.sourceTier || "tier1",
+            type: "ubo",
+          });
+        });
+    }
+
+    return candidates;
+  };
+
+  // Clear the applicant gap fields a person-selection had pre-filled (used when
+  // the customer switches to "I am not listed").
+  const clearApplicantPrefill = () => {
+    ["applicantFirstName", "applicantLastName", "applicantPosition", "applicantNationality", "applicantDateOfBirth"].forEach((f) => {
+      gapRef.current[f] = "";
+    });
+  };
+
+  // Pre-fill the applicant gap fields from a selected director/UBO and record
+  // the agent-sourced values so submit-time provenance can detect overrides.
+  const selectApplicantPerson = (person) => {
+    if (!person) {
+      setApplicantSelectedPerson(null);
+      setApplicantAgentValues({});
+      setApplicantOverrides([]);
+      clearApplicantPrefill();
+      setFormVersion((v) => v + 1);
+      return;
+    }
+    setApplicantSelectedPerson(person);
+    const av = {};
+    if (person.name) {
+      const parts = String(person.name).trim().split(/\s+/);
+      av.applicantFirstName = parts[0] || "";
+      av.applicantLastName = parts.slice(1).join(" ");
+    }
+    if (person.jobTitle) av.applicantPosition = person.jobTitle;
+    if (person.nationality) av.applicantNationality = person.nationality;
+    if (person.dob) av.applicantDateOfBirth = person.dob;
+    setApplicantAgentValues(av);
+    setApplicantOverrides([]);
+    Object.entries(av).forEach(([fieldId, value]) => { gapRef.current[fieldId] = value; });
+    setFormVersion((v) => v + 1);
+  };
+
+  const renderApplicantPersonSelector = () => {
+    const candidates = getApplicantCandidates();
+    if (candidates.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, color: "#1a3a4a80", display: "block", marginBottom: 6, fontWeight: 600 }}>
+          Who is completing this application?
+        </label>
+        <select
+          value={applicantSelectedPerson?.id || ""}
+          onChange={(e) => {
+            const id = e.target.value;
+            if (!id || id === "none") { selectApplicantPerson(null); return; }
+            selectApplicantPerson(candidates.find((c) => c.id === id) || null);
+          }}
+          style={{ width: "100%", border: "1.5px solid rgba(26,58,74,0.14)", borderRadius: 8, padding: "10px 14px", fontSize: 14, fontFamily: "inherit", background: "#fff", color: "#1a3a4a", cursor: "pointer" }}
+        >
+          <option value="">Select your name...</option>
+          {candidates.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}  —  {c.role}</option>
+          ))}
+          <option value="none">I am not listed — fill in manually</option>
+        </select>
+        <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "6px 2px 0" }}>
+          Picking your name pre-fills the fields below from the official registry. Edit any field that's wrong.
+        </p>
+      </div>
+    );
+  };
+
   const renderGapSection = (sectionKey) => {
     // "Additional Documents" (documents) section hidden on the Fill Gaps page
     // for all flows (FI / Corporate, AI-only / document+AI) per request. Kept
@@ -3532,6 +3784,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <div style={card} key={sectionKey}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
         <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
+        {sectionKey === "applicant" && renderApplicantPersonSelector()}
         <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
           {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
         </div>
@@ -6686,6 +6939,30 @@ Nium Onboarding Team`;
               );
             })()}
             {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
+            {/* Research cache override. Cache-first by default (saves API cost on
+                repeat searches); tick to force a live re-fetch. See
+                lib/researchCache.js + api/research.js. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748b' }}>
+                <input
+                  type="checkbox"
+                  checked={forceRefresh}
+                  onChange={e => setForceRefresh(e.target.checked)}
+                  style={{ width: 15, height: 15, cursor: 'pointer' }}
+                />
+                🔄 Force re-fetch (ignore cache)
+              </label>
+              {!forceRefresh && (
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  Cache saves API costs — only override for demos or stale data
+                </span>
+              )}
+              {forceRefresh && (
+                <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                  ⚠ Live API call — this will cost tokens
+                </span>
+              )}
+            </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
               {SHOW_TEST_TOOLS && <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>}
               <Btn
@@ -7630,9 +7907,36 @@ Nium Onboarding Team`;
                 </>)}
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <Btn variant="secondary" onClick={() => { setError(""); setJourneyOpen(true); scrollAndSetStep(STEPS.input); }}>← Back</Btn>
-                <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* Test/demo only: continue with synthesised data instead of
+                      the real research + self-source agents, so the rest of the
+                      flow can be exercised without spending on live API calls.
+                      Mirrors the dummy path the journey-selection page uses
+                      (proceedFromDocuments → doDummyResearch in demo mode). */}
+                  {(demoMode || SHOW_TEST_TOOLS) && (
+                    <button
+                      onClick={() => { setError(""); doDummyResearch("ai_documents"); }}
+                      title="Skip the real search — fills the rest of the flow with demo data at no cost"
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        padding: "10px 16px",
+                        background: "transparent",
+                        border: `1px dashed ${C.border}`,
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        color: C.text,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      🧪 Dummy search (no cost)
+                    </button>
+                  )}
+                  <Btn variant="primary" onClick={proceedFromDocuments}>Continue →</Btn>
+                </div>
               </div>
             </div>
           );
@@ -7711,6 +8015,16 @@ Nium Onboarding Team`;
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
                     {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} need your attention
                   </p>
+                  {servedFromCache && cachedAt && (
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: '#f0fdf4', border: '1px solid #bbf7d0',
+                      borderRadius: 20, padding: '3px 10px', fontSize: 11, color: '#166534',
+                      marginTop: 8
+                    }}>
+                      ✓ Served from cache · fetched {new Date(cachedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
