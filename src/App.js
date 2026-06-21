@@ -3866,10 +3866,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // nationality, PEP) rendered as a standalone block. Same StableInput rendering
   // the Fill Gaps applicant section used — extracted here now that Applicant is
   // its own step.
+  // Fallback applicant field set, mirroring the schema's applicant section
+  // (see UK/SG schemas in pipeline.js). Used when activeSchema is unavailable
+  // (e.g. a path that skipped the Company-input step) so the Applicant page
+  // never renders blank. Shape matches what renderApplicantFields consumes:
+  // { field, label, inputType, required, options }.
+  const APPLICANT_FALLBACK_FIELDS = [
+    { field: "applicantFirstName", label: "Applicant First Name", inputType: "text", required: true },
+    { field: "applicantLastName", label: "Applicant Last Name", inputType: "text", required: true },
+    { field: "applicantEmail", label: "Applicant Email", inputType: "email", required: true },
+    { field: "applicantMobileCountryCode", label: "Mobile Country Code", inputType: "text", required: true },
+    { field: "applicantMobile", label: "Applicant Mobile", inputType: "tel", required: true },
+    { field: "applicantDateOfBirth", label: "Applicant Date of Birth", inputType: "date", required: true },
+    { field: "applicantNationality", label: "Applicant Nationality (2-letter code)", inputType: "text", required: true },
+    { field: "applicantBirthCountry", label: "Applicant Birth Country", inputType: "text", required: true },
+    { field: "applicantPosition", label: "Applicant Position Title", inputType: "select", required: true, options: ["Director", "UBO", "Authorised Representative", "Partner", "Trustee", "Signatory", "Other"] },
+    { field: "applicantIsPEP", label: "Is Applicant a PEP?", inputType: "select", required: true, options: ["Yes", "No"] },
+  ];
+
   const renderApplicantFields = () => {
-    const items = getCombinedGaps()
+    const schemaItems = getCombinedGaps()
       .filter((g) => g.section === "applicant")
       .filter(dependsOnSatisfied);
+    // Fall back to the hardcoded applicant fields when the schema yields none
+    // (activeSchema null / not yet resolved), so the page is never blank.
+    const items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
     if (items.length === 0) return null;
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
@@ -6577,6 +6598,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
             <button
               onClick={() => {
+                // Pre-boarding never went through the Company-input step, so
+                // activeSchema is null — resolve it from entityType + countryCode
+                // (set during the pre-boarding research run) so the Applicant
+                // page's gap fields render. Signature is (countryCode, entityType,
+                // tenantConfig), matching the research handlers.
+                try {
+                  const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
+                  if (schema) setActiveSchema(schema);
+                } catch (_) { /* fall back to the hardcoded applicant fields */ }
                 setAgentType("onboarding");
                 setShowDossierView(false);
                 setStep(stepsFor(journeyType || "ai_only").applicant);
