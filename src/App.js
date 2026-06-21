@@ -1980,6 +1980,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // eslint-disable-next-line no-console
           console.log("[loadDossier] Fallback to tiered arrays:", found.length, "fields");
         }
+        // The dossier-load path skips the live research pipeline, so re-attach
+        // parsed .stakeholders arrays to stakeholder-field items the same way the
+        // live flow does. enrichStakeholders is idempotent (keeps existing
+        // .stakeholders) and parses .value whether it's a JSON array string
+        // ('[{"full_name":...}]') or legacy text ("John Smith (40%)").
+        found = enrichStakeholders(found);
+        // Belt-and-braces: for any stakeholder field still without people (e.g.
+        // .value wasn't parseable), pull from the dossier's saved stakeholders
+        // map, which is keyed by field id. Use the raw response (d.stakeholders),
+        // not the dossierStakeholders state which isn't updated yet this tick.
+        const rawDossierStakeholders = d.stakeholders || {};
+        found = found.map((item) => {
+          const fieldId = item.field || item.fieldId || "";
+          if (!isStakeholderField(fieldId)) return item;
+          if (Array.isArray(item.stakeholders) && item.stakeholders.length > 0) return item;
+          if (Array.isArray(rawDossierStakeholders[fieldId]) && rawDossierStakeholders[fieldId].length) {
+            return { ...item, stakeholders: rawDossierStakeholders[fieldId] };
+          }
+          return item;
+        });
         if (found.length > 0) setResearch({ companyName: d.company_name, found });
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
@@ -4181,10 +4201,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // column to near-zero, rendering values vertically.
   const renderFoundRow = ({ item, idx }, n) => {
     const fieldDef = findFieldDef(activeSchema, item.field);
-    const displayValue =
+    let displayValue =
       item.value !== null && typeof item.value === "object"
         ? safeRenderValue(item.value)
         : safeRenderValue(resolveDisplayValue(fieldDef, item.value));
+    // Safety net: a stakeholder field that fell through to the plain-row table
+    // (no parsed people) must never show a raw JSON-array blob like
+    // '[{"full_name":...}]'. Show a neutral placeholder instead. The real fix
+    // is upstream (enrichStakeholders re-attaches .stakeholders so these render
+    // as cards); this guards any residual case.
+    if (isStakeholderField(item.field) && /^\s*\[\s*\{/.test(String(item.value || ""))) {
+      displayValue = "Director / owner information sourced — details to be confirmed";
+    }
     const isUnmappedDropdown =
       fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
     return (
