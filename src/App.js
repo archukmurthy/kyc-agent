@@ -1955,6 +1955,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         if (d.company_name) setCompanyName(d.company_name);
         if (d.entity_type) setEntityType(d.entity_type);
         if (d.country_code) setCountryCode(d.country_code);
+        if (d.ownership_type) setOwnershipType(d.ownership_type);
         // Resolve the schema so the Applicant gap fields (and the rest of the
         // flow) have field definitions to render — the dossier stores entity
         // type + country, not the schema itself.
