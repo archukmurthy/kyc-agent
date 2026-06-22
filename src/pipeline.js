@@ -1894,6 +1894,18 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         return desc;
       }
 
+      // UK (GB) director/officer fields are sourced deterministically from the
+      // Companies House Officers API (Layer 1 — see lib/applyOfficersLayer.js +
+      // agents/registries/companiesHouseOfficers.js) and injected into the
+      // result after this AI call. So the model must NOT spend web-search budget
+      // re-searching director names for UK companies — it returns an empty array
+      // and that field is overwritten with the authoritative registry data.
+      if (countryCode === "GB") {
+        let ukDesc = `- "${f.label}" (id: ${f.field})\n`;
+        ukDesc += `  UK DIRECTOR/OFFICER DATA — DO NOT SEARCH. For this UK company, director and officer names are fetched directly from the Companies House Officers API (Layer 1, authoritative) and injected automatically. Return an empty JSON array [] for this field — do NOT run web searches for director names. Spend your search budget on all OTHER fields instead.\n`;
+        return ukDesc;
+      }
+
       // Director / officer fields: actual person name extraction. The model
       // must return the NAME, never the demographic description shown beside it.
       let desc = `- "${f.label}" (id: ${f.field})\n`;
