@@ -6274,6 +6274,61 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .filter((g) => g.section !== "documents")
       .filter(dependsOnSatisfied);
 
+  // Manual upload for registry documents that are behind a captcha and cannot
+  // be retrieved automatically. The analyst downloads the document by hand from
+  // the registry, then uploads it here to bring it back into the dossier.
+  // Registry docs live in `selfSourceResults.results` (no stable id field), so
+  // we key by array index.
+  function handleManualDocumentUpload(event, idx) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Local object URL for preview/reference. NB: this is an ephemeral blob URL
+    // that only lives in browser memory — see the PR-034 note in
+    // buildDossierPayload() for the persistence plan.
+    const localUrl = URL.createObjectURL(file);
+
+    setSelfSourceResults((prev) => {
+      if (!prev) return prev;
+      const results = (prev.results || []).map((doc, i) =>
+        i === idx
+          ? {
+              ...doc,
+              status: "manually_uploaded",
+              manualUploadFile: file,
+              manualUploadName: file.name,
+              manualUploadUrl: localUrl,
+              manualUploadAt: new Date().toISOString(),
+            }
+          : doc
+      );
+      return { ...prev, results };
+    });
+
+    // Reset the input so the same file can be re-selected after a Remove.
+    event.target.value = "";
+  }
+
+  function handleManualDocumentRemove(idx) {
+    setSelfSourceResults((prev) => {
+      if (!prev) return prev;
+      const results = (prev.results || []).map((doc, i) =>
+        i === idx
+          ? {
+              ...doc,
+              // captchaBlocked stays true, so the "Behind captcha" UI re-appears.
+              status: "manual_retrieval_required",
+              manualUploadFile: null,
+              manualUploadName: null,
+              manualUploadUrl: null,
+              manualUploadAt: null,
+            }
+          : doc
+      );
+      return { ...prev, results };
+    });
+  }
+
   const buildDossierPayload = () => {
     const found = research?.found || [];
     const mapItem = (r) => ({
@@ -6296,6 +6351,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     const costSummary = buildCostSummary(costTracker, dossierCompany(), entityType, ownershipType, coverage || null);
 
+    // Registry documents the analyst manually uploaded (captcha-blocked docs
+    // that couldn't be auto-sourced). Fold them into required_documents.
+    // TODO(PR-034 — Vercel Blob): when blob storage is built, upload
+    // `manualUploadFile` to Vercel Blob *here* and persist the permanent
+    // `blobUrl` instead of the ephemeral `manualUploadUrl` (a browser-memory
+    // blob: URL that does not survive a page reload).
+    const manuallyUploadedDocs = (selfSourceResults?.results || [])
+      .filter((d) => d.status === "manually_uploaded")
+      .map((d) => {
+        // Drop the non-serializable File object before persisting.
+        const rest = { ...d };
+        delete rest.manualUploadFile;
+        return {
+          ...rest,
+          status: "manually_uploaded",
+          filename: d.manualUploadName,
+          sourceUrl: d.manualUploadUrl || null,
+          manuallyUploaded: true,
+          uploadedAt: d.manualUploadAt,
+        };
+      });
+
     return {
       tenantId,
       company: dossierCompany(),
@@ -6309,7 +6386,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       probableData,
       indicativeData,
       stakeholders: stakeholderData,
-      requiredDocuments: docSearchResults?.documents || [],
+      requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
       rawResearch: { found: research?.found || [], timestamp: researchTimestamp },
     };
@@ -8043,10 +8120,16 @@ Nium Onboarding Team`;
                       let host = "";
                       try { host = url ? new URL(url).hostname.replace(/^www\./, "") : ""; } catch (_) { host = url || ""; }
                       const verified = item.status === "retrieved";
-                      const captcha = !!item.captchaBlocked;
+                      const uploaded = item.status === "manually_uploaded";
+                      // captchaBlocked docs can't be auto-retrieved; the analyst
+                      // uploads them manually. Once uploaded, the captcha UI is
+                      // replaced by the success state (uploaded takes priority).
+                      const captcha = !!item.captchaBlocked && !uploaded;
                       const manual = item.manualReviewFlag || item.status === "manual_retrieval_required";
                       const failed = item.status === "fetch_failed";
-                      const badge = verified
+                      const badge = uploaded
+                        ? { t: "✓ Document uploaded", bg: C.successBg, fg: C.success }
+                        : verified
                         ? { t: "✓ Retrieved", bg: C.successBg, fg: C.success }
                         : captcha
                           ? { t: "🔒 Behind captcha", bg: C.warningBg, fg: C.warning }
@@ -8056,8 +8139,8 @@ Nium Onboarding Team`;
                       return (
                         <div key={i} style={{
                           display: "flex", alignItems: "flex-start", gap: 12,
-                          padding: "14px 16px", background: verified ? C.successBg : "#fff",
-                          border: `1.5px solid ${verified ? C.successBorder : C.border}`,
+                          padding: "14px 16px", background: (verified || uploaded) ? C.successBg : "#fff",
+                          border: `1.5px solid ${(verified || uploaded) ? C.successBorder : C.border}`,
                           borderRadius: 10, marginBottom: 8,
                         }}>
                           <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>🏛️</span>
@@ -8074,19 +8157,78 @@ Nium Onboarding Team`;
                                 background: badge.bg, color: badge.fg,
                               }}>{badge.t}</span>
                             </div>
-                            {url && (
-                              <a href={url} target="_blank" rel="noopener noreferrer" style={{
-                                display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
-                                color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
+                            {uploaded ? (
+                              /* Manually-uploaded captcha doc — success state */
+                              <div style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                marginTop: 6, fontSize: 12, color: C.success,
                               }}>
-                                <span style={{ fontSize: 14 }}>🔗</span>
-                                {(manual || captcha) ? "Open registry →" : "View on registry →"}
-                              </a>
-                            )}
-                            {(item.status === "retrieved" || item.status === "retrieved_unverified") && (
-                              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
-                                📸 Snapshot captured as evidence
+                                <span>✓</span>
+                                <span style={{ fontWeight: 600 }}>{item.manualUploadName}</span>
+                                <span
+                                  onClick={() => handleManualDocumentRemove(i)}
+                                  style={{
+                                    cursor: "pointer", color: C.textSec,
+                                    fontSize: 11, textDecoration: "underline",
+                                  }}
+                                >
+                                  Remove
+                                </span>
                               </div>
+                            ) : captcha ? (
+                              /* Captcha-blocked — offer manual download + upload */
+                              <div style={{ marginTop: 6 }}>
+                                <div style={{ fontSize: 12, color: C.warning, marginBottom: 6 }}>
+                                  🔒 Behind captcha — cannot be retrieved automatically
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  {url && (
+                                    <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                                      display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
+                                      padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`,
+                                      background: C.surface, color: C.niumBlue, fontWeight: 600, textDecoration: "none",
+                                    }}>
+                                      <span style={{ fontSize: 14 }}>🔗</span>
+                                      Open registry →
+                                    </a>
+                                  )}
+                                  <input
+                                    type="file"
+                                    id={`upload-registry-${i}`}
+                                    accept=".pdf,.png,.jpg,.jpeg"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => handleManualDocumentUpload(e, i)}
+                                  />
+                                  <button
+                                    onClick={() => document.getElementById(`upload-registry-${i}`).click()}
+                                    style={{
+                                      fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                                      border: `1px solid ${C.border}`, background: C.surface,
+                                      color: C.text, cursor: "pointer",
+                                      display: "flex", alignItems: "center", gap: 4,
+                                    }}
+                                  >
+                                    ↑ Upload document
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {url && (
+                                  <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                                    display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
+                                    color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
+                                  }}>
+                                    <span style={{ fontSize: 14 }}>🔗</span>
+                                    {manual ? "Open registry →" : "View on registry →"}
+                                  </a>
+                                )}
+                                {(item.status === "retrieved" || item.status === "retrieved_unverified") && (
+                                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                                    📸 Snapshot captured as evidence
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>

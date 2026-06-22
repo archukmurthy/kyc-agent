@@ -65,8 +65,10 @@ function companiesHouseUrl(pageType, companyName, registrationNumber) {
         : `https://find-and-update.company-information.service.gov.uk/search?q=${encoded}`;
 
     case "regulator":
-      // FCA register — separate site entirely
-      return `https://register.fca.org.uk/s/search?predefined=ALL&q=${encoded}`;
+      // FCA register — separate site entirely.
+      // NB: no `predefined=ALL` — that param breaks the search page (returns
+      // an empty/error result); the register only needs `q`.
+      return `https://register.fca.org.uk/s/search?q=${encoded}`;
 
     default:
       return regNum
@@ -157,7 +159,8 @@ function germanyUrl(pageType, companyName, registrationNumber) {
 
 // ─── FCA register (standalone — used for Regulatory status across UK) ─────────
 function fcaUrl(companyName) {
-  return `https://register.fca.org.uk/s/search?predefined=ALL&q=${encodeURIComponent(companyName)}`;
+  // No `predefined=ALL` — that param breaks the FCA search page; only `q` is needed.
+  return `https://register.fca.org.uk/s/search?q=${encodeURIComponent(companyName)}`;
 }
 
 // ─── MAS register (Singapore regulatory status) ───────────────────────────────
