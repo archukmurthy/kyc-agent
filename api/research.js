@@ -2,6 +2,7 @@
 // It holds your API key securely and forwards requests to Claude.
 
 import { getCachedResearch, saveResearchToCache } from "../lib/researchCache.js";
+import officersLayer from "../lib/applyOfficersLayer.js";
 
 export default async function handler(req, res) {
   // Allow CORS from any origin (safe because this only accepts POST with specific body)
@@ -19,7 +20,8 @@ export default async function handler(req, res) {
 
   try {
     const { prompt, messages, model, tools, max_tokens,
-            companyName, jurisdiction, entityType, forceRefresh } = req.body;
+            companyName, jurisdiction, entityType, forceRefresh,
+            registrationNumber } = req.body;
 
     if (!prompt && !messages) {
       return res.status(400).json({ error: "Missing prompt or messages in request body" });
@@ -46,6 +48,15 @@ export default async function handler(req, res) {
     } else if (cacheEnabled && forceRefresh) {
       console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
     }
+
+    // ─── LAYER 1 — Companies House Officers API (deterministic) ───
+    // For UK (GB) companies, fetch all active officers from the authenticated
+    // Companies House REST API BEFORE the Anthropic call. The AI still handles
+    // every other field; the director field is replaced with this data after
+    // the call. Failures return null and fall back to AI web search.
+    const chOfficers = await officersLayer.fetchOfficersLayer({
+      companyName, jurisdiction, registrationNumber,
+    });
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -84,6 +95,12 @@ export default async function handler(req, res) {
         details: data
       });
     }
+
+    // ─── LAYER 1 INJECTION — replace AI directors with CH Officers data ───
+    // Runs before the cache save so the cached copy carries the deterministic
+    // directors too. No-op when chOfficers is null/empty (non-GB, key absent,
+    // or fetch failed) — the AI result is returned untouched.
+    officersLayer.injectOfficers(data, chOfficers);
 
     // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
     // Don't fail the request if the cache write fails.

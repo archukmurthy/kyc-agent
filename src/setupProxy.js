@@ -30,6 +30,7 @@ const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
+const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -55,7 +56,8 @@ module.exports = function (app) {
       try {
         const body = JSON.parse(raw || "{}");
         const { prompt, messages, model, tools, max_tokens,
-                companyName, jurisdiction, entityType, forceRefresh } = body;
+                companyName, jurisdiction, entityType, forceRefresh,
+                registrationNumber } = body;
         if (!prompt && !messages) {
           return res.status(400).json({ error: "Missing prompt or messages in request body" });
         }
@@ -89,6 +91,14 @@ module.exports = function (app) {
         } else if (cacheMod && forceRefresh) {
           console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
         }
+
+        // ─── LAYER 1 — Companies House Officers API (deterministic) ───
+        // Mirrors api/research.js: for UK (GB) companies fetch all active
+        // officers before the Anthropic call; the director field is replaced
+        // with this data after the call. Failures fall back to AI web search.
+        const chOfficers = await officersLayer.fetchOfficersLayer({
+          companyName, jurisdiction, registrationNumber,
+        });
 
         const apiKey = process.env.ANTHROPIC_API_KEY;
         if (!apiKey) {
@@ -127,6 +137,11 @@ module.exports = function (app) {
         if (!r.ok) {
           return res.status(r.status).json({ error: "Claude API error", details: data });
         }
+
+        // ─── LAYER 1 INJECTION — replace AI directors with CH Officers data ───
+        // Runs before the cache save so the cached copy carries them too. No-op
+        // when chOfficers is null/empty (non-GB, key absent, or fetch failed).
+        officersLayer.injectOfficers(data, chOfficers);
 
         // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
         if (cacheMod) {
