@@ -4200,6 +4200,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // fr-unit columns with whiteSpace:nowrap badges — a long source string
   // forced the source column to its content width and squeezed the value
   // column to near-zero, rendering values vertically.
+  // PR-041: a stakeholder field whose value is an EMPTY array (e.g. a publicly
+  // listed company that is exempt from recording persons with significant
+  // control) must render human-readable text, not a raw "[]". The empty array
+  // arrives either as the string "[]" or as an actual []. When the AI captured a
+  // meaningful exemption note in `source`, surface that; otherwise fall back to a
+  // generic message. Returns item.value unchanged for every other case, so the
+  // normal render path (dropdown mapping, the [{ safety net, etc.) is untouched.
+  const getDisplayValue = (item) => {
+    const fieldId = item.field || item.fieldId || "";
+    const val = item.value;
+    if (isStakeholderField(fieldId)) {
+      const isEmptyArrayString = typeof val === "string" && val.trim() === "[]";
+      const isEmptyArray = Array.isArray(val) && val.length === 0;
+      const hasNoStakeholders = !item.stakeholders || item.stakeholders.length === 0;
+      if ((isEmptyArrayString || isEmptyArray) && hasNoStakeholders) {
+        const sourceLabel = item.source || "";
+        const hasUsefulSource = sourceLabel.length > 10 && !sourceLabel.startsWith("http");
+        return hasUsefulSource
+          ? sourceLabel
+          : "No persons with significant control recorded";
+      }
+    }
+    return val;
+  };
+
   const renderFoundRow = ({ item, idx }, n) => {
     const fieldDef = findFieldDef(activeSchema, item.field);
     let displayValue =
@@ -4213,6 +4238,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // as cards); this guards any residual case.
     if (isStakeholderField(item.field) && /^\s*\[\s*\{/.test(String(item.value || ""))) {
       displayValue = "Director / owner information sourced — details to be confirmed";
+    }
+    // PR-041: empty stakeholder array → human-readable text instead of raw "[]".
+    // getDisplayValue only returns a different (string) value in that exact case;
+    // for every other field it returns item.value unchanged, so this is a no-op.
+    const humanReadable = getDisplayValue(item);
+    if (typeof humanReadable === "string" && humanReadable !== item.value) {
+      displayValue = humanReadable;
     }
     const isUnmappedDropdown =
       fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
