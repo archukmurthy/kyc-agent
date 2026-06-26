@@ -31,6 +31,8 @@ const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
+const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
+const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -356,4 +358,20 @@ module.exports = function (app) {
       adapt(uboRecalculateHandler)(req, res);
     });
   });
+
+  // Change Intelligence — append-only change_events write. POST; parse the JSON
+  // body the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/change-events", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(changeEventsHandler)(req, res);
+    });
+  });
+
+  // Amendment documents derived from change_events for the Fill Gaps section.
+  // GET uses req.query directly.
+  app.get("/api/amendment-documents", adapt(amendmentDocumentsHandler));
 };
