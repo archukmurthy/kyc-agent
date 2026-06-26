@@ -19,6 +19,7 @@ async function discoverOwnership({ entity, tenantConfig = {}, adapters = {}, bud
       missingInformation.push(...(result.missingInformation || []));
       searchEvents.push(...(result.searchEvents || []));
       for (let i = 0; i < (result.documentsDownloaded || 0); i += 1) budget.consume("documentsDownloaded");
+      if (result.sufficient) break;
     } catch (error) {
       missingInformation.push({ source: name, reason: error.message });
     }

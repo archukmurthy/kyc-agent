@@ -29,6 +29,7 @@ const companySearchHandler = require(path.join(__dirname, "..", "api", "company-
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
+const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
@@ -343,6 +344,16 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(uboDiscoveryHandler)(req, res);
+    });
+  });
+
+  app.post("/api/ubo-recalculate", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboRecalculateHandler)(req, res);
     });
   });
 };

@@ -3,7 +3,7 @@
 const { NODE_TYPES, TERMINAL_NODE_TYPES, EDGE_TYPES } = require("./constants");
 const { evaluateMateriality } = require("./materialityEvaluationAgent");
 
-async function expandOwnership({ rootEntity, discovery, adapters, rules, budget }) {
+async function expandOwnership({ rootEntity, discovery, adapters, rules, budget, onProgress }) {
   const statements = [];
   const evidence = [];
   const missingInformation = [];
@@ -15,12 +15,15 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget 
     const entityId = current.entity.id || current.entity.registrationNumber || current.entity.name;
     if (current.ancestry.has(entityId)) { missingInformation.push({ entity: current.entity.name, reason: "Ownership cycle detected" }); continue; }
     if (TERMINAL_NODE_TYPES.has(current.entity.type)) {
+      onProgress?.({ stage: "terminal", entity: current.entity.name, message: `${current.entity.name}: terminal ${current.entity.type}` });
       investigationLog.push({ entity: current.entity.name, jurisdiction: current.entity.jurisdiction, outcome: `Terminal ${current.entity.type}` });
       if ([NODE_TYPES.TRUST, NODE_TYPES.FOUNDATION].includes(current.entity.type)) missingInformation.push({ entity: current.entity.name, reason: `${current.entity.type} workflow required` });
       continue;
     }
     if (!budget.consume("entitiesInvestigated")) break;
+    onProgress?.({ stage: "research_start", entity: current.entity.name, message: `Researching ${current.entity.name}` });
     const found = await discovery({ entity: current.entity, tenantConfig: rules.tenantConfig, adapters, budget });
+    onProgress?.({ stage: "research_complete", entity: current.entity.name, message: found.statements.length ? `${current.entity.name}: found ${found.statements.length} ownership relationship${found.statements.length === 1 ? "" : "s"}` : `${current.entity.name}: no usable ownership relationship found` });
     investigationLog.push({ entity: current.entity.name, jurisdiction: current.entity.jurisdiction, outcome: found.statements.length ? `Found ${found.statements.length} direct ownership relationship${found.statements.length === 1 ? "" : "s"}` : "No usable direct ownership relationships found" });
     statements.push(...found.statements); evidence.push(...found.evidence); missingInformation.push(...found.missingInformation);
     searchEvents.push(...(found.searchEvents || []));

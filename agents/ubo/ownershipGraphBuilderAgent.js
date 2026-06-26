@@ -32,6 +32,8 @@ function normaliseEdge(statement, nodes) {
     to: ownedEntity.id,
     type: Object.values(EDGE_TYPES).includes(statement.type) ? statement.type : EDGE_TYPES.OWNERSHIP,
     ownershipPercentage: Number.isFinite(percentage) ? percentage : null,
+    ownershipIsMinimum: Boolean(statement.ownershipIsMinimum || statement.metadata?.ownershipIsMinimum),
+    ownershipBand: statement.ownershipBand || statement.metadata?.ownershipBand || null,
     evidenceIds: [...new Set(statement.evidenceIds || [])],
     confidence: Number.isFinite(Number(statement.confidence)) ? Number(statement.confidence) : 0,
     resolved: statement.resolved !== false,

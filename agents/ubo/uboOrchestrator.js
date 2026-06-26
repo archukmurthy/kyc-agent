@@ -79,7 +79,7 @@ function resolveOwnershipStatements(statements, evidence) {
  * Standalone UBO framework entry point. `adapters` is a map of async functions
  * that return { statements, evidence, missingInformation, documentsDownloaded }.
  */
-async function runUboFramework({ entityName, registrationNumber, jurisdiction, tenantConfig = {}, adapters = {} }) {
+async function runUboFramework({ entityName, registrationNumber, jurisdiction, tenantConfig = {}, adapters = {}, onProgress }) {
   if (!entityName || !jurisdiction) throw new Error("entityName and jurisdiction are required");
   const rules = {
     ...DEFAULT_RULES,
@@ -89,13 +89,15 @@ async function runUboFramework({ entityName, registrationNumber, jurisdiction, t
   };
   const budget = createBudget(rules.budgets);
   const rootEntity = { name: entityName, registrationNumber, jurisdiction, type: "company" };
-  const expanded = await expandOwnership({ rootEntity, discovery: discoverOwnership, adapters, rules, budget });
+  const expanded = await expandOwnership({ rootEntity, discovery: discoverOwnership, adapters, rules, budget, onProgress });
+  onProgress?.({ stage: "calculation", message: "Calculating effective ownership" });
   const resolutions = resolveOwnershipStatements(expanded.statements, expanded.evidence);
   const graph = buildOwnershipGraph({ rootEntity, statements: resolutions.statements });
   const unrelatedStatements = findUnrelatedStatements(graph);
   const ownership = calculateEffectiveOwnership(graph);
   const control = analyseControl(graph);
   const determination = determineUbos({ ownership, control, rules });
+  onProgress?.({ stage: "determination", message: "Determining beneficial owners" });
   const status = outcome({ budget, missingInformation: expanded.missingInformation, unresolvedPaths: ownership.unresolvedPaths });
   return {
     status,
