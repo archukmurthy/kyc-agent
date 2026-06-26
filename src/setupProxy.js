@@ -33,6 +33,8 @@ const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-rec
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
+const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
+const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -374,4 +376,29 @@ module.exports = function (app) {
   // Amendment documents derived from change_events for the Fill Gaps section.
   // GET uses req.query directly.
   app.get("/api/amendment-documents", adapt(amendmentDocumentsHandler));
+
+  // Self-serve re-research — dossier lifecycle reseed decision (full vs derive).
+  // POST; parse the JSON body the dev server doesn't auto-parse.
+  app.post("/api/dossier-reseed", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(dossierReseedHandler)(req, res);
+    });
+  });
+
+  // Server-authoritative search-attempt counter (two-retry cap). GET reads
+  // (req.query); POST atomically increments (parse the JSON body).
+  app.get("/api/search-attempt", adapt(searchAttemptHandler));
+  app.post("/api/search-attempt", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(searchAttemptHandler)(req, res);
+    });
+  });
 };

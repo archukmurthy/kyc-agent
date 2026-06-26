@@ -10,6 +10,9 @@ import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
+import CompanyConfirmGate from "./components/companyConfirm/CompanyConfirmGate";
+import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG, disputeKindFromAnswer } from "./reresearch/searchPolicy";
+import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
   SOURCE_TRUST,
   UK_SCHEMA,
@@ -1509,6 +1512,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [dossierId, setDossierId] = useState(null);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
+
+  // Self-serve re-research (front-door "wrong company / wrong type") state.
+  //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
+  //  searchAttempts    — searches already consumed for this dossier (server-read)
+  //  pendingReseedMode — null | 'full_research' | 're_derive', set after a dispute
+  //  companyConfirmed  — the front-door gate has been answered (don't re-show)
+  const [seededBy, setSeededBy] = useState("analyst");
+  const [searchAttempts, setSearchAttempts] = useState(0);
+  const [pendingReseedMode, setPendingReseedMode] = useState(null);
+  const [companyConfirmed, setCompanyConfirmed] = useState(false);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -1875,9 +1888,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
   // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
+    // The dossier auto-saves for the analyst pre-boarding flow AND for a customer
+    // self-serve re-research (seededBy 'customer') — same engine, same audit
+    // record, only the trigger differs. The customer reaches confirm only after
+    // clearing the applicant gate, so the gate stays ahead of the saved dossier.
     if (
-      agentType === "preboarding" &&
-      preboardingUnlocked &&
+      ((agentType === "preboarding" && preboardingUnlocked) || seededBy === "customer") &&
       step === stepsFor(journeyType).confirm &&
       research?.found?.length > 0 &&
       !showDossierView &&
@@ -2725,7 +2741,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Onboarding inserts the Applicant step between Research and Confirm;
       // pre-boarding skips it (Company → Research → Dossier).
       setStep(agentType === "preboarding" ? S.confirm : S.applicant);
-    } catch (err) { setError("Research failed: " + err.message); setStep(S.input); }
+    } catch (err) {
+      // Failure fallback. For a customer self-serve re-research, never leave them
+      // hanging and never hand them to an analyst mid-session: flag the failure
+      // as a first-class data point (reused change_events store) and fall through
+      // to manual entry so they can proceed.
+      if (seededBy === "customer") {
+        postReresearchFailureFlag({
+          dossierId,
+          jurisdiction: countryCode,
+          stage: "re_research",
+          reason: err.message,
+        });
+        setError("We couldn't complete that search just now. You can continue by entering your application manually below.");
+        setJourneyOpen(true);
+        setStep(S.input);
+      } else {
+        setError("Research failed: " + err.message);
+        setStep(S.input);
+      }
+    }
     finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
   };
 
@@ -3309,10 +3344,92 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
   const removeDocFile = (key) => () => setUploadedDocs(prev => ({ ...prev, [key]: null }));
 
+  // ── Self-serve re-research (front-door "wrong company / wrong type") ───────
+  // The customer flagged, on the company-confirm gate, that we researched the
+  // wrong company or the wrong type. We run the SAME research+dossier engine as
+  // the analyst flow — only the trigger and seeded_by differ. The dossierLifecycle
+  // state machine (via /api/dossier-reseed) decides the mode: identity → full
+  // re-research (discard research), interpretation → re-derive (keep research).
+  // The customer never sees the word "dossier".
+  const handleCompanyDispute = async (answer) => {
+    const disputeKind = disputeKindFromAnswer(answer);
+    if (!disputeKind) { setCompanyConfirmed(true); return; }
+    let mode = disputeKind === "identity" ? "full_research" : "re_derive";
+    try {
+      const r = await fetch("/api/dossier-reseed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          disputeKind,
+          disputedClassifiers: disputeKind === "identity" ? ["companyName"] : ["ownershipType"],
+        }),
+      });
+      const d = await r.json();
+      if (d && d.ok && d.mode) mode = d.mode; // server state machine confirms the mode
+    } catch (_) { /* fall back to the local mapping */ }
+
+    setSeededBy("customer");
+    setPendingReseedMode(mode);
+    setCompanyConfirmed(true);
+    setDossierSaved(false); // let the re-run save a fresh customer-seeded dossier
+
+    // Refresh the server-authoritative attempt count so the Step 1 cap is accurate.
+    if (dossierId) {
+      try {
+        const a = await fetch(`/api/search-attempt?dossierId=${encodeURIComponent(dossierId)}`);
+        const ad = await a.json();
+        if (ad && Number.isFinite(ad.attempts)) setSearchAttempts(ad.attempts);
+      } catch (_) { /* keep current count */ }
+    }
+    // Back to Step 1 to correct the classifier(s). Full re-research runs a new
+    // search there (cap enforced); re-derive skips the search (applyReDerive).
+    setError("");
+    scrollAndSetStep(STEPS.input);
+  };
+
+  // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
+  // the schema from the corrected classifier, re-save as customer-seeded. No new
+  // AI search, no attempt spent. Per this slice's scope we do NOT auto-strip/add
+  // type-conditional questions or fire any EDD behaviour (deferred) — the field
+  // set is left to the existing schema resolution.
+  const applyReDerive = () => {
+    try { setActiveSchema(getSchemaFromConfig(countryCode, entityType, tenantConfig)); }
+    catch (_) { /* leave schema as-is */ }
+    setPendingReseedMode(null);
+    setDossierSaved(false);
+    saveDossier(); // persists seeded_by:customer (seededBy state is 'customer')
+    scrollAndSetStep(STEPS.applicant); // applicant gate stays AHEAD of confirm
+  };
+
   // Journey-screen Continue → routes per selected card.
   const proceedFromJourney = () => {
     if (!selectedJourneyCard) { setError("Please choose an option to continue."); return; }
     setError("");
+
+    // Two-retry cap: search cards (A/B/E) are blocked once the customer has used
+    // their searches — only manual entry (C) remains. Card C is never blocked.
+    const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
+    if (isSearchCard && evaluateSearchCap(searchAttempts).locked) {
+      setError(CONTACT_ADMIN_MSG);
+      return;
+    }
+    // A customer re-search consumes an attempt — increment the server-authoritative
+    // counter (optimistic locally, reconciled from the server response). The new
+    // dossier carries the count forward via buildDossierPayload.
+    if (isSearchCard && seededBy === "customer") {
+      setSearchAttempts((n) => n + 1);
+      if (dossierId) {
+        fetch("/api/search-attempt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dossierId }),
+        })
+          .then((r) => r.json())
+          .then((d) => { if (d && Number.isFinite(d.attempts)) setSearchAttempts(d.attempts); })
+          .catch(() => {});
+      }
+    }
+
     if (selectedJourneyCard === "A") {
       setJourneyType("ai_documents");
       setJourneyOpen(false);
@@ -6435,6 +6552,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
       rawResearch: { found: research?.found || [], timestamp: researchTimestamp },
+      // Self-serve re-research audit data: who triggered the search that produced
+      // this dossier, and the carried search-attempt count (migration 008).
+      seededBy,
+      searchAttempts: seededBy === "customer" ? Math.max(1, searchAttempts) : 1,
     };
   };
 
@@ -7386,6 +7507,9 @@ Nium Onboarding Team`;
                   if (!ownershipType) { setError("Please select an ownership type."); return; }
                   if (!countryCode) { setError("Please select a country."); return; }
                   setError("");
+                  // Wrong-TYPE re-derive: skip the search journey entirely — keep
+                  // the existing research and re-resolve from the corrected type.
+                  if (pendingReseedMode === "re_derive") { applyReDerive(); return; }
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
                   // Both the onboarding AND pre-boarding flows now show the
@@ -7415,18 +7539,41 @@ Nium Onboarding Team`;
               )}
             </div>
 
+            {/* Two-retry cap notices: legal-name tip on the second attempt, and
+                the lockout-to-manual message once searches are used up. */}
+            {(() => {
+              const cap = evaluateSearchCap(searchAttempts);
+              if (cap.locked) {
+                return (
+                  <div data-testid="search-locked-banner" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#b91c1c", marginBottom: 14 }}>
+                    {CONTACT_ADMIN_MSG}
+                  </div>
+                );
+              }
+              if (cap.isSecondAttempt) {
+                return (
+                  <div data-testid="legal-name-alert" style={{ background: "#fff8ed", border: "1px solid #fcd9a8", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#9d6500", marginBottom: 14 }}>
+                    <strong>Tip:</strong> {LEGAL_NAME_ALERT}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 }}>
               {/* Card A */}
               {(() => {
                 const sel = selectedJourneyCard === "A";
+                const locked = evaluateSearchCap(searchAttempts).locked;
                 return (
                   <div
-                    onClick={() => { setSelectedJourneyCard("A"); setError(""); }}
+                    onClick={() => { if (locked) { setError(CONTACT_ADMIN_MSG); return; } setSelectedJourneyCard("A"); setError(""); }}
                     style={{
-                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: locked ? "not-allowed" : "pointer",
                       background: sel ? "#f0f9f6" : "#fafcfb",
                       border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.18)"}`,
                       boxShadow: sel ? "0 6px 18px rgba(26,58,74,0.12)" : "none",
+                      opacity: locked ? 0.45 : 1,
                     }}
                   >
                     <span style={{ position: "absolute", top: 10, right: 10, background: "#4a9e8e", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>Recommended</span>
@@ -7441,13 +7588,15 @@ Nium Onboarding Team`;
               {/* Card B */}
               {(() => {
                 const sel = selectedJourneyCard === "B";
+                const locked = evaluateSearchCap(searchAttempts).locked;
                 return (
                   <div
-                    onClick={() => { setSelectedJourneyCard("B"); setError(""); }}
+                    onClick={() => { if (locked) { setError(CONTACT_ADMIN_MSG); return; } setSelectedJourneyCard("B"); setError(""); }}
                     style={{
-                      padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      padding: "18px 16px", borderRadius: 12, cursor: locked ? "not-allowed" : "pointer",
                       background: sel ? "#f0f3f8" : "#fafcfb",
                       border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.12)"}`,
+                      opacity: locked ? 0.45 : 1,
                     }}
                   >
                     <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
@@ -7489,6 +7638,9 @@ Nium Onboarding Team`;
                 return (
                   <div
                     onClick={() => {
+                      // Two-retry cap: the Nium API lookup is a search option, so
+                      // it's blocked once the customer has used their searches.
+                      if (evaluateSearchCap(searchAttempts).locked) { setError(CONTACT_ADMIN_MSG); return; }
                       // The Nium KYB sandbox only holds one fixture (the STAR
                       // FINANCE PRIVATE LIMITED / SG record), so the lookup ALWAYS
                       // returns that sample data regardless of what was entered.
@@ -8487,6 +8639,19 @@ Nium Onboarding Team`;
 
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <div>
+            {/* Front-door self-serve re-research gate: "is this the right company?"
+                Shown once, at the top of Confirm (after the applicant gate). On a
+                dispute it routes to full re-research or re-derive; the customer
+                never sees the word "dossier". */}
+            {!companyConfirmed && (
+              <CompanyConfirmGate
+                company={research.companyName || companyName}
+                entityTypeLabel={entityType}
+                countryLabel={countryObj?.name || countryCode}
+                onConfirm={() => setCompanyConfirmed(true)}
+                onDispute={handleCompanyDispute}
+              />
+            )}
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
