@@ -22,3 +22,6 @@ test-output-self-source/
 
 # Local notification helper (run by Claude Code after task completion)
 alert.ps1
+
+# Local idle-watcher helper (run in a separate PowerShell window)
+watch-claude.ps1

@@ -8,6 +8,7 @@ import {
 } from "./utils/ownershipTypes";
 import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
+import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import {
   SOURCE_TRUST,
   UK_SCHEMA,
@@ -4354,6 +4355,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </div>
               </div>
             </div>
+          )}
+          {/* Capture-mode change dialogue — mounts beneath an unchecked field,
+              captures intent/registry + records one append-only change_event. */}
+          {!checks[idx] && (
+            <ChangeDialogue
+              field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
+              jurisdiction={countryCode || "GB"}
+              submissionId={dossierId}
+              dossierId={dossierId}
+              onEvent={(event) => trackEvent("change_event_captured", event)}
+            />
           )}
         </div>
         {/* Source badge cell — FIXED width so long source text can never
