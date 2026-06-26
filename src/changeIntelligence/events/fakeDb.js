@@ -21,7 +21,7 @@ function qidOf(text) {
   return m ? m[1] : null;
 }
 
-export function makeFakeDb() {
+function makeFakeDb() {
   const rows = [];
   let seq = 0;
 
@@ -100,7 +100,7 @@ export function makeFakeDb() {
 }
 
 // A minimal valid event for happy-path writes; spread + override per test.
-export function baseEvent(overrides = {}) {
+function baseEvent(overrides = {}) {
   return {
     submissionId: 'sub-1',
     fieldId: 'director.0.name',
@@ -110,3 +110,5 @@ export function baseEvent(overrides = {}) {
     ...overrides,
   };
 }
+
+module.exports = { makeFakeDb, baseEvent };

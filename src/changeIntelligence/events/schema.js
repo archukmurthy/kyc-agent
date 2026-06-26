@@ -11,12 +11,16 @@
  * output (add|remove|changed) — distinct from the engine's post-split
  * CHANGE_TYPE (add|remove|correct|update), which the engine consumes but this
  * table does not store.
+ *
+ * Packaged CJS-in-src (module.exports), mirroring the engine + pipeline.js, so a
+ * CommonJS api/ route can require() the DAL. The React side imports it via the
+ * same ESM→CJS interop already used for the engine (classifyChange).
  */
 
-export const TABLE = 'change_events';
+const TABLE = 'change_events';
 
 // Every column, in DDL order. Used to build queries without re-typing strings.
-export const COLUMNS = {
+const COLUMNS = {
   id: 'id',
   submissionId: 'submission_id',
   dossierId: 'dossier_id',
@@ -53,7 +57,7 @@ export const COLUMNS = {
 // Columns a caller may supply on write. `id`, `supersedes`, and `created_at`
 // are excluded: id + created_at are server-assigned, and supersedes is set via
 // the dedicated `supersedesId` argument so the supersede path is validated.
-export const WRITABLE_COLUMNS = [
+const WRITABLE_COLUMNS = [
   COLUMNS.submissionId,
   COLUMNS.dossierId,
   COLUMNS.fieldId,
@@ -80,7 +84,15 @@ export const WRITABLE_COLUMNS = [
 
 // JSONB columns — serialised with JSON.stringify on write so a JS value (object,
 // array, scalar) round-trips faithfully through the driver.
-export const JSONB_COLUMNS = [COLUMNS.beforeValue, COLUMNS.afterValue];
+const JSONB_COLUMNS = [COLUMNS.beforeValue, COLUMNS.afterValue];
 
 // change_type vocab = deriveChangeType output. Owned here (not an engine enum).
-export const CHANGE_TYPE_VALUES = ['add', 'remove', 'changed'];
+const CHANGE_TYPE_VALUES = ['add', 'remove', 'changed'];
+
+module.exports = {
+  TABLE,
+  COLUMNS,
+  WRITABLE_COLUMNS,
+  JSONB_COLUMNS,
+  CHANGE_TYPE_VALUES,
+};

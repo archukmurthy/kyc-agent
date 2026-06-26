@@ -117,6 +117,20 @@ export function ChangeDialogue({
       engineResult,
     });
 
+    // Durable write: persist this one change_event to the append-only store via
+    // the real Neon-backed route. Fire-and-forget — capture must NEVER block the
+    // customer (mirrors App.js#trackEvent). This is the dialogue fulfilling its
+    // one job ("EMIT EXACTLY ONE change_event"); onEvent stays a pure analytics
+    // notification. writeEvent server-side rejects a malformed/identifier-less
+    // event with a 200 + warning, so a missing submissionId can't break the UI.
+    if (typeof fetch === 'function') {
+      fetch('/api/change-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      }).catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
+    }
+
     if (typeof onEvent === 'function') onEvent(event);
     if (typeof onResolved === 'function') onResolved(engineResult);
     setOutcome(engineResult);

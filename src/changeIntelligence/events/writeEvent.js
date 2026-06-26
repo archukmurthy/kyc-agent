@@ -15,14 +15,14 @@
  * value throws, which is the guard against a drifting caller.
  */
 
-import {
+const {
   FIELD_CLASS,
   WORKFLOW,
   VERIFIABILITY,
   INTENT,
   REGISTRY_STATUS,
-} from '../enums';
-import { COLUMNS, WRITABLE_COLUMNS, JSONB_COLUMNS, CHANGE_TYPE_VALUES } from './schema';
+} = require('../enums');
+const { COLUMNS, WRITABLE_COLUMNS, JSONB_COLUMNS, CHANGE_TYPE_VALUES } = require('./schema');
 
 // NOT NULL columns that carry a DB DEFAULT. Because writeEvent always lists
 // every writable column in the INSERT, an omitted value would send an explicit
@@ -60,7 +60,7 @@ function requirePresent(event, label, key) {
   }
 }
 
-export async function writeEvent(db, event = {}) {
+async function writeEvent(db, event = {}) {
   if (!db || typeof db.query !== 'function') {
     throw new Error('writeEvent: db with a .query(text, params) method is required');
   }
@@ -140,3 +140,5 @@ export async function writeEvent(db, event = {}) {
 
   return rows[0];
 }
+
+module.exports = { writeEvent };

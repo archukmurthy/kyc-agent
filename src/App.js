@@ -9,6 +9,7 @@ import {
 import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
+import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import {
   SOURCE_TRUST,
   UK_SCHEMA,
@@ -8694,6 +8695,7 @@ Nium Onboarding Team`;
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
+            <AmendmentDocuments submissionId={dossierId} />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>
