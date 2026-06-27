@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import KYCAgent from "./App";
 import AdminRoot from "./admin/AdminRoot";
 import SuperAdminRoot from "./superadmin/SuperAdminRoot";
+import ChangeIntelligenceRoot from "./components/changeIntelligenceDashboard/ChangeIntelligenceRoot";
 
 const path = window.location.pathname;
 const root = ReactDOM.createRoot(document.getElementById("root"));
@@ -10,6 +11,9 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 let tree;
 if (path === "/super-admin" || path.startsWith("/super-admin/")) {
   tree = <SuperAdminRoot />;
+} else if (path === "/insights" || path.startsWith("/insights/")) {
+  // Internal, read-only Change Intelligence dashboard (gated by the admin token).
+  tree = <ChangeIntelligenceRoot />;
 } else if (path === "/admin" || path.startsWith("/admin/")) {
   tree = <AdminRoot />;
 } else if (path === "/preview" || path.startsWith("/preview/")) {

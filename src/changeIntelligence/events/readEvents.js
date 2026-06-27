@@ -73,6 +73,17 @@ async function getAmendmentDocs(db, submissionId) {
   );
 }
 
+// Whole-table read for the (read-only) Change Intelligence dashboard. Returns
+// EVERY event, oldest first, so the pure aggregator can derive current-state per
+// (submission, field) itself. Bounded by `limit` (default 50k) so a runaway
+// table can't blow the serverless response. Data only — no aggregation here.
+async function getAllEvents(db, limit = 50000) {
+  return db.query(
+    `-- @qid:all_events\nSELECT * FROM change_events ORDER BY ${COLUMNS.id} ASC LIMIT $1`,
+    [limit],
+  );
+}
+
 module.exports = {
   getEventsBySubmission,
   getEventsByField,
@@ -80,4 +91,5 @@ module.exports = {
   getUndecidedEvents,
   getEscalations,
   getAmendmentDocs,
+  getAllEvents,
 };

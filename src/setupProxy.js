@@ -35,6 +35,7 @@ const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-ev
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
+const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -401,4 +402,8 @@ module.exports = function (app) {
       adapt(searchAttemptHandler)(req, res);
     });
   });
+
+  // Read-only Change Intelligence dashboard metrics (aggregations over
+  // change_events). GET only.
+  app.get("/api/change-intelligence-metrics", adapt(changeIntelligenceMetricsHandler));
 };

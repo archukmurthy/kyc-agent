@@ -91,6 +91,12 @@ function makeFakeDb() {
           .filter((r) => r.submission_id === params[0] && r.doc_type != null)
           .sort((a, b) => a.id - b.id)
           .map(clone);
+      case 'all_events':
+        return rows
+          .slice()
+          .sort((a, b) => a.id - b.id)
+          .slice(0, params[0] || rows.length)
+          .map(clone);
       default:
         throw new Error(`fakeDb: unrecognised query (qid=${qid}):\n${text}`);
     }
