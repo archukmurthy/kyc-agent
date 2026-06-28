@@ -7,6 +7,7 @@
 // Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
 
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 // Lazy-require the API handlers and shared modules from their canonical
 // locations so dev and production run the exact same code paths.
@@ -78,7 +79,10 @@ module.exports = function (app) {
         let cacheMod = null;
         if (cacheEnabled) {
           try {
-            cacheMod = await import(path.join(__dirname, "..", "lib", "researchCache.js"));
+            // Node's ESM dynamic import() needs a file:// URL on Windows — a raw
+            // "C:\..." path throws "protocol 'c:'" and the cache silently never
+            // loads (every research run then hits the paid API). pathToFileURL fixes it.
+            cacheMod = await import(pathToFileURL(path.join(__dirname, "..", "lib", "researchCache.js")).href);
           } catch (err) {
             console.error("[research-cache] Failed to load cache module:", err.message);
           }
