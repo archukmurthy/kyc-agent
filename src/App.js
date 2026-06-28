@@ -11,6 +11,7 @@ import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import CompanyConfirmGate from "./components/companyConfirm/CompanyConfirmGate";
+import { Notice } from "./components/notices/Notice";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG, disputeKindFromAnswer } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
@@ -4378,7 +4379,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         boxSizing: "border-box",
         background: n % 2 === 0 ? "#fafcfb" : "#fff",
         borderBottom: "1px solid rgba(26,58,74,0.04)",
-        opacity: checks[idx] ? 1 : 0.3,
+        // Unchecking a field is NOT disabling it — keep the row fully legible.
+        // The Tier 1 "no action needed" notice below conveys the recorded state.
       }}>
         {/* Checkbox */}
         <div style={{ flexShrink: 0, width: 20, paddingTop: 2 }}>
@@ -4448,14 +4450,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
           )}
           {item.sourceTier === "tier2" && (
-            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-              From a company source — please confirm this is correct
-            </div>
+            <Notice tier="tier2" style={{ marginTop: 6 }}>
+              From a company source — please confirm this is correct.
+            </Notice>
           )}
           {item.sourceTier === "tier3" && (
-            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#C2410C" }}>
-              ⚠ From unverified source — please verify this is correct
-            </div>
+            <Notice tier="tier2" style={{ marginTop: 6 }}>
+              From an unverified source — please verify this is correct.
+            </Notice>
           )}
           {item.sharePercentageWarning && (
             <div style={{

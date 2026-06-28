@@ -22,6 +22,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { classifyChange } from '../../changeIntelligence/classifyChange';
+import { Notice } from '../notices/Notice';
 import { buildChangeEvent } from './buildChangeEvent';
 import { useDialogueState } from './useDialogueState';
 import {
@@ -54,13 +55,6 @@ const OPTION_BTN = {
   background: '#fff',
   border: '1px solid #CBD5E1',
   borderRadius: 6,
-};
-const NOTICE_NEUTRAL = { ...PANEL, background: '#F1F5F9', borderColor: '#CBD5E1' };
-const NOTICE_DOC = {
-  ...PANEL,
-  background: '#FEF9EF',
-  borderColor: '#FCD9A8',
-  color: '#7a4f00',
 };
 
 export function ChangeDialogue({
@@ -169,18 +163,20 @@ export function ChangeDialogue({
   const isDocRequired = outcome.workflow === 'doc_required' && outcome.docType;
 
   if (isDocRequired) {
+    // Tier 3 — action required (the customer must upload a document next).
     return (
-      <div style={NOTICE_DOC} data-testid="change-dialogue-notice">
+      <Notice tier="tier3" testId="change-dialogue-notice">
         Because of this change, we’ve added <strong>{outcome.docType}</strong> to your
         checklist — you’ll upload it on the next page.
-      </div>
+      </Notice>
     );
   }
 
+  // Tier 1 — calm. Recorded; nothing required from the customer right now.
   return (
-    <div style={NOTICE_NEUTRAL} data-testid="change-dialogue-notice">
-      Noted — we’ll review this. No action needed from you right now.
-    </div>
+    <Notice tier="tier1" testId="change-dialogue-notice">
+      We’ll review this. No action needed from you right now.
+    </Notice>
   );
 }
 
