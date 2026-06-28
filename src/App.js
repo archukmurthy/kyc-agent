@@ -4928,9 +4928,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       This person is marked incorrect — you'll enter the correct details on the next page.
                     </div>
                   ) : !needsEDD ? (
-                    <div style={{ fontSize: 12, color: "#1a6b56", fontStyle: "italic" }}>
-                      ✓ Verified from official sources. No additional details required for a listed company.
-                    </div>
+                    // Listed-company person: show the real held detail read-only
+                    // (same fields the private card shows, but no ticks / no
+                    // "edit next page" affordances — directors of a listed company
+                    // are public record, nothing to edit or collect). Calm Tier 1
+                    // note. Removal is still the header checkbox above.
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {stkConfirmFields(s, ubo)
+                          .filter((f) => stkFieldFound(s, f.key))
+                          .map((f) => (
+                            <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                              <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+                              <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
+                            </div>
+                          ))}
+                      </div>
+                      <Notice tier="tier1" style={{ marginTop: 10 }}>
+                        Verified from official sources — no additional details required for a listed company.
+                        Untick above if this person does not belong; you'll name their replacement on the next page.
+                      </Notice>
+                    </>
                   ) : (
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -5553,6 +5571,78 @@ export default function KYCAgent({ previewMode = false } = {}) {
     </div>
   );
 
+  // Light, identify-only replacement card (PR-057 interim). Shown ONLY on Fill
+  // Gaps for a listed-company person the customer unticked on Confirm. Collects
+  // just enough to identify the replacement — full legal name (required) + role
+  // — NOT the full UBO/EDD set (no nationality/DOB/PEP/residence). Writes through
+  // the same stakeholdersRef helpers as every other person card.
+  const renderLightReplacementCard = (fieldId, s) => {
+    const named = !!(s.full_name && s.full_name.trim());
+    return (
+      <div
+        key={s.id}
+        style={{
+          borderRadius: 10,
+          border: `1.5px solid ${named ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
+          background: "#fff", marginBottom: 12, overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px", background: "#fafcfb",
+          borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
+                {s.full_name || "Replacement director"}
+              </div>
+              {s.full_name_original && (
+                <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>
+                  Replacing: {s.full_name_original}
+                </div>
+              )}
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+            background: named ? "#dff2ec" : "#fff8ed",
+            color: named ? "#1a6b56" : "#8c5500",
+            border: `1px solid ${named ? "#4a9e8e" : "#e0a040"}40`,
+          }}>
+            {named ? "✅ Identified" : "⚠ Name needed"}
+          </span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
+            Identify-only — a listed company's directors are public record, so we only need to know
+            who replaces the person you removed.
+          </p>
+          <div style={{ marginBottom: 14 }}>
+            <StableInput
+              id={`stk_${fieldId}_${s.id}_full_name`}
+              label="Full Legal Name"
+              type="text"
+              value={s.full_name || ""}
+              onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "full_name", v)}
+              required
+              placeholder="Full legal name"
+            />
+          </div>
+          <StableInput
+            id={`stk_${fieldId}_${s.id}_role`}
+            label="Role / Position"
+            type="text"
+            value={s.role || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "role", v)}
+            placeholder="e.g. Director"
+          />
+        </div>
+      </div>
+    );
+  };
+
   const renderStakeholderForms = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
@@ -5564,6 +5654,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Drop registry exemption notices — never real people / EDD forms.
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
     const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
+
+    // Listed-company replacement path: a person the customer unticked on Confirm
+    // gets a LIGHT identify-only card here (not the full EDD set). These people
+    // return false from needsStakeholderDetails (which we must not change), so
+    // detect them via the customer_rejected flag seeded by initStakeholdersForFillGaps.
+    const lightReplacements = effectivelyListed
+      ? validStakeholders.filter((s) => s.customer_rejected && !needsStakeholderDetails(s, fieldId, effectivelyListed))
+      : [];
 
     // Private company with no real people found yet: prompt to add one. This is
     // a customer action, so it belongs in the forms section.
@@ -5584,13 +5682,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     // Nobody needs input → nothing in the forms section (summary handles the
-    // read-only reference at the bottom of the page).
-    if (needingDetails.length === 0) return null;
+    // read-only reference at the bottom of the page). For a listed company the
+    // section still renders if the customer unticked someone (light replacement).
+    if (needingDetails.length === 0 && lightReplacements.length === 0) return null;
 
     return (
       <div key={`stk-forms-${fieldId}`} style={card}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
-        {effectivelyListed ? (
+        {!effectivelyListed ? (
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
+            Complete the required details for each {personLabel} below. Names and roles marked
+            "Verified" came from the research on the previous page; everything else needs your input.
+          </p>
+        ) : needingDetails.length > 0 ? (
           <div style={{
             padding: "12px 16px", background: "#fff8ed", border: "1px solid #e0a040",
             borderRadius: 8, fontSize: 13, color: "#8c5500",
@@ -5603,13 +5707,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
               enhanced due diligence details.
             </span>
           </div>
-        ) : (
-          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
-            Complete the required details for each {personLabel} below. Names and roles marked
-            "Verified" came from the research on the previous page; everything else needs your input.
-          </p>
-        )}
+        ) : null}
         {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+
+        {/* Listed-company light replacement cards — only for unticked people. */}
+        {lightReplacements.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
+              You removed {lightReplacements.length === 1 ? `a ${personLabel}` : `${lightReplacements.length} ${personLabel}s`} on
+              the previous page. Please identify {lightReplacements.length === 1 ? "their replacement" : "their replacements"} below —
+              just a name and role. A listed company's {personLabel}s are public record, so no further details are needed.
+            </p>
+            {lightReplacements.map((s) => renderLightReplacementCard(fieldId, s))}
+          </>
+        )}
+
         {!effectivelyListed && renderAddStakeholderButtons(fieldId, ubo)}
       </div>
     );
@@ -5671,6 +5783,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
       const ubo = isUboLikeField(result.field);
       const personLabel = ubo ? "beneficial owner" : "director";
+
+      // Listed-company light replacement cards (PR-057): a person the customer
+      // unticked needs only a name (identify-only). Validate this before the
+      // "no one needs full details" early return below.
+      if (effectivelyListed) {
+        validStakeholders
+          .filter((s) => s.customer_rejected && !needsStakeholderDetails(s, result.field, effectivelyListed))
+          .forEach((s) => {
+            if (!s.full_name || !s.full_name.trim()) {
+              errors.push(`Please name the replacement ${personLabel} for the person you removed.`);
+            }
+          });
+      }
 
       // Only validate stakeholders that still need the full gap form. For a
       // listed company that's the >= 25% UBOs; for a private company it's
