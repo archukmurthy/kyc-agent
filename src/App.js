@@ -4104,20 +4104,69 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // Testing-only: auto-complete the applicant form with sample data. Mirrors
+  // fillTestData (Fill Gaps) — pulls from TEST_DATA, keeps any value already
+  // entered, and falls back to sensible values for schema fields not in
+  // TEST_DATA. Gated by SHOW_TEST_TOOLS at the button, so prod never sees it.
+  const fillApplicantTestData = () => {
+    const schemaItems = getCombinedGaps()
+      .filter((g) => g.section === "applicant")
+      .filter(dependsOnSatisfied);
+    const items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    items.forEach((g) => {
+      const current = gapRef.current[g.field];
+      if (current && String(current).trim().length > 0) return; // keep existing edits
+      let val = TEST_DATA[g.field];
+      if (val === undefined) {
+        const it = String(g.inputType || "text").toLowerCase();
+        if (it === "select" && Array.isArray(g.options) && g.options.length > 0) {
+          const first = g.options[0];
+          val = first && typeof first === "object" ? (first.value ?? first.label) : first;
+        } else if (it === "date") {
+          val = "1985-06-15";
+        } else if (it === "email") {
+          val = "jane.smith@example.com";
+        } else {
+          val = "Sample value";
+        }
+      }
+      gapRef.current[g.field] = val;
+    });
+    setFormVersion((v) => v + 1);
+  };
+
   // Standalone Applicant page (step between Research and Confirm). Reuses the
   // director/UBO person selector + the applicant gap fields, with its own
   // header, required-field validation, and Continue → Confirm.
   const renderApplicantPage = () => {
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
-            Tell us about yourself
-          </h2>
-          <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
-            As the person completing this application, we need a few details about you.
-            We have pre-filled what we already know.
-          </p>
+        <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
+              Tell us about yourself
+            </h2>
+            <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
+              As the person completing this application, we need a few details about you.
+              We have pre-filled what we already know.
+            </p>
+          </div>
+          {SHOW_TEST_TOOLS && (
+            <button
+              type="button"
+              onClick={fillApplicantTestData}
+              title="Testing only — fills the applicant form with sample data"
+              style={{
+                flexShrink: 0,
+                padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                background: "transparent", color: "#4a9e8e",
+                border: "2px dashed #4a9e8e",
+              }}
+            >
+              ✨ Fill with test data
+            </button>
+          )}
         </div>
 
         <div style={card}>
