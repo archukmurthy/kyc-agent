@@ -8728,6 +8728,50 @@ Nium Onboarding Team`;
               </div>
             </div>
 
+            {/* TEST-ONLY utility — treat the company as publicly listed, which
+                skips the detailed stakeholder EDD forms on the next page. Sets
+                isPubliclyListedOverride (same state + downstream effectivelyListed
+                consumer as before — behaviour unchanged). Gated by SHOW_TEST_TOOLS
+                so real customers never see it; styled to match the dashed
+                "Fill with test data" test control, not a customer selection. */}
+            {SHOW_TEST_TOOLS && (
+              <div
+                onClick={() => setIsPubliclyListedOverride(v => !v)}
+                title="Testing only — treat this company as publicly listed to skip the detailed stakeholder forms on the next page"
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 14px", marginBottom: 16,
+                  background: "transparent",
+                  border: "2px dashed #4a9e8e", borderRadius: 8,
+                  cursor: "pointer", userSelect: "none",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isPubliclyListedOverride}
+                  onChange={() => setIsPubliclyListedOverride(v => !v)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 15, height: 15, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
+                  aria-label="TEST: treat as publicly listed (skips stakeholder forms)"
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#4a9e8e", letterSpacing: "0.3px" }}>
+                    🧪 TEST: treat as publicly listed (skips stakeholder forms)
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 1, color: "#4a9e8e", opacity: 0.8 }}>
+                    {isPubliclyListedOverride
+                      ? "On — detailed stakeholder forms will be skipped on the next page"
+                      : "Test aid only — not shown to customers"}
+                  </div>
+                </div>
+                {isPubliclyListedOverride && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#4a9e8e", border: "1px dashed #4a9e8e", borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Listed ✓
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Part 11 — low-data banner. Threshold is calibrated per ownership
                 type (private companies expect lower fill rates than listed). */}
             {(() => {
@@ -8814,58 +8858,6 @@ Nium Onboarding Team`;
                   <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
                 </div>
               </div>
-            )}
-
-            {/* Manual "publicly listed company" toggle — hides stakeholder EDD
-                forms on the next page. Test-mode only (gated by SHOW_TEST_TOOLS):
-                hidden for real customers, shown in local dev / ?test=1. */}
-            {SHOW_TEST_TOOLS && (
-            <div
-              onClick={() => setIsPubliclyListedOverride(v => !v)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "12px 16px",
-                background: isPubliclyListedOverride ? "#f3faf8" : "#f2f1ed",
-                border: `1.5px solid ${isPubliclyListedOverride ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
-                borderRadius: 10, marginBottom: 16,
-                cursor: "pointer", transition: "all 0.15s", userSelect: "none",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isPubliclyListedOverride}
-                onChange={() => setIsPubliclyListedOverride(v => !v)}
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: 16, height: 16, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
-                aria-label="This is a publicly listed company"
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 14, fontWeight: 600,
-                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a",
-                }}>
-                  🏛 This is a publicly listed company
-                </div>
-                <div style={{
-                  fontSize: 12, marginTop: 2,
-                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a70",
-                }}>
-                  {isPubliclyListedOverride
-                    ? "✓ Stakeholder compliance details will not be collected on the next page"
-                    : "Check this box to skip detailed stakeholder forms on the next page"}
-                </div>
-              </div>
-              {isPubliclyListedOverride && (
-                <span style={{
-                  fontSize: 12, fontWeight: 700, color: "#1a6b56",
-                  background: "#f3faf8", border: "1px solid #4a9e8e",
-                  borderRadius: 99, padding: "3px 10px",
-                  whiteSpace: "nowrap", flexShrink: 0,
-                }}>
-                  Listed ✓
-                </span>
-              )}
-            </div>
             )}
 
             {stakeholderFound.length > 0 && (
