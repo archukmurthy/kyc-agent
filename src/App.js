@@ -1571,6 +1571,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // slice 2's confirmation gate verifies it. Distinct from `niumRegNumber`,
   // which is the test-gated Nium-journey field.
   const [regNumber, setRegNumber] = useState("");
+  // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
+  // the string is non-empty. Set to "customer" ONLY by the lookup-page input
+  // handler (the customer typed it themselves this session). Every link-landing
+  // path (?dossierId / ?ref) leaves it null — even once `regNumber` is later
+  // restored from a loaded dossier — so slice 2's FoundationalFactsGate locks
+  // the "✓ You provided this" row only for the genuine lookup journey and keeps
+  // it verifiable/uncheckable everywhere else.
+  const [regNumberSource, setRegNumberSource] = useState(null);
   // Registration number for the Nium API Lookup journey (test mode only). The
   // Nium eKYB publicDetails endpoint searches registries by registration number
   // — a name-only search returns HTTP 400 — so this is required for that one
@@ -1855,6 +1863,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDossierSaved(false);
     setShowDossierView(false);
     setRegNumber("");
+    setRegNumberSource(null);
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -4180,11 +4189,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // header, required-field validation, and Continue → Confirm.
   const renderApplicantPage = () => {
     // The five foundational facts used to research the company. Reg-number
-    // provenance (G2): a customer-typed number (slice-1 regNumber state) is
-    // pre-confirmed and display-only; otherwise the research `registration_number`
-    // found field is the system-retrieved value the customer must verify; neither
-    // → "Not provided" and non-disputable (nothing to confirm).
-    const customerReg = (regNumber || "").trim();
+    // provenance (G2) is gated on the EXPLICIT `regNumberSource` flag, never on
+    // `regNumber` truthiness — so a number restored from a loaded dossier (the
+    // ?dossierId / ?ref link journeys, which leave the source null) is treated as
+    // system-retrieved and stays verifiable, not locked as "you provided this".
+    // A customer-typed number (source === "customer") is pre-confirmed and
+    // display-only; otherwise the research `registration_number` found field is
+    // the system-retrieved value the customer must verify; neither → "Not
+    // provided" and non-disputable (nothing to confirm).
+    const customerReg = regNumberSource === "customer" ? (regNumber || "").trim() : "";
     const systemReg = customerReg
       ? ""
       : ((research?.found || []).find((f) => f.field === "registration_number")?.value || "");
@@ -6992,13 +7005,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     // Registration number carried onto the dossier for slice 2's confirmation
     // gate. Provenance distinguishes a customer-typed number (trusted) from a
-    // system-retrieved one (shown for verification). In slice 1 the lookup-page
-    // field is always customer-entered; a system-retrieved number, when present,
-    // already lives in the research output as the `registration_number` found
-    // field, so slice 2 can reconcile the two.
+    // system-retrieved one (shown for verification), and is taken from the
+    // EXPLICIT `regNumberSource` flag — not inferred from the string — so a
+    // number restored from a loaded dossier (source null) is never re-persisted
+    // as "customer". A system-retrieved number, when present, already lives in
+    // the research output as the `registration_number` found field, so slice 2
+    // can reconcile the two.
     const trimmedRegNumber = regNumber.trim();
     const registrationNumber = trimmedRegNumber || null;
-    const registrationNumberSource = trimmedRegNumber ? "customer" : null;
+    const registrationNumberSource =
+      trimmedRegNumber && regNumberSource === "customer" ? "customer" : null;
 
     return {
       tenantId,
@@ -7875,7 +7891,7 @@ Nium Onboarding Team`;
             {/* Optional registration / company number. When supplied it's used as
                 the primary search key to pinpoint the exact company; blank = the
                 same name-based search as before (slice 1). */}
-            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => setRegNumber(v)} placeholder="e.g. 00445790 — the official company / registration number" />
+            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => { setRegNumber(v); setRegNumberSource(v.trim() ? "customer" : null); }} placeholder="e.g. 00445790 — the official company / registration number" />
             <p style={{ fontSize: 11, color: "#1a3a4a80", margin: "-8px 0 16px", lineHeight: 1.4 }}>
               Optional. If you know the company's official registration number, we'll use it to pinpoint the exact company and sharpen the research. Leave it blank to search by name.
             </p>
