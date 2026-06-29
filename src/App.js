@@ -10,9 +10,9 @@ import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
-import CompanyConfirmGate from "./components/companyConfirm/CompanyConfirmGate";
+import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import { Notice } from "./components/notices/Notice";
-import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG, disputeKindFromAnswer } from "./reresearch/searchPolicy";
+import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
   SOURCE_TRUST,
@@ -1518,11 +1518,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
   //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
   //  searchAttempts    — searches already consumed for this dossier (server-read)
   //  pendingReseedMode — null | 'full_research' | 're_derive', set after a dispute
-  //  companyConfirmed  — the front-door gate has been answered (don't re-show)
-  const [seededBy, setSeededBy] = useState("analyst");
+  // seededBy is now always 'analyst': the only writer was the old dossier-reseed
+  // dispute, which the foundational-facts gate (slice 2) supersedes with a full
+  // reset. Kept as a read-only value so the downstream re-research wiring is
+  // unchanged; revive a setter here if customer-seeded reseed is reintroduced.
+  const [seededBy] = useState("analyst");
   const [searchAttempts, setSearchAttempts] = useState(0);
   const [pendingReseedMode, setPendingReseedMode] = useState(null);
-  const [companyConfirmed, setCompanyConfirmed] = useState(false);
+
+  // Foundational-facts confirmation gate (slice 2 of 2). Shown at the top of the
+  // Applicant page; the applicant section reveals only once all five facts are
+  // confirmed. `factChecks` is sparse: a missing key means confirmed (default
+  // ticked); a key set false means that fact was disputed. Ownership disputes
+  // open `ownershipFork` ('choose' → misclassified|changed); a genuine change is
+  // recorded in `ownershipChangeDeclared` and routes to the pending document slot.
+  const [factChecks, setFactChecks] = useState({});
+  const [ownershipFork, setOwnershipFork] = useState(null); // null | 'choose' | 'changed'
+  const [ownershipChangeDeclared, setOwnershipChangeDeclared] = useState(null);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -1817,6 +1829,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
+    // Foundational-facts gate → back to all-confirmed default for the next run.
+    setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -3376,47 +3390,42 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
   const removeDocFile = (key) => () => setUploadedDocs(prev => ({ ...prev, [key]: null }));
 
-  // ── Self-serve re-research (front-door "wrong company / wrong type") ───────
-  // The customer flagged, on the company-confirm gate, that we researched the
-  // wrong company or the wrong type. We run the SAME research+dossier engine as
-  // the analyst flow — only the trigger and seeded_by differ. The dossierLifecycle
-  // state machine (via /api/dossier-reseed) decides the mode: identity → full
-  // re-research (discard research), interpretation → re-derive (keep research).
-  // The customer never sees the word "dossier".
-  const handleCompanyDispute = async (answer) => {
-    const disputeKind = disputeKindFromAnswer(answer);
-    if (!disputeKind) { setCompanyConfirmed(true); return; }
-    let mode = disputeKind === "identity" ? "full_research" : "re_derive";
-    try {
-      const r = await fetch("/api/dossier-reseed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          disputeKind,
-          disputedClassifiers: disputeKind === "identity" ? ["companyName"] : ["ownershipType"],
-        }),
-      });
-      const d = await r.json();
-      if (d && d.ok && d.mode) mode = d.mode; // server state machine confirms the mode
-    } catch (_) { /* fall back to the local mapping */ }
+  // ── Foundational-facts confirmation gate handlers (slice 2 of 2) ──────────
+  // The five-fact gate at the top of the Applicant page is controlled: these
+  // handlers own its check state and outcomes. A disputed fact (other than the
+  // ownership fork) — or an "ownership misclassified" choice — is a HARD reset to
+  // the fresh lookup page via resetAll() (nothing pre-filled). This deliberately
+  // replaces the old dossier-reseed dispute (which carried state forward); the
+  // re-research engine itself is untouched and still reachable elsewhere.
+  const isFactConfirmed = (key) => factChecks[key] !== false;
 
-    setSeededBy("customer");
-    setPendingReseedMode(mode);
-    setCompanyConfirmed(true);
-    setDossierSaved(false); // let the re-run save a fresh customer-seeded dossier
-
-    // Refresh the server-authoritative attempt count so the Step 1 cap is accurate.
-    if (dossierId) {
-      try {
-        const a = await fetch(`/api/search-attempt?dossierId=${encodeURIComponent(dossierId)}`);
-        const ad = await a.json();
-        if (ad && Number.isFinite(ad.attempts)) setSearchAttempts(ad.attempts);
-      } catch (_) { /* keep current count */ }
+  const toggleFact = (key) => {
+    // Flip this fact's confirm state. Toggling ownership opens/closes its fork.
+    const wasConfirmed = factChecks[key] !== false;
+    setFactChecks((prev) => ({ ...prev, [key]: wasConfirmed ? false : true }));
+    if (key === "ownershipType") {
+      setOwnershipFork(wasConfirmed ? "choose" : null);
+      if (wasConfirmed === false) setOwnershipChangeDeclared(null);
     }
-    // Back to Step 1 to correct the classifier(s). Full re-research runs a new
-    // search there (cap enforced); re-derive skips the search (applyReDerive).
-    setError("");
-    scrollAndSetStep(STEPS.input);
+  };
+
+  // Re-tick everything → back to the all-confirmed default (cancel a dispute).
+  const cancelFactDispute = () => {
+    setFactChecks({});
+    setOwnershipFork(null);
+    setOwnershipChangeDeclared(null);
+  };
+
+  // Ownership genuinely changed → record the declared change and route to the
+  // document-request path. The specific document is a PENDING mapping (ops-owned),
+  // so we only record + surface the "to be specified" slot; we never guess a
+  // document and the gate stays un-confirmed (applicant section stays hidden).
+  const declareOwnershipChanged = () => {
+    setOwnershipFork("changed");
+    setOwnershipChangeDeclared({
+      from: ownershipTypeLabel(ownershipType) || ownershipType || "",
+      at: new Date().toISOString(),
+    });
   };
 
   // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
@@ -4170,71 +4179,123 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // director/UBO person selector + the applicant gap fields, with its own
   // header, required-field validation, and Continue → Confirm.
   const renderApplicantPage = () => {
+    // The five foundational facts used to research the company. Reg-number
+    // provenance (G2): a customer-typed number (slice-1 regNumber state) is
+    // pre-confirmed and display-only; otherwise the research `registration_number`
+    // found field is the system-retrieved value the customer must verify; neither
+    // → "Not provided" and non-disputable (nothing to confirm).
+    const customerReg = (regNumber || "").trim();
+    const systemReg = customerReg
+      ? ""
+      : ((research?.found || []).find((f) => f.field === "registration_number")?.value || "");
+    const regProvenance = customerReg ? "customer" : systemReg ? "system" : "none";
+    const regValue = customerReg || systemReg || "";
+
+    const facts = [
+      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "—", disputable: true },
+      {
+        key: "registrationNumber",
+        label: "Registration / company number",
+        value: regValue || "Not provided",
+        disputable: regProvenance === "system",
+        note:
+          regProvenance === "customer"
+            ? "✓ You provided this"
+            : regProvenance === "system"
+            ? "Found by research — please verify"
+            : "Not provided on lookup",
+      },
+      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
+      { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
+      { key: "ownershipType", label: "Ownership type", value: ownershipTypeLabel(ownershipType) || ownershipType || "—", disputable: true },
+    ];
+
+    // All five confirmed (a disputed fact, or a pending ownership fork, hides the
+    // applicant section below). A four-fact dispute resets; ownership forks.
+    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.disputable && factChecks[f.key] === false);
+    const ownershipDisputed = factChecks.ownershipType === false;
+    const factsConfirmed = !fourDisputed && !ownershipDisputed && ownershipFork === null;
+
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
-        <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
-              Tell us about yourself
-            </h2>
-            <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
-              As the person completing this application, we need a few details about you.
-              We have pre-filled what we already know.
-            </p>
-          </div>
-          {SHOW_TEST_TOOLS && (
+        <FoundationalFactsGate
+          facts={facts}
+          isConfirmed={isFactConfirmed}
+          onToggle={toggleFact}
+          ownershipFork={ownershipFork}
+          ownershipChangeFrom={ownershipChangeDeclared?.from || ""}
+          onReset={resetAll}
+          onOwnershipChanged={declareOwnershipChanged}
+          onCancel={cancelFactDispute}
+        />
+
+        {factsConfirmed && (
+          <>
+            <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
+                  Tell us about yourself
+                </h2>
+                <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
+                  As the person completing this application, we need a few details about you.
+                  We have pre-filled what we already know.
+                </p>
+              </div>
+              {SHOW_TEST_TOOLS && (
+                <button
+                  type="button"
+                  onClick={fillApplicantTestData}
+                  title="Testing only — fills the applicant form with sample data"
+                  style={{
+                    flexShrink: 0,
+                    padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                    background: "transparent", color: "#4a9e8e",
+                    border: "2px dashed #4a9e8e",
+                  }}
+                >
+                  ✨ Fill with test data
+                </button>
+              )}
+            </div>
+
+            <div style={card}>
+              {renderApplicantPersonSelector()}
+              {renderApplicantFields()}
+            </div>
+
             <button
-              type="button"
-              onClick={fillApplicantTestData}
-              title="Testing only — fills the applicant form with sample data"
+              onClick={() => {
+                const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
+                const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
+                if (missing.length > 0) {
+                  setApplicantValidationError(
+                    "Please fill in " + missing.length + " required field" +
+                    (missing.length > 1 ? "s" : "") + " before continuing."
+                  );
+                  return;
+                }
+                setApplicantValidationError(null);
+                scrollAndSetStep(STEPS.confirm);
+              }}
               style={{
-                flexShrink: 0,
-                padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                background: "transparent", color: "#4a9e8e",
-                border: "2px dashed #4a9e8e",
+                width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
+                color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
+                fontFamily: "inherit", cursor: "pointer", marginTop: 24,
               }}
             >
-              ✨ Fill with test data
+              Continue →
             </button>
-          )}
-        </div>
 
-        <div style={card}>
-          {renderApplicantPersonSelector()}
-          {renderApplicantFields()}
-        </div>
-
-        <button
-          onClick={() => {
-            const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
-            const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
-            if (missing.length > 0) {
-              setApplicantValidationError(
-                "Please fill in " + missing.length + " required field" +
-                (missing.length > 1 ? "s" : "") + " before continuing."
-              );
-              return;
-            }
-            setApplicantValidationError(null);
-            scrollAndSetStep(STEPS.confirm);
-          }}
-          style={{
-            width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
-            color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
-            fontFamily: "inherit", cursor: "pointer", marginTop: 24,
-          }}
-        >
-          Continue →
-        </button>
-
-        {applicantValidationError && (
-          <div style={{
-            marginTop: 12, padding: "10px 14px", background: "#FEF2F2",
-            border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 13, color: "#DC2626",
-          }}>
-            {applicantValidationError}
-          </div>
+            {applicantValidationError && (
+              <div style={{
+                marginTop: 12, padding: "10px 14px", background: "#FEF2F2",
+                border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 13, color: "#DC2626",
+              }}>
+                {applicantValidationError}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -9054,19 +9115,9 @@ Nium Onboarding Team`;
 
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <div>
-            {/* Front-door self-serve re-research gate: "is this the right company?"
-                Shown once, at the top of Confirm (after the applicant gate). On a
-                dispute it routes to full re-research or re-derive; the customer
-                never sees the word "dossier". */}
-            {!companyConfirmed && (
-              <CompanyConfirmGate
-                company={research.companyName || companyName}
-                entityTypeLabel={entityType}
-                countryLabel={countryObj?.name || countryCode}
-                onConfirm={() => setCompanyConfirmed(true)}
-                onDispute={handleCompanyDispute}
-              />
-            )}
+            {/* The "is this the right company?" check now lives on the Applicant
+                page as the five-fact FoundationalFactsGate (slice 2), so there is
+                no gate here — avoids a double gate. */}
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
