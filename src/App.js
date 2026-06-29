@@ -4215,13 +4215,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // ?dossierId / ?ref link journeys, which leave the source null) is treated as
     // system-retrieved and stays verifiable, not locked as "you provided this".
     // A customer-typed number (source === "customer") is pre-confirmed and
-    // display-only; otherwise the research `registration_number` found field is
-    // the system-retrieved value the customer must verify; neither → "Not
-    // provided" and non-disputable (nothing to confirm).
+    // display-only; otherwise the schema-correct registration-number research
+    // field is the system-retrieved value the customer must verify; neither →
+    // "Not provided" and non-disputable (nothing to confirm).
+    //
+    // PR-059 B: resolve the reg field id from the active schema's flow rather
+    // than a hardcoded literal. Corporate schemas store it as
+    // `businessRegistrationNumber`, fi schemas as `registration_number`; reading
+    // the literal `registration_number` matched only the fi case and, for a
+    // corporate entity, could surface a stray/contaminated row instead of the
+    // real value Confirm shows. mapExtractedKey() is the single source of truth
+    // for that mapping (same one the extraction pipeline uses).
+    const regFlow =
+      activeSchema?.flow === "fi" || entityType === "FI" || entityType === "Platform"
+        ? "fi"
+        : "corporate";
+    const regFieldId = mapExtractedKey(regFlow, "registration_number") || "registration_number";
     const customerReg = regNumberSource === "customer" ? (regNumber || "").trim() : "";
     const systemReg = customerReg
       ? ""
-      : ((research?.found || []).find((f) => f.field === "registration_number")?.value || "");
+      : ((research?.found || []).find((f) => f.field === regFieldId)?.value || "");
     const regProvenance = customerReg ? "customer" : systemReg ? "system" : "none";
     const regValue = customerReg || systemReg || "";
 
