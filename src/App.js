@@ -4711,6 +4711,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
       })
       .map((f) => f.label);
 
+  // AI-returned fields the customer unticked on a person card to correct them
+  // (field-level correction). Strictly value-present fields — never the missing
+  // ones — so a listed-company person can only correct what was surfaced, not
+  // trigger new collection. Used to route a listed person's corrected values to
+  // an editable card on Fill Gaps (mirrors the private side's per-field edit).
+  const stkCorrectedFields = (s, ubo) =>
+    stkConfirmFields(s, ubo).filter(
+      (f) => stkFieldFound(s, f.key) && !isStkFieldConfirmed(s.id, f.key)
+    );
+  const stkHasCorrections = (s, ubo) => stkCorrectedFields(s, ubo).length > 0;
+
   // Render a customer-added (pending) stakeholder card on Confirm. The blank
   // person already lives in stakeholdersRef and will surface on the next page
   // for the customer to complete; here we just show it + allow removal.
@@ -4810,7 +4821,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // Listed-company shortcut: people who don't need EDD stay a simple
           // verified card (no granular routing ticks).
           const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
-          const nextPageFields = needsEDD && !rejected ? stkNextPageFields(s, ubo) : [];
+          // Fields routed to the next page: for an EDD person that's
+          // stkNextPageFields (unticked + missing-required); for a listed
+          // read-only person it's purely the AI-returned values they unticked
+          // to correct (we never collect missing fields for them).
+          const nextPageFields = rejected
+            ? []
+            : needsEDD
+            ? stkNextPageFields(s, ubo)
+            : stkCorrectedFields(s, ubo).map((f) => f.label);
           return (
             <div
               key={s.id}
@@ -4959,25 +4978,46 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       This person is marked incorrect — you'll enter the correct details on the next page.
                     </div>
                   ) : !needsEDD ? (
-                    // Listed-company person: show the real held detail read-only
-                    // (same fields the private card shows, but no ticks / no
-                    // "edit next page" affordances — directors of a listed company
-                    // are public record, nothing to edit or collect). Calm Tier 1
-                    // note. Removal is still the header checkbox above.
+                    // Listed-company person: the AI-returned values render
+                    // read-only but each is individually unticked-able to
+                    // CORRECT a value the AI got wrong — same mechanism as the
+                    // private card (isStkFieldConfirmed / toggleStkFieldConfirm
+                    // + "edit on next page"). This is correction of surfaced
+                    // data only: fields the AI did NOT return stay hidden, so we
+                    // never newly collect the full natural-person dataset for a
+                    // listed company (CD-12 / PR-057 still open). Person removal
+                    // remains the header checkbox above.
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {stkConfirmFields(s, ubo)
                           .filter((f) => stkFieldFound(s, f.key))
-                          .map((f) => (
-                            <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                              <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-                              <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-                            </div>
-                          ))}
+                          .map((f) => {
+                            const amberTag = {
+                              fontSize: 10, fontWeight: 700, color: "#8c5500",
+                              background: "#fff8ed", border: "1px solid #e0a040",
+                              borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                            };
+                            const confirmed = isStkFieldConfirmed(s.id, f.key);
+                            return (
+                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={confirmed}
+                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
+                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
+                                  aria-label={`Confirm ${f.label}`}
+                                />
+                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
+                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
+                              </label>
+                            );
+                          })}
                       </div>
                       <Notice tier="tier1" style={{ marginTop: 10 }}>
                         Verified from official sources — no additional details required for a listed company.
-                        Untick above if this person does not belong; you'll name their replacement on the next page.
+                        Untick a field to correct a value we got wrong, or untick this person above if they
+                        don't belong; you'll make the change on the next page.
                       </Notice>
                     </>
                   ) : (
@@ -5674,6 +5714,115 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // One editable input for a single corrected field, reusing the exact
+  // components the private EDD card uses (StableInput / PrePopulatedField).
+  // Pre-filled with the AI value and opened for editing (the field is unticked
+  // by definition), so the customer edits the surfaced value in place.
+  const renderCorrectionField = (fieldId, s, f) => {
+    const onUpdate = (_, v) => updateStakeholderField(fieldId, s.id, f.key, v);
+    switch (f.key) {
+      case "full_name":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_full_name`} label="Full Legal Name" type="text"
+              value={s.full_name || ""} onUpdate={onUpdate} required placeholder="Full legal name" />
+          </div>
+        );
+      case "role":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_role`} label="Role / Position" type="text"
+              value={s.role || ""} onUpdate={onUpdate} placeholder="e.g. CEO, Director, CFO" />
+          </div>
+        );
+      case "nationality":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_nationality`} label="Nationality" type="text"
+            value={s.nationality || ""} onUpdate={onUpdate} sourceLabel={s.source} startEditing required
+            placeholder="e.g. British, American, Singaporean" />
+        );
+      case "date_of_birth":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_dob`} label="Date of Birth" type="date"
+            value={s.date_of_birth || ""} displayValue={formatDOBForDisplay(s.date_of_birth)} onUpdate={onUpdate}
+            sourceLabel={s.source} startEditing required placeholder="YYYY-MM-DD" />
+        );
+      case "residential_country":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_country`} label="Country of Residence" type="select"
+            value={s.residential_country || ""} onUpdate={onUpdate}
+            options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+            sourceLabel={s.source} startEditing />
+        );
+      case "share_percentage":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_share`} label="Shareholding" type="text"
+              value={s.share_percentage != null ? String(s.share_percentage) : ""} onUpdate={onUpdate}
+              placeholder="e.g. 30%" />
+          </div>
+        );
+      default:
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_${f.key}`} label={f.label} type="text"
+              value={stkFieldDisplay(s, f.key)} onUpdate={onUpdate} />
+          </div>
+        );
+    }
+  };
+
+  // Field-level correction card for a listed-company person the customer did
+  // NOT remove but whose AI-returned value(s) they unticked on Confirm. Renders
+  // ONLY the unticked fields as editable — correction, not collection. Mirrors
+  // the private per-field edit; the person-level removal path is the separate
+  // light replacement card above.
+  const renderFieldCorrectionCard = (fieldId, s, ubo) => {
+    const corrected = stkCorrectedFields(s, ubo);
+    if (corrected.length === 0) return null;
+    return (
+      <div
+        key={s.id}
+        style={{
+          borderRadius: 10, border: "1.5px solid #e0a040",
+          background: "#fff", marginBottom: 12, overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px", background: "#fafcfb",
+          borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
+                {s.full_name || (ubo ? "Beneficial owner" : "Director")}
+              </div>
+              {s.role && (
+                <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>{s.role}</div>
+              )}
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+            background: "#fff8ed", color: "#8c5500", border: "1px solid #e0a04040",
+          }}>
+            ✎ {corrected.length} correction{corrected.length > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
+            You marked {corrected.length === 1 ? "a detail" : "these details"} as incorrect on the previous
+            page. Correct {corrected.length === 1 ? "it" : "them"} below — we only collect the
+            value{corrected.length > 1 ? "s" : ""} you're fixing.
+          </p>
+          {corrected.map((f) => renderCorrectionField(fieldId, s, f))}
+        </div>
+      </div>
+    );
+  };
+
   const renderStakeholderForms = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
@@ -5692,6 +5841,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // detect them via the customer_rejected flag seeded by initStakeholdersForFillGaps.
     const lightReplacements = effectivelyListed
       ? validStakeholders.filter((s) => s.customer_rejected && !needsStakeholderDetails(s, fieldId, effectivelyListed))
+      : [];
+
+    // Listed-company field-level corrections: a person the customer kept but
+    // whose AI-returned value(s) they unticked on Confirm. Correction-only —
+    // these people return false from needsStakeholderDetails so they'd otherwise
+    // sit in the read-only summary with no way to edit. People needing full EDD
+    // (>=25% UBOs) already correct fields inside renderStakeholderCard, and
+    // private-company people flow through needingDetails — so this list is
+    // listed-only, not-rejected, not-EDD. (Private corrections are unchanged.)
+    const fieldCorrections = effectivelyListed
+      ? validStakeholders.filter(
+          (s) =>
+            !s.customer_rejected &&
+            !needsStakeholderDetails(s, fieldId, effectivelyListed) &&
+            stkHasCorrections(s, ubo)
+        )
       : [];
 
     // Private company with no real people found yet: prompt to add one. This is
@@ -5715,7 +5880,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Nobody needs input → nothing in the forms section (summary handles the
     // read-only reference at the bottom of the page). For a listed company the
     // section still renders if the customer unticked someone (light replacement).
-    if (needingDetails.length === 0 && lightReplacements.length === 0) return null;
+    if (needingDetails.length === 0 && lightReplacements.length === 0 && fieldCorrections.length === 0) return null;
 
     return (
       <div key={`stk-forms-${fieldId}`} style={card}>
@@ -5753,6 +5918,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
           </>
         )}
 
+        {/* Listed-company field-level corrections — kept people whose surfaced
+            value(s) the customer unticked to fix. Correction-only, no EDD. */}
+        {fieldCorrections.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
+              You marked {fieldCorrections.length === 1 ? "a detail" : "some details"} as incorrect on the
+              previous page. Please correct {fieldCorrections.length === 1 ? "it" : "them"} below. As a listed
+              company, no further details are collected — only the values you're fixing.
+            </p>
+            {fieldCorrections.map((s) => renderFieldCorrectionCard(fieldId, s, ubo))}
+          </>
+        )}
+
         {!effectivelyListed && renderAddStakeholderButtons(fieldId, ubo)}
       </div>
     );
@@ -5765,7 +5943,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
-    const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, effectivelyListed));
+    // Read-only "verified" reference: people needing no input. Exclude listed
+    // people the customer is actively correcting (a field unticked) — they now
+    // render as an editable correction card in the forms section above, so
+    // showing them here too would duplicate them with the stale value.
+    const confirmedOnly = validStakeholders.filter(
+      (s) =>
+        !needsStakeholderDetails(s, fieldId, effectivelyListed) &&
+        !(effectivelyListed && !s.customer_rejected && stkHasCorrections(s, ubo))
+    );
 
     // Listed company with no real owners (e.g. PSC-exempt — only an exemption
     // notice): clean "No action required" reference card.
