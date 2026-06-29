@@ -847,6 +847,12 @@ function buildDemoDocSearchResults(
 // shape of the /api/self-source response so the Documents-step registry section,
 // the Confirm prefill, and the Required-Documents "already satisfied" logic all
 // behave the same as a live run — without spending API credits.
+//
+// PR-059 A: every value here is deliberately FAKE placeholder data. Earlier this
+// stub hardcoded a real third party's Companies House identity (reg number,
+// address, incorporation date), which then got persisted into test dossiers and
+// surfaced as cross-company contamination. NEVER put a real company's details
+// here — only obviously-synthetic sentinels (00000000 / 1 Test Street / etc.).
 function buildDemoSelfSourceResults(companyName) {
   const now = new Date().toISOString();
   const CH = "https://find-and-update.company-information.service.gov.uk";
@@ -865,14 +871,14 @@ function buildDemoSelfSourceResults(companyName) {
     ],
     selfSourcedFields: {
       business_name:               { value: companyName, ...chField },
-      registration_number:         { value: "08804411", ...chField },
-      incorporation_date:          { value: "2013-07-01", ...chField },
-      registered_address_line1:    { value: "7 Westferry Circus", ...chField },
-      registered_address_city:     { value: "London", ...chField },
-      registered_address_postcode: { value: "E14 4HD", ...chField },
+      registration_number:         { value: "00000000", ...chField },
+      incorporation_date:          { value: "2000-01-01", ...chField },
+      registered_address_line1:    { value: "1 Test Street", ...chField },
+      registered_address_city:     { value: "Testville", ...chField },
+      registered_address_postcode: { value: "TE5 7XX", ...chField },
     },
     results: [
-      { requirement: "Legal existence", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high", registeredName: companyName, registrationNumber: "08804411", incorporationDate: "2013-07-01", registeredAddress: "7 Westferry Circus, London, E14 4HD" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
+      { requirement: "Legal existence", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high", registeredName: companyName, registrationNumber: "00000000", incorporationDate: "2000-01-01", registeredAddress: "1 Test Street, Testville, TE5 7XX" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
       { requirement: "Constitution", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/filing-history`, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
       { requirement: "Business activity", selfSourceTier: "Supplementary self-source", status: "retrieved", extracted: { matchConfidence: "medium" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
       { requirement: "Ownership / control", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/persons-with-significant-control`, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
