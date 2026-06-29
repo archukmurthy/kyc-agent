@@ -1511,6 +1511,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
   });
   // Pre-boarding dossier (Part 7).
   const [dossierId, setDossierId] = useState(null);
+  // Journey-origin flag: true when the customer landed via an invite link
+  // (?dossierId&journey=customer or ?ref) and so never saw the lookup page —
+  // Company/Research were done by the analyst before they arrived. This is the
+  // SAME "dossier/invite journey" definition the reg-number "you provided this"
+  // lock uses (the link-landing URL param; regNumberSource stays null on exactly
+  // this journey). Captured as reactive state — not read live from the URL —
+  // because resetAll does not clear the URL: clearing this flag on a "wrong
+  // company" dispute reset correctly returns the redirected-to-lookup customer
+  // to the full 7-step bar. Display-only: drives which step-bar pills show, never
+  // routing. Set in the two link-landing paths (loadDossierAndStartOnboarding +
+  // the ?ref hydration effect); cleared in resetAll.
+  const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
 
@@ -1864,6 +1876,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setShowDossierView(false);
     setRegNumber("");
     setRegNumberSource(null);
+    // Wrong-company dispute → redirected to the lookup page: this is now a
+    // genuine KYC/lookup journey, so restore the full 7-step bar.
+    setLandedViaLink(false);
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -1978,6 +1993,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setChecks(snap.checks || {});
     setAgentType("onboarding");
     setStep(stepsFor(jt).confirm);
+    // Customer landed via the ?ref invite link — same dossier/invite journey
+    // marker as the ?dossierId path (drives the step-bar subset, display only).
+    setLandedViaLink(true);
     trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2000,6 +2018,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }, []);
 
   async function loadDossierAndStartOnboarding(id, tenant) {
+    // Customer landed via the dossier/invite link — mark the journey so the step
+    // bar hides the analyst-completed Company/Research steps (display only).
+    setLandedViaLink(true);
     try {
       const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
       const data = await res.json();
@@ -7868,8 +7889,21 @@ Nium Onboarding Team`;
             // showDossierView→Dossier (covers the confirm-step window while the
             // dossier auto-saves).
             const pbActive = showDossierView ? 2 : (step >= 1 ? 1 : 0);
-            const names = pb ? ["Company", "Research", "Dossier"] : stepNames;
-            const activeIdx = pb ? pbActive : step;
+            let names = pb ? ["Company", "Research", "Dossier"] : stepNames;
+            let activeIdx = pb ? pbActive : step;
+            // Dossier/invite journey: the customer landed via link, so Company &
+            // Research (and Documents, on that journey) were done before they
+            // arrived. Hide every pre-Applicant pill and renumber the rest 1–N.
+            // DISPLAY ONLY — `step`/STEPS routing is untouched; we just slice the
+            // labels and re-base the active index by the same offset so Applicant
+            // reads as 1 of 5 here while staying 3 of 7 on the KYC/lookup journey.
+            // Skipped for preboarding (analyst flow) and once a dispute reset
+            // clears landedViaLink (→ back to the full 7).
+            if (!pb && landedViaLink && step >= STEPS.applicant) {
+              const hidden = STEPS.applicant; // count of pre-Applicant steps
+              names = stepNames.slice(hidden);
+              activeIdx = step - hidden;
+            }
             const doneBg = pb ? "#7C3AED" : "#4a9e8e";
             const activeBg = pb ? "#6D28D9" : "#1a3a4a";
             const ring = pb ? "0 0 0 3px rgba(124,58,237,0.2)" : "0 0 0 3px rgba(74,158,142,0.2)";
