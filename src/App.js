@@ -1549,6 +1549,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [entityType, setEntityType] = useState("");
+  // Optional business registration / company number captured on the lookup page
+  // (slice 1 of the reg-number initiative). When provided it's used as the
+  // PRIMARY search key — fed to the Companies House officers layer (via the
+  // `registrationNumber` body field /api/research already accepts) and injected
+  // into the web-research prompt. Blank or unresolved silently falls back to the
+  // existing name-based search (the company name is always in the prompt+body,
+  // so there's no dead end). Provenance is "customer" here (customer-typed);
+  // slice 2's confirmation gate verifies it. Distinct from `niumRegNumber`,
+  // which is the test-gated Nium-journey field.
+  const [regNumber, setRegNumber] = useState("");
   // Registration number for the Nium API Lookup journey (test mode only). The
   // Nium eKYB publicDetails endpoint searches registries by registration number
   // — a name-only search returns HTTP 400 — so this is required for that one
@@ -1830,6 +1840,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
+    setRegNumber("");
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -2495,6 +2506,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // rather than inside buildPrompt so the shared src/pipeline.js (also
       // used by api/benchmark.js) stays unchanged.
       let researchPrompt = buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType);
+      // Optional registration number → PRIMARY search key. Appended client-side
+      // (like the AUTOMATICALLY SOURCED DOCUMENTS block below) so the shared
+      // src/pipeline.js buildPrompt stays untouched. The company name is still
+      // in the prompt, so an absent or wrong number safely falls back to the
+      // name-based search — never a dead end.
+      const trimmedRegNumber = regNumber.trim();
+      if (trimmedRegNumber) {
+        researchPrompt += `\n\nPRIMARY COMPANY IDENTIFIER:\n` +
+          `The customer provided this official business registration / company number: ${trimmedRegNumber}.\n` +
+          `Use it as the PRIMARY key to identify the exact company in ` +
+          `${countryObj ? countryObj.name : countryCode} (Companies House and any ` +
+          `other applicable company register), so you pull the precise entity ` +
+          `rather than name-matching. If this number does not correspond to a ` +
+          `real company, ignore it and fall back to researching by the company ` +
+          `name "${companyName}".\n`;
+      }
       const acceptedDocs = (docSearchResults?.documents || [])
         .filter(d => acceptedDocTypes.has(d.type));
       if (acceptedDocs.length > 0) {
@@ -2522,6 +2549,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           jurisdiction: countryCode,
           entityType,
           forceRefresh,
+          // Optional reg number → drives the deterministic Companies House
+          // officers layer in api/research.js (already wired to accept it).
+          // Undefined when blank, so the officers layer resolves from name.
+          registrationNumber: trimmedRegNumber || undefined,
         })
       });
       if (!resp.ok) {
@@ -6712,11 +6743,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
         };
       });
 
+    // Registration number carried onto the dossier for slice 2's confirmation
+    // gate. Provenance distinguishes a customer-typed number (trusted) from a
+    // system-retrieved one (shown for verification). In slice 1 the lookup-page
+    // field is always customer-entered; a system-retrieved number, when present,
+    // already lives in the research output as the `registration_number` found
+    // field, so slice 2 can reconcile the two.
+    const trimmedRegNumber = regNumber.trim();
+    const registrationNumber = trimmedRegNumber || null;
+    const registrationNumberSource = trimmedRegNumber ? "customer" : null;
+
     return {
       tenantId,
       company: dossierCompany(),
       entityType,
       ownershipType,
+      // Top-level for in-session reads (slice 2 gate). Also folded into
+      // rawResearch below so it survives a reload via the existing raw_research
+      // JSONB column without a schema migration.
+      registrationNumber,
+      registrationNumberSource,
       coverage,
       includedFields: getIncludedGapFields(),
       excludedFields: Array.from(excludedGapFields),
@@ -6727,7 +6773,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       stakeholders: stakeholderData,
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp },
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
@@ -7579,6 +7625,13 @@ Nium Onboarding Team`;
             <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Company Lookup</h2>
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
             <StableInput id="companyName" label="Company Legal Name" type="text" value={companyName} onUpdate={(_, v) => setCompanyName(v)} required placeholder="e.g. Tesco PLC, DBS Group Holdings" />
+            {/* Optional registration / company number. When supplied it's used as
+                the primary search key to pinpoint the exact company; blank = the
+                same name-based search as before (slice 1). */}
+            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => setRegNumber(v)} placeholder="e.g. 00445790 — the official company / registration number" />
+            <p style={{ fontSize: 11, color: "#1a3a4a80", margin: "-8px 0 16px", lineHeight: 1.4 }}>
+              Optional. If you know the company's official registration number, we'll use it to pinpoint the exact company and sharpen the research. Leave it blank to search by name.
+            </p>
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="entity-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
               <SearchableSelect
