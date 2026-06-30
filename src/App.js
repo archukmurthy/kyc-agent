@@ -1517,6 +1517,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   });
   // Pre-boarding dossier (Part 7).
   const [dossierId, setDossierId] = useState(null);
+  // PR: stable per-research-run submission id for the FRESH onboarding flow,
+  // which has no dossierId. Used as the change_events key (submissionId) for both
+  // the Confirm capture-dialogue WRITE and the Fill Gaps amendment-document READ,
+  // so that handoff round-trips. Generated once when research completes (below);
+  // cleared in resetAll. Pre-boarding is unaffected: dossierId is non-null there,
+  // so `dossierId || onboardingSubmissionId` always resolves to dossierId.
+  const [onboardingSubmissionId, setOnboardingSubmissionId] = useState(null);
   // Journey-origin flag: true when the customer landed via an invite link
   // (?dossierId&journey=customer or ?ref) and so never saw the lookup page —
   // Company/Research were done by the analyst before they arrived. This is the
@@ -1886,6 +1893,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
     setDossierId(null);
+    setOnboardingSubmissionId(null);
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
@@ -2800,6 +2808,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // enrichment and before results reach state. See validateAllDirectors().
       const validatedFound = validateAllDirectors(mergedFound);
       setResearch({ ...parsed, found: validatedFound });
+      setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
@@ -2998,6 +3007,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       gaps: schema.gapFields.map(f => ({ ...f, reason: "Not publicly available" })),
     };
     setResearch(tagged);
+    setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
     setResearchTimestamp(dummyTs);
 
     // Demo coverage (Part 14). Gap recovery is skipped in demo mode.
@@ -3139,6 +3149,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           gaps: schema.gapFields.map(f => ({ ...f, reason: "Not in Nium registry response" })),
         };
         setResearch(tagged);
+        setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
         setResearchTimestamp(ts);
 
         const cov = computeCoverage(found, schema);
@@ -4787,7 +4798,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <ChangeDialogue
               field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
               jurisdiction={countryCode || "GB"}
-              submissionId={dossierId}
+              submissionId={dossierId || onboardingSubmissionId}
               dossierId={dossierId}
               onEvent={(event) => trackEvent("change_event_captured", event)}
             />
@@ -9502,7 +9513,7 @@ Nium Onboarding Team`;
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
-            <AmendmentDocuments submissionId={dossierId} />
+            <AmendmentDocuments submissionId={dossierId || onboardingSubmissionId} />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>
