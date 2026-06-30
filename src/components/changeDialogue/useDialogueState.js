@@ -11,9 +11,17 @@
 
 import { useState, useCallback } from 'react';
 
-export function useDialogueState(steps = []) {
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState({});
+// `initial` (optional) seeds index/answers from a persisted snapshot so a
+// <ChangeDialogue> that re-mounts (e.g. returning to Confirm after navigating
+// away) resumes exactly where it left off instead of restarting. Null/absent →
+// a fresh dialogue, identical to before.
+export function useDialogueState(steps = [], initial = null) {
+  const [index, setIndex] = useState(() =>
+    initial && Number.isInteger(initial.index) ? initial.index : 0,
+  );
+  const [answers, setAnswers] = useState(() =>
+    initial && initial.answers ? initial.answers : {},
+  );
 
   const recordAnswer = useCallback(
     (key, value) => {
@@ -26,5 +34,5 @@ export function useDialogueState(steps = []) {
   const stepKey = index < steps.length ? steps[index] : null;
   const isComplete = index >= steps.length;
 
-  return { stepKey, answers, recordAnswer, isComplete };
+  return { index, stepKey, answers, recordAnswer, isComplete };
 }

@@ -1647,6 +1647,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // sub-25% UBOs skip the detailed gap form).
   const isPubliclyListed = useMemo(() => detectPubliclyListed(research), [research]);
   const [checks, setChecks] = useState({});
+  // PR: durable per-field store for the Confirm change-dialogue working state
+  // (answers + progress + emitted), lifted out of the per-field <ChangeDialogue>
+  // so it survives the Confirm subtree unmounting on navigation. Without this,
+  // leaving Confirm (→ Fill Gaps) and returning re-mounts each dialogue with
+  // empty local state and re-asks already-answered questions. Keyed by fieldId;
+  // cleared in resetAll. (`checks` itself already persists — it's parent state.)
+  const dialogueStateRef = useRef({});
+  const persistDialogueState = useCallback((fieldId, snapshot) => {
+    if (fieldId != null) dialogueStateRef.current[fieldId] = snapshot;
+  }, []);
   // Per-person rejection for stakeholder fields. Shape:
   //   { [fieldId]: Set<stakeholderId> }
   // A stakeholder id present in the set means the customer unchecked that
@@ -1856,6 +1866,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
+    dialogueStateRef.current = {}; // drop persisted change-dialogue answers on Start Over
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
     setStakeholderFieldChecks({});
@@ -4801,6 +4812,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
               submissionId={dossierId || onboardingSubmissionId}
               dossierId={dossierId}
               onEvent={(event) => trackEvent("change_event_captured", event)}
+              persisted={dialogueStateRef.current[item.field]}
+              onPersist={persistDialogueState}
             />
           )}
         </div>

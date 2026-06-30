@@ -64,19 +64,24 @@ export function ChangeDialogue({
   dossierId = null,
   onEvent,
   onResolved,
+  persisted = null,
+  onPersist,
 }) {
   // Resolve engine metadata from the raw Confirm row once (stable per instance).
   const fieldClass = field.fieldClass || classifyFieldClass(field.fieldId);
   const verifiability = deriveVerifiability(field);
   const steps = planSteps(fieldClass, verifiability);
 
-  const { stepKey, answers, recordAnswer, isComplete } = useDialogueState(steps);
+  // Seed from the lifted (durable) snapshot so a return visit to Confirm resumes
+  // instead of re-asking. `emittedRef` is seeded from persisted.emitted so the
+  // "emit EXACTLY ONCE" contract holds across unmount/remount — a restored,
+  // already-emitted dialogue re-renders its outcome WITHOUT writing a duplicate.
+  const { index, stepKey, answers, recordAnswer, isComplete } = useDialogueState(steps, persisted);
   const [outcome, setOutcome] = useState(null);
-  const emittedRef = useRef(false);
+  const emittedRef = useRef(Boolean(persisted && persisted.emitted));
 
   useEffect(() => {
-    if (!isComplete || emittedRef.current) return;
-    emittedRef.current = true; // emit EXACTLY ONCE per completed dialogue
+    if (!isComplete) return;
 
     const intent = answers.intent ?? null;
     const registryStatus = answers.registry ?? 'unknown';
@@ -91,45 +96,61 @@ export function ChangeDialogue({
       jurisdiction,
     });
 
-    const src = deriveSource(field);
-    const event = buildChangeEvent({
-      field: {
-        fieldId: field.fieldId,
-        fieldClass,
-        value: field.value,
-        sourceType: src.sourceType,
-        sourceProvider: src.sourceProvider,
-        sourceTier: src.sourceTier,
-        verifiability,
-      },
-      jurisdiction,
-      submissionId,
-      dossierId,
-      storedChangeType: 'changed', // unchecked found value; final form lands at Fill Gaps
-      intent,
-      registryStatus,
-      engineResult,
-    });
+    // Emit EXACTLY ONCE per completed dialogue — including across a remount: when
+    // restored with persisted.emitted, we recompute the outcome to show the
+    // notice but skip the write/onEvent so no duplicate change_event is created.
+    if (!emittedRef.current) {
+      emittedRef.current = true;
 
-    // Durable write: persist this one change_event to the append-only store via
-    // the real Neon-backed route. Fire-and-forget — capture must NEVER block the
-    // customer (mirrors App.js#trackEvent). This is the dialogue fulfilling its
-    // one job ("EMIT EXACTLY ONE change_event"); onEvent stays a pure analytics
-    // notification. writeEvent server-side rejects a malformed/identifier-less
-    // event with a 200 + warning, so a missing submissionId can't break the UI.
-    if (typeof fetch === 'function') {
-      fetch('/api/change-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
-      }).catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
+      const src = deriveSource(field);
+      const event = buildChangeEvent({
+        field: {
+          fieldId: field.fieldId,
+          fieldClass,
+          value: field.value,
+          sourceType: src.sourceType,
+          sourceProvider: src.sourceProvider,
+          sourceTier: src.sourceTier,
+          verifiability,
+        },
+        jurisdiction,
+        submissionId,
+        dossierId,
+        storedChangeType: 'changed', // unchecked found value; final form lands at Fill Gaps
+        intent,
+        registryStatus,
+        engineResult,
+      });
+
+      // Durable write: persist this one change_event to the append-only store via
+      // the real Neon-backed route. Fire-and-forget — capture must NEVER block the
+      // customer (mirrors App.js#trackEvent). writeEvent server-side rejects a
+      // malformed/identifier-less event with a 200 + warning, so a missing
+      // submissionId can't break the UI.
+      if (typeof fetch === 'function') {
+        fetch('/api/change-events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(event),
+        }).catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
+      }
+
+      if (typeof onEvent === 'function') onEvent(event);
     }
 
-    if (typeof onEvent === 'function') onEvent(event);
     if (typeof onResolved === 'function') onResolved(engineResult);
     setOutcome(engineResult);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete]);
+
+  // Lift the working state (answers + progress + emitted) into the parent's
+  // durable store so it survives the Confirm subtree unmounting on navigation.
+  useEffect(() => {
+    if (typeof onPersist === 'function') {
+      onPersist(field.fieldId, { index, answers, emitted: emittedRef.current });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, answers, outcome]);
 
   // ── Still asking questions ──
   if (!isComplete) {
