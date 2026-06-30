@@ -1,5 +1,5 @@
 -- Immutable audit snapshots for UBO discovery. Apply with:
--- node db/apply.js db/migrations/006_ubo_investigations.sql
+-- node db/apply.js db/migrations/009_ubo_investigations.sql
 CREATE TABLE IF NOT EXISTS ubo_investigations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id VARCHAR(64) NOT NULL,
