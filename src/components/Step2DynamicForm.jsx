@@ -124,7 +124,10 @@ function AutoSourcedBanner({ result, showUploadHint = true }) {
 
 // ─── Upload card ─────────────────────────────────────────────────────────────
 
-function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult }) {
+// Exported so the Applicant page (App.js, PR-044) can reuse this exact card for
+// the "Authority to act" upload when the applicant declares they are not a
+// listed director/officer — same markup, styling, and "why required" details.
+export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult }) {
   const selfSource = isSelfSourced(item);
   const done = !!uploaded;
   const regUrl = item.regulatoryUrl || item.sourceUrl;

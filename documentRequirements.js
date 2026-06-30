@@ -673,6 +673,12 @@ function buildRows(onboarding, incorp, entityType, sector){
   const base = individualMode ? individualStandard(onboarding) : onboardingStandard(onboarding);
   let requirements = Object.keys(base);
 
+  // PR-044: 'Authority to act' is no longer requested on the Required Documents
+  // page. It now lives only on the Applicant page, shown when the applicant
+  // declares they are not a listed director/officer ("I am not listed"), so it
+  // is never asked for twice. Removed at the checklist source, not at render.
+  requirements = requirements.filter(r => r !== 'Authority to act');
+
   if (!individualMode){
     if (['Publicly listed','State-owned enterprise'].includes(entityType)) requirements = requirements.filter(r => r !== 'UBO ID');
     if (sector === 'Bank / deposit-taking institution' && entityType !== 'Privately owned' && entityType !== 'Partnership/LLP') requirements = requirements.filter(r => r !== 'UBO ID');

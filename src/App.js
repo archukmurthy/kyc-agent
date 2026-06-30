@@ -6,7 +6,7 @@ import {
   getResearchStrategy,
   ownershipTypeLabel,
 } from "./utils/ownershipTypes";
-import Step2DynamicForm from "./components/Step2DynamicForm";
+import Step2DynamicForm, { DocumentUploadCard } from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
@@ -1725,6 +1725,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // dossier stakeholders loaded when a customer arrives via an invite link
   // (?dossierId=&journey=customer) without having run research in this session.
   const [applicantValidationError, setApplicantValidationError] = useState(null);
+  // PR-044 — "I am not listed" applicant path. `applicantNotListed` records the
+  // EXPLICIT "I am not listed — fill in manually" choice (distinct from "nothing
+  // selected yet", which also leaves applicantSelectedPerson null). When set, the
+  // applicant must prove authority to act: `authorityToActFile` holds that upload
+  // for the session (durable storage is PR-034, out of scope). This document now
+  // lives only here — it was removed from the Required Docs checklist.
+  const [applicantNotListed, setApplicantNotListed] = useState(false);
+  const [authorityToActFile, setAuthorityToActFile] = useState(null);
   const [dossierStakeholders, setDossierStakeholders] = useState(null);
   // Reserved for the future live locked/unlocked override UI; the authoritative
   // override list is recomputed deterministically at submit (buildApplicantProvenance).
@@ -1855,6 +1863,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
+    setApplicantNotListed(false); setAuthorityToActFile(null);
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     // Landing page hidden for stakeholder review weekend — instead of
@@ -4110,10 +4119,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
           Who is completing this application?
         </label>
         <select
-          value={applicantSelectedPerson?.id || ""}
+          value={applicantSelectedPerson?.id || (applicantNotListed ? "none" : "")}
           onChange={(e) => {
             const id = e.target.value;
-            if (!id || id === "none") { selectApplicantPerson(null); return; }
+            // "none" is the explicit "I am not listed" declaration → record it so
+            // the Authority-to-act gate (PR-044) shows. Any other change clears it.
+            if (id === "none") { setApplicantNotListed(true); selectApplicantPerson(null); return; }
+            setApplicantNotListed(false);
+            if (!id) { selectApplicantPerson(null); return; }
             selectApplicantPerson(candidates.find((c) => c.id === id) || null);
           }}
           style={{ width: "100%", border: "1.5px solid rgba(26,58,74,0.14)", borderRadius: 8, padding: "10px 14px", fontSize: 14, fontFamily: "inherit", background: "#fff", color: "#1a3a4a", cursor: "pointer" }}
@@ -4208,6 +4221,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       }
       gapRef.current[g.field] = val;
     });
+    // PR-044: also satisfy the Authority-to-act hard gate in test mode by
+    // attaching a dummy file (harmless when the not-listed card isn't shown).
+    if (!authorityToActFile) {
+      const fname = "test-authority-to-act.pdf";
+      let dummy;
+      try { dummy = new File([new Blob(["test authority to act"])], fname, { type: "application/pdf" }); }
+      catch { dummy = { name: fname, size: 21 }; }
+      setAuthorityToActFile(dummy);
+    }
     setFormVersion((v) => v + 1);
   };
 
@@ -4269,6 +4291,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const ownershipDisputed = factChecks.ownershipType === false;
     const factsConfirmed = !fourDisputed && !ownershipDisputed && ownershipFork === null;
 
+    // PR-044 — Authority-to-act, shown only when the applicant declares they are
+    // NOT a listed director/officer. Content mirrors documentRequirements.js's
+    // 'Authority to act' item (which is now removed from the Required Docs
+    // checklist so it's asked exactly once, here). The card is the SAME reused
+    // DocumentUploadCard from the Required Docs page. Only the regulatory citation
+    // is jurisdiction-specific (UK MLR 2017 vs SG MAS PSN01); applies to both.
+    // TODO(PR-044): SG Apostille/notarisation overlay is a later addition.
+    const isUK = countryCode === "GB" || activeSchema?.region === "UK";
+    // Unlisted = the applicant is NOT one of the company's listed directors/
+    // officers. Two ways to be unlisted: (a) explicitly choosing "I am not listed"
+    // in the dropdown, or (b) research found no director/UBO candidates at all, so
+    // the dropdown isn't shown and the page falls straight to manual entry. Both
+    // must prove authority to act (PR-044).
+    const applicantUnlisted = applicantNotListed || getApplicantCandidates().length === 0;
+    const authorityToActItem = {
+      requirement: "Authority to act",
+      standardDocument: "Board resolution / power of attorney / mandate",
+      localEquivalent: "Board resolution / power of attorney / authorised mandate",
+      why: "Confirm the relationship and product are authorised and the named signatories may bind the customer.",
+      fallback: "Do not activate the relationship until authority and signatory identity are resolved.",
+      mandatory: true,
+      selfSource: "Client-provided only",
+      regulatoryRationale: isUK ? "Money Laundering Regulations 2017" : "MAS Notice PSN01",
+      regulatoryUrl: isUK
+        ? "https://www.legislation.gov.uk/id/uksi/2017/692"
+        : "https://www.mas.gov.sg/regulation/notices/psn01-aml-cft-notice---specified-payment-services",
+    };
+    // Hard gate: when unlisted, Continue is blocked until the file is uploaded.
+    const authorityGateBlocks = applicantUnlisted && !authorityToActFile;
+
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
         <FoundationalFactsGate
@@ -4317,8 +4369,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
               {renderApplicantFields()}
             </div>
 
+            {/* PR-044 — Authority-to-act proof, directly below the applicant
+                fields, shown whenever the applicant is unlisted: either "I am not
+                listed" was selected, or no directors/UBOs were found (manual-entry
+                fallback). Reuses the Required Docs DocumentUploadCard. */}
+            {applicantUnlisted && (
+              <div style={{ ...card, marginTop: 16 }}>
+                <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
+                  Because you are <strong>not one of the company's listed directors or officers</strong>,
+                  please upload a document showing you are authorised to act for the company.
+                </p>
+                <DocumentUploadCard
+                  item={authorityToActItem}
+                  uploaded={authorityToActFile}
+                  onUpload={(_req, file) => setAuthorityToActFile(file)}
+                  onRemove={() => setAuthorityToActFile(null)}
+                  autoSourcedResult={null}
+                />
+              </div>
+            )}
+
             <button
+              disabled={authorityGateBlocks}
               onClick={() => {
+                // Hard gate: unlisted applicants must upload authority-to-act first.
+                if (applicantUnlisted && !authorityToActFile) {
+                  setApplicantValidationError(
+                    "Please upload your authority-to-act document before continuing."
+                  );
+                  return;
+                }
                 const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
                 const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
                 if (missing.length > 0) {
@@ -4332,13 +4412,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 scrollAndSetStep(STEPS.confirm);
               }}
               style={{
-                width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
+                width: "100%", padding: "14px 0",
+                background: authorityGateBlocks ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
                 color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
-                fontFamily: "inherit", cursor: "pointer", marginTop: 24,
+                fontFamily: "inherit", cursor: authorityGateBlocks ? "not-allowed" : "pointer", marginTop: 24,
               }}
             >
               Continue →
             </button>
+
+            {authorityGateBlocks && (
+              <div style={{
+                marginTop: 12, padding: "10px 14px", background: "#FFFBEB",
+                border: "1px solid #FCD34D", borderRadius: 8, fontSize: 13, color: "#92400E",
+              }}>
+                Upload your authority-to-act document above to continue.
+              </div>
+            )}
 
             {applicantValidationError && (
               <div style={{
