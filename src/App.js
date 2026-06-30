@@ -9,6 +9,8 @@ import {
 import Step2DynamicForm, { DocumentUploadCard } from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
+import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
+import { classifyFieldClass } from "./components/changeDialogue/dialogueContent";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import { Notice } from "./components/notices/Notice";
@@ -3916,18 +3918,54 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Toggle a Confirm-page checkbox AND record the action in metadata.
   const toggleCheck = (idx) => {
-    setChecks(prev => {
-      const next = { ...prev, [idx]: !prev[idx] };
-      const item = (research && research.found) ? research.found[idx] : null;
-      if (item) {
-        const action = next[idx] ? "accepted" : "rejected";
-        const at = new Date().toISOString();
-        setFieldMetadata(prevMeta => prevMeta.map(m =>
-          m.fieldId === item.field ? { ...m, customerAction: action, customerActionAt: at } : m
-        ));
+    const item = (research && research.found) ? research.found[idx] : null;
+    const nowChecked = !checks[idx]; // true = re-checked (accepted / undo)
+    setChecks(prev => ({ ...prev, [idx]: !prev[idx] }));
+    if (!item) return;
+
+    const at = new Date().toISOString();
+    setFieldMetadata(prevMeta => prevMeta.map(m =>
+      m.fieldId === item.field ? { ...m, customerAction: nowChecked ? "accepted" : "rejected", customerActionAt: at } : m
+    ));
+
+    // Re-check = the customer UNDID their change → retract its amendment-document
+    // request. Append a compensating REVERT event (workflow 'accept_silent'); the
+    // original change event is NEVER deleted or mutated (append-only store).
+    // deriveAmendmentDocuments reads the latest event per field, so this later
+    // non-doc event nets the document to "not owed" — the Fill Gaps card drops and
+    // the Confirm notice clears (the dialogue isn't rendered once re-checked).
+    // Only write a revert when a change was actually emitted for this field.
+    // Same submissionId keying as the change write, so it works in both journeys.
+    //
+    // NOTE: the change AND this revert both remain in the append-only audit store
+    // on purpose (a future rule may care that e.g. a UBO was changed then put
+    // back). Materiality / which fields matter / MLRO-surfacing are pending Danny
+    // (CD-register) — do NOT infer materiality or surface anything here.
+    if (nowChecked) {
+      const snap = dialogueStateRef.current[item.field];
+      if (snap && snap.emitted) {
+        const revertEvent = buildChangeEvent({
+          field: { fieldId: item.field, fieldClass: classifyFieldClass(item.field) },
+          jurisdiction: countryCode || "GB",
+          submissionId: dossierId || onboardingSubmissionId,
+          dossierId,
+          storedChangeType: "changed",
+          intent: null,
+          registryStatus: null,
+          engineResult: { workflow: "accept_silent", docType: null, decided: true },
+        });
+        if (typeof fetch === "function") {
+          fetch("/api/change-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(revertEvent),
+          }).catch((err) => console.warn("[toggleCheck] revert persist failed:", err));
+        }
       }
-      return next;
-    });
+      // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
+      // that emits a new change event (R6: toggling re-adds the document each time).
+      delete dialogueStateRef.current[item.field];
+    }
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
