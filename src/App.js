@@ -4450,6 +4450,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 {applicantValidationError}
               </div>
             )}
+
+            {/* PR: Start Over — onboarding journey ONLY (hidden on the dossier/
+                invite journey, where landedViaLink is true: that customer didn't
+                start the journey, an analyst did). Reuses resetAll, the same
+                handler today's Confirm "Start Over" uses — returns to the lookup
+                page with the company details still pre-filled (not a blank wipe;
+                resetAll preserves companyName/country/entity/ownership). */}
+            {!landedViaLink && (
+              <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 16 }}>
+                <Btn variant="secondary" onClick={resetAll}>↺ Start Over</Btn>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -9465,7 +9477,11 @@ Nium Onboarding Team`;
             )}
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={resetAll}>← Start Over</Btn>
+              {/* PR: Applicant now sits just before Confirm, so the backward action
+                  is to return to the Applicant page (not restart). Plain step
+                  navigation — preserves all field values, checks, applicant data
+                  and uploaded docs; no wipe, no confirmation. Both journeys. */}
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.applicant)}>← Back</Btn>
               <Btn variant="green" onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
             </div>
           </div>
