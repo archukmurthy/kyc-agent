@@ -4401,6 +4401,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
 
+            {/* PR: Continue + Start Over share one row (Start Over left, Continue
+                right). Start Over is onboarding-only (!landedViaLink) — hidden on
+                the dossier/invite journey; the empty <span/> keeps Continue
+                right-aligned there. Start Over reuses resetAll (pre-filled lookup,
+                not a blank wipe). Layout only — onClick/gating unchanged. */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
+              {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
             <button
               disabled={authorityGateBlocks}
               onClick={() => {
@@ -4424,14 +4431,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 scrollAndSetStep(STEPS.confirm);
               }}
               style={{
-                width: "100%", padding: "14px 0",
+                padding: "12px 28px",
                 background: authorityGateBlocks ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
                 color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
-                fontFamily: "inherit", cursor: authorityGateBlocks ? "not-allowed" : "pointer", marginTop: 24,
+                fontFamily: "inherit", cursor: authorityGateBlocks ? "not-allowed" : "pointer",
               }}
             >
               Continue →
             </button>
+            </div>
 
             {authorityGateBlocks && (
               <div style={{
@@ -4451,17 +4459,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
 
-            {/* PR: Start Over — onboarding journey ONLY (hidden on the dossier/
-                invite journey, where landedViaLink is true: that customer didn't
-                start the journey, an analyst did). Reuses resetAll, the same
-                handler today's Confirm "Start Over" uses — returns to the lookup
-                page with the company details still pre-filled (not a blank wipe;
-                resetAll preserves companyName/country/entity/ownership). */}
-            {!landedViaLink && (
-              <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 16 }}>
-                <Btn variant="secondary" onClick={resetAll}>↺ Start Over</Btn>
-              </div>
-            )}
           </>
         )}
       </div>
