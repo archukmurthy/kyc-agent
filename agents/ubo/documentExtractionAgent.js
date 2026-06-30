@@ -1,0 +1,6 @@
+"use strict";
+
+const { createHash, randomUUID } = require("crypto");
+function documentMetadata({ caseId, entityId, sourceName, documentType, fileName, bytes }) { return { documentId: randomUUID(), caseId, entityId, sourceType: "authenticated_registry", sourceName, retrievedAt: new Date().toISOString(), retrievedBy: "registry_research_agent", documentType, fileName, hash: createHash("sha256").update(bytes || "").digest("hex") }; }
+function ownershipEvidenceFromExtraction({ document, entity, ownershipStatements = [], controlStatements = [], missingFields = [] }) { return { source: "document_extraction", evidence: [{ id: document.documentId, source: document.sourceName, sourceDocumentId: document.documentId, fetchedAt: document.retrievedAt }], relationships: [...ownershipStatements, ...controlStatements].map((s) => ({ owner: { name: s.ownerName, type: s.ownerType || "unknown" }, ownedEntity: { name: s.ownedEntityName || entity.name, jurisdiction: entity.jurisdiction, type: "company" }, type: s.relationshipType || "ownership", ownershipPercentage: s.percentage ?? null, confidence: Number(s.confidence || 0) * 100, evidenceIds: [document.documentId], metadata: { evidenceText: s.evidenceText || "", sourceDocumentId: document.documentId } })), missingFields }; }
+module.exports = { documentMetadata, ownershipEvidenceFromExtraction };

@@ -15,7 +15,20 @@ function calculateEffectiveOwnership(graph) {
   const walk = (entityId, percentage, chain, visited) => {
     if (visited.has(entityId)) { unresolvedPaths.push({ chain, reason: "Ownership cycle detected" }); return; }
     const owners = byOwnedEntity.get(entityId) || [];
-    if (!owners.length) return;
+    if (!owners.length) {
+      const entity = nodes.get(entityId);
+      // Reaching an intermediary company with no known owners is not a
+      // resolved outcome. Natural people, listed companies and governments are
+      // valid terminal nodes, but a company must be investigated further.
+      if (entity && ![NODE_TYPES.INDIVIDUAL, NODE_TYPES.PUBLIC_COMPANY, NODE_TYPES.GOVERNMENT].includes(entity.type)) {
+        unresolvedPaths.push({
+          chain,
+          entityId,
+          reason: `No ownership evidence found for ${entity.name}`,
+        });
+      }
+      return;
+    }
     for (const edge of owners) {
       const effective = (percentage * edge.ownershipPercentage) / 100;
       const owner = nodes.get(edge.from);

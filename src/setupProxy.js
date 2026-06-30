@@ -7,6 +7,7 @@
 // Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
 
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 // Lazy-require the API handlers and shared modules from their canonical
 // locations so dev and production run the exact same code paths.
@@ -28,7 +29,14 @@ const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.j
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
+const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
+const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
+const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
+const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
+const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
+const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
+const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -55,9 +63,43 @@ module.exports = function (app) {
       try {
         const body = JSON.parse(raw || "{}");
         const { prompt, messages, model, tools, max_tokens,
-                companyName, jurisdiction, registrationNumber } = body;
+                companyName, jurisdiction, entityType, forceRefresh,
+                registrationNumber } = body;
         if (!prompt && !messages) {
           return res.status(400).json({ error: "Missing prompt or messages in request body" });
+        }
+
+        // ─── CACHE LAYER (opt-in) ───
+        // Mirrors api/research.js so caching works under `npm start` too. Only
+        // the main research call passes `companyName`, so other callers (doc
+        // extraction, gap recovery) are untouched. researchCache.js is ESM, so
+        // it's loaded via dynamic import() from this CJS dev-server file. Cache
+        // failures always fall through to the live API.
+        const cacheEnabled = !!companyName;
+        let cacheMod = null;
+        if (cacheEnabled) {
+          try {
+            // Node's ESM dynamic import() needs a file:// URL on Windows — a raw
+            // "C:\..." path throws "protocol 'c:'" and the cache silently never
+            // loads (every research run then hits the paid API). pathToFileURL fixes it.
+            cacheMod = await import(pathToFileURL(path.join(__dirname, "..", "lib", "researchCache.js")).href);
+          } catch (err) {
+            console.error("[research-cache] Failed to load cache module:", err.message);
+          }
+        }
+        if (cacheMod && !forceRefresh) {
+          try {
+            const cached = await cacheMod.getCachedResearch(companyName, jurisdiction, entityType);
+            if (cached) {
+              console.log(`[research-cache] HIT for "${companyName}" — serving from DB`);
+              return res.status(200).json(cached);
+            }
+            console.log(`[research-cache] MISS for "${companyName}" — calling Anthropic API`);
+          } catch (err) {
+            console.error("[research-cache] Cache lookup error, falling through:", err.message);
+          }
+        } else if (cacheMod && forceRefresh) {
+          console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
         }
 
         // ─── LAYER 1 — Companies House Officers API (deterministic) ───
@@ -106,9 +148,18 @@ module.exports = function (app) {
           return res.status(r.status).json({ error: "Claude API error", details: data });
         }
 
-        // ─── LAYER 1 INJECTION — replace AI directors with CH Officers data ───
-        // No-op when chOfficers is null/empty (non-GB, key absent, or fetch failed).
+        // Runs before the cache save so the cached copy carries them too. No-op
+        // when chOfficers is null/empty (non-GB, key absent, or fetch failed).
         officersLayer.injectOfficers(data, chOfficers);
+
+        // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
+        if (cacheMod) {
+          try {
+            await cacheMod.saveResearchToCache(companyName, jurisdiction, entityType, data, finalModel);
+          } catch (err) {
+            console.error("[research-cache] Failed to save to cache:", err.message);
+          }
+        }
 
         res.status(200).json(data);
       } catch (err) {
@@ -292,4 +343,70 @@ module.exports = function (app) {
       adapt(inviteHandler)(req, res);
     });
   });
+
+  // Standalone UBO discovery lab. POST; parse JSON like other serverless routes.
+  app.post("/api/ubo-discovery", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDiscoveryHandler)(req, res);
+    });
+  });
+
+  app.post("/api/ubo-recalculate", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboRecalculateHandler)(req, res);
+    });
+  });
+
+  // Change Intelligence — append-only change_events write. POST; parse the JSON
+  // body the dev server doesn't auto-parse (mirrors the routes above).
+  app.post("/api/change-events", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(changeEventsHandler)(req, res);
+    });
+  });
+
+  // Amendment documents derived from change_events for the Fill Gaps section.
+  // GET uses req.query directly.
+  app.get("/api/amendment-documents", adapt(amendmentDocumentsHandler));
+
+  // Self-serve re-research — dossier lifecycle reseed decision (full vs derive).
+  // POST; parse the JSON body the dev server doesn't auto-parse.
+  app.post("/api/dossier-reseed", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(dossierReseedHandler)(req, res);
+    });
+  });
+
+  // Server-authoritative search-attempt counter (two-retry cap). GET reads
+  // (req.query); POST atomically increments (parse the JSON body).
+  app.get("/api/search-attempt", adapt(searchAttemptHandler));
+  app.post("/api/search-attempt", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(searchAttemptHandler)(req, res);
+    });
+  });
+
+  // Read-only Change Intelligence dashboard metrics (aggregations over
+  // change_events). GET only.
+  app.get("/api/change-intelligence-metrics", adapt(changeIntelligenceMetricsHandler));
 };

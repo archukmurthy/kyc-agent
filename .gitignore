@@ -20,5 +20,11 @@ downloads/
 # Self-source agent test-run output (generated locally — not source)
 test-output-self-source/
 
+# Durable local backups of DB rows (full dossier data — must NEVER be committed)
+backups/
+
 # Local notification helper (run by Claude Code after task completion)
 alert.ps1
+
+# Local idle-watcher helper (run in a separate PowerShell window)
+watch-claude.ps1

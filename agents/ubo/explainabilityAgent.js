@@ -12,7 +12,8 @@ function explainDetermination({ graph, determination, evidence = [] }) {
       effectiveOwnership: chain.effectiveOwnership,
       statements: chain.edgeIds.map((id) => {
         const edge = edges.get(id);
-        return `${nodes.get(edge?.from)?.name || edge?.from} owns ${edge?.ownershipPercentage}% of ${nodes.get(edge?.to)?.name || edge?.to}`;
+        const ownership = edge?.ownershipBand || (edge?.ownershipIsMinimum ? `${edge?.ownershipPercentage}% or more` : `${edge?.ownershipPercentage}%`);
+        return `${nodes.get(edge?.from)?.name || edge?.from} owns ${ownership} of ${nodes.get(edge?.to)?.name || edge?.to}`;
       }),
       evidence: chain.edgeIds.flatMap((id) => (edges.get(id)?.evidenceIds || []).map((evidenceId) => evidenceById.get(evidenceId) || { id: evidenceId })),
     })),

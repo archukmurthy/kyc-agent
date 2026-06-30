@@ -1,0 +1,310 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UBO Discovery Lab</title>
+  <style>
+    body { margin: 0; background: #f5f7fb; color: #172033; font: 15px system-ui, -apple-system, Segoe UI, sans-serif; }
+    main { max-width: 1100px; margin: 32px auto; padding: 0 22px; }
+    h1, h2, h3 { margin-top: 0; }
+    .card { background: #fff; border: 1px solid #dce4ed; border-radius: 12px; padding: 22px; margin: 18px 0; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+    .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; }
+    label { display: grid; gap: 7px; font-weight: 650; }
+    input { padding: 10px; border: 1px solid #bdc8d8; border-radius: 7px; }
+    button { margin-top: 20px; padding: 11px 16px; background: #1767d1; color: #fff; border: 0; border-radius: 7px; font-weight: 700; cursor: pointer; }
+    button:disabled { background: #8191a8; cursor: wait; }
+    .hide { display: none; }
+    .muted { color: #65738a; }
+    .notice { padding: 10px 12px; background: #fff8e6; border-left: 4px solid #d99812; border-radius: 6px; margin-bottom: 16px; }
+    .ok { padding: 10px 12px; background: #ebf8f0; border-left: 4px solid #1f9d55; border-radius: 6px; margin-bottom: 16px; }
+    .bad { padding: 10px 12px; background: #fff1f1; border-left: 4px solid #d93025; border-radius: 6px; margin-bottom: 16px; }
+    .pill { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #edf3ff; color: #23406b; font-size: 12px; font-weight: 700; margin-right: 8px; }
+    .map { padding: 20px; background: #f8fafc; border: 1px solid #dce4ed; border-radius: 10px; overflow: auto; }
+    .level { display: flex; justify-content: center; gap: 14px; min-width: 300px; }
+    .node { min-width: 200px; max-width: 285px; padding: 12px; border: 1px solid #8fa1b7; border-radius: 9px; background: #fff; text-align: center; font-weight: 750; }
+    .node small { display: block; color: #65738a; margin-top: 5px; font-weight: 600; }
+    .customer { background: #263b54; color: #fff; }
+    .customer small { color: #dbe6f2; }
+    .terminal { border-color: #19764a; background: #eefaf3; }
+    .arrow { text-align: center; color: #ae5700; font-size: 12px; font-weight: 800; padding: 8px; }
+    .arrow b { display: block; font-size: 26px; line-height: 18px; color: #db7118; }
+    .progress { padding: 12px 18px; background: #f6f8fb; border-radius: 8px; }
+    .progress li { margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; border-bottom: 1px solid #dce4ed; padding: 9px; vertical-align: top; }
+    th { color: #465874; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    pre { white-space: pre-wrap; overflow: auto; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>UBO Discovery Lab</h1>
+  <p class="muted">Use Companies House first for GB entities. Paid web research is only used when the configured primary source cannot resolve the chain.</p>
+
+  <section class="card">
+    <div class="notice">A result is rejected if its company identity does not match this form. Use “Refresh evidence now” to bypass saved results and fetch a fresh copy.</div>
+    <form id="searchForm">
+      <div class="form">
+        <label>Company name<input name="entityName" required></label>
+        <label>Jurisdiction<input name="jurisdiction" value="GB" maxlength="2" required></label>
+        <label>Registration number<input name="registrationNumber"></label>
+        <label>UBO threshold<input name="uboThreshold" type="number" value="25"></label>
+        <label>Discovery threshold<input name="discoveryThreshold" type="number" value="5"></label>
+      </div>
+      <label style="display:block;margin-top:15px"><input name="forceRefresh" type="checkbox"> Refresh evidence now</label>
+      <button id="runButton">Run discovery</button>
+    </form>
+    <p id="status" class="muted"></p>
+    <ol id="progress" class="progress hide"></ol>
+  </section>
+
+  <section id="result" class="hide">
+    <section class="card">
+      <h2 id="headline"></h2>
+      <div id="summary"></div>
+    </section>
+
+    <section class="card">
+      <h2>Ownership map</h2>
+      <p class="muted">Follow the arrows downward to see who owns the customer company. Registry bands such as “75% or more” are lower bounds, not exact percentages.</p>
+      <div id="map" class="map"></div>
+    </section>
+
+    <section class="card">
+      <h2>Beneficial owners identified</h2>
+      <div id="ubos"></div>
+    </section>
+
+    <section class="card">
+      <h2>Where the investigation stopped</h2>
+      <p class="muted">If the chain crosses into another jurisdiction, this section explains whether it was resolved, treated as a terminal public company, or needs customer/analyst evidence.</p>
+      <ul id="issues"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Research trail</h2>
+      <table>
+        <thead><tr><th>Entity</th><th>Jurisdiction</th><th>Outcome</th></tr></thead>
+        <tbody id="trail"></tbody>
+      </table>
+    </section>
+
+    <details class="card">
+      <summary>Technical result</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+const $ = (selector) => document.querySelector(selector);
+const normalise = (value) => String(value || "").trim().toLowerCase();
+const make = (tag, text = "", className = "") => {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  return node;
+};
+
+function isTerminalType(type) {
+  return String(type || "").includes("Publicly listed company") || ["individual", "public_company", "government"].includes(type);
+}
+
+function edgeLabel(edge) {
+  const band = edge.ownershipBand || edge.metadata?.ownershipBand;
+  if (band) return `${band} ownership`;
+  if (edge.ownershipIsMinimum && edge.ownershipPercentage != null) return `${edge.ownershipPercentage}% or more ownership`;
+  if (edge.ownershipPercentage != null) return `${edge.ownershipPercentage}% ownership`;
+  return "ownership relationship";
+}
+
+function drawMap(result) {
+  const target = $("#map");
+  target.replaceChildren();
+  const graph = result.ownershipGraph || { nodes: [], edges: [] };
+  const nodes = new Map((graph.nodes || []).map((node) => [node.id, node]));
+  const edges = graph.edges || [];
+  const root = graph.rootEntityId;
+  if (!root || !nodes.size) {
+    target.textContent = "No ownership structure was returned.";
+    return;
+  }
+
+  const depth = new Map([[root, 0]]);
+  const queue = [root];
+  while (queue.length) {
+    const current = queue.shift();
+    for (const edge of edges.filter((candidate) => candidate.to === current)) {
+      if (!depth.has(edge.from)) {
+        depth.set(edge.from, depth.get(current) + 1);
+        queue.push(edge.from);
+      }
+    }
+  }
+
+  const maxDepth = Math.max(...depth.values());
+  for (let level = maxDepth; level >= 0; level -= 1) {
+    const row = make("div", "", "level");
+    for (const [id, nodeDepth] of depth) {
+      if (nodeDepth !== level) continue;
+      const node = nodes.get(id);
+      const className = `node ${id === root ? "customer" : ""} ${isTerminalType(node.type) ? "terminal" : ""}`;
+      const box = make("div", node.name, className);
+      box.append(make("small", `${node.type || "unknown"} • ${node.jurisdiction || "unknown"}`));
+      if (node.registrationNumber) box.append(make("small", `Reg: ${node.registrationNumber}`));
+      row.append(box);
+    }
+    target.append(row);
+
+    if (level > 0) {
+      const labels = edges
+        .filter((edge) => depth.get(edge.from) === level && depth.get(edge.to) === level - 1)
+        .map(edgeLabel);
+      const arrow = make("div", labels.join(" • "), "arrow");
+      arrow.prepend(make("b", "↓"));
+      target.append(arrow);
+    }
+  }
+}
+
+function renderTable(container, rows, emptyText, columns) {
+  container.replaceChildren();
+  if (!rows.length) {
+    container.append(make("p", emptyText, "muted"));
+    return;
+  }
+  const table = make("table");
+  const body = make("tbody");
+  for (const row of rows) {
+    const tr = make("tr");
+    for (const column of columns) tr.append(make("td", column(row)));
+    body.append(tr);
+  }
+  table.append(body);
+  container.append(table);
+}
+
+function showResult(result) {
+  const requested = result.run?.requestedEntity;
+  if (!requested) throw new Error("Server did not identify the result. Restart npm start and try again.");
+
+  const submitted = Object.fromEntries(new FormData($("#searchForm")));
+  if (
+    normalise(requested.entityName) !== normalise(submitted.entityName) ||
+    normalise(requested.jurisdiction) !== normalise(submitted.jurisdiction) ||
+    normalise(requested.registrationNumber) !== normalise(submitted.registrationNumber)
+  ) {
+    throw new Error("Safety check: returned result belongs to a different company. It was not displayed.");
+  }
+
+  $("#result").classList.remove("hide");
+  $("#headline").textContent = result.ubos?.length ? "Beneficial ownership resolved" : "No UBO confirmed yet";
+  $("#summary").replaceChildren(
+    make("span", `Result for: ${requested.entityName}`, "pill"),
+    make("span", `Registration: ${requested.registrationNumber || "not provided"}`, "pill"),
+    make("span", result.cache?.hit ? "Saved result reused" : "Live research", "pill"),
+    make("span", `Status: ${result.status || "unknown"}`, "pill")
+  );
+
+  drawMap(result);
+
+  renderTable(
+    $("#ubos"),
+    result.ubos || [],
+    "No beneficial owner has been confirmed from the evidence currently available.",
+    [
+      (ubo) => ubo.name || ubo.personId || "Unknown",
+      (ubo) => `${ubo.effectiveOwnership ?? "unknown"}%`,
+      (ubo) => ubo.basis || "ownership"
+    ]
+  );
+
+  const issueList = $("#issues");
+  issueList.replaceChildren();
+  const issues = result.missingInformation || [];
+  if (!issues.length) issueList.append(make("li", "No unresolved material ownership gaps were reported."));
+  for (const issue of issues) {
+    issueList.append(make("li", `${issue.entity ? issue.entity + ": " : ""}${issue.reason || issue.missing || "Review needed"}`));
+  }
+
+  const trail = $("#trail");
+  trail.replaceChildren();
+  for (const item of result.investigationLog || []) {
+    const row = make("tr");
+    row.append(make("td", item.entity || ""));
+    row.append(make("td", item.jurisdiction || ""));
+    row.append(make("td", item.outcome || ""));
+    trail.append(row);
+  }
+  if (!trail.children.length) {
+    const row = make("tr");
+    const cell = make("td", "No research trail was returned.");
+    cell.colSpan = 3;
+    row.append(cell);
+    trail.append(row);
+  }
+
+  $("#raw").textContent = JSON.stringify(result, null, 2);
+}
+
+$("#searchForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $("#runButton");
+  const progress = $("#progress");
+  button.disabled = true;
+  progress.replaceChildren();
+  progress.classList.remove("hide");
+  $("#result").classList.add("hide");
+  $("#status").textContent = "Investigation in progress…";
+
+  try {
+    const formData = Object.fromEntries(new FormData($("#searchForm")));
+    formData.forceRefresh = Boolean(formData.forceRefresh);
+    const response = await fetch("/api/ubo-discovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(formData)
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalResult = null;
+
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop();
+      for (const eventText of events) {
+        const line = eventText.split("\n").find((candidate) => candidate.startsWith("data: "));
+        if (!line) continue;
+        const eventData = JSON.parse(line.slice(6));
+        if (eventData.result) finalResult = eventData.result;
+        else progress.append(make("li", eventData.message || "Working…"));
+      }
+    }
+
+    if (buffer) {
+      const line = buffer.split("\n").find((candidate) => candidate.startsWith("data: "));
+      if (line) {
+        const eventData = JSON.parse(line.slice(6));
+        if (eventData.result) finalResult = eventData.result;
+      }
+    }
+
+    if (!finalResult) throw new Error("No completed result was returned.");
+    showResult(finalResult);
+    $("#status").textContent = "Complete";
+  } catch (error) {
+    $("#status").textContent = "Unable to complete discovery";
+    progress.append(make("li", error.message));
+  } finally {
+    button.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

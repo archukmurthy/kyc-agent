@@ -299,9 +299,9 @@ Rules for Codex:
     for the UBO lab — do not merge to main
     until the lab is production-ready
   - The ubo_investigations migration
-    (db/migrations/006_ubo_investigations.sql)
+    (db/migrations/009_ubo_investigations.sql)
     requires manual activation:
-    node db/apply.js db/migrations/006_ubo_investigations.sql
+    node db/apply.js db/migrations/009_ubo_investigations.sql
   - When building new UBO features, follow
     the same agent interface contract as
     agents/ubo/uboOrchestrator.js

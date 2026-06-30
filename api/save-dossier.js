@@ -27,7 +27,17 @@ module.exports = async function handler(req, res) {
     requiredDocuments,
     costSummary,
     rawResearch,
+    seededBy,
+    searchAttempts,
   } = req.body || {};
+
+  // Self-serve re-research metadata (migration 008). `seeded_by` records who
+  // triggered the search that produced this dossier: 'customer' (self-serve
+  // re-research) vs the default 'analyst'. `search_attempts` seeds the
+  // server-authoritative two-retry counter — one search has run by the time a
+  // dossier exists, so a first save is attempt 1 unless the caller says otherwise.
+  const seededByValue = seededBy === "customer" ? "customer" : "analyst";
+  const searchAttemptsValue = Number.isFinite(searchAttempts) ? searchAttempts : 1;
 
   if (!tenantId || !company?.name) {
     return res.status(400).json({ error: "tenantId and company.name required" });
@@ -80,6 +90,9 @@ module.exports = async function handler(req, res) {
         research_model,
         raw_research,
 
+        seeded_by,
+        search_attempts,
+
         status,
         saved_at
       )
@@ -113,6 +126,9 @@ module.exports = async function handler(req, res) {
         ${costSummary?.totals?.totalTokens ?? null},
         ${costSummary?.model || null},
         ${JSON.stringify(rawResearch || {})},
+
+        ${seededByValue},
+        ${searchAttemptsValue},
 
         'ready',
         NOW()

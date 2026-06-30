@@ -128,7 +128,7 @@ ON THIS BRANCH (codex/ubo-discovery-framework):
           api/ubo-discovery.js
           public/ubo-lab.html
    To activate Neon audit trail:
-   node db/apply.js db/migrations/006_ubo_investigations.sql
+   node db/apply.js db/migrations/009_ubo_investigations.sql
 
 ON MAIN (deployed):
 

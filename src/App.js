@@ -8,6 +8,12 @@ import {
 } from "./utils/ownershipTypes";
 import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
+import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
+import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
+import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
+import { Notice } from "./components/notices/Notice";
+import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
+import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
   SOURCE_TRUST,
   UK_SCHEMA,
@@ -841,6 +847,12 @@ function buildDemoDocSearchResults(
 // shape of the /api/self-source response so the Documents-step registry section,
 // the Confirm prefill, and the Required-Documents "already satisfied" logic all
 // behave the same as a live run — without spending API credits.
+//
+// PR-059 A: every value here is deliberately FAKE placeholder data. Earlier this
+// stub hardcoded a real third party's Companies House identity (reg number,
+// address, incorporation date), which then got persisted into test dossiers and
+// surfaced as cross-company contamination. NEVER put a real company's details
+// here — only obviously-synthetic sentinels (00000000 / 1 Test Street / etc.).
 function buildDemoSelfSourceResults(companyName) {
   const now = new Date().toISOString();
   const CH = "https://find-and-update.company-information.service.gov.uk";
@@ -859,14 +871,14 @@ function buildDemoSelfSourceResults(companyName) {
     ],
     selfSourcedFields: {
       business_name:               { value: companyName, ...chField },
-      registration_number:         { value: "08804411", ...chField },
-      incorporation_date:          { value: "2013-07-01", ...chField },
-      registered_address_line1:    { value: "7 Westferry Circus", ...chField },
-      registered_address_city:     { value: "London", ...chField },
-      registered_address_postcode: { value: "E14 4HD", ...chField },
+      registration_number:         { value: "00000000", ...chField },
+      incorporation_date:          { value: "2000-01-01", ...chField },
+      registered_address_line1:    { value: "1 Test Street", ...chField },
+      registered_address_city:     { value: "Testville", ...chField },
+      registered_address_postcode: { value: "TE5 7XX", ...chField },
     },
     results: [
-      { requirement: "Legal existence", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high", registeredName: companyName, registrationNumber: "08804411", incorporationDate: "2013-07-01", registeredAddress: "7 Westferry Circus, London, E14 4HD" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
+      { requirement: "Legal existence", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high", registeredName: companyName, registrationNumber: "00000000", incorporationDate: "2000-01-01", registeredAddress: "1 Test Street, Testville, TE5 7XX" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
       { requirement: "Constitution", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/filing-history`, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
       { requirement: "Business activity", selfSourceTier: "Supplementary self-source", status: "retrieved", extracted: { matchConfidence: "medium" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
       { requirement: "Ownership / control", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/persons-with-significant-control`, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
@@ -1505,8 +1517,42 @@ export default function KYCAgent({ previewMode = false } = {}) {
   });
   // Pre-boarding dossier (Part 7).
   const [dossierId, setDossierId] = useState(null);
+  // Journey-origin flag: true when the customer landed via an invite link
+  // (?dossierId&journey=customer or ?ref) and so never saw the lookup page —
+  // Company/Research were done by the analyst before they arrived. This is the
+  // SAME "dossier/invite journey" definition the reg-number "you provided this"
+  // lock uses (the link-landing URL param; regNumberSource stays null on exactly
+  // this journey). Captured as reactive state — not read live from the URL —
+  // because resetAll does not clear the URL: clearing this flag on a "wrong
+  // company" dispute reset correctly returns the redirected-to-lookup customer
+  // to the full 7-step bar. Display-only: drives which step-bar pills show, never
+  // routing. Set in the two link-landing paths (loadDossierAndStartOnboarding +
+  // the ?ref hydration effect); cleared in resetAll.
+  const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
+
+  // Self-serve re-research (front-door "wrong company / wrong type") state.
+  //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
+  //  searchAttempts    — searches already consumed for this dossier (server-read)
+  //  pendingReseedMode — null | 'full_research' | 're_derive', set after a dispute
+  // seededBy is now always 'analyst': the only writer was the old dossier-reseed
+  // dispute, which the foundational-facts gate (slice 2) supersedes with a full
+  // reset. Kept as a read-only value so the downstream re-research wiring is
+  // unchanged; revive a setter here if customer-seeded reseed is reintroduced.
+  const [seededBy] = useState("analyst");
+  const [searchAttempts, setSearchAttempts] = useState(0);
+  const [pendingReseedMode, setPendingReseedMode] = useState(null);
+
+  // Foundational-facts confirmation gate (slice 2 of 2). Shown at the top of the
+  // Applicant page; the applicant section reveals only once all five facts are
+  // confirmed. `factChecks` is sparse: a missing key means confirmed (default
+  // ticked); a key set false means that fact was disputed. Ownership disputes
+  // open `ownershipFork` ('choose' → misclassified|changed); a genuine change is
+  // recorded in `ownershipChangeDeclared` and routes to the pending document slot.
+  const [factChecks, setFactChecks] = useState({});
+  const [ownershipFork, setOwnershipFork] = useState(null); // null | 'choose' | 'changed'
+  const [ownershipChangeDeclared, setOwnershipChangeDeclared] = useState(null);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -1533,6 +1579,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [entityType, setEntityType] = useState("");
+  // Optional business registration / company number captured on the lookup page
+  // (slice 1 of the reg-number initiative). When provided it's used as the
+  // PRIMARY search key — fed to the Companies House officers layer (via the
+  // `registrationNumber` body field /api/research already accepts) and injected
+  // into the web-research prompt. Blank or unresolved silently falls back to the
+  // existing name-based search (the company name is always in the prompt+body,
+  // so there's no dead end). Provenance is "customer" here (customer-typed);
+  // slice 2's confirmation gate verifies it. Distinct from `niumRegNumber`,
+  // which is the test-gated Nium-journey field.
+  const [regNumber, setRegNumber] = useState("");
+  // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
+  // the string is non-empty. Set to "customer" ONLY by the lookup-page input
+  // handler (the customer typed it themselves this session). Every link-landing
+  // path (?dossierId / ?ref) leaves it null — even once `regNumber` is later
+  // restored from a loaded dossier — so slice 2's FoundationalFactsGate locks
+  // the "✓ You provided this" row only for the genuine lookup journey and keeps
+  // it verifiable/uncheckable everywhere else.
+  const [regNumberSource, setRegNumberSource] = useState(null);
   // Registration number for the Nium API Lookup journey (test mode only). The
   // Nium eKYB publicDetails endpoint searches registries by registration number
   // — a name-only search returns HTTP 400 — so this is required for that one
@@ -1791,6 +1855,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
+    // Foundational-facts gate → back to all-confirmed default for the next run.
+    setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -1814,6 +1880,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
+    setRegNumber("");
+    setRegNumberSource(null);
+    // Wrong-company dispute → redirected to the lookup page: this is now a
+    // genuine KYC/lookup journey, so restore the full 7-step bar.
+    setLandedViaLink(false);
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -1873,9 +1944,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
   // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
+    // The dossier auto-saves for the analyst pre-boarding flow AND for a customer
+    // self-serve re-research (seededBy 'customer') — same engine, same audit
+    // record, only the trigger differs. The customer reaches confirm only after
+    // clearing the applicant gate, so the gate stays ahead of the saved dossier.
     if (
-      agentType === "preboarding" &&
-      preboardingUnlocked &&
+      ((agentType === "preboarding" && preboardingUnlocked) || seededBy === "customer") &&
       step === stepsFor(journeyType).confirm &&
       research?.found?.length > 0 &&
       !showDossierView &&
@@ -1925,6 +1999,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setChecks(snap.checks || {});
     setAgentType("onboarding");
     setStep(stepsFor(jt).confirm);
+    // Customer landed via the ?ref invite link — same dossier/invite journey
+    // marker as the ?dossierId path (drives the step-bar subset, display only).
+    setLandedViaLink(true);
     trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1947,6 +2024,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }, []);
 
   async function loadDossierAndStartOnboarding(id, tenant) {
+    // Customer landed via the dossier/invite link — mark the journey so the step
+    // bar hides the analyst-completed Company/Research steps (display only).
+    setLandedViaLink(true);
     try {
       const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
       const data = await res.json();
@@ -2476,6 +2556,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // rather than inside buildPrompt so the shared src/pipeline.js (also
       // used by api/benchmark.js) stays unchanged.
       let researchPrompt = buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType);
+      // Optional registration number → PRIMARY search key. Appended client-side
+      // (like the AUTOMATICALLY SOURCED DOCUMENTS block below) so the shared
+      // src/pipeline.js buildPrompt stays untouched. The company name is still
+      // in the prompt, so an absent or wrong number safely falls back to the
+      // name-based search — never a dead end.
+      const trimmedRegNumber = regNumber.trim();
+      if (trimmedRegNumber) {
+        researchPrompt += `\n\nPRIMARY COMPANY IDENTIFIER:\n` +
+          `The customer provided this official business registration / company number: ${trimmedRegNumber}.\n` +
+          `Use it as the PRIMARY key to identify the exact company in ` +
+          `${countryObj ? countryObj.name : countryCode} (Companies House and any ` +
+          `other applicable company register), so you pull the precise entity ` +
+          `rather than name-matching. If this number does not correspond to a ` +
+          `real company, ignore it and fall back to researching by the company ` +
+          `name "${companyName}".\n`;
+      }
       const acceptedDocs = (docSearchResults?.documents || [])
         .filter(d => acceptedDocTypes.has(d.type));
       if (acceptedDocs.length > 0) {
@@ -2503,6 +2599,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           jurisdiction: countryCode,
           entityType,
           forceRefresh,
+          // Optional reg number → drives the deterministic Companies House
+          // officers layer in api/research.js (already wired to accept it).
+          // Undefined when blank, so the officers layer resolves from name.
+          registrationNumber: trimmedRegNumber || undefined,
         })
       });
       if (!resp.ok) {
@@ -2723,7 +2823,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Onboarding inserts the Applicant step between Research and Confirm;
       // pre-boarding skips it (Company → Research → Dossier).
       setStep(agentType === "preboarding" ? S.confirm : S.applicant);
-    } catch (err) { setError("Research failed: " + err.message); setStep(S.input); }
+    } catch (err) {
+      // Failure fallback. For a customer self-serve re-research, never leave them
+      // hanging and never hand them to an analyst mid-session: flag the failure
+      // as a first-class data point (reused change_events store) and fall through
+      // to manual entry so they can proceed.
+      if (seededBy === "customer") {
+        postReresearchFailureFlag({
+          dossierId,
+          jurisdiction: countryCode,
+          stage: "re_research",
+          reason: err.message,
+        });
+        setError("We couldn't complete that search just now. You can continue by entering your application manually below.");
+        setJourneyOpen(true);
+        setStep(S.input);
+      } else {
+        setError("Research failed: " + err.message);
+        setStep(S.input);
+      }
+    }
     finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
   };
 
@@ -3307,10 +3426,87 @@ export default function KYCAgent({ previewMode = false } = {}) {
   };
   const removeDocFile = (key) => () => setUploadedDocs(prev => ({ ...prev, [key]: null }));
 
+  // ── Foundational-facts confirmation gate handlers (slice 2 of 2) ──────────
+  // The five-fact gate at the top of the Applicant page is controlled: these
+  // handlers own its check state and outcomes. A disputed fact (other than the
+  // ownership fork) — or an "ownership misclassified" choice — is a HARD reset to
+  // the fresh lookup page via resetAll() (nothing pre-filled). This deliberately
+  // replaces the old dossier-reseed dispute (which carried state forward); the
+  // re-research engine itself is untouched and still reachable elsewhere.
+  const isFactConfirmed = (key) => factChecks[key] !== false;
+
+  const toggleFact = (key) => {
+    // Flip this fact's confirm state. Toggling ownership opens/closes its fork.
+    const wasConfirmed = factChecks[key] !== false;
+    setFactChecks((prev) => ({ ...prev, [key]: wasConfirmed ? false : true }));
+    if (key === "ownershipType") {
+      setOwnershipFork(wasConfirmed ? "choose" : null);
+      if (wasConfirmed === false) setOwnershipChangeDeclared(null);
+    }
+  };
+
+  // Re-tick everything → back to the all-confirmed default (cancel a dispute).
+  const cancelFactDispute = () => {
+    setFactChecks({});
+    setOwnershipFork(null);
+    setOwnershipChangeDeclared(null);
+  };
+
+  // Ownership genuinely changed → record the declared change and route to the
+  // document-request path. The specific document is a PENDING mapping (ops-owned),
+  // so we only record + surface the "to be specified" slot; we never guess a
+  // document and the gate stays un-confirmed (applicant section stays hidden).
+  const declareOwnershipChanged = () => {
+    setOwnershipFork("changed");
+    setOwnershipChangeDeclared({
+      from: ownershipTypeLabel(ownershipType) || ownershipType || "",
+      at: new Date().toISOString(),
+    });
+  };
+
+  // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
+  // the schema from the corrected classifier, re-save as customer-seeded. No new
+  // AI search, no attempt spent. Per this slice's scope we do NOT auto-strip/add
+  // type-conditional questions or fire any EDD behaviour (deferred) — the field
+  // set is left to the existing schema resolution.
+  const applyReDerive = () => {
+    try { setActiveSchema(getSchemaFromConfig(countryCode, entityType, tenantConfig)); }
+    catch (_) { /* leave schema as-is */ }
+    setPendingReseedMode(null);
+    setDossierSaved(false);
+    saveDossier(); // persists seeded_by:customer (seededBy state is 'customer')
+    scrollAndSetStep(STEPS.applicant); // applicant gate stays AHEAD of confirm
+  };
+
   // Journey-screen Continue → routes per selected card.
   const proceedFromJourney = () => {
     if (!selectedJourneyCard) { setError("Please choose an option to continue."); return; }
     setError("");
+
+    // Two-retry cap: search cards (A/B/E) are blocked once the customer has used
+    // their searches — only manual entry (C) remains. Card C is never blocked.
+    const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
+    if (isSearchCard && evaluateSearchCap(searchAttempts).locked) {
+      setError(CONTACT_ADMIN_MSG);
+      return;
+    }
+    // A customer re-search consumes an attempt — increment the server-authoritative
+    // counter (optimistic locally, reconciled from the server response). The new
+    // dossier carries the count forward via buildDossierPayload.
+    if (isSearchCard && seededBy === "customer") {
+      setSearchAttempts((n) => n + 1);
+      if (dossierId) {
+        fetch("/api/search-attempt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dossierId }),
+        })
+          .then((r) => r.json())
+          .then((d) => { if (d && Number.isFinite(d.attempts)) setSearchAttempts(d.attempts); })
+          .catch(() => {});
+      }
+    }
+
     if (selectedJourneyCard === "A") {
       setJourneyType("ai_documents");
       setJourneyOpen(false);
@@ -3984,57 +4180,175 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   };
 
+  // Testing-only: auto-complete the applicant form with sample data. Mirrors
+  // fillTestData (Fill Gaps) — pulls from TEST_DATA, keeps any value already
+  // entered, and falls back to sensible values for schema fields not in
+  // TEST_DATA. Gated by SHOW_TEST_TOOLS at the button, so prod never sees it.
+  const fillApplicantTestData = () => {
+    const schemaItems = getCombinedGaps()
+      .filter((g) => g.section === "applicant")
+      .filter(dependsOnSatisfied);
+    const items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    items.forEach((g) => {
+      const current = gapRef.current[g.field];
+      if (current && String(current).trim().length > 0) return; // keep existing edits
+      let val = TEST_DATA[g.field];
+      if (val === undefined) {
+        const it = String(g.inputType || "text").toLowerCase();
+        if (it === "select" && Array.isArray(g.options) && g.options.length > 0) {
+          const first = g.options[0];
+          val = first && typeof first === "object" ? (first.value ?? first.label) : first;
+        } else if (it === "date") {
+          val = "1985-06-15";
+        } else if (it === "email") {
+          val = "jane.smith@example.com";
+        } else {
+          val = "Sample value";
+        }
+      }
+      gapRef.current[g.field] = val;
+    });
+    setFormVersion((v) => v + 1);
+  };
+
   // Standalone Applicant page (step between Research and Confirm). Reuses the
   // director/UBO person selector + the applicant gap fields, with its own
   // header, required-field validation, and Continue → Confirm.
   const renderApplicantPage = () => {
+    // The five foundational facts used to research the company. Reg-number
+    // provenance (G2) is gated on the EXPLICIT `regNumberSource` flag, never on
+    // `regNumber` truthiness — so a number restored from a loaded dossier (the
+    // ?dossierId / ?ref link journeys, which leave the source null) is treated as
+    // system-retrieved and stays verifiable, not locked as "you provided this".
+    // A customer-typed number (source === "customer") is pre-confirmed and
+    // display-only; otherwise the schema-correct registration-number research
+    // field is the system-retrieved value the customer must verify; neither →
+    // "Not provided" and non-disputable (nothing to confirm).
+    //
+    // PR-059 B: resolve the reg field id from the active schema's flow rather
+    // than a hardcoded literal. Corporate schemas store it as
+    // `businessRegistrationNumber`, fi schemas as `registration_number`; reading
+    // the literal `registration_number` matched only the fi case and, for a
+    // corporate entity, could surface a stray/contaminated row instead of the
+    // real value Confirm shows. mapExtractedKey() is the single source of truth
+    // for that mapping (same one the extraction pipeline uses).
+    const regFlow =
+      activeSchema?.flow === "fi" || entityType === "FI" || entityType === "Platform"
+        ? "fi"
+        : "corporate";
+    const regFieldId = mapExtractedKey(regFlow, "registration_number") || "registration_number";
+    const customerReg = regNumberSource === "customer" ? (regNumber || "").trim() : "";
+    const systemReg = customerReg
+      ? ""
+      : ((research?.found || []).find((f) => f.field === regFieldId)?.value || "");
+    const regProvenance = customerReg ? "customer" : systemReg ? "system" : "none";
+    const regValue = customerReg || systemReg || "";
+
+    const facts = [
+      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "—", disputable: true },
+      {
+        key: "registrationNumber",
+        label: "Registration / company number",
+        value: regValue || "Not provided",
+        disputable: regProvenance === "system",
+        note:
+          regProvenance === "customer"
+            ? "✓ You provided this"
+            : regProvenance === "system"
+            ? "Found by research — please verify"
+            : "Not provided on lookup",
+      },
+      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
+      { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
+      { key: "ownershipType", label: "Ownership type", value: ownershipTypeLabel(ownershipType) || ownershipType || "—", disputable: true },
+    ];
+
+    // All five confirmed (a disputed fact, or a pending ownership fork, hides the
+    // applicant section below). A four-fact dispute resets; ownership forks.
+    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.disputable && factChecks[f.key] === false);
+    const ownershipDisputed = factChecks.ownershipType === false;
+    const factsConfirmed = !fourDisputed && !ownershipDisputed && ownershipFork === null;
+
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
-            Tell us about yourself
-          </h2>
-          <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
-            As the person completing this application, we need a few details about you.
-            We have pre-filled what we already know.
-          </p>
-        </div>
+        <FoundationalFactsGate
+          facts={facts}
+          isConfirmed={isFactConfirmed}
+          onToggle={toggleFact}
+          ownershipFork={ownershipFork}
+          ownershipChangeFrom={ownershipChangeDeclared?.from || ""}
+          onReset={resetAll}
+          onOwnershipChanged={declareOwnershipChanged}
+          onCancel={cancelFactDispute}
+        />
 
-        <div style={card}>
-          {renderApplicantPersonSelector()}
-          {renderApplicantFields()}
-        </div>
+        {factsConfirmed && (
+          <>
+            <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
+                  Tell us about yourself
+                </h2>
+                <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
+                  As the person completing this application, we need a few details about you.
+                  We have pre-filled what we already know.
+                </p>
+              </div>
+              {SHOW_TEST_TOOLS && (
+                <button
+                  type="button"
+                  onClick={fillApplicantTestData}
+                  title="Testing only — fills the applicant form with sample data"
+                  style={{
+                    flexShrink: 0,
+                    padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                    background: "transparent", color: "#4a9e8e",
+                    border: "2px dashed #4a9e8e",
+                  }}
+                >
+                  ✨ Fill with test data
+                </button>
+              )}
+            </div>
 
-        <button
-          onClick={() => {
-            const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
-            const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
-            if (missing.length > 0) {
-              setApplicantValidationError(
-                "Please fill in " + missing.length + " required field" +
-                (missing.length > 1 ? "s" : "") + " before continuing."
-              );
-              return;
-            }
-            setApplicantValidationError(null);
-            scrollAndSetStep(STEPS.confirm);
-          }}
-          style={{
-            width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
-            color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
-            fontFamily: "inherit", cursor: "pointer", marginTop: 24,
-          }}
-        >
-          Continue →
-        </button>
+            <div style={card}>
+              {renderApplicantPersonSelector()}
+              {renderApplicantFields()}
+            </div>
 
-        {applicantValidationError && (
-          <div style={{
-            marginTop: 12, padding: "10px 14px", background: "#FEF2F2",
-            border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 13, color: "#DC2626",
-          }}>
-            {applicantValidationError}
-          </div>
+            <button
+              onClick={() => {
+                const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
+                const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
+                if (missing.length > 0) {
+                  setApplicantValidationError(
+                    "Please fill in " + missing.length + " required field" +
+                    (missing.length > 1 ? "s" : "") + " before continuing."
+                  );
+                  return;
+                }
+                setApplicantValidationError(null);
+                scrollAndSetStep(STEPS.confirm);
+              }}
+              style={{
+                width: "100%", padding: "14px 0", background: C.niumBlue || "#0B3D91",
+                color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
+                fontFamily: "inherit", cursor: "pointer", marginTop: 24,
+              }}
+            >
+              Continue →
+            </button>
+
+            {applicantValidationError && (
+              <div style={{
+                marginTop: 12, padding: "10px 14px", background: "#FEF2F2",
+                border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 13, color: "#DC2626",
+              }}>
+                {applicantValidationError}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -4259,7 +4573,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         boxSizing: "border-box",
         background: n % 2 === 0 ? "#fafcfb" : "#fff",
         borderBottom: "1px solid rgba(26,58,74,0.04)",
-        opacity: checks[idx] ? 1 : 0.3,
+        // Unchecking a field is NOT disabling it — keep the row fully legible.
+        // The Tier 1 "no action needed" notice below conveys the recorded state.
       }}>
         {/* Checkbox */}
         <div style={{ flexShrink: 0, width: 20, paddingTop: 2 }}>
@@ -4329,14 +4644,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
           )}
           {item.sourceTier === "tier2" && (
-            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-              From a company source — please confirm this is correct
-            </div>
+            <Notice tier="tier2" style={{ marginTop: 6 }}>
+              From a company source — please confirm this is correct.
+            </Notice>
           )}
           {item.sourceTier === "tier3" && (
-            <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#C2410C" }}>
-              ⚠ From unverified source — please verify this is correct
-            </div>
+            <Notice tier="tier2" style={{ marginTop: 6 }}>
+              From an unverified source — please verify this is correct.
+            </Notice>
           )}
           {item.sharePercentageWarning && (
             <div style={{
@@ -4354,6 +4669,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 </div>
               </div>
             </div>
+          )}
+          {/* Capture-mode change dialogue — mounts beneath an unchecked field,
+              captures intent/registry + records one append-only change_event. */}
+          {!checks[idx] && (
+            <ChangeDialogue
+              field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
+              jurisdiction={countryCode || "GB"}
+              submissionId={dossierId}
+              dossierId={dossierId}
+              onEvent={(event) => trackEvent("change_event_captured", event)}
+            />
           )}
         </div>
         {/* Source badge cell — FIXED width so long source text can never
@@ -4499,6 +4825,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
       })
       .map((f) => f.label);
 
+  // AI-returned fields the customer unticked on a person card to correct them
+  // (field-level correction). Strictly value-present fields — never the missing
+  // ones — so a listed-company person can only correct what was surfaced, not
+  // trigger new collection. Used to route a listed person's corrected values to
+  // an editable card on Fill Gaps (mirrors the private side's per-field edit).
+  const stkCorrectedFields = (s, ubo) =>
+    stkConfirmFields(s, ubo).filter(
+      (f) => stkFieldFound(s, f.key) && !isStkFieldConfirmed(s.id, f.key)
+    );
+  const stkHasCorrections = (s, ubo) => stkCorrectedFields(s, ubo).length > 0;
+
   // Render a customer-added (pending) stakeholder card on Confirm. The blank
   // person already lives in stakeholdersRef and will surface on the next page
   // for the customer to complete; here we just show it + allow removal.
@@ -4598,7 +4935,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // Listed-company shortcut: people who don't need EDD stay a simple
           // verified card (no granular routing ticks).
           const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
-          const nextPageFields = needsEDD && !rejected ? stkNextPageFields(s, ubo) : [];
+          // Fields routed to the next page: for an EDD person that's
+          // stkNextPageFields (unticked + missing-required); for a listed
+          // read-only person it's purely the AI-returned values they unticked
+          // to correct (we never collect missing fields for them).
+          const nextPageFields = rejected
+            ? []
+            : needsEDD
+            ? stkNextPageFields(s, ubo)
+            : stkCorrectedFields(s, ubo).map((f) => f.label);
           return (
             <div
               key={s.id}
@@ -4747,9 +5092,48 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       This person is marked incorrect — you'll enter the correct details on the next page.
                     </div>
                   ) : !needsEDD ? (
-                    <div style={{ fontSize: 12, color: "#1a6b56", fontStyle: "italic" }}>
-                      ✓ Verified from official sources. No additional details required for a listed company.
-                    </div>
+                    // Listed-company person: the AI-returned values render
+                    // read-only but each is individually unticked-able to
+                    // CORRECT a value the AI got wrong — same mechanism as the
+                    // private card (isStkFieldConfirmed / toggleStkFieldConfirm
+                    // + "edit on next page"). This is correction of surfaced
+                    // data only: fields the AI did NOT return stay hidden, so we
+                    // never newly collect the full natural-person dataset for a
+                    // listed company (CD-12 / PR-057 still open). Person removal
+                    // remains the header checkbox above.
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {stkConfirmFields(s, ubo)
+                          .filter((f) => stkFieldFound(s, f.key))
+                          .map((f) => {
+                            const amberTag = {
+                              fontSize: 10, fontWeight: 700, color: "#8c5500",
+                              background: "#fff8ed", border: "1px solid #e0a040",
+                              borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                            };
+                            const confirmed = isStkFieldConfirmed(s.id, f.key);
+                            return (
+                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={confirmed}
+                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
+                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
+                                  aria-label={`Confirm ${f.label}`}
+                                />
+                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
+                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
+                              </label>
+                            );
+                          })}
+                      </div>
+                      <Notice tier="tier1" style={{ marginTop: 10 }}>
+                        Verified from official sources — no additional details required for a listed company.
+                        Untick a field to correct a value we got wrong, or untick this person above if they
+                        don't belong; you'll make the change on the next page.
+                      </Notice>
+                    </>
                   ) : (
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -5372,6 +5756,187 @@ export default function KYCAgent({ previewMode = false } = {}) {
     </div>
   );
 
+  // Light, identify-only replacement card (PR-057 interim). Shown ONLY on Fill
+  // Gaps for a listed-company person the customer unticked on Confirm. Collects
+  // just enough to identify the replacement — full legal name (required) + role
+  // — NOT the full UBO/EDD set (no nationality/DOB/PEP/residence). Writes through
+  // the same stakeholdersRef helpers as every other person card.
+  const renderLightReplacementCard = (fieldId, s) => {
+    const named = !!(s.full_name && s.full_name.trim());
+    return (
+      <div
+        key={s.id}
+        style={{
+          borderRadius: 10,
+          border: `1.5px solid ${named ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
+          background: "#fff", marginBottom: 12, overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px", background: "#fafcfb",
+          borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
+                {s.full_name || "Replacement director"}
+              </div>
+              {s.full_name_original && (
+                <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>
+                  Replacing: {s.full_name_original}
+                </div>
+              )}
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+            background: named ? "#dff2ec" : "#fff8ed",
+            color: named ? "#1a6b56" : "#8c5500",
+            border: `1px solid ${named ? "#4a9e8e" : "#e0a040"}40`,
+          }}>
+            {named ? "✅ Identified" : "⚠ Name needed"}
+          </span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
+            Identify-only — a listed company's directors are public record, so we only need to know
+            who replaces the person you removed.
+          </p>
+          <div style={{ marginBottom: 14 }}>
+            <StableInput
+              id={`stk_${fieldId}_${s.id}_full_name`}
+              label="Full Legal Name"
+              type="text"
+              value={s.full_name || ""}
+              onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "full_name", v)}
+              required
+              placeholder="Full legal name"
+            />
+          </div>
+          <StableInput
+            id={`stk_${fieldId}_${s.id}_role`}
+            label="Role / Position"
+            type="text"
+            value={s.role || ""}
+            onUpdate={(_, v) => updateStakeholderField(fieldId, s.id, "role", v)}
+            placeholder="e.g. Director"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // One editable input for a single corrected field, reusing the exact
+  // components the private EDD card uses (StableInput / PrePopulatedField).
+  // Pre-filled with the AI value and opened for editing (the field is unticked
+  // by definition), so the customer edits the surfaced value in place.
+  const renderCorrectionField = (fieldId, s, f) => {
+    const onUpdate = (_, v) => updateStakeholderField(fieldId, s.id, f.key, v);
+    switch (f.key) {
+      case "full_name":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_full_name`} label="Full Legal Name" type="text"
+              value={s.full_name || ""} onUpdate={onUpdate} required placeholder="Full legal name" />
+          </div>
+        );
+      case "role":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_role`} label="Role / Position" type="text"
+              value={s.role || ""} onUpdate={onUpdate} placeholder="e.g. CEO, Director, CFO" />
+          </div>
+        );
+      case "nationality":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_nationality`} label="Nationality" type="text"
+            value={s.nationality || ""} onUpdate={onUpdate} sourceLabel={s.source} startEditing required
+            placeholder="e.g. British, American, Singaporean" />
+        );
+      case "date_of_birth":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_dob`} label="Date of Birth" type="date"
+            value={s.date_of_birth || ""} displayValue={formatDOBForDisplay(s.date_of_birth)} onUpdate={onUpdate}
+            sourceLabel={s.source} startEditing required placeholder="YYYY-MM-DD" />
+        );
+      case "residential_country":
+        return (
+          <PrePopulatedField key={f.key} id={`stk_${fieldId}_${s.id}_country`} label="Country of Residence" type="select"
+            value={s.residential_country || ""} onUpdate={onUpdate}
+            options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+            sourceLabel={s.source} startEditing />
+        );
+      case "share_percentage":
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_share`} label="Shareholding" type="text"
+              value={s.share_percentage != null ? String(s.share_percentage) : ""} onUpdate={onUpdate}
+              placeholder="e.g. 30%" />
+          </div>
+        );
+      default:
+        return (
+          <div key={f.key} style={{ marginBottom: 14 }}>
+            <StableInput id={`stk_${fieldId}_${s.id}_${f.key}`} label={f.label} type="text"
+              value={stkFieldDisplay(s, f.key)} onUpdate={onUpdate} />
+          </div>
+        );
+    }
+  };
+
+  // Field-level correction card for a listed-company person the customer did
+  // NOT remove but whose AI-returned value(s) they unticked on Confirm. Renders
+  // ONLY the unticked fields as editable — correction, not collection. Mirrors
+  // the private per-field edit; the person-level removal path is the separate
+  // light replacement card above.
+  const renderFieldCorrectionCard = (fieldId, s, ubo) => {
+    const corrected = stkCorrectedFields(s, ubo);
+    if (corrected.length === 0) return null;
+    return (
+      <div
+        key={s.id}
+        style={{
+          borderRadius: 10, border: "1.5px solid #e0a040",
+          background: "#fff", marginBottom: 12, overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 16px", background: "#fafcfb",
+          borderBottom: "1px solid rgba(26,58,74,0.08)", gap: 8, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a3a4a" }}>
+                {s.full_name || (ubo ? "Beneficial owner" : "Director")}
+              </div>
+              {s.role && (
+                <div style={{ fontSize: 11, color: "#1a3a4a80", marginTop: 2 }}>{s.role}</div>
+              )}
+            </div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99,
+            background: "#fff8ed", color: "#8c5500", border: "1px solid #e0a04040",
+          }}>
+            ✎ {corrected.length} correction{corrected.length > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
+            You marked {corrected.length === 1 ? "a detail" : "these details"} as incorrect on the previous
+            page. Correct {corrected.length === 1 ? "it" : "them"} below — we only collect the
+            value{corrected.length > 1 ? "s" : ""} you're fixing.
+          </p>
+          {corrected.map((f) => renderCorrectionField(fieldId, s, f))}
+        </div>
+      </div>
+    );
+  };
+
   const renderStakeholderForms = (researchItem) => {
     const fieldId = researchItem.field;
     const ubo = isUboLikeField(fieldId);
@@ -5383,6 +5948,30 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Drop registry exemption notices — never real people / EDD forms.
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
     const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
+
+    // Listed-company replacement path: a person the customer unticked on Confirm
+    // gets a LIGHT identify-only card here (not the full EDD set). These people
+    // return false from needsStakeholderDetails (which we must not change), so
+    // detect them via the customer_rejected flag seeded by initStakeholdersForFillGaps.
+    const lightReplacements = effectivelyListed
+      ? validStakeholders.filter((s) => s.customer_rejected && !needsStakeholderDetails(s, fieldId, effectivelyListed))
+      : [];
+
+    // Listed-company field-level corrections: a person the customer kept but
+    // whose AI-returned value(s) they unticked on Confirm. Correction-only —
+    // these people return false from needsStakeholderDetails so they'd otherwise
+    // sit in the read-only summary with no way to edit. People needing full EDD
+    // (>=25% UBOs) already correct fields inside renderStakeholderCard, and
+    // private-company people flow through needingDetails — so this list is
+    // listed-only, not-rejected, not-EDD. (Private corrections are unchanged.)
+    const fieldCorrections = effectivelyListed
+      ? validStakeholders.filter(
+          (s) =>
+            !s.customer_rejected &&
+            !needsStakeholderDetails(s, fieldId, effectivelyListed) &&
+            stkHasCorrections(s, ubo)
+        )
+      : [];
 
     // Private company with no real people found yet: prompt to add one. This is
     // a customer action, so it belongs in the forms section.
@@ -5403,13 +5992,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     // Nobody needs input → nothing in the forms section (summary handles the
-    // read-only reference at the bottom of the page).
-    if (needingDetails.length === 0) return null;
+    // read-only reference at the bottom of the page). For a listed company the
+    // section still renders if the customer unticked someone (light replacement).
+    if (needingDetails.length === 0 && lightReplacements.length === 0 && fieldCorrections.length === 0) return null;
 
     return (
       <div key={`stk-forms-${fieldId}`} style={card}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>👥 {heading}</h3>
-        {effectivelyListed ? (
+        {!effectivelyListed ? (
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
+            Complete the required details for each {personLabel} below. Names and roles marked
+            "Verified" came from the research on the previous page; everything else needs your input.
+          </p>
+        ) : needingDetails.length > 0 ? (
           <div style={{
             padding: "12px 16px", background: "#fff8ed", border: "1px solid #e0a040",
             borderRadius: 8, fontSize: 13, color: "#8c5500",
@@ -5422,13 +6017,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
               enhanced due diligence details.
             </span>
           </div>
-        ) : (
-          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 14px", lineHeight: 1.5 }}>
-            Complete the required details for each {personLabel} below. Names and roles marked
-            "Verified" came from the research on the previous page; everything else needs your input.
-          </p>
-        )}
+        ) : null}
         {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
+
+        {/* Listed-company light replacement cards — only for unticked people. */}
+        {lightReplacements.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
+              You removed {lightReplacements.length === 1 ? `a ${personLabel}` : `${lightReplacements.length} ${personLabel}s`} on
+              the previous page. Please identify {lightReplacements.length === 1 ? "their replacement" : "their replacements"} below —
+              just a name and role. A listed company's {personLabel}s are public record, so no further details are needed.
+            </p>
+            {lightReplacements.map((s) => renderLightReplacementCard(fieldId, s))}
+          </>
+        )}
+
+        {/* Listed-company field-level corrections — kept people whose surfaced
+            value(s) the customer unticked to fix. Correction-only, no EDD. */}
+        {fieldCorrections.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
+              You marked {fieldCorrections.length === 1 ? "a detail" : "some details"} as incorrect on the
+              previous page. Please correct {fieldCorrections.length === 1 ? "it" : "them"} below. As a listed
+              company, no further details are collected — only the values you're fixing.
+            </p>
+            {fieldCorrections.map((s) => renderFieldCorrectionCard(fieldId, s, ubo))}
+          </>
+        )}
+
         {!effectivelyListed && renderAddStakeholderButtons(fieldId, ubo)}
       </div>
     );
@@ -5441,7 +6057,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
-    const confirmedOnly = validStakeholders.filter((s) => !needsStakeholderDetails(s, fieldId, effectivelyListed));
+    // Read-only "verified" reference: people needing no input. Exclude listed
+    // people the customer is actively correcting (a field unticked) — they now
+    // render as an editable correction card in the forms section above, so
+    // showing them here too would duplicate them with the stale value.
+    const confirmedOnly = validStakeholders.filter(
+      (s) =>
+        !needsStakeholderDetails(s, fieldId, effectivelyListed) &&
+        !(effectivelyListed && !s.customer_rejected && stkHasCorrections(s, ubo))
+    );
 
     // Listed company with no real owners (e.g. PSC-exempt — only an exemption
     // notice): clean "No action required" reference card.
@@ -5490,6 +6114,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
       const ubo = isUboLikeField(result.field);
       const personLabel = ubo ? "beneficial owner" : "director";
+
+      // Listed-company light replacement cards (PR-057): a person the customer
+      // unticked needs only a name (identify-only). Validate this before the
+      // "no one needs full details" early return below.
+      if (effectivelyListed) {
+        validStakeholders
+          .filter((s) => s.customer_rejected && !needsStakeholderDetails(s, result.field, effectivelyListed))
+          .forEach((s) => {
+            if (!s.full_name || !s.full_name.trim()) {
+              errors.push(`Please name the replacement ${personLabel} for the person you removed.`);
+            }
+          });
+      }
 
       // Only validate stakeholders that still need the full gap form. For a
       // listed company that's the >= 25% UBOs; for a private company it's
@@ -6406,11 +7043,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
         };
       });
 
+    // Registration number carried onto the dossier for slice 2's confirmation
+    // gate. Provenance distinguishes a customer-typed number (trusted) from a
+    // system-retrieved one (shown for verification), and is taken from the
+    // EXPLICIT `regNumberSource` flag — not inferred from the string — so a
+    // number restored from a loaded dossier (source null) is never re-persisted
+    // as "customer". A system-retrieved number, when present, already lives in
+    // the research output as the `registration_number` found field, so slice 2
+    // can reconcile the two.
+    const trimmedRegNumber = regNumber.trim();
+    const registrationNumber = trimmedRegNumber || null;
+    const registrationNumberSource =
+      trimmedRegNumber && regNumberSource === "customer" ? "customer" : null;
+
     return {
       tenantId,
       company: dossierCompany(),
       entityType,
       ownershipType,
+      // Top-level for in-session reads (slice 2 gate). Also folded into
+      // rawResearch below so it survives a reload via the existing raw_research
+      // JSONB column without a schema migration.
+      registrationNumber,
+      registrationNumberSource,
       coverage,
       includedFields: getIncludedGapFields(),
       excludedFields: Array.from(excludedGapFields),
@@ -6421,7 +7076,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       stakeholders: stakeholderData,
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp },
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource },
+      // Self-serve re-research audit data: who triggered the search that produced
+      // this dossier, and the carried search-attempt count (migration 008).
+      seededBy,
+      searchAttempts: seededBy === "customer" ? Math.max(1, searchAttempts) : 1,
     };
   };
 
@@ -7249,8 +7908,21 @@ Nium Onboarding Team`;
             // showDossierView→Dossier (covers the confirm-step window while the
             // dossier auto-saves).
             const pbActive = showDossierView ? 2 : (step >= 1 ? 1 : 0);
-            const names = pb ? ["Company", "Research", "Dossier"] : stepNames;
-            const activeIdx = pb ? pbActive : step;
+            let names = pb ? ["Company", "Research", "Dossier"] : stepNames;
+            let activeIdx = pb ? pbActive : step;
+            // Dossier/invite journey: the customer landed via link, so Company &
+            // Research (and Documents, on that journey) were done before they
+            // arrived. Hide every pre-Applicant pill and renumber the rest 1–N.
+            // DISPLAY ONLY — `step`/STEPS routing is untouched; we just slice the
+            // labels and re-base the active index by the same offset so Applicant
+            // reads as 1 of 5 here while staying 3 of 7 on the KYC/lookup journey.
+            // Skipped for preboarding (analyst flow) and once a dispute reset
+            // clears landedViaLink (→ back to the full 7).
+            if (!pb && landedViaLink && step >= STEPS.applicant) {
+              const hidden = STEPS.applicant; // count of pre-Applicant steps
+              names = stepNames.slice(hidden);
+              activeIdx = step - hidden;
+            }
             const doneBg = pb ? "#7C3AED" : "#4a9e8e";
             const activeBg = pb ? "#6D28D9" : "#1a3a4a";
             const ring = pb ? "0 0 0 3px rgba(124,58,237,0.2)" : "0 0 0 3px rgba(74,158,142,0.2)";
@@ -7269,6 +7941,13 @@ Nium Onboarding Team`;
             <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Company Lookup</h2>
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
             <StableInput id="companyName" label="Company Legal Name" type="text" value={companyName} onUpdate={(_, v) => setCompanyName(v)} required placeholder="e.g. Tesco PLC, DBS Group Holdings" />
+            {/* Optional registration / company number. When supplied it's used as
+                the primary search key to pinpoint the exact company; blank = the
+                same name-based search as before (slice 1). */}
+            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => { setRegNumber(v); setRegNumberSource(v.trim() ? "customer" : null); }} placeholder="e.g. 00445790 — the official company / registration number" />
+            <p style={{ fontSize: 11, color: "#1a3a4a80", margin: "-8px 0 16px", lineHeight: 1.4 }}>
+              Optional. If you know the company's official registration number, we'll use it to pinpoint the exact company and sharpen the research. Leave it blank to search by name.
+            </p>
             <div style={{ marginBottom: 14 }}>
               <label htmlFor="entity-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
               <SearchableSelect
@@ -7373,6 +8052,9 @@ Nium Onboarding Team`;
                   if (!ownershipType) { setError("Please select an ownership type."); return; }
                   if (!countryCode) { setError("Please select a country."); return; }
                   setError("");
+                  // Wrong-TYPE re-derive: skip the search journey entirely — keep
+                  // the existing research and re-resolve from the corrected type.
+                  if (pendingReseedMode === "re_derive") { applyReDerive(); return; }
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
                   // Both the onboarding AND pre-boarding flows now show the
@@ -7402,18 +8084,41 @@ Nium Onboarding Team`;
               )}
             </div>
 
+            {/* Two-retry cap notices: legal-name tip on the second attempt, and
+                the lockout-to-manual message once searches are used up. */}
+            {(() => {
+              const cap = evaluateSearchCap(searchAttempts);
+              if (cap.locked) {
+                return (
+                  <div data-testid="search-locked-banner" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#b91c1c", marginBottom: 14 }}>
+                    {CONTACT_ADMIN_MSG}
+                  </div>
+                );
+              }
+              if (cap.isSecondAttempt) {
+                return (
+                  <div data-testid="legal-name-alert" style={{ background: "#fff8ed", border: "1px solid #fcd9a8", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#9d6500", marginBottom: 14 }}>
+                    <strong>Tip:</strong> {LEGAL_NAME_ALERT}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 }}>
               {/* Card A */}
               {(() => {
                 const sel = selectedJourneyCard === "A";
+                const locked = evaluateSearchCap(searchAttempts).locked;
                 return (
                   <div
-                    onClick={() => { setSelectedJourneyCard("A"); setError(""); }}
+                    onClick={() => { if (locked) { setError(CONTACT_ADMIN_MSG); return; } setSelectedJourneyCard("A"); setError(""); }}
                     style={{
-                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      position: "relative", padding: "18px 16px", borderRadius: 12, cursor: locked ? "not-allowed" : "pointer",
                       background: sel ? "#f0f9f6" : "#fafcfb",
                       border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.18)"}`,
                       boxShadow: sel ? "0 6px 18px rgba(26,58,74,0.12)" : "none",
+                      opacity: locked ? 0.45 : 1,
                     }}
                   >
                     <span style={{ position: "absolute", top: 10, right: 10, background: "#4a9e8e", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>Recommended</span>
@@ -7428,13 +8133,15 @@ Nium Onboarding Team`;
               {/* Card B */}
               {(() => {
                 const sel = selectedJourneyCard === "B";
+                const locked = evaluateSearchCap(searchAttempts).locked;
                 return (
                   <div
-                    onClick={() => { setSelectedJourneyCard("B"); setError(""); }}
+                    onClick={() => { if (locked) { setError(CONTACT_ADMIN_MSG); return; } setSelectedJourneyCard("B"); setError(""); }}
                     style={{
-                      padding: "18px 16px", borderRadius: 12, cursor: "pointer",
+                      padding: "18px 16px", borderRadius: 12, cursor: locked ? "not-allowed" : "pointer",
                       background: sel ? "#f0f3f8" : "#fafcfb",
                       border: `2px solid ${sel ? "#1a3a4a" : "rgba(26,58,74,0.12)"}`,
+                      opacity: locked ? 0.45 : 1,
                     }}
                   >
                     <div style={{ fontSize: 24, marginBottom: 6 }}>🔍</div>
@@ -7476,6 +8183,9 @@ Nium Onboarding Team`;
                 return (
                   <div
                     onClick={() => {
+                      // Two-retry cap: the Nium API lookup is a search option, so
+                      // it's blocked once the customer has used their searches.
+                      if (evaluateSearchCap(searchAttempts).locked) { setError(CONTACT_ADMIN_MSG); return; }
                       // The Nium KYB sandbox only holds one fixture (the STAR
                       // FINANCE PRIVATE LIMITED / SG record), so the lookup ALWAYS
                       // returns that sample data regardless of what was entered.
@@ -8474,6 +9184,9 @@ Nium Onboarding Team`;
 
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <div>
+            {/* The "is this the right company?" check now lives on the Applicant
+                page as the five-fact FoundationalFactsGate (slice 2), so there is
+                no gate here — avoids a double gate. */}
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
@@ -8498,6 +9211,50 @@ Nium Onboarding Team`;
                 Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then company-owned sources, then unverified web. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
               </div>
             </div>
+
+            {/* TEST-ONLY utility — treat the company as publicly listed, which
+                skips the detailed stakeholder EDD forms on the next page. Sets
+                isPubliclyListedOverride (same state + downstream effectivelyListed
+                consumer as before — behaviour unchanged). Gated by SHOW_TEST_TOOLS
+                so real customers never see it; styled to match the dashed
+                "Fill with test data" test control, not a customer selection. */}
+            {SHOW_TEST_TOOLS && (
+              <div
+                onClick={() => setIsPubliclyListedOverride(v => !v)}
+                title="Testing only — treat this company as publicly listed to skip the detailed stakeholder forms on the next page"
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 14px", marginBottom: 16,
+                  background: "transparent",
+                  border: "2px dashed #4a9e8e", borderRadius: 8,
+                  cursor: "pointer", userSelect: "none",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isPubliclyListedOverride}
+                  onChange={() => setIsPubliclyListedOverride(v => !v)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 15, height: 15, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
+                  aria-label="TEST: treat as publicly listed (skips stakeholder forms)"
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#4a9e8e", letterSpacing: "0.3px" }}>
+                    🧪 TEST: treat as publicly listed (skips stakeholder forms)
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 1, color: "#4a9e8e", opacity: 0.8 }}>
+                    {isPubliclyListedOverride
+                      ? "On — detailed stakeholder forms will be skipped on the next page"
+                      : "Test aid only — not shown to customers"}
+                  </div>
+                </div>
+                {isPubliclyListedOverride && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#4a9e8e", border: "1px dashed #4a9e8e", borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Listed ✓
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Part 11 — low-data banner. Threshold is calibrated per ownership
                 type (private companies expect lower fill rates than listed). */}
@@ -8587,58 +9344,6 @@ Nium Onboarding Team`;
               </div>
             )}
 
-            {/* Manual "publicly listed company" toggle — hides stakeholder EDD
-                forms on the next page. Test-mode only (gated by SHOW_TEST_TOOLS):
-                hidden for real customers, shown in local dev / ?test=1. */}
-            {SHOW_TEST_TOOLS && (
-            <div
-              onClick={() => setIsPubliclyListedOverride(v => !v)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "12px 16px",
-                background: isPubliclyListedOverride ? "#f3faf8" : "#f2f1ed",
-                border: `1.5px solid ${isPubliclyListedOverride ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
-                borderRadius: 10, marginBottom: 16,
-                cursor: "pointer", transition: "all 0.15s", userSelect: "none",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isPubliclyListedOverride}
-                onChange={() => setIsPubliclyListedOverride(v => !v)}
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: 16, height: 16, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
-                aria-label="This is a publicly listed company"
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 14, fontWeight: 600,
-                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a",
-                }}>
-                  🏛 This is a publicly listed company
-                </div>
-                <div style={{
-                  fontSize: 12, marginTop: 2,
-                  color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a70",
-                }}>
-                  {isPubliclyListedOverride
-                    ? "✓ Stakeholder compliance details will not be collected on the next page"
-                    : "Check this box to skip detailed stakeholder forms on the next page"}
-                </div>
-              </div>
-              {isPubliclyListedOverride && (
-                <span style={{
-                  fontSize: 12, fontWeight: 700, color: "#1a6b56",
-                  background: "#f3faf8", border: "1px solid #4a9e8e",
-                  borderRadius: 99, padding: "3px 10px",
-                  whiteSpace: "nowrap", flexShrink: 0,
-                }}>
-                  Listed ✓
-                </span>
-              )}
-            </div>
-            )}
-
             {stakeholderFound.length > 0 && (
               <div style={card}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
@@ -8682,6 +9387,7 @@ Nium Onboarding Team`;
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
+            <AmendmentDocuments submissionId={dossierId} />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>
