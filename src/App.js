@@ -2090,7 +2090,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
           }
           return item;
         });
-        if (found.length > 0) setResearch({ companyName: d.company_name, found });
+        if (found.length > 0) {
+          setResearch({ companyName: d.company_name, found });
+          // PR-056 — match the KYC/research path (see the live-research and
+          // lookup paths): pre-accept every scalar field (checked by default) so
+          // the customer only unchecks what's wrong. Without this, `checks` stays
+          // {} from resetAll on the dossier-load path, so every scalar arrives
+          // UNCHECKED and each row spuriously shows its change-dialogue on arrival
+          // (4765: `!checks[idx]`). Stakeholders are unaffected — they default to
+          // confirmed via their own separate state.
+          const c = {};
+          found.forEach((_, i) => { c[i] = true; });
+          setChecks(c);
+        }
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
