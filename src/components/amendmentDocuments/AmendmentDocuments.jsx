@@ -39,7 +39,6 @@ const ROW = {
   borderTop: '1px solid #FCD9A8',
 };
 const DOC_TITLE = { fontSize: 14, fontWeight: 700, color: '#1a3a4a' };
-const DOC_REASON = { fontSize: 12, color: '#7a4f00' };
 const BTN = {
   fontSize: 12,
   padding: '6px 12px',
@@ -66,7 +65,23 @@ export function AmendmentDocuments({ submissionId }) {
     fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`)
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setDocuments(Array.isArray(data.documents) ? data.documents : []);
+        if (cancelled) return;
+        const arr = Array.isArray(data.documents) ? data.documents : [];
+        // Deduplicate by docType: several changed fields can map to ONE real
+        // document (e.g. three address lines → one "Notice of Change of
+        // Address"). Same document → one card; the derived list carries one entry
+        // per (fieldId, docType), so same-docType entries are true duplicates.
+        // Different docTypes stay separate, and any entry without a docType is
+        // passed through untouched — never under-collect evidence (safety rule).
+        // Keeps the first occurrence of each docType.
+        const seen = new Set();
+        const deduped = [];
+        for (const d of arr) {
+          const t = d && d.docType;
+          if (t) { if (seen.has(t)) continue; seen.add(t); }
+          deduped.push(d);
+        }
+        setDocuments(deduped);
       })
       .catch((err) => console.warn('[AmendmentDocuments] fetch failed:', err));
     return () => {
@@ -112,8 +127,10 @@ export function AmendmentDocuments({ submissionId }) {
         return (
           <div style={ROW} key={k}>
             <div style={{ flex: 1, minWidth: 180 }}>
+              {/* Document name only — internal rule codes (doc.reason, e.g.
+                  "Required by rule ADDR-NOTREFLECTED") are never shown to the
+                  customer. */}
               <div style={DOC_TITLE}>{doc.docType}</div>
-              {doc.reason && <div style={DOC_REASON}>{doc.reason}</div>}
             </div>
 
             {up ? (
