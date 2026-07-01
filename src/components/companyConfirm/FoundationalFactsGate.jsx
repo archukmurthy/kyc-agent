@@ -88,15 +88,22 @@ export function FoundationalFactsGate({
   onCancel,
   ownershipTypeOptions = [],
   onOwnershipChangeResolved,
+  regNumberFork = null,
+  regNumberChangeFrom = "",
+  onRegNumberChanged,
+  onRegNumberChangeResolved,
 }) {
-  // Any of the four reset-facts disputed → full reset (ownership has its own fork).
+  // Any of the reset-only facts disputed → full reset. Ownership AND registration
+  // number each have their own fork (misclassified vs genuinely changed).
   const fourDisputed = facts.some(
-    (f) => f.key !== "ownershipType" && f.disputable && !isConfirmed(f.key)
+    (f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && !isConfirmed(f.key)
   );
   const ownershipDisputed = !isConfirmed("ownershipType");
-  // Transient input value for the "changed to?" select (not journey state — the
-  // resolved value is handed up via onOwnershipChangeResolved).
+  const regNumberDisputed = !isConfirmed("registrationNumber");
+  // Transient input values for the "changed to?" controls (not journey state —
+  // the resolved value is handed up via the on…Resolved callbacks).
   const [newOwnershipType, setNewOwnershipType] = useState("");
+  const [newRegNumber, setNewRegNumber] = useState("");
 
   return (
     <div style={CARD} data-testid="foundational-facts-gate">
@@ -210,6 +217,62 @@ export function FoundationalFactsGate({
                 It genuinely changed
               </button>
               <button type="button" style={BTN} onClick={onCancel} data-testid="ownership-fork-cancel">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )
+      ) : regNumberDisputed ? (
+        regNumberFork === "changed" ? (
+          <div style={PANEL("warn")} data-testid="regnumber-changed-panel">
+            <p style={PANEL_TITLE("warn")}>What's the new registration / company number?</p>
+            <p style={PANEL_BODY("warn")}>
+              We've recorded that your registration / company number genuinely changed
+              {regNumberChangeFrom ? ` from "${regNumberChangeFrom}"` : ""}. Enter the new number — we'll
+              add the supporting document to your checklist, then you can continue.
+            </p>
+            <input
+              type="text"
+              value={newRegNumber}
+              onChange={(e) => setNewRegNumber(e.target.value)}
+              data-testid="regnumber-new-value"
+              placeholder="New registration / company number"
+              style={{
+                width: "100%", padding: "9px 12px", marginBottom: 12,
+                border: "1px solid #FCD9A8", borderRadius: 6, fontSize: 13,
+                fontFamily: "inherit", background: "#fff", color: "#1a3a4a", boxSizing: "border-box",
+              }}
+            />
+            <div style={ROW_BTNS}>
+              <button
+                type="button"
+                style={newRegNumber.trim() ? BTN_WARN : { ...BTN_WARN, opacity: 0.5, cursor: "not-allowed" }}
+                disabled={!newRegNumber.trim()}
+                onClick={() => newRegNumber.trim() && onRegNumberChangeResolved(newRegNumber)}
+                data-testid="regnumber-changed-confirm"
+              >
+                Confirm change
+              </button>
+              <button type="button" style={BTN} onClick={onCancel} data-testid="regnumber-changed-cancel">
+                Cancel — keep my answers
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={PANEL("warn")} data-testid="regnumber-fork-panel">
+            <p style={PANEL_TITLE("warn")}>What changed about the registration number?</p>
+            <p style={PANEL_BODY("warn")}>
+              Did we get the registration / company number wrong, or did it genuinely change (for example a
+              re-registration or conversion that issued a new number)?
+            </p>
+            <div style={ROW_BTNS}>
+              <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="regnumber-misclassified">
+                You got it wrong — start over
+              </button>
+              <button type="button" style={BTN_WARN} onClick={onRegNumberChanged} data-testid="regnumber-genuinely-changed">
+                It genuinely changed
+              </button>
+              <button type="button" style={BTN} onClick={onCancel} data-testid="regnumber-fork-cancel">
                 Cancel
               </button>
             </div>

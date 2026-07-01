@@ -1562,6 +1562,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [factChecks, setFactChecks] = useState({});
   const [ownershipFork, setOwnershipFork] = useState(null); // null | 'choose' | 'changed'
   const [ownershipChangeDeclared, setOwnershipChangeDeclared] = useState(null);
+  // Registration/company number has the SAME fork as ownership: untick →
+  // misclassified (start over) | genuinely changed (capture new number + request
+  // the jurisdiction-appropriate change document, then resolve the gate).
+  const [regNumberFork, setRegNumberFork] = useState(null); // null | 'choose' | 'changed'
+  const [regNumberChangeDeclared, setRegNumberChangeDeclared] = useState(null);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -1886,6 +1891,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setApplicantNotListed(false); setAuthorityToActFile(null);
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
+    setRegNumberFork(null); setRegNumberChangeDeclared(null);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -3488,6 +3494,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setOwnershipFork(wasConfirmed ? "choose" : null);
       if (wasConfirmed === false) setOwnershipChangeDeclared(null);
     }
+    if (key === "registrationNumber") {
+      setRegNumberFork(wasConfirmed ? "choose" : null);
+      if (wasConfirmed === false) setRegNumberChangeDeclared(null);
+    }
   };
 
   // Re-tick everything → back to the all-confirmed default (cancel a dispute).
@@ -3495,6 +3505,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setFactChecks({});
     setOwnershipFork(null);
     setOwnershipChangeDeclared(null);
+    setRegNumberFork(null);
+    setRegNumberChangeDeclared(null);
   };
 
   // Ownership genuinely changed → record the declared change and move to the
@@ -3572,6 +3584,51 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }));
     setFactChecks((prev) => ({ ...prev, ownershipType: true })); // re-confirm → gate passes
     setOwnershipFork(null);
+  };
+
+  // Registration/company number genuinely changed → move to new-number capture.
+  // `from` is passed in from the render (where the displayed reg value is known).
+  const declareRegNumberChanged = (fromValue) => {
+    setRegNumberFork("changed");
+    setRegNumberChangeDeclared({ from: fromValue || "", at: new Date().toISOString() });
+  };
+
+  // "Registration number genuinely changed" resolution: capture the NEW number,
+  // request the jurisdiction-appropriate change document into Fill Gaps (via
+  // change_events, keyed dossierId||onboardingSubmissionId), and RESOLVE the gate.
+  // A BRN change is evidenced by a jurisdiction-dependent document — Certificate
+  // of Change of Registration Number / Notice of Registration / updated Extract
+  // from the Commercial Register — same document class, label per jurisdiction.
+  // DEFERRED (as with ownership): inline-on-Applicant doc card is a later piece
+  // (docs surface in Fill Gaps for now); the stored regNumber is left unchanged.
+  const resolveRegNumberChange = (newNumber) => {
+    const trimmed = (newNumber || "").trim();
+    if (!trimmed) return;
+    const submissionId = dossierId || onboardingSubmissionId;
+    const isUKJur = countryCode === "GB" || activeSchema?.region === "UK";
+    const regChangeDoc = isUKJur
+      ? "Certificate of Change of Registration Number / updated Companies House extract"
+      : "Certificate of Change of Registration Number / Notice of Registration (updated Extract from the Commercial Register)";
+    if (submissionId && typeof fetch === "function") {
+      const ev = buildChangeEvent({
+        field: { fieldId: "reg_number_change_certificate", fieldClass: "factualId" },
+        jurisdiction: countryCode || "GB",
+        submissionId,
+        dossierId,
+        storedChangeType: "changed",
+        intent: "genuine_update",
+        registryStatus: null,
+        engineResult: { workflow: "doc_required", docType: regChangeDoc, decided: true },
+      });
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ev),
+      }).catch((err) => console.warn("[reg-number-change] doc persist failed:", err));
+    }
+    setRegNumberChangeDeclared((prev) => ({ ...(prev || {}), to: trimmed, at: new Date().toISOString() }));
+    setFactChecks((prev) => ({ ...prev, registrationNumber: true })); // re-confirm → gate passes
+    setRegNumberFork(null);
   };
 
   // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
@@ -4408,10 +4465,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       {
         key: "registrationNumber",
         label: "Registration / company number",
-        value: regValue || "Not provided",
+        // After a genuine change is resolved, reflect the NEW number the customer
+        // provided (stored regNumber left unchanged) + note that the change
+        // document was added to Fill Gaps.
+        value: regNumberChangeDeclared?.to
+          ? regNumberChangeDeclared.to
+          : (regValue || "Not provided"),
         disputable: regProvenance === "system",
-        note:
-          regProvenance === "customer"
+        note: regNumberChangeDeclared?.to
+          ? `Changed from "${regNumberChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          : regProvenance === "customer"
             ? "✓ You provided this"
             : regProvenance === "system"
             ? "Found by research — please verify"
@@ -4438,9 +4501,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     // All five confirmed (a disputed fact, or a pending ownership fork, hides the
     // applicant section below). A four-fact dispute resets; ownership forks.
-    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.disputable && factChecks[f.key] === false);
+    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && factChecks[f.key] === false);
     const ownershipDisputed = factChecks.ownershipType === false;
-    const factsConfirmed = !fourDisputed && !ownershipDisputed && ownershipFork === null;
+    const regNumberDisputed = factChecks.registrationNumber === false;
+    const factsConfirmed = !fourDisputed && !ownershipDisputed && !regNumberDisputed && ownershipFork === null && regNumberFork === null;
 
     // PR-044 — Authority-to-act, shown only when the applicant declares they are
     // NOT a listed director/officer. Content mirrors documentRequirements.js's
@@ -4485,6 +4549,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           onCancel={cancelFactDispute}
           ownershipTypeOptions={OWNERSHIP_TYPE_LIBRARY.map((o) => ({ value: o.id, label: o.label }))}
           onOwnershipChangeResolved={resolveOwnershipChange}
+          regNumberFork={regNumberFork}
+          regNumberChangeFrom={regNumberChangeDeclared?.from || ""}
+          onRegNumberChanged={() => declareRegNumberChanged(regValue)}
+          onRegNumberChangeResolved={resolveRegNumberChange}
         />
 
         {factsConfirmed && (
