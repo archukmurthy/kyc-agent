@@ -4419,7 +4419,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
       },
       { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
       { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
-      { key: "ownershipType", label: "Ownership type", value: ownershipTypeLabel(ownershipType) || ownershipType || "—", disputable: true },
+      {
+        key: "ownershipType",
+        label: "Ownership type",
+        // After a genuine ownership change is resolved, reflect the NEW type the
+        // customer selected (the stored `ownershipType` is intentionally left
+        // unchanged — reshaping the schema/questions off the new type is PR-049),
+        // and note that the supporting documents were added to Fill Gaps.
+        value: ownershipChangeDeclared?.to
+          ? ownershipChangeDeclared.to
+          : (ownershipTypeLabel(ownershipType) || ownershipType || "—"),
+        disputable: true,
+        note: ownershipChangeDeclared?.to
+          ? `Changed from "${ownershipChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          : undefined,
+      },
     ];
 
     // All five confirmed (a disputed fact, or a pending ownership fork, hides the
