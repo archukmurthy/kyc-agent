@@ -3497,16 +3497,81 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setOwnershipChangeDeclared(null);
   };
 
-  // Ownership genuinely changed → record the declared change and route to the
-  // document-request path. The specific document is a PENDING mapping (ops-owned),
-  // so we only record + surface the "to be specified" slot; we never guess a
-  // document and the gate stays un-confirmed (applicant section stays hidden).
+  // Ownership genuinely changed → record the declared change and move to the
+  // NEW-type capture (the "changed" fork now shows a select). This no longer
+  // dead-ends: resolveOwnershipChange (below) captures the new type, requests the
+  // documents, and confirms the gate so the applicant section reappears.
   const declareOwnershipChanged = () => {
     setOwnershipFork("changed");
     setOwnershipChangeDeclared({
       from: ownershipTypeLabel(ownershipType) || ownershipType || "",
       at: new Date().toISOString(),
     });
+  };
+
+  // Pre-check document required for the NEW ownership type (Phase 0 #4 mapping).
+  // Extend this map as ops confirm more types; the default is a clearly-commented
+  // fallback (closest constitutional/registration document) — never a guess of a
+  // specific named certificate.
+  const preCheckDocForOwnershipType = (typeId) => {
+    switch (typeId) {
+      case "trust": return "Trust deed";
+      case "llp":
+      case "general_partnership": return "Partnership agreement";
+      case "sole_trader": return "Tax returns";
+      case "private_limited": return "Business registration documents";
+      default: return "Constitutional / registration document"; // fallback (extend as ops confirm)
+    }
+  };
+
+  // "It genuinely changed" resolution: capture the NEW ownership type, request the
+  // two supporting documents into Fill Gaps (via change_events → the Amendment
+  // Documentation panel, keyed dossierId||onboardingSubmissionId so both journeys
+  // work), and RESOLVE the gate (re-confirm the ownership fact + close the fork) so
+  // the applicant fields + Continue REAPPEAR. This un-traps the journey.
+  //
+  // DEFERRED: the inline-on-Applicant document-upload card is a later piece — for
+  // now these documents surface in Fill Gaps' Amendment Documentation. We also do
+  // NOT reshape the question set / EDD off the new type (that's PR-049): the stored
+  // ownershipType is left unchanged; we only record the change + request docs.
+  const resolveOwnershipChange = (newTypeId) => {
+    if (!newTypeId) return;
+    const submissionId = dossierId || onboardingSubmissionId;
+    const isUKJur = countryCode === "GB" || activeSchema?.region === "UK";
+    const certLabel = isUKJur
+      ? "Certificate of Re-registration / Conversion (Companies House)"
+      : "Certificate of Change / Conversion (Amended Certificate of Incorporation)";
+    const docs = [
+      { fieldId: "ownership_change_certificate", docType: certLabel },
+      { fieldId: "ownership_change_precheck", docType: preCheckDocForOwnershipType(newTypeId) },
+    ];
+    if (submissionId && typeof fetch === "function") {
+      docs.forEach(({ fieldId, docType }) => {
+        const ev = buildChangeEvent({
+          field: { fieldId, fieldClass: "structural" },
+          jurisdiction: countryCode || "GB",
+          submissionId,
+          dossierId,
+          storedChangeType: "changed",
+          intent: "genuine_update",
+          registryStatus: null,
+          engineResult: { workflow: "doc_required", docType, decided: true },
+        });
+        fetch("/api/change-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ev),
+        }).catch((err) => console.warn("[ownership-change] doc persist failed:", err));
+      });
+    }
+    // Record the new type (audit) and RESOLVE the gate → applicant fields reappear.
+    setOwnershipChangeDeclared((prev) => ({
+      ...(prev || {}),
+      to: ownershipTypeLabel(newTypeId) || newTypeId,
+      at: new Date().toISOString(),
+    }));
+    setFactChecks((prev) => ({ ...prev, ownershipType: true })); // re-confirm → gate passes
+    setOwnershipFork(null);
   };
 
   // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
@@ -4404,6 +4469,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
           onReset={resetAll}
           onOwnershipChanged={declareOwnershipChanged}
           onCancel={cancelFactDispute}
+          ownershipTypeOptions={OWNERSHIP_TYPE_LIBRARY.map((o) => ({ value: o.id, label: o.label }))}
+          onOwnershipChangeResolved={resolveOwnershipChange}
         />
 
         {factsConfirmed && (
