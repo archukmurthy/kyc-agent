@@ -9,6 +9,8 @@ import {
 import Step2DynamicForm, { DocumentUploadCard } from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
+import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
+import { classifyFieldClass } from "./components/changeDialogue/dialogueContent";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import { Notice } from "./components/notices/Notice";
@@ -1560,6 +1562,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [factChecks, setFactChecks] = useState({});
   const [ownershipFork, setOwnershipFork] = useState(null); // null | 'choose' | 'changed'
   const [ownershipChangeDeclared, setOwnershipChangeDeclared] = useState(null);
+  // Registration/company number has the SAME fork as ownership: untick →
+  // misclassified (start over) | genuinely changed (capture new number + request
+  // the jurisdiction-appropriate change document, then resolve the gate).
+  const [regNumberFork, setRegNumberFork] = useState(null); // null | 'choose' | 'changed'
+  const [regNumberChangeDeclared, setRegNumberChangeDeclared] = useState(null);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -1884,6 +1891,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setApplicantNotListed(false); setAuthorityToActFile(null);
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
+    setRegNumberFork(null); setRegNumberChangeDeclared(null);
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
@@ -2122,6 +2130,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           found.forEach((_, i) => { c[i] = true; });
           setChecks(c);
         }
+        // Bug 2 — restore self-sourced registry results folded into raw_research
+        // at save time, so the "Sourced from company registry" section and the
+        // per-card "Sourced automatically" banners reappear after the dossier →
+        // onboarding round-trip. Null-safe: a company with no self-source has no
+        // selfSourceResults on raw_research, so this restores null (renders clean).
+        setSelfSourceResults(d.raw_research?.selfSourceResults || null);
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
@@ -3486,6 +3500,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setOwnershipFork(wasConfirmed ? "choose" : null);
       if (wasConfirmed === false) setOwnershipChangeDeclared(null);
     }
+    if (key === "registrationNumber") {
+      setRegNumberFork(wasConfirmed ? "choose" : null);
+      if (wasConfirmed === false) setRegNumberChangeDeclared(null);
+    }
   };
 
   // Re-tick everything → back to the all-confirmed default (cancel a dispute).
@@ -3493,18 +3511,130 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setFactChecks({});
     setOwnershipFork(null);
     setOwnershipChangeDeclared(null);
+    setRegNumberFork(null);
+    setRegNumberChangeDeclared(null);
   };
 
-  // Ownership genuinely changed → record the declared change and route to the
-  // document-request path. The specific document is a PENDING mapping (ops-owned),
-  // so we only record + surface the "to be specified" slot; we never guess a
-  // document and the gate stays un-confirmed (applicant section stays hidden).
+  // Ownership genuinely changed → record the declared change and move to the
+  // NEW-type capture (the "changed" fork now shows a select). This no longer
+  // dead-ends: resolveOwnershipChange (below) captures the new type, requests the
+  // documents, and confirms the gate so the applicant section reappears.
   const declareOwnershipChanged = () => {
     setOwnershipFork("changed");
     setOwnershipChangeDeclared({
       from: ownershipTypeLabel(ownershipType) || ownershipType || "",
       at: new Date().toISOString(),
     });
+  };
+
+  // Pre-check document required for the NEW ownership type (Phase 0 #4 mapping).
+  // Extend this map as ops confirm more types; the default is a clearly-commented
+  // fallback (closest constitutional/registration document) — never a guess of a
+  // specific named certificate.
+  const preCheckDocForOwnershipType = (typeId) => {
+    switch (typeId) {
+      case "trust": return "Trust deed";
+      case "llp":
+      case "general_partnership": return "Partnership agreement";
+      case "sole_trader": return "Tax returns";
+      case "private_limited": return "Business registration documents";
+      default: return "Constitutional / registration document"; // fallback (extend as ops confirm)
+    }
+  };
+
+  // "It genuinely changed" resolution: capture the NEW ownership type, request the
+  // two supporting documents into Fill Gaps (via change_events → the Amendment
+  // Documentation panel, keyed dossierId||onboardingSubmissionId so both journeys
+  // work), and RESOLVE the gate (re-confirm the ownership fact + close the fork) so
+  // the applicant fields + Continue REAPPEAR. This un-traps the journey.
+  //
+  // DEFERRED: the inline-on-Applicant document-upload card is a later piece — for
+  // now these documents surface in Fill Gaps' Amendment Documentation. We also do
+  // NOT reshape the question set / EDD off the new type (that's PR-049): the stored
+  // ownershipType is left unchanged; we only record the change + request docs.
+  const resolveOwnershipChange = (newTypeId) => {
+    if (!newTypeId) return;
+    const submissionId = dossierId || onboardingSubmissionId;
+    const isUKJur = countryCode === "GB" || activeSchema?.region === "UK";
+    const certLabel = isUKJur
+      ? "Certificate of Re-registration / Conversion (Companies House)"
+      : "Certificate of Change / Conversion (Amended Certificate of Incorporation)";
+    const docs = [
+      { fieldId: "ownership_change_certificate", docType: certLabel },
+      { fieldId: "ownership_change_precheck", docType: preCheckDocForOwnershipType(newTypeId) },
+    ];
+    if (submissionId && typeof fetch === "function") {
+      docs.forEach(({ fieldId, docType }) => {
+        const ev = buildChangeEvent({
+          field: { fieldId, fieldClass: "structural" },
+          jurisdiction: countryCode || "GB",
+          submissionId,
+          dossierId,
+          storedChangeType: "changed",
+          intent: "genuine_update",
+          registryStatus: null,
+          engineResult: { workflow: "doc_required", docType, decided: true },
+        });
+        fetch("/api/change-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ev),
+        }).catch((err) => console.warn("[ownership-change] doc persist failed:", err));
+      });
+    }
+    // Record the new type (audit) and RESOLVE the gate → applicant fields reappear.
+    setOwnershipChangeDeclared((prev) => ({
+      ...(prev || {}),
+      to: ownershipTypeLabel(newTypeId) || newTypeId,
+      at: new Date().toISOString(),
+    }));
+    setFactChecks((prev) => ({ ...prev, ownershipType: true })); // re-confirm → gate passes
+    setOwnershipFork(null);
+  };
+
+  // Registration/company number genuinely changed → move to new-number capture.
+  // `from` is passed in from the render (where the displayed reg value is known).
+  const declareRegNumberChanged = (fromValue) => {
+    setRegNumberFork("changed");
+    setRegNumberChangeDeclared({ from: fromValue || "", at: new Date().toISOString() });
+  };
+
+  // "Registration number genuinely changed" resolution: capture the NEW number,
+  // request the jurisdiction-appropriate change document into Fill Gaps (via
+  // change_events, keyed dossierId||onboardingSubmissionId), and RESOLVE the gate.
+  // A BRN change is evidenced by a jurisdiction-dependent document — Certificate
+  // of Change of Registration Number / Notice of Registration / updated Extract
+  // from the Commercial Register — same document class, label per jurisdiction.
+  // DEFERRED (as with ownership): inline-on-Applicant doc card is a later piece
+  // (docs surface in Fill Gaps for now); the stored regNumber is left unchanged.
+  const resolveRegNumberChange = (newNumber) => {
+    const trimmed = (newNumber || "").trim();
+    if (!trimmed) return;
+    const submissionId = dossierId || onboardingSubmissionId;
+    const isUKJur = countryCode === "GB" || activeSchema?.region === "UK";
+    const regChangeDoc = isUKJur
+      ? "Certificate of Change of Registration Number / updated Companies House extract"
+      : "Certificate of Change of Registration Number / Notice of Registration (updated Extract from the Commercial Register)";
+    if (submissionId && typeof fetch === "function") {
+      const ev = buildChangeEvent({
+        field: { fieldId: "reg_number_change_certificate", fieldClass: "factualId" },
+        jurisdiction: countryCode || "GB",
+        submissionId,
+        dossierId,
+        storedChangeType: "changed",
+        intent: "genuine_update",
+        registryStatus: null,
+        engineResult: { workflow: "doc_required", docType: regChangeDoc, decided: true },
+      });
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ev),
+      }).catch((err) => console.warn("[reg-number-change] doc persist failed:", err));
+    }
+    setRegNumberChangeDeclared((prev) => ({ ...(prev || {}), to: trimmed, at: new Date().toISOString() }));
+    setFactChecks((prev) => ({ ...prev, registrationNumber: true })); // re-confirm → gate passes
+    setRegNumberFork(null);
   };
 
   // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
@@ -3916,18 +4046,54 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Toggle a Confirm-page checkbox AND record the action in metadata.
   const toggleCheck = (idx) => {
-    setChecks(prev => {
-      const next = { ...prev, [idx]: !prev[idx] };
-      const item = (research && research.found) ? research.found[idx] : null;
-      if (item) {
-        const action = next[idx] ? "accepted" : "rejected";
-        const at = new Date().toISOString();
-        setFieldMetadata(prevMeta => prevMeta.map(m =>
-          m.fieldId === item.field ? { ...m, customerAction: action, customerActionAt: at } : m
-        ));
+    const item = (research && research.found) ? research.found[idx] : null;
+    const nowChecked = !checks[idx]; // true = re-checked (accepted / undo)
+    setChecks(prev => ({ ...prev, [idx]: !prev[idx] }));
+    if (!item) return;
+
+    const at = new Date().toISOString();
+    setFieldMetadata(prevMeta => prevMeta.map(m =>
+      m.fieldId === item.field ? { ...m, customerAction: nowChecked ? "accepted" : "rejected", customerActionAt: at } : m
+    ));
+
+    // Re-check = the customer UNDID their change → retract its amendment-document
+    // request. Append a compensating REVERT event (workflow 'accept_silent'); the
+    // original change event is NEVER deleted or mutated (append-only store).
+    // deriveAmendmentDocuments reads the latest event per field, so this later
+    // non-doc event nets the document to "not owed" — the Fill Gaps card drops and
+    // the Confirm notice clears (the dialogue isn't rendered once re-checked).
+    // Only write a revert when a change was actually emitted for this field.
+    // Same submissionId keying as the change write, so it works in both journeys.
+    //
+    // NOTE: the change AND this revert both remain in the append-only audit store
+    // on purpose (a future rule may care that e.g. a UBO was changed then put
+    // back). Materiality / which fields matter / MLRO-surfacing are pending Danny
+    // (CD-register) — do NOT infer materiality or surface anything here.
+    if (nowChecked) {
+      const snap = dialogueStateRef.current[item.field];
+      if (snap && snap.emitted) {
+        const revertEvent = buildChangeEvent({
+          field: { fieldId: item.field, fieldClass: classifyFieldClass(item.field) },
+          jurisdiction: countryCode || "GB",
+          submissionId: dossierId || onboardingSubmissionId,
+          dossierId,
+          storedChangeType: "changed",
+          intent: null,
+          registryStatus: null,
+          engineResult: { workflow: "accept_silent", docType: null, decided: true },
+        });
+        if (typeof fetch === "function") {
+          fetch("/api/change-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(revertEvent),
+          }).catch((err) => console.warn("[toggleCheck] revert persist failed:", err));
+        }
       }
-      return next;
-    });
+      // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
+      // that emits a new change event (R6: toggling re-adds the document each time).
+      delete dialogueStateRef.current[item.field];
+    }
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
@@ -4305,10 +4471,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       {
         key: "registrationNumber",
         label: "Registration / company number",
-        value: regValue || "Not provided",
+        // After a genuine change is resolved, reflect the NEW number the customer
+        // provided (stored regNumber left unchanged) + note that the change
+        // document was added to Fill Gaps.
+        value: regNumberChangeDeclared?.to
+          ? regNumberChangeDeclared.to
+          : (regValue || "Not provided"),
         disputable: regProvenance === "system",
-        note:
-          regProvenance === "customer"
+        note: regNumberChangeDeclared?.to
+          ? `Changed from "${regNumberChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          : regProvenance === "customer"
             ? "✓ You provided this"
             : regProvenance === "system"
             ? "Found by research — please verify"
@@ -4316,14 +4488,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
       },
       { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
       { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
-      { key: "ownershipType", label: "Ownership type", value: ownershipTypeLabel(ownershipType) || ownershipType || "—", disputable: true },
+      {
+        key: "ownershipType",
+        label: "Ownership type",
+        // After a genuine ownership change is resolved, reflect the NEW type the
+        // customer selected (the stored `ownershipType` is intentionally left
+        // unchanged — reshaping the schema/questions off the new type is PR-049),
+        // and note that the supporting documents were added to Fill Gaps.
+        value: ownershipChangeDeclared?.to
+          ? ownershipChangeDeclared.to
+          : (ownershipTypeLabel(ownershipType) || ownershipType || "—"),
+        disputable: true,
+        note: ownershipChangeDeclared?.to
+          ? `Changed from "${ownershipChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          : undefined,
+      },
     ];
 
     // All five confirmed (a disputed fact, or a pending ownership fork, hides the
     // applicant section below). A four-fact dispute resets; ownership forks.
-    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.disputable && factChecks[f.key] === false);
+    const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && factChecks[f.key] === false);
     const ownershipDisputed = factChecks.ownershipType === false;
-    const factsConfirmed = !fourDisputed && !ownershipDisputed && ownershipFork === null;
+    const regNumberDisputed = factChecks.registrationNumber === false;
+    const factsConfirmed = !fourDisputed && !ownershipDisputed && !regNumberDisputed && ownershipFork === null && regNumberFork === null;
 
     // PR-044 — Authority-to-act, shown only when the applicant declares they are
     // NOT a listed director/officer. Content mirrors documentRequirements.js's
@@ -4366,6 +4553,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           onReset={resetAll}
           onOwnershipChanged={declareOwnershipChanged}
           onCancel={cancelFactDispute}
+          ownershipTypeOptions={OWNERSHIP_TYPE_LIBRARY.map((o) => ({ value: o.id, label: o.label }))}
+          onOwnershipChangeResolved={resolveOwnershipChange}
+          regNumberFork={regNumberFork}
+          regNumberChangeFrom={regNumberChangeDeclared?.from || ""}
+          onRegNumberChanged={() => declareRegNumberChanged(regValue)}
+          onRegNumberChangeResolved={resolveRegNumberChange}
         />
 
         {factsConfirmed && (
@@ -7211,7 +7404,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       stakeholders: stakeholderData,
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource },
+      // Bug 2 — fold ephemeral self-source results (incl. results[].files[]) into
+      // the persisted rawResearch so the registry section + "Sourced automatically"
+      // banners survive dossier → onboarding. Uses the existing raw_research JSONB
+      // column — no new column, no migration.
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
