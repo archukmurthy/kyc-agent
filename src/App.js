@@ -2130,6 +2130,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           found.forEach((_, i) => { c[i] = true; });
           setChecks(c);
         }
+        // Bug 2 — restore self-sourced registry results folded into raw_research
+        // at save time, so the "Sourced from company registry" section and the
+        // per-card "Sourced automatically" banners reappear after the dossier →
+        // onboarding round-trip. Null-safe: a company with no self-source has no
+        // selfSourceResults on raw_research, so this restores null (renders clean).
+        setSelfSourceResults(d.raw_research?.selfSourceResults || null);
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
@@ -7398,7 +7404,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       stakeholders: stakeholderData,
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource },
+      // Bug 2 — fold ephemeral self-source results (incl. results[].files[]) into
+      // the persisted rawResearch so the registry section + "Sourced automatically"
+      // banners survive dossier → onboarding. Uses the existing raw_research JSONB
+      // column — no new column, no migration.
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
