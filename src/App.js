@@ -4609,7 +4609,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <DocumentUploadCard
                   item={authorityToActItem}
                   uploaded={authorityToActFile}
-                  onUpload={(_req, file) => setAuthorityToActFile(file)}
+                  onUpload={(_req, file) => handleAuthorityToActUpload(file)}
                   onRemove={() => setAuthorityToActFile(null)}
                   autoSourcedResult={null}
                 />
@@ -7277,14 +7277,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // the registry, then uploads it here to bring it back into the dossier.
   // Registry docs live in `selfSourceResults.results` (no stable id field), so
   // we key by array index.
-  function handleManualDocumentUpload(event, idx) {
+  async function handleManualDocumentUpload(event, idx) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Local object URL for preview/reference. NB: this is an ephemeral blob URL
-    // that only lives in browser memory — see the PR-034 note in
-    // buildDossierPayload() for the persistence plan.
+    // Reset the input up-front (before the await) so the same file can be
+    // re-selected after a Remove and we don't touch a reused event later.
+    event.target.value = "";
+
+    // PR-034 — upload to Vercel Blob immediately and persist the permanent URL
+    // rather than an ephemeral browser blob: URL (which does not survive a page
+    // reload). The ephemeral URL is kept only as a local fallback for preview if
+    // the upload fails.
     const localUrl = URL.createObjectURL(file);
+    let blobUrl = null;
+    let uploadFailed = false;
+    let filename = file.name;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const resp = await fetch("/api/upload-document", { method: "POST", body: fd });
+      if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+      const data = await resp.json();
+      if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
+      blobUrl = data.blobUrl;
+      filename = data.filename || file.name;
+    } catch (err) {
+      // Fall back to the ephemeral URL + a flag so the UI can warn rather than
+      // silently lose the file.
+      uploadFailed = true;
+    }
 
     setSelfSourceResults((prev) => {
       if (!prev) return prev;
@@ -7294,17 +7316,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
               ...doc,
               status: "manually_uploaded",
               manualUploadFile: file,
-              manualUploadName: file.name,
-              manualUploadUrl: localUrl,
+              manualUploadName: filename,
+              // Permanent Vercel Blob URL on success; ephemeral fallback on
+              // failure (uploadFailed flags the UI to warn).
+              manualUploadUrl: blobUrl || localUrl,
+              manualUploadBlobUrl: blobUrl,
+              manuallyUploaded: true,
+              uploadFailed,
               manualUploadAt: new Date().toISOString(),
             }
           : doc
       );
       return { ...prev, results };
     });
-
-    // Reset the input so the same file can be re-selected after a Remove.
-    event.target.value = "";
   }
 
   function handleManualDocumentRemove(idx) {
@@ -7325,6 +7349,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
       );
       return { ...prev, results };
     });
+  }
+
+  // PR-034 / PR-044 — Authority-to-act upload. Upload to Vercel Blob on file
+  // selection and store the permanent URL rather than holding the raw File (an
+  // ephemeral, non-persistable reference) in session state. A failed upload
+  // still stores the file metadata with uploadFailed:true so the analyst is
+  // alerted, but the customer is never blocked from continuing the journey.
+  async function handleAuthorityToActUpload(file) {
+    if (!file) return;
+    let blobUrl = null;
+    let uploadFailed = false;
+    let filename = file.name;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const resp = await fetch("/api/upload-document", { method: "POST", body: fd });
+      if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+      const data = await resp.json();
+      if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
+      blobUrl = data.blobUrl;
+      filename = data.filename || file.name;
+    } catch (err) {
+      uploadFailed = true;
+    }
+    // Keep .name/.size so the DocumentUploadCard renders the uploaded state and
+    // the gate (truthy = satisfied) still passes even when the upload failed.
+    setAuthorityToActFile({ name: filename, size: file.size, filename, blobUrl, uploadFailed });
   }
 
   const buildDossierPayload = () => {
