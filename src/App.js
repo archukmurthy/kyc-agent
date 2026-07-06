@@ -1727,6 +1727,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [selfSourceResults, setSelfSourceResults] = useState(null);
   const [selfSourceLoading, setSelfSourceLoading] = useState(false);
   const [selfSourceError, setSelfSourceError] = useState(null);
+  useEffect(() => {
+    if (agentType !== "preboarding" || activeSchema || !countryCode || !entityType) return;
+    try { setActiveSchema(getSchemaFromConfig(countryCode, entityType, tenantConfig)); }
+    catch (_) { /* leave schema unset until research resolves it */ }
+  }, [agentType, activeSchema, countryCode, entityType, tenantConfig]);
   // Documents-step unified loader: cycles DOC_LOADER_MSGS every 8s while either
   // agent (doc search OR registry self-source) is running.
   const [docLoaderIdx, setDocLoaderIdx] = useState(0);
@@ -2136,6 +2141,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // onboarding round-trip. Null-safe: a company with no self-source has no
         // selfSourceResults on raw_research, so this restores null (renders clean).
         setSelfSourceResults(d.raw_research?.selfSourceResults || null);
+        // PR-043 — restore the internet-research docs (annual report / Wolfsberg)
+        // so they reappear in the unified Documents Sourced panel after reload.
+        // Null-safe, same as selfSourceResults above.
+        setDocSearchResults(d.raw_research?.docSearchResults || null);
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
@@ -7459,7 +7468,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // the persisted rawResearch so the registry section + "Sourced automatically"
       // banners survive dossier → onboarding. Uses the existing raw_research JSONB
       // column — no new column, no migration.
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults },
+      // PR-043 — also fold docSearchResults (annual report / Wolfsberg internet
+      // research docs) into rawResearch so the unified Documents Sourced panel
+      // still shows them after a dossier → onboarding reload. Mirrors the
+      // selfSourceResults persistence above; reuses the raw_research JSONB column.
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, docSearchResults },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
@@ -8770,6 +8783,100 @@ Nium Onboarding Team`;
             return false;
           }
 
+          // PR-043 — unified "Documents Sourced" list. Merge three origins into
+          // one deduped, labelled, sorted array so manual uploads and the annual
+          // report sit in the same panel as the automated registry docs:
+          //   • registry  — selfSourceResults.results, status "retrieved"
+          //   • manual    — selfSourceResults.results, status "manually_uploaded"
+          //                 (carries a permanent blobUrl from PR-034)
+          //   • research  — docSearchResults.documents (annual report / Wolfsberg)
+          const SOURCE_LABELS = {
+            registry: "Retrieved from registry",
+            research: "Retrieved automatically",
+            manual: "Uploaded manually",
+          };
+          const normDocType = (s) =>
+            String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+          const registryEntries = (selfSourceResults?.results || []).map((item, i) => {
+            const uploaded = item.status === "manually_uploaded";
+            const captcha = !!item.captchaBlocked && !uploaded;
+            const manualReview =
+              item.manualReviewFlag || item.status === "manual_retrieval_required";
+            const failed = item.status === "fetch_failed";
+            const retrieved =
+              item.status === "retrieved" || item.status === "retrieved_unverified";
+            // Permanent blob URL for manual uploads (null when the upload failed);
+            // automated registry docs link to the registry page instead.
+            const blobUrl = item.manualUploadBlobUrl || null;
+            const viewUrl = uploaded
+              ? (item.uploadFailed ? null : blobUrl)
+              : (item.searchUrl || item.sourceUrl || null);
+            let host = "";
+            try {
+              const u = item.searchUrl || item.sourceUrl;
+              host = u ? new URL(u).hostname.replace(/^www\./, "") : "";
+            } catch (_) { host = ""; }
+            return {
+              kind: "registry",
+              registryIndex: i,
+              docType: normDocType(item.requirement),
+              name: item.localEquivalent || item.requirement,
+              subLabel: item.requirement,
+              host,
+              origin: uploaded ? "manual" : "registry",
+              sourceLabel: uploaded
+                ? SOURCE_LABELS.manual
+                : (retrieved ? SOURCE_LABELS.registry : null),
+              viewUrl,
+              uploadFailed: !!item.uploadFailed,
+              captcha,
+              manualReview,
+              failed,
+              retrieved,
+              uploaded,
+              manualUploadName: item.manualUploadName || null,
+              openUrl: item.searchUrl || item.sourceUrl || null,
+              timestamp: item.manualUploadAt || item.retrievedAt || selfSourceResults?.searchedAt || "",
+            };
+          });
+
+          const researchEntries = (docSearchResults?.documents || [])
+            .filter((d) => d.status === "downloaded" || d.status === "url_found")
+            .map((doc) => ({
+              kind: "research",
+              docType: normDocType(doc.type),
+              name: doc.label,
+              subLabel: doc.sourceLabel,
+              origin: "research",
+              sourceLabel: SOURCE_LABELS.research,
+              viewUrl: doc.sourceUrl || null,
+              docObj: doc,
+              year: doc.year,
+              confidence: doc.confidence,
+              status: doc.status,
+              timestamp: docSearchResults?.searchedAt || "",
+            }));
+
+          // Dedup by document type — prefer an automated entry (registry/research)
+          // over a manual upload of the same type; show the manual upload only as
+          // a fallback. Empty doc types are never collapsed together.
+          const isAuto = (e) => e.origin !== "manual";
+          const byType = new Map();
+          [...registryEntries, ...researchEntries].forEach((e) => {
+            const key = e.docType || `__${e.kind}_${e.registryIndex ?? e.name}`;
+            const existing = byType.get(key);
+            if (!existing || (isAuto(e) && !isAuto(existing))) byType.set(key, e);
+          });
+          // Sort: automated (registry/research) first, manual uploads last; within
+          // each group newest first by timestamp.
+          const mergedSourcedDocs = Array.from(byType.values()).sort((a, b) => {
+            const am = a.origin === "manual" ? 1 : 0;
+            const bm = b.origin === "manual" ? 1 : 0;
+            if (am !== bm) return am - bm;
+            return String(b.timestamp).localeCompare(String(a.timestamp));
+          });
+
           return (
             <div>
               <div style={card}>
@@ -8912,404 +9019,133 @@ Nium Onboarding Team`;
                   </div>
                 )}
 
-                {/* Section A — documents we found */}
-                {!docSearchLoading && docSearchResults !== null && docSearchResults.documents.length > 0 && (
-                  <div style={{ marginBottom: 24 }}>
-
-                    {/* Section header */}
-                    <div style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: C.textMuted,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.8px",
-                      marginBottom: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}>
-                      <span>📄 Documents sourced automatically</span>
-                      {docSearchResults.isDemo && (
-                        <span style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          color: C.textMuted,
-                          background: C.surfaceAlt,
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 99,
-                          padding: "2px 8px",
-                        }}>
-                          DEMO DATA
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Intro text */}
-                    <p style={{
-                      fontSize: 13,
-                      color: C.textMuted,
-                      marginBottom: 12,
-                      lineHeight: 1.5,
-                    }}>
-                      We found {foundDocs.length}{" "}document
-                      {foundDocs.length !== 1 ? "s" : ""} for{" "}
-                      <strong>{companyName}</strong> from public sources. Accept
-                      any you would like to use — we will extract compliance
-                      fields from them automatically.
-                    </p>
-
-                    {/* Document cards */}
-                    {foundDocs.map(doc => {
-                      const isAccepted = acceptedDocTypes.has(doc.type);
-                      return (
-                        <div
-                          key={doc.type}
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: 12,
-                            padding: "14px 16px",
-                            background: isAccepted ? C.successBg : "#fff",
-                            border: `1.5px solid ${isAccepted ? C.successBorder : C.border}`,
-                            borderRadius: 10,
-                            marginBottom: 8,
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {/* Doc icon */}
-                          <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>
-                            {doc.type === "wolfsberg_questionnaire" ? "📋" : "📊"}
-                          </span>
-
-                          {/* Doc details */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontSize: 15,
-                              fontWeight: 600,
-                              color: C.text,
-                              marginBottom: 4,
-                            }}>
-                              {doc.label}
-                              <span style={{
-                                fontSize: 12,
-                                fontWeight: 400,
-                                color: C.textMuted,
-                                marginLeft: 8,
-                              }}>
-                                {doc.year}
-                              </span>
-                            </div>
-
-                            <div style={{
-                              fontSize: 12,
-                              color: C.textMuted,
-                              marginBottom: 6,
-                            }}>
-                              {doc.sourceLabel}
-                            </div>
-
-                            {/* Confidence + source badges */}
-                            <div style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              flexWrap: "wrap",
-                            }}>
-                              <span style={{
-                                fontSize: 11,
-                                fontWeight: 600,
-                                padding: "2px 8px",
-                                borderRadius: 99,
-                                background: doc.confidence === "high" ? C.successBg : C.warningBg,
-                                color: doc.confidence === "high" ? C.success : C.warning,
-                                border: `1px solid ${doc.confidence === "high" ? C.successBorder : C.warningBorder}`,
-                              }}>
-                                {doc.confidence === "high" ? "✓ High confidence" : "~ Medium confidence"}
-                              </span>
-
-                              {doc.status === "downloaded" && (
-                                <span style={{
-                                  fontSize: 11,
-                                  color: C.success,
-                                  fontWeight: 600,
-                                }}>
-                                  ✅ Downloaded
-                                </span>
-                              )}
-
-                              {doc.status === "url_found" && (
-                                <span style={{
-                                  fontSize: 11,
-                                  color: C.warning,
-                                  fontWeight: 600,
-                                }}>
-                                  🔗 URL found
-                                </span>
-                              )}
-                            </div>
-
-                            {/* View document link */}
-                            {doc.sourceUrl ? (
-                              <a
-                                href={doc.sourceUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  fontSize: 12,
-                                  color: C.niumBlue,
-                                  fontWeight: 600,
-                                  textDecoration: "none",
-                                  marginTop: 6,
-                                  padding: "4px 0",
-                                }}
-                                onMouseEnter={e => {
-                                  e.currentTarget.style.textDecoration = "underline";
-                                }}
-                                onMouseLeave={e => {
-                                  e.currentTarget.style.textDecoration = "none";
-                                }}
-                              >
-                                <span style={{ fontSize: 14 }}>📄</span>
-                                View document →
-                              </a>
-                            ) : (
-                              <span style={{
-                                display: "block",
-                                fontSize: 11,
-                                color: C.textMuted,
-                                fontStyle: "italic",
-                                marginTop: 6,
-                              }}>
-                                Direct link not available
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Accept / Remove button */}
-                          <div style={{ flexShrink: 0 }}>
-                            {isAccepted ? (
-                              <button
-                                onClick={() => {
-                                  setAcceptedDocTypes(prev => {
-                                    const next = new Set(prev);
-                                    next.delete(doc.type);
-                                    return next;
-                                  });
-                                }}
-                                style={{
-                                  padding: "7px 14px",
-                                  background: C.success,
-                                  color: "#fff",
-                                  border: "none",
-                                  borderRadius: 8,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  fontFamily: "inherit",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                }}
-                              >
-                                ✓ Using this
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setAcceptedDocTypes(prev =>
-                                    new Set([...prev, doc.type])
-                                  );
-                                }}
-                                style={{
-                                  padding: "7px 14px",
-                                  background: "transparent",
-                                  color: C.niumBlue,
-                                  border: `1.5px solid ${C.niumBlue}`,
-                                  borderRadius: 8,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  fontFamily: "inherit",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Use this document
-                              </button>
-                            )}
-                            <p style={{
-                              fontSize: 11,
-                              color: C.textMuted,
-                              marginTop: 4,
-                              textAlign: "center",
-                              fontStyle: "italic",
-                              whiteSpace: "pre-line",
-                            }}>
-                              {isAccepted
-                                ? "Fields will be extracted automatically"
-                                : "We will extract compliance fields\nfrom this document"
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Summary table — collapsible */}
-                    <details style={{ marginTop: 12 }}>
-                      <summary style={{
-                        fontSize: 12,
-                        color: C.textMuted,
-                        cursor: "pointer",
-                        userSelect: "none",
-                        listStyle: "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}>
-                        <span>▾</span>
-                        <span>View search details</span>
-                      </summary>
-
-                      <div style={{ marginTop: 10, overflowX: "auto" }}>
-                        <table style={{
-                          width: "100%",
-                          borderCollapse: "collapse",
-                          fontSize: 11,
-                        }}>
-                          <thead>
-                            <tr>
-                              {Object.keys(docSearchResults.summaryTable[0] || {}).map(col => (
-                                <th key={col} style={{
-                                  padding: "6px 10px",
-                                  background: C.surfaceAlt,
-                                  border: `1px solid ${C.border}`,
-                                  textAlign: "left",
-                                  fontWeight: 700,
-                                  color: C.textMuted,
-                                  whiteSpace: "nowrap",
-                                }}>
-                                  {col}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {docSearchResults.summaryTable.map((row, i) => (
-                              <tr key={i}>
-                                {/* entries (not values) so the Notes column can be
-                                    detected and allowed to wrap to its full text */}
-                                {Object.entries(row).map(([col, val], j) => (
-                                  <td key={j} style={{
-                                    padding: "6px 10px",
-                                    border: `1px solid ${C.border}`,
-                                    color: C.text,
-                                    maxWidth: col === "Notes" ? 300 : 200,
-                                    whiteSpace: col === "Notes" ? "normal" : "nowrap",
-                                    overflow: col === "Notes" ? "visible" : "hidden",
-                                    textOverflow: col === "Notes" ? "unset" : "ellipsis",
-                                    wordBreak: col === "Notes" ? "break-word" : "normal",
-                                    fontSize: 11,
-                                    verticalAlign: "top",
-                                  }}>
-                                    {String(val)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </details>
-                  </div>
-                )}
-
-                {/* Company registry documents — retrieved by the self-source agent
-                    (Companies House / ACRA / etc.), shown alongside Section A docs. */}
-                {selfSourceResults?.results?.length > 0 && (
+                {/* PR-043 — unified Documents Sourced panel: automated registry
+                    docs, internet-research docs (annual report / Wolfsberg) and
+                    manual uploads, deduped by type and labelled by origin. */}
+                {!isLoading && mergedSourcedDocs.length > 0 && (
                   <div style={{ marginBottom: 24 }}>
                     <div style={{
                       fontSize: 11, fontWeight: 700, color: C.textMuted,
                       textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12,
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
                     }}>
-                      🏛️ Company registry documents
+                      <span>📁 Documents Sourced</span>
+                      {docSearchResults?.isDemo && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, color: C.textMuted,
+                          background: C.surfaceAlt, border: `1px solid ${C.border}`,
+                          borderRadius: 99, padding: "2px 8px",
+                        }}>DEMO DATA</span>
+                      )}
                     </div>
                     <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
-                      Retrieved directly from official registries for <strong>{companyName}</strong>
-                      {selfSourceResults.summary
-                        ? ` — ${selfSourceResults.summary.retrieved} of ${selfSourceResults.summary.total} sourced automatically.`
-                        : "."}
+                      Documents gathered for <strong>{companyName}</strong> — from official
+                      registries, public sources, and your manual uploads.
                     </p>
-                    {selfSourceResults.results.map((item, i) => {
-                      const url = item.searchUrl || item.sourceUrl;
-                      let host = "";
-                      try { host = url ? new URL(url).hostname.replace(/^www\./, "") : ""; } catch (_) { host = url || ""; }
-                      const verified = item.status === "retrieved";
-                      const uploaded = item.status === "manually_uploaded";
-                      // captchaBlocked docs can't be auto-retrieved; the analyst
-                      // uploads them manually. Once uploaded, the captcha UI is
-                      // replaced by the success state (uploaded takes priority).
-                      const captcha = !!item.captchaBlocked && !uploaded;
-                      const manual = item.manualReviewFlag || item.status === "manual_retrieval_required";
-                      const failed = item.status === "fetch_failed";
-                      const badge = uploaded
-                        ? { t: "✓ Document uploaded", bg: C.successBg, fg: C.success }
-                        : verified
-                        ? { t: "✓ Retrieved", bg: C.successBg, fg: C.success }
-                        : captcha
-                          ? { t: "🔒 Behind captcha", bg: C.warningBg, fg: C.warning }
-                          : failed
-                            ? { t: "✗ Not found", bg: C.surfaceAlt, fg: C.textMuted }
-                            : { t: manual ? "⚠ Manual retrieval" : "⚠ Unverified", bg: C.warningBg, fg: C.warning };
+
+                    {mergedSourcedDocs.map((e) => {
+                      const accepted = e.kind === "research" && acceptedDocTypes.has(e.docObj.type);
+                      const positive = e.uploaded || e.retrieved || e.kind === "research";
+                      const labelStyle = e.origin === "research"
+                        ? { bg: C.surfaceAlt, fg: C.niumBlue }
+                        : { bg: C.successBg, fg: C.success };
+                      const icon = e.kind === "research"
+                        ? (e.docObj.type === "wolfsberg_questionnaire" ? "📋" : "📊")
+                        : "🏛️";
                       return (
-                        <div key={i} style={{
+                        <div key={`${e.kind}-${e.registryIndex ?? e.docType}-${e.name}`} style={{
                           display: "flex", alignItems: "flex-start", gap: 12,
-                          padding: "14px 16px", background: (verified || uploaded) ? C.successBg : "#fff",
-                          border: `1.5px solid ${(verified || uploaded) ? C.successBorder : C.border}`,
+                          padding: "14px 16px",
+                          background: positive && !e.uploadFailed ? C.successBg : "#fff",
+                          border: `1.5px solid ${positive && !e.uploadFailed ? C.successBorder : C.border}`,
                           borderRadius: 10, marginBottom: 8,
                         }}>
-                          <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>🏛️</span>
+                          <span style={{ fontSize: 24, flexShrink: 0, marginTop: 2 }}>{icon}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-                              {item.localEquivalent || item.requirement}
+                              {e.name}
+                              {e.year && (
+                                <span style={{ fontSize: 12, fontWeight: 400, color: C.textMuted, marginLeft: 8 }}>{e.year}</span>
+                              )}
                             </div>
                             <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>
-                              {item.requirement}{host ? ` · ${host}` : ""}
+                              {e.subLabel}{e.host ? ` · ${e.host}` : ""}
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{
-                                fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
-                                background: badge.bg, color: badge.fg,
-                              }}>{badge.t}</span>
+                              {e.sourceLabel && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                  background: labelStyle.bg, color: labelStyle.fg,
+                                }}>{e.sourceLabel}</span>
+                              )}
+                              {e.kind === "research" && e.confidence && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                  background: e.confidence === "high" ? C.successBg : C.warningBg,
+                                  color: e.confidence === "high" ? C.success : C.warning,
+                                  border: `1px solid ${e.confidence === "high" ? C.successBorder : C.warningBorder}`,
+                                }}>{e.confidence === "high" ? "✓ High confidence" : "~ Medium confidence"}</span>
+                              )}
+                              {e.captcha && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                  background: C.warningBg, color: C.warning,
+                                }}>🔒 Behind captcha</span>
+                              )}
+                              {!e.uploaded && !e.captcha && e.manualReview && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                  background: C.warningBg, color: C.warning,
+                                }}>⚠ Manual retrieval</span>
+                              )}
+                              {e.failed && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                                  background: C.surfaceAlt, color: C.textMuted,
+                                }}>✗ Not found</span>
+                              )}
                             </div>
-                            {uploaded ? (
-                              /* Manually-uploaded captcha doc — success state */
-                              <div style={{
-                                display: "flex", alignItems: "center", gap: 8,
-                                marginTop: 6, fontSize: 12, color: C.success,
+
+                            {/* View link — permanent blobUrl for manual uploads,
+                                registry/source URL for automated docs. Hidden when a
+                                manual upload failed (blobUrl null / uploadFailed). */}
+                            {e.viewUrl && (
+                              <a href={e.viewUrl} target="_blank" rel="noopener noreferrer" style={{
+                                display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
+                                color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
                               }}>
-                                <span>✓</span>
-                                <span style={{ fontWeight: 600 }}>{item.manualUploadName}</span>
-                                <span
-                                  onClick={() => handleManualDocumentRemove(i)}
-                                  style={{
-                                    cursor: "pointer", color: C.textSec,
-                                    fontSize: 11, textDecoration: "underline",
-                                  }}
-                                >
-                                  Remove
-                                </span>
+                                <span style={{ fontSize: 14 }}>{e.origin === "manual" ? "📄" : "🔗"}</span>
+                                View →
+                              </a>
+                            )}
+
+                            {/* Manual upload failed — warn but never block the journey. */}
+                            {e.uploaded && e.uploadFailed && (
+                              <div style={{ marginTop: 6, fontSize: 12, color: C.warning }}>
+                                ⚠ Upload could not be stored permanently — please re-upload before submitting.
                               </div>
-                            ) : captcha ? (
-                              /* Captcha-blocked — offer manual download + upload */
+                            )}
+
+                            {/* Manually-uploaded doc — filename + remove. */}
+                            {e.uploaded && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12, color: e.uploadFailed ? C.warning : C.success }}>
+                                <span>{e.uploadFailed ? "⚠" : "✓"}</span>
+                                <span style={{ fontWeight: 600 }}>{e.manualUploadName}</span>
+                                <span onClick={() => handleManualDocumentRemove(e.registryIndex)} style={{
+                                  cursor: "pointer", color: C.textSec, fontSize: 11, textDecoration: "underline",
+                                }}>Remove</span>
+                              </div>
+                            )}
+
+                            {/* Captcha-blocked registry doc — offer manual download + upload. */}
+                            {e.captcha && (
                               <div style={{ marginTop: 6 }}>
                                 <div style={{ fontSize: 12, color: C.warning, marginBottom: 6 }}>
                                   🔒 Behind captcha — cannot be retrieved automatically
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                  {url && (
-                                    <a href={url} target="_blank" rel="noopener noreferrer" style={{
+                                  {e.openUrl && (
+                                    <a href={e.openUrl} target="_blank" rel="noopener noreferrer" style={{
                                       display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
                                       padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`,
                                       background: C.surface, color: C.niumBlue, fontWeight: 600, textDecoration: "none",
@@ -9318,49 +9154,92 @@ Nium Onboarding Team`;
                                       Open registry →
                                     </a>
                                   )}
-                                  <input
-                                    type="file"
-                                    id={`upload-registry-${i}`}
-                                    accept=".pdf,.png,.jpg,.jpeg"
-                                    style={{ display: "none" }}
-                                    onChange={(e) => handleManualDocumentUpload(e, i)}
-                                  />
-                                  <button
-                                    onClick={() => document.getElementById(`upload-registry-${i}`).click()}
-                                    style={{
-                                      fontSize: 12, padding: "4px 10px", borderRadius: 6,
-                                      border: `1px solid ${C.border}`, background: C.surface,
-                                      color: C.text, cursor: "pointer",
-                                      display: "flex", alignItems: "center", gap: 4,
-                                    }}
-                                  >
-                                    ↑ Upload document
-                                  </button>
+                                  <input type="file" id={`upload-registry-${e.registryIndex}`}
+                                    accept=".pdf,.png,.jpg,.jpeg" style={{ display: "none" }}
+                                    onChange={(ev) => handleManualDocumentUpload(ev, e.registryIndex)} />
+                                  <button onClick={() => document.getElementById(`upload-registry-${e.registryIndex}`).click()} style={{
+                                    fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                                    border: `1px solid ${C.border}`, background: C.surface,
+                                    color: C.text, cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                                  }}>↑ Upload document</button>
                                 </div>
                               </div>
-                            ) : (
-                              <>
-                                {url && (
-                                  <a href={url} target="_blank" rel="noopener noreferrer" style={{
-                                    display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
-                                    color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
-                                  }}>
-                                    <span style={{ fontSize: 14 }}>🔗</span>
-                                    {manual ? "Open registry →" : "View on registry →"}
-                                  </a>
-                                )}
-                                {(item.status === "retrieved" || item.status === "retrieved_unverified") && (
-                                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
-                                    📸 Snapshot captured as evidence
-                                  </div>
-                                )}
-                              </>
+                            )}
+
+                            {/* Registry snapshot-evidence note (automated retrieval). */}
+                            {e.retrieved && !e.uploaded && (
+                              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                                📸 Snapshot captured as evidence
+                              </div>
                             )}
                           </div>
+
+                          {/* Research docs — accept-to-extract toggle (unchanged behaviour). */}
+                          {e.kind === "research" && (
+                            <div style={{ flexShrink: 0 }}>
+                              {accepted ? (
+                                <button onClick={() => setAcceptedDocTypes(prev => { const n = new Set(prev); n.delete(e.docObj.type); return n; })} style={{
+                                  padding: "7px 14px", background: C.success, color: "#fff", border: "none",
+                                  borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                                  display: "flex", alignItems: "center", gap: 4,
+                                }}>✓ Using this</button>
+                              ) : (
+                                <button onClick={() => setAcceptedDocTypes(prev => new Set([...prev, e.docObj.type]))} style={{
+                                  padding: "7px 14px", background: "transparent", color: C.niumBlue,
+                                  border: `1.5px solid ${C.niumBlue}`, borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                  fontFamily: "inherit", cursor: "pointer",
+                                }}>Use this document</button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
+                )}
+
+                {/* Search details — collapsible diagnostic table (doc-search agent). */}
+                {docSearchResults?.summaryTable?.length > 0 && (
+                  <details style={{ marginTop: -8, marginBottom: 24 }}>
+                    <summary style={{
+                      fontSize: 12, color: C.textMuted, cursor: "pointer", userSelect: "none",
+                      listStyle: "none", display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      <span>▾</span>
+                      <span>View search details</span>
+                    </summary>
+                    <div style={{ marginTop: 10, overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <thead>
+                          <tr>
+                            {Object.keys(docSearchResults.summaryTable[0] || {}).map(col => (
+                              <th key={col} style={{
+                                padding: "6px 10px", background: C.surfaceAlt, border: `1px solid ${C.border}`,
+                                textAlign: "left", fontWeight: 700, color: C.textMuted, whiteSpace: "nowrap",
+                              }}>{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {docSearchResults.summaryTable.map((row, i) => (
+                            <tr key={i}>
+                              {Object.entries(row).map(([col, val], j) => (
+                                <td key={j} style={{
+                                  padding: "6px 10px", border: `1px solid ${C.border}`, color: C.text,
+                                  maxWidth: col === "Notes" ? 300 : 200,
+                                  whiteSpace: col === "Notes" ? "normal" : "nowrap",
+                                  overflow: col === "Notes" ? "visible" : "hidden",
+                                  textOverflow: col === "Notes" ? "unset" : "ellipsis",
+                                  wordBreak: col === "Notes" ? "break-word" : "normal",
+                                  fontSize: 11, verticalAlign: "top",
+                                }}>{String(val)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
                 )}
 
                 {/* Section divider between A (found) and B (uploads) */}
