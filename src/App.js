@@ -1725,6 +1725,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [docSearchLoading, setDocSearchLoading] = useState(false);
   const [docSearchError, setDocSearchError] = useState(null);
   const [selfSourceResults, setSelfSourceResults] = useState(null);
+  // PR-071 — amendment-document uploads (Fill Gaps). Lifted out of
+  // AmendmentDocuments so the permanent blobUrls persist in the dossier payload
+  // and survive navigating away from Fill Gaps and back. Keyed by fieldId::docType.
+  const [amendmentUploads, setAmendmentUploads] = useState({});
   const [selfSourceLoading, setSelfSourceLoading] = useState(false);
   const [selfSourceError, setSelfSourceError] = useState(null);
   // Documents-step unified loader: cycles DOC_LOADER_MSGS every 8s while either
@@ -1889,6 +1893,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
     setApplicantNotListed(false); setAuthorityToActFile(null);
+    setAmendmentUploads({}); // PR-071 — drop amendment uploads on Start Over
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     setRegNumberFork(null); setRegNumberChangeDeclared(null);
@@ -2136,6 +2141,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // onboarding round-trip. Null-safe: a company with no self-source has no
         // selfSourceResults on raw_research, so this restores null (renders clean).
         setSelfSourceResults(d.raw_research?.selfSourceResults || null);
+        // PR-071 — restore amendment-document uploads (permanent blobUrls) so the
+        // Amendment Documentation section reappears filled after reload. Null-safe.
+        setAmendmentUploads(d.raw_research?.amendmentUploads || {});
         // Belt-and-braces fallback for getApplicantCandidates if raw_research
         // rows somehow lack .stakeholders.
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
@@ -7459,7 +7467,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // the persisted rawResearch so the registry section + "Sourced automatically"
       // banners survive dossier → onboarding. Uses the existing raw_research JSONB
       // column — no new column, no migration.
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults },
+      // PR-071 — also fold amendment-document uploads (permanent Vercel Blob
+      // URLs from /api/upload-document) into rawResearch so they survive the
+      // dossier round-trip. Reuses the raw_research JSONB column — no migration.
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, amendmentUploads },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
@@ -9774,7 +9785,11 @@ Nium Onboarding Team`;
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
           <div>
-            <AmendmentDocuments submissionId={dossierId || onboardingSubmissionId} />
+            <AmendmentDocuments
+              submissionId={dossierId || onboardingSubmissionId}
+              initialUploads={amendmentUploads}
+              onUploadsChange={setAmendmentUploads}
+            />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>

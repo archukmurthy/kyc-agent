@@ -14,9 +14,11 @@
  *
  * Upload control: matches the existing manual-upload pattern in App.js
  * (handleManualDocumentUpload) — a hidden <input type="file"> triggered by a
- * button, storing an EPHEMERAL object URL in local component state. That blob
- * lives only in browser memory; durable file storage is a known limitation of
- * the matched pattern and is tracked separately (PR-034), not solved here.
+ * button. On selection the file is uploaded to Vercel Blob via
+ * /api/upload-document (PR-034) and the PERMANENT blobUrl is stored, then lifted
+ * to the parent via onUploadsChange so it lands in the dossier save payload and
+ * survives a page refresh (PR-071). A failed upload stores uploadFailed:true and
+ * warns, but never blocks the customer.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -51,13 +53,22 @@ const BTN = {
   fontFamily: 'inherit',
 };
 const UPLOADED = { fontSize: 12, color: '#1a7a4a', fontWeight: 600 };
+const WARN = { fontSize: 12, color: '#b45309', fontWeight: 600 };
 const REMOVE = { fontSize: 12, color: '#b91c1c', cursor: 'pointer', fontWeight: 600 };
 
 const keyOf = (d) => `${d.fieldId}::${d.docType}`;
 
-export function AmendmentDocuments({ submissionId }) {
+export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChange }) {
   const [documents, setDocuments] = useState([]);
-  const [uploads, setUploads] = useState({}); // keyOf(doc) -> { name, url, at }
+  // keyOf(doc) -> { name, blobUrl, uploadFailed, at }. Seeded from the parent so
+  // amendment uploads survive navigating away from Fill Gaps and back (PR-071).
+  const [uploads, setUploads] = useState(() => initialUploads || {});
+
+  // Lift uploads to the parent so the permanent blobUrls are included in the
+  // dossier save payload and persist across a page refresh (PR-071).
+  useEffect(() => {
+    if (onUploadsChange) onUploadsChange(uploads);
+  }, [uploads, onUploadsChange]);
 
   useEffect(() => {
     if (!submissionId) return undefined;
@@ -91,17 +102,35 @@ export function AmendmentDocuments({ submissionId }) {
 
   if (!documents.length) return null; // no changes need documents → render nothing
 
-  function handleUpload(e, doc) {
+  async function handleUpload(e, doc) {
     const file = e.target.files[0];
     if (!file) return;
-    // Ephemeral blob URL — same as App.js#handleManualDocumentUpload. Lives only
-    // in browser memory; durable storage tracked in PR-034 (not solved here).
-    const url = URL.createObjectURL(file);
+    e.target.value = ''; // reset before the await so the same file can be re-selected
+
+    // PR-071 — upload to Vercel Blob immediately (PR-034 endpoint) and store the
+    // PERMANENT blobUrl rather than an ephemeral browser blob: URL (which is lost
+    // on refresh). Same pattern as App.js#handleManualDocumentUpload.
+    let blobUrl = null;
+    let uploadFailed = false;
+    let filename = file.name;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch('/api/upload-document', { method: 'POST', body: fd });
+      if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+      const data = await resp.json();
+      if (!data.blobUrl) throw new Error(data.error || 'No blobUrl returned');
+      blobUrl = data.blobUrl;
+      filename = data.filename || file.name;
+    } catch (err) {
+      // Never block the customer — flag the failure so the UI can warn.
+      uploadFailed = true;
+    }
+
     setUploads((prev) => ({
       ...prev,
-      [keyOf(doc)]: { name: file.name, url, at: new Date().toISOString() },
+      [keyOf(doc)]: { name: filename, blobUrl, uploadFailed, at: new Date().toISOString() },
     }));
-    e.target.value = ''; // allow re-selecting the same file after a Remove
   }
 
   function handleRemove(doc) {
@@ -135,7 +164,11 @@ export function AmendmentDocuments({ submissionId }) {
 
             {up ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={UPLOADED}>✓ {up.name}</span>
+                {up.uploadFailed ? (
+                  <span style={WARN}>⚠ {up.name} — not stored, please re-upload</span>
+                ) : (
+                  <span style={UPLOADED}>✓ {up.name}</span>
+                )}
                 <span
                   role="button"
                   tabIndex={0}
