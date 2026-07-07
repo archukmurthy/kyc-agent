@@ -1841,6 +1841,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // lives only here — it was removed from the Required Docs checklist.
   const [applicantNotListed, setApplicantNotListed] = useState(false);
   const [authorityToActFile, setAuthorityToActFile] = useState(null);
+  // PR-072 — Signatory ID proof, COPIED from the Required Docs section onto the
+  // Applicant page and shown for EVERY applicant (unlike authorityToActFile,
+  // which is conditional on "not listed"). Its own session-hold slot; durable
+  // storage is PR-034, out of scope. NOTE: this Applicant-page slot is
+  // INDEPENDENT of the Required Docs Signatory ID upload — uploading here does
+  // NOT satisfy the Required Docs one (and vice versa). "One-upload-satisfies-
+  // both" is a possible later enhancement, deliberately deferred for now.
+  const [signatoryIdFile, setSignatoryIdFile] = useState(null);
   const [dossierStakeholders, setDossierStakeholders] = useState(null);
   // Reserved for the future live locked/unlocked override UI; the authoritative
   // override list is recomputed deterministically at submit (buildApplicantProvenance).
@@ -1972,7 +1980,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
-    setApplicantNotListed(false); setAuthorityToActFile(null);
+    setApplicantNotListed(false); setAuthorityToActFile(null); setSignatoryIdFile(null);
     setAmendmentUploads({}); // PR-071 — drop amendment uploads on Start Over
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
@@ -4536,6 +4544,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
       catch { dummy = { name: fname, size: 21 }; }
       setAuthorityToActFile(dummy);
     }
+    // PR-072: also satisfy the always-shown Signatory ID hard gate in test mode.
+    if (!signatoryIdFile) {
+      const fname = "test-signatory-id.pdf";
+      let dummy;
+      try { dummy = new File([new Blob(["test signatory id"])], fname, { type: "application/pdf" }); }
+      catch { dummy = { name: fname, size: 18 }; }
+      setSignatoryIdFile(dummy);
+    }
     setFormVersion((v) => v + 1);
   };
 
@@ -4648,6 +4664,38 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Hard gate: when unlisted, Continue is blocked until the file is uploaded.
     const authorityGateBlocks = applicantUnlisted && !authorityToActFile;
 
+    // PR-072 — Signatory ID card, COPIED verbatim from the Required Docs section
+    // (the DocumentUploadCard driven by the DRS "Signatory ID" checklist item)
+    // onto the Applicant page. Shown for EVERY applicant (always), unlike
+    // authority-to-act. App.js (src/) cannot import root documentRequirements.js
+    // (CRA ModuleScopePlugin), so — exactly as authorityToActItem does — the item
+    // is reconstructed inline with the SAME content the DRS produces: title +
+    // Required pill, the accepted-documents guidance (buildIdLocalEquivalent incl.
+    // residency + UK/JMLSG onboarding-country overlay), the "Verify each
+    // signatory…" line, and the "Why this is required / can't provide it?"
+    // expander. UK vs SG split mirrors the isUK toggle used above (LICENSED_MARKETS
+    // GB → UK/JMLSG; everything else → Singapore/MAS default).
+    const signatoryIdItem = {
+      requirement: "Signatory ID",
+      standardDocument: "Government-issued photo ID for each authorised signatory",
+      localEquivalent: isUK
+        ? "For each authorised signatory. Document types accepted may include: Passport; UK photocard driving licence; National identity card (where accepted). The exact document accepted may vary depending on residency status, onboarding channel, document verifiability, translation/transliteration quality, and local policy. For cross-border onboarding, passport is usually the clearest first ask. Onboarding-country overlay (United Kingdom): UK/JMLSG-style practice: passport is the safest first ask for cross-border onboarding; photocard driving licence works best for UK residents; national ID cards are more case-specific."
+        : "For each authorised signatory. Document types accepted may include: NRIC (citizen / PR); FIN card (foreign resident); Passport. The exact document accepted may vary depending on residency status, onboarding channel, document verifiability, translation/transliteration quality, and local policy. Passport is the safer ask for non-residents or where local electronic verification is unavailable. Onboarding-country overlay (Singapore): MAS-style practice: use resident local photo ID where reliable, but ask for passport for non-residents, cross-border cases, or where local ID cannot be independently verified.",
+      why: "Verify each signatory before the relationship is activated or the first permitted transaction occurs.",
+      fallback: "Do not activate the relationship until authority and signatory identity are resolved.",
+      mandatory: true,
+      selfSource: "Client-provided only",
+      regulatoryRationale: isUK ? "Money Laundering Regulations 2017" : "MAS Notice PSN01",
+      regulatoryUrl: isUK
+        ? "https://www.legislation.gov.uk/id/uksi/2017/692"
+        : "https://www.mas.gov.sg/regulation/notices/psn01-aml-cft-notice---specified-payment-services",
+    };
+    // Hard gate: Signatory ID is always required — Continue is blocked until the
+    // file is uploaded, for every applicant. Combined with the conditional
+    // authority-to-act gate below.
+    const signatoryGateBlocks = !signatoryIdFile;
+    const continueBlocked = signatoryGateBlocks || authorityGateBlocks;
+
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
         <FoundationalFactsGate
@@ -4702,6 +4750,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
               {renderApplicantFields()}
             </div>
 
+            {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
+                shown (every applicant), directly below the applicant fields and
+                ABOVE the conditional Authority-to-act card. Reuses the exact same
+                Required Docs DocumentUploadCard. This is a COPY — the Signatory ID
+                card ALSO still renders in Required Docs (Step2DynamicForm),
+                unchanged. The upload slot here is INDEPENDENT of the Required Docs
+                one (see signatoryIdFile comment; one-satisfies-both is a deferred
+                future enhancement). */}
+            <div style={{ ...card, marginTop: 16 }}>
+              <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
+                Please upload government-issued photo ID for each authorised
+                signatory. This is required before we can continue.
+              </p>
+              <DocumentUploadCard
+                item={signatoryIdItem}
+                uploaded={signatoryIdFile}
+                onUpload={(_req, file) => handleSignatoryIdUpload(file)}
+                onRemove={() => setSignatoryIdFile(null)}
+                autoSourcedResult={null}
+              />
+            </div>
+
             {/* PR-044 — Authority-to-act proof, directly below the applicant
                 fields, shown whenever the applicant is unlisted: either "I am not
                 listed" was selected, or no directors/UBOs were found (manual-entry
@@ -4730,8 +4800,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
             <button
-              disabled={authorityGateBlocks}
+              disabled={continueBlocked}
               onClick={() => {
+                // Hard gate (PR-072): Signatory ID is always required for every
+                // applicant — check it before the conditional authority-to-act gate.
+                if (!signatoryIdFile) {
+                  setApplicantValidationError(
+                    "Please upload the signatory ID document before continuing."
+                  );
+                  return;
+                }
                 // Hard gate: unlisted applicants must upload authority-to-act first.
                 if (applicantUnlisted && !authorityToActFile) {
                   setApplicantValidationError(
@@ -4753,14 +4831,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
               }}
               style={{
                 padding: "12px 28px",
-                background: authorityGateBlocks ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
+                background: continueBlocked ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
                 color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
-                fontFamily: "inherit", cursor: authorityGateBlocks ? "not-allowed" : "pointer",
+                fontFamily: "inherit", cursor: continueBlocked ? "not-allowed" : "pointer",
               }}
             >
               Continue →
             </button>
             </div>
+
+            {/* PR-072 — Signatory ID gate reason. Shown first (always-required
+                slot); the authority-to-act reason follows when that card blocks too. */}
+            {signatoryGateBlocks && (
+              <div style={{
+                marginTop: 12, padding: "10px 14px", background: "#FFFBEB",
+                border: "1px solid #FCD34D", borderRadius: 8, fontSize: 13, color: "#92400E",
+              }}>
+                Upload the signatory ID document above to continue.
+              </div>
+            )}
 
             {authorityGateBlocks && (
               <div style={{
@@ -7482,6 +7571,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Keep .name/.size so the DocumentUploadCard renders the uploaded state and
     // the gate (truthy = satisfied) still passes even when the upload failed.
     setAuthorityToActFile({ name: filename, size: file.size, filename, blobUrl, uploadFailed });
+  }
+
+  // PR-072 — Applicant-page Signatory ID upload. Mirrors
+  // handleAuthorityToActUpload exactly (session-hold via /api/upload-document,
+  // keep .name/.size so truthy = gate satisfied even on upload failure). This is
+  // a SEPARATE slot from the Required Docs Signatory ID upload — they do not
+  // cross-satisfy. "One-upload-satisfies-both" is a possible later enhancement.
+  async function handleSignatoryIdUpload(file) {
+    if (!file) return;
+    let blobUrl = null;
+    let uploadFailed = false;
+    let filename = file.name;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const resp = await fetch("/api/upload-document", { method: "POST", body: fd });
+      if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+      const data = await resp.json();
+      if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
+      blobUrl = data.blobUrl;
+      filename = data.filename || file.name;
+    } catch (err) {
+      uploadFailed = true;
+    }
+    setSignatoryIdFile({ name: filename, size: file.size, filename, blobUrl, uploadFailed });
   }
 
   const buildDossierPayload = () => {
