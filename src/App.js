@@ -641,19 +641,36 @@ const EXTRACTION_KEY_TO_SCHEMA = {
   },
   corporate: {
     legal_name: "tradeName",
+    business_name: "tradeName",
+    trading_name: "tradeName",
     registration_number: "businessRegistrationNumber",
+    business_registration_number: "businessRegistrationNumber",
     incorporation_date: "registeredDate",
     registered_address: "addressLine1",
+    registered_address_line1: "addressLine1",
+    registered_address_line2: "addressLine2",
+    registered_address_city: "city",
+    registered_address_state: "state",
+    registered_address_postcode: "postcode",
+    registered_address_country: "country",
     legal_form: "businessType",
+    business_type: "businessType",
     country_of_incorporation: "registeredCountry",
+    registered_country: "registeredCountry",
+    annual_turnover: "annualRevenue",
     annual_turnover_band: "annualRevenue",
+    employee_count: "employees",
     employee_count_band: "employees",
     operating_countries: "countriesOfOperation",
     business_description: "industryDescription",
+    business_activity_description: "industryDescription",
     publicly_listed: "stockListing",
     listed_where: "listedExchange",
     directors: "directors",
+    director_names: "directors",
     ubo_names: "uboAnalysis",
+    ubo_parent_company: "uboAnalysis",
+    ubo_share_percentage: "uboAnalysis",
     parent_company: "uboAnalysis",
   },
 };
@@ -661,6 +678,63 @@ const EXTRACTION_KEY_TO_SCHEMA = {
 const mapExtractedKey = (flow, key) => {
   const m = EXTRACTION_KEY_TO_SCHEMA[flow] || {};
   return key in m ? m[key] : null;
+};
+
+const FIELD_SECTION_BY_FLOW = {
+  corporate: {
+    businessType: "business_entity",
+    businessRegistrationNumber: "business_entity",
+    registeredDate: "business_entity",
+    registeredCountry: "business_entity",
+    tradeName: "business_entity",
+    website: "business_entity",
+    addressLine1: "registered_address",
+    addressLine2: "registered_address",
+    city: "registered_address",
+    state: "registered_address",
+    postcode: "registered_address",
+    country: "registered_address",
+    sicCode: "business_activity",
+    annualRevenue: "business_activity",
+    employees: "business_activity",
+    stockListing: "business_activity",
+    listedExchange: "business_activity",
+    leiNumber: "business_activity",
+    countriesOfOperation: "business_activity",
+    industryCodes: "business_activity",
+    industryDescription: "business_activity",
+    isMultiLayered: "Ownership & Control",
+    uboAnalysis: "Ownership & Control",
+    directors: "Ownership & Control",
+    companySecretary: "Ownership & Control",
+    isPEP: "Ownership & Control",
+  },
+};
+
+const normalizeResearchFieldIds = (items, schema) => {
+  if (!Array.isArray(items) || !schema) return items;
+  const flow = schema.flow === "fi" ? "fi" : "corporate";
+  const applyCanonicalMeta = (item, field, def) => {
+    const section = def?.section || FIELD_SECTION_BY_FLOW[flow]?.[field] || item.section;
+    return {
+      ...item,
+      field,
+      label: def?.label || item.label,
+      ...(section ? { section } : {}),
+    };
+  };
+  return items.map((item) => {
+    if (!item || !item.field) return item;
+    const existingDef = findFieldDef(schema, item.field);
+    if (existingDef) return applyCanonicalMeta(item, item.field, existingDef);
+    const mapped = mapExtractedKey(flow, item.field);
+    if (!mapped || !findFieldDef(schema, mapped)) return item;
+    const def = findFieldDef(schema, mapped);
+    return {
+      ...applyCanonicalMeta(item, mapped, def),
+      originalField: item.originalField || item.field,
+    };
+  });
 };
 
 /* ═══════════════════════════════════════════
@@ -709,11 +783,12 @@ function mapToDocAgentOwnershipType(
 // matching verificationStatus so registry fields render as verified tier-1 data
 // on the Confirm page (exactly like AI-researched fields).
 function selfSourcedToRows(selfSourcedFields, schema) {
-  return Object.entries(selfSourcedFields || {}).map(([field, f]) => {
+  const rows = Object.entries(selfSourcedFields || {}).map(([field, f]) => {
     const sourceTier = f.tier === "tier-1" ? "tier1" : "tier2";
     const label = (schema && (findFieldDef(schema, field) || {}).label) || f.label || field;
     return { field, label, ...f, sourceTier, verificationStatus: getVerificationStatus(sourceTier) };
   });
+  return normalizeResearchFieldIds(rows, schema);
 }
 
 // Documents-step loading messages — cycled every 8s while the doc-search and
@@ -2080,8 +2155,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // Resolve the schema so the Applicant gap fields (and the rest of the
         // flow) have field definitions to render — the dossier stores entity
         // type + country, not the schema itself.
+        let dossierSchema = null;
         if (d.entity_type && d.country_code) {
-          try { setActiveSchema(getSchemaFromConfig(d.country_code, d.entity_type, tenantConfig)); }
+          try {
+            dossierSchema = getSchemaFromConfig(d.country_code, d.entity_type, tenantConfig);
+            setActiveSchema(dossierSchema);
+          }
           catch (_) { /* leave schema unset; page still renders the selector */ }
         }
         // Primary source: raw_research.found — the complete, intact research
@@ -2107,7 +2186,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // live flow does. enrichStakeholders is idempotent (keeps existing
         // .stakeholders) and parses .value whether it's a JSON array string
         // ('[{"full_name":...}]') or legacy text ("John Smith (40%)").
-        found = enrichStakeholders(found);
+        found = enrichStakeholders(normalizeResearchFieldIds(found, dossierSchema));
         // Belt-and-braces: for any stakeholder field still without people (e.g.
         // .value wasn't parseable), pull from the dossier's saved stakeholders
         // map, which is keyed by field id. Use the raw response (d.stakeholders),
@@ -2749,7 +2828,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
       // Doc-extracted rows take priority over anything web returned for the same field.
       const docFieldIds = new Set(docFound.map(f => f.field));
-      const mergedRaw = [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))];
+      const mergedRaw = normalizeResearchFieldIds(
+        [...docFound, ...webFound.filter(f => !docFieldIds.has(f.field))],
+        schema
+      );
       // Coerce free-text values for dropdown fields onto one of the configured
       // option values (e.g. "Private Limited Company" → "private_limited") so
       // the gap form can pre-select correctly on correction.
@@ -2811,10 +2893,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   },
                 }));
               }
-              const gapRows = (gapParsed.found || [])
+              const gapRows = normalizeResearchFieldIds((gapParsed.found || [])
                 .map((item) => classifyWebRow(item, gapTs))
                 // Never let gap recovery override a document-sourced row.
-                .filter((r) => !docFieldIds.has(r.field));
+                .filter((r) => !docFieldIds.has(r.field)), schema);
               const remerged = mergeResearchResults(merged, gapRows);
               merged = enrichStakeholders(mapAIValuesToOptions(remerged, schema));
               cov = computeCoverage(merged, schema);
@@ -2836,7 +2918,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Use this SAME list for research, metadata, and checks below — otherwise
       // the appended registry rows get no checks entry and wrongly surface as
       // "unchecked" corrections on Confirm / Fill Gaps.
-      const mergedFound = mergeResearchResults(merged, selfSourcedRows);
+      const mergedFound = normalizeResearchFieldIds(
+        mergeResearchResults(merged, selfSourcedRows),
+        schema
+      );
       // Deterministic director/UBO three-rule gate (registry-only names, active
       // status only, no cross-person attribute merging). Runs after parsing /
       // enrichment and before results reach state. See validateAllDirectors().
@@ -3031,7 +3116,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const found0 = enrichStakeholders(mapAIValuesToOptions(foundRaw, schema));
     // Demo: fold in registry self-sourced fields so the registry → Confirm
     // prefill is visible under ?test=1 too (mirrors the doResearch path).
-    const found = mergeResearchResults(found0, selfSourcedToRows(demoSelfSource?.selfSourcedFields, schema));
+    const found = normalizeResearchFieldIds(
+      mergeResearchResults(found0, selfSourcedToRows(demoSelfSource?.selfSourcedFields, schema)),
+      schema
+    );
 
     const tagged = {
       companyName,
@@ -3166,12 +3254,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
         const ts = data.searchedAt || new Date().toISOString();
         // Same dropdown-value coercion + stakeholder enrichment the AI paths
         // use, so Nium results render identically on Confirm and Fill Gaps.
-        const found = enrichStakeholders(mapAIValuesToOptions(data.fields, schema));
+        const normalizedLookupFields = normalizeResearchFieldIds(data.fields, schema);
+        const found = enrichStakeholders(mapAIValuesToOptions(normalizedLookupFields, schema));
         // Show the company name the registry actually returned (e.g. the demo
         // fixture "STAR FINANCE PRIVATE LIMITED") rather than what was typed, so
         // testers don't mistake the sample data for their searched company. Strip
         // a trailing registration number the sandbox appends to the legal name.
-        const niumLegalName = (found.find(f => f.field === "legal_name") || {}).value;
+        const niumLegalName = (found.find(f => f.originalField === "legal_name" || f.field === "tradeName" || f.field === "business_name") || {}).value;
         const displayName = niumLegalName
           ? String(niumLegalName).replace(/\s+\d{4,}$/, "").trim()
           : companyName;
