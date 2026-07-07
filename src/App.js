@@ -7568,12 +7568,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // PR-071 — also fold amendment-document uploads (permanent Vercel Blob
       // URLs from /api/upload-document) into rawResearch so they survive the
       // dossier round-trip. Reuses the raw_research JSONB column — no migration.
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, amendmentUploads },
       // PR-043 — also fold docSearchResults (annual report / Wolfsberg internet
       // research docs) into rawResearch so the unified Documents Sourced panel
       // still shows them after a dossier → onboarding reload. Mirrors the
       // selfSourceResults persistence above; reuses the raw_research JSONB column.
-      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, docSearchResults },
+      rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, amendmentUploads, docSearchResults },
       // Self-serve re-research audit data: who triggered the search that produced
       // this dossier, and the carried search-attempt count (migration 008).
       seededBy,
