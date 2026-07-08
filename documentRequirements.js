@@ -679,6 +679,17 @@ function buildRows(onboarding, incorp, entityType, sector){
   // is never asked for twice. Removed at the checklist source, not at render.
   requirements = requirements.filter(r => r !== 'Authority to act');
 
+  // PR-073: 'Signatory ID' and 'Customer application form' are no longer required
+  // documents on the Required Documents page.
+  //  - Signatory ID moved to the Applicant page (always shown, hard-gated) — it
+  //    is collected there, so asking again in Required Docs would double-ask.
+  //  - Customer application form is obsolete: this onboarding IS a signed digital
+  //    form, so a separate uploaded application form is redundant.
+  // Removed at the checklist source (like Authority to act) so they disappear
+  // from EVERY flow — the Required Docs render, the pre-declaration mandatory-gap
+  // gate, the self-source agent, and the submit payload — not just the UI.
+  requirements = requirements.filter(r => r !== 'Signatory ID' && r !== 'Customer application form');
+
   if (!individualMode){
     if (['Publicly listed','State-owned enterprise'].includes(entityType)) requirements = requirements.filter(r => r !== 'UBO ID');
     if (sector === 'Bank / deposit-taking institution' && entityType !== 'Privately owned' && entityType !== 'Partnership/LLP') requirements = requirements.filter(r => r !== 'UBO ID');
@@ -814,9 +825,16 @@ function buildRows(onboarding, incorp, entityType, sector){
       });
     }
 
+    // PR-073: Signatory ID is no longer in the checklist, so this insertion can
+    // no longer anchor to its index. Decoupled from Signatory ID's presence to
+    // PRESERVE the pre-existing non-UK 'Signatory proof of address' requirement
+    // (needsSignatoryAddress is true for all non-UK onboarding). When Signatory
+    // ID is absent (always, now), append at the end; if it ever returns, keep the
+    // original "immediately after Signatory ID" ordering.
     const sigIdx = rows.findIndex(r => r.requirement === 'Signatory ID');
-    if (sigIdx >= 0 && needsSignatoryAddress(onboarding, entityType, sector)) {
-      rows.splice(sigIdx + 1, 0, {
+    if (needsSignatoryAddress(onboarding, entityType, sector)) {
+      const sigAddrInsertAt = sigIdx >= 0 ? sigIdx + 1 : rows.length;
+      rows.splice(sigAddrInsertAt, 0, {
         requirement:'Signatory proof of address',
         standard:'Proof of residential address for each authorised signatory',
         localEquivalent:addressLocalEquivalent(incorp, 'signatory'),
