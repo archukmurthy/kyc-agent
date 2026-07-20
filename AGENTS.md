@@ -65,7 +65,7 @@ This is a single-page React app (Create React App) with one Vercel serverless fu
 
 ### Two-piece structure
 
-- **`src/App.js`** — the entire frontend lives in this one file as the `KYCAgent` component. All UI, state, schemas, prompt construction, and styling (inline) are here. There is no component library, no CSS files, and no router. `src/index.js` just mounts it.
+- **`src/App.js`** — the heart of the frontend: the `KYCAgent` component owns all state, effects, step routing and page rendering (styling is inline; there are no CSS files and no router; `src/index.js` just mounts it). Pure constants, prompts, demo fixtures, small shared components and stateless workflow helpers live in dedicated modules under `src/constants/`, `src/utils/`, `src/config/`, `src/demo/`, `src/components/` and `src/workflows/` — see the FRONTEND MODULE MAP section below.
 - **`api/research.js`** — Vercel serverless function that proxies the frontend's prompt to `https://api.anthropic.com/v1/messages` using `Codex-sonnet-4-5` with the `web_search_20250305` tool. Its sole purpose is to keep `ANTHROPIC_API_KEY` server-side; it does no business logic and does not transform the prompt.
 
 The frontend calls `POST /api/research` with `{ prompt }`, then parses the model's text response as JSON (stripping ```` ```json ```` fences and slicing from the first `{` to the last `}`).
@@ -280,11 +280,14 @@ If any check fails, do not push.
     needs a matching app.get/post/put
 
 ## FRONTEND MODULE MAP
-## (branch refactor/modular-architecture)
 
-The modularization refactor moved the pure,
-self-contained parts of src/App.js into
-dedicated modules. src/App.js still owns ALL
+The modularization refactor (first phase,
+2026-07) moved the pure, self-contained
+parts of src/App.js into dedicated modules.
+This is a first modularization pass that
+creates parallel-development seams — it is
+NOT the final breakup of App.js, which
+remains large. src/App.js still owns ALL
 state, effects, step routing and page
 rendering — the RULE 1 restrictions on it
 are unchanged. The extracted modules are:
@@ -335,10 +338,14 @@ are unchanged. The extracted modules are:
     dossier/DossierSection.jsx
 
   src/workflows/
-    documentWorkflow.js — mapToDocAgent
-      OwnershipType, extractFromDoc,
-      preCheckDocForOwnershipType (pure;
-      state stays in App.js)
+    documentWorkflow.js — stateless
+      browser-side document-workflow logic
+      (no React state): mapToDocAgent
+      OwnershipType and preCheckDocFor
+      OwnershipType are pure mapping
+      helpers; extractFromDoc performs I/O
+      (reads the uploaded file, POSTs to
+      /api/research for extraction)
     applicantWorkflow.js — genUUID,
       isCorporateStakeholder,
       APPLICANT_FALLBACK_FIELDS,
@@ -364,9 +371,13 @@ Module ownership for agents:
     routing or page rendering still edits
     App.js under the RULE 1 constraints
     (only the named function).
-  - Never move state handling out of App.js
-    into these modules; new module functions
-    must stay pure (state passed in).
+  - The existing extracted helpers must
+    remain free of React state — state is
+    passed in as arguments. Moving state
+    handling out of App.js (e.g. into a
+    dedicated hook) is allowed only as an
+    explicitly scoped refactor task, never
+    as a side effect of another change.
   - Run scripts/refactor-smoke-checklist.md
     (all 6 checks) plus `npx react-scripts
     test --watchAll=false` after touching
