@@ -86,6 +86,7 @@ import {
 import { readFileAsBase64, formatFetchedAt } from "./utils/files";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
+import { DemoBanner } from "./components/banners/DemoBanner";
 
 /* ═══════════════════════════════════════════
    DOC SEARCH AGENT (Step 2 — Document Intelligence)
@@ -125,31 +126,6 @@ function mapToDocAgentOwnershipType(
   if (isFI && !isListed) return "fi_only";
   if (!isFI && isListed) return "public_only";
   return "corporate";
-}
-
-// Fixed-top amber strip shown while demo mode is on. Stacks below the
-// Preview banner via the offsetTop prop so both can coexist (admin running
-// a preview of a demo flow).
-function DemoBanner({ offsetTop = 0 }) {
-  return (
-    <div style={{
-      position: "fixed",
-      top: offsetTop,
-      left: 0,
-      right: 0,
-      zIndex: 9998,
-      background: "#FCD34D",
-      color: "#92400E",
-      textAlign: "center",
-      padding: "6px",
-      fontSize: 12,
-      fontWeight: 700,
-      letterSpacing: "0.3px",
-      fontFamily: "inherit",
-    }}>
-      🧪 DEMO MODE — Sample data only. Not real company information.
-    </div>
-  );
 }
 
 // Small unobtrusive chip-shaped toggle used on the journey-selection screen.
