@@ -53,6 +53,7 @@ import {
   buildPrompt,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
+import { C } from "./constants/theme";
 
 // ── Nium API Lookup (test journey) — temporary demo wiring ──
 // The Companies House name→registration-number resolver is parked while its API
@@ -96,34 +97,6 @@ const OWNERSHIP_ID_TO_DRS = {
   investment_fund: "Private Limited",
   insurance_company: "Private Limited",
   other: "Private Limited",
-};
-
-/* ═══════════════════════════════════════════
-   COLOUR PALETTE
-   Named tokens used by the enhanced research-pipeline UI (coverage bar,
-   three-tier badges, low-data banner). Maps the spec's semantic colour names
-   onto this app's existing hex values so the Confirm-page UX reads
-   consistently with the rest of the flow.
-   ═══════════════════════════════════════════ */
-const C = {
-  niumBlue: "#1a3a4a",
-  text: "#1a3a4a",
-  textMuted: "#1a3a4a90",
-  textSec: "#1a3a4aaa",
-  border: "rgba(26,58,74,0.14)",
-  surfaceAlt: "#fafcfb",
-  surface: "#ffffff",
-  background: "#f1f4f3",
-  success: "#1a6b56",
-  successBg: "#dff2ec",
-  successBorder: "#9fd8c8",
-  warning: "#8c5500",
-  warningBg: "#fff1d6",
-  warningBorder: "#e8c98a",
-  error: "#d44",
-  info: "#1a4a7a",
-  infoBg: "#f0f3f8",
-  infoBorder: "#bcd0e8",
 };
 
 /* ═══════════════════════════════════════════
