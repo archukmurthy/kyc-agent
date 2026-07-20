@@ -6,6 +6,7 @@ var validators =
         require("../validators/DateValidator"),
         require("../validators/ValidityValidator"),
         require("../validators/RequiredFieldValidator"),
+        require("../validators/AuthorityValidator"),
       ]
     : [
         window.RecipientValidator,
@@ -13,6 +14,7 @@ var validators =
         window.DateValidator,
         window.ValidityValidator,
         window.RequiredFieldValidator,
+        window.AuthorityValidator,
       ];
 
 function createDefaultValidators() {

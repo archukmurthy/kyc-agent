@@ -1,6 +1,7 @@
 (function () {
   const fileInput = document.getElementById("document");
   const marketInput = document.getElementById("market");
+  const entityTypeInput = document.getElementById("entity-type");
   const expectedRecipientInput = document.getElementById("expected-recipient");
   const extractedRecipientInput = document.getElementById("extracted-recipient");
   const applicantNameInput = document.getElementById("applicant-name");
@@ -68,6 +69,9 @@
       documentType: "LOA",
       applicationContext: {
         recipientName: expectedRecipientInput.value.trim(),
+      },
+      requirementContext: {
+        entityType: entityTypeInput.value,
       },
       extraction: extractionBundle.extraction,
       evidence: extractionBundle.evidence,

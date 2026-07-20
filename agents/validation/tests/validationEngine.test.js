@@ -38,12 +38,17 @@ test("validation engine passes a complete valid LOA", async () => {
     market: "UK",
     documentType: "LOA",
     applicationContext: { recipientName: "Nium" },
+    requirementContext: { entityType: "Private Limited" },
     extraction: { fields: validFields(), evidence: [] },
   });
 
   assert.strictEqual(result.status, "PASS");
   assert.ok(result.findings.length > 0);
   assert.ok(result.findings.every((finding) => finding.status === "PASS"));
+  assert.strictEqual(
+    result.findings.filter((finding) => finding.ruleId === "LOA.AUTHORITY.VALID").length,
+    1
+  );
 });
 
 test("validation engine preserves evidence supplied by extraction", async () => {
@@ -52,6 +57,7 @@ test("validation engine preserves evidence supplied by extraction", async () => 
     market: "UK",
     documentType: "LOA",
     applicationContext: { recipientName: "Nium" },
+    requirementContext: { entityType: "Private Limited" },
     extraction: { fields: validFields(), evidence: extractionEvidence },
   });
 

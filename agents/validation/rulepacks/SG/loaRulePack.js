@@ -1,7 +1,7 @@
 const sgLoaRulePack = {
   jurisdiction: "SG",
   documentType: "LOA",
-  version: "0.1.0",
+  version: "0.2.0",
   id: "SG.LOA",
   name: "Singapore Letter of Authorization",
   validityMonths: 12,
@@ -54,6 +54,44 @@ const sgLoaRulePack = {
       description: "LOA must include a signature, printed signer name, and signer title.",
       severity: "HIGH",
       parameters: {},
+    },
+    {
+      ruleId: "LOA.AUTHORITY.VALID",
+      description: "LOA signer role must be permitted for the Singapore entity type.",
+      severity: "HIGH",
+      parameters: {
+        entityRules: {
+          PRIVATE_LIMITED: {
+            applicantAllowedRoles: ["DIRECTOR", "UBO"],
+            allowedSignerRoles: ["DIRECTOR", "UBO"],
+          },
+          LISTED_PUBLIC_COMPANY: {
+            applicantAllowedRoles: ["DIRECTOR", "CONTROLLING_PERSON"],
+            allowedSignerRoles: ["DIRECTOR", "CONTROLLING_PERSON"],
+          },
+          PARTNERSHIP: {
+            applicantAllowedRoles: ["PARTNER"],
+            allowedSignerRoles: ["PARTNER"],
+          },
+          SOLE_PROPRIETOR: {
+            applicantAllowedRoles: ["SOLE_OWNER"],
+            allowedSignerRoles: ["SOLE_OWNER"],
+          },
+        },
+      },
+    },
+    {
+      ruleId: "LOA.AUTHORITY.VALID",
+      description: "LOA signer role must be permitted for the Singapore entity type.",
+      severity: "HIGH",
+      parameters: {
+        allowedSignatoryRoles: {
+          PRIVATE_LIMITED: ["Director", "UBO"],
+          LISTED_PUBLIC_COMPANY: ["Director", "Controlling Person"],
+          PARTNERSHIP: ["Partner"],
+          SOLE_PROPRIETOR: ["Sole Owner"],
+        },
+      },
     },
   ],
 };

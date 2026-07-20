@@ -1,7 +1,7 @@
 const ukLoaRulePack = {
   jurisdiction: "UK",
   documentType: "LOA",
-  version: "0.1.0",
+  version: "0.2.0",
   id: "UK.LOA",
   name: "UK Letter of Authorization",
   validityMonths: 12,
@@ -56,6 +56,35 @@ const ukLoaRulePack = {
       description: "LOA must include a signature, printed signer name, and signer title.",
       severity: "HIGH",
       parameters: {},
+    },
+    {
+      ruleId: "LOA.AUTHORITY.VALID",
+      description: "LOA signer role must be permitted for the UK entity type.",
+      severity: "HIGH",
+      parameters: {
+        entityRules: {
+          PRIVATE_LIMITED: {
+            applicantAllowedRoles: ["DIRECTOR", "UBO", "CONTROLLING_PERSON"],
+            allowedSignerRoles: ["DIRECTOR", "UBO", "CONTROLLING_PERSON"],
+          },
+          LISTED_PUBLIC_COMPANY: {
+            applicantAllowedRoles: ["DIRECTOR", "CONTROLLING_PERSON"],
+            allowedSignerRoles: ["DIRECTOR", "CONTROLLING_PERSON"],
+          },
+          PARTNERSHIP: {
+            applicantAllowedRoles: ["PARTNER"],
+            allowedSignerRoles: ["PARTNER"],
+          },
+          SOLE_PROPRIETOR: {
+            applicantAllowedRoles: ["SOLE_OWNER"],
+            allowedSignerRoles: ["SOLE_OWNER"],
+          },
+          COOPERATIVE: {
+            applicantAllowedRoles: ["DIRECTOR"],
+            allowedSignerRoles: ["DIRECTOR"],
+          },
+        },
+      },
     },
   ],
 };
