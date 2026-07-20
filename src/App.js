@@ -70,6 +70,12 @@ import {
   docTypesForEntity,
   buildPhase1Msgs,
 } from "./constants/docTypes";
+import {
+  LOADER_MSGS,
+  LOADER_MSGS_WOLFSBERG_PHASE1,
+  LOADER_MSGS_WOLFSBERG_PHASE2,
+  DOC_LOADER_MSGS,
+} from "./constants/loaderMessages";
 
 // Built locally from the still-present hardcoded constants above. This is
 // the offline fallback used only when /api/config is unreachable; the
@@ -117,30 +123,6 @@ const buildLocalDefaultConfig = () => ({
   },
   documents: {},
 });
-
-const LOADER_MSGS = [
-  "Searching company registries...",
-  "Checking regulatory databases...",
-  "Extracting director information...",
-  "Analysing ownership structure...",
-  "Compiling financial data...",
-  "Identifying jurisdiction-specific gaps...",
-  "Building onboarding form...",
-  "Almost done, compiling results...",
-];
-
-// Two-phase loader messages for the AI + Documents journey.
-// Phase 1 messages are generated dynamically in doResearch from the
-// uploadedDocs map; this list is the fallback when nothing was uploaded.
-const LOADER_MSGS_WOLFSBERG_PHASE1 = [
-  "Reading your documents...",
-];
-const LOADER_MSGS_WOLFSBERG_PHASE2 = [
-  "Searching official registries…",
-  "Checking regulatory databases…",
-  "Scanning secondary sources…",
-  "Almost done, compiling results…",
-];
 
 // Read a File object as base64 (data: prefix stripped) for sending in an
 // Anthropic messages "document" content block.
@@ -344,15 +326,6 @@ function selfSourcedToRows(selfSourcedFields, schema) {
   });
   return normalizeResearchFieldIds(rows, schema);
 }
-
-// Documents-step loading messages — cycled every 8s while the doc-search and
-// registry agents run, so the ~30-40s wait has live feedback.
-const DOC_LOADER_MSGS = [
-  "Searching for Wolfsberg Questionnaire and Annual Report...",
-  "Checking Companies House registry...",
-  "Extracting company details...",
-  "Almost done — compiling results...",
-];
 
 // Realistic demo doc-search results built from the actual Step 1 inputs.
 // Used in demo mode / local dev so Section A renders without spending API
