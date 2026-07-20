@@ -51,6 +51,7 @@
         new window.DateValidator(),
         new window.ValidityValidator(),
         new window.SignatureValidator(),
+        new window.AuthorityValidator(),
       ],
     });
     const extractedValues = {
