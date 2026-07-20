@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Validation Lab</title>
+    <link rel="stylesheet" href="../validation-lab/validationLab.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Validation Lab</h1>
+        <p>Standalone Letter of Authorization validation harness for UK and Singapore.</p>
+      </header>
+
+      <section class="controls" aria-label="Validation controls">
+        <label>
+          Upload document
+          <input id="document" type="file" />
+        </label>
+
+        <label>
+          Market
+          <select id="market">
+            <option value="UK">UK</option>
+            <option value="SG">Singapore</option>
+          </select>
+        </label>
+
+        <label>
+          Expected recipient
+          <input id="expected-recipient" type="text" value="Nium" />
+        </label>
+
+        <label>
+          Extracted recipient
+          <input id="extracted-recipient" type="text" value="Nium" />
+        </label>
+
+        <label>
+          Applicant name
+          <input id="applicant-name" type="text" value="Example Ltd" />
+        </label>
+
+        <label>
+          LOA date
+          <input id="issue-date" type="date" />
+        </label>
+
+        <label>
+          Printed signer name
+          <input id="printed-signer-name" type="text" value="Jane Smith" />
+        </label>
+
+        <label>
+          Signer title
+          <input id="signer-title" type="text" value="Director" />
+        </label>
+
+        <label>
+          Country of issue
+          <input id="country-of-issue" type="text" value="United Kingdom" />
+        </label>
+
+        <label class="checkbox-row">
+          <input id="signature-present" type="checkbox" checked />
+          Signature present
+        </label>
+
+        <button id="run-validation" type="button">Run validation</button>
+      </section>
+
+      <section class="results" aria-label="Validation results">
+        <div class="panel">
+          <h2>Structured JSON</h2>
+          <pre id="json-output">{}</pre>
+        </div>
+
+        <div class="panel">
+          <h2>Findings</h2>
+          <div id="findings-output">
+            <p>Run validation to see findings.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="../agents/validation/contracts/validationTypes.js"></script>
+    <script src="../agents/validation/guidance/guidanceBuilder.js"></script>
+    <script src="../agents/validation/validators/BaseValidator.js"></script>
+    <script src="../agents/validation/validators/RecipientValidator.js"></script>
+    <script src="../agents/validation/validators/SignatureValidator.js"></script>
+    <script src="../agents/validation/validators/DateValidator.js"></script>
+    <script src="../agents/validation/validators/ValidityValidator.js"></script>
+    <script src="../agents/validation/validators/RequiredFieldValidator.js"></script>
+    <script src="../agents/validation/validators/AuthorityValidator.js"></script>
+    <script src="../agents/validation/validators/DuplicateEvidenceValidator.js"></script>
+    <script src="../agents/validation/rulepacks/UK/loaRulePack.js"></script>
+    <script src="../agents/validation/rulepacks/SG/loaRulePack.js"></script>
+    <script src="../agents/validation/rulepacks/rulePackLoader.js"></script>
+    <script src="../agents/validation/extraction/extractionOrchestrator.js"></script>
+    <script src="../agents/validation/engine/validatorPipeline.js"></script>
+    <script src="../agents/validation/engine/resultAggregator.js"></script>
+    <script src="../agents/validation/engine/validationEngine.js"></script>
+    <script src="../validation-lab/validationLab.js"></script>
+  </body>
+</html>
