@@ -106,6 +106,16 @@ pre {
   margin-bottom: 12px;
 }
 
+.finding-group + .finding-group {
+  margin-top: 24px;
+}
+
+.finding-group h3 {
+  margin: 0 0 10px;
+  color: #253858;
+  font-size: 15px;
+}
+
 .finding-header {
   display: flex;
   justify-content: space-between;

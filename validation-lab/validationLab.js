@@ -24,19 +24,46 @@
       return;
     }
 
-    findingsOutput.innerHTML = findings
+    const groups = [
+      { title: "Recipient", matches: (ruleId) => ruleId.includes("RECIPIENT") },
+      { title: "Dates", matches: (ruleId) => ruleId.includes("DATE") || ruleId.includes("VALIDITY") },
+      {
+        title: "Signature & Authority",
+        matches: (ruleId) => ruleId.includes("SIGNATURE") || ruleId.includes("AUTHORITY"),
+      },
+      { title: "Other Required Fields", matches: () => true },
+    ];
+    const remaining = findings.slice();
+    const groupedFindings = groups
+      .map((group) => {
+        const items = remaining.filter((finding) => group.matches(finding.ruleId));
+        items.forEach((item) => remaining.splice(remaining.indexOf(item), 1));
+        return { ...group, items };
+      })
+      .filter((group) => group.items.length);
+
+    findingsOutput.innerHTML = groupedFindings
       .map(
-        (finding) => `
-          <article class="finding">
-            <div class="finding-header">
-              <strong>${finding.status}</strong>
-              <span>${finding.ruleId}</span>
-            </div>
-            <p>${finding.message}</p>
-            <p><b>Customer guidance:</b> ${finding.customerGuidance.summary}</p>
-            <p><b>Analyst guidance:</b> ${finding.analystGuidance.summary}</p>
-            <p><b>Decision:</b> ${finding.decision.outcomeReason}</p>
-          </article>
+        (group) => `
+          <section class="finding-group">
+            <h3>${group.title}</h3>
+            ${group.items
+              .map(
+                (finding) => `
+                  <article class="finding">
+                    <div class="finding-header">
+                      <strong>${finding.status}</strong>
+                      <span>${finding.ruleId}</span>
+                    </div>
+                    <p>${finding.message}</p>
+                    <p><b>Customer guidance:</b> ${finding.customerGuidance.summary}</p>
+                    <p><b>Analyst guidance:</b> ${finding.analystGuidance.summary}</p>
+                    <p><b>Decision:</b> ${finding.decision.outcomeReason}</p>
+                  </article>
+                `
+              )
+              .join("")}
+          </section>
         `
       )
       .join("");
