@@ -49,6 +49,15 @@ test("validation engine passes a complete valid LOA", async () => {
     result.findings.filter((finding) => finding.ruleId === "LOA.AUTHORITY.VALID").length,
     1
   );
+  assert.ok(
+    !result.findings.some((finding) =>
+      [
+        "LOA.REQUIRED_FIELD.SIGNATURE_PRESENCE",
+        "LOA.REQUIRED_FIELD.PRINTED_SIGNER_NAME",
+        "LOA.REQUIRED_FIELD.SIGNER_TITLE",
+      ].includes(finding.ruleId)
+    )
+  );
 });
 
 test("validation engine preserves evidence supplied by extraction", async () => {

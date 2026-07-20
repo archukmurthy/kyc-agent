@@ -9,9 +9,6 @@ const sgLoaRulePack = {
     "applicantName",
     "recipientName",
     "issueDate",
-    "signaturePresent",
-    "printedSignerName",
-    "signerTitle",
   ],
   rules: [
     {
@@ -29,9 +26,6 @@ const sgLoaRulePack = {
           "applicantName",
           "recipientName",
           "issueDate",
-          "signaturePresent",
-          "printedSignerName",
-          "signerTitle",
         ],
       },
     },
