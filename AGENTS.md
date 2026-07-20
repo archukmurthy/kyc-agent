@@ -279,6 +279,99 @@ If any check fails, do not push.
   → src/setupProxy.js — every api/*.js file
     needs a matching app.get/post/put
 
+## FRONTEND MODULE MAP
+## (branch refactor/modular-architecture)
+
+The modularization refactor moved the pure,
+self-contained parts of src/App.js into
+dedicated modules. src/App.js still owns ALL
+state, effects, step routing and page
+rendering — the RULE 1 restrictions on it
+are unchanged. The extracted modules are:
+
+  src/constants/
+    theme.js            — C colour palette
+    appConstants.js     — SHOW_TEST_TOOLS /
+      TEST_FLAG, MANUAL_FORM_URL, COUNTRIES,
+      OWNERSHIP_ID_TO_DRS, Nium demo-lookup
+      constants, CACHE_STALE_DAYS
+    extractionPrompts.js — per-document AI
+      extraction prompts (Wolfsberg, cert,
+      licence, annual report, org chart, AML)
+    docTypes.js         — DOC_TYPES catalogue,
+      initialUploadedDocs, docTypesForEntity,
+      buildPhase1Msgs
+    loaderMessages.js   — research/doc loader
+      message lists
+
+  src/utils/
+    costs.js            — API_PRICING,
+      calcCostUsd, buildCostSummary
+    extractionMapping.js — EXTRACTION_KEY_TO_
+      SCHEMA, mapExtractedKey,
+      normalizeResearchFieldIds,
+      selfSourcedToRows
+    files.js            — readFileAsBase64,
+      formatFetchedAt
+
+  src/config/
+    localDefaultConfig.js — offline fallback
+      tenant config (buildLocalDefaultConfig)
+
+  src/demo/
+    demoData.js         — TEST_DATA,
+      DUMMY_RESEARCH_VALUES, demo doc-search
+      and self-source fixtures (synthetic
+      sentinels only — see PR-059 A)
+
+  src/components/
+    banners/PreviewBanner.jsx
+    banners/DemoBanner.jsx
+    banners/DemoToggle.jsx
+    inputs/StableInput.jsx   — CRITICAL:
+      local-state + gapRef write-through;
+      do not lift values into parent state
+    inputs/PrePopulatedField.jsx
+    dossier/DossierSection.jsx
+
+  src/workflows/
+    documentWorkflow.js — mapToDocAgent
+      OwnershipType, extractFromDoc,
+      preCheckDocForOwnershipType (pure;
+      state stays in App.js)
+    applicantWorkflow.js — genUUID,
+      isCorporateStakeholder,
+      APPLICANT_FALLBACK_FIELDS,
+      getApplicantCandidates,
+      buildApplicantProvenance (pure; App.js
+      wraps them with its state)
+
+  src/__tests__/
+    appMounts.test.jsx  — full-tree mount
+      characterization test
+    characterization.pure.test.js
+    characterization.workflows.test.js
+      — golden-value tests pinning the
+        extracted modules to pre-refactor
+        behaviour
+
+Module ownership for agents:
+  - A task scoped to prompts, doc catalogue,
+    constants, demo fixtures or the pure
+    workflow helpers should edit ONLY the
+    matching module above — not App.js.
+  - A task scoped to state, effects, step
+    routing or page rendering still edits
+    App.js under the RULE 1 constraints
+    (only the named function).
+  - Never move state handling out of App.js
+    into these modules; new module functions
+    must stay pure (state passed in).
+  - Run scripts/refactor-smoke-checklist.md
+    (all 6 checks) plus `npx react-scripts
+    test --watchAll=false` after touching
+    any of these modules.
+
 ## CODEX-SPECIFIC RULES
 
 You are working on branch:
