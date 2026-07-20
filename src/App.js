@@ -87,6 +87,7 @@ import {
   TEST_DATA,
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
+import { readFileAsBase64, formatFetchedAt } from "./utils/files";
 
 // Built locally from the still-present hardcoded constants above. This is
 // the offline fallback used only when /api/config is unreachable; the
@@ -133,15 +134,6 @@ const buildLocalDefaultConfig = () => ({
     documentsArePrimary: true,
   },
   documents: {},
-});
-
-// Read a File object as base64 (data: prefix stripped) for sending in an
-// Anthropic messages "document" content block.
-const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(String(reader.result).split(",")[1]);
-  reader.onerror = reject;
-  reader.readAsDataURL(file);
 });
 
 /* ═══════════════════════════════════════════
@@ -441,19 +433,6 @@ function StableInput({ id, label, type, value, onUpdate, required, options, plac
 // (not a render-helper) so its collapse useState is hook-safe even when some
 // tiers are conditionally rendered. Stakeholder fields are skipped (they have
 // their own section). `getLabel` resolves a field id → human label.
-// Format an ISO fetch timestamp ("grabbed at" line) for the dossier. Returns ""
-// for missing/unparseable values so callers can render conditionally.
-function formatFetchedAt(ts) {
-  if (!ts) return "";
-  try {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return "";
-    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  } catch (_) {
-    return "";
-  }
-}
-
 function DossierSection({ title, subtitle, items, bg, borderColor, color, startCollapsed = false, getLabel, fallbackTs }) {
   const [collapsed, setCollapsed] = useState(startCollapsed);
   if (!items || items.length === 0) return null;
