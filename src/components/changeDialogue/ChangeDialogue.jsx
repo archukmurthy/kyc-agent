@@ -79,6 +79,14 @@ export function ChangeDialogue({
   const { index, stepKey, answers, recordAnswer, isComplete } = useDialogueState(steps, persisted);
   const [outcome, setOutcome] = useState(null);
   const emittedRef = useRef(Boolean(persisted && persisted.emitted));
+  // Option B (inline capture): the built initial event and its server-assigned
+  // id are lifted into the persisted snapshot so the Confirm page can emit a
+  // SUPERSEDING value-event (afterValue + supersedesId) when the customer
+  // saves the corrected value inline. Seeded from the snapshot on remount so
+  // navigation never loses the lineage.
+  const eventRef = useRef(persisted && persisted.event ? persisted.event : null);
+  const eventIdRef = useRef(persisted && persisted.eventId != null ? persisted.eventId : null);
+  const [persistTick, setPersistTick] = useState(0);
 
   useEffect(() => {
     if (!isComplete) return;
@@ -127,12 +135,26 @@ export function ChangeDialogue({
       // customer (mirrors App.js#trackEvent). writeEvent server-side rejects a
       // malformed/identifier-less event with a 200 + warning, so a missing
       // submissionId can't break the UI.
+      eventRef.current = event;
       if (typeof fetch === 'function') {
         fetch('/api/change-events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(event),
-        }).catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            // Retain the server-assigned id so the superseding value-event can
+            // point at this row. A non-JSON / no-DB / failure response simply
+            // leaves the id absent — the superseding event is then emitted
+            // un-linked and the store's latest-per-field ordering resolves
+            // currency (flagged fallback, see supersedingEvent.js).
+            if (d && d.success && d.id != null) {
+              eventIdRef.current = d.id;
+              setPersistTick((t) => t + 1);
+            }
+          })
+          .catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
       }
 
       if (typeof onEvent === 'function') onEvent(event);
@@ -143,14 +165,22 @@ export function ChangeDialogue({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete]);
 
-  // Lift the working state (answers + progress + emitted) into the parent's
-  // durable store so it survives the Confirm subtree unmounting on navigation.
+  // Lift the working state (answers + progress + emitted + event lineage) into
+  // the parent's durable store so it survives the Confirm subtree unmounting on
+  // navigation. The parent MERGES this snapshot (it also stashes its own keys —
+  // lastSavedValue, chained eventId — on inline save).
   useEffect(() => {
     if (typeof onPersist === 'function') {
-      onPersist(field.fieldId, { index, answers, emitted: emittedRef.current });
+      onPersist(field.fieldId, {
+        index,
+        answers,
+        emitted: emittedRef.current,
+        event: eventRef.current,
+        eventId: eventIdRef.current,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, answers, outcome]);
+  }, [index, answers, outcome, persistTick]);
 
   // ── Still asking questions ──
   if (!isComplete) {

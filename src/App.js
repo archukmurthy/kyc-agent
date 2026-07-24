@@ -13,6 +13,8 @@ import { classifyFieldClass } from "./components/changeDialogue/dialogueContent"
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
+import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
+import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
 import { Notice } from "./components/notices/Notice";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
@@ -370,8 +372,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // empty local state and re-asks already-answered questions. Keyed by fieldId;
   // cleared in resetAll. (`checks` itself already persists — it's parent state.)
   const dialogueStateRef = useRef({});
+  // MERGE (not replace): the dialogue persists {index, answers, emitted, event,
+  // eventId}, while the inline-capture save path (commit 3) stashes its own
+  // keys on the same snapshot (lastSavedValue, the chained eventId of the
+  // latest superseding write). A replace would clobber whichever side wrote
+  // second.
   const persistDialogueState = useCallback((fieldId, snapshot) => {
-    if (fieldId != null) dialogueStateRef.current[fieldId] = snapshot;
+    if (fieldId != null) {
+      dialogueStateRef.current[fieldId] = { ...dialogueStateRef.current[fieldId], ...snapshot };
+    }
   }, []);
   // Per-person rejection for stakeholder fields. Shape:
   //   { [fieldId]: Set<stakeholderId> }
@@ -2672,7 +2681,63 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
       // that emits a new change event (R6: toggling re-adds the document each time).
       delete dialogueStateRef.current[item.field];
+      // Inline capture (commit 3): a re-check is an undo — drop the inline
+      // corrected value too. gapRef entries always win over accepted AI values
+      // in submitApplication, so a stale correction left behind here would
+      // silently override the value the customer just re-accepted.
+      if (gapRef.current["corrected_" + item.field] !== undefined) {
+        delete gapRef.current["corrected_" + item.field];
+        setFormVersion(v => v + 1);
+      }
     }
+  };
+
+  // Commit 3 (Option B core) — save handler for the inline correction editor.
+  // Two consistent destinations, in order:
+  //   1. gapRef["corrected_<field>"] — the SAME client-state key Fill Gaps
+  //      renders and submitApplication/allGapsFilled/field_provenance consume,
+  //      so submit works unchanged and Fill Gaps shows the value pre-filled.
+  //   2. A SUPERSEDING change-event carrying afterValue, cloned from the
+  //      dialogue's initial classification (never re-classified) with
+  //      supersedesId when the initial write returned its id. One event per
+  //      logical save: the editor commits on its Save button (not keystrokes)
+  //      and an unchanged re-save is skipped.
+  const saveInlineCorrection = (item, value) => {
+    const fieldId = item.field;
+    updateGap("corrected_" + fieldId, value);
+    setFormVersion(v => v + 1); // surface the saved state on the Confirm row
+    const snap = dialogueStateRef.current[fieldId];
+    if (!snap || !snap.emitted || !snap.event) return; // nothing to supersede yet
+    if (snap.lastSavedValue === value) return;         // idempotent double-save guard
+    dialogueStateRef.current[fieldId] = { ...snap, lastSavedValue: value };
+    const superseding = buildSupersedingEvent(snap, value);
+    if (!superseding) return;
+    // Deliberate observability log (commit-3 verification): the payload must be
+    // inspectable even where the POST can't persist (no DATABASE_URL).
+    // eslint-disable-next-line no-console
+    console.log("[confirm] superseding change-event:", superseding);
+    if (typeof fetch === "function") {
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(superseding),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          // Chain the lineage: a later re-edit supersedes THIS event. On a
+          // failed/no-DB write, clear the id so the next event goes un-linked
+          // (latest-per-field fallback) instead of pointing at a stale row.
+          const cur = dialogueStateRef.current[fieldId];
+          if (cur) {
+            dialogueStateRef.current[fieldId] = {
+              ...cur,
+              eventId: d && d.success && d.id != null ? d.id : null,
+            };
+          }
+        })
+        .catch((err) => console.warn("[confirm] superseding event persist failed:", err));
+    }
+    trackEvent("change_event_superseded", superseding);
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
@@ -3492,7 +3557,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             button fires only on a state TRANSITION (tick on a ticked row and
             cross on a crossed row are no-ops), so the state machine — and the
             ChangeDialogue mount / revert-event flow — is unchanged. */}
-        <div style={{ flexShrink: 0, display: "flex", gap: 4, paddingTop: 2 }}>
+        <div style={{ flexShrink: 0, width: 80, display: "flex", gap: 4, paddingTop: 2 }}>
           <button
             type="button"
             onClick={() => { if (!rowChecked) toggleCheck(idx); }}
@@ -3519,6 +3584,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
               border: !rowChecked ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
             }}
           >✕</button>
+          {/* Pencil (commit 3) — "tweak this value". Routes through the IDENTICAL
+              cross flow (toggleCheck → ChangeDialogue → classification → inline
+              editor) for every field class, so the affordance can never bypass a
+              required document: whether a doc is owed is a property of the
+              field-class + change (policyTable), not of which button was used.
+              For generic fields the dialogue asks nothing and completes
+              silently, so the pencil is effectively the lightweight edit. */}
+          {rowChecked && (
+            <button
+              type="button"
+              onClick={() => toggleCheck(idx)}
+              aria-label={`Edit ${item.label}`}
+              title="Edit this value"
+              style={{
+                ...tickCrossBase,
+                background: "#fff",
+                color: C.textMuted,
+                border: `1.5px solid ${C.border}`,
+              }}
+            >✎</button>
+          )}
         </div>
         {/* Label cell — fixed width */}
         <span style={{
@@ -3611,7 +3697,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
           )}
           {/* Capture-mode change dialogue — mounts beneath an unchecked field,
-              captures intent/registry + records one append-only change_event. */}
+              captures intent/registry + records one append-only change_event.
+              onResolved (commit 3) bumps formVersion so the row re-renders the
+              moment classification completes and the inline editor can appear —
+              the questions always come first, the value input second. */}
           {!checks[idx] && (
             <ChangeDialogue
               field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
@@ -3619,10 +3708,38 @@ export default function KYCAgent({ previewMode = false } = {}) {
               submissionId={dossierId || onboardingSubmissionId}
               dossierId={dossierId}
               onEvent={(event) => trackEvent("change_event_captured", event)}
+              onResolved={() => setFormVersion(v => v + 1)}
               persisted={dialogueStateRef.current[item.field]}
               onPersist={persistDialogueState}
             />
           )}
+          {/* Inline correction editor (commit 3) — value capture ON Confirm.
+              Gated on the dialogue having emitted (classification first), so a
+              value can never be saved before the initial event exists. Writes
+              through saveInlineCorrection: gapRef["corrected_<field>"] (same
+              key Fill Gaps renders — the value shows pre-filled there) + the
+              superseding change-event. */}
+          {!checks[idx] && (() => {
+            const snap = dialogueStateRef.current[item.field];
+            if (!snap || !snap.emitted) return null;
+            const savedCorrection = gapRef.current["corrected_" + item.field];
+            // Reference-value exception: don't prefill a literal cross-reference
+            // like "Same as registered office" — prompt for the real value.
+            const isReferenceValue = typeof item.value === "string" && /\bsame as\b/i.test(item.value);
+            const prefill = isReferenceValue || item.value == null || typeof item.value === "object"
+              ? ""
+              : String(item.value);
+            return (
+              <InlineCorrectionEditor
+                key={"edit-" + item.field}
+                fieldDef={fieldDef || {}}
+                originalDisplay={displayValue}
+                initialValue={prefill}
+                savedValue={savedCorrection != null ? String(savedCorrection) : ""}
+                onSave={(v) => saveInlineCorrection(item, v)}
+              />
+            );
+          })()}
         </div>
         {/* Source badge cell — FIXED width so long source text can never
             squeeze the value column. Badge text wraps inside. */}
@@ -3691,13 +3808,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
             }}>
               {humaniseSection(section)}
             </div>
-            {/* Header — column geometry mirrors renderFoundRow: 52px tick/cross
-                pair, 180px label, flex:1 value, 180px source (gap 12); the 3px
+            {/* Header — column geometry mirrors renderFoundRow: 80px tick/cross/
+                pencil cell, 180px label, flex:1 value, 180px source (gap 12); the 3px
                 transparent left border matches the rows' state stripe. Re-skin:
                 quiet light header instead of the dark navy bar, so confirmed
                 content recedes and only the amber state stripes pull the eye. */}
             <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: C.surfaceAlt, borderLeft: "3px solid transparent", borderBottom: `1px solid ${C.border}`, borderRadius: "8px 8px 0 0" }}>
-              <span style={{ flexShrink: 0, width: 52, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>✓ / ✕</span>
+              <span style={{ flexShrink: 0, width: 80, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>✓ / ✕ / ✎</span>
               <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>FIELD</span>
               <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>VALUE</span>
               <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, textAlign: "right", letterSpacing: "0.06em" }}>SOURCE</span>
