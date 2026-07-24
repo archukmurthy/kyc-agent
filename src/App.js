@@ -3335,6 +3335,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     cursor: "pointer",
     display: "inline-block",
   };
+  // Re-skin: provenance is supporting detail, not the headline — quiet
+  // text-only badges (the row's state stripe carries the confidence signal).
+  // Same glyph vocabulary per tier, same click-to-reveal-timestamp behaviour.
   const renderSourceBadge = (item, idx) => {
     const m = metaFor(item.field);
     const ts = (m && m.fetchedAt) || researchTimestamp || "";
@@ -3345,7 +3348,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? `🕒 ${ts}` : `From uploaded ${label}`}
-          style={{ ...badgeBaseStyle, color: "#fff", background: "#0B3D91" }}
+          style={{ ...badgeBaseStyle, color: "#0B3D91", background: "transparent" }}
         >
           {revealedTs[idx] ? `🕒 ${tsShort}` : `📄 ${label}`}
         </span>
@@ -3356,9 +3359,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
-          style={{ ...badgeBaseStyle, color: "#1a6b56", background: "#dff2ec" }}
+          style={{ ...badgeBaseStyle, color: C.textMuted, background: "transparent" }}
         >
-          {revealedTs[idx] ? `🕒 ${ts}` : `✅ ${item.source}`}
+          {revealedTs[idx] ? `🕒 ${ts}` : `✓ ${item.source}`}
         </span>
       );
     }
@@ -3368,7 +3371,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence — from unverified source"}
-          style={{ ...badgeBaseStyle, color: "#C2410C", background: "#FFF7ED", border: "1px solid #FED7AA" }}
+          style={{ ...badgeBaseStyle, color: "#C2410C", background: "transparent" }}
         >
           {revealedTs[idx] ? `🕒 ${ts}` : `⚠ ${item.source}`}
         </span>
@@ -3379,7 +3382,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
         title={revealedTs[idx] ? "Click to hide timestamp" : "Probable — from company source, please confirm"}
-        style={{ ...badgeBaseStyle, color: "#8c5500", background: "#fff1d6" }}
+        style={{ ...badgeBaseStyle, color: C.warning, background: "transparent" }}
       >
         {revealedTs[idx] ? `🕒 ${ts}` : `~ ${item.source}`}
       </span>
@@ -3431,7 +3434,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return val;
   };
 
-  const renderFoundRow = ({ item, idx }, n) => {
+  const renderFoundRow = ({ item, idx }) => {
     const fieldDef = findFieldDef(activeSchema, item.field);
     let displayValue =
       item.value !== null && typeof item.value === "object"
@@ -3454,6 +3457,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
     const isUnmappedDropdown =
       fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
+    // Re-skin: row state drives the visual treatment, from EXISTING data only.
+    // Confirmation lives in checks[idx]; confidence in verificationStatus
+    // (sourceTier fallback covers rows stored before that field existed).
+    // Amber tracks confidence, never "has a control"; a disputed row's info
+    // tone wins over amber while its ChangeDialogue is open.
+    const rowChecked = !!checks[idx];
+    const vStatus = item.verificationStatus
+      || (item.sourceTier === "tier2" ? "probable" : item.sourceTier === "tier3" ? "indicative" : "verified");
+    const needsAttention = vStatus === "probable" || vStatus === "indicative";
+    const tickCrossBase = {
+      width: 24, height: 24, borderRadius: 7, cursor: "pointer",
+      fontSize: 12, fontWeight: 700, lineHeight: 1, padding: 0,
+      fontFamily: "inherit",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+    };
     return (
       <div key={item.field + idx} style={{
         display: "flex",
@@ -3463,14 +3481,44 @@ export default function KYCAgent({ previewMode = false } = {}) {
         width: "100%",
         padding: "12px 10px",
         boxSizing: "border-box",
-        background: n % 2 === 0 ? "#fafcfb" : "#fff",
+        background: !rowChecked ? C.infoBg : needsAttention ? C.warningTint : "transparent",
+        borderLeft: !rowChecked ? `3px solid ${C.info}` : needsAttention ? `3px solid ${C.warning}` : "3px solid transparent",
         borderBottom: "1px solid rgba(26,58,74,0.04)",
         // Unchecking a field is NOT disabling it — keep the row fully legible.
         // The Tier 1 "no action needed" notice below conveys the recorded state.
       }}>
-        {/* Checkbox */}
-        <div style={{ flexShrink: 0, width: 20, paddingTop: 2 }}>
-          <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
+        {/* Tick / cross — the SAME checks[idx] state and toggleCheck handler as
+            the old single checkbox, rendered as a two-button affordance. Each
+            button fires only on a state TRANSITION (tick on a ticked row and
+            cross on a crossed row are no-ops), so the state machine — and the
+            ChangeDialogue mount / revert-event flow — is unchanged. */}
+        <div style={{ flexShrink: 0, display: "flex", gap: 4, paddingTop: 2 }}>
+          <button
+            type="button"
+            onClick={() => { if (!rowChecked) toggleCheck(idx); }}
+            aria-label={`Confirm ${item.label}`}
+            aria-pressed={rowChecked}
+            title="Correct — keep this value"
+            style={{
+              ...tickCrossBase,
+              background: rowChecked ? "#4a9e8e" : "#fff",
+              color: rowChecked ? "#fff" : C.textMuted,
+              border: rowChecked ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
+            }}
+          >✓</button>
+          <button
+            type="button"
+            onClick={() => { if (rowChecked) toggleCheck(idx); }}
+            aria-label={`Mark ${item.label} as incorrect`}
+            aria-pressed={!rowChecked}
+            title="Wrong — flag this value for correction"
+            style={{
+              ...tickCrossBase,
+              background: !rowChecked ? C.error : "#fff",
+              color: !rowChecked ? "#fff" : C.textMuted,
+              border: !rowChecked ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+            }}
+          >✕</button>
         </div>
         {/* Label cell — fixed width */}
         <span style={{
@@ -3643,15 +3691,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
             }}>
               {humaniseSection(section)}
             </div>
-            {/* Header — column geometry mirrors renderFoundRow: 20px checkbox,
-                180px label, flex:1 value, 180px source (gap 12). */}
-            <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
-              <span style={{ flexShrink: 0, width: 20, fontSize: 10, fontWeight: 700, color: "#fff" }}>✓</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff" }}>FIELD</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: "#fff" }}>VALUE</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff", textAlign: "right" }}>SOURCE</span>
+            {/* Header — column geometry mirrors renderFoundRow: 52px tick/cross
+                pair, 180px label, flex:1 value, 180px source (gap 12); the 3px
+                transparent left border matches the rows' state stripe. Re-skin:
+                quiet light header instead of the dark navy bar, so confirmed
+                content recedes and only the amber state stripes pull the eye. */}
+            <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: C.surfaceAlt, borderLeft: "3px solid transparent", borderBottom: `1px solid ${C.border}`, borderRadius: "8px 8px 0 0" }}>
+              <span style={{ flexShrink: 0, width: 52, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>✓ / ✕</span>
+              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>FIELD</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>VALUE</span>
+              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, textAlign: "right", letterSpacing: "0.06em" }}>SOURCE</span>
             </div>
-            {rows.map((r, n) => renderFoundRow(r, n))}
+            {rows.map((r) => renderFoundRow(r))}
           </div>
         ))}
       </div>
@@ -3818,10 +3869,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </span>
           </div>
         </div>
-        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 10px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 4px", lineHeight: 1.5 }}>
           Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}. Expand each
           person to review the details we found — keep the green tick on anything correct, or untick a
           field to edit it on the next page. Anything we couldn't find is collected on the next page too.
+        </p>
+        <p style={{ fontSize: 11, color: C.textMuted, margin: "0 0 10px", fontStyle: "italic" }}>
+          Editing who is on this list is coming soon — for now, untick anyone who doesn't belong.
         </p>
         {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
@@ -3866,12 +3920,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {/* Re-skin: initials avatar in place of the person emoji
+                        (companies keep the building glyph). */}
+                    <span style={{
+                      width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                      background: rejected ? "#fde8e8" : C.successBg,
+                      color: rejected ? C.error : C.success,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 800, letterSpacing: "0.02em",
+                    }}>
+                      {isCorporateStakeholder(s)
+                        ? "🏢"
+                        : ((s.full_name || "?").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?")}
+                    </span>
                     <span style={{
                       fontSize: 14, fontWeight: 700,
                       color: rejected ? "#1a3a4a70" : "#1a3a4a",
                       textDecoration: rejected ? "line-through" : "none",
                     }}>
-                      {isCorporateStakeholder(s) ? "🏢" : "👤"} {s.full_name}
+                      {s.full_name}
                     </span>
                     {s.role && (
                       <span style={{
@@ -3896,12 +3963,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 3 }}>
                       {rejected
                         ? "⚠ Marked as incorrect — tap to review"
-                        : nextPageFields.length > 0
-                        ? `${nextPageFields.length} field${nextPageFields.length > 1 ? "s" : ""} to complete on next page · tap to expand`
-                        : "✓ All details confirmed · tap to expand"}
+                        : "Tap to expand and review the details we found"}
                     </div>
                   )}
                 </div>
+                {/* Re-skin: per-card status badge — same nextPageFields data
+                    that previously drove the collapsed subtitle line. */}
+                {!rejected && (nextPageFields.length > 0 ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
+                    border: `1px solid ${C.warningBorder}`, borderRadius: 99,
+                    padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
+                  }}>
+                    {nextPageFields.length} need{nextPageFields.length === 1 ? "s" : ""} you
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: C.success, background: C.successBg,
+                    border: `1px solid ${C.successBorder}`, borderRadius: 99,
+                    padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
+                  }}>
+                    ✓ Complete
+                  </span>
+                ))}
                 {rejected && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
@@ -8051,7 +8135,6 @@ Nium Onboarding Team`;
             jurisdictionBadge={jurisdictionBadge}
             entityBadge={entityBadge}
             cardStyle={card}
-            Btn={Btn}
             STEPS={STEPS}
             stepsFor={stepsFor}
             setStep={setStep}

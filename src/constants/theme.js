@@ -20,6 +20,7 @@ export const C = {
   warning: "#8c5500",
   warningBg: "#fff1d6",
   warningBorder: "#e8c98a",
+  warningTint: "#fffaf1",
   error: "#d44",
   info: "#1a4a7a",
   infoBg: "#f0f3f8",

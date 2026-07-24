@@ -37,7 +37,6 @@ export function ConfirmStep({
   jurisdictionBadge,
   entityBadge,
   cardStyle,
-  Btn,
   STEPS,
   stepsFor,
   setStep,
@@ -60,7 +59,7 @@ export function ConfirmStep({
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
                 <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
+                  <h2 style={{ fontSize: 19, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
                   <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
                     {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} need your attention
                   </p>
@@ -76,10 +75,47 @@ export function ConfirmStep({
                   )}
                 </div>
               </div>
-              <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
-                Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then company-owned sources, then unverified web. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
-              </div>
             </div>
+
+            {/* Re-skin: ONE action banner (replaces the old green intro strip
+                here and the amber unchecked-count strip that sat above the
+                footer). Pure presentation over existing data — a row "needs
+                input" when it is tier2/tier3 (low confidence) OR unchecked, so
+                a disputed low-confidence row is never double-counted. */}
+            {(() => {
+              const needsInput = (research.found || []).filter(
+                (it, i) => !checks[i] || it.sourceTier === "tier2" || it.sourceTier === "tier3"
+              ).length;
+              const uncheckedCount = (research.found || []).filter((_, i) => !checks[i]).length;
+              const allQuiet = needsInput === 0;
+              return (
+                <div style={{
+                  display: "flex", alignItems: "flex-start", gap: 12,
+                  background: "#fff", borderRadius: 12,
+                  border: `1px solid ${C.border}`,
+                  borderLeft: `4px solid ${allQuiet ? "#4a9e8e" : C.warning}`,
+                  padding: "14px 18px", marginBottom: 16,
+                  boxShadow: "0 2px 10px rgba(26,58,74,0.04)",
+                }}>
+                  <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>{allQuiet ? "✅" : "👋"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+                      {allQuiet
+                        ? "Everything is confirmed from official sources — just review and continue."
+                        : `${needsInput} item${needsInput === 1 ? "" : "s"} need${needsInput === 1 ? "s" : ""} your input`}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3, lineHeight: 1.5 }}>
+                      {allQuiet
+                        ? "Every pre-filled field below came from your documents or official registries. Click any source to see when it was fetched."
+                        : "Everything else is confirmed — you don't need to touch it. Amber rows came from company or unverified sources; give each a quick check. Click any source to see when it was fetched."}
+                      {uncheckedCount > 0 && (
+                        <> You've marked {uncheckedCount} field{uncheckedCount === 1 ? "" : "s"} as wrong — you'll provide the correct value{uncheckedCount === 1 ? "" : "s"} on the next page.</>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* TEST-ONLY utility — treat the company as publicly listed, which
                 skips the detailed stakeholder EDD forms on the next page. Sets
@@ -189,29 +225,34 @@ export function ConfirmStep({
               );
             })()}
 
-            {/* Part 9 — coverage summary bar. */}
-            {coverage && (
-              <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-                <div style={{ flex: 1, padding: "12px 16px", background: C.successBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.success, lineHeight: 1 }}>{coverage.verifiedFields}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.success, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified</div>
+            {/* Part 9 — coverage summary tiles. Same computeCoverage data;
+                re-skin: four separate tile cards (always rendered — a zero
+                tile is de-emphasised rather than hidden), plain integers. */}
+            {coverage && (() => {
+              const tiles = [
+                { label: "Verified", value: coverage.verifiedFields, color: C.success, bg: C.successBg },
+                { label: "To Confirm", value: coverage.probableFields, color: C.warning, bg: C.warningBg },
+                { label: "Low Confidence", value: coverage.indicativeFields, color: "#C2410C", bg: "#FFF7ED" },
+                { label: "To Complete", value: coverage.missingFieldCount, color: C.textMuted, bg: C.surfaceAlt },
+              ];
+              return (
+                <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                  {tiles.map((t) => {
+                    const v = Number(t.value) || 0;
+                    return (
+                      <div key={t.label} style={{
+                        flex: 1, padding: "14px 12px", background: t.bg,
+                        border: `1px solid ${C.border}`, borderRadius: 10,
+                        textAlign: "center", opacity: v === 0 ? 0.45 : 1,
+                      }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: t.color, lineHeight: 1 }}>{v}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: t.color, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t.label}</div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div style={{ flex: 1, padding: "12px 16px", background: C.warningBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.warning, lineHeight: 1 }}>{coverage.probableFields}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.warning, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Confirm</div>
-                </div>
-                {coverage.indicativeFields > 0 && (
-                  <div style={{ flex: 1, padding: "12px 16px", background: "#FFF7ED", borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#C2410C", lineHeight: 1 }}>{coverage.indicativeFields}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#C2410C", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Low Confidence</div>
-                  </div>
-                )}
-                <div style={{ flex: 1, padding: "12px 16px", background: C.surfaceAlt, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.textMuted, lineHeight: 1 }}>{coverage.missingFieldCount}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {stakeholderFound.length > 0 && (
               <div style={card}>
@@ -225,19 +266,34 @@ export function ConfirmStep({
 
             {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
 
-            {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
-              <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-                ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
-              </div>
-            )}
+            {/* (The old amber unchecked-count strip lived here — its message
+                now lives in the single action banner at the top.) */}
 
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              {/* PR: Applicant now sits just before Confirm, so the backward action
-                  is to return to the Applicant page (not restart). Plain step
-                  navigation — preserves all field values, checks, applicant data
-                  and uploaded docs; no wipe, no confirmation. Both journeys. */}
-              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.applicant)}>← Back</Btn>
-              <Btn variant="green" onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
+            {/* Re-skin: sticky footer bar. Same two navigation handlers as
+                before — no gate in commit 2, both buttons always advance.
+                PR: Applicant now sits just before Confirm, so the backward
+                action is to return to the Applicant page (not restart). Plain
+                step navigation — preserves all field values, checks, applicant
+                data and uploaded docs; no wipe, no confirmation. Both journeys. */}
+            <div style={{
+              position: "sticky", bottom: 0, zIndex: 5,
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: "rgba(255,255,255,0.96)", backdropFilter: "blur(4px)",
+              borderTop: `1px solid ${C.border}`, borderRadius: "12px 12px 0 0",
+              padding: "12px 16px",
+            }}>
+              <button
+                onClick={() => scrollAndSetStep(STEPS.applicant)}
+                style={{ padding: "11px 22px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.text, border: `1.5px solid ${C.border}` }}
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
+                style={{ padding: "12px 28px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "#4a9e8e", color: "#fff", border: "none", boxShadow: "0 3px 12px rgba(74,158,142,0.35)" }}
+              >
+                Confirm and Continue →
+              </button>
             </div>
           </div>
   );
