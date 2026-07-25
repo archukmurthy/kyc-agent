@@ -309,6 +309,11 @@ module.exports = async function handler(req, res) {
     ownershipType,
     journeyType,
     fieldValues,
+    // Per-field provenance trail. Must be destructured here AND forwarded to
+    // persistJourneyModel below — that call passes an explicitly-constructed
+    // object, so a key missing from either place silently becomes undefined and
+    // every scalar's agent_value falls back to NULL.
+    fieldMetadata,
     stakeholders,
     documents,
     costSummary,
@@ -570,6 +575,7 @@ module.exports = async function handler(req, res) {
         ownershipType,
         journeyType,
         fieldValues,
+        fieldMetadata,
         stakeholders,
         costSummary: cs,
         coverage: cov,
