@@ -14,6 +14,7 @@
 // src/setupProxy.js can require() it for local dev — mirrors api/config.js,
 // api/benchmark.js, and api/doc-search.js. Vercel supports both forms.
 const { neon } = require("@neondatabase/serverless");
+const { deriveScalarProvenance } = require("../src/utils/fieldProvenance");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Journey-model persistence (migration 003 tables). ADDITIVE — runs alongside
@@ -199,19 +200,38 @@ async function persistJourneyModel(sql, d) {
   const applicantProv = Array.isArray(d.applicantProvenance) ? d.applicantProvenance : [];
   const applicantFieldNames = new Set(applicantProv.map((p) => p.fieldId));
 
+  // Per-field provenance trail from the client, keyed by field id. Scalars used
+  // to write no agent_value at all, which made change_events.before_value the
+  // ONLY durable record of a corrected scalar's original registry value — a
+  // single point of failure for the one thing that must never be lost. With the
+  // trail transmitted, scalars now carry the same agent_value / customer_value /
+  // customer_action discipline the stakeholder and applicant rows already use.
+  const metaByField = new Map();
+  for (const m of Array.isArray(d.fieldMetadata) ? d.fieldMetadata : []) {
+    if (m && m.fieldId) metaByField.set(m.fieldId, m);
+  }
+
   for (const [k, v] of Object.entries(d.fieldValues || {})) {
     if (v === null || v === undefined || v === "") continue;
     if (stake[k]) continue; // handled as stakeholder rows below
     if (applicantFieldNames.has(k)) continue; // handled as applicant rows below
     const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+    const meta = metaByField.get(k);
+    // agent_value is ALWAYS the AI/registry original, never the customer's
+    // value — see src/utils/fieldProvenance.js for the rule and its tests.
+    const { agentValue, customerAction } = deriveScalarProvenance(meta);
     try {
       await sql`
         INSERT INTO field_provenance (
-          journey_id, field_name, final_value, customer_value, layer, model_version
+          journey_id, field_name, final_value, customer_value, layer, model_version,
+          agent_value, customer_action, source_tier, source_identity
         )
         VALUES (
           ${journeyId}, ${k}, ${val}, ${val}, ${scalarLayer},
-          ${scalarLayer === "L3_ai" ? cs?.model || null : null}
+          ${scalarLayer === "L3_ai" ? cs?.model || null : null},
+          ${agentValue}, ${customerAction},
+          ${(meta && (meta.agentSourceTier || meta.sourceTier)) || null},
+          ${(meta && (meta.agentSource || meta.source)) || null}
         )
       `;
     } catch (e) {

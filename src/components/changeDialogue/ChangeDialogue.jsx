@@ -144,14 +144,19 @@ export function ChangeDialogue({
         })
           .then((r) => r.json())
           .then((d) => {
-            // Retain the server-assigned id so the superseding value-event can
-            // point at this row. A non-JSON / no-DB / failure response simply
-            // leaves the id absent — the superseding event is then emitted
-            // un-linked and the store's latest-per-field ordering resolves
-            // currency (flagged fallback, see supersedingEvent.js).
+            // Retain the server-assigned id as the HEAD of this field's event
+            // chain, so the first superseding value-event can point at it.
+            // Treated as an opaque token (a bigint may arrive as a string).
+            // A non-JSON / no-DB / failure response simply leaves it absent —
+            // the superseding event is then emitted un-linked, which is the
+            // safe path (currency resolves by max id), never an error.
             if (d && d.success && d.id != null) {
               eventIdRef.current = d.id;
               setPersistTick((t) => t + 1);
+            } else if (d && d.success === false && d.warning) {
+              // api/change-events always answers 200, so a swallowed writeEvent
+              // rejection is only observable here — never let it pass silently.
+              console.warn('[ChangeDialogue] event rejected:', d.warning);
             }
           })
           .catch((err) => console.warn('[ChangeDialogue] persist failed:', err));

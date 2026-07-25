@@ -31,6 +31,8 @@ export function buildChangeEvent({
   intent = null,
   registryStatus = 'unknown',
   engineResult = {},
+  afterValue = null,
+  supersedesId = null,
 } = {}) {
   const draft = {
     submissionId,
@@ -38,10 +40,18 @@ export function buildChangeEvent({
     fieldId: field.fieldId ?? null,
     fieldClass: field.fieldClass ?? null,
 
-    // the diff — final (after) value is unknown on Confirm; see header.
+    // the diff. afterValue is null in CAPTURE mode (the customer's final value
+    // does not exist yet when the dialogue classifies), but it is a real
+    // parameter, not a hardcoded null: the Confirm page's inline-capture save
+    // passes the corrected value on the superseding event. supersedesId is the
+    // append-only lineage pointer — null is always a valid, non-throwing value
+    // (currency then resolves by max id), a stale one is NOT: writeEvent
+    // rejects an already-superseded target and the route swallows the throw as
+    // a 200, which would silently lose the event. Never guess it.
     changeType: storedChangeType,
     beforeValue: field.value ?? null,
-    afterValue: null,
+    afterValue,
+    supersedesId,
 
     // provenance of the presented value
     sourceType: field.sourceType ?? null,

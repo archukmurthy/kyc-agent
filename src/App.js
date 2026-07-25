@@ -2401,9 +2401,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const manualEntries = [];
     Object.entries(gapRef.current).forEach(([fieldId, value]) => {
       if (value === undefined || value === null || String(value).trim() === "") return;
-      const key = fieldId.startsWith("corrected_") ? fieldId.slice("corrected_".length) : fieldId;
-      // Mark corrections distinctly so the trail shows the user's overwrite
-      // alongside the original AI-found row.
+      const isCorrection = fieldId.startsWith("corrected_");
+      const key = isCorrection ? fieldId.slice("corrected_".length) : fieldId;
+      // Carry the ORIGINAL registry value on the correction entry. Without it
+      // the original is lost from this trail entirely: finalMeta below drops
+      // the AI entry for any corrected field, so the manual entry would be the
+      // only record and it holds the CUSTOMER's value. The server writes this
+      // into field_provenance.agent_value, giving a corrected scalar a second
+      // durable home for its original — change_events.before_value was
+      // previously the only one.
+      const originalMeta = isCorrection ? fieldMetadata.find(m => m.fieldId === key) : null;
+      const originalRow = isCorrection ? (research?.found || []).find(r => r.field === key) : null;
+      const rawAgentValue = originalMeta && originalMeta.value !== undefined && originalMeta.value !== null
+        ? originalMeta.value
+        : (originalRow ? originalRow.value : null);
       manualEntries.push({
         fieldId: key,
         value: String(value),
@@ -2414,8 +2425,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
         fetchedAt: submittedAt,
         method: "manual",
         confidence: "verified",
-        customerAction: fieldId.startsWith("corrected_") ? "corrected" : "entered",
+        customerAction: isCorrection ? "corrected" : "entered",
         customerActionAt: submittedAt,
+        // The pre-correction registry value + where it came from. Null for a
+        // plain gap entry — the AI never had a value to be corrected.
+        agentValue: rawAgentValue === null || rawAgentValue === undefined
+          ? null
+          : (typeof rawAgentValue === "object" ? JSON.stringify(rawAgentValue) : String(rawAgentValue)),
+        agentSource: isCorrection ? ((originalMeta && originalMeta.source) || (originalRow && originalRow.source) || null) : null,
+        agentSourceTier: isCorrection ? ((originalMeta && originalMeta.sourceTier) || (originalRow && originalRow.sourceTier) || null) : null,
+        agentFetchedAt: isCorrection ? ((originalMeta && originalMeta.fetchedAt) || (originalRow && originalRow.fetchedAt) || null) : null,
       });
     });
     const finalMeta = [...fieldMetadata.filter(m => !manualEntries.some(e => e.fieldId === m.fieldId && e.customerAction === "corrected")), ...manualEntries];
@@ -2607,6 +2626,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
           ownershipType,
           journeyType,
           fieldValues,
+          // The per-field provenance trail. It was built for the payload log
+          // but never actually transmitted, which is why field_provenance left
+          // agent_value NULL for every scalar. Sending it lets the server
+          // record the AI/registry original alongside the customer's value.
+          fieldMetadata: payload.fieldMetadata,
           stakeholders: stakeholderPayload,
           documents: docSearchResults?.documents || [],
           costSummary,
@@ -2731,9 +2755,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const snap = dialogueStateRef.current[fieldId];
     if (!snap || !snap.emitted || !snap.event) return; // nothing to supersede yet
     if (snap.lastSavedValue === value) return;         // idempotent double-save guard
-    dialogueStateRef.current[fieldId] = { ...snap, lastSavedValue: value };
     const superseding = buildSupersedingEvent(snap, value);
     if (!superseding) return;
+    // Consume the head and clear the tail BEFORE the write lands: from here on
+    // the only safe targets are the id this write returns, or null. Falling
+    // back to an already-superseded row would throw in writeEvent, be swallowed
+    // as a 200 by the route, and lose the event — taking the registry original
+    // with it on any field where change_events is its only durable home.
+    dialogueStateRef.current[fieldId] = {
+      ...snap,
+      lastSavedValue: value,
+      headConsumed: true,
+      tailEventId: null,
+    };
     // Deliberate observability log (commit-3 verification): the payload must be
     // inspectable even where the POST can't persist (no DATABASE_URL).
     // eslint-disable-next-line no-console
@@ -2746,15 +2780,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
       })
         .then((r) => r.json())
         .then((d) => {
-          // Chain the lineage: a later re-edit supersedes THIS event. On a
-          // failed/no-DB write, clear the id so the next event goes un-linked
-          // (latest-per-field fallback) instead of pointing at a stale row.
+          // Chain the lineage: a later re-edit supersedes THIS event, not the
+          // head. The id is an OPAQUE token (the Neon driver may return a
+          // bigint as a string) — stored and passed back verbatim, never
+          // compared numerically. A failed/no-id write leaves tailEventId null,
+          // which is the safe un-linked path, not an error.
           const cur = dialogueStateRef.current[fieldId];
           if (cur) {
             dialogueStateRef.current[fieldId] = {
               ...cur,
-              eventId: d && d.success && d.id != null ? d.id : null,
+              tailEventId: d && d.success && d.id != null ? d.id : null,
             };
+          }
+          if (d && d.success === false && d.warning) {
+            // The route always answers 200, so a swallowed writeEvent throw is
+            // only visible here. Surface it rather than losing it silently.
+            console.warn("[confirm] superseding event rejected:", d.warning);
           }
         })
         .catch((err) => console.warn("[confirm] superseding event persist failed:", err));
