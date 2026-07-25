@@ -28,8 +28,8 @@ export function InlineCorrectionEditor({
   fieldDef = {},
   originalDisplay = "",
   initialValue = "",
-  savedValue = "",
   onSave,
+  onCancel = null,
 }) {
   const isSelect =
     fieldDef.inputType === "select" &&
@@ -41,52 +41,13 @@ export function InlineCorrectionEditor({
   const validInitial = (v) =>
     isSelect ? (options.some((o) => String(o.value) === String(v)) ? v : "") : v;
 
-  const hasSaved = Boolean(savedValue && String(savedValue).trim());
-  const [editing, setEditing] = useState(!hasSaved);
-  const [draft, setDraft] = useState(String(validInitial(hasSaved ? savedValue : initialValue) ?? ""));
+  const [draft, setDraft] = useState(String(validInitial(initialValue) ?? ""));
 
   const inputStyle = {
     width: "100%", boxSizing: "border-box", padding: "8px 10px",
     fontSize: 13, fontFamily: "inherit", color: C.text,
     background: "#fff", border: `1px solid ${C.infoBorder}`, borderRadius: 6,
   };
-
-  // Saved summary — original stays visible on the row above; this shows the
-  // customer's value alongside it (original + corrected coexist).
-  if (!editing) {
-    return (
-      <div
-        data-testid="inline-correction-saved"
-        style={{
-          marginTop: 8, padding: "8px 12px", background: "#fff",
-          border: `1px solid ${C.infoBorder}`, borderRadius: 8,
-          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        }}
-      >
-        <span style={{
-          fontSize: 10, fontWeight: 700, color: C.info, background: C.infoBg,
-          border: `1px solid ${C.infoBorder}`, borderRadius: 99,
-          padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
-        }}>
-          ✎ Edited by you
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1, minWidth: 0, overflowWrap: "break-word" }}>
-          {savedValue}
-        </span>
-        <button
-          type="button"
-          onClick={() => { setDraft(String(validInitial(savedValue) ?? "")); setEditing(true); }}
-          style={{
-            cursor: "pointer", padding: "5px 12px", fontSize: 12, fontWeight: 600,
-            color: C.info, background: "#fff", border: `1px solid ${C.infoBorder}`,
-            borderRadius: 6, fontFamily: "inherit", flexShrink: 0,
-          }}
-        >
-          Edit
-        </button>
-      </div>
-    );
-  }
 
   const canSave = Boolean(String(draft).trim());
   return (
@@ -124,7 +85,7 @@ export function InlineCorrectionEditor({
         <button
           type="button"
           disabled={!canSave}
-          onClick={() => { if (canSave) { onSave(String(draft).trim()); setEditing(false); } }}
+          onClick={() => { if (canSave) onSave(String(draft).trim()); }}
           style={{
             cursor: canSave ? "pointer" : "not-allowed", opacity: canSave ? 1 : 0.5,
             padding: "6px 16px", fontSize: 12.5, fontWeight: 700, color: "#fff",
@@ -133,10 +94,10 @@ export function InlineCorrectionEditor({
         >
           Save
         </button>
-        {hasSaved && (
+        {typeof onCancel === "function" && (
           <button
             type="button"
-            onClick={() => setEditing(false)}
+            onClick={onCancel}
             style={{
               cursor: "pointer", padding: "6px 14px", fontSize: 12.5, fontWeight: 600,
               color: C.text, background: "#fff", border: `1px solid ${C.border}`,

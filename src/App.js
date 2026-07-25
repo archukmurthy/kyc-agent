@@ -15,6 +15,7 @@ import FoundationalFactsGate from "./components/companyConfirm/FoundationalFacts
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
+import { ROW_STATE, rowState, computeConfirmCounts } from "./components/companyConfirm/confirmState";
 import { Notice } from "./components/notices/Notice";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
@@ -399,6 +400,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // caller, and the submission payload so the behaviour stays consistent.
   const effectivelyListed = isPubliclyListed || isPubliclyListedOverride;
   const [revealedTs, setRevealedTs] = useState({});
+  // Confirm-page affirmation, keyed by FIELD ID (stable across the tier sort —
+  // unlike `checks`, which is research.found-index-keyed and must stay that
+  // way). Every row arrives pre-ticked, so "ticked" cannot distinguish
+  // "customer agreed" from "customer hasn't looked"; ticking a low-confidence
+  // row records that agreement here so the Needs-you count can reach zero.
+  // Purely additive: it never touches checks, the dialogue, or capture.
+  const [affirmedFields, setAffirmedFields] = useState({});
+  // Which rows have the inline correction editor open (field id → bool). A
+  // corrected row renders its value inline and re-opens the editor on demand.
+  const [inlineEditOpen, setInlineEditOpen] = useState({});
   const gapRef = useRef({});
   // Per-person stakeholder data on Fill Gaps. Parallel to gapRef, but each
   // field id maps to an array of stakeholder records (objects with full_name,
@@ -608,6 +619,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
+    setAffirmedFields({}); setInlineEditOpen({});
     dialogueStateRef.current = {}; // drop persisted change-dialogue answers on Start Over
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
@@ -1539,6 +1551,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const c = {};
       mergedFound.forEach((_, i) => { c[i] = true; });
       setChecks(c);
+      setAffirmedFields({}); setInlineEditOpen({});
       setRejectedStakeholders({});
       setStakeholderFieldChecks({});
       setExpandedStakeholders({});
@@ -2692,6 +2705,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
   };
 
+  // Record that the customer explicitly ticked this row. Additive only — it
+  // does not touch `checks`, so nothing downstream (corrections, dialogue,
+  // submit) changes; it exists so an untouched low-confidence row can be told
+  // apart from one the customer actually agreed with. See confirmState.js.
+  const affirmRow = (item) => {
+    if (!item || !item.field) return;
+    setAffirmedFields(prev => (prev[item.field] ? prev : { ...prev, [item.field]: true }));
+  };
+
   // Commit 3 (Option B core) — save handler for the inline correction editor.
   // Two consistent destinations, in order:
   //   1. gapRef["corrected_<field>"] — the SAME client-state key Fill Gaps
@@ -3528,108 +3550,58 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Amber tracks confidence, never "has a control"; a disputed row's info
     // tone wins over amber while its ChangeDialogue is open.
     const rowChecked = !!checks[idx];
-    const vStatus = item.verificationStatus
-      || (item.sourceTier === "tier2" ? "probable" : item.sourceTier === "tier3" ? "indicative" : "verified");
-    const needsAttention = vStatus === "probable" || vStatus === "indicative";
-    const tickCrossBase = {
-      width: 24, height: 24, borderRadius: 7, cursor: "pointer",
+    const correction = gapRef.current["corrected_" + item.field];
+    // ONE predicate for the row's state, the tiles and (commit 4) the gate —
+    // see components/companyConfirm/confirmState.js. Never re-derive it here.
+    const state = rowState(item, {
+      checked: rowChecked,
+      affirmed: !!affirmedFields[item.field],
+      correction,
+    });
+    const isCorrected = state === ROW_STATE.CORRECTED;
+    const isDisputed = !rowChecked && !isCorrected;
+    // Amber = low confidence AND still unresolved. Ticking (affirming) or
+    // correcting resolves it, which is what lets the Needs-you count fall.
+    const needsAttention = state === ROW_STATE.NEEDS_YOU && rowChecked;
+    const stripe = isCorrected || isDisputed ? C.info : needsAttention ? C.warning : C.border;
+    const tint = isCorrected || isDisputed ? C.infoBg : needsAttention ? C.warningTint : "#fff";
+    const labelColor = needsAttention ? C.warning : isCorrected || isDisputed ? C.info : C.textMuted;
+    const btnBase = {
+      width: 26, height: 26, borderRadius: 7, cursor: "pointer",
       fontSize: 12, fontWeight: 700, lineHeight: 1, padding: 0,
       fontFamily: "inherit",
       display: "inline-flex", alignItems: "center", justifyContent: "center",
     };
+    // Right-rail status line — the prototype's second line under the source.
+    const statusLine = isCorrected
+      ? { text: "Customer corrected", color: C.info }
+      : isDisputed
+      ? { text: "Correction needed", color: C.info }
+      : needsAttention
+      ? { text: "Please confirm", color: C.warning }
+      : null;
     return (
       <div key={item.field + idx} style={{
         display: "flex",
         flexDirection: "row",
         alignItems: "flex-start",
-        gap: 12,
+        gap: 16,
         width: "100%",
-        padding: "12px 10px",
+        padding: "12px 14px",
         boxSizing: "border-box",
-        background: !rowChecked ? C.infoBg : needsAttention ? C.warningTint : "transparent",
-        borderLeft: !rowChecked ? `3px solid ${C.info}` : needsAttention ? `3px solid ${C.warning}` : "3px solid transparent",
+        background: tint,
+        borderLeft: `3px solid ${stripe}`,
         borderBottom: "1px solid rgba(26,58,74,0.04)",
         // Unchecking a field is NOT disabling it — keep the row fully legible.
-        // The Tier 1 "no action needed" notice below conveys the recorded state.
       }}>
-        {/* Tick / cross — the SAME checks[idx] state and toggleCheck handler as
-            the old single checkbox, rendered as a two-button affordance. Each
-            button fires only on a state TRANSITION (tick on a ticked row and
-            cross on a crossed row are no-ops), so the state machine — and the
-            ChangeDialogue mount / revert-event flow — is unchanged. */}
-        <div style={{ flexShrink: 0, width: 80, display: "flex", gap: 4, paddingTop: 2 }}>
-          <button
-            type="button"
-            onClick={() => { if (!rowChecked) toggleCheck(idx); }}
-            aria-label={`Confirm ${item.label}`}
-            aria-pressed={rowChecked}
-            title="Correct — keep this value"
-            style={{
-              ...tickCrossBase,
-              background: rowChecked ? "#4a9e8e" : "#fff",
-              color: rowChecked ? "#fff" : C.textMuted,
-              border: rowChecked ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
-            }}
-          >✓</button>
-          <button
-            type="button"
-            onClick={() => { if (rowChecked) toggleCheck(idx); }}
-            aria-label={`Mark ${item.label} as incorrect`}
-            aria-pressed={!rowChecked}
-            title="Wrong — flag this value for correction"
-            style={{
-              ...tickCrossBase,
-              background: !rowChecked ? C.error : "#fff",
-              color: !rowChecked ? "#fff" : C.textMuted,
-              border: !rowChecked ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
-            }}
-          >✕</button>
-          {/* Pencil (commit 3) — "tweak this value". Routes through the IDENTICAL
-              cross flow (toggleCheck → ChangeDialogue → classification → inline
-              editor) for every field class, so the affordance can never bypass a
-              required document: whether a doc is owed is a property of the
-              field-class + change (policyTable), not of which button was used.
-              For generic fields the dialogue asks nothing and completes
-              silently, so the pencil is effectively the lightweight edit. */}
-          {rowChecked && (
-            <button
-              type="button"
-              onClick={() => toggleCheck(idx)}
-              aria-label={`Edit ${item.label}`}
-              title="Edit this value"
-              style={{
-                ...tickCrossBase,
-                background: "#fff",
-                color: C.textMuted,
-                border: `1.5px solid ${C.border}`,
-              }}
-            >✎</button>
-          )}
-        </div>
-        {/* Label cell — fixed width */}
-        <span style={{
-          flexShrink: 0,
-          width: 180,
-          minWidth: 180,
-          maxWidth: 180,
-          fontSize: 13,
-          color: C.textMuted,
-          fontWeight: 500,
-          lineHeight: 1.4,
-          wordWrap: "break-word",
-          overflowWrap: "break-word",
-        }}>{item.label}</span>
-        {/* Value cell — takes remaining space; minWidth:0 prevents collapse */}
-        <div style={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: 14,
-          color: C.text,
-          lineHeight: 1.5,
-          wordWrap: "break-word",
-          overflowWrap: "break-word",
-          whiteSpace: "normal",
-        }}>
+        {/* Main block — label ABOVE value (prototype layout), not side-by-side. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: labelColor, lineHeight: 1.3,
+          }}>
+            {item.label}
+          </div>
           {displayValue.length > 150 ? (
             <div style={{
               fontSize: 12,
@@ -3642,22 +3614,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
               wordWrap: "break-word",
               overflowWrap: "break-word",
               whiteSpace: "pre-wrap",
-              marginTop: 2,
+              marginTop: 4,
             }}>
               {displayValue}
             </div>
           ) : (
-            <span style={{
-              fontSize: 14,
-              color: C.text,
-              wordWrap: "break-word",
-              overflowWrap: "break-word",
-              whiteSpace: "normal",
-              lineHeight: 1.5,
-              display: "block",
+            <div style={{
+              fontSize: 14.5, fontWeight: 600, color: C.text, marginTop: 3,
+              wordWrap: "break-word", overflowWrap: "break-word",
+              whiteSpace: "normal", lineHeight: 1.45,
             }}>
-              {displayValue}
-            </span>
+              {/* Corrected: the customer's value leads, the registry value stays
+                  beside it struck through — original + corrected coexist. */}
+              {isCorrected ? (
+                <>
+                  <span>{String(correction)}</span>
+                  <span style={{
+                    marginLeft: 8, fontSize: 13, fontWeight: 500,
+                    color: C.textMuted, textDecoration: "line-through",
+                  }}>
+                    {displayValue}
+                  </span>
+                </>
+              ) : (
+                displayValue
+              )}
+            </div>
           )}
           {item.originalAIValue && item.originalAIValue !== displayValue && (
             <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
@@ -3718,11 +3700,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
               value can never be saved before the initial event exists. Writes
               through saveInlineCorrection: gapRef["corrected_<field>"] (same
               key Fill Gaps renders — the value shows pre-filled there) + the
-              superseding change-event. */}
+              superseding change-event. Once saved, the value renders inline on
+              the row above (with the original struck through) and this editor
+              only re-opens on demand via "Edit again".  */}
           {!checks[idx] && (() => {
             const snap = dialogueStateRef.current[item.field];
             if (!snap || !snap.emitted) return null;
-            const savedCorrection = gapRef.current["corrected_" + item.field];
+            if (isCorrected && !inlineEditOpen[item.field]) return null;
             // Reference-value exception: don't prefill a literal cross-reference
             // like "Same as registered office" — prompt for the real value.
             const isReferenceValue = typeof item.value === "string" && /\bsame as\b/i.test(item.value);
@@ -3734,26 +3718,94 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 key={"edit-" + item.field}
                 fieldDef={fieldDef || {}}
                 originalDisplay={displayValue}
-                initialValue={prefill}
-                savedValue={savedCorrection != null ? String(savedCorrection) : ""}
-                onSave={(v) => saveInlineCorrection(item, v)}
+                initialValue={isCorrected ? String(correction) : prefill}
+                onSave={(v) => {
+                  saveInlineCorrection(item, v);
+                  setInlineEditOpen(p => ({ ...p, [item.field]: false }));
+                }}
+                onCancel={isCorrected ? () => setInlineEditOpen(p => ({ ...p, [item.field]: false })) : null}
               />
             );
           })()}
         </div>
-        {/* Source badge cell — FIXED width so long source text can never
-            squeeze the value column. Badge text wraps inside. */}
+        {/* Right rail — provenance is supporting detail (quiet, two lines),
+            then the affordances. Fixed width so a long source string can never
+            squeeze the value column. */}
         <div style={{
           flexShrink: 0,
-          width: 180,
-          minWidth: 180,
-          maxWidth: 180,
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 4,
+          alignItems: "flex-start",
+          gap: 10,
         }}>
-          {renderSourceBadge(item, idx)}
+          <div style={{
+            width: 150, minWidth: 150, maxWidth: 150,
+            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
+          }}>
+            {renderSourceBadge(item, idx)}
+            {statusLine && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: statusLine.color, textAlign: "right" }}>
+                {statusLine.text}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 4, paddingTop: 1 }}>
+            {/* Tick / cross — the SAME checks[idx] state and toggleCheck handler
+                as the original single checkbox. The cross fires only on a
+                ticked row and the tick re-checks only a crossed one, so the
+                state machine — and the ChangeDialogue mount / revert-event
+                flow — is unchanged. The tick ALSO records affirmation, which is
+                what moves an untouched low-confidence row out of "needs you". */}
+            <button
+              type="button"
+              onClick={() => { if (!rowChecked) toggleCheck(idx); affirmRow(item); }}
+              aria-label={`Confirm ${item.label}`}
+              aria-pressed={rowChecked && !needsAttention}
+              title="Correct — keep this value"
+              style={{
+                ...btnBase,
+                background: rowChecked && !needsAttention ? "#4a9e8e" : "#fff",
+                color: rowChecked && !needsAttention ? "#fff" : C.textMuted,
+                border: rowChecked && !needsAttention ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
+              }}
+            >✓</button>
+            <button
+              type="button"
+              onClick={() => { if (rowChecked) toggleCheck(idx); }}
+              aria-label={`Mark ${item.label} as incorrect`}
+              aria-pressed={!rowChecked}
+              title="Wrong — flag this value for correction"
+              style={{
+                ...btnBase,
+                background: !rowChecked && !isCorrected ? C.error : "#fff",
+                color: !rowChecked && !isCorrected ? "#fff" : C.textMuted,
+                border: !rowChecked && !isCorrected ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+              }}
+            >✕</button>
+            {/* Pencil (commit 3) — "tweak this value". Routes through the
+                IDENTICAL cross flow (toggleCheck → ChangeDialogue →
+                classification → inline editor) for every field class, so the
+                affordance can never bypass a required document: whether a doc
+                is owed is a property of the field-class + change (policyTable),
+                not of which button was used. For generic fields the dialogue
+                asks nothing and completes silently, so the pencil is the
+                lightweight edit in practice. On an already-corrected row it
+                re-opens the editor rather than re-classifying. */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isCorrected) setInlineEditOpen(p => ({ ...p, [item.field]: true }));
+                else if (rowChecked) toggleCheck(idx);
+              }}
+              aria-label={`Edit ${item.label}`}
+              title={isCorrected ? "Edit again" : "Edit this value"}
+              style={{
+                ...btnBase,
+                background: "#fff",
+                color: isCorrected ? C.info : C.textMuted,
+                border: `1.5px solid ${isCorrected ? C.infoBorder : C.border}`,
+              }}
+            >✎</button>
+          </div>
         </div>
       </div>
     );
@@ -3808,17 +3860,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
             }}>
               {humaniseSection(section)}
             </div>
-            {/* Header — column geometry mirrors renderFoundRow: 80px tick/cross/
-                pencil cell, 180px label, flex:1 value, 180px source (gap 12); the 3px
-                transparent left border matches the rows' state stripe. Re-skin:
-                quiet light header instead of the dark navy bar, so confirmed
-                content recedes and only the amber state stripes pull the eye. */}
-            <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: C.surfaceAlt, borderLeft: "3px solid transparent", borderBottom: `1px solid ${C.border}`, borderRadius: "8px 8px 0 0" }}>
-              <span style={{ flexShrink: 0, width: 80, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>✓ / ✕ / ✎</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>FIELD</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em" }}>VALUE</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: C.textMuted, textAlign: "right", letterSpacing: "0.06em" }}>SOURCE</span>
-            </div>
+            {/* Fidelity pass: the prototype has no table header — each row is a
+                self-describing card (tiny uppercase label above its value, with
+                the provenance and affordances on the right), so the column
+                header bar is gone rather than restyled. */}
             {rows.map((r) => renderFoundRow(r))}
           </div>
         ))}
@@ -5349,6 +5394,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const stakeholderSummaryNodes = stakeholderGapRows.map((r) => renderStakeholderSummary(r)).filter(Boolean);
   const hasStakeholderForms = stakeholderFormNodes.length > 0;
   const hasStakeholderSummary = stakeholderSummaryNodes.length > 0;
+
+  // Confirm-page tile counts + (commit 4) the gate's inputs, from the ONE
+  // shared predicate. Computed during render — not memoised — because gapRef
+  // and dialogueStateRef are refs: a memo would serve stale counts after an
+  // inline save. Re-render is driven by the same setFormVersion bump the save
+  // already fires.
+  const confirmCounts = computeConfirmCounts({
+    found: research?.found || [],
+    checks,
+    affirmed: affirmedFields,
+    corrections: gapRef.current,
+    dialogueState: dialogueStateRef.current,
+  });
 
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
@@ -8240,6 +8298,7 @@ Nium Onboarding Team`;
             servedFromCache={servedFromCache}
             cachedAt={cachedAt}
             checks={checks}
+            confirmCounts={confirmCounts}
             isPubliclyListedOverride={isPubliclyListedOverride}
             setIsPubliclyListedOverride={setIsPubliclyListedOverride}
             sortedFound={sortedFound}

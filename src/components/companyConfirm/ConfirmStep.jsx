@@ -25,6 +25,7 @@ export function ConfirmStep({
   servedFromCache,
   cachedAt,
   checks,
+  confirmCounts,
   isPubliclyListedOverride,
   setIsPubliclyListedOverride,
   sortedFound,
@@ -50,18 +51,29 @@ export function ConfirmStep({
   renderUnifiedFoundTable,
 }) {
   const card = cardStyle;
+  // Every count on this page comes from the ONE shared predicate
+  // (confirmState.js) that the commit-4 submit gate will also read — the tiles
+  // and the gate can never disagree because there is only one derivation.
+  const counts = confirmCounts || { needsYou: 0, confirmed: 0, corrected: 0, docsNeeded: 0, docs: [] };
+  const outstanding = counts.needsYou;
   return (
           <div>
             {/* The "is this the right company?" check now lives on the Applicant
                 page as the five-fact FoundationalFactsGate (slice 2), so there is
                 no gate here — avoids a double gate. */}
             <div style={card}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <h2 style={{ fontSize: 19, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
-                  <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
-                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} need your attention
+                  {/* Prototype's reassurance line leads; the source breakdown
+                      stays as smaller supporting detail. */}
+                  <p style={{ fontSize: 13, color: C.textSec, margin: "3px 0 0", lineHeight: 1.5 }}>
+                    We verified the high-confidence data for <strong>{research.companyName || companyName}</strong>.{" "}
+                    {outstanding > 0 ? "Only a few items need your input." : "Nothing needs your input."}
+                  </p>
+                  <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "4px 0 0" }}>
+                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} from company or unverified sources
                   </p>
                   {servedFromCache && cachedAt && (
                     <div style={{
@@ -74,18 +86,24 @@ export function ConfirmStep({
                     </div>
                   )}
                 </div>
+                {/* Prototype's header pill — same shared count as the tile. */}
+                <span style={{
+                  flexShrink: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em",
+                  color: outstanding > 0 ? C.warning : C.success,
+                  background: outstanding > 0 ? C.warningBg : C.successBg,
+                  border: `1px solid ${outstanding > 0 ? C.warningBorder : C.successBorder}`,
+                  borderRadius: 99, padding: "4px 12px", whiteSpace: "nowrap",
+                }}>
+                  {outstanding > 0 ? `${outstanding} ITEM${outstanding === 1 ? "" : "S"} NEED${outstanding === 1 ? "S" : ""} YOUR INPUT` : "ALL ITEMS REVIEWED"}
+                </span>
               </div>
             </div>
 
-            {/* Re-skin: ONE action banner (replaces the old green intro strip
-                here and the amber unchecked-count strip that sat above the
-                footer). Pure presentation over existing data — a row "needs
-                input" when it is tier2/tier3 (low confidence) OR unchecked, so
-                a disputed low-confidence row is never double-counted. */}
+            {/* ONE action banner (replaces the old green intro strip here and
+                the amber unchecked-count strip that sat above the footer).
+                Reads the shared predicate — never its own count. */}
             {(() => {
-              const needsInput = (research.found || []).filter(
-                (it, i) => !checks[i] || it.sourceTier === "tier2" || it.sourceTier === "tier3"
-              ).length;
+              const needsInput = outstanding;
               const uncheckedCount = (research.found || []).filter((_, i) => !checks[i]).length;
               const allQuiet = needsInput === 0;
               return (
@@ -225,15 +243,21 @@ export function ConfirmStep({
               );
             })()}
 
-            {/* Part 9 — coverage summary tiles. Same computeCoverage data;
-                re-skin: four separate tile cards (always rendered — a zero
-                tile is de-emphasised rather than hidden), plain integers. */}
-            {coverage && (() => {
+            {/* The prototype's four tiles — Needs You / Confirmed / Corrected /
+                Docs Needed — replacing the old coverage-bar vocabulary
+                (Verified / To Confirm / Low Confidence / To Complete). Every
+                value is real state from the shared predicate, no invented
+                counters: Needs You and Confirmed are fully live; Corrected
+                counts saved inline corrections (commit 3); Docs Needed counts
+                doc_required classifications and becomes authoritative in
+                commit 4, when it reconciles against /api/amendment-documents.
+                Plain integers, zero tiles de-emphasised. */}
+            {(() => {
               const tiles = [
-                { label: "Verified", value: coverage.verifiedFields, color: C.success, bg: C.successBg },
-                { label: "To Confirm", value: coverage.probableFields, color: C.warning, bg: C.warningBg },
-                { label: "Low Confidence", value: coverage.indicativeFields, color: "#C2410C", bg: "#FFF7ED" },
-                { label: "To Complete", value: coverage.missingFieldCount, color: C.textMuted, bg: C.surfaceAlt },
+                { label: "Needs You", value: counts.needsYou, color: C.warning, bg: C.warningBg },
+                { label: "Confirmed", value: counts.confirmed, color: C.success, bg: C.successBg },
+                { label: "Corrected", value: counts.corrected, color: C.info, bg: C.infoBg },
+                { label: "Docs Needed", value: counts.docsNeeded, color: "#C2410C", bg: "#FFF7ED" },
               ];
               return (
                 <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
@@ -245,8 +269,8 @@ export function ConfirmStep({
                         border: `1px solid ${C.border}`, borderRadius: 10,
                         textAlign: "center", opacity: v === 0 ? 0.45 : 1,
                       }}>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: t.color, lineHeight: 1 }}>{v}</div>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, color: t.color, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t.label}</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: t.color, lineHeight: 1 }}>{v}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: t.color, marginTop: 5, textTransform: "uppercase", letterSpacing: "0.07em" }}>{t.label}</div>
                       </div>
                     );
                   })}
@@ -269,6 +293,48 @@ export function ConfirmStep({
             {/* (The old amber unchecked-count strip lived here — its message
                 now lives in the single action banner at the top.) */}
 
+            {/* "Documents we'll need" — the prototype's dark summary panel.
+                Commit 4 owns the inline upload cards and the reconciliation
+                against GET /api/amendment-documents; this renders the real
+                doc_required outcomes already classified on this page, and is
+                honest about where the upload happens today (Fill Gaps). */}
+            <div style={{
+              background: "#1F2A33", borderRadius: 12,
+              padding: "16px 20px", marginBottom: 16, color: "#fff",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: counts.docsNeeded > 0 ? 10 : 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.85)" }}>
+                  Documents we'll need
+                </span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
+                  {counts.docsNeeded > 0 ? `${counts.docsNeeded} pending` : "None triggered yet"}
+                </span>
+              </div>
+              {counts.docsNeeded > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {counts.docs.map((d) => (
+                    <div key={d.docType} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 8, padding: "10px 14px",
+                    }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>📄</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{d.docType}</div>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
+                          Triggered by your correction — you'll upload it on the next page.
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12.5, fontStyle: "italic", color: "rgba(255,255,255,0.6)" }}>
+                  Any documents required by your corrections will appear here.
+                </div>
+              )}
+            </div>
+
             {/* Re-skin: sticky footer bar. Same two navigation handlers as
                 before — no gate in commit 2, both buttons always advance.
                 PR: Applicant now sits just before Confirm, so the backward
@@ -288,6 +354,20 @@ export function ConfirmStep({
               >
                 ← Back
               </button>
+              {/* Progress readout beside the action, from the same predicate
+                  the commit-4 gate will use. It REPORTS only — the button
+                  still always advances until that gate lands. */}
+              <div style={{ flex: 1, textAlign: "right", paddingRight: 16, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: outstanding > 0 ? C.warning : C.success }}>
+                  {outstanding > 0
+                    ? `${outstanding} item${outstanding === 1 ? "" : "s"} left`
+                    : "All items reviewed"}
+                  {counts.docsNeeded > 0 && ` · ${counts.docsNeeded} doc${counts.docsNeeded === 1 ? "" : "s"} needed`}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1 }}>
+                  {outstanding > 0 ? "Review incomplete" : "Ready to continue"}
+                </div>
+              </div>
               <button
                 onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
                 style={{ padding: "12px 28px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "#4a9e8e", color: "#fff", border: "none", boxShadow: "0 3px 12px rgba(74,158,142,0.35)" }}
