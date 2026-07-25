@@ -15,6 +15,8 @@
 import { C } from "../../constants/theme";
 import { SHOW_TEST_TOOLS } from "../../constants/appConstants";
 import { getResearchStrategy } from "../../utils/ownershipTypes";
+import { AmendmentDocCard } from "../amendmentDocuments/AmendmentDocCard";
+import { docKey, isSatisfied } from "./confirmState";
 
 export function ConfirmStep({
   research,
@@ -26,6 +28,13 @@ export function ConfirmStep({
   cachedAt,
   checks,
   confirmCounts,
+  confirmDocs,
+  amendmentUploads,
+  uploadingDocKey,
+  onAmendmentUpload,
+  onAmendmentRemove,
+  blockers,
+  blockerMessage,
   isPubliclyListedOverride,
   setIsPubliclyListedOverride,
   sortedFound,
@@ -56,6 +65,12 @@ export function ConfirmStep({
   // and the gate can never disagree because there is only one derivation.
   const counts = confirmCounts || { needsYou: 0, confirmed: 0, corrected: 0, docsNeeded: 0, docs: [] };
   const outstanding = counts.needsYou;
+  const docs = confirmDocs || [];
+  const uploads = amendmentUploads || {};
+  // The gate: blocked iff the shared predicate returns anything. The message
+  // comes from the SAME list, so the button can never grey out silently.
+  const blockerList = blockers || [];
+  const isBlocked = blockerList.length > 0;
   return (
           <div>
             {/* The "is this the right company?" check now lives on the Applicant
@@ -293,6 +308,28 @@ export function ConfirmStep({
             {/* (The old amber unchecked-count strip lived here — its message
                 now lives in the single action banner at the top.) */}
 
+            {/* Pre-submit reassurance line — what you are about to submit, in a
+                sentence, from the same counts the tiles show. Live-updating. */}
+            <div style={{
+              padding: "12px 16px", marginBottom: 16,
+              background: C.surfaceAlt, border: `1px solid ${C.border}`,
+              borderRadius: 10, fontSize: 13, color: C.textSec, lineHeight: 1.6,
+            }}>
+              You're confirming <strong style={{ color: C.text }}>{counts.confirmed}</strong> field
+              {counts.confirmed === 1 ? "" : "s"} as found
+              {counts.corrected > 0 && (
+                <>, correcting <strong style={{ color: C.info }}>{counts.corrected}</strong></>
+              )}
+              {docs.length > 0 && (
+                <>, providing <strong style={{ color: C.text }}>{docs.length}</strong> supporting document{docs.length === 1 ? "" : "s"}</>
+              )}
+              {outstanding > 0 ? (
+                <>, with <strong style={{ color: C.warning }}>{outstanding}</strong> still to review.</>
+              ) : (
+                <>.</>
+              )}
+            </div>
+
             {/* "Documents we'll need" — the prototype's dark summary panel.
                 Commit 4 owns the inline upload cards and the reconciliation
                 against GET /api/amendment-documents; this renders the real
@@ -304,29 +341,63 @@ export function ConfirmStep({
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: counts.docsNeeded > 0 ? 10 : 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.85)" }}>
-                  Documents we'll need
+                  Documents we'll need{counts.docsNeeded > 0 ? ` (${counts.docsNeeded})` : ""}
                 </span>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.55)", whiteSpace: "nowrap" }}>
-                  {counts.docsNeeded > 0 ? `${counts.docsNeeded} pending` : "None triggered yet"}
+                  {docs.length === 0
+                    ? "None triggered yet"
+                    : counts.docsNeeded === 0
+                    ? "All uploaded"
+                    : `${counts.docsNeeded} outstanding`}
                 </span>
               </div>
-              {counts.docsNeeded > 0 ? (
+              {docs.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {counts.docs.map((d) => (
-                    <div key={d.docType} style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 8, padding: "10px 14px",
-                    }}>
-                      <span style={{ fontSize: 14, flexShrink: 0 }}>📄</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>{d.docType}</div>
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
-                          Triggered by your correction — you'll upload it on the next page.
+                  {docs.map((d) => {
+                    const k = docKey(d);
+                    const up = uploads[k];
+                    const done = isSatisfied(up);
+                    return (
+                      <div key={k} style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        background: "rgba(255,255,255,0.06)",
+                        border: `1px solid ${done ? "rgba(122,220,180,0.4)" : "rgba(255,255,255,0.12)"}`,
+                        borderRadius: 8, padding: "10px 14px", flexWrap: "wrap",
+                      }}>
+                        <span style={{ fontSize: 14, flexShrink: 0 }}>{done ? "✓" : "📄"}</span>
+                        <div style={{ flex: 1, minWidth: 160 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>{d.docType}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
+                            {done
+                              ? `Uploaded — ${up.name}`
+                              : up && up.uploadFailed
+                              ? "Upload didn't store — please try again."
+                              : "Required by your correction — upload it here or on the row above."}
+                          </div>
                         </div>
+                        {!done && (
+                          <AmendmentDocCard
+                            doc={d}
+                            upload={up && up.uploadFailed ? up : undefined}
+                            busy={uploadingDocKey === k}
+                            onUpload={onAmendmentUpload}
+                            onRemove={onAmendmentRemove}
+                            variant="summary-action"
+                          />
+                        )}
+                        {done && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => onAmendmentRemove && onAmendmentRemove(d)}
+                            style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.7)", cursor: "pointer", flexShrink: 0 }}
+                          >
+                            Remove
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ fontSize: 12.5, fontStyle: "italic", color: "rgba(255,255,255,0.6)" }}>
@@ -354,25 +425,30 @@ export function ConfirmStep({
               >
                 ← Back
               </button>
-              {/* Progress readout beside the action, from the same predicate
-                  the commit-4 gate will use. It REPORTS only — the button
-                  still always advances until that gate lands. */}
+              {/* What's blocking, in words, from the SAME list that blocks the
+                  button — never a silent grey-out. */}
               <div style={{ flex: 1, textAlign: "right", paddingRight: 16, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: outstanding > 0 ? C.warning : C.success }}>
-                  {outstanding > 0
-                    ? `${outstanding} item${outstanding === 1 ? "" : "s"} left`
-                    : "All items reviewed"}
-                  {counts.docsNeeded > 0 && ` · ${counts.docsNeeded} doc${counts.docsNeeded === 1 ? "" : "s"} needed`}
+                <div style={{ fontSize: 12, fontWeight: 700, color: isBlocked ? C.warning : C.success }}>
+                  {isBlocked ? blockerMessage : "Everything's ready"}
                 </div>
                 <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1 }}>
-                  {outstanding > 0 ? "Review incomplete" : "Ready to continue"}
+                  {isBlocked ? "Resolve these to continue" : "Nothing outstanding"}
                 </div>
               </div>
               <button
-                onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
-                style={{ padding: "12px 28px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "#4a9e8e", color: "#fff", border: "none", boxShadow: "0 3px 12px rgba(74,158,142,0.35)" }}
+                onClick={isBlocked ? undefined : () => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
+                disabled={isBlocked}
+                title={isBlocked ? blockerMessage : undefined}
+                style={{
+                  padding: "12px 28px", borderRadius: 9, fontSize: 14, fontWeight: 700,
+                  fontFamily: "inherit", border: "none",
+                  cursor: isBlocked ? "not-allowed" : "pointer",
+                  background: isBlocked ? "#cbd5e1" : "#4a9e8e",
+                  color: isBlocked ? "#64748b" : "#fff",
+                  boxShadow: isBlocked ? "none" : "0 3px 12px rgba(74,158,142,0.35)",
+                }}
               >
-                Confirm and Continue →
+                {isBlocked ? blockerMessage : "Confirm and Continue →"}
               </button>
             </div>
           </div>

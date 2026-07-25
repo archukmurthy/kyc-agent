@@ -15,7 +15,19 @@ import FoundationalFactsGate from "./components/companyConfirm/FoundationalFacts
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
-import { ROW_STATE, rowState, computeConfirmCounts } from "./components/companyConfirm/confirmState";
+import {
+  ROW_STATE,
+  rowState,
+  rowContext,
+  computeConfirmCounts,
+  submitBlockers,
+  blockerSummary,
+  canonicalDocs,
+  docsNeededFrom,
+  docKey,
+} from "./components/companyConfirm/confirmState";
+import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
+import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
 import { Notice } from "./components/notices/Notice";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
@@ -407,6 +419,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // row records that agreement here so the Needs-you count can reach zero.
   // Purely additive: it never touches checks, the dialogue, or capture.
   const [affirmedFields, setAffirmedFields] = useState({});
+  // Amendment documents derived server-side from the append-only event store
+  // (authoritative in production). Unioned with the LIVE dialogue outcomes so
+  // the requirement shows the instant a change is classified — before the
+  // round-trip lands, and at all in a DB-less dev environment. De-duped by
+  // docType in canonicalDocs so one real document is never asked for twice.
+  const [persistedAmendmentDocs, setPersistedAmendmentDocs] = useState([]);
+  const [uploadingDocKey, setUploadingDocKey] = useState(null);
   // Which rows have the inline correction editor open (field id → bool). A
   // corrected row renders its value inline and re-opens the editor on demand.
   const [inlineEditOpen, setInlineEditOpen] = useState({});
@@ -1083,6 +1102,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (step === STEPS.fillGaps) initStakeholdersForFillGaps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, research, rejectedStakeholders]);
+
+  // Amendment documents the store says are currently owed. Refetched on entering
+  // Confirm and whenever a row is crossed/re-checked, so the list reflects the
+  // latest non-superseded event per field. The live-outcome union in
+  // confirmDocs covers the window before this lands (and a DB-less dev run), so
+  // a slow or failed fetch can never make a required document disappear.
+  useEffect(() => {
+    const submissionId = dossierId || onboardingSubmissionId;
+    if (!submissionId || step !== STEPS.confirm) return undefined;
+    let cancelled = false;
+    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setPersistedAmendmentDocs(Array.isArray(data.documents) ? data.documents : []);
+      })
+      .catch((err) => console.warn("[confirm] amendment-documents fetch failed:", err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, dossierId, onboardingSubmissionId, checks]);
 
   const fillTestData = () => {
     getCombinedGaps().forEach(g => {
@@ -3592,13 +3631,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // tone wins over amber while its ChangeDialogue is open.
     const rowChecked = !!checks[idx];
     const correction = gapRef.current["corrected_" + item.field];
-    // ONE predicate for the row's state, the tiles and (commit 4) the gate —
-    // see components/companyConfirm/confirmState.js. Never re-derive it here.
-    const state = rowState(item, {
-      checked: rowChecked,
-      affirmed: !!affirmedFields[item.field],
-      correction,
-    });
+    // ONE predicate for the row's state, the tiles AND the submit gate — same
+    // rowState() call, fed by the same rowContext() builder submitBlockers
+    // uses, so the amber styling, the "Needs You" count and blocker kind (a)
+    // are the same set by construction. Never re-derive it here.
+    const state = rowState(item, rowContext(item, idx, {
+      checks,
+      affirmed: affirmedFields,
+      corrections: gapRef.current,
+    }));
     const isCorrected = state === ROW_STATE.CORRECTED;
     const isDisputed = !rowChecked && !isCorrected;
     // Amber = low confidence AND still unresolved. Ticking (affirming) or
@@ -3765,6 +3806,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   setInlineEditOpen(p => ({ ...p, [item.field]: false }));
                 }}
                 onCancel={isCorrected ? () => setInlineEditOpen(p => ({ ...p, [item.field]: false })) : null}
+              />
+            );
+          })()}
+          {/* Inline document request (commit 4) — the upload lives WHERE the
+              change happened. Same card, same store and same upload call as the
+              Fill Gaps panel, so a file added in either place satisfies both.
+              Matched by docType against the canonical list so two fields
+              mapping to one document never ask for it twice. */}
+          {!checks[idx] && (() => {
+            const snap = dialogueStateRef.current[item.field];
+            const live = snap && snap.event && snap.event.workflow === "doc_required" ? snap.event.docType : null;
+            if (!live) return null;
+            const doc = confirmDocs.find((d) => d.docType === live);
+            if (!doc) return null;
+            const k = docKey(doc);
+            return (
+              <AmendmentDocCard
+                key={"doc-" + k}
+                doc={doc}
+                upload={amendmentUploads[k]}
+                busy={uploadingDocKey === k}
+                onUpload={handleAmendmentUpload}
+                onRemove={handleAmendmentRemove}
+                variant="inline"
+                hint="Required before you can continue."
               />
             );
           })()}
@@ -5436,18 +5502,57 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const hasStakeholderForms = stakeholderFormNodes.length > 0;
   const hasStakeholderSummary = stakeholderSummaryNodes.length > 0;
 
-  // Confirm-page tile counts + (commit 4) the gate's inputs, from the ONE
-  // shared predicate. Computed during render — not memoised — because gapRef
-  // and dialogueStateRef are refs: a memo would serve stale counts after an
-  // inline save. Re-render is driven by the same setFormVersion bump the save
-  // already fires.
-  const confirmCounts = computeConfirmCounts({
-    found: research?.found || [],
+  // Confirm-page documents: persisted (server-derived) ∪ live dialogue
+  // outcomes, collapsed to one entry per docType. Feeds the inline row card,
+  // the summary panel, and blocker kind (b) — one list, three surfaces.
+  const confirmDocs = canonicalDocs(persistedAmendmentDocs, docsNeededFrom(dialogueStateRef.current));
+
+  // Confirm-page tile counts and the gate's blockers, from the ONE shared
+  // predicate. Computed during render — not memoised — because gapRef and
+  // dialogueStateRef are refs: a memo would serve stale values after an inline
+  // save. Re-render is driven by the same setFormVersion bump the save fires.
+  const confirmStateInput = {
+    // VITAL ROWS ONLY — the rows the customer can actually act on in the
+    // pre-filled table, carrying their original research.found index (checks is
+    // index-keyed). Stakeholder fields render as person cards with their own
+    // affordances and are not gate-eligible until commit 6 wires per-person
+    // corrections; counting them here would block the customer on a control
+    // this page does not give them.
+    rows: regularFound,
     checks,
     affirmed: affirmedFields,
     corrections: gapRef.current,
-    dialogueState: dialogueStateRef.current,
-  });
+    docs: confirmDocs,
+    uploads: amendmentUploads,
+  };
+  const confirmCounts = computeConfirmCounts(confirmStateInput);
+  // requiredGaps is deliberately EMPTY here. Every value the customer can
+  // supply on Confirm is already covered by kind (a) — a crossed row with no
+  // correction is an attention row. The remaining required gaps live on Fill
+  // Gaps and are invisible from this page; blocking on a field the customer
+  // cannot see would be an illegible trap, and allGapsFilled still enforces
+  // them at the Fill Gaps gate (kept as the backstop).
+  const confirmBlockers = submitBlockers({ ...confirmStateInput, requiredGaps: [] });
+  const confirmBlockerMessage = blockerSummary(confirmBlockers);
+
+  // Upload handler shared by the inline Confirm card and the Fill Gaps panel —
+  // one store (amendmentUploads), keyed fieldId::docType, lifted here so blobs
+  // survive Confirm↔Fill Gaps navigation and land in the dossier payload.
+  const handleAmendmentUpload = async (file, doc) => {
+    const k = docKey(doc);
+    setUploadingDocKey(k);
+    const record = await uploadAmendmentDoc(file);
+    setUploadingDocKey(null);
+    setAmendmentUploads(prev => ({ ...prev, [k]: record }));
+  };
+  const handleAmendmentRemove = (doc) => {
+    const k = docKey(doc);
+    setAmendmentUploads(prev => {
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+  };
 
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
@@ -8340,6 +8445,13 @@ Nium Onboarding Team`;
             cachedAt={cachedAt}
             checks={checks}
             confirmCounts={confirmCounts}
+            confirmDocs={confirmDocs}
+            amendmentUploads={amendmentUploads}
+            uploadingDocKey={uploadingDocKey}
+            onAmendmentUpload={handleAmendmentUpload}
+            onAmendmentRemove={handleAmendmentRemove}
+            blockers={confirmBlockers}
+            blockerMessage={confirmBlockerMessage}
             isPubliclyListedOverride={isPubliclyListedOverride}
             setIsPubliclyListedOverride={setIsPubliclyListedOverride}
             sortedFound={sortedFound}
@@ -8388,6 +8500,7 @@ Nium Onboarding Team`;
               submissionId={dossierId || onboardingSubmissionId}
               initialUploads={amendmentUploads}
               onUploadsChange={setAmendmentUploads}
+              extraDocuments={docsNeededFrom(dialogueStateRef.current)}
             />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
