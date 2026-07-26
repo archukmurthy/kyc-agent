@@ -182,6 +182,10 @@ export function ChangeDialogue({
         emitted: emittedRef.current,
         event: eventRef.current,
         eventId: eventIdRef.current,
+        // The engine result verbatim. The event's column set cannot carry
+        // `silent`, so the build-time analyst view (commit 5) reads it from
+        // here. Display-only — nothing consumes it for routing.
+        outcome,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

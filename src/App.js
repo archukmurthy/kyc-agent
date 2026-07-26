@@ -14,6 +14,8 @@ import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocumen
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
+import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
+import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
 import {
   ROW_STATE,
@@ -3831,6 +3833,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 onRemove={handleAmendmentRemove}
                 variant="inline"
                 hint="Required before you can continue."
+              />
+            );
+          })()}
+          {/* Build-time analyst view (commit 5) — what the engine actually
+              decided for this row, including the outcomes the customer never
+              sees, and an explicit "no automated consequence" note where the
+              engine produces nothing. Read-only: it displays the recorded
+              decision, never re-classifies and never affects the gate.
+              SHOW_TEST_TOOLS is passed as a prop so the silence-later
+              guarantee is a testable contract, not a module-load accident. */}
+          {(() => {
+            const snap = dialogueStateRef.current[item.field];
+            if (!snap || !snap.emitted || !snap.event) return null;
+            return (
+              <AnalystSignalStrip
+                show={SHOW_TEST_TOOLS}
+                fieldId={item.field}
+                signal={buildAnalystSignal({
+                  event: snap.event,
+                  outcome: snap.outcome,
+                  correctedValue: correction,
+                })}
               />
             );
           })()}
