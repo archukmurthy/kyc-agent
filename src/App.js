@@ -3856,18 +3856,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
           </div>
           <div style={{ display: "flex", gap: 4, paddingTop: 1 }}>
-            {/* Tick / cross — the SAME checks[idx] state and toggleCheck handler
-                as the original single checkbox. The cross fires only on a
-                ticked row and the tick re-checks only a crossed one, so the
-                state machine — and the ChangeDialogue mount / revert-event
-                flow — is unchanged. The tick ALSO records affirmation, which is
-                what moves an untouched low-confidence row out of "needs you". */}
+            {/* Contextual control PAIR, per the prototype — never three buttons.
+                The prototype only ever shows two row states; ours has four, so
+                the rule is applied by meaning rather than copied by position:
+                  needs-attention / disputed → ✓ ✕  ("is this right or wrong?")
+                  confirmed / corrected      → ✓ ✎  (settled value; tweak it)
+                No capability is lost either way, because ✎ and ✕ enter the SAME
+                flow (toggleCheck → ChangeDialogue → classification → inline
+                editor). A confirmed row is disputed via ✎; an attention row is
+                edited via ✕. Whether a document is owed remains a property of
+                the field-class + change (policyTable), never of which button
+                was pressed.
+                The tick keeps the original checks[idx]/toggleCheck semantics and
+                ALSO records affirmation, which is what moves an untouched
+                low-confidence row out of "needs you". */}
             <button
               type="button"
               onClick={() => { if (!rowChecked) toggleCheck(idx); affirmRow(item); }}
-              aria-label={`Confirm ${item.label}`}
+              aria-label={isCorrected || isDisputed ? `Restore the original value for ${item.label}` : `Confirm ${item.label}`}
               aria-pressed={rowChecked && !needsAttention}
-              title="Correct — keep this value"
+              title={isCorrected || isDisputed ? "Undo — keep the original value" : "Correct — keep this value"}
               style={{
                 ...btnBase,
                 background: rowChecked && !needsAttention ? "#4a9e8e" : "#fff",
@@ -3875,43 +3883,37 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 border: rowChecked && !needsAttention ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
               }}
             >✓</button>
-            <button
-              type="button"
-              onClick={() => { if (rowChecked) toggleCheck(idx); }}
-              aria-label={`Mark ${item.label} as incorrect`}
-              aria-pressed={!rowChecked}
-              title="Wrong — flag this value for correction"
-              style={{
-                ...btnBase,
-                background: !rowChecked && !isCorrected ? C.error : "#fff",
-                color: !rowChecked && !isCorrected ? "#fff" : C.textMuted,
-                border: !rowChecked && !isCorrected ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
-              }}
-            >✕</button>
-            {/* Pencil (commit 3) — "tweak this value". Routes through the
-                IDENTICAL cross flow (toggleCheck → ChangeDialogue →
-                classification → inline editor) for every field class, so the
-                affordance can never bypass a required document: whether a doc
-                is owed is a property of the field-class + change (policyTable),
-                not of which button was used. For generic fields the dialogue
-                asks nothing and completes silently, so the pencil is the
-                lightweight edit in practice. On an already-corrected row it
-                re-opens the editor rather than re-classifying. */}
-            <button
-              type="button"
-              onClick={() => {
-                if (isCorrected) setInlineEditOpen(p => ({ ...p, [item.field]: true }));
-                else if (rowChecked) toggleCheck(idx);
-              }}
-              aria-label={`Edit ${item.label}`}
-              title={isCorrected ? "Edit again" : "Edit this value"}
-              style={{
-                ...btnBase,
-                background: "#fff",
-                color: isCorrected ? C.info : C.textMuted,
-                border: `1.5px solid ${isCorrected ? C.infoBorder : C.border}`,
-              }}
-            >✎</button>
+            {needsAttention || isDisputed ? (
+              <button
+                type="button"
+                onClick={() => { if (rowChecked) toggleCheck(idx); }}
+                aria-label={`Mark ${item.label} as incorrect`}
+                aria-pressed={isDisputed}
+                title="Wrong — flag this value for correction"
+                style={{
+                  ...btnBase,
+                  background: isDisputed ? C.error : "#fff",
+                  color: isDisputed ? "#fff" : C.textMuted,
+                  border: isDisputed ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+                }}
+              >✕</button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isCorrected) setInlineEditOpen(p => ({ ...p, [item.field]: true }));
+                  else if (rowChecked) toggleCheck(idx);
+                }}
+                aria-label={`Edit ${item.label}`}
+                title={isCorrected ? "Edit again" : "Edit this value"}
+                style={{
+                  ...btnBase,
+                  background: "#fff",
+                  color: isCorrected ? C.info : C.textMuted,
+                  border: `1.5px solid ${isCorrected ? C.infoBorder : C.border}`,
+                }}
+              >✎</button>
+            )}
           </div>
         </div>
       </div>

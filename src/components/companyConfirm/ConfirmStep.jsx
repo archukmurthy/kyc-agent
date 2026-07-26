@@ -448,7 +448,7 @@ export function ConfirmStep({
                   boxShadow: isBlocked ? "none" : "0 3px 12px rgba(74,158,142,0.35)",
                 }}
               >
-                {isBlocked ? blockerMessage : "Confirm and Continue →"}
+                {isBlocked ? blockerMessage : "Confirm and Continue"}
               </button>
             </div>
           </div>
