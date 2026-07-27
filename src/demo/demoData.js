@@ -227,7 +227,16 @@ export const DUMMY_RESEARCH_VALUES = {
   industryCodes: "62012, 70229",
   industryDescription: "Software development and SaaS distribution to enterprise customers.",
   isMultiLayered: "No",
-  uboAnalysis: "John Smith (40%), Jane Doe (35%), Trustees (25%)",
+  // JSON-encoded (same shape as `directors` below) so the UBO people carry the
+  // identity attributes CD-03's person rules act on — nationality, DOB,
+  // residence. As a bare string they parsed into name+shareholding only, which
+  // made the UBO half of the person-type matrix (UBO DOB/nationality → POI)
+  // impossible to exercise live.
+  uboAnalysis: JSON.stringify([
+    { full_name: "John Smith", share_percentage: 40, nationality: "British", date_of_birth: "1965-08", country_of_residence: "United Kingdom" },
+    { full_name: "Jane Doe", share_percentage: 35, nationality: "British", date_of_birth: "1972-03", country_of_residence: "United Kingdom" },
+    { full_name: "Trustees", share_percentage: 25 },
+  ]),
   // directors / UBO research fields are parsed into structured stakeholder
   // records on Confirm — value is a JSON-encoded array of {full_name, role,
   // share_percentage} so the customer sees per-person cards instead of a
