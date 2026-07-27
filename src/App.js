@@ -16,6 +16,15 @@ import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
 import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
 import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
+import { PersonCorrection, PersonRemovalPrompt } from "./components/companyConfirm/PersonCorrection";
+import {
+  resolvePersonType,
+  personFieldId,
+  PERSON_ATTRIBUTE,
+  ATTRIBUTE_BY_FIELD_KEY,
+} from "./components/companyConfirm/personType";
+import { classifyChange } from "./changeIntelligence/classifyChange";
+import { personHasHighRiskCountry } from "./changeIntelligence/highRiskCountries";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
 import {
   ROW_STATE,
@@ -2779,6 +2788,176 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setAffirmedFields(prev => (prev[item.field] ? prev : { ...prev, [item.field]: true }));
   };
 
+  // ── CD-03 person-scoped corrections (commit 6) ──────────────────────────────
+  // Which person-attribute is currently being corrected, keyed by composite
+  // fieldId; and which person is mid-removal, keyed by stakeholder id.
+  const [personEditing, setPersonEditing] = useState(null); // { fieldId, stakeholderId, attribute, fieldKey }
+  const [personRemoving, setPersonRemoving] = useState(null); // { fieldId, stakeholderId, name }
+
+  /**
+   * Emit ONE person-scoped change-event through the SAME pipeline the company
+   * rows use: classify → buildChangeEvent → POST /api/change-events. The only
+   * difference is the composite fieldId (`<personType>::<sh_id>::<attribute>`),
+   * which makes each person-attribute independently addressable, independently
+   * supersedable, and independently resolvable by deriveAmendmentDocuments.
+   *
+   * Snapshots land in dialogueStateRef under that composite key, so the
+   * documents list, the summary panel, the submit gate and the analyst strip
+   * all pick person documents up with no extra wiring — one pipeline, not two.
+   */
+  const emitPersonChange = ({ person, researchFieldId, attribute, value = null, nameCase = null, reason = null }) => {
+    const type = resolvePersonType(person, researchFieldId);
+    const compositeId = personFieldId(type.personType, person.id, attribute);
+    const engineInput = {
+      personScope: true,
+      personType: type.personType,
+      attribute,
+      nameCase,
+      // PEP is add-only: the customer declaring "yes" is what CD-03 rules on.
+      pepValue: attribute === PERSON_ATTRIBUTE.PEP
+        ? (value === true || value === "yes" ? "yes" : "no")
+        : null,
+      // Threshold crossing needs reliable per-person ownership data, which the
+      // person-type stub cannot supply — 'unknown' records UNDECIDED rather
+      // than guessing (CD-03's deliberate gap, see policyTable PERSON_RULES).
+      thresholdCrossing: attribute === PERSON_ATTRIBUTE.OWNERSHIP_PCT ? "unknown" : null,
+      // EDD flag: injectable list, empty until the MLRO supplies it.
+      highRiskCountry: personHasHighRiskCountry({
+        ...person,
+        ...(attribute === PERSON_ATTRIBUTE.NATIONALITY ? { nationality: value } : {}),
+        ...(attribute === PERSON_ATTRIBUTE.RESIDENTIAL_ADDRESS ? { residential_country: value } : {}),
+      }),
+    };
+    const engineResult = classifyChange(engineInput);
+
+    const prev = dialogueStateRef.current[compositeId];
+    const event = buildChangeEvent({
+      field: {
+        fieldId: compositeId,
+        // fieldClass stays inside the existing closed enum — person type maps
+        // onto 'director' / 'ubo', both already valid, so writeEvent's guard
+        // passes with no schema or vocabulary change.
+        fieldClass: type.personType === "director" ? "director" : "ubo",
+        value: person[Object.keys(ATTRIBUTE_BY_FIELD_KEY).find(k => ATTRIBUTE_BY_FIELD_KEY[k] === attribute)] ?? null,
+        sourceTier: person.sourceTier || null,
+        verifiability: "structured_registry",
+      },
+      jurisdiction: countryCode || "GB",
+      submissionId: dossierId || onboardingSubmissionId,
+      dossierId,
+      storedChangeType: attribute === PERSON_ATTRIBUTE.REMOVAL ? "remove" : "changed",
+      intent: null,
+      registryStatus: "unknown",
+      engineResult,
+      afterValue: value == null ? null : String(value),
+      // Chain to the tail, never a consumed head (the 3.1 rule).
+      supersedesId: prev && prev.tailEventId != null ? prev.tailEventId : (prev && !prev.headConsumed ? prev.eventId : null),
+    });
+
+    dialogueStateRef.current[compositeId] = {
+      ...prev,
+      emitted: true,
+      event,
+      outcome: engineResult,
+      headConsumed: true,
+      tailEventId: null,
+      personScope: true,
+      reason,
+    };
+
+    if (typeof fetch === "function") {
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const cur = dialogueStateRef.current[compositeId];
+          if (cur) {
+            dialogueStateRef.current[compositeId] = {
+              ...cur,
+              tailEventId: d && d.success && d.id != null ? d.id : null,
+            };
+          }
+          if (d && d.success === false && d.warning) {
+            console.warn("[confirm] person change-event rejected:", d.warning);
+          }
+        })
+        .catch((err) => console.warn("[confirm] person change-event persist failed:", err));
+    }
+    trackEvent("person_change_captured", event);
+    setFormVersion(v => v + 1);
+    return { compositeId, engineResult, type };
+  };
+
+  /** Resolve one person correction: capture the value, then emit the event(s). */
+  const resolvePersonCorrection = (person, researchFieldId, fieldKey, resolution) => {
+    const { attribute, value, nameCase } = resolution;
+
+    // "This isn't the right person" resolves as a REMOVAL, not a name edit.
+    if (attribute === PERSON_ATTRIBUTE.REMOVAL) {
+      emitPersonChange({ person, researchFieldId, attribute, reason: resolution.reason || null });
+      if (!isStakeholderRejected(researchFieldId, person.id)) {
+        toggleStakeholderRejection(researchFieldId, person.id);
+      }
+      setPersonEditing(null);
+      return;
+    }
+
+    // Capture the value where Fill Gaps already reads it, so nothing is retyped.
+    if (fieldKey && value != null) {
+      updateStakeholderField(researchFieldId, person.id, fieldKey, value);
+    }
+    emitPersonChange({ person, researchFieldId, attribute, value, nameCase });
+
+    // A UBO's legal name change needs the ownership chart AS WELL as the POI;
+    // one event carries one docType, so the companion list document is its own
+    // person-attribute event. (Director-only already gets the list doc from the
+    // name rule itself, so no second event there.)
+    const type = resolvePersonType(person, researchFieldId);
+    if (attribute === PERSON_ATTRIBUTE.NAME && nameCase === "legal_change" && type.personType === "ubo") {
+      emitPersonChange({ person, researchFieldId, attribute: "name_list", value });
+    }
+    setPersonEditing(null);
+  };
+
+  /**
+   * Unticking a person attribute now OPENS the CD-03 correction flow instead of
+   * silently routing the field to the next page. Re-ticking closes it. The
+   * existing stakeholderFieldChecks state is preserved exactly as before — this
+   * only adds the correction panel on top of it.
+   */
+  const togglePersonField = (item, s, f) => {
+    const wasConfirmed = isStkFieldConfirmed(s.id, f.key);
+    toggleStkFieldConfirm(s.id, f.key);
+    const attribute = ATTRIBUTE_BY_FIELD_KEY[f.key];
+    if (wasConfirmed && attribute) {
+      setPersonEditing({ researchFieldId: item.field, stakeholderId: s.id, attribute, fieldKey: f.key });
+    } else {
+      setPersonEditing(null);
+    }
+  };
+
+  /** Crossing a person asks WHY first; un-crossing is a plain undo. */
+  const togglePersonRemoval = (item, s) => {
+    if (isStakeholderRejected(item.field, s.id)) {
+      toggleStakeholderRejection(item.field, s.id);
+      setPersonRemoving(null);
+      return;
+    }
+    setPersonRemoving({ researchFieldId: item.field, stakeholderId: s.id, name: s.full_name });
+  };
+
+  /** Confirm-why removal from the person card's own checkbox. */
+  const confirmPersonRemoval = (person, researchFieldId, reason) => {
+    emitPersonChange({ person, researchFieldId, attribute: PERSON_ATTRIBUTE.REMOVAL, reason });
+    if (!isStakeholderRejected(researchFieldId, person.id)) {
+      toggleStakeholderRejection(researchFieldId, person.id);
+    }
+    setPersonRemoving(null);
+  };
+
   // Commit 3 (Option B core) — save handler for the inline correction editor.
   // Two consistent destinations, in order:
   //   1. gapRef["corrected_<field>"] — the SAME client-state key Fill Gaps
@@ -4208,7 +4387,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <input
                   type="checkbox"
                   checked={!rejected}
-                  onChange={() => toggleStakeholderRejection(item.field, s.id)}
+                  onChange={() => togglePersonRemoval(item, s)}
                   onClick={(e) => e.stopPropagation()}
                   style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
                   aria-label={`Confirm ${s.full_name}`}
@@ -4298,6 +4477,75 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   ▾
                 </span>
               </div>
+
+              {/* ── CD-03 person correction surface (commit 6) ──────────────
+                  Removal asks why first; the answer picks the list document
+                  (director → list of directors, UBO → ownership chart), and
+                  that document request IS the analyst trigger. Attribute
+                  corrections run the name three-way or the inline editor, then
+                  emit ONE person-scoped change-event under the composite
+                  fieldId. Any resulting document renders on the person, and
+                  because the snapshot lives in the same dialogue store as the
+                  company rows it also lands in the documents panel and the
+                  submit gate automatically. */}
+              {personRemoving && personRemoving.stakeholderId === s.id && (
+                <div style={{ padding: "0 16px 12px" }}>
+                  <PersonRemovalPrompt
+                    personName={s.full_name}
+                    onConfirm={(reason) => confirmPersonRemoval(s, item.field, reason)}
+                    onCancel={() => setPersonRemoving(null)}
+                  />
+                </div>
+              )}
+              {personEditing && personEditing.stakeholderId === s.id && (
+                <div style={{ padding: "0 16px 12px" }}>
+                  <PersonCorrection
+                    attribute={personEditing.attribute}
+                    personName={s.full_name}
+                    originalValue={s[personEditing.fieldKey] ?? ""}
+                    inputType={personEditing.fieldKey === "date_of_birth" ? "date" : "text"}
+                    onResolve={(res) => resolvePersonCorrection(s, item.field, personEditing.fieldKey, res)}
+                    onCancel={() => setPersonEditing(null)}
+                  />
+                </div>
+              )}
+              {(() => {
+                // Documents + analyst view for every recorded correction on
+                // THIS person, resolved per person-attribute.
+                const mine = Object.entries(dialogueStateRef.current)
+                  .filter(([k, snap]) => snap && snap.personScope && k.includes(`::${s.id}::`));
+                if (mine.length === 0) return null;
+                return (
+                  <div style={{ padding: "0 16px 12px" }}>
+                    {mine.map(([k, snap]) => {
+                      const ev = snap.event || {};
+                      const doc = ev.workflow === "doc_required" && ev.docType
+                        ? confirmDocs.find((d) => d.docType === ev.docType)
+                        : null;
+                      return (
+                        <div key={k}>
+                          {doc && (
+                            <AmendmentDocCard
+                              doc={doc}
+                              upload={amendmentUploads[docKey(doc)]}
+                              busy={uploadingDocKey === docKey(doc)}
+                              onUpload={handleAmendmentUpload}
+                              onRemove={handleAmendmentRemove}
+                              variant="inline"
+                              hint={`Required for ${s.full_name}.`}
+                            />
+                          )}
+                          <AnalystSignalStrip
+                            show={SHOW_TEST_TOOLS}
+                            fieldId={k}
+                            signal={buildAnalystSignal({ event: snap.event, outcome: snap.outcome })}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Validation flag — director/UBO failed a check: stripped share
                   band, non-official source, or cross-source attribute merge.
@@ -4390,7 +4638,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                                 <input
                                   type="checkbox"
                                   checked={confirmed}
-                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
+                                  onChange={() => togglePersonField(item, s, f)}
                                   style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
                                   aria-label={`Confirm ${f.label}`}
                                 />
@@ -4423,7 +4671,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                                 <input
                                   type="checkbox"
                                   checked={confirmed}
-                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
+                                  onChange={() => togglePersonField(item, s, f)}
                                   style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
                                   aria-label={`Confirm ${f.label}`}
                                 />

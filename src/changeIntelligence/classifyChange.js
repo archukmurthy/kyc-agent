@@ -15,7 +15,7 @@
  *   4. No fallthrough    — unmatched → UNDECIDED, decided: false. Never guess.
  */
 
-const { BASE_RULES } = require('./policyTable');
+const { BASE_RULES, PERSON_RULES } = require('./policyTable');
 const { JURISDICTION_OVERRIDES } = require('./policyTable.jurisdictions');
 
 // The full result shape. Every path returns this superset of the contract.
@@ -39,6 +39,69 @@ function ruleMatches(when, input) {
   return Object.keys(when).every((field) => when[field] === input[field]);
 }
 
+/**
+ * PERSON-SCOPED classification (CD-03, ratified 26 Jul 2026).
+ *
+ * Runs the PERSON_RULES table, then applies CD-03's EDD post-step. Same matcher,
+ * same result shape — an extension of this engine, not a second one.
+ *
+ * WHY THIS RUNS BEFORE THE TWO HARD RULES (deliberate, and the one judgement
+ * call in commit 6 — flagged for compliance sign-off):
+ *
+ *  - The VERIFIABILITY GUARD exists because a company research field has
+ *    registry ground truth to dispute against; without it there is no honest
+ *    comparison, so the change is accepted silently for an analyst. A person's
+ *    self-declared nationality, DOB or residential address has no registry
+ *    ground truth BY DESIGN — that absence is precisely why CD-03 asks for
+ *    POI/POA. Letting the guard run first would suppress every person document
+ *    CD-03 requires, since these attributes are rarely registry-sourced.
+ *
+ *  - The PEP HARD RULE governs the COMPANY-level "PEP status of directors"
+ *    research field: a silent escalation, never revealed. CD-03's PEP rule is a
+ *    different event — the customer ADDING a person-scoped PEP declaration —
+ *    and ratifies a Source of Wealth request plus an EDD flag. Scoping CD-03's
+ *    rule to person changes leaves the company-level hard rule untouched.
+ *
+ * Company-level classification is byte-identical: `personScope` is absent for
+ * every company field, so this branch is unreachable from those call sites.
+ */
+function classifyPersonChange(input) {
+  const {
+    personType = null,
+    attribute = null,
+    nameCase = null,
+    pepValue = null,
+    thresholdCrossing = null,
+    highRiskCountry = false,
+  } = input || {};
+
+  const normalized = {
+    personScope: true,
+    personType,
+    attribute,
+    nameCase,
+    pepValue,
+    thresholdCrossing,
+  };
+
+  let result = { ...DEFAULT_RESULT };
+  for (const rule of PERSON_RULES) {
+    if (ruleMatches(rule.when, normalized)) {
+      result = { ...DEFAULT_RESULT, decided: true, matchedRule: rule.id, ...rule.then };
+      break;
+    }
+  }
+
+  // CD-03 EDD post-step: a high-risk nationality / country of birth / country
+  // of residence sets the flag EITHER WAY — independently of whether the
+  // attribute produced a document. Flag only; there is no EDD collection flow.
+  // The list is injectable and empty until the MLRO supplies it, so this never
+  // fires by default (see highRiskCountries.js).
+  if (highRiskCountry === true) result.eddFlag = true;
+
+  return result;
+}
+
 function classifyChange(input) {
   const {
     fieldClass,
@@ -48,6 +111,10 @@ function classifyChange(input) {
     verifiability,
     jurisdiction,
   } = input || {};
+
+  // ── Person-scoped changes (CD-03) take their own rule table. See the header
+  //    on classifyPersonChange for why this precedes the two hard rules. ──
+  if (input && input.personScope === true) return classifyPersonChange(input);
 
   // ── Hard rule 2 (PEP override) — before everything, no doc, no dialogue. ──
   if (fieldClass === 'pep') {
