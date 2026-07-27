@@ -17,6 +17,7 @@ import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrection
 import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
 import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
 import { PersonCorrection, PersonRemovalPrompt } from "./components/companyConfirm/PersonCorrection";
+import AddPersonPanel from "./components/companyConfirm/AddPersonPanel";
 import {
   resolvePersonType,
   personFieldId,
@@ -1030,9 +1031,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const next = current.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
     setStakeholders(fieldId, next);
   };
+  // Returns the created person so callers that need its stable sh_ id (the
+  // add-a-person flow addresses its change-events by composite fieldId) can use
+  // it. Existing callers ignore the return value.
   const addStakeholder = (fieldId, overrides = {}) => {
     const current = getStakeholders(fieldId);
-    setStakeholders(fieldId, [...current, makeStakeholder({ customer_added: true, ...overrides })]);
+    const person = makeStakeholder({ customer_added: true, ...overrides });
+    setStakeholders(fieldId, [...current, person]);
+    return person;
   };
   const removeStakeholder = (fieldId, stakeholderId) => {
     const current = getStakeholders(fieldId);
@@ -2804,6 +2810,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // fieldId; and which person is mid-removal, keyed by stakeholder id.
   const [personEditing, setPersonEditing] = useState(null); // { fieldId, stakeholderId, attribute, fieldKey }
   const [personRemoving, setPersonRemoving] = useState(null); // { fieldId, stakeholderId, name }
+  const [addingPerson, setAddingPerson] = useState(false);    // commit 7 add-a-person panel
 
   /**
    * Emit ONE person-scoped change-event through the SAME pipeline the company
@@ -2864,7 +2871,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
       jurisdiction: countryCode || "GB",
       submissionId: dossierId || onboardingSubmissionId,
       dossierId,
-      storedChangeType: attribute === PERSON_ATTRIBUTE.REMOVAL ? "remove" : "changed",
+      // The stored vocabulary is add|remove|changed. An addition must record as
+      // 'add' — filing it as 'changed' would misdescribe it to an analyst
+      // reading the trail, and deriveChangeType's presence semantics agree
+      // (no prior value → add).
+      storedChangeType:
+        attribute === PERSON_ATTRIBUTE.REMOVAL
+          ? "remove"
+          : (attribute === PERSON_ATTRIBUTE.ADDED
+            || attribute === PERSON_ATTRIBUTE.ADDED_POI
+            || attribute === PERSON_ATTRIBUTE.ADDED_POA)
+            ? "add"
+            : "changed",
       intent: null,
       registryStatus: "unknown",
       engineResult,
@@ -2966,6 +2984,56 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return;
     }
     setPersonRemoving({ researchFieldId: item.field, stakeholderId: s.id, name: s.full_name });
+  };
+
+  /**
+   * ADD A PERSON (commit 7). The customer states the type, so person type here
+   * is EXPLICIT — the created stakeholder carries real isDirector/isUBO flags,
+   * which is the interface personType.js assumes and the stub otherwise fakes.
+   *
+   * Emits the CD-03 events for an addition, each as its own person-scoped
+   * change-event under the composite fieldId, so they flow through the same
+   * derive → scope-aware dedup (6a) → panel → gate path as every other
+   * document. Nothing new is wired: a distinct stakeholderId is all the
+   * per-person keying needs.
+   */
+  const addPersonFromConfirm = ({ type, full_name, date_of_birth, nationality, residential_country, is_pep }) => {
+    const isDirector = type === "director" || type === "both";
+    const isUBO = type === "ubo" || type === "both";
+    // Attach the person to the matching research field so Fill Gaps renders
+    // them alongside the people already found there.
+    const rows = (research?.found || []).filter((r) => isStakeholderField(r.field));
+    const preferred = rows.find((r) => (isUBO ? isUboLikeField(r.field) : !isUboLikeField(r.field)));
+    const targetField = (preferred || rows[0] || {}).field;
+    if (!targetField) return null;
+
+    const person = addStakeholder(targetField, {
+      full_name,
+      date_of_birth: date_of_birth || "",
+      nationality: nationality || "",
+      residential_country: residential_country || "",
+      is_pep: is_pep === true ? true : is_pep === false ? false : null,
+      // The real person-type interface — stated, not inferred.
+      isDirector,
+      isUBO,
+    });
+
+    const emit = (attribute, value) =>
+      emitPersonChange({ person, researchFieldId: targetField, attribute, value });
+
+    // 1. The list document proving the person belongs (director → list of
+    //    directors, UBO → ownership chart). Requesting it IS the analyst review.
+    emit(PERSON_ATTRIBUTE.ADDED, full_name);
+    // 2. The person's own evidence — a no-op for a director-only person, whose
+    //    rules resolve to accept_silent with no document.
+    emit(PERSON_ATTRIBUTE.ADDED_POI, full_name);
+    emit(PERSON_ATTRIBUTE.ADDED_POA, residential_country || full_name);
+    // 3. PEP is add-only, and this is the moment it can be declared.
+    if (is_pep === true) emit(PERSON_ATTRIBUTE.PEP, true);
+
+    setAddingPerson(false);
+    setExpandedStakeholders((prev) => ({ ...prev, [person.id]: true }));
+    return person;
   };
 
   /** Confirm-why removal from the person card's own checkbox. */
@@ -4276,39 +4344,114 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   const stkHasCorrections = (s, ubo) => stkCorrectedFields(s, ubo).length > 0;
 
-  // Render a customer-added (pending) stakeholder card on Confirm. The blank
-  // person already lives in stakeholdersRef and will surface on the next page
-  // for the customer to complete; here we just show it + allow removal.
-  const renderPendingAddedStakeholder = (fieldId, s, ubo) => (
-    <div
-      key={s.id}
-      style={{
-        background: "#f3faf8", border: "1.5px dashed #4a9e8e",
-        borderRadius: 8, marginBottom: 8, padding: "12px 16px",
-        display: "flex", alignItems: "center", gap: 12,
-      }}
-    >
-      <span style={{ fontSize: 16, flexShrink: 0 }}>{isCorporateStakeholder(s) ? "🏢" : "➕"}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
-          New {isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added
-        </div>
-        <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
-          You'll complete their details on the next page.
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => removeStakeholder(fieldId, s.id)}
-        title="Remove"
-        aria-label="Remove"
+  // Render a customer-added (pending) stakeholder card on Confirm. Commit 7:
+  // a person added HERE arrives with their details and their CD-03 documents
+  // already requested, so the card names them and carries their evidence —
+  // rather than the old placeholder that only said "complete them next page".
+  const renderPendingAddedStakeholder = (fieldId, s, ubo) => {
+    const addedHere = !!(s.full_name && String(s.full_name).trim());
+    const type = resolvePersonType(s, fieldId);
+    return (
+      <div
+        key={s.id}
         style={{
-          background: "none", border: "none", color: "#1a3a4a70",
-          cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px", fontFamily: "inherit",
+          background: "#f3faf8", border: "1.5px dashed #4a9e8e",
+          borderRadius: 8, marginBottom: 8,
         }}
       >
-        ×
-      </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>{isCorporateStakeholder(s) ? "🏢" : "➕"}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
+              {addedHere
+                ? `${s.full_name} — added by you`
+                : `New ${isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added`}
+            </div>
+            <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
+              {addedHere
+                ? `${type.isUBO ? (type.isDirector ? "Director and beneficial owner" : "Beneficial owner") : "Director"}${s.nationality ? ` · ${s.nationality}` : ""}${s.is_pep ? " · PEP" : ""}`
+                : "You'll complete their details on the next page."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => removeStakeholder(fieldId, s.id)}
+            title="Remove"
+            aria-label="Remove"
+            style={{
+              background: "none", border: "none", color: "#1a3a4a70",
+              cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px", fontFamily: "inherit",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        {/* The added person's own evidence, per-person keyed like everyone else. */}
+        {renderPersonDocuments(s)}
+      </div>
+    );
+  };
+
+  /**
+   * The documents + analyst view for ONE person, resolved per person-attribute.
+   * Shared by the found-person cards and the added-person card so an added
+   * person's evidence surfaces exactly like everyone else's.
+   */
+  const renderPersonDocuments = (s) => {
+    const mine = Object.entries(dialogueStateRef.current)
+      .filter(([k, snap]) => snap && snap.personScope && k.includes(`::${s.id}::`));
+    if (mine.length === 0) return null;
+    return (
+      <div style={{ padding: "0 16px 12px" }}>
+        {mine.map(([k, snap]) => {
+          const ev = snap.event || {};
+          const doc = ev.workflow === "doc_required" && ev.docType
+            ? confirmDocs.find((d) => d.docType === ev.docType && d.stakeholderId === s.id)
+            : null;
+          return (
+            <div key={k}>
+              {doc && (
+                <AmendmentDocCard
+                  doc={doc}
+                  upload={amendmentUploads[docKey(doc)]}
+                  busy={uploadingDocKey === docKey(doc)}
+                  onUpload={handleAmendmentUpload}
+                  onRemove={handleAmendmentRemove}
+                  variant="inline"
+                  hint={`Required for ${s.full_name}.`}
+                />
+              )}
+              <AnalystSignalStrip
+                show={SHOW_TEST_TOOLS}
+                fieldId={k}
+                signal={buildAnalystSignal({ event: snap.event, outcome: snap.outcome })}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  /** The "add a person the research missed" affordance for the People section. */
+  const renderAddPerson = () => (
+    <div style={{ marginTop: 12 }}>
+      {addingPerson ? (
+        <AddPersonPanel onAdd={addPersonFromConfirm} onCancel={() => setAddingPerson(false)} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingPerson(true)}
+          style={{
+            width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "11px 18px", background: "transparent", color: "#1a6b56",
+            border: "1.5px dashed #4a9e8e", borderRadius: 8,
+            fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+          }}
+        >
+          + Add a director or beneficial owner we missed
+        </button>
+      )}
     </div>
   );
 
@@ -4530,45 +4673,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   />
                 </div>
               )}
-              {(() => {
-                // Documents + analyst view for every recorded correction on
-                // THIS person, resolved per person-attribute.
-                const mine = Object.entries(dialogueStateRef.current)
-                  .filter(([k, snap]) => snap && snap.personScope && k.includes(`::${s.id}::`));
-                if (mine.length === 0) return null;
-                return (
-                  <div style={{ padding: "0 16px 12px" }}>
-                    {mine.map(([k, snap]) => {
-                      const ev = snap.event || {};
-                      // Match THIS person's document — never another person's
-                      // entry of the same type (the 6a under-collection fix).
-                      const doc = ev.workflow === "doc_required" && ev.docType
-                        ? confirmDocs.find((d) => d.docType === ev.docType && d.stakeholderId === s.id)
-                        : null;
-                      return (
-                        <div key={k}>
-                          {doc && (
-                            <AmendmentDocCard
-                              doc={doc}
-                              upload={amendmentUploads[docKey(doc)]}
-                              busy={uploadingDocKey === docKey(doc)}
-                              onUpload={handleAmendmentUpload}
-                              onRemove={handleAmendmentRemove}
-                              variant="inline"
-                              hint={`Required for ${s.full_name}.`}
-                            />
-                          )}
-                          <AnalystSignalStrip
-                            show={SHOW_TEST_TOOLS}
-                            fieldId={k}
-                            signal={buildAnalystSignal({ event: snap.event, outcome: snap.outcome })}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              {/* Documents + analyst view for every recorded correction on THIS
+                  person. Matches per person, never another person's entry of
+                  the same type (the 6a under-collection fix). */}
+              {renderPersonDocuments(s)}
 
               {/* Validation flag — director/UBO failed a check: stripped share
                   band, non-official source, or cross-source attribute merge.
@@ -8792,6 +8900,7 @@ Nium Onboarding Team`;
             scrollAndSetStep={scrollAndSetStep}
             renderStakeholderConfirmSection={renderStakeholderConfirmSection}
             renderUnifiedFoundTable={renderUnifiedFoundTable}
+            renderAddPerson={renderAddPerson}
           />
         )}
 

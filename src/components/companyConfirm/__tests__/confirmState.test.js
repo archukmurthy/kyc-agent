@@ -270,6 +270,40 @@ describe("scope-aware document dedup (6a) — identity evidence is per person", 
   });
 });
 
+describe("an ADDED person's documents are per-person too (commit 7 × 6a)", () => {
+  const existingPoi = { fieldId: "ubo::sh_existing::nationality", docType: "Proof of Identity", personName: "John Smith" };
+  const addedPoi = { fieldId: "ubo::sh_added::added_poi", docType: "Proof of Identity", personName: "Priya Raman" };
+  const addedPoa = { fieldId: "ubo::sh_added::added_poa", docType: "Proof of Address", personName: "Priya Raman" };
+  const addedChart = { fieldId: "ubo::sh_added::added", docType: "Ownership Chart", personName: "Priya Raman" };
+
+  it("does not collapse an added person's POI into an existing person's POI", () => {
+    const docs = canonicalDocs([existingPoi, addedPoi]);
+    expect(docs).toHaveLength(2);
+    expect(docs.map((d) => d.stakeholderId).sort()).toEqual(["sh_added", "sh_existing"]);
+  });
+
+  it("uploading the existing person's POI leaves the added person's outstanding", () => {
+    const docs = canonicalDocs([existingPoi, addedPoi]);
+    const uploads = { [docKey(existingPoi)]: { name: "john.pdf", uploadFailed: false } };
+    const blockers = submitBlockers({ found: [], docs, uploads });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].stakeholderId).toBe("sh_added");
+    expect(blockers[0].label).toContain("Priya Raman");
+  });
+
+  it("an added UBO's three documents are three separate requests", () => {
+    const docs = canonicalDocs([addedChart, addedPoi, addedPoa]);
+    expect(docs.map((d) => d.docType).sort()).toEqual([
+      "Ownership Chart", "Proof of Address", "Proof of Identity",
+    ]);
+    expect(submitBlockers({ found: [], docs, uploads: {} })).toHaveLength(3);
+  });
+
+  it("the added person's own POI and POA do not collapse into each other", () => {
+    expect(docKey(addedPoi)).not.toBe(docKey(addedPoa));
+  });
+});
+
 describe("rows form — original indices survive a filtered subset", () => {
   // The vital-row table renders a SUBSET of research.found (stakeholder fields
   // render as person cards). `checks` stays keyed by the original index, so the

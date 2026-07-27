@@ -58,6 +58,7 @@ export function ConfirmStep({
   scrollAndSetStep,
   renderStakeholderConfirmSection,
   renderUnifiedFoundTable,
+  renderAddPerson,
 }) {
   const card = cardStyle;
   // Every count on this page comes from the ONE shared predicate
@@ -300,6 +301,8 @@ export function ConfirmStep({
                   Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
                 </p>
                 {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
+                {/* Adding is its own action, never a hijacked name edit. */}
+                {renderAddPerson && renderAddPerson()}
               </div>
             )}
 

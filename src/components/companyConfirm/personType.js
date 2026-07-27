@@ -57,6 +57,13 @@ export const PERSON_ATTRIBUTE = {
   OWNERSHIP_PCT: "ownership_pct",
   ROLE: "role",
   REMOVAL: "removal",
+  // Commit 7 — the customer adding a person the research missed. Kept as their
+  // own attributes rather than reusing the correction attributes so the audit
+  // trail names the rule that actually fired: an analyst reading
+  // PERSON-DOB-UBO on a person who was ADDED would be misled.
+  ADDED: "added",           // the list document proving the person belongs
+  ADDED_POI: "added_poi",   // the added person's own identity evidence
+  ADDED_POA: "added_poa",   // the added person's own address evidence
 };
 
 /** Maps the stakeholder card's field keys onto CD-03 attributes. */

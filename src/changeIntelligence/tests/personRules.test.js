@@ -173,6 +173,60 @@ describe('CD-03 — role changes', () => {
   });
 });
 
+describe('CD-03 — adding a person (commit 7)', () => {
+  it('adding a director requests the List of Directors', () => {
+    const r = classifyChange(director({ attribute: 'added' }));
+    expect(r).toMatchObject({ workflow: 'doc_required', docType: 'List of Directors' });
+    expect(r.matchedRule).toBe('PERSON-ADDED-DIRECTOR');
+  });
+
+  it('adding a UBO requests the Ownership Chart', () => {
+    const r = classifyChange(person({ attribute: 'added' }));
+    expect(r).toMatchObject({ workflow: 'doc_required', docType: 'Ownership Chart' });
+    expect(r.matchedRule).toBe('PERSON-ADDED-UBO');
+  });
+
+  it('an added UBO also needs POI and POA', () => {
+    expect(classifyChange(person({ attribute: 'added_poi' })))
+      .toMatchObject({ workflow: 'doc_required', docType: 'Proof of Identity' });
+    expect(classifyChange(person({ attribute: 'added_poa' })))
+      .toMatchObject({ workflow: 'doc_required', docType: 'Proof of Address' });
+  });
+
+  it('an added director-only person needs NO POI or POA — identification only', () => {
+    for (const attribute of ['added_poi', 'added_poa']) {
+      const r = classifyChange(director({ attribute }));
+      expect(r.workflow).toBe('accept_silent');
+      expect(r.docType).toBeNull();
+    }
+  });
+
+  it('the list document IS the analyst trigger — no separate flag', () => {
+    const r = classifyChange(director({ attribute: 'added' }));
+    expect(r.workflow).toBe('doc_required');
+    expect(r.escalation).toBe(false);
+  });
+
+  it('an added person declared PEP reuses the add-only PEP rule', () => {
+    const r = classifyChange(person({ attribute: 'pep', pepValue: 'yes' }));
+    expect(r).toMatchObject({ docType: 'Source of Wealth', eddFlag: true });
+  });
+
+  it('a high-risk country on an added person still only sets the EDD flag', () => {
+    setHighRiskCountries(['Ruritania']);
+    const r = classifyChange(person({ attribute: 'added', highRiskCountry: true }));
+    expect(r.eddFlag).toBe(true);
+    expect(r.docType).toBe('Ownership Chart'); // no extra EDD document
+    expect(r.workflow).not.toBe('edd');
+  });
+
+  it('uses add-specific rule ids, so the audit trail is not misleading', () => {
+    // A correction rule firing on an ADDED person would misinform an analyst.
+    expect(classifyChange(person({ attribute: 'added_poi' })).matchedRule).toBe('PERSON-ADDED-POI-UBO');
+    expect(classifyChange(person({ attribute: 'dob' })).matchedRule).toBe('PERSON-DOB-UBO');
+  });
+});
+
 describe('the two deliberate UNDECIDED sub-rules (need real ownership data)', () => {
   it('ownership %: crossing is UNKNOWN on stub data → UNDECIDED, inert', () => {
     const r = classifyChange(person({ attribute: 'ownership_pct', thresholdCrossing: 'unknown' }));

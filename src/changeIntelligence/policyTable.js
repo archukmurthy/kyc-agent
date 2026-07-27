@@ -273,6 +273,46 @@ const PERSON_RULES = [
     then: { workflow: 'accept_silent', silent: true },
   },
 
+  // ── ADD A PERSON (commit 7). The customer STATES the type when adding, so
+  //    person type is explicit here rather than inferred — the one place it is
+  //    not a stub. Same director-vs-UBO document selection as everywhere else.
+  //
+  //    The list document proves the person belongs, and requesting it IS the
+  //    analyst trigger (same principle as removal) — no separate flag. ──
+  {
+    id: 'PERSON-ADDED-DIRECTOR',
+    when: { personScope: true, attribute: 'added', personType: 'director' },
+    then: { workflow: 'doc_required', docType: 'List of Directors' },
+  },
+  {
+    id: 'PERSON-ADDED-UBO',
+    when: { personScope: true, attribute: 'added', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  // The added person's OWN identity evidence, gated on person type exactly as
+  // a correction would be: a UBO needs POI + POA; a director-only person is
+  // identification-only, verified through the list document and the registry.
+  {
+    id: 'PERSON-ADDED-POI-UBO',
+    when: { personScope: true, attribute: 'added_poi', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Identity' },
+  },
+  {
+    id: 'PERSON-ADDED-POI-DIRECTOR',
+    when: { personScope: true, attribute: 'added_poi', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+  {
+    id: 'PERSON-ADDED-POA-UBO',
+    when: { personScope: true, attribute: 'added_poa', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Address' },
+  },
+  {
+    id: 'PERSON-ADDED-POA-DIRECTOR',
+    when: { personScope: true, attribute: 'added_poa', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
   // ── Removal. The list document IS the analyst trigger — requesting it means
   //    an analyst reviews the removal, so there is no separate analyst flag. ──
   {
