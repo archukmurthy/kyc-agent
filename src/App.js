@@ -6687,6 +6687,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // the upload fails.
     const localUrl = URL.createObjectURL(file);
     let blobUrl = null;
+    // Store path within the Blob store, returned since the private-write fix.
+    // Persisted alongside the URL (raw_research JSONB — no migration) because
+    // signed-URL retrieval is keyed by pathname and addRandomSuffix makes it
+    // unreconstructable. Null for uploads made before that change.
+    let blobPathname = null;
     let uploadFailed = false;
     let filename = file.name;
     try {
@@ -6697,6 +6702,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const data = await resp.json();
       if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
       blobUrl = data.blobUrl;
+      blobPathname = data.pathname || null;
       filename = data.filename || file.name;
     } catch (err) {
       // Fall back to the ephemeral URL + a flag so the UI can warn rather than
@@ -6717,6 +6723,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               // failure (uploadFailed flags the UI to warn).
               manualUploadUrl: blobUrl || localUrl,
               manualUploadBlobUrl: blobUrl,
+              manualUploadPathname: blobPathname,
               manuallyUploaded: true,
               uploadFailed,
               manualUploadAt: new Date().toISOString(),
@@ -8223,9 +8230,17 @@ Nium Onboarding Team`;
               item.status === "retrieved" || item.status === "retrieved_unverified";
             // Permanent blob URL for manual uploads (null when the upload failed);
             // automated registry docs link to the registry page instead.
+            //
+            // Blobs are written PRIVATE, so a manual upload can no longer be an
+            // <a href> straight at the blob — a private blob is not fetchable by
+            // URL. Route it through /api/get-document, which reads it with the
+            // store token and streams the bytes back. Registry docs are ordinary
+            // public web pages and are linked directly, unchanged.
             const blobUrl = item.manualUploadBlobUrl || null;
             const viewUrl = uploaded
-              ? (item.uploadFailed ? null : blobUrl)
+              ? (item.uploadFailed || !blobUrl
+                  ? null
+                  : `/api/get-document?url=${encodeURIComponent(blobUrl)}`)
               : (item.searchUrl || item.sourceUrl || null);
             let host = "";
             try {
@@ -8521,7 +8536,8 @@ Nium Onboarding Team`;
                               )}
                             </div>
 
-                            {/* View link — permanent blobUrl for manual uploads,
+                            {/* View link — /api/get-document for manual uploads (the
+                                blob is private and streamed back by the server),
                                 registry/source URL for automated docs. Hidden when a
                                 manual upload failed (blobUrl null / uploadFailed). */}
                             {e.viewUrl && (

@@ -13,6 +13,11 @@
 
 export async function uploadAmendmentDoc(file) {
   let blobUrl = null;
+  // Store path within the Blob store, returned since the private-write fix.
+  // Kept next to blobUrl because it rides into raw_research with the rest of
+  // this record (JSONB — no migration) and is the key signed-URL retrieval
+  // needs. Null for uploads made before that change; nothing depends on it yet.
+  let pathname = null;
   let uploadFailed = false;
   let filename = file && file.name ? file.name : "document";
   try {
@@ -23,11 +28,12 @@ export async function uploadAmendmentDoc(file) {
     const data = await resp.json();
     if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
     blobUrl = data.blobUrl;
+    pathname = data.pathname || null;
     filename = data.filename || filename;
   } catch (err) {
     uploadFailed = true;
   }
-  return { name: filename, blobUrl, uploadFailed, at: new Date().toISOString() };
+  return { name: filename, blobUrl, pathname, uploadFailed, at: new Date().toISOString() };
 }
 
 export default uploadAmendmentDoc;
