@@ -9,7 +9,7 @@ import Step2DynamicForm, { DocumentUploadCard } from "./components/Step2DynamicF
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
-import { classifyFieldClass } from "./components/changeDialogue/dialogueContent";
+import { classifyFieldClass, deriveSource } from "./components/changeDialogue/dialogueContent";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
@@ -24,7 +24,9 @@ import {
   ATTRIBUTE_BY_FIELD_KEY,
 } from "./components/companyConfirm/personType";
 import { classifyChange } from "./changeIntelligence/classifyChange";
-import { personHasHighRiskCountry } from "./changeIntelligence/highRiskCountries";
+// eslint-disable-next-line no-unused-vars -- setHighRiskCountries is used by the
+// SHOW_TEST_TOOLS window affordance below, which the rule does not see.
+import { personHasHighRiskCountry, setHighRiskCountries } from "./changeIntelligence/highRiskCountries";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
 import {
   ROW_STATE,
@@ -127,6 +129,14 @@ import {
   getApplicantCandidates as deriveApplicantCandidates,
   buildApplicantProvenance as deriveApplicantProvenance,
 } from "./workflows/applicantWorkflow";
+
+// Test affordance, same gate as every other one on this page: the CD-03 EDD
+// check runs against an INJECTABLE high-risk list that is empty until the MLRO
+// supplies it. Exposing the setter under SHOW_TEST_TOOLS lets the mechanism be
+// exercised end-to-end before that list exists. Never present for customers.
+if (SHOW_TEST_TOOLS && typeof window !== "undefined") {
+  window.__setHighRiskCountries = setHighRiskCountries;
+}
 
 export default function KYCAgent({ previewMode = false } = {}) {
   // Tenant config — loaded from /api/config on mount, or from sessionStorage
@@ -2831,6 +2841,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const engineResult = classifyChange(engineInput);
 
     const prev = dialogueStateRef.current[compositeId];
+    // Provenance goes through the SAME deriveSource the company path uses.
+    // change_events.source_tier is a SMALLINT, and a stakeholder carries the
+    // string form ("tier1"); deriveSource normalises it to 1. Passing the raw
+    // string makes real Postgres reject the whole INSERT — invisible locally,
+    // because the route always answers 200 and the fake DB never type-checks.
+    const src = deriveSource({ sourceTier: person.sourceTier, source: person.source });
     const event = buildChangeEvent({
       field: {
         fieldId: compositeId,
@@ -2839,7 +2855,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
         // passes with no schema or vocabulary change.
         fieldClass: type.personType === "director" ? "director" : "ubo",
         value: person[Object.keys(ATTRIBUTE_BY_FIELD_KEY).find(k => ATTRIBUTE_BY_FIELD_KEY[k] === attribute)] ?? null,
-        sourceTier: person.sourceTier || null,
+        sourceType: src.sourceType,
+        sourceProvider: src.sourceProvider,
+        sourceTier: src.sourceTier,
         verifiability: "structured_registry",
       },
       jurisdiction: countryCode || "GB",
