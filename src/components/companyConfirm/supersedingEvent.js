@@ -46,12 +46,25 @@ export function serialiseLike(value, reference) {
   return String(value);
 }
 
-export function buildSupersedingEvent(snapshot, value) {
+/**
+ * @param {object}  snapshot   the dialogue's persisted state for this field
+ * @param {*}       value      the customer's corrected value
+ * @param {object} [opts]
+ * @param {boolean} [opts.eddFlag]  CD-03 high-risk-country flag for the CORRECTED
+ *   value (commit 8). It is OR-ed onto the cloned classification, never cleared:
+ *   correcting a country field INTO a high-risk country must raise the flag, and
+ *   correcting back out of one must not silently retract an analyst signal on an
+ *   append-only trail. Same reasoning as the workflow/docType clone above — a
+ *   genuine retraction goes through the re-check/revert path, not through an
+ *   edit. Everything else stays verbatim.
+ */
+export function buildSupersedingEvent(snapshot, value, opts = {}) {
   if (!snapshot || !snapshot.emitted || !snapshot.event) return null;
   const event = {
     ...snapshot.event,
     changeType: "changed",
     afterValue: serialiseLike(value, snapshot.event.beforeValue),
+    eddFlag: Boolean(snapshot.event.eddFlag) || opts.eddFlag === true,
   };
   // Prefer the tail (the most recent superseding write). The head is only ever
   // a target for the FIRST correction: once `headConsumed` is set, a write has

@@ -19,9 +19,11 @@ const { BASE_RULES, PERSON_RULES } = require('./policyTable');
 const { JURISDICTION_OVERRIDES } = require('./policyTable.jurisdictions');
 
 // The full result shape. Every path returns this superset of the contract.
-// eddFlag is ALWAYS false: no rule fires EDD because EDD triggering conditions
-// were never specified (open question O2). It is deliberately not defaulted
-// "true somewhere" — the UNDECIDED-ness of EDD is surfaced by the sweep.
+// eddFlag defaults false and NO RULE sets it: EDD triggering conditions were
+// never specified for the rule tables (open question O2), and it is deliberately
+// not defaulted "true somewhere" — the UNDECIDED-ness of EDD is surfaced by the
+// sweep. The one thing that raises it is the CD-03 high-risk-country post-step
+// at the bottom of this file, driven by the caller's injectable list.
 const DEFAULT_RESULT = {
   workflow: 'UNDECIDED',
   docType: null,
@@ -72,7 +74,6 @@ function classifyPersonChange(input) {
     nameCase = null,
     pepValue = null,
     thresholdCrossing = null,
-    highRiskCountry = false,
   } = input || {};
 
   const normalized = {
@@ -84,25 +85,19 @@ function classifyPersonChange(input) {
     thresholdCrossing,
   };
 
-  let result = { ...DEFAULT_RESULT };
   for (const rule of PERSON_RULES) {
     if (ruleMatches(rule.when, normalized)) {
-      result = { ...DEFAULT_RESULT, decided: true, matchedRule: rule.id, ...rule.then };
-      break;
+      return { ...DEFAULT_RESULT, decided: true, matchedRule: rule.id, ...rule.then };
     }
   }
 
-  // CD-03 EDD post-step: a high-risk nationality / country of birth / country
-  // of residence sets the flag EITHER WAY — independently of whether the
-  // attribute produced a document. Flag only; there is no EDD collection flow.
-  // The list is injectable and empty until the MLRO supplies it, so this never
-  // fires by default (see highRiskCountries.js).
-  if (highRiskCountry === true) result.eddFlag = true;
-
-  return result;
+  // The CD-03 EDD post-step used to live here. It now runs once at the single
+  // exit of classifyChange, so person and company country fields share ONE
+  // mechanism — see the comment there.
+  return { ...DEFAULT_RESULT };
 }
 
-function classifyChange(input) {
+function classifyChangeCore(input) {
   const {
     fieldClass,
     changeType,
@@ -163,6 +158,34 @@ function classifyChange(input) {
 
   // ── Hard rule 4 (no default fallthrough) — surface the hole, do not guess. ──
   return { ...DEFAULT_RESULT };
+}
+
+/**
+ * The engine's single entry point, and the single place the CD-03 high-risk
+ * country EDD flag is applied.
+ *
+ * It runs AFTER classification, on every exit path — person rules (commit 6),
+ * company policy table, the PEP short-circuit, the verifiability guard and the
+ * UNDECIDED fallthrough alike. That placement is the point: a high-risk country
+ * sets the flag EITHER WAY, independently of whether the change produced a
+ * document, and person-level (commit 6) and company-level (commit 8) country
+ * fields therefore go through ONE mechanism rather than two parallel ones.
+ *
+ * Flag only — no document, no EDD collection flow (CD-03). The caller decides
+ * WHICH fields are country-typed and whether their value is on the list
+ * (highRiskCountries.js); the engine only records the consequence. The list is
+ * injectable and empty until the MLRO supplies it, so this never fires by
+ * default.
+ *
+ * OPEN COMPLIANCE QUESTION raised by widening to company fields, deliberately
+ * not decided in code: does a high-risk country of OPERATION carry the same
+ * weight as a high-risk NATIONALITY? Today both set the same undifferentiated
+ * flag. If they should differ, that is a CD-03-round decision, not a code one.
+ */
+function classifyChange(input) {
+  const result = classifyChangeCore(input);
+  if (input && input.highRiskCountry === true) return { ...result, eddFlag: true };
+  return result;
 }
 
 module.exports = { classifyChange };

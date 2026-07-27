@@ -32,6 +32,33 @@ describe("buildSupersedingEvent", () => {
     expect(ev.customerRegistryClaim).toBe("not_reflected");
   });
 
+  // Commit 8 — the corrected value gets its own high-risk-country check, and the
+  // flag only ever goes up.
+  describe("CD-03 EDD flag on the corrected value", () => {
+    it("raises the flag when the correction moves INTO a high-risk country", () => {
+      const ev = buildSupersedingEvent({ emitted: true, event: baseEvent }, "Ruritania", { eddFlag: true });
+      expect(ev.eddFlag).toBe(true);
+    });
+
+    it("leaves it false when neither the original nor the correction is high risk", () => {
+      const ev = buildSupersedingEvent({ emitted: true, event: baseEvent }, "United Kingdom", { eddFlag: false });
+      expect(ev.eddFlag).toBe(false);
+    });
+
+    it("never RETRACTS a flag already set on the original — append-only trail", () => {
+      const flagged = { ...baseEvent, eddFlag: true };
+      const ev = buildSupersedingEvent({ emitted: true, event: flagged }, "United Kingdom", { eddFlag: false });
+      expect(ev.eddFlag).toBe(true);
+    });
+
+    it("defaults to the original's flag when no opts are passed", () => {
+      expect(buildSupersedingEvent({ emitted: true, event: baseEvent }, "x").eddFlag).toBe(false);
+      expect(
+        buildSupersedingEvent({ emitted: true, event: { ...baseEvent, eddFlag: true } }, "x").eddFlag
+      ).toBe(true);
+    });
+  });
+
   it("returns null until the initial event has been emitted", () => {
     expect(buildSupersedingEvent(null, "x")).toBeNull();
     expect(buildSupersedingEvent({ emitted: false, event: baseEvent }, "x")).toBeNull();

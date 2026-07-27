@@ -22,6 +22,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { classifyChange } from '../../changeIntelligence/classifyChange';
+import { fieldHasHighRiskCountry } from '../../changeIntelligence/highRiskCountries';
 import { Notice } from '../notices/Notice';
 import { buildChangeEvent } from './buildChangeEvent';
 import { useDialogueState } from './useDialogueState';
@@ -102,6 +103,13 @@ export function ChangeDialogue({
       registryStatus,
       verifiability,
       jurisdiction,
+      // CD-03 EDD (commit 8) — the SAME check and the SAME injectable list the
+      // person path uses, now asked of every country-typed company field
+      // (registered country, address country, countries of operation, …). Read
+      // off the FOUND value: a company already sitting in a high-risk country is
+      // what the analyst needs flagged, not only one that corrects into it. The
+      // corrected value is checked separately on the superseding event.
+      highRiskCountry: fieldHasHighRiskCountry(field),
     });
 
     // Emit EXACTLY ONCE per completed dialogue — including across a remount: when

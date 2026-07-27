@@ -50,9 +50,83 @@ function personHasHighRiskCountry(person = {}) {
   );
 }
 
+// ── Company-level country fields (commit 8) ─────────────────────────────────
+// Same list, same membership test as the person path above — isHighRiskCountry
+// is the one check both call. This section only widens WHICH fields are asked;
+// it introduces no second mechanism and no new rule.
+
+/**
+ * Is this a country-typed field?
+ *
+ * LIMITATION, flagged rather than papered over: schema field defs are
+ * `{ field, label, tier, section }` (+ `inputType` on gap fields) and carry NO
+ * marker for "this value is a country". Detection is therefore by id/label
+ * token. That buys the property commit 8 asked for — a schema that adds a new
+ * country field is covered without touching this code — but it is a heuristic
+ * over naming, not a declared type. The proper fix is a country type on the
+ * field def; until then, a country field named without the word "country"
+ * (e.g. "jurisdictionOfIncorporation") would be missed.
+ */
+const COUNTRY_TOKEN = /countr(y|ies)/i;
+/**
+ * "Mobile Country Code" / applicantMobileCountryCode is a DIALLING code, not a
+ * country. Without this exclusion a dialling-code string that happened to
+ * appear in the MLRO list would flag EDD on every applicant who used it.
+ */
+const NOT_A_COUNTRY = /countr(y|ies)\s*code|countrycode/i;
+
+function isCountryField(field = {}) {
+  const id = typeof field === "string" ? field : field.fieldId || field.field || "";
+  const label = (field && typeof field === "object" && field.label) || "";
+  const hay = `${id} ${label}`;
+  if (NOT_A_COUNTRY.test(hay)) return false;
+  return COUNTRY_TOKEN.test(hay);
+}
+
+/**
+ * Split a field value into candidate country tokens. Country fields are not
+ * all scalar — "Countries of Operation" arrives as "UK, US, SG" or an array —
+ * so a single-value check would miss every country but the first.
+ * Structured/object values (uboAnalysis and friends) are not country lists and
+ * yield nothing rather than a stringified guess.
+ */
+function countryValues(value) {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) return value.reduce((acc, v) => acc.concat(countryValues(v)), []);
+  if (typeof value === "object") return [];
+  return String(value)
+    .split(/[,;/|]|\band\b/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** True when any country token in `value` is on the list. */
+function containsHighRiskCountry(value) {
+  return countryValues(value).some(isHighRiskCountry);
+}
+
+/**
+ * Company-level entry point: a country-typed field carrying a high-risk value.
+ * `value` defaults to the field's own value so a found row can be tested as-is;
+ * pass it explicitly to test a corrected value before it lands on the field.
+ *
+ * Person attributes never reach here: they are classified through the
+ * person-scoped path under composite fieldIds (`<type>::<sh_id>::<attribute>`),
+ * which carry no "country" token, so there is no double-flagging by
+ * construction — asserted in the tests.
+ */
+function fieldHasHighRiskCountry(field = {}, value) {
+  if (!isCountryField(field)) return false;
+  return containsHighRiskCountry(value === undefined ? field && field.value : value);
+}
+
 module.exports = {
   setHighRiskCountries,
   getHighRiskCountries,
   isHighRiskCountry,
   personHasHighRiskCountry,
+  isCountryField,
+  countryValues,
+  containsHighRiskCountry,
+  fieldHasHighRiskCountry,
 };

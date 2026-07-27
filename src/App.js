@@ -28,7 +28,11 @@ import {
 import { classifyChange } from "./changeIntelligence/classifyChange";
 // eslint-disable-next-line no-unused-vars -- setHighRiskCountries is used by the
 // SHOW_TEST_TOOLS window affordance below, which the rule does not see.
-import { personHasHighRiskCountry, setHighRiskCountries } from "./changeIntelligence/highRiskCountries";
+import {
+  personHasHighRiskCountry,
+  fieldHasHighRiskCountry,
+  setHighRiskCountries,
+} from "./changeIntelligence/highRiskCountries";
 import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
 import {
   ROW_STATE,
@@ -3062,7 +3066,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const snap = dialogueStateRef.current[fieldId];
     if (!snap || !snap.emitted || !snap.event) return; // nothing to supersede yet
     if (snap.lastSavedValue === value) return;         // idempotent double-save guard
-    const superseding = buildSupersedingEvent(snap, value);
+    // CD-03 EDD (commit 8) — re-run the SAME country check against the CORRECTED
+    // value. The initial event was classified off the found value; a customer who
+    // corrects "Registered Country" into a high-risk country has to raise the
+    // flag, and the superseding event otherwise clones the original verbatim.
+    const superseding = buildSupersedingEvent(snap, value, {
+      eddFlag: fieldHasHighRiskCountry({ fieldId: item.field, label: item.label }, value),
+    });
     if (!superseding) return;
     // Consume the head and clear the tail BEFORE the write lands: from here on
     // the only safe targets are the id this write returns, or null. Falling
@@ -4035,7 +4045,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
               the questions always come first, the value input second. */}
           {!checks[idx] && (
             <ChangeDialogue
-              field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
+              // `label` is here for the commit-8 country-field check: the schema
+              // marks no field as country-typed, so detection reads the id AND
+              // the label (e.g. field "country" / label "Address Country"). The
+              // row's own label is used — the same string the customer sees.
+              field={{ fieldId: item.field, label: item.label, value: item.value, source: item.source, sourceTier: item.sourceTier }}
               jurisdiction={countryCode || "GB"}
               submissionId={dossierId || onboardingSubmissionId}
               dossierId={dossierId}
