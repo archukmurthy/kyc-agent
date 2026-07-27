@@ -24,6 +24,7 @@
 import React, { useEffect, useState } from 'react';
 import { AmendmentDocCard } from './AmendmentDocCard';
 import { uploadAmendmentDoc } from './uploadAmendmentDoc';
+import { canonicalDocs, docKey } from '../companyConfirm/confirmState';
 
 const SECTION = {
   background: '#FEF9EF',
@@ -37,7 +38,11 @@ const SUB = { fontSize: 12, color: '#7a4f0099', margin: '0 0 12px' };
 // The row / title / button / upload-state styles moved to AmendmentDocCard,
 // which now renders every amendment document — here and on the Confirm row.
 
-const keyOf = (d) => `${d.fieldId}::${d.docType}`;
+// Scope-aware (commit 6a): person documents key by (stakeholderId, docType) so
+// one person's upload can never satisfy another person's requirement; company
+// documents keep the historic fieldId::docType form. Shared with Confirm so
+// both surfaces agree on what is satisfied.
+const keyOf = docKey;
 
 export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChange, extraDocuments }) {
   const [documents, setDocuments] = useState([]);
@@ -65,19 +70,13 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
         const arr = Array.isArray(data.documents) ? data.documents : [];
         // Deduplicate by docType: several changed fields can map to ONE real
         // document (e.g. three address lines → one "Notice of Change of
-        // Address"). Same document → one card; the derived list carries one entry
-        // per (fieldId, docType), so same-docType entries are true duplicates.
-        // Different docTypes stay separate, and any entry without a docType is
-        // passed through untouched — never under-collect evidence (safety rule).
-        // Keeps the first occurrence of each docType.
-        const seen = new Set();
-        const deduped = [];
-        for (const d of arr) {
-          const t = d && d.docType;
-          if (t) { if (seen.has(t)) continue; seen.add(t); }
-          deduped.push(d);
-        }
-        setDocuments(deduped);
+        // Address"). Collapsing is SCOPE-AWARE (commit 6a): company documents
+        // dedupe per type as before, but person documents dedupe per
+        // (person, type) — "Proof of Identity" is inherently per-person, and
+        // collapsing John's and Jane's into one card under-collects identity
+        // evidence. Any entry without a docType passes through untouched —
+        // never under-collect evidence (safety rule).
+        setDocuments(canonicalDocs(arr));
       })
       .catch((err) => console.warn('[AmendmentDocuments] fetch failed:', err));
     return () => {
@@ -87,16 +86,8 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
 
   // Union the persisted list with any live-classified documents the parent
   // passes (correct before the read endpoint catches up, and in dev with no
-  // DB). De-duped by docType, so one real document is never asked for twice.
-  const merged = (() => {
-    const seen = new Set(documents.map((d) => d && d.docType).filter(Boolean));
-    const extra = (Array.isArray(extraDocuments) ? extraDocuments : []).filter((d) => {
-      if (!d || !d.docType || seen.has(d.docType)) return false;
-      seen.add(d.docType);
-      return true;
-    });
-    return [...documents, ...extra];
-  })();
+  // DB), collapsed with the same scope-aware key.
+  const merged = canonicalDocs(documents, extraDocuments);
 
   if (!merged.length) return null; // no changes need documents → render nothing
 

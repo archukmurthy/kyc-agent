@@ -190,6 +190,86 @@ describe("submitBlockers", () => {
   });
 });
 
+describe("scope-aware document dedup (6a) — identity evidence is per person", () => {
+  const johnDob = { fieldId: "ubo::sh_john::dob", docType: "Proof of Identity", personName: "John Smith" };
+  const johnNat = { fieldId: "ubo::sh_john::nationality", docType: "Proof of Identity", personName: "John Smith" };
+  const janeNat = { fieldId: "ubo::sh_jane::nationality", docType: "Proof of Identity", personName: "Jane Doe" };
+  const addr1 = { fieldId: "addressLine1", docType: "Notice of Change of Address" };
+  const addr2 = { fieldId: "addressLine2", docType: "Notice of Change of Address" };
+
+  it("two people each needing a POI produce TWO entries, not one", () => {
+    const docs = canonicalDocs([johnDob, janeNat]);
+    expect(docs).toHaveLength(2);
+    expect(docs.map((d) => d.stakeholderId)).toEqual(["sh_john", "sh_jane"]);
+  });
+
+  it("one person, two attributes both triggering POI, produce ONE entry", () => {
+    const docs = canonicalDocs([johnDob, johnNat]);
+    expect(docs).toHaveLength(1);
+    expect(docs[0].stakeholderId).toBe("sh_john");
+  });
+
+  it("a company document triggered by several fields still collapses to one", () => {
+    const docs = canonicalDocs([addr1, addr2]);
+    expect(docs).toHaveLength(1);
+    expect(docs[0].stakeholderId).toBeNull();
+  });
+
+  it("keeps company and person documents of different types apart", () => {
+    const docs = canonicalDocs([johnDob, janeNat, addr1, addr2]);
+    expect(docs).toHaveLength(3);
+  });
+
+  it("keys person uploads by (person, docType) and company uploads unchanged", () => {
+    expect(docKey(johnDob)).toBe("sh_john::Proof of Identity");
+    expect(docKey(johnNat)).toBe("sh_john::Proof of Identity"); // same person, same doc
+    expect(docKey(janeNat)).toBe("sh_jane::Proof of Identity"); // different person
+    expect(docKey(addr1)).toBe("addressLine1::Notice of Change of Address"); // historic form
+  });
+
+  /**
+   * THE REGRESSION TEST for the P1 defect. On commit 6 the dedupe key was the
+   * docType alone, so one uploaded Proof of Identity satisfied every person's
+   * POI and the gate opened while the database still owed documents.
+   */
+  it("UPLOAD ISOLATION: person A's upload never satisfies person B's document", () => {
+    const docs = canonicalDocs([johnDob, johnNat, janeNat]);
+    expect(docs).toHaveLength(2); // John's POI + Jane's POI
+
+    // Upload ONLY John's.
+    const uploads = { [docKey(johnDob)]: { name: "john-poi.pdf", uploadFailed: false } };
+
+    const blockers = submitBlockers({ found: [], docs, uploads });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].kind).toBe(BLOCKER_KIND.MISSING_DOCUMENT);
+    expect(blockers[0].stakeholderId).toBe("sh_jane");
+    expect(blockers[0].label).toContain("Jane Doe");
+
+    // The counts agree with the gate.
+    const counts = computeConfirmCounts({ found: [], docs, uploads });
+    expect(counts.docsNeeded).toBe(1);
+    expect(counts.docsTotal).toBe(2);
+
+    // Uploading Jane's as well clears it.
+    const both = { ...uploads, [docKey(janeNat)]: { name: "jane-poi.pdf", uploadFailed: false } };
+    expect(submitBlockers({ found: [], docs, uploads: both })).toEqual([]);
+    expect(computeConfirmCounts({ found: [], docs, uploads: both }).docsNeeded).toBe(0);
+  });
+
+  it("a failed upload does not satisfy that person either", () => {
+    const docs = canonicalDocs([johnDob]);
+    const uploads = { [docKey(johnDob)]: { name: "x.pdf", uploadFailed: true } };
+    expect(submitBlockers({ found: [], docs, uploads })).toHaveLength(1);
+  });
+
+  it("labels a person document with the person and leaves company docs unnamed", () => {
+    const docs = canonicalDocs([janeNat, addr1]);
+    const blockers = submitBlockers({ found: [], docs, uploads: {} });
+    expect(blockers.find((b) => b.stakeholderId === "sh_jane").label).toBe("Proof of Identity — Jane Doe");
+    expect(blockers.find((b) => !b.stakeholderId).label).toBe("Notice of Change of Address");
+  });
+});
+
 describe("rows form — original indices survive a filtered subset", () => {
   // The vital-row table renders a SUBSET of research.found (stakeholder fields
   // render as person cards). `checks` stays keyed by the original index, so the

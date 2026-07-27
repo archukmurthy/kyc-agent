@@ -20,6 +20,7 @@ import { PersonCorrection, PersonRemovalPrompt } from "./components/companyConfi
 import {
   resolvePersonType,
   personFieldId,
+  parsePersonFieldId,
   PERSON_ATTRIBUTE,
   ATTRIBUTE_BY_FIELD_KEY,
 } from "./components/companyConfirm/personType";
@@ -4017,7 +4018,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
             const snap = dialogueStateRef.current[item.field];
             const live = snap && snap.event && snap.event.workflow === "doc_required" ? snap.event.docType : null;
             if (!live) return null;
-            const doc = confirmDocs.find((d) => d.docType === live);
+            // Company-scoped row: match a company entry (no stakeholderId), so
+            // it can never pick up a person's same-named document.
+            const doc = confirmDocs.find((d) => d.docType === live && !d.stakeholderId);
             if (!doc) return null;
             const k = docKey(doc);
             return (
@@ -4537,8 +4540,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   <div style={{ padding: "0 16px 12px" }}>
                     {mine.map(([k, snap]) => {
                       const ev = snap.event || {};
+                      // Match THIS person's document — never another person's
+                      // entry of the same type (the 6a under-collection fix).
                       const doc = ev.workflow === "doc_required" && ev.docType
-                        ? confirmDocs.find((d) => d.docType === ev.docType)
+                        ? confirmDocs.find((d) => d.docType === ev.docType && d.stakeholderId === s.id)
                         : null;
                       return (
                         <div key={k}>
@@ -5795,9 +5800,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const hasStakeholderSummary = stakeholderSummaryNodes.length > 0;
 
   // Confirm-page documents: persisted (server-derived) ∪ live dialogue
-  // outcomes, collapsed to one entry per docType. Feeds the inline row card,
-  // the summary panel, and blocker kind (b) — one list, three surfaces.
-  const confirmDocs = canonicalDocs(persistedAmendmentDocs, docsNeededFrom(dialogueStateRef.current));
+  // outcomes, collapsed with the SCOPE-AWARE key (commit 6a) — per person for
+  // identity evidence, per type for company evidence. Feeds the inline row
+  // card, the person cards, the summary panel and blocker kind (b): one list,
+  // four surfaces, one satisfaction rule.
+  const stakeholderNameById = (() => {
+    const byId = new Map();
+    (research?.found || []).forEach((row) => {
+      (row.stakeholders || []).forEach((s) => { if (s && s.id) byId.set(s.id, s.full_name || null); });
+    });
+    // Customer-added / edited people live in the ref, and win on name.
+    Object.values(stakeholdersRef.current || {}).forEach((list) => {
+      (list || []).forEach((s) => { if (s && s.id && s.full_name) byId.set(s.id, s.full_name); });
+    });
+    return byId;
+  })();
+  const withPersonName = (list) => (Array.isArray(list) ? list : []).map((d) => {
+    const p = d && d.fieldId ? parsePersonFieldId(d.fieldId) : null;
+    return p ? { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null } : d;
+  });
+  const confirmDocs = canonicalDocs(
+    withPersonName(persistedAmendmentDocs),
+    withPersonName(docsNeededFrom(dialogueStateRef.current)),
+  );
 
   // Confirm-page tile counts and the gate's blockers, from the ONE shared
   // predicate. Computed during render — not memoised — because gapRef and

@@ -36,6 +36,8 @@
  * predicate somewhere else.
  */
 
+import { parsePersonFieldId } from "./personType";
+
 export const ROW_STATE = {
   CONFIRMED: "confirmed",
   NEEDS_YOU: "needsYou",
@@ -113,14 +115,55 @@ export function docsNeededFrom(dialogueState = {}) {
   return out;
 }
 
-export const docKey = (d) => `${d.fieldId}::${d.docType}`;
+/**
+ * DOCUMENT SCOPE — the correction that makes identity evidence safe.
+ *
+ * A document's scope is derivable from the event's fieldId: commit 6's
+ * composite person key (`<personType>::<stakeholderId>::<attribute>`) carries
+ * the person id, while a company field is a plain id.
+ *
+ *   person-scoped  (Proof of Identity, Proof of Address, Source of Wealth)
+ *     — inherently PER PERSON. John's POI and Jane's POI are two different
+ *       documents that merely share a type name.
+ *   company-scoped (Notice of Change of Address, List of Directors, Ownership
+ *     Chart) — one per type. Three corrected address lines genuinely need one
+ *       notice.
+ */
+export function docScope(d = {}) {
+  const person = parsePersonFieldId(d.fieldId);
+  return person ? { kind: "person", stakeholderId: person.stakeholderId } : { kind: "company" };
+}
 
 /**
- * Collapse a document list to one entry per DOC TYPE — several changed fields
- * can map to one real document (three address lines → one "Notice of Change of
- * Address"), and the customer must never be asked to upload the same document
- * twice. First occurrence wins, which is also how AmendmentDocuments has always
- * de-duped, so upload keys stay compatible with anything already stored.
+ * The UPLOAD-SATISFACTION key. This is the safety-critical one: an uploaded
+ * file satisfies exactly the entries sharing this key, so a person-scoped
+ * document is keyed by (stakeholderId, docType) and can NEVER be satisfied by a
+ * file uploaded for somebody else.
+ *
+ * Company documents keep the historic `<fieldId>::<docType>` form, so uploads
+ * already stored against them (PR-071 persists amendmentUploads into the
+ * dossier payload) keep matching.
+ */
+export const docKey = (d) => {
+  const scope = docScope(d);
+  return scope.kind === "person"
+    ? `${scope.stakeholderId}::${d.docType}`
+    : `${d.fieldId}::${d.docType}`;
+};
+
+/** The DEDUPE key — what collapses into one visible request. */
+export const docDedupeKey = (d) => {
+  const scope = docScope(d);
+  // Per person for identity evidence; per type for company evidence, so the
+  // company behaviour (several fields → one document) is exactly as before.
+  return scope.kind === "person" ? `p:${scope.stakeholderId}:${d.docType}` : `c:${d.docType}`;
+};
+
+/**
+ * Collapse a document list to what the customer is actually asked for, using
+ * the scope-aware key: N people each owing a POI produce N entries (one each),
+ * while one person whose DOB *and* nationality both trigger POI produces a
+ * single POI for that person. First occurrence wins.
  *
  * Sources are unioned first: the persisted list from /api/amendment-documents
  * (authoritative in production) and the live dialogue outcomes (correct in dev
@@ -132,9 +175,18 @@ export function canonicalDocs(...sources) {
   for (const list of sources) {
     for (const d of Array.isArray(list) ? list : []) {
       if (!d || !d.docType) continue;
-      if (seen.has(d.docType)) continue;
-      seen.add(d.docType);
-      out.push({ fieldId: d.fieldId, docType: d.docType, fieldClass: d.fieldClass || null });
+      const key = docDedupeKey(d);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const scope = docScope(d);
+      out.push({
+        fieldId: d.fieldId,
+        docType: d.docType,
+        fieldClass: d.fieldClass || null,
+        // Carried so the panel can say WHOSE document this is.
+        stakeholderId: scope.kind === "person" ? scope.stakeholderId : null,
+        personName: d.personName || null,
+      });
     }
   }
   return out;
@@ -221,12 +273,17 @@ export function submitBlockers({
     });
   });
 
+  // Person-scoped documents are counted PER PERSON: uploading John's Proof of
+  // Identity clears John's blocker and leaves Jane's standing. The scope-aware
+  // docKey is what guarantees that — one person's file can never satisfy
+  // another's requirement.
   canonicalDocs(docs).forEach((d) => {
     if (isSatisfied(uploads[docKey(d)])) return;
     blockers.push({
       kind: BLOCKER_KIND.MISSING_DOCUMENT,
       fieldId: d.fieldId,
-      label: d.docType,
+      stakeholderId: d.stakeholderId || null,
+      label: d.personName ? `${d.docType} — ${d.personName}` : d.docType,
       reason: "Your change needs this document before we can continue.",
     });
   });

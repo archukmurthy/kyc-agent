@@ -366,7 +366,16 @@ export function ConfirmStep({
                       }}>
                         <span style={{ fontSize: 14, flexShrink: 0 }}>{done ? "✓" : "📄"}</span>
                         <div style={{ flex: 1, minWidth: 160 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{d.docType}</div>
+                          {/* Person documents say WHOSE they are — two people
+                              each owing a Proof of Identity are two separate
+                              requests, and the customer must be able to tell
+                              them apart. Company documents carry no name. */}
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>
+                            {d.docType}
+                            {d.personName && (
+                              <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.72)" }}> — {d.personName}</span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
                             {done
                               ? `Uploaded — ${up.name}`
