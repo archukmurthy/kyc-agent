@@ -16,6 +16,7 @@ import { C } from "../../constants/theme";
 import { SHOW_TEST_TOOLS } from "../../constants/appConstants";
 import { getResearchStrategy } from "../../utils/ownershipTypes";
 import { AmendmentDocCard } from "../amendmentDocuments/AmendmentDocCard";
+import { HoverTooltip } from "./HoverTooltip";
 import { docKey, isSatisfied } from "./confirmState";
 
 export function ConfirmStep({
@@ -81,15 +82,35 @@ export function ConfirmStep({
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <h2 style={{ fontSize: 19, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
-                  {/* Prototype's reassurance line leads; the source breakdown
-                      stays as smaller supporting detail. */}
+                  {/* The source breakdown is supporting detail, not headline
+                      copy — it now lives in a hover tooltip on the company name
+                      so the default view stays uncluttered. Same numbers, same
+                      wording, floating (out of flow) so nothing reflows. */}
+                  <h2 style={{ fontSize: 19, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>
+                    <HoverTooltip
+                      testId="prefilled-breakdown-tooltip"
+                      width={320}
+                      content={
+                        <span style={{ display: "block" }}>
+                          {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} from company or unverified sources
+                        </span>
+                      }
+                    >
+                      <span style={{
+                        cursor: "help",
+                        textDecoration: "underline dotted",
+                        textDecorationColor: "rgba(26,58,74,0.3)",
+                        textUnderlineOffset: 4,
+                      }}>
+                        {research.companyName || companyName}
+                      </span>
+                    </HoverTooltip>
+                    {" "}{jurisdictionBadge}{entityBadge}
+                  </h2>
+                  {/* Prototype's reassurance line leads. */}
                   <p style={{ fontSize: 13, color: C.textSec, margin: "3px 0 0", lineHeight: 1.5 }}>
                     We verified the high-confidence data for <strong>{research.companyName || companyName}</strong>.{" "}
                     {outstanding > 0 ? "Only a few items need your input." : "Nothing needs your input."}
-                  </p>
-                  <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "4px 0 0" }}>
-                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} from company or unverified sources
                   </p>
                   {servedFromCache && cachedAt && (
                     <div style={{
@@ -102,54 +123,15 @@ export function ConfirmStep({
                     </div>
                   )}
                 </div>
-                {/* Prototype's header pill — same shared count as the tile. */}
-                <span style={{
-                  flexShrink: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em",
-                  color: outstanding > 0 ? C.warning : C.success,
-                  background: outstanding > 0 ? C.warningBg : C.successBg,
-                  border: `1px solid ${outstanding > 0 ? C.warningBorder : C.successBorder}`,
-                  borderRadius: 99, padding: "4px 12px", whiteSpace: "nowrap",
-                }}>
-                  {outstanding > 0 ? `${outstanding} ITEM${outstanding === 1 ? "" : "S"} NEED${outstanding === 1 ? "S" : ""} YOUR INPUT` : "ALL ITEMS REVIEWED"}
-                </span>
+                {/* (The header's "N ITEMS NEED YOUR INPUT" pill was removed —
+                    the same count is already the Needs You tile below, and its
+                    coaching copy is that tile's hover tooltip.) */}
               </div>
             </div>
 
-            {/* ONE action banner (replaces the old green intro strip here and
-                the amber unchecked-count strip that sat above the footer).
-                Reads the shared predicate — never its own count. */}
-            {(() => {
-              const needsInput = outstanding;
-              const uncheckedCount = (research.found || []).filter((_, i) => !checks[i]).length;
-              const allQuiet = needsInput === 0;
-              return (
-                <div style={{
-                  display: "flex", alignItems: "flex-start", gap: 12,
-                  background: "#fff", borderRadius: 12,
-                  border: `1px solid ${C.border}`,
-                  borderLeft: `4px solid ${allQuiet ? "#4a9e8e" : C.warning}`,
-                  padding: "14px 18px", marginBottom: 16,
-                  boxShadow: "0 2px 10px rgba(26,58,74,0.04)",
-                }}>
-                  <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>{allQuiet ? "✅" : "👋"}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-                      {allQuiet
-                        ? "Everything is confirmed from official sources — just review and continue."
-                        : `${needsInput} item${needsInput === 1 ? "" : "s"} need${needsInput === 1 ? "s" : ""} your input`}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3, lineHeight: 1.5 }}>
-                      {allQuiet
-                        ? "Every pre-filled field below came from your documents or official registries. Click any source to see when it was fetched."
-                        : "Everything else is confirmed — you don't need to touch it. Amber rows came from company or unverified sources; give each a quick check. Click any source to see when it was fetched."}
-                      {uncheckedCount > 0 && (
-                        <> You've marked {uncheckedCount} field{uncheckedCount === 1 ? "" : "s"} as wrong — you'll provide the correct value{uncheckedCount === 1 ? "" : "s"} on the next page.</>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* (The single action banner that used to sit here is gone from the
+                page flow — its coaching copy is now the Needs You tile's hover
+                tooltip. Same text, same shared predicate, just not permanent.) */}
 
             {/* TEST-ONLY utility — treat the company as publicly listed, which
                 skips the detailed stakeholder EDD forms on the next page. Sets
@@ -269,8 +251,31 @@ export function ConfirmStep({
                 commit 4, when it reconciles against /api/amendment-documents.
                 Plain integers, zero tiles de-emphasised. */}
             {(() => {
+              // The old action banner's copy, verbatim — now surfaced only on
+              // hover of the Needs You tile it was always describing.
+              const needsInput = outstanding;
+              const uncheckedCount = (research.found || []).filter((_, i) => !checks[i]).length;
+              const allQuiet = needsInput === 0;
+              const needsYouTip = (
+                <>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.text }}>
+                    {allQuiet ? "✅ " : "👋 "}
+                    {allQuiet
+                      ? "Everything is confirmed from official sources — just review and continue."
+                      : `${needsInput} item${needsInput === 1 ? "" : "s"} need${needsInput === 1 ? "s" : ""} your input`}
+                  </span>
+                  <span style={{ display: "block", marginTop: 4 }}>
+                    {allQuiet
+                      ? "Every pre-filled field below came from your documents or official registries. Click any source to see when it was fetched."
+                      : "Everything else is confirmed — you don't need to touch it. Amber rows came from company or unverified sources; give each a quick check. Click any source to see when it was fetched."}
+                    {uncheckedCount > 0 && (
+                      <> You've marked {uncheckedCount} field{uncheckedCount === 1 ? "" : "s"} as wrong — you'll provide the correct value{uncheckedCount === 1 ? "" : "s"} on the next page.</>
+                    )}
+                  </span>
+                </>
+              );
               const tiles = [
-                { label: "Needs You", value: counts.needsYou, color: C.warning, bg: C.warningBg },
+                { label: "Needs You", value: counts.needsYou, color: C.warning, bg: C.warningBg, tooltip: needsYouTip },
                 { label: "Confirmed", value: counts.confirmed, color: C.success, bg: C.successBg },
                 { label: "Corrected", value: counts.corrected, color: C.info, bg: C.infoBg },
                 { label: "Docs Needed", value: counts.docsNeeded, color: "#C2410C", bg: "#FFF7ED" },
@@ -279,15 +284,32 @@ export function ConfirmStep({
                 <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
                   {tiles.map((t) => {
                     const v = Number(t.value) || 0;
-                    return (
-                      <div key={t.label} style={{
-                        flex: 1, padding: "14px 12px", background: t.bg,
+                    const face = (
+                      <div style={{
+                        padding: "14px 12px", background: t.bg,
                         border: `1px solid ${C.border}`, borderRadius: 10,
                         textAlign: "center", opacity: v === 0 ? 0.45 : 1,
+                        cursor: t.tooltip ? "help" : "default",
                       }}>
                         <div style={{ fontSize: 26, fontWeight: 800, color: t.color, lineHeight: 1 }}>{v}</div>
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: t.color, marginTop: 5, textTransform: "uppercase", letterSpacing: "0.07em" }}>{t.label}</div>
                       </div>
+                    );
+                    // Every tile is wrapped in an equal `flex: 1` box so adding
+                    // the tooltip to one of them can't change tile widths.
+                    return t.tooltip ? (
+                      <HoverTooltip
+                        key={t.label}
+                        testId="needs-you-tooltip"
+                        content={t.tooltip}
+                        align="center"
+                        width={340}
+                        wrapStyle={{ flex: 1, minWidth: 0, display: "block" }}
+                      >
+                        {face}
+                      </HoverTooltip>
+                    ) : (
+                      <div key={t.label} style={{ flex: 1, minWidth: 0 }}>{face}</div>
                     );
                   })}
                 </div>
