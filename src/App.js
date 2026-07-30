@@ -44,6 +44,7 @@ import {
   canonicalDocs,
   docsNeededFrom,
   docKey,
+  isCompanyWideDocType,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
@@ -4419,8 +4420,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <div style={{ padding: "0 16px 12px" }}>
         {mine.map(([k, snap]) => {
           const ev = snap.event || {};
-          const doc = ev.workflow === "doc_required" && ev.docType
-            ? confirmDocs.find((d) => d.docType === ev.docType && d.stakeholderId === s.id)
+          // A company-wide document is the SAME single file for everyone, so it
+          // renders on its anchor person only. Identity evidence stays strictly
+          // per person: matched on stakeholderId, never on a company entry.
+          const companyWide = isCompanyWideDocType(ev.docType);
+          const isAnchor = !companyWide || companyDocAnchor.get(ev.docType) === s.id;
+          const doc = ev.workflow === "doc_required" && ev.docType && isAnchor
+            ? confirmDocs.find((d) =>
+                d.docType === ev.docType &&
+                (companyWide ? !d.stakeholderId : d.stakeholderId === s.id))
             : null;
           return (
             <div key={k}>
@@ -4432,8 +4440,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   onUpload={handleAmendmentUpload}
                   onRemove={handleAmendmentRemove}
                   variant="inline"
-                  hint={`Required for ${s.full_name}.`}
+                  hint={companyWide
+                    ? `One ${ev.docType.toLowerCase()} covers the whole company — upload it once.`
+                    : `Required for ${s.full_name}.`}
                 />
+              )}
+              {/* Same document, already requested against another person — say
+                  so rather than silently showing nothing here. */}
+              {companyWide && !isAnchor && ev.workflow === "doc_required" && (
+                <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", padding: "6px 0" }}>
+                  Covered by the single {ev.docType.toLowerCase()} requested for this company — you only upload it once.
+                </div>
               )}
               <AnalystSignalStrip
                 show={SHOW_TEST_TOOLS}
@@ -5941,10 +5958,29 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const p = d && d.fieldId ? parsePersonFieldId(d.fieldId) : null;
     return p ? { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null } : d;
   });
-  const confirmDocs = canonicalDocs(
-    withPersonName(persistedAmendmentDocs),
-    withPersonName(docsNeededFrom(dialogueStateRef.current)),
-  );
+  // Persisted first, then live — canonicalDocs keeps first-occurrence order.
+  const rawAmendmentDocs = [
+    ...withPersonName(persistedAmendmentDocs),
+    ...withPersonName(docsNeededFrom(dialogueStateRef.current)),
+  ];
+  const confirmDocs = canonicalDocs(rawAmendmentDocs);
+
+  // A company-wide document (ownership chart, directors list) is ONE request no
+  // matter how many people's changes asked for it. Anchor it to the first
+  // person who triggered it, so exactly one person card carries the upload and
+  // the others show a pointer instead of a duplicate request for the same file.
+  // Derived here rather than during the person-card render pass: a render-order
+  // "first one wins" mutation would double-fire under StrictMode.
+  const companyDocAnchor = (() => {
+    const anchor = new Map();
+    rawAmendmentDocs.forEach((d) => {
+      if (!d || !d.docType || !isCompanyWideDocType(d.docType)) return;
+      if (anchor.has(d.docType)) return;
+      const p = parsePersonFieldId(d.fieldId);
+      if (p) anchor.set(d.docType, p.stakeholderId);
+    });
+    return anchor;
+  })();
 
   // Confirm-page tile counts and the gate's blockers, from the ONE shared
   // predicate. Computed during render — not memoised — because gapRef and

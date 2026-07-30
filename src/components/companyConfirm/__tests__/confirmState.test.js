@@ -220,11 +220,14 @@ describe("scope-aware document dedup (6a) — identity evidence is per person", 
     expect(docs).toHaveLength(3);
   });
 
-  it("keys person uploads by (person, docType) and company uploads unchanged", () => {
+  it("keys person uploads by (person, docType) and company uploads by docType", () => {
     expect(docKey(johnDob)).toBe("sh_john::Proof of Identity");
     expect(docKey(johnNat)).toBe("sh_john::Proof of Identity"); // same person, same doc
     expect(docKey(janeNat)).toBe("sh_jane::Proof of Identity"); // different person
-    expect(docKey(addr1)).toBe("addressLine1::Notice of Change of Address"); // historic form
+    // No fieldId in either form: which field lands in the canonical entry
+    // depends on list order, which differs between Confirm and Fill Gaps.
+    expect(docKey(addr1)).toBe("company::Notice of Change of Address");
+    expect(docKey(addr2)).toBe(docKey(addr1));
   });
 
   /**
@@ -267,6 +270,76 @@ describe("scope-aware document dedup (6a) — identity evidence is per person", 
     const blockers = submitBlockers({ found: [], docs, uploads: {} });
     expect(blockers.find((b) => b.stakeholderId === "sh_jane").label).toBe("Proof of Identity — Jane Doe");
     expect(blockers.find((b) => !b.stakeholderId).label).toBe("Notice of Change of Address");
+  });
+});
+
+/**
+ * THE REGRESSION TEST for the company-wide-document defect. Scope used to be
+ * read off the fieldId alone, so a document triggered by a person BECAME
+ * per-person — removing two UBOs opened two Ownership Chart requests for the
+ * one chart that exists, and uploading it once could not close the other.
+ * Scope is a property of the DOCUMENT; the trigger only says who asked.
+ */
+describe("company-wide documents are ONE request however many people trigger them", () => {
+  const johnRemoval = { fieldId: "ubo::sh_john::removal", docType: "Ownership Chart", personName: "John Smith" };
+  const janeRemoval = { fieldId: "ubo::sh_jane::removal", docType: "Ownership Chart", personName: "Jane Doe" };
+  const johnDirList = { fieldId: "director::sh_john::removal", docType: "List of Directors", personName: "John Smith" };
+  const janeDirList = { fieldId: "director::sh_jane::removal", docType: "List of Directors", personName: "Jane Doe" };
+  const janePoi = { fieldId: "ubo::sh_jane::nationality", docType: "Proof of Identity", personName: "Jane Doe" };
+
+  it("two UBO removals produce ONE ownership chart request", () => {
+    const docs = canonicalDocs([johnRemoval, janeRemoval]);
+    expect(docs).toHaveLength(1);
+    expect(docs[0].docType).toBe("Ownership Chart");
+  });
+
+  it("the single chart belongs to nobody — it is not labelled with a person", () => {
+    const docs = canonicalDocs([johnRemoval, janeRemoval]);
+    expect(docs[0].stakeholderId).toBeNull();
+    expect(docs[0].personName).toBeNull();
+    const blockers = submitBlockers({ found: [], docs, uploads: {} });
+    expect(blockers[0].label).toBe("Ownership Chart"); // not "— John Smith"
+  });
+
+  it("uploading it once closes it for everyone", () => {
+    const docs = canonicalDocs([johnRemoval, janeRemoval]);
+    const uploads = { [docKey(johnRemoval)]: { name: "chart.pdf", uploadFailed: false } };
+    expect(submitBlockers({ found: [], docs, uploads })).toEqual([]);
+    expect(computeConfirmCounts({ found: [], docs, uploads }).docsNeeded).toBe(0);
+  });
+
+  it("the key does not depend on WHICH person triggered it", () => {
+    expect(docKey(johnRemoval)).toBe("company::Ownership Chart");
+    expect(docKey(janeRemoval)).toBe(docKey(johnRemoval));
+    // Order of the source list must not change the satisfaction key either.
+    expect(docKey(canonicalDocs([johnRemoval, janeRemoval])[0]))
+      .toBe(docKey(canonicalDocs([janeRemoval, johnRemoval])[0]));
+  });
+
+  it("the same holds for List of Directors", () => {
+    const docs = canonicalDocs([johnDirList, janeDirList]);
+    expect(docs).toHaveLength(1);
+    const uploads = { [docKey(janeDirList)]: { name: "directors.pdf", uploadFailed: false } };
+    expect(submitBlockers({ found: [], docs, uploads })).toEqual([]);
+  });
+
+  /** The fix must NOT loosen identity evidence — that was the earlier P1. */
+  it("does not make identity evidence company-wide by accident", () => {
+    const docs = canonicalDocs([johnRemoval, janeRemoval, janePoi]);
+    expect(docs).toHaveLength(2); // one chart + Jane's POI
+    // Uploading the chart leaves Jane's POI standing.
+    const uploads = { [docKey(johnRemoval)]: { name: "chart.pdf", uploadFailed: false } };
+    const blockers = submitBlockers({ found: [], docs, uploads });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].stakeholderId).toBe("sh_jane");
+    expect(blockers[0].label).toBe("Proof of Identity — Jane Doe");
+  });
+
+  it("an unknown person-triggered docType stays per-person (fail-safe default)", () => {
+    const a = { fieldId: "ubo::sh_john::something", docType: "Some New Identity Document" };
+    const b = { fieldId: "ubo::sh_jane::something", docType: "Some New Identity Document" };
+    expect(canonicalDocs([a, b])).toHaveLength(2);
+    expect(docKey(a)).not.toBe(docKey(b));
   });
 });
 

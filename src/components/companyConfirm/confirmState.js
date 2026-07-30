@@ -116,20 +116,45 @@ export function docsNeededFrom(dialogueState = {}) {
 }
 
 /**
+ * COMPANY-WIDE DOCUMENT TYPES — the artefact describes the whole company, so
+ * ONE upload covers it however many people's changes asked for it.
+ *
+ * An ownership chart maps the entire ownership structure and a directors list
+ * names every director; removing two UBOs does not create two charts. Contrast
+ * identity evidence (Proof of Identity / Proof of Address / Source of Wealth),
+ * where John's passport genuinely is not Jane's.
+ *
+ * Complete as of the current policy table — these are every non-identity
+ * docType any rule emits (BASE_RULES + PERSON_RULES). Anything NOT listed and
+ * triggered by a person is treated as per-person, which is the fail-safe
+ * direction: a new identity-ish document over-collects rather than letting one
+ * person's file silently satisfy everybody else's requirement.
+ */
+export const COMPANY_WIDE_DOC_TYPES = new Set([
+  "Ownership Chart",
+  "List of Directors",
+  "Updated Director Registry",
+  "Updated UBO Registry",
+  "Notice of Change of Address",
+  "Supporting Registration Document",
+]);
+
+export const isCompanyWideDocType = (docType) => COMPANY_WIDE_DOC_TYPES.has(docType);
+
+/**
  * DOCUMENT SCOPE — the correction that makes identity evidence safe.
  *
- * A document's scope is derivable from the event's fieldId: commit 6's
- * composite person key (`<personType>::<stakeholderId>::<attribute>`) carries
- * the person id, while a company field is a plain id.
+ * Scope is a property of the DOCUMENT, not of the change that triggered it.
+ * Deriving it from the fieldId alone was the bug: a person-scoped trigger
+ * (`<personType>::<stakeholderId>::<attribute>`) made every document it asked
+ * for per-person, so removing two UBOs opened two Ownership Chart requests for
+ * one chart — and uploading it once could not close the other.
  *
- *   person-scoped  (Proof of Identity, Proof of Address, Source of Wealth)
- *     — inherently PER PERSON. John's POI and Jane's POI are two different
- *       documents that merely share a type name.
- *   company-scoped (Notice of Change of Address, List of Directors, Ownership
- *     Chart) — one per type. Three corrected address lines genuinely need one
- *       notice.
+ * So: company-wide docType → company scope, whoever triggered it. Otherwise a
+ * person-scoped trigger means the document belongs to that person.
  */
 export function docScope(d = {}) {
+  if (isCompanyWideDocType(d.docType)) return { kind: "company" };
   const person = parsePersonFieldId(d.fieldId);
   return person ? { kind: "person", stakeholderId: person.stakeholderId } : { kind: "company" };
 }
@@ -140,15 +165,18 @@ export function docScope(d = {}) {
  * document is keyed by (stakeholderId, docType) and can NEVER be satisfied by a
  * file uploaded for somebody else.
  *
- * Company documents keep the historic `<fieldId>::<docType>` form, so uploads
- * already stored against them (PR-071 persists amendmentUploads into the
- * dossier payload) keep matching.
+ * NEITHER form contains the fieldId, and that is deliberate. The old company
+ * form was `<fieldId>::<docType>`, but a company document can be triggered by
+ * several different fields (or several different people), and which one lands
+ * in the canonical entry depends on list order — which differs between the
+ * Confirm page and the Fill Gaps panel. Keying on the docType alone is what
+ * makes "upload it once, anywhere" actually true.
  */
 export const docKey = (d) => {
   const scope = docScope(d);
   return scope.kind === "person"
     ? `${scope.stakeholderId}::${d.docType}`
-    : `${d.fieldId}::${d.docType}`;
+    : `company::${d.docType}`;
 };
 
 /** The DEDUPE key — what collapses into one visible request. */
@@ -179,13 +207,18 @@ export function canonicalDocs(...sources) {
       if (seen.has(key)) continue;
       seen.add(key);
       const scope = docScope(d);
+      const isPerson = scope.kind === "person";
       out.push({
         fieldId: d.fieldId,
         docType: d.docType,
         fieldClass: d.fieldClass || null,
-        // Carried so the panel can say WHOSE document this is.
-        stakeholderId: scope.kind === "person" ? scope.stakeholderId : null,
-        personName: d.personName || null,
+        // Carried so the panel can say WHOSE document this is. A company-wide
+        // document belongs to nobody in particular even when a person's change
+        // asked for it, so it must NOT inherit that person's name — labelling
+        // the single ownership chart "— John Smith" is what made it look like
+        // one of several per-person requests.
+        stakeholderId: isPerson ? scope.stakeholderId : null,
+        personName: isPerson ? d.personName || null : null,
       });
     }
   }
