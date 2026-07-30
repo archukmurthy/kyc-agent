@@ -157,12 +157,32 @@ export const COMPANY_WIDE_DOC_TYPES = new Set([
   "Ownership Chart",
   "List of Directors",
   "Notice of Change of Address",
+]);
+
+/**
+ * PER-FIELD DOCUMENT TYPES — one placeholder name standing in for several
+ * genuinely different filings, so it must NOT collapse.
+ *
+ * 'Supporting Registration Document' is the policy table's acknowledged
+ * placeholder (open question O3) for BRN, VAT and licence-number corrections.
+ * Those are different documents wearing one name, so a single upload must not
+ * satisfy all of them: each triggering field gets its own request. That
+ * over-collects if they ever turn out to be one filing, which is the
+ * fail-safe direction — the same call made for unknown person documents.
+ *
+ * When O3 lands and each field has its real document name, these become
+ * ordinary distinct docTypes and this set can go away.
+ */
+export const PER_FIELD_DOC_TYPES = new Set([
   "Supporting Registration Document",
 ]);
 
 /** Alias-aware, so the pre-merge names resolve too. */
 export const isCompanyWideDocType = (docType) =>
   COMPANY_WIDE_DOC_TYPES.has(canonicalDocType(docType));
+
+export const isPerFieldDocType = (docType) =>
+  PER_FIELD_DOC_TYPES.has(canonicalDocType(docType));
 
 /**
  * DOCUMENT SCOPE — the correction that makes identity evidence safe.
@@ -178,6 +198,7 @@ export const isCompanyWideDocType = (docType) =>
  */
 export function docScope(d = {}) {
   if (isCompanyWideDocType(d.docType)) return { kind: "company" };
+  if (isPerFieldDocType(d.docType)) return { kind: "field", fieldId: d.fieldId };
   const person = parsePersonFieldId(d.fieldId);
   return person ? { kind: "person", stakeholderId: person.stakeholderId } : { kind: "company" };
 }
@@ -198,16 +219,20 @@ export function docScope(d = {}) {
 export const docKey = (d) => {
   const scope = docScope(d);
   const type = canonicalDocType(d.docType);
-  return scope.kind === "person" ? `${scope.stakeholderId}::${type}` : `company::${type}`;
+  if (scope.kind === "person") return `${scope.stakeholderId}::${type}`;
+  if (scope.kind === "field") return `field::${scope.fieldId}::${type}`;
+  return `company::${type}`;
 };
 
 /** The DEDUPE key — what collapses into one visible request. */
 export const docDedupeKey = (d) => {
   const scope = docScope(d);
   const type = canonicalDocType(d.docType);
-  // Per person for identity evidence; per type for company evidence, so the
-  // company behaviour (several fields → one document) is exactly as before.
-  return scope.kind === "person" ? `p:${scope.stakeholderId}:${type}` : `c:${type}`;
+  // Per person for identity evidence, per field for the O3 placeholder, per
+  // type for company evidence (several fields → one document).
+  if (scope.kind === "person") return `p:${scope.stakeholderId}:${type}`;
+  if (scope.kind === "field") return `f:${scope.fieldId}:${type}`;
+  return `c:${type}`;
 };
 
 /**
@@ -237,6 +262,10 @@ export function canonicalDocs(...sources) {
         // rule-level name survives untouched on the change event itself.
         docType: canonicalDocType(d.docType),
         fieldClass: d.fieldClass || null,
+        // Which field asked for it, for the per-field placeholder only: several
+        // requests share one docType name, so without this the customer sees
+        // the same title repeated with no way to tell them apart.
+        fieldLabel: scope.kind === "field" ? d.fieldLabel || null : null,
         // Carried so the panel can say WHOSE document this is. A company-wide
         // document belongs to nobody in particular even when a person's change
         // asked for it, so it must NOT inherit that person's name — labelling
@@ -341,7 +370,9 @@ export function submitBlockers({
       kind: BLOCKER_KIND.MISSING_DOCUMENT,
       fieldId: d.fieldId,
       stakeholderId: d.stakeholderId || null,
-      label: d.personName ? `${d.docType} — ${d.personName}` : d.docType,
+      label: d.personName || d.fieldLabel
+        ? `${d.docType} — ${d.personName || d.fieldLabel}`
+        : d.docType,
       reason: "Your change needs this document before we can continue.",
     });
   });

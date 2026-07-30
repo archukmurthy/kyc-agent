@@ -394,11 +394,13 @@ export function ConfirmStep({
                           {/* Person documents say WHOSE they are — two people
                               each owing a Proof of Identity are two separate
                               requests, and the customer must be able to tell
-                              them apart. Company documents carry no name. */}
+                              them apart. Per-field documents qualify the same
+                              way with the field that asked. Company-wide
+                              documents are one request and carry neither. */}
                           <div style={{ fontSize: 13, fontWeight: 700 }}>
                             {d.docType}
-                            {d.personName && (
-                              <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.72)" }}> — {d.personName}</span>
+                            {(d.personName || d.fieldLabel) && (
+                              <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.72)" }}> — {d.personName || d.fieldLabel}</span>
                             )}
                           </div>
                           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>

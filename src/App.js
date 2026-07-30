@@ -45,6 +45,7 @@ import {
   docsNeededFrom,
   docKey,
   isCompanyWideDocType,
+  isPerFieldDocType,
   canonicalDocType,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
@@ -4104,8 +4105,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
             if (!live) return null;
             // Company-scoped row: match a company entry (no stakeholderId), so
             // it can never pick up a person's same-named document. Compared on
-            // the merged name — confirmDocs carries the canonical docType.
-            const doc = confirmDocs.find((d) => d.docType === canonicalDocType(live) && !d.stakeholderId);
+            // the merged name — confirmDocs carries the canonical docType. A
+            // per-field document shares its title with the other fields that
+            // triggered it, so it must match THIS row's field, not just the type.
+            const liveType = canonicalDocType(live);
+            const doc = confirmDocs.find((d) =>
+              d.docType === liveType &&
+              !d.stakeholderId &&
+              (isPerFieldDocType(liveType) ? d.fieldId === item.field : true));
             if (!doc) return null;
             const k = docKey(doc);
             return (
@@ -5957,9 +5964,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
     return byId;
   })();
+  // Field label by field id, so a per-field document request can name the field
+  // that asked for it — several 'Supporting Registration Document' requests
+  // share one title and are otherwise indistinguishable.
+  const fieldLabelById = new Map(
+    (research?.found || []).filter((r) => r && r.field).map((r) => [r.field, r.label || r.field])
+  );
   const withPersonName = (list) => (Array.isArray(list) ? list : []).map((d) => {
     const p = d && d.fieldId ? parsePersonFieldId(d.fieldId) : null;
-    return p ? { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null } : d;
+    if (p) return { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null };
+    return d && d.fieldId ? { ...d, fieldLabel: fieldLabelById.get(d.fieldId) || null } : d;
   });
   // Persisted first, then live — canonicalDocs keeps first-occurrence order.
   const rawAmendmentDocs = [

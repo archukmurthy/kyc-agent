@@ -12,6 +12,7 @@ import {
   submitBlockers,
   blockerSummary,
   isCompanyWideDocType,
+  isPerFieldDocType,
   canonicalDocType,
 } from "../confirmState";
 
@@ -393,6 +394,47 @@ describe("aliased document types collapse to one request", () => {
     expect(isCompanyWideDocType("Updated UBO Registry")).toBe(true);
     expect(isCompanyWideDocType("Proof of Identity")).toBe(false);
     expect(canonicalDocType("Notice of Change of Address")).toBe("Notice of Change of Address");
+  });
+});
+
+/**
+ * 'Supporting Registration Document' is one placeholder name (policy table open
+ * question O3) standing in for BRN / VAT / licence documents. Different filings
+ * wearing one name must NOT collapse into a single upload — decided with
+ * Archana 2026-07-30: over-collect rather than under-collect.
+ */
+describe("per-field placeholder documents do not collapse", () => {
+  const brn = { fieldId: "companyNumber", docType: "Supporting Registration Document", fieldLabel: "Companies House Number" };
+  const vat = { fieldId: "vatNumber", docType: "Supporting Registration Document", fieldLabel: "VAT Number" };
+
+  it("two registration fields produce TWO requests", () => {
+    const docs = canonicalDocs([brn, vat]);
+    expect(docs).toHaveLength(2);
+  });
+
+  it("keys them apart so one upload cannot satisfy the other", () => {
+    expect(docKey(brn)).not.toBe(docKey(vat));
+    const docs = canonicalDocs([brn, vat]);
+    const uploads = { [docKey(brn)]: { name: "brn.pdf", uploadFailed: false } };
+    const blockers = submitBlockers({ found: [], docs, uploads });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].label).toBe("Supporting Registration Document — VAT Number");
+  });
+
+  it("the same field asking twice is still one request", () => {
+    expect(canonicalDocs([brn, { ...brn }])).toHaveLength(1);
+  });
+
+  it("is not treated as company-wide", () => {
+    expect(isCompanyWideDocType("Supporting Registration Document")).toBe(false);
+    expect(isPerFieldDocType("Supporting Registration Document")).toBe(true);
+    expect(isPerFieldDocType("Ownership Chart")).toBe(false);
+  });
+
+  it("company-wide documents still collapse — the split is scoped to O3 only", () => {
+    const a = { fieldId: "addressLine1", docType: "Notice of Change of Address" };
+    const b = { fieldId: "addressLine2", docType: "Notice of Change of Address" };
+    expect(canonicalDocs([a, b])).toHaveLength(1);
   });
 });
 
