@@ -20,6 +20,8 @@ const verified = { field: "companyNumber", label: "Company Number", verification
 const probable = { field: "leiNumber", label: "LEI Number", verificationStatus: "probable" };
 const indicative = { field: "employees", label: "Employees", verificationStatus: "indicative" };
 const address = { field: "addressLine1", label: "Registered Address Line 1", verificationStatus: "verified" };
+const probable2 = { field: "tradeName", label: "Trade Name", verificationStatus: "probable" };
+const indicative2 = { field: "pepDirectors", label: "PEP Status of Directors", verificationStatus: "indicative" };
 
 const DOC = { fieldId: "addressLine1", docType: "Notice of Change of Address" };
 const uploaded = { name: "proof.pdf", blobUrl: "https://blob/x", uploadFailed: false };
@@ -469,6 +471,92 @@ describe("an ADDED person's documents are per-person too (commit 7 × 6a)", () =
 
   it("the added person's own POI and POA do not collapse into each other", () => {
     expect(docKey(addedPoi)).not.toBe(docKey(addedPoa));
+  });
+});
+
+/**
+ * Person attributes join the tiles, so the page stops telling the customer two
+ * different things: eight amber "needs you" badges on person cards next to a
+ * tile reading 4. Reproduces the real dummy-data shape — five found attributes
+ * per person plus a missing PEP status.
+ */
+describe("person attributes count toward the tiles", () => {
+  const person = (id, name, { pepFound = false, untickedKeys = [] } = {}) =>
+    [
+      { key: "full_name", label: "Full legal name", found: true },
+      { key: "share_percentage", label: "Shareholding", found: true },
+      { key: "nationality", label: "Nationality", found: true },
+      { key: "date_of_birth", label: "Date of birth", found: true },
+      { key: "residential_country", label: "Country of residence", found: true },
+      { key: "is_pep", label: "PEP status", found: pepFound },
+    ].map((f) => {
+      const ticked = f.found && !untickedKeys.includes(f.key);
+      return {
+        stakeholderId: id,
+        personName: name,
+        key: f.key,
+        label: f.label,
+        found: f.found,
+        confirmed: ticked,
+        outstanding: f.found ? !ticked : true,
+        resolvableHere: f.found,
+      };
+    });
+
+  const threePeople = [
+    ...person("sh_john", "John Smith"),
+    ...person("sh_jane", "Jane Doe"),
+    ...person("sh_mark", "Mark Lee"),
+  ];
+
+  it("adds outstanding person attributes to Needs You", () => {
+    // 4 low-confidence vital rows + one missing PEP each for three people.
+    const counts = computeConfirmCounts({
+      found: [probable, indicative, probable2, indicative2],
+      personItems: threePeople,
+    });
+    expect(counts.needsYou).toBe(7);
+    expect(counts.personPending).toBe(3);
+  });
+
+  it("adds ticked found attributes to Confirmed", () => {
+    const counts = computeConfirmCounts({ found: [verified], personItems: threePeople });
+    expect(counts.confirmed).toBe(1 + 15); // one vital row + 5 ticked each
+  });
+
+  it("an unticked found attribute is outstanding AND resolvable here", () => {
+    const items = person("sh_john", "John Smith", { untickedKeys: ["nationality"] });
+    const counts = computeConfirmCounts({ found: [], personItems: items });
+    expect(counts.needsYou).toBe(2); // unticked nationality + missing PEP
+    expect(counts.personDeferred).toBe(1); // only the missing PEP is deferred
+    const blockers = submitBlockers({ found: [], personItems: items });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].kind).toBe(BLOCKER_KIND.PERSON_ATTRIBUTE);
+    expect(blockers[0].label).toBe("Nationality — John Smith");
+  });
+
+  /**
+   * The trap this guards against: a missing attribute has no input on the
+   * person card (it is tagged "added on next page"), so blocking on it would
+   * leave the customer on Confirm with no control that can clear it.
+   */
+  it("counts a missing attribute but does NOT block on it", () => {
+    const items = person("sh_john", "John Smith"); // PEP missing, nothing unticked
+    expect(computeConfirmCounts({ found: [], personItems: items }).needsYou).toBe(1);
+    expect(submitBlockers({ found: [], personItems: items })).toEqual([]);
+  });
+
+  it("ticking the last found attribute clears that person's blocker", () => {
+    const items = person("sh_john", "John Smith", { untickedKeys: ["nationality"] });
+    const ticked = items.map((p) =>
+      p.key === "nationality" ? { ...p, confirmed: true, outstanding: false } : p
+    );
+    expect(submitBlockers({ found: [], personItems: ticked })).toEqual([]);
+  });
+
+  it("defaults to the old behaviour when no person items are supplied", () => {
+    expect(computeConfirmCounts({ found: [verified, probable] }).needsYou).toBe(1);
+    expect(computeConfirmCounts({ found: [verified, probable] }).personPending).toBe(0);
   });
 });
 

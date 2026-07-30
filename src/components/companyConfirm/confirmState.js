@@ -46,9 +46,29 @@ export const ROW_STATE = {
 
 export const BLOCKER_KIND = {
   ATTENTION_ROW: "attention_row",
+  PERSON_ATTRIBUTE: "person_attribute",
   MISSING_DOCUMENT: "missing_document",
   EMPTY_REQUIRED_GAP: "empty_required_gap",
 };
+
+/**
+ * PERSON ATTRIBUTES — the per-person data points the person cards show.
+ *
+ * They are COUNTED here so the tiles describe the whole page: a customer who
+ * sees eight amber "needs you" badges on person cards and a tile reading 4 has
+ * been told two different things. Every outstanding attribute is part of
+ * needsYou; every ticked found attribute is part of confirmed.
+ *
+ * They BLOCK only when `resolvableHere` — i.e. research returned a value the
+ * customer can tick or correct on this page. An attribute with no value has no
+ * input on the person card (it is tagged "added on next page" and collected on
+ * Fill Gaps), so blocking on it would leave the customer stuck on Confirm with
+ * no control that can clear it. allGapsFilled still enforces those at the Fill
+ * Gaps gate.
+ */
+export function personOutstanding(items = []) {
+  return (Array.isArray(items) ? items : []).filter((p) => p && p.outstanding);
+}
 
 /** Low confidence = tier2/tier3. Falls back to sourceTier for rows stored
  *  before verificationStatus existed (mirrors renderFoundRow). */
@@ -292,6 +312,7 @@ export function computeConfirmCounts({
   corrections = {},
   docs = [],
   uploads = {},
+  personItems = [],
 } = {}) {
   let needsYou = 0;
   let confirmed = 0;
@@ -302,11 +323,18 @@ export function computeConfirmCounts({
     else if (state === ROW_STATE.NEEDS_YOU) needsYou += 1;
     else confirmed += 1;
   });
+  // People count on the same footing as vital rows — the tiles describe the
+  // whole page, not just the pre-filled table.
+  const personPending = personOutstanding(personItems);
+  needsYou += personPending.length;
+  confirmed += (Array.isArray(personItems) ? personItems : []).filter((p) => p && p.confirmed).length;
   const outstandingDocs = docs.filter((d) => !isSatisfied(uploads[docKey(d)]));
   return {
     needsYou,
     confirmed,
     corrected,
+    personPending: personPending.length,
+    personDeferred: personPending.filter((p) => !p.resolvableHere).length,
     docsNeeded: outstandingDocs.length,
     docsTotal: docs.length,
     docs,
@@ -343,6 +371,7 @@ export function submitBlockers({
   docs = [],
   uploads = {},
   requiredGaps = [],
+  personItems = [],
 } = {}) {
   const blockers = [];
 
@@ -357,6 +386,20 @@ export function submitBlockers({
       reason: disputed
         ? "You marked this as wrong — enter the correct value."
         : "From a company or unverified source — confirm it or correct it.",
+    });
+  });
+
+  // Person attributes the customer CAN act on here. The deferred ones (no
+  // value returned, so no control on the card) are counted but not blocking —
+  // see the note on personOutstanding.
+  personOutstanding(personItems).forEach((p) => {
+    if (!p.resolvableHere) return;
+    blockers.push({
+      kind: BLOCKER_KIND.PERSON_ATTRIBUTE,
+      fieldId: `${p.stakeholderId}::${p.key}`,
+      stakeholderId: p.stakeholderId,
+      label: p.personName ? `${p.label} — ${p.personName}` : p.label,
+      reason: "Confirm this detail or correct it.",
     });
   });
 

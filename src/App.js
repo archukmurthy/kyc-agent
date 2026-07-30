@@ -6000,6 +6000,51 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return anchor;
   })();
 
+  /**
+   * Per-person attributes as countable items, so the tiles describe the WHOLE
+   * page rather than only the pre-filled table. Built from exactly the same
+   * helpers the person-card badge uses (stkConfirmFields / stkFieldFound /
+   * isStkFieldConfirmed, gated by needsStakeholderDetails), so the badge on a
+   * card and this person's share of the tile can never disagree.
+   *
+   * `resolvableHere` is the load-bearing distinction: a FOUND attribute can be
+   * ticked or corrected on this page, but an attribute research did not return
+   * has no input on the person card — it is collected on Fill Gaps, which is
+   * why the card tags it "added on next page". Counting it is honest; blocking
+   * on it would strand the customer with no control to clear it.
+   */
+  const personConfirmItems = (() => {
+    const out = [];
+    stakeholderFound.forEach(({ item }) => {
+      const ubo = isUboLikeField(item.field);
+      (item.stakeholders || [])
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .forEach((s) => {
+          if (isStakeholderRejected(item.field, s.id)) return;
+          const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
+          stkConfirmFields(s, ubo).forEach((f) => {
+            const found = stkFieldFound(s, f.key);
+            const confirmed = isStkFieldConfirmed(s.id, f.key);
+            // Mirrors stkNextPageFields (EDD people) and stkCorrectedFields
+            // (listed read-only people) exactly.
+            const outstanding = needsEDD ? (found ? !confirmed : f.required) : found && !confirmed;
+            out.push({
+              stakeholderId: s.id,
+              fieldId: item.field,
+              key: f.key,
+              label: f.label,
+              personName: s.full_name || null,
+              found,
+              outstanding,
+              confirmed: found && confirmed,
+              resolvableHere: found,
+            });
+          });
+        });
+    });
+    return out;
+  })();
+
   // Confirm-page tile counts and the gate's blockers, from the ONE shared
   // predicate. Computed during render — not memoised — because gapRef and
   // dialogueStateRef are refs: a memo would serve stale values after an inline
@@ -6017,6 +6062,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     corrections: gapRef.current,
     docs: confirmDocs,
     uploads: amendmentUploads,
+    personItems: personConfirmItems,
   };
   const confirmCounts = computeConfirmCounts(confirmStateInput);
   // requiredGaps is deliberately EMPTY here. Every value the customer can
