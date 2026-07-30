@@ -130,16 +130,39 @@ export function docsNeededFrom(dialogueState = {}) {
  * direction: a new identity-ish document over-collects rather than letting one
  * person's file silently satisfy everybody else's requirement.
  */
+/**
+ * DOCUMENT-TYPE ALIASES — two rule paths, one real document.
+ *
+ * The policy table names the same artefact differently depending on which path
+ * asked for it: a company-level director edit emits 'Updated Director Registry'
+ * while a person-level director removal emits 'List of Directors'. They are one
+ * filing, so a customer who does both was asked for it twice.
+ *
+ * Deliberately resolved HERE and not in the policy table. classifyChange and
+ * policyTable stay authoritative and untouched, so `change_events.doc_type`
+ * keeps the precise rule-level name and the audit trail can still show WHICH
+ * rule fired. This layer only decides what the customer is asked to upload —
+ * and it applies to already-persisted events too, so historic rows collapse
+ * correctly rather than reappearing as a second request.
+ */
+export const DOC_TYPE_ALIASES = {
+  "Updated Director Registry": "List of Directors",
+  "Updated UBO Registry": "Ownership Chart",
+};
+
+export const canonicalDocType = (docType) =>
+  (docType && DOC_TYPE_ALIASES[docType]) || docType;
+
 export const COMPANY_WIDE_DOC_TYPES = new Set([
   "Ownership Chart",
   "List of Directors",
-  "Updated Director Registry",
-  "Updated UBO Registry",
   "Notice of Change of Address",
   "Supporting Registration Document",
 ]);
 
-export const isCompanyWideDocType = (docType) => COMPANY_WIDE_DOC_TYPES.has(docType);
+/** Alias-aware, so the pre-merge names resolve too. */
+export const isCompanyWideDocType = (docType) =>
+  COMPANY_WIDE_DOC_TYPES.has(canonicalDocType(docType));
 
 /**
  * DOCUMENT SCOPE — the correction that makes identity evidence safe.
@@ -174,17 +197,17 @@ export function docScope(d = {}) {
  */
 export const docKey = (d) => {
   const scope = docScope(d);
-  return scope.kind === "person"
-    ? `${scope.stakeholderId}::${d.docType}`
-    : `company::${d.docType}`;
+  const type = canonicalDocType(d.docType);
+  return scope.kind === "person" ? `${scope.stakeholderId}::${type}` : `company::${type}`;
 };
 
 /** The DEDUPE key — what collapses into one visible request. */
 export const docDedupeKey = (d) => {
   const scope = docScope(d);
+  const type = canonicalDocType(d.docType);
   // Per person for identity evidence; per type for company evidence, so the
   // company behaviour (several fields → one document) is exactly as before.
-  return scope.kind === "person" ? `p:${scope.stakeholderId}:${d.docType}` : `c:${d.docType}`;
+  return scope.kind === "person" ? `p:${scope.stakeholderId}:${type}` : `c:${type}`;
 };
 
 /**
@@ -210,7 +233,9 @@ export function canonicalDocs(...sources) {
       const isPerson = scope.kind === "person";
       out.push({
         fieldId: d.fieldId,
-        docType: d.docType,
+        // The merged name — this is what the customer is asked to upload. The
+        // rule-level name survives untouched on the change event itself.
+        docType: canonicalDocType(d.docType),
         fieldClass: d.fieldClass || null,
         // Carried so the panel can say WHOSE document this is. A company-wide
         // document belongs to nobody in particular even when a person's change

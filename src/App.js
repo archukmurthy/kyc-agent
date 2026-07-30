@@ -45,6 +45,7 @@ import {
   docsNeededFrom,
   docKey,
   isCompanyWideDocType,
+  canonicalDocType,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
@@ -4102,8 +4103,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
             const live = snap && snap.event && snap.event.workflow === "doc_required" ? snap.event.docType : null;
             if (!live) return null;
             // Company-scoped row: match a company entry (no stakeholderId), so
-            // it can never pick up a person's same-named document.
-            const doc = confirmDocs.find((d) => d.docType === live && !d.stakeholderId);
+            // it can never pick up a person's same-named document. Compared on
+            // the merged name — confirmDocs carries the canonical docType.
+            const doc = confirmDocs.find((d) => d.docType === canonicalDocType(live) && !d.stakeholderId);
             if (!doc) return null;
             const k = docKey(doc);
             return (
@@ -4423,11 +4425,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // A company-wide document is the SAME single file for everyone, so it
           // renders on its anchor person only. Identity evidence stays strictly
           // per person: matched on stakeholderId, never on a company entry.
-          const companyWide = isCompanyWideDocType(ev.docType);
-          const isAnchor = !companyWide || companyDocAnchor.get(ev.docType) === s.id;
-          const doc = ev.workflow === "doc_required" && ev.docType && isAnchor
+          const evDocType = canonicalDocType(ev.docType);
+          const companyWide = isCompanyWideDocType(evDocType);
+          const isAnchor = !companyWide || companyDocAnchor.get(evDocType) === s.id;
+          const doc = ev.workflow === "doc_required" && evDocType && isAnchor
             ? confirmDocs.find((d) =>
-                d.docType === ev.docType &&
+                d.docType === evDocType &&
                 (companyWide ? !d.stakeholderId : d.stakeholderId === s.id))
             : null;
           return (
@@ -4441,7 +4444,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   onRemove={handleAmendmentRemove}
                   variant="inline"
                   hint={companyWide
-                    ? `One ${ev.docType.toLowerCase()} covers the whole company — upload it once.`
+                    ? `One ${evDocType.toLowerCase()} covers the whole company — upload it once.`
                     : `Required for ${s.full_name}.`}
                 />
               )}
@@ -4449,7 +4452,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   so rather than silently showing nothing here. */}
               {companyWide && !isAnchor && ev.workflow === "doc_required" && (
                 <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", padding: "6px 0" }}>
-                  Covered by the single {ev.docType.toLowerCase()} requested for this company — you only upload it once.
+                  Covered by the single {evDocType.toLowerCase()} requested for this company — you only upload it once.
                 </div>
               )}
               <AnalystSignalStrip
@@ -5975,9 +5978,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const anchor = new Map();
     rawAmendmentDocs.forEach((d) => {
       if (!d || !d.docType || !isCompanyWideDocType(d.docType)) return;
-      if (anchor.has(d.docType)) return;
+      const type = canonicalDocType(d.docType);
+      if (anchor.has(type)) return;
       const p = parsePersonFieldId(d.fieldId);
-      if (p) anchor.set(d.docType, p.stakeholderId);
+      if (p) anchor.set(type, p.stakeholderId);
     });
     return anchor;
   })();

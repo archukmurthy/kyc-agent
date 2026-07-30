@@ -11,6 +11,8 @@ import {
   computeConfirmCounts,
   submitBlockers,
   blockerSummary,
+  isCompanyWideDocType,
+  canonicalDocType,
 } from "../confirmState";
 
 const verified = { field: "companyNumber", label: "Company Number", verificationStatus: "verified" };
@@ -340,6 +342,57 @@ describe("company-wide documents are ONE request however many people trigger the
     const b = { fieldId: "ubo::sh_jane::something", docType: "Some New Identity Document" };
     expect(canonicalDocs([a, b])).toHaveLength(2);
     expect(docKey(a)).not.toBe(docKey(b));
+  });
+});
+
+/**
+ * Two rule paths, one real filing. A company-level director edit emits
+ * 'Updated Director Registry'; a person-level removal emits 'List of
+ * Directors'. Doing both asked the customer for the same document twice.
+ * Merged in the presentation layer only — the policy table and the audit
+ * trail keep the precise rule-level name.
+ */
+describe("aliased document types collapse to one request", () => {
+  const companyDirEdit = { fieldId: "directors", docType: "Updated Director Registry" };
+  const personDirRemoval = { fieldId: "director::sh_jane::removal", docType: "List of Directors", personName: "Jane Doe" };
+  const companyUboEdit = { fieldId: "ubo_list", docType: "Updated UBO Registry" };
+  const personUboRemoval = { fieldId: "ubo::sh_john::removal", docType: "Ownership Chart", personName: "John Smith" };
+
+  it("merges the director pair into one request under the plain-English name", () => {
+    const docs = canonicalDocs([companyDirEdit, personDirRemoval]);
+    expect(docs).toHaveLength(1);
+    expect(docs[0].docType).toBe("List of Directors");
+  });
+
+  it("merges the UBO pair into one request", () => {
+    const docs = canonicalDocs([companyUboEdit, personUboRemoval]);
+    expect(docs).toHaveLength(1);
+    expect(docs[0].docType).toBe("Ownership Chart");
+  });
+
+  it("an upload against either name satisfies both", () => {
+    const docs = canonicalDocs([companyDirEdit, personDirRemoval]);
+    expect(docKey(companyDirEdit)).toBe(docKey(personDirRemoval));
+    const uploads = { [docKey(companyDirEdit)]: { name: "directors.pdf", uploadFailed: false } };
+    expect(submitBlockers({ found: [], docs, uploads })).toEqual([]);
+  });
+
+  it("the merge does not drag unrelated types together", () => {
+    const docs = canonicalDocs([
+      personDirRemoval,
+      personUboRemoval,
+      { fieldId: "ubo::sh_john::nationality", docType: "Proof of Identity", personName: "John Smith" },
+    ]);
+    expect(docs.map((d) => d.docType).sort()).toEqual([
+      "List of Directors", "Ownership Chart", "Proof of Identity",
+    ]);
+  });
+
+  it("an aliased name is still recognised as company-wide", () => {
+    expect(isCompanyWideDocType("Updated Director Registry")).toBe(true);
+    expect(isCompanyWideDocType("Updated UBO Registry")).toBe(true);
+    expect(isCompanyWideDocType("Proof of Identity")).toBe(false);
+    expect(canonicalDocType("Notice of Change of Address")).toBe("Notice of Change of Address");
   });
 });
 
