@@ -49,6 +49,7 @@ import {
   canonicalDocType,
   isGateConfirmedField,
   prefillBreakdown,
+  isLowConfidence,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
@@ -451,6 +452,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // row records that agreement here so the Needs-you count can reach zero.
   // Purely additive: it never touches checks, the dialogue, or capture.
   const [affirmedFields, setAffirmedFields] = useState({});
+  // The same thing for a PERSON's individual attributes, keyed
+  // `<stakeholderId>::<attributeKey>`. Separate map because person attributes
+  // are not research.found rows and have no index of their own.
+  const [affirmedPersonFields, setAffirmedPersonFields] = useState({});
   // Amendment documents derived server-side from the append-only event store
   // (authoritative in production). Unioned with the LIVE dialogue outcomes so
   // the requirement shows the instant a change is classified — before the
@@ -1012,6 +1017,39 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return { ...prev, [stakeholderId]: { ...cur, [key]: !curVal } };
     });
   };
+
+  /**
+   * Per-attribute AFFIRMATION for people — the exact counterpart of
+   * `affirmedFields` on the pre-filled rows, and for the same reason.
+   *
+   * Every attribute arrives ticked, so `isStkFieldConfirmed` alone cannot tell
+   * "the customer agreed" from "the customer hasn't looked". A pre-filled row
+   * from a low-confidence source must be explicitly ticked before it counts as
+   * confirmed; a person attribute from the SAME source was counting as
+   * confirmed untouched, purely because it renders as a card instead of a row.
+   * Three directors sourced from Investor Relations were silently confirmed.
+   *
+   * Additive state, exactly like affirmedFields: it never touches
+   * stakeholderFieldChecks, the dialogue, or what gets submitted.
+   */
+  const personFieldKey = (stakeholderId, key) => `${stakeholderId}::${key}`;
+  const isPersonFieldAffirmed = (stakeholderId, key) =>
+    !!affirmedPersonFields[personFieldKey(stakeholderId, key)];
+  const affirmPersonField = (stakeholderId, key) =>
+    setAffirmedPersonFields((prev) => ({ ...prev, [personFieldKey(stakeholderId, key)]: true }));
+
+  /** Tier of a person's data — their own if present, else the row that carried
+   *  them, which is what the person card's source badge already displays. */
+  const isPersonLowConfidence = (s, item) =>
+    isLowConfidence({ sourceTier: (s && s.sourceTier) || (item && item.sourceTier) });
+
+  /**
+   * THE per-attribute predicate. One rule, three consumers — the attribute row's
+   * tick, the card's "needs you" badge, and the tile/gate counts — so they can
+   * never disagree, exactly as rowState() does for the pre-filled rows.
+   */
+  const isPersonAttributeSettled = (s, f, lowConf) =>
+    isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key));
 
   const isStakeholderExpanded = (id) => expandedStakeholders[id] === true;
   const toggleStakeholderExpanded = (id) => {
@@ -4355,6 +4393,45 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
     return s[key] != null ? String(s[key]) : "";
   };
+  /**
+   * ONE found-attribute row for a person card, shared by the EDD and the
+   * listed-company branches so the two can never drift apart.
+   *
+   * A low-confidence attribute renders UNTICKED until the customer ticks it,
+   * which is what "affirm" means here — the pre-filled rows behave the same
+   * way, and an attribute arriving pre-ticked from an unverified source is not
+   * agreement. First click affirms; a second click unticks to correct it on
+   * the next page, the existing behaviour.
+   */
+  const renderPersonAttributeRow = (item, s, f, lowConf) => {
+    const amberTag = {
+      fontSize: 10, fontWeight: 700, color: "#8c5500",
+      background: "#fff8ed", border: "1px solid #e0a040",
+      borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+    };
+    const ticked = isStkFieldConfirmed(s.id, f.key);
+    const settled = isPersonAttributeSettled(s, f, lowConf);
+    const needsAffirm = ticked && !settled;
+    return (
+      <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={settled}
+          onChange={() => {
+            if (needsAffirm) affirmPersonField(s.id, f.key);
+            else togglePersonField(item, s, f);
+          }}
+          style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
+          aria-label={needsAffirm ? `Confirm ${f.label} — from an unverified source` : `Confirm ${f.label}`}
+        />
+        <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+        <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
+        {needsAffirm && <span style={amberTag}>❓ please confirm</span>}
+        {!ticked && <span style={amberTag}>✎ edit on next page</span>}
+      </label>
+    );
+  };
+
   // Field labels that will land on the next page for this person/company: any
   // found field the customer unticked, plus any missing required field.
   const stkNextPageFields = (s, ubo) =>
@@ -4581,11 +4658,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
             ? stkNextPageFields(s, ubo)
             : stkCorrectedFields(s, ubo).map((f) => f.label);
           // What actually needs the customer HERE: a value research returned
-          // that they haven't confirmed. A pure gap is NOT "needs you" — there
+          // that they haven't settled. A pure gap is NOT "needs you" — there
           // is no control on this card to supply it, the row already says
           // "added on next page", and Fill Gaps is where it is collected.
           // Counting it here was telling the customer to act with no way to.
-          const attentionFields = rejected ? [] : stkCorrectedFields(s, ubo).map((f) => f.label);
+          // Reads the SAME predicate as the row and the tiles.
+          const personLowConf = isPersonLowConfidence(s, item);
+          const attentionFields = rejected
+            ? []
+            : stkConfirmFields(s, ubo)
+                .filter((f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(s, f, personLowConf))
+                .map((f) => f.label);
           return (
             <div
               key={s.id}
@@ -4827,28 +4910,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {stkConfirmFields(s, ubo)
                           .filter((f) => stkFieldFound(s, f.key))
-                          .map((f) => {
-                            const amberTag = {
-                              fontSize: 10, fontWeight: 700, color: "#8c5500",
-                              background: "#fff8ed", border: "1px solid #e0a040",
-                              borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
-                            };
-                            const confirmed = isStkFieldConfirmed(s.id, f.key);
-                            return (
-                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={confirmed}
-                                  onChange={() => togglePersonField(item, s, f)}
-                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
-                                  aria-label={`Confirm ${f.label}`}
-                                />
-                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
-                              </label>
-                            );
-                          })}
+                          .map((f) => renderPersonAttributeRow(item, s, f, isPersonLowConfidence(s, item)))}
                       </div>
                       <Notice tier="tier1" style={{ marginTop: 10 }}>
                         Verified from official sources — no additional details required for a listed company.
@@ -4860,11 +4922,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {stkConfirmFields(s, ubo).map((f) => {
-                          const amberTag = {
-                            fontSize: 10, fontWeight: 700, color: "#8c5500",
-                            background: "#fff8ed", border: "1px solid #e0a040",
-                            borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
-                          };
                           // A gap is not a warning. Nothing is wrong with a value
                           // research simply didn't return, and there is no control
                           // here to act on it — it is collected on the next page.
@@ -4875,21 +4932,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                             borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
                           };
                           if (stkFieldFound(s, f.key)) {
-                            const confirmed = isStkFieldConfirmed(s.id, f.key);
-                            return (
-                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={confirmed}
-                                  onChange={() => togglePersonField(item, s, f)}
-                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
-                                  aria-label={`Confirm ${f.label}`}
-                                />
-                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
-                              </label>
-                            );
+                            return renderPersonAttributeRow(item, s, f, isPersonLowConfidence(s, item));
                           }
                           if (!f.required) return null;
                           return (
@@ -6060,12 +6103,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
         .forEach((s) => {
           if (isStakeholderRejected(item.field, s.id)) return;
           const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
+          const lowConf = isPersonLowConfidence(s, item);
           stkConfirmFields(s, ubo).forEach((f) => {
             const found = stkFieldFound(s, f.key);
-            const confirmed = isStkFieldConfirmed(s.id, f.key);
+            // A low-confidence attribute needs an EXPLICIT tick, exactly as a
+            // low-confidence pre-filled row does — arriving pre-ticked is not
+            // agreement. Same source, same standard, whether it renders as a
+            // row or inside a person card.
+            const settled = isPersonAttributeSettled(s, f, lowConf);
             // Mirrors stkNextPageFields (EDD people) and stkCorrectedFields
-            // (listed read-only people) exactly.
-            const outstanding = needsEDD ? (found ? !confirmed : f.required) : found && !confirmed;
+            // (listed read-only people), plus the affirmation requirement.
+            const outstanding = needsEDD ? (found ? !settled : f.required) : found && !settled;
             out.push({
               stakeholderId: s.id,
               fieldId: item.field,
@@ -6074,7 +6122,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               personName: s.full_name || null,
               found,
               outstanding,
-              confirmed: found && confirmed,
+              confirmed: found && settled,
               resolvableHere: found,
             });
           });
