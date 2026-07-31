@@ -335,8 +335,11 @@ export function ConfirmStep({
                   Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
                 </p>
                 {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
-                {/* Adding is its own action, never a hijacked name edit. */}
-                {renderAddPerson && renderAddPerson()}
+                {/* The "add a director or beneficial owner we missed" panel was
+                    removed from this page. renderAddPerson is still accepted as
+                    a prop and AddPersonPanel is untouched, so re-enabling it is
+                    one line — the capability was not deleted, only this
+                    placement. */}
               </div>
             )}
 
