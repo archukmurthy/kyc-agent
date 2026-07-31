@@ -45,6 +45,7 @@ export function ConfirmStep({
   tier1Count,
   tier2Count,
   tier3Count,
+  prefill,
   jurisdictionBadge,
   entityBadge,
   cardStyle,
@@ -73,6 +74,16 @@ export function ConfirmStep({
   // comes from the SAME list, so the button can never grey out silently.
   const blockerList = blockers || [];
   const isBlocked = blockerList.length > 0;
+  // Pre-fill is a RESEARCH metric — how much arrived and from where, counted in
+  // data points (a stakeholder row carrying three people is not one field).
+  // Falls back to the old row-based numbers only if the prop is absent.
+  const prefillStats = prefill || {
+    total: sortedFound.length,
+    document: docCount,
+    tier1: tier1Count,
+    unverified: tier2Count + tier3Count,
+    other: 0,
+  };
   return (
           <div>
             {/* The "is this the right company?" check now lives on the Applicant
@@ -92,7 +103,8 @@ export function ConfirmStep({
                       width={320}
                       content={
                         <span style={{ display: "block" }}>
-                          {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} from company or unverified sources
+                          {prefillStats.total} fields pre-filled · {prefillStats.document} from documents · {prefillStats.tier1} from official sources · {prefillStats.unverified} from company or unverified sources
+                          {prefillStats.other > 0 && ` · ${prefillStats.other} from an unrecorded source`}
                         </span>
                       }
                     >

@@ -48,6 +48,7 @@ import {
   isPerFieldDocType,
   canonicalDocType,
   isGateConfirmedField,
+  prefillBreakdown,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
@@ -6120,6 +6121,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const tier2Count = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
   const tier3Count = (research?.found || []).filter(i => i.sourceTier === "tier3").length;
 
+  /**
+   * How much research actually pre-filled, by source — counted in DATA POINTS.
+   *
+   * A stakeholder row is one row but many values: three directors with five
+   * known attributes each is fifteen pre-filled fields, not one. The old count
+   * used research.found.length, so every people-heavy run was understated by
+   * roughly the number of people on it.
+   *
+   * Attributes inherit their row's tier, which is what the person card's own
+   * source badge already displays ("Companies House"), so the breakdown agrees
+   * with what the customer sees. Rejected people and unticked fields still
+   * count: this measures what research DELIVERED, not what survived review.
+   */
+  const prefill = prefillBreakdown(
+    (research?.found || []).map((item) => {
+      if (!hasRealStakeholders(item)) return { sourceTier: item.sourceTier, count: 1 };
+      const ubo = isUboLikeField(item.field);
+      const count = item.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .reduce(
+          (n, s) => n + stkConfirmFields(s, ubo).filter((f) => stkFieldFound(s, f.key)).length,
+          0
+        );
+      return { sourceTier: item.sourceTier, count };
+    })
+  );
+
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
   const companyName_ = tenantConfig?.company?.name || "Nium";
@@ -9038,6 +9066,7 @@ Nium Onboarding Team`;
             tier1Count={tier1Count}
             tier2Count={tier2Count}
             tier3Count={tier3Count}
+            prefill={prefill}
             jurisdictionBadge={jurisdictionBadge}
             entityBadge={entityBadge}
             cardStyle={card}

@@ -329,6 +329,44 @@ export function isSatisfied(upload) {
   return !!upload && !upload.uploadFailed;
 }
 
+/**
+ * PRE-FILL BREAKDOWN — how much research delivered, and from where.
+ *
+ * A RESEARCH metric, not a progress metric: it describes what arrived on the
+ * page and is invariant to what the customer then does with it. Confirming,
+ * correcting, unticking or rejecting a person never moves it. (It coincides
+ * with the Confirmed tile only while nothing has been touched yet.)
+ *
+ * Counts DATA POINTS, not rows. A stakeholder row carrying three people with
+ * five known attributes each delivered fifteen pre-filled values, not one —
+ * counting the row as 1 understated every people-heavy research run, which is
+ * exactly the kind of skew that would poison later metrics.
+ *
+ * Every entry lands in a bucket: an unrecognised tier goes to `other` rather
+ * than being silently dropped, so `total` always equals the sum of the parts.
+ * `assertsTotal` is that invariant, exposed so a caller can trust the split.
+ */
+export const SOURCE_BUCKETS = ["document", "tier1", "tier2", "tier3", "other"];
+
+export function prefillBreakdown(entries = []) {
+  const out = { total: 0, document: 0, tier1: 0, tier2: 0, tier3: 0, other: 0 };
+  (Array.isArray(entries) ? entries : []).forEach((e) => {
+    if (!e) return;
+    const n = Number(e.count);
+    if (!Number.isFinite(n) || n <= 0) return;
+    const bucket = SOURCE_BUCKETS.includes(e.sourceTier) && e.sourceTier !== "other"
+      ? e.sourceTier
+      : "other";
+    out[bucket] += n;
+    out.total += n;
+  });
+  // Unverified = company-owned (tier2) + web (tier3), the split the page shows.
+  out.unverified = out.tier2 + out.tier3;
+  out.assertsTotal =
+    out.total === out.document + out.tier1 + out.tier2 + out.tier3 + out.other;
+  return out;
+}
+
 export function computeConfirmCounts({
   rows,
   found = [],

@@ -14,6 +14,7 @@ import {
   isCompanyWideDocType,
   isPerFieldDocType,
   canonicalDocType,
+  prefillBreakdown,
 } from "../confirmState";
 
 const verified = { field: "companyNumber", label: "Company Number", verificationStatus: "verified" };
@@ -609,6 +610,62 @@ describe("gate-confirmed rows are read-only and never block", () => {
   it("counts toward Confirmed, not Needs You", () => {
     const counts = computeConfirmCounts({ found: [businessType, chNumber] });
     expect(counts).toMatchObject({ needsYou: 0, confirmed: 2 });
+  });
+});
+
+/**
+ * The pre-fill breakdown is a research metric destined for stats, so the two
+ * ways it used to lie both matter: a stakeholder row counted as one field
+ * however many people it carried, and a row with an unrecognised tier landed
+ * in the total but in no bucket.
+ */
+describe("prefillBreakdown", () => {
+  it("counts data points, not rows", () => {
+    // 6 plain fields + one stakeholder row carrying 15 known attributes.
+    const b = prefillBreakdown([
+      ...Array.from({ length: 6 }, () => ({ sourceTier: "tier1", count: 1 })),
+      { sourceTier: "tier1", count: 15 },
+    ]);
+    expect(b.total).toBe(21);
+    expect(b.tier1).toBe(21);
+  });
+
+  it("splits by source and folds tier2+tier3 into unverified", () => {
+    const b = prefillBreakdown([
+      { sourceTier: "document", count: 4 },
+      { sourceTier: "tier1", count: 18 },
+      { sourceTier: "tier2", count: 3 },
+      { sourceTier: "tier3", count: 2 },
+    ]);
+    expect(b).toMatchObject({ total: 27, document: 4, tier1: 18, tier2: 3, tier3: 2, unverified: 5 });
+  });
+
+  it("never drops an unrecognised tier — the parts always sum to the total", () => {
+    const b = prefillBreakdown([
+      { sourceTier: "tier1", count: 2 },
+      { sourceTier: undefined, count: 3 },
+      { sourceTier: "something_new", count: 1 },
+    ]);
+    expect(b.other).toBe(4);
+    expect(b.total).toBe(6);
+    expect(b.assertsTotal).toBe(true);
+  });
+
+  it("ignores empty, zero and malformed entries", () => {
+    const b = prefillBreakdown([
+      null,
+      { sourceTier: "tier1", count: 0 },
+      { sourceTier: "tier1", count: -2 },
+      { sourceTier: "tier1", count: "x" },
+      { sourceTier: "tier1", count: 5 },
+    ]);
+    expect(b.total).toBe(5);
+    expect(b.assertsTotal).toBe(true);
+  });
+
+  it("is empty and self-consistent with no input", () => {
+    expect(prefillBreakdown()).toMatchObject({ total: 0, unverified: 0, assertsTotal: true });
+    expect(prefillBreakdown(null).total).toBe(0);
   });
 });
 
