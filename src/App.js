@@ -4397,11 +4397,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
    * ONE found-attribute row for a person card, shared by the EDD and the
    * listed-company branches so the two can never drift apart.
    *
-   * A low-confidence attribute renders UNTICKED until the customer ticks it,
-   * which is what "affirm" means here — the pre-filled rows behave the same
-   * way, and an attribute arriving pre-ticked from an unverified source is not
-   * agreement. First click affirms; a second click unticks to correct it on
-   * the next page, the existing behaviour.
+   * Carries the SAME contextual control PAIR as a pre-filled row (see
+   * renderFoundRow), by meaning rather than by position:
+   *   needs-confirming / disputed → ✓ ✕  ("is this right or wrong?")
+   *   settled                     → ✓ ✎  (settled value; tweak it)
+   * A lone checkbox could only agree — there was no way to say "this is wrong,
+   * let me edit it", which the rows have always offered. ✕ and ✎ enter the same
+   * flow: untick, and the value is corrected on the next page.
+   *
+   * A low-confidence attribute is UNSETTLED until the customer explicitly
+   * confirms it, exactly as a low-confidence row is: arriving pre-ticked from
+   * an unverified source is not agreement.
    */
   const renderPersonAttributeRow = (item, s, f, lowConf) => {
     const amberTag = {
@@ -4409,26 +4415,55 @@ export default function KYCAgent({ previewMode = false } = {}) {
       background: "#fff8ed", border: "1px solid #e0a040",
       borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
     };
+    const btn = {
+      width: 22, height: 22, borderRadius: 6, cursor: "pointer",
+      fontSize: 11, fontWeight: 700, lineHeight: 1, padding: 0, fontFamily: "inherit",
+      display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    };
     const ticked = isStkFieldConfirmed(s.id, f.key);
     const settled = isPersonAttributeSettled(s, f, lowConf);
     const needsAffirm = ticked && !settled;
+    const disputed = !ticked;
     return (
-      <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-        <input
-          type="checkbox"
-          checked={settled}
-          onChange={() => {
-            if (needsAffirm) affirmPersonField(s.id, f.key);
-            else togglePersonField(item, s, f);
-          }}
-          style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
-          aria-label={needsAffirm ? `Confirm ${f.label} — from an unverified source` : `Confirm ${f.label}`}
-        />
+      <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
         <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
         {needsAffirm && <span style={amberTag}>❓ please confirm</span>}
-        {!ticked && <span style={amberTag}>✎ edit on next page</span>}
-      </label>
+        {disputed && <span style={amberTag}>✎ edit on next page</span>}
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!ticked) togglePersonField(item, s, f); // undo — restore the value
+              affirmPersonField(s.id, f.key);
+            }}
+            aria-label={disputed ? `Restore the original ${f.label}` : `Confirm ${f.label}`}
+            aria-pressed={settled}
+            title={disputed ? "Undo — keep the original value" : "Correct — keep this value"}
+            style={{
+              ...btn,
+              background: settled ? "#4a9e8e" : "#fff",
+              color: settled ? "#fff" : C.textMuted,
+              border: settled ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
+            }}
+          >✓</button>
+          <button
+            type="button"
+            onClick={() => { if (ticked) togglePersonField(item, s, f); }}
+            aria-label={needsAffirm || disputed ? `Mark ${f.label} as incorrect` : `Edit ${f.label}`}
+            aria-pressed={disputed}
+            title={needsAffirm || disputed
+              ? "Wrong — flag this value for correction"
+              : "Edit this value"}
+            style={{
+              ...btn,
+              background: disputed ? C.error : "#fff",
+              color: disputed ? "#fff" : C.textMuted,
+              border: disputed ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+            }}
+          >{needsAffirm || disputed ? "✕" : "✎"}</button>
+        </div>
+      </div>
     );
   };
 
