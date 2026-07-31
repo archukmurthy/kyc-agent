@@ -4571,6 +4571,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
             : needsEDD
             ? stkNextPageFields(s, ubo)
             : stkCorrectedFields(s, ubo).map((f) => f.label);
+          // What actually needs the customer HERE: a value research returned
+          // that they haven't confirmed. A pure gap is NOT "needs you" — there
+          // is no control on this card to supply it, the row already says
+          // "added on next page", and Fill Gaps is where it is collected.
+          // Counting it here was telling the customer to act with no way to.
+          const attentionFields = rejected ? [] : stkCorrectedFields(s, ubo).map((f) => f.label);
           return (
             <div
               key={s.id}
@@ -4646,15 +4652,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     </div>
                   )}
                 </div>
-                {/* Re-skin: per-card status badge — same nextPageFields data
-                    that previously drove the collapsed subtitle line. */}
-                {!rejected && (nextPageFields.length > 0 ? (
+                {/* Per-card status badge. Driven by attentionFields, NOT by
+                    everything routed to the next page: a person whose only
+                    outstanding item is a gap has nothing to do here, so an
+                    amber "needs you" on them was a prompt with no action
+                    behind it. Their gaps still show per-row in green. */}
+                {!rejected && (attentionFields.length > 0 ? (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
                     border: `1px solid ${C.warningBorder}`, borderRadius: 99,
                     padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
                   }}>
-                    {nextPageFields.length} need{nextPageFields.length === 1 ? "s" : ""} you
+                    {attentionFields.length} need{attentionFields.length === 1 ? "s" : ""} you
                   </span>
                 ) : (
                   <span style={{
@@ -4836,6 +4845,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                             background: "#fff8ed", border: "1px solid #e0a040",
                             borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
                           };
+                          // A gap is not a warning. Nothing is wrong with a value
+                          // research simply didn't return, and there is no control
+                          // here to act on it — it is collected on the next page.
+                          // Same calm green as the tick and the shareholding pill.
+                          const deferredTag = {
+                            fontSize: 10, fontWeight: 700, color: "#1a6b56",
+                            background: "#dff2ec", border: "1px solid rgba(74,158,142,0.3)",
+                            borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                          };
                           if (stkFieldFound(s, f.key)) {
                             const confirmed = isStkFieldConfirmed(s.id, f.key);
                             return (
@@ -4856,10 +4874,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
                           if (!f.required) return null;
                           return (
                             <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                              <span style={{ width: 14, textAlign: "center", color: "#e0a040", flexShrink: 0 }}>＋</span>
+                              <span style={{ width: 14, textAlign: "center", color: "#4a9e8e", flexShrink: 0 }}>＋</span>
                               <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
                               <span style={{ color: "#1a3a4a70", flex: 1, fontStyle: "italic" }}>Not found</span>
-                              <span style={amberTag}>added on next page</span>
+                              <span style={deferredTag}>added on next page</span>
                             </div>
                           );
                         })}

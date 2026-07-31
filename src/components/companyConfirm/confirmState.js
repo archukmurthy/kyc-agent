@@ -54,17 +54,19 @@ export const BLOCKER_KIND = {
 /**
  * PERSON ATTRIBUTES — the per-person data points the person cards show.
  *
- * They are COUNTED here so the tiles describe the whole page: a customer who
- * sees eight amber "needs you" badges on person cards and a tile reading 4 has
- * been told two different things. Every outstanding attribute is part of
- * needsYou; every ticked found attribute is part of confirmed.
+ * `resolvableHere` — research returned a value, so the card has a tick and an
+ * inline correction — is the whole distinction:
  *
- * They BLOCK only when `resolvableHere` — i.e. research returned a value the
- * customer can tick or correct on this page. An attribute with no value has no
- * input on the person card (it is tagged "added on next page" and collected on
- * Fill Gaps), so blocking on it would leave the customer stuck on Confirm with
- * no control that can clear it. allGapsFilled still enforces those at the Fill
- * Gaps gate.
+ *   resolvable  → COUNTS in needsYou and BLOCKS. It is a real ask: an
+ *                 unverified-source value the customer must confirm or correct.
+ *   pure gap    → counts in NEITHER tile and never blocks. Nothing is wrong
+ *                 with it, there is no control on this card to supply it, and
+ *                 the row already says "added on next page". Counting it as
+ *                 "needs you" told the customer to act with no way to act;
+ *                 Fill Gaps collects it and allGapsFilled enforces it there.
+ *
+ * Ticked found attributes still count in `confirmed`, so the tiles describe the
+ * people as well as the pre-filled table.
  */
 export function personOutstanding(items = []) {
   return (Array.isArray(items) ? items : []).filter((p) => p && p.outstanding);
@@ -323,18 +325,22 @@ export function computeConfirmCounts({
     else if (state === ROW_STATE.NEEDS_YOU) needsYou += 1;
     else confirmed += 1;
   });
-  // People count on the same footing as vital rows — the tiles describe the
-  // whole page, not just the pre-filled table.
+  // People count on the same footing as vital rows — but only for what is
+  // actionable HERE. A pure gap is next-page work, not an unmet ask.
   const personPending = personOutstanding(personItems);
-  needsYou += personPending.length;
+  const personActionable = personPending.filter((p) => p.resolvableHere);
+  needsYou += personActionable.length;
   confirmed += (Array.isArray(personItems) ? personItems : []).filter((p) => p && p.confirmed).length;
   const outstandingDocs = docs.filter((d) => !isSatisfied(uploads[docKey(d)]));
   return {
     needsYou,
     confirmed,
     corrected,
-    personPending: personPending.length,
-    personDeferred: personPending.filter((p) => !p.resolvableHere).length,
+    // Counted in needsYou and blocking.
+    personPending: personActionable.length,
+    // Counted nowhere — informational, so the UI can say how much Fill Gaps
+    // still owes without dressing it up as an outstanding ask.
+    personDeferred: personPending.length - personActionable.length,
     docsNeeded: outstandingDocs.length,
     docsTotal: docs.length,
     docs,

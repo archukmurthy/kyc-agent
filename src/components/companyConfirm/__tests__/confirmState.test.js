@@ -509,14 +509,30 @@ describe("person attributes count toward the tiles", () => {
     ...person("sh_mark", "Mark Lee"),
   ];
 
-  it("adds outstanding person attributes to Needs You", () => {
+  /**
+   * A missing PEP status is NOT "needs you": there is no control on the person
+   * card to supply it, the row says "added on next page", and Fill Gaps
+   * collects it. Counting it prompted the customer to act with no way to act.
+   */
+  it("does NOT add pure gaps to Needs You", () => {
     // 4 low-confidence vital rows + one missing PEP each for three people.
     const counts = computeConfirmCounts({
       found: [probable, indicative, probable2, indicative2],
       personItems: threePeople,
     });
-    expect(counts.needsYou).toBe(7);
-    expect(counts.personPending).toBe(3);
+    expect(counts.needsYou).toBe(4); // the vital rows only
+    expect(counts.personPending).toBe(0);
+    expect(counts.personDeferred).toBe(3); // informational
+  });
+
+  it("adds an unconfirmed found attribute to Needs You", () => {
+    const counts = computeConfirmCounts({
+      found: [probable],
+      personItems: person("sh_john", "John Smith", { untickedKeys: ["nationality"] }),
+    });
+    expect(counts.needsYou).toBe(2); // the vital row + John's nationality
+    expect(counts.personPending).toBe(1);
+    expect(counts.personDeferred).toBe(1); // his missing PEP, uncounted
   });
 
   it("adds ticked found attributes to Confirmed", () => {
@@ -527,8 +543,8 @@ describe("person attributes count toward the tiles", () => {
   it("an unticked found attribute is outstanding AND resolvable here", () => {
     const items = person("sh_john", "John Smith", { untickedKeys: ["nationality"] });
     const counts = computeConfirmCounts({ found: [], personItems: items });
-    expect(counts.needsYou).toBe(2); // unticked nationality + missing PEP
-    expect(counts.personDeferred).toBe(1); // only the missing PEP is deferred
+    expect(counts.needsYou).toBe(1); // the unticked nationality only
+    expect(counts.personDeferred).toBe(1); // the missing PEP, uncounted
     const blockers = submitBlockers({ found: [], personItems: items });
     expect(blockers).toHaveLength(1);
     expect(blockers[0].kind).toBe(BLOCKER_KIND.PERSON_ATTRIBUTE);
@@ -540,9 +556,11 @@ describe("person attributes count toward the tiles", () => {
    * person card (it is tagged "added on next page"), so blocking on it would
    * leave the customer on Confirm with no control that can clear it.
    */
-  it("counts a missing attribute but does NOT block on it", () => {
+  it("neither counts nor blocks on a missing attribute", () => {
     const items = person("sh_john", "John Smith"); // PEP missing, nothing unticked
-    expect(computeConfirmCounts({ found: [], personItems: items }).needsYou).toBe(1);
+    const counts = computeConfirmCounts({ found: [], personItems: items });
+    expect(counts.needsYou).toBe(0);
+    expect(counts.personDeferred).toBe(1);
     expect(submitBlockers({ found: [], personItems: items })).toEqual([]);
   });
 
