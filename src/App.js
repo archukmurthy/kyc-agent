@@ -4777,21 +4777,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   padding: "12px 16px 14px",
                   borderTop: "1px solid rgba(26,58,74,0.08)",
                 }}>
+                  {/* Source badge — SAME click-to-reveal-timestamp interaction as
+                      the pre-filled rows (renderSourceBadge). This used to be a
+                      badge plus a separate "🕐 When?" chip whose timestamp only
+                      appeared in a native title tooltip: two different
+                      behaviours for the same information on one page, and the
+                      chip looked clickable while doing nothing. Now the badge
+                      itself toggles, keyed per person so it can never toggle a
+                      row's badge. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, color: sourceBadge.color,
-                      background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
-                    }}>
-                      {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
-                    </span>
-                    {(s.fetchedAt || item.fetchedAt) && (
-                      <span
-                        style={{ fontSize: 11, color: "#1a3a4a70", cursor: "default" }}
-                        title={`Fetched: ${s.fetchedAt || item.fetchedAt}`}
-                      >
-                        🕐 When?
-                      </span>
-                    )}
+                    {(() => {
+                      const stkMeta = metaFor(item.field);
+                      const ts = s.fetchedAt || item.fetchedAt || (stkMeta && stkMeta.fetchedAt) || researchTimestamp || "";
+                      const tsKey = `stk:${s.id}`;
+                      const revealed = !!revealedTs[tsKey];
+                      return (
+                        <span
+                          onClick={ts ? () => setRevealedTs(p => ({ ...p, [tsKey]: !p[tsKey] })) : undefined}
+                          title={!ts ? undefined : revealed ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+                          style={{
+                            fontSize: 10, fontWeight: 700, color: sourceBadge.color,
+                            background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
+                            cursor: ts ? "pointer" : "default",
+                          }}
+                        >
+                          {revealed
+                            ? `🕒 ${ts}`
+                            : `${sourceBadge.glyph} ${item.source || (tier === "tier1" ? "Official source" : "Source")}`}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {rejected ? (
