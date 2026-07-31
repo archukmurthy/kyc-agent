@@ -68,6 +68,24 @@ export const BLOCKER_KIND = {
  * Ticked found attributes still count in `confirmed`, so the tiles describe the
  * people as well as the pre-filled table.
  */
+/**
+ * Rows the customer has ALREADY confirmed upstream, on the Applicant page's
+ * five-fact FoundationalFactsGate. Confirm re-displays them for context but
+ * offers no tick or pencil: asking the same question twice invites a different
+ * answer to the one that was used to run the research, and the gate is the
+ * place that owns disputing them (it resets the journey / forks on ownership).
+ *
+ *   businessType              ← gate fact "ownershipType"
+ *                               (both render e.g. "Private Limited Company")
+ *   businessRegistrationNumber ← gate fact "registrationNumber"
+ */
+export const GATE_CONFIRMED_FIELDS = new Set([
+  "businessType",
+  "businessRegistrationNumber",
+]);
+
+export const isGateConfirmedField = (field) => GATE_CONFIRMED_FIELDS.has(field);
+
 export function personOutstanding(items = []) {
   return (Array.isArray(items) ? items : []).filter((p) => p && p.outstanding);
 }
@@ -91,6 +109,11 @@ export function hasValue(v) {
 
 export function rowState(item, { checked = true, affirmed = false, correction } = {}) {
   if (hasValue(correction)) return ROW_STATE.CORRECTED;
+  // Settled on the Applicant page's gate and read-only here. Stated rather
+  // than derived, because a low-confidence source would otherwise make this
+  // needsYou — and the row has no tick to clear it with, which is precisely
+  // the unresolvable blocker the gate scoping rule exists to prevent.
+  if (isGateConfirmedField(item && item.field)) return ROW_STATE.CONFIRMED;
   if (!checked) return ROW_STATE.NEEDS_YOU; // disputed; correction not supplied yet
   if (isLowConfidence(item) && !affirmed) return ROW_STATE.NEEDS_YOU;
   return ROW_STATE.CONFIRMED;

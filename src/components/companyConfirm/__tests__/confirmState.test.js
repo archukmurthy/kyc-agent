@@ -578,6 +578,40 @@ describe("person attributes count toward the tiles", () => {
   });
 });
 
+/**
+ * Business Type and Companies House Number restate two of the five facts the
+ * customer already confirmed on the Applicant page's gate, so Confirm shows
+ * them read-only. With no tick to press, they must never reach needsYou.
+ */
+describe("gate-confirmed rows are read-only and never block", () => {
+  const businessType = { field: "businessType", label: "Business Type", verificationStatus: "verified" };
+  const chNumber = { field: "businessRegistrationNumber", label: "Companies House Number", verificationStatus: "indicative" };
+
+  it("stays confirmed even from a low-confidence source", () => {
+    // An ordinary indicative row would be needsYou until affirmed.
+    expect(rowState(chNumber, { checked: true, affirmed: false })).toBe(ROW_STATE.CONFIRMED);
+    expect(rowState(indicative, { checked: true, affirmed: false })).toBe(ROW_STATE.NEEDS_YOU);
+  });
+
+  it("stays confirmed even if unchecked", () => {
+    expect(rowState(businessType, { checked: false })).toBe(ROW_STATE.CONFIRMED);
+  });
+
+  it("never appears as a blocker", () => {
+    const blockers = submitBlockers({ found: [businessType, chNumber, indicative], checks: { 0: false, 1: false } });
+    expect(blockers.map((b) => b.fieldId)).toEqual(["employees"]);
+  });
+
+  it("still honours a correction saved before the row became read-only", () => {
+    expect(rowState(businessType, { correction: "Public Limited Company" })).toBe(ROW_STATE.CORRECTED);
+  });
+
+  it("counts toward Confirmed, not Needs You", () => {
+    const counts = computeConfirmCounts({ found: [businessType, chNumber] });
+    expect(counts).toMatchObject({ needsYou: 0, confirmed: 2 });
+  });
+});
+
 describe("rows form — original indices survive a filtered subset", () => {
   // The vital-row table renders a SUBSET of research.found (stakeholder fields
   // render as person cards). `checks` stays keyed by the original index, so the

@@ -47,6 +47,7 @@ import {
   isCompanyWideDocType,
   isPerFieldDocType,
   canonicalDocType,
+  isGateConfirmedField,
 } from "./components/companyConfirm/confirmState";
 import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
@@ -4171,6 +4172,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </span>
             )}
           </div>
+          {/* Already confirmed on the Applicant page's five-fact gate, so this
+              row is read-only here — see GATE_CONFIRMED_FIELDS. The spacer
+              keeps the source-badge column aligned with every other row. */}
+          {isGateConfirmedField(item.field) ? (
+            <div style={{ width: 56, flexShrink: 0 }} aria-hidden="true" />
+          ) : (
           <div style={{ display: "flex", gap: 4, paddingTop: 1 }}>
             {/* Contextual control PAIR, per the prototype — never three buttons.
                 The prototype only ever shows two row states; ours has four, so
@@ -4231,6 +4238,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               >✎</button>
             )}
           </div>
+          )}
         </div>
       </div>
     );
