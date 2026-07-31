@@ -4704,12 +4704,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
             : stkConfirmFields(s, ubo)
                 .filter((f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(s, f, personLowConf))
                 .map((f) => f.label);
+          // A person with outstanding attributes must not LOOK settled. The
+          // header tick means "this person belongs", not "everything about them
+          // is confirmed" — but rendered solid green next to a green avatar it
+          // read as done, identically to a fully verified person. Same rule the
+          // pre-filled rows use: their ✓ is only green when the row is checked
+          // AND needs no attention.
+          const personNeedsAttention = !rejected && attentionFields.length > 0;
           return (
             <div
               key={s.id}
               style={{
-                background: rejected ? "#fef2f2" : "#fafcfb",
-                border: `1.5px solid ${rejected ? "#fecaca" : "rgba(26,58,74,0.08)"}`,
+                background: rejected ? "#fef2f2" : personNeedsAttention ? C.warningTint : "#fafcfb",
+                border: `1.5px solid ${rejected ? "#fecaca" : personNeedsAttention ? C.warningBorder : "rgba(26,58,74,0.08)"}`,
                 borderRadius: 8, marginBottom: 8, overflow: "hidden",
                 transition: "border-color .15s",
               }}
@@ -4727,8 +4734,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   checked={!rejected}
                   onChange={() => togglePersonRemoval(item, s)}
                   onClick={(e) => e.stopPropagation()}
-                  style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
-                  aria-label={`Confirm ${s.full_name}`}
+                  style={{
+                    width: 15, height: 15, flexShrink: 0, cursor: "pointer",
+                    accentColor: personNeedsAttention ? C.warning : "#4a9e8e",
+                  }}
+                  aria-label={
+                    personNeedsAttention
+                      ? `${s.full_name} belongs on this list — ${attentionFields.length} detail${attentionFields.length === 1 ? "" : "s"} still need confirming`
+                      : `Confirm ${s.full_name}`
+                  }
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
