@@ -4652,12 +4652,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     </div>
                   )}
                 </div>
-                {/* Per-card status badge. Driven by attentionFields, NOT by
-                    everything routed to the next page: a person whose only
-                    outstanding item is a gap has nothing to do here, so an
-                    amber "needs you" on them was a prompt with no action
-                    behind it. Their gaps still show per-row in green. */}
-                {!rejected && (attentionFields.length > 0 ? (
+                {/* Per-card status badge — shown ONLY when this person needs
+                    something from the customer here, i.e. a found value not yet
+                    confirmed. Driven by attentionFields, NOT by everything
+                    routed to the next page: a gap has no control on this card,
+                    so an amber "needs you" on it was a prompt with no action
+                    behind it, and a green "✓ Complete" claimed the person was
+                    finished while their own row still said "added on next
+                    page". Nothing to say here is said with no badge; the gaps
+                    speak for themselves per-row. */}
+                {!rejected && attentionFields.length > 0 && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
                     border: `1px solid ${C.warningBorder}`, borderRadius: 99,
@@ -4665,15 +4669,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   }}>
                     {attentionFields.length} need{attentionFields.length === 1 ? "s" : ""} you
                   </span>
-                ) : (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, color: C.success, background: C.successBg,
-                    border: `1px solid ${C.successBorder}`, borderRadius: 99,
-                    padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
-                  }}>
-                    ✓ Complete
-                  </span>
-                ))}
+                )}
                 {rejected && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
