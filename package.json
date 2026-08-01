@@ -19,6 +19,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "test": "react-scripts test",
+    "test:smoke:db": "node scripts/real-db-smoke.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
