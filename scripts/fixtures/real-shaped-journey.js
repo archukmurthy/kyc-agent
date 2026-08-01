@@ -176,12 +176,46 @@ function buildRealShapedJourneyFixture(runId = randomUUID()) {
     journeyType: "ai_only",
     fieldValues: {
       businessRegistrationNumber: "12345678",
-      registeredAddress: "10 Example Street, London, EC1A 1AA",
+      // CORRECTED scalar: the customer replaced the registry value. The
+      // original survives only in fieldMetadata.agentValue below (and in
+      // change_events.before_value) — the whole point of the provenance trail.
+      registeredAddress: "20 Example Street, London, EC1A 1AB",
       applicantFirstName: "Maya",
       applicantLastName: "Thompson",
       applicantEmail: `${marker}@example.invalid`,
       natureOfBusiness: "Cross-border payment services",
     },
+    // Per-field provenance trail, as the Confirm page transmits it. Three
+    // shapes on purpose, because deriveScalarProvenance resolves each
+    // differently and only a real submit proves the whole chain is wired:
+    //   corrected -> agent_value is the registry original, != customer_value
+    //   untouched -> agent_value == final_value
+    //   customer gap -> agent_value IS NULL (never claim the AI sourced it)
+    // applicantFirstName/applicantEmail are deliberately absent: they arrive as
+    // applicantProvenance rows and the scalar loop skips them.
+    fieldMetadata: [
+      {
+        fieldId: "registeredAddress",
+        value: "20 Example Street, London, EC1A 1AB",
+        agentValue: "10 Example Street, London, EC1A 1AA",
+        customerAction: "corrected",
+        source: "Companies House",
+        sourceTier: "tier1",
+      },
+      {
+        fieldId: "businessRegistrationNumber",
+        value: "12345678",
+        customerAction: "kept",
+        source: "Companies House",
+        sourceTier: "tier1",
+      },
+      {
+        fieldId: "natureOfBusiness",
+        value: "Cross-border payment services",
+        customerAction: "provided",
+        sourceTier: "manual",
+      },
+    ],
     stakeholders: { directors, beneficialOwners: ubos },
     documents: [],
     costSummary,
