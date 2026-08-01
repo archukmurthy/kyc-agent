@@ -4806,7 +4806,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // What actually needs the customer HERE: a value research returned
           // that they haven't settled. A pure gap is NOT "needs you" — there
           // is no control on this card to supply it, the row already says
-          // "added on next page", and Fill Gaps is where it is collected.
+          // "collected on next page", and Fill Gaps is where that happens.
           // Counting it here was telling the customer to act with no way to.
           // Reads the SAME predicate as the row and the tiles.
           const personLowConf = isPersonLowConfidence(s, item);
@@ -5109,7 +5109,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                               <span style={{ width: 14, textAlign: "center", color: "#4a9e8e", flexShrink: 0 }}>＋</span>
                               <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
                               <span style={{ color: "#1a3a4a70", flex: 1, fontStyle: "italic" }}>Not found</span>
-                              <span style={deferredTag}>added on next page</span>
+                              <span style={deferredTag}>collected on next page</span>
                             </div>
                           );
                         })}
@@ -6282,7 +6282,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
    * `resolvableHere` is the load-bearing distinction: a FOUND attribute can be
    * ticked or corrected on this page, but an attribute research did not return
    * has no input on the person card — it is collected on Fill Gaps, which is
-   * why the card tags it "added on next page". Counting it is honest; blocking
+   * why the card tags it "collected on next page". Counting it is honest; blocking
    * on it would strand the customer with no control to clear it.
    */
   const personConfirmItems = (() => {

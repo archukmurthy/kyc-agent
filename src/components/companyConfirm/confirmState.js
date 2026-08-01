@@ -61,7 +61,7 @@ export const BLOCKER_KIND = {
  *                 unverified-source value the customer must confirm or correct.
  *   pure gap    → counts in NEITHER tile and never blocks. Nothing is wrong
  *                 with it, there is no control on this card to supply it, and
- *                 the row already says "added on next page". Counting it as
+ *                 the row already says "collected on next page". Counting it as
  *                 "needs you" told the customer to act with no way to act;
  *                 Fill Gaps collects it and allGapsFilled enforces it there.
  *

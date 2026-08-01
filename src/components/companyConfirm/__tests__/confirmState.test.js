@@ -512,7 +512,7 @@ describe("person attributes count toward the tiles", () => {
 
   /**
    * A missing PEP status is NOT "needs you": there is no control on the person
-   * card to supply it, the row says "added on next page", and Fill Gaps
+   * card to supply it, the row says "collected on next page", and Fill Gaps
    * collects it. Counting it prompted the customer to act with no way to act.
    */
   it("does NOT add pure gaps to Needs You", () => {
@@ -554,7 +554,7 @@ describe("person attributes count toward the tiles", () => {
 
   /**
    * The trap this guards against: a missing attribute has no input on the
-   * person card (it is tagged "added on next page"), so blocking on it would
+   * person card (it is tagged "collected on next page"), so blocking on it would
    * leave the customer on Confirm with no control that can clear it.
    */
   it("neither counts nor blocks on a missing attribute", () => {
