@@ -1051,6 +1051,38 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const isPersonAttributeSettled = (s, f, lowConf) =>
     isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key));
 
+  /**
+   * "Confirm all" — settle every outstanding attribute on one person in a
+   * single action. Same outcome as clicking each ✓ in turn, including
+   * restoring anything the customer had marked wrong, so it is a shortcut and
+   * never a different decision.
+   *
+   * Written as ONE update per state map rather than N sequential setStates:
+   * a loop calling the per-field handlers would queue a separate write per
+   * attribute, each computed from a stale snapshot.
+   */
+  const confirmAllPersonAttributes = (item, s, ubo, lowConf) => {
+    const pending = stkConfirmFields(s, ubo).filter(
+      (f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(s, f, lowConf)
+    );
+    if (pending.length === 0) return;
+    const toRetick = pending.filter((f) => !isStkFieldConfirmed(s.id, f.key));
+    if (toRetick.length > 0) {
+      setStakeholderFieldChecks((prev) => {
+        const next = { ...(prev[s.id] || {}) };
+        toRetick.forEach((f) => { next[f.key] = true; });
+        return { ...prev, [s.id]: next };
+      });
+      // Re-ticking is the undo path — close any correction editor it opened.
+      setPersonEditing(null);
+    }
+    setAffirmedPersonFields((prev) => {
+      const next = { ...prev };
+      pending.forEach((f) => { next[personFieldKey(s.id, f.key)] = true; });
+      return next;
+    });
+  };
+
   const isStakeholderExpanded = (id) => expandedStakeholders[id] === true;
   const toggleStakeholderExpanded = (id) => {
     setExpandedStakeholders((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -4803,13 +4835,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     page". Nothing to say here is said with no badge; the gaps
                     speak for themselves per-row. */}
                 {!rejected && attentionFields.length > 0 && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
-                    border: `1px solid ${C.warningBorder}`, borderRadius: 99,
-                    padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
-                  }}>
-                    {attentionFields.length} need{attentionFields.length === 1 ? "s" : ""} you
-                  </span>
+                  <>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
+                      border: `1px solid ${C.warningBorder}`, borderRadius: 99,
+                      padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
+                    }}>
+                      {attentionFields.length} need{attentionFields.length === 1 ? "s" : ""} you
+                    </span>
+                    {/* Settle the whole person in one action. stopPropagation
+                        because the header row toggles expand/collapse. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmAllPersonAttributes(item, s, ubo, personLowConf);
+                      }}
+                      title={`Confirm all ${attentionFields.length} outstanding detail${attentionFields.length === 1 ? "" : "s"} for ${s.full_name}`}
+                      aria-label={`Confirm all outstanding details for ${s.full_name}`}
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: "#fff",
+                        background: "#4a9e8e", border: "1px solid #4a9e8e",
+                        borderRadius: 99, padding: "3px 10px", cursor: "pointer",
+                        fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap",
+                      }}
+                    >
+                      ✓ Confirm all
+                    </button>
+                  </>
                 )}
                 {rejected && (
                   <span style={{
