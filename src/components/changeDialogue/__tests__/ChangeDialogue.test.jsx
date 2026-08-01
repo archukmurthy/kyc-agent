@@ -65,17 +65,22 @@ describe('ChangeDialogue — question flow + single emit', () => {
     expect(question()).toBeTruthy();
     clickByText('Not yet'); // not_reflected
 
-    // Finalised: exactly one event, doc_required notice (UBO has an update rule).
+    // Finalised: exactly one event (UBO has an update rule).
     expect(onEvent).toHaveBeenCalledTimes(1);
     const event = onEvent.mock.calls[0][0];
     expect(event.fieldClass).toBe('ubo');
     expect(event.customerIntent).toBe('genuine_update');
     expect(event.customerRegistryClaim).toBe('not_reflected');
     expect(event.workflow).toBe('doc_required');
-    expect(notice().textContent).toMatch(/Updated UBO Registry/);
+    // The REQUIREMENT rides on the event; the docType is what the upload card
+    // and the submit gate read.
+    expect(event.docType).toMatch(/Updated UBO Registry/);
+    // No notice for doc_required — the inline upload card beneath this names
+    // the document and takes the file, on this page.
+    expect(notice()).toBeNull();
   });
 
-  test('factualId: no questions → immediate single event + doc notice', () => {
+  test('factualId: no questions → immediate single event, no duplicate notice', () => {
     const onEvent = jest.fn();
     render(
       <ChangeDialogue
@@ -86,7 +91,8 @@ describe('ChangeDialogue — question flow + single emit', () => {
     expect(question()).toBeNull();
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent.mock.calls[0][0].fieldClass).toBe('factualId');
-    expect(notice()).toBeTruthy();
+    expect(onEvent.mock.calls[0][0].workflow).toBe('doc_required');
+    expect(notice()).toBeNull();
   });
 
   test('generic field: neutral notice, ops_review, one event', () => {

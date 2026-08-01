@@ -231,13 +231,16 @@ export function ChangeDialogue({
   const isDocRequired = outcome.workflow === 'doc_required' && outcome.docType;
 
   if (isDocRequired) {
-    // Tier 3 — action required (the customer must upload a document next).
-    return (
-      <Notice tier="tier3" testId="change-dialogue-notice">
-        Because of this change, we’ve added <strong>{outcome.docType}</strong> to your
-        checklist — you’ll upload it on the next page.
-      </Notice>
-    );
+    // NO NOTICE. This used to read "we've added <doc> to your checklist —
+    // you'll upload it on the next page", which was true of the old flow and is
+    // now wrong twice over: the upload card renders directly beneath this, on
+    // THIS page, naming the same document and offering the button. The notice
+    // both duplicated it and sent the customer to the wrong place.
+    //
+    // The requirement itself is unchanged — the event still carries docType,
+    // the card still appears, and the submit gate still blocks until it is
+    // uploaded. Only the redundant sentence is gone.
+    return null;
   }
 
   // Tier 1 — calm. Recorded; nothing required from the customer right now.

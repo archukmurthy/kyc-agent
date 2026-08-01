@@ -3065,6 +3065,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Capture the value where Fill Gaps already reads it, so nothing is retyped.
     if (fieldKey && value != null) {
       updateStakeholderField(researchFieldId, person.id, fieldKey, value);
+      // RE-TICK. Unticking is what opened this editor, and "unticked" is also
+      // what routes an attribute to Fill Gaps for correction — so leaving it
+      // unticked after the customer had already corrected it here asked them
+      // for the same value twice, on two pages. The attribute is resolved: it
+      // carries a customer-supplied value and is settled.
+      if (!isStkFieldConfirmed(person.id, fieldKey)) {
+        toggleStkFieldConfirm(person.id, fieldKey);
+      }
     }
     emitPersonChange({ person, researchFieldId, attribute, value, nameCase });
 
