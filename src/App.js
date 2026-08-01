@@ -4137,12 +4137,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
               Doesn't match any dropdown option — please correct on the next page
             </div>
           )}
-          {item.sourceTier === "tier2" && (
+          {/* The source prompt is a QUESTION, so it goes once the row answers
+              it. It used to render off item.sourceTier alone, so "please
+              confirm this is correct" stayed under a value the customer had
+              already corrected, confirmed or marked wrong. needsAttention is
+              exactly "low confidence and still unresolved" — the same
+              condition driving the amber stripe. */}
+          {needsAttention && item.sourceTier === "tier2" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
               From a company source — please confirm this is correct.
             </Notice>
           )}
-          {item.sourceTier === "tier3" && (
+          {needsAttention && item.sourceTier === "tier3" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
               From an unverified source — please verify this is correct.
             </Notice>
@@ -4517,6 +4523,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     };
     const ticked = isStkFieldConfirmed(s.id, f.key);
     const corrected = isPersonAttributeCorrected(item, s, f);
+    // The research row for this person, for showing what the value WAS.
+    const originalPerson = researchStakeholders(item.field).find((x) => x && x.id === s.id) || null;
     const settled = isPersonAttributeSettled(item, s, f, lowConf);
     const needsAffirm = ticked && !settled;
     // The editor for THIS attribute is open right now.
@@ -4536,8 +4544,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return (
       <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+        {/* Corrected: the customer's value leads and the original stays beside
+            it struck through — the same old-beside-new treatment a corrected
+            pre-filled row gets. Overwriting in place lost what changed. */}
         <span style={{ fontWeight: 600, color: corrected ? C.info : "#1a3a4a", flex: 1, minWidth: 0 }}>
           {stkFieldDisplay(s, f.key)}
+          {corrected && originalPerson && (
+            <span style={{
+              marginLeft: 8, fontWeight: 500, color: C.textMuted,
+              textDecoration: "line-through",
+            }}>
+              {stkFieldDisplay(originalPerson, f.key)}
+            </span>
+          )}
         </span>
         {corrected && <span style={infoTag}>✓ corrected</span>}
         {needsAffirm && !corrected && <span style={amberTag}>❓ please confirm</span>}
