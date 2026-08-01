@@ -18,6 +18,7 @@
 
 import React, { useState } from "react";
 import { C } from "../../constants/theme";
+import { isDateField } from "../../utils/dateFields";
 
 const normaliseOption = (o) =>
   o && typeof o === "object"
@@ -70,7 +71,10 @@ export function InlineCorrectionEditor({
         </select>
       ) : (
         <input
-          type={fieldDef.inputType === "date" ? "date" : "text"}
+          // Detected, not just declared — most research fields carry no
+          // inputType, so "Date of Incorporation" used to edit as free text
+          // while the person's Date of birth got a picker.
+          type={isDateField(fieldDef, initialValue) ? "date" : "text"}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Enter the correct value"

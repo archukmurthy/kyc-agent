@@ -124,6 +124,7 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { formatFetchedAt } from "./utils/files";
+import { isDateField, resolveInputType } from "./utils/dateFields";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
@@ -1368,7 +1369,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
           field: "corrected_" + item.field,
           label: item.label + " (correction needed)",
           reason: "Original: " + resolveDisplayValue(def, item.value),
-          inputType: def.inputType || "text",
+          // Same detection as the inline editor, so a date corrected here and
+          // a date corrected on Confirm get the same control.
+          inputType: resolveInputType({ ...def, field: item.field, label: item.label }, item.value),
           options: def.options || undefined,
           dependsOn: def.dependsOn || undefined,
           required: true,
@@ -5211,7 +5214,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
                             personEditing.fieldKey
                           ] ?? ""
                         }
-                        inputType={personEditing.fieldKey === "date_of_birth" ? "date" : "text"}
+                        // Was hardcoded to date_of_birth; detected now, so any
+                        // future person date attribute gets the picker too.
+                        inputType={isDateField({ field: personEditing.fieldKey }) ? "date" : "text"}
                         onResolve={(res) => resolvePersonCorrection(s, item.field, personEditing.fieldKey, res)}
                         onCancel={() => setPersonEditing(null)}
                       />
