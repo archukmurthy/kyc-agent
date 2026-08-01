@@ -392,9 +392,7 @@ module.exports = function (app) {
   // Windows path fails.
   //
   // The multipart stream must reach formidable untouched, so there is no body
-  // parsing here. Needs BLOB_READ_WRITE_TOKEN in .env.local; without it the
-  // handler returns its own 500 and the card still says "not stored", which is
-  // the honest outcome.
+  // parsing here.
   const esmHandler = (relPath) => {
     let mod = null;
     return async (req, res) => {
@@ -411,7 +409,28 @@ module.exports = function (app) {
       }
     };
   };
-  app.post("/api/upload-document", esmHandler("upload-document.js"));
+  // put() writes to the REAL Vercel Blob store using BLOB_READ_WRITE_TOKEN. To
+  // keep dev test files out of production storage, set DEV_FAKE_BLOB=1 in
+  // .env.local to short-circuit to a stub. The stub also kicks in when no token
+  // is configured, so the Confirm document gate can still be cleared locally
+  // without Blob credentials.
+  //
+  // The stub URL is intentionally an unresolvable example.invalid address: it is
+  // stored in amendmentUploads and can reach the dossier via rawResearch, so it
+  // must fail loudly rather than look like a real blob.
+  //
+  // The real handler is resolved ONCE here, not per request, so esmHandler's
+  // module memo survives across uploads.
+  const uploadDocument = esmHandler("upload-document.js");
+  app.post("/api/upload-document", (req, res) => {
+    if (process.env.DEV_FAKE_BLOB === "1" || !process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn("[upload-document] DEV STUB — file not stored to Vercel Blob");
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ blobUrl: "https://example.invalid/DEV-FAKE", filename: "dev-stub" }));
+    }
+    return uploadDocument(req, res);
+  });
   app.get("/api/get-document", esmHandler("get-document.js"));
 
   // Self-serve re-research — dossier lifecycle reseed decision (full vs derive).
