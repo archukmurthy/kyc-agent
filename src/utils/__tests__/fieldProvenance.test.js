@@ -53,3 +53,44 @@ describe("deriveScalarProvenance — agent_value is never the customer's value",
     expect(agentValue).toBe('[{"full_name":"Marcus Thorne"}]');
   });
 });
+
+describe("deriveScalarProvenance — affirmation", () => {
+  it("records an explicit tick of a low-confidence value as 'affirmed'", () => {
+    const { agentValue, customerAction } = deriveScalarProvenance({
+      fieldId: "leiNumber",
+      value: "529900T8BM49AURSDO55",
+      sourceTier: "tier2",
+      customerAction: null,
+      affirmed: true,
+    });
+    expect(customerAction).toBe("affirmed");
+    // Affirming does not touch the value — it is still the agent's.
+    expect(agentValue).toBe("529900T8BM49AURSDO55");
+  });
+
+  it("never downgrades a stated action — an edit outranks an affirmation", () => {
+    expect(
+      deriveScalarProvenance({
+        fieldId: "leiNumber",
+        value: "NEW",
+        agentValue: "OLD",
+        customerAction: "corrected",
+        affirmed: true,
+      }).customerAction
+    ).toBe("corrected");
+    expect(
+      deriveScalarProvenance({ fieldId: "x", value: "v", customerAction: "unchecked", affirmed: true })
+        .customerAction
+    ).toBe("unchecked");
+  });
+
+  it("stays null when the customer never affirmed", () => {
+    expect(
+      deriveScalarProvenance({ fieldId: "x", value: "v", customerAction: null, affirmed: false })
+        .customerAction
+    ).toBeNull();
+    expect(
+      deriveScalarProvenance({ fieldId: "x", value: "v" }).customerAction
+    ).toBeNull();
+  });
+});

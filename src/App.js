@@ -46,6 +46,7 @@ import {
   canonicalDocs,
   docsNeededFrom,
   docKey,
+  isSatisfied,
   isCompanyWideDocType,
   isPerFieldDocType,
   canonicalDocType,
@@ -2775,8 +2776,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
         verificationStatus: m.verificationStatus
           || (research?.found || []).find(r => r.field === m.fieldId)?.verificationStatus
           || "manual",
+        // Did the customer EXPLICITLY tick this low-confidence row, as opposed
+        // to leaving it as it arrived? Every row starts ticked, so without this
+        // the two are indistinguishable in the record — and "the customer
+        // confirmed an unverified value" is exactly the assertion an audit
+        // needs. The server maps it onto customer_action.
+        affirmed: !!affirmedFields[m.fieldId],
       })),
       stakeholders: stakeholderPayload,
+      // PER-ATTRIBUTE person provenance. The stakeholders payload above carries
+      // the values but only as a nested blob; field_provenance wrote ONE row per
+      // person (their name), so nationality / DOB / residence / PEP were not
+      // queryable and had no source or customer action of their own. This is the
+      // per-attribute trail the server turns into one row each.
+      stakeholderAttributes: buildStakeholderAttributeTrail(submittedAt),
+      // Which document was asked for, and which file answered it. Nothing
+      // previously recorded this against the journey at all.
+      amendmentDocuments: buildAmendmentDocumentTrail(),
+      // What the Confirm page showed at submit time — the four tiles and the
+      // pre-fill breakdown, so the numbers can be reconciled after the fact.
+      confirmMetrics: {
+        tiles: {
+          needsYou: confirmCounts.needsYou,
+          confirmed: confirmCounts.confirmed,
+          corrected: confirmCounts.corrected,
+          docsNeeded: confirmCounts.docsNeeded,
+          docsTotal: confirmCounts.docsTotal,
+        },
+        prefill,
+        capturedAt: submittedAt,
+      },
       declaration: {
         ipAddress: device.ipAddress,
         userAgent: device.userAgent,
@@ -6464,6 +6493,87 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // them at the Fill Gaps gate (kept as the backstop).
   const confirmBlockers = submitBlockers({ ...confirmStateInput, requiredGaps: [] });
   const confirmBlockerMessage = blockerSummary(confirmBlockers);
+
+  /**
+   * The per-attribute trail for every person, built where the UI's own
+   * predicates live so what is stored is exactly what was shown.
+   *
+   * `agentValue` is the value RESEARCH returned and is read from the untouched
+   * research row, never from the edited copy — the same discipline the scalar
+   * trail follows, so a corrected attribute keeps both values.
+   */
+  const buildStakeholderAttributeTrail = (stampedAt) => {
+    const out = [];
+    (research?.found || []).forEach((row) => {
+      if (!isStakeholderField(row.field) || !Array.isArray(row.stakeholders)) return;
+      const ubo = isUboLikeField(row.field);
+      row.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .forEach((orig) => {
+          const cur = personWithEdits(row.field, orig);
+          const rejected = isStakeholderRejected(row.field, orig.id);
+          const lowConf = isPersonLowConfidence(cur, row);
+          stkConfirmFields(cur, ubo).forEach((f) => {
+            const found = stkFieldFound(orig, f.key);
+            const corrected = isPersonAttributeCorrected(row, cur, f);
+            const ticked = isStkFieldConfirmed(orig.id, f.key);
+            const affirmed = isPersonFieldAffirmed(orig.id, f.key);
+            // "affirmed" is the one the page newly earns: the customer
+            // explicitly ticked a low-confidence value rather than leaving it.
+            const customerAction = rejected
+              ? "person_removed"
+              : corrected
+              ? "edited"
+              : !ticked
+              ? "unchecked"
+              : lowConf && affirmed
+              ? "affirmed"
+              : "kept";
+            const asText = (v) =>
+              v === null || v === undefined || v === "" ? null : String(v);
+            out.push({
+              fieldId: row.field,
+              stakeholderId: orig.id,
+              attribute: f.key,
+              label: f.label,
+              personName: cur.full_name || orig.full_name || null,
+              value: asText(cur[f.key]),
+              agentValue: found ? asText(orig[f.key]) : null,
+              customerAction,
+              customerActionAt: stampedAt,
+              researchable: found,
+              source: cur.source || row.source || null,
+              sourceTier: cur.sourceTier || row.sourceTier || null,
+              sourceUrl: cur.sourceUrl || row.sourceUrl || null,
+              fetchedAt: cur.fetchedAt || row.fetchedAt || null,
+            });
+          });
+        });
+    });
+    return out;
+  };
+
+  /** Every document the page asked for, and the file that answered it. */
+  const buildAmendmentDocumentTrail = () =>
+    confirmDocs.map((d) => {
+      const k = docKey(d);
+      const up = amendmentUploads[k] || null;
+      return {
+        docKey: k,
+        docType: d.docType,
+        fieldId: d.fieldId || null,
+        stakeholderId: d.stakeholderId || null,
+        personName: d.personName || null,
+        docGroup: d.docGroup || null,
+        fieldLabel: d.fieldLabel || null,
+        satisfied: isSatisfied(up),
+        filename: (up && up.name) || null,
+        blobUrl: (up && up.blobUrl) || null,
+        pathname: (up && up.pathname) || null,
+        uploadFailed: !!(up && up.uploadFailed),
+        uploadedAt: (up && up.at) || null,
+      };
+    });
 
   // Upload handler shared by the inline Confirm card and the Fill Gaps panel —
   // one store (amendmentUploads), keyed fieldId::docType, lifted here so blobs

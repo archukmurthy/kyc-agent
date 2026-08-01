@@ -28,7 +28,11 @@ function deriveScalarProvenance(meta) {
     // sourced a value it may never have seen is worse than a null.
     return { agentValue: null, customerAction: null };
   }
-  const customerAction = meta.customerAction || null;
+  // AFFIRMED — the customer explicitly ticked a low-confidence value. Every row
+  // arrives ticked, so without this "confirmed an unverified value" and "never
+  // looked at it" are the same record. Only fills an action the client did not
+  // already state: an edit or an uncheck is the stronger fact and wins.
+  const customerAction = meta.customerAction || (meta.affirmed ? "affirmed" : null);
   // A correction carries the pre-correction value explicitly.
   if (meta.agentValue !== null && meta.agentValue !== undefined) {
     return { agentValue: asText(meta.agentValue), customerAction };
