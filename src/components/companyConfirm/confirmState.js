@@ -391,7 +391,9 @@ export function computeConfirmCounts({
   const personPending = personOutstanding(personItems);
   const personActionable = personPending.filter((p) => p.resolvableHere);
   needsYou += personActionable.length;
-  confirmed += (Array.isArray(personItems) ? personItems : []).filter((p) => p && p.confirmed).length;
+  const people = Array.isArray(personItems) ? personItems : [];
+  confirmed += people.filter((p) => p && p.confirmed).length;
+  corrected += people.filter((p) => p && p.corrected).length;
   const outstandingDocs = docs.filter((d) => !isSatisfied(uploads[docKey(d)]));
   return {
     needsYou,

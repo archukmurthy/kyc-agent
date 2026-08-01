@@ -1048,8 +1048,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
    * tick, the card's "needs you" badge, and the tile/gate counts — so they can
    * never disagree, exactly as rowState() does for the pre-filled rows.
    */
-  const isPersonAttributeSettled = (s, f, lowConf) =>
-    isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key));
+  /**
+   * The customer replaced this attribute's value HERE, inline. Inferred by
+   * comparing what they have now against what research returned, so it needs no
+   * extra state and cannot fall out of sync with the value on screen.
+   */
+  const isPersonAttributeCorrected = (item, s, f) => {
+    const norm = (v) => (v === null || v === undefined ? "" : String(v).trim());
+    const original = (researchStakeholders(item.field).find((x) => x && x.id === s.id) || {})[f.key];
+    const now = s[f.key];
+    return norm(now) !== "" && norm(now) !== norm(original);
+  };
+
+  /**
+   * A corrected attribute is SETTLED — the customer supplied the value, which
+   * is a stronger statement than confirming ours. Otherwise it is settled when
+   * ticked, and additionally affirmed if it came from a low-confidence source.
+   */
+  const isPersonAttributeSettled = (item, s, f, lowConf) =>
+    isPersonAttributeCorrected(item, s, f) ||
+    (isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key)));
 
   /**
    * "Confirm all" — settle every outstanding attribute on one person in a
@@ -1063,7 +1081,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
    */
   const confirmAllPersonAttributes = (item, s, ubo, lowConf) => {
     const pending = stkConfirmFields(s, ubo).filter(
-      (f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(s, f, lowConf)
+      (f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(item, s, f, lowConf)
     );
     if (pending.length === 0) return;
     const toRetick = pending.filter((f) => !isStkFieldConfirmed(s.id, f.key));
@@ -1105,9 +1123,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setStakeholderErrors([]);
     setStakeholderVersion((v) => v + 1);
   };
+  /** The people research returned for a field, straight from research.found. */
+  const researchStakeholders = (fieldId) =>
+    ((research?.found || []).find((r) => r && r.field === fieldId) || {}).stakeholders || [];
+
+  /**
+   * The person as the customer has them NOW: the research row with any edits
+   * from the ref applied on top.
+   *
+   * The ref is only seeded on entry to Fill Gaps, so on Confirm it is empty and
+   * the card renders research values — which is why an inline correction saved
+   * here did not show up.
+   */
+  const personWithEdits = (fieldId, s) => {
+    const list = stakeholdersRef.current[fieldId];
+    if (!list) return s;
+    return list.find((x) => x && x.id === s.id) || s;
+  };
+
   const updateStakeholderField = (fieldId, stakeholderId, key, value) => {
+    // SEED LAZILY. `current` is [] until Fill Gaps seeds the ref, and mapping
+    // over [] stored [] — so a correction saved on Confirm was silently
+    // dropped, value and all. Fall back to the research list so the edit lands
+    // on a real person rather than on nothing.
     const current = getStakeholders(fieldId);
-    const next = current.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
+    const base = current.length > 0 ? current : researchStakeholders(fieldId);
+    const next = base.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
     setStakeholders(fieldId, next);
   };
   // Returns the created person so callers that need its stable sh_ id (the
@@ -4452,15 +4493,37 @@ export default function KYCAgent({ previewMode = false } = {}) {
       fontSize: 11, fontWeight: 700, lineHeight: 1, padding: 0, fontFamily: "inherit",
       display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
     };
+    const infoTag = {
+      fontSize: 10, fontWeight: 700, color: C.info,
+      background: C.infoBg, border: `1px solid ${C.infoBorder}`,
+      borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+    };
     const ticked = isStkFieldConfirmed(s.id, f.key);
-    const settled = isPersonAttributeSettled(s, f, lowConf);
+    const corrected = isPersonAttributeCorrected(item, s, f);
+    const settled = isPersonAttributeSettled(item, s, f, lowConf);
     const needsAffirm = ticked && !settled;
-    const disputed = !ticked;
+    // The editor for THIS attribute is open right now.
+    const editingThis =
+      personEditing && personEditing.stakeholderId === s.id && personEditing.fieldKey === f.key;
+    // "Edit on next page" is only true when it IS next-page work. While the
+    // inline editor is open, or once the value has been corrected here, the
+    // edit is happening on this page — saying otherwise was simply wrong.
+    const disputed = !ticked && !corrected && !editingThis;
+    const openEditor = () =>
+      setPersonEditing({
+        researchFieldId: item.field,
+        stakeholderId: s.id,
+        attribute: ATTRIBUTE_BY_FIELD_KEY[f.key],
+        fieldKey: f.key,
+      });
     return (
       <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-        <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-        {needsAffirm && <span style={amberTag}>❓ please confirm</span>}
+        <span style={{ fontWeight: 600, color: corrected ? C.info : "#1a3a4a", flex: 1, minWidth: 0 }}>
+          {stkFieldDisplay(s, f.key)}
+        </span>
+        {corrected && <span style={infoTag}>✓ corrected</span>}
+        {needsAffirm && !corrected && <span style={amberTag}>❓ please confirm</span>}
         {disputed && <span style={amberTag}>✎ edit on next page</span>}
         <div style={{ display: "flex", gap: 4 }}>
           <button
@@ -4481,17 +4544,22 @@ export default function KYCAgent({ previewMode = false } = {}) {
           >✓</button>
           <button
             type="button"
-            onClick={() => { if (ticked) togglePersonField(item, s, f); }}
+            onClick={() => {
+              // A corrected value is edited again in place, exactly as a
+              // corrected pre-filled row reopens its editor.
+              if (corrected) openEditor();
+              else if (ticked) togglePersonField(item, s, f);
+            }}
             aria-label={needsAffirm || disputed ? `Mark ${f.label} as incorrect` : `Edit ${f.label}`}
             aria-pressed={disputed}
             title={needsAffirm || disputed
               ? "Wrong — flag this value for correction"
-              : "Edit this value"}
+              : corrected ? "Edit again" : "Edit this value"}
             style={{
               ...btn,
               background: disputed ? C.error : "#fff",
-              color: disputed ? "#fff" : C.textMuted,
-              border: disputed ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+              color: disputed ? "#fff" : corrected ? C.info : C.textMuted,
+              border: disputed ? `1.5px solid ${C.error}` : `1.5px solid ${corrected ? C.infoBorder : C.border}`,
             }}
           >{needsAffirm || disputed ? "✕" : "✎"}</button>
         </div>
@@ -4501,12 +4569,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Field labels that will land on the next page for this person/company: any
   // found field the customer unticked, plus any missing required field.
-  const stkNextPageFields = (s, ubo) =>
+  // `item` is optional — when supplied, an attribute the customer has ALREADY
+  // corrected inline is excluded, because it is finished here and listing it as
+  // next-page work is a false promise.
+  const stkNextPageFields = (s, ubo, item) =>
     stkConfirmFields(s, ubo)
       .filter((f) => {
         const found = stkFieldFound(s, f.key);
-        if (found) return !isStkFieldConfirmed(s.id, f.key);
-        return f.required;
+        if (!found) return f.required;
+        if (item && isPersonAttributeCorrected(item, s, f)) return false;
+        return !isStkFieldConfirmed(s.id, f.key);
       })
       .map((f) => f.label);
 
@@ -4656,7 +4728,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Exclude registry exemption notices — they are not people. If nothing real
     // remains, render nothing here so the field falls through to the normal
     // confirm row showing the raw registry value.
-    const realStakeholders = item.stakeholders.filter((s) => !isRegistryExemptionNotice(s));
+    // Render the person as the customer has them NOW — research values with any
+    // inline correction applied on top. Without this the card kept showing the
+    // original after a correction was saved.
+    const realStakeholders = item.stakeholders
+      .filter((s) => !isRegistryExemptionNotice(s))
+      .map((s) => personWithEdits(item.field, s));
     if (realStakeholders.length === 0) return null;
     const ubo = isUboLikeField(item.field);
     const fieldDef = findFieldDef(activeSchema, item.field);
@@ -4722,8 +4799,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           const nextPageFields = rejected
             ? []
             : needsEDD
-            ? stkNextPageFields(s, ubo)
-            : stkCorrectedFields(s, ubo).map((f) => f.label);
+            ? stkNextPageFields(s, ubo, item)
+            : stkCorrectedFields(s, ubo)
+                .filter((f) => !isPersonAttributeCorrected(item, s, f))
+                .map((f) => f.label);
           // What actually needs the customer HERE: a value research returned
           // that they haven't settled. A pure gap is NOT "needs you" — there
           // is no control on this card to supply it, the row already says
@@ -4734,7 +4813,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           const attentionFields = rejected
             ? []
             : stkConfirmFields(s, ubo)
-                .filter((f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(s, f, personLowConf))
+                .filter((f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(item, s, f, personLowConf))
                 .map((f) => f.label);
           // A person with outstanding attributes must not LOOK settled. The
           // header tick means "this person belongs", not "everything about them
@@ -4901,18 +4980,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   />
                 </div>
               )}
-              {personEditing && personEditing.stakeholderId === s.id && (
-                <div style={{ padding: "0 16px 12px" }}>
-                  <PersonCorrection
-                    attribute={personEditing.attribute}
-                    personName={s.full_name}
-                    originalValue={s[personEditing.fieldKey] ?? ""}
-                    inputType={personEditing.fieldKey === "date_of_birth" ? "date" : "text"}
-                    onResolve={(res) => resolvePersonCorrection(s, item.field, personEditing.fieldKey, res)}
-                    onCancel={() => setPersonEditing(null)}
-                  />
-                </div>
-              )}
               {/* Documents + analyst view for every recorded correction on THIS
                   person. Matches per person, never another person's entry of
                   the same type (the 6a under-collection fix). */}
@@ -5053,6 +5120,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
                           : "All details confirmed — nothing further needed on the next page."}
                       </div>
                     </>
+                  )}
+
+                  {/* Inline correction editor — LAST in the card, under the
+                      next-page line. It used to render above the header, which
+                      pushed the editor away from the row it belongs to and put
+                      it on top of every value. It edits one of the attributes
+                      listed above, so it reads in place here. */}
+                  {personEditing && personEditing.stakeholderId === s.id && (
+                    <div style={{ marginTop: 12 }}>
+                      <PersonCorrection
+                        attribute={personEditing.attribute}
+                        personName={s.full_name}
+                        originalValue={
+                          (researchStakeholders(item.field).find((x) => x && x.id === s.id) || {})[
+                            personEditing.fieldKey
+                          ] ?? ""
+                        }
+                        inputType={personEditing.fieldKey === "date_of_birth" ? "date" : "text"}
+                        onResolve={(res) => resolvePersonCorrection(s, item.field, personEditing.fieldKey, res)}
+                        onCancel={() => setPersonEditing(null)}
+                      />
+                    </div>
                   )}
                 </div>
               )}
@@ -6202,6 +6291,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const ubo = isUboLikeField(item.field);
       (item.stakeholders || [])
         .filter((s) => !isRegistryExemptionNotice(s))
+        // Same overlay the cards render, so a corrected value counts as
+        // corrected rather than still-outstanding.
+        .map((s) => personWithEdits(item.field, s))
         .forEach((s) => {
           if (isStakeholderRejected(item.field, s.id)) return;
           const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
@@ -6212,7 +6304,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
             // low-confidence pre-filled row does — arriving pre-ticked is not
             // agreement. Same source, same standard, whether it renders as a
             // row or inside a person card.
-            const settled = isPersonAttributeSettled(s, f, lowConf);
+            const corrected = isPersonAttributeCorrected(item, s, f);
+            const settled = isPersonAttributeSettled(item, s, f, lowConf);
             // Mirrors stkNextPageFields (EDD people) and stkCorrectedFields
             // (listed read-only people), plus the affirmation requirement.
             const outstanding = needsEDD ? (found ? !settled : f.required) : found && !settled;
@@ -6224,7 +6317,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
               personName: s.full_name || null,
               found,
               outstanding,
-              confirmed: found && settled,
+              // A customer-supplied value is CORRECTED, not merely confirmed —
+              // the same distinction the pre-filled rows draw.
+              corrected: found && corrected,
+              confirmed: found && settled && !corrected,
               resolvableHere: found,
             });
           });
