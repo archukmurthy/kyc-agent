@@ -22,7 +22,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { classifyChange } from '../../changeIntelligence/classifyChange';
-import { Notice } from '../notices/Notice';
+import { fieldHasHighRiskCountry } from '../../changeIntelligence/highRiskCountries';
+// Notice is no longer rendered here — both finalised outcomes are silent, and
+// the row itself carries the result. Re-add the import if a notice ever returns.
 import { buildChangeEvent } from './buildChangeEvent';
 import { useDialogueState } from './useDialogueState';
 import {
@@ -79,6 +81,14 @@ export function ChangeDialogue({
   const { index, stepKey, answers, recordAnswer, isComplete } = useDialogueState(steps, persisted);
   const [outcome, setOutcome] = useState(null);
   const emittedRef = useRef(Boolean(persisted && persisted.emitted));
+  // Option B (inline capture): the built initial event and its server-assigned
+  // id are lifted into the persisted snapshot so the Confirm page can emit a
+  // SUPERSEDING value-event (afterValue + supersedesId) when the customer
+  // saves the corrected value inline. Seeded from the snapshot on remount so
+  // navigation never loses the lineage.
+  const eventRef = useRef(persisted && persisted.event ? persisted.event : null);
+  const eventIdRef = useRef(persisted && persisted.eventId != null ? persisted.eventId : null);
+  const [persistTick, setPersistTick] = useState(0);
 
   useEffect(() => {
     if (!isComplete) return;
@@ -94,6 +104,13 @@ export function ChangeDialogue({
       registryStatus,
       verifiability,
       jurisdiction,
+      // CD-03 EDD (commit 8) — the SAME check and the SAME injectable list the
+      // person path uses, now asked of every country-typed company field
+      // (registered country, address country, countries of operation, …). Read
+      // off the FOUND value: a company already sitting in a high-risk country is
+      // what the analyst needs flagged, not only one that corrects into it. The
+      // corrected value is checked separately on the superseding event.
+      highRiskCountry: fieldHasHighRiskCountry(field),
     });
 
     // Emit EXACTLY ONCE per completed dialogue — including across a remount: when
@@ -127,12 +144,31 @@ export function ChangeDialogue({
       // customer (mirrors App.js#trackEvent). writeEvent server-side rejects a
       // malformed/identifier-less event with a 200 + warning, so a missing
       // submissionId can't break the UI.
+      eventRef.current = event;
       if (typeof fetch === 'function') {
         fetch('/api/change-events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(event),
-        }).catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            // Retain the server-assigned id as the HEAD of this field's event
+            // chain, so the first superseding value-event can point at it.
+            // Treated as an opaque token (a bigint may arrive as a string).
+            // A non-JSON / no-DB / failure response simply leaves it absent —
+            // the superseding event is then emitted un-linked, which is the
+            // safe path (currency resolves by max id), never an error.
+            if (d && d.success && d.id != null) {
+              eventIdRef.current = d.id;
+              setPersistTick((t) => t + 1);
+            } else if (d && d.success === false && d.warning) {
+              // api/change-events always answers 200, so a swallowed writeEvent
+              // rejection is only observable here — never let it pass silently.
+              console.warn('[ChangeDialogue] event rejected:', d.warning);
+            }
+          })
+          .catch((err) => console.warn('[ChangeDialogue] persist failed:', err));
       }
 
       if (typeof onEvent === 'function') onEvent(event);
@@ -143,14 +179,26 @@ export function ChangeDialogue({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete]);
 
-  // Lift the working state (answers + progress + emitted) into the parent's
-  // durable store so it survives the Confirm subtree unmounting on navigation.
+  // Lift the working state (answers + progress + emitted + event lineage) into
+  // the parent's durable store so it survives the Confirm subtree unmounting on
+  // navigation. The parent MERGES this snapshot (it also stashes its own keys —
+  // lastSavedValue, chained eventId — on inline save).
   useEffect(() => {
     if (typeof onPersist === 'function') {
-      onPersist(field.fieldId, { index, answers, emitted: emittedRef.current });
+      onPersist(field.fieldId, {
+        index,
+        answers,
+        emitted: emittedRef.current,
+        event: eventRef.current,
+        eventId: eventIdRef.current,
+        // The engine result verbatim. The event's column set cannot carry
+        // `silent`, so the build-time analyst view (commit 5) reads it from
+        // here. Display-only — nothing consumes it for routing.
+        outcome,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, answers, outcome]);
+  }, [index, answers, outcome, persistTick]);
 
   // ── Still asking questions ──
   if (!isComplete) {
@@ -184,21 +232,27 @@ export function ChangeDialogue({
   const isDocRequired = outcome.workflow === 'doc_required' && outcome.docType;
 
   if (isDocRequired) {
-    // Tier 3 — action required (the customer must upload a document next).
-    return (
-      <Notice tier="tier3" testId="change-dialogue-notice">
-        Because of this change, we’ve added <strong>{outcome.docType}</strong> to your
-        checklist — you’ll upload it on the next page.
-      </Notice>
-    );
+    // NO NOTICE. This used to read "we've added <doc> to your checklist —
+    // you'll upload it on the next page", which was true of the old flow and is
+    // now wrong twice over: the upload card renders directly beneath this, on
+    // THIS page, naming the same document and offering the button. The notice
+    // both duplicated it and sent the customer to the wrong place.
+    //
+    // The requirement itself is unchanged — the event still carries docType,
+    // the card still appears, and the submit gate still blocks until it is
+    // uploaded. Only the redundant sentence is gone.
+    return null;
   }
 
-  // Tier 1 — calm. Recorded; nothing required from the customer right now.
-  return (
-    <Notice tier="tier1" testId="change-dialogue-notice">
-      We’ll review this. No action needed from you right now.
-    </Notice>
-  );
+  // Also NO NOTICE. "We'll review this. No action needed from you right now."
+  // belonged to the flow where finishing the dialogue was the end of the
+  // interaction. Now the row itself shows the outcome — the corrected value,
+  // the "corrected" tag, the upload card when one is owed — so a banner saying
+  // nothing is needed is stale reassurance stacked on top of the answer.
+  //
+  // Every outcome is still recorded and emitted; this only stops rendering a
+  // sentence about it.
+  return null;
 }
 
 export default ChangeDialogue;

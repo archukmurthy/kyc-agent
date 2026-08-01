@@ -124,4 +124,220 @@ const BASE_RULES = [
   },
 ];
 
-module.exports = { BASE_RULES };
+/**
+ * ── PERSON RULES (CD-03, ratified 26 Jul 2026) ──────────────────────────────
+ *
+ * Same table format, same matcher, same result shape as BASE_RULES — these are
+ * ADDED rules, not a parallel engine. They apply only to person-scoped changes
+ * (classifyChange's `personScope: true` path); company-level classification is
+ * completely unaffected.
+ *
+ * THE LOAD-BEARING RULE: documents are keyed off PERSON TYPE, not the attribute
+ * corrected. The same attribute correction produces a document for a UBO and no
+ * document for a director-only person, because a director's identity is already
+ * registry-verified (Companies House / ACRA) — collecting POI/POA from them
+ * would over-collect against the UK/SG standard.
+ *
+ * `then.silent: true` means the change is accepted and recorded with nothing
+ * shown to the customer.
+ *
+ * Two sub-rules are deliberately UNDECIDED because they need real ownership
+ * data that the person-type stub cannot honestly supply (see personType.js):
+ * the ≥25%→<25% threshold crossing, and the pseudo-UBO case. UNDECIDED is
+ * inert — recorded, no customer-facing consequence — never a guess.
+ */
+const PERSON_RULES = [
+  // Pseudo-UBO (most-senior-director-as-UBO where nobody meets the threshold)
+  // is not derivable without real ownership data. FIRST so it wins for every
+  // attribute. Nothing currently produces this personType.
+  {
+    id: 'PERSON-PSEUDO-UBO-UNDECIDED',
+    when: { personScope: true, personType: 'pseudo_ubo' },
+    then: { workflow: 'UNDECIDED', decided: false, silent: true },
+  },
+
+  // ── Name: the three-way question (never a plain text edit) ──
+  {
+    // "You spelled this person's name wrong" — AI error, same person.
+    id: 'PERSON-NAME-TYPO',
+    when: { personScope: true, attribute: 'name', nameCase: 'typo' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+  {
+    // "Their name legally changed" — same person, new name. POI shows the
+    // CURRENT name; we never ask for a name-change certificate, and we do not
+    // care about the former name. The list document is emitted as its own
+    // event (attribute 'name_list') so both are requested.
+    id: 'PERSON-NAME-LEGAL-UBO',
+    when: { personScope: true, attribute: 'name', nameCase: 'legal_change', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Identity' },
+  },
+  {
+    // Director-only: no POI (registry-verified identity), list document only.
+    id: 'PERSON-NAME-LEGAL-DIRECTOR',
+    when: { personScope: true, attribute: 'name', nameCase: 'legal_change', personType: 'director' },
+    then: { workflow: 'doc_required', docType: 'List of Directors' },
+  },
+  // The companion list document for a UBO legal name change.
+  {
+    id: 'PERSON-NAME-LIST-UBO',
+    when: { personScope: true, attribute: 'name_list', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  {
+    id: 'PERSON-NAME-LIST-DIRECTOR',
+    when: { personScope: true, attribute: 'name_list', personType: 'director' },
+    then: { workflow: 'doc_required', docType: 'List of Directors' },
+  },
+
+  // ── Date of birth ──
+  {
+    id: 'PERSON-DOB-UBO',
+    when: { personScope: true, attribute: 'dob', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Identity' },
+  },
+  {
+    id: 'PERSON-DOB-DIRECTOR',
+    when: { personScope: true, attribute: 'dob', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Nationality (EDD flag on high-risk is applied post-match, either way) ──
+  {
+    id: 'PERSON-NATIONALITY-UBO',
+    when: { personScope: true, attribute: 'nationality', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Identity' },
+  },
+  {
+    id: 'PERSON-NATIONALITY-DIRECTOR',
+    when: { personScope: true, attribute: 'nationality', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Country of birth: never its own document (POI carries it). Separate
+  //    compliance signal from nationality — it does NOT fold into it. ──
+  {
+    id: 'PERSON-COUNTRY-OF-BIRTH',
+    when: { personScope: true, attribute: 'country_of_birth' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Residential address ──
+  {
+    id: 'PERSON-ADDRESS-UBO',
+    when: { personScope: true, attribute: 'residential_address', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Address' },
+  },
+  {
+    id: 'PERSON-ADDRESS-DIRECTOR',
+    when: { personScope: true, attribute: 'residential_address', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── PEP: add-only (research never returns it). Person-scoped, so it does NOT
+  //    disturb the company-level PEP hard rule in classifyChange. ──
+  {
+    id: 'PERSON-PEP-YES',
+    when: { personScope: true, attribute: 'pep', pepValue: 'yes' },
+    then: { workflow: 'doc_required', docType: 'Source of Wealth', eddFlag: true },
+  },
+  {
+    id: 'PERSON-PEP-NO',
+    when: { personScope: true, attribute: 'pep', pepValue: 'no' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Ownership %: a change that crosses the 25% UBO threshold changes WHO the
+  //    beneficial owners are, so the ownership chart has to be re-evidenced.
+  //    Crossing is now computed from the before/after percentages
+  //    (ownershipCrossing.js) instead of being hardcoded 'unknown'; 'unknown'
+  //    survives for registry BANDS ("25-50%"), where a point comparison would
+  //    be a guess. ──
+  {
+    id: 'PERSON-OWNERSHIP-CROSSING-UNKNOWN',
+    when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'unknown' },
+    then: { workflow: 'UNDECIDED', decided: false, silent: true },
+  },
+  {
+    // Was a UBO, now is not. Archana, 2026-08-01: this must ASK for the
+    // ownership chart, not just flag an analyst — the request IS the analyst
+    // trigger, the same principle as removal and add-a-person.
+    id: 'PERSON-OWNERSHIP-CROSSED-BELOW',
+    when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_below' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  {
+    // Was not a UBO, now is — a NEW beneficial owner, which is at least as
+    // material as losing one. Same document for the same reason.
+    id: 'PERSON-OWNERSHIP-CROSSED-ABOVE',
+    when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_above' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  {
+    id: 'PERSON-OWNERSHIP-NO-CROSSING',
+    when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'none' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Role/title change that is not a removal (e.g. director → secretary). ──
+  {
+    id: 'PERSON-ROLE-CHANGE',
+    when: { personScope: true, attribute: 'role' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── ADD A PERSON (commit 7). The customer STATES the type when adding, so
+  //    person type is explicit here rather than inferred — the one place it is
+  //    not a stub. Same director-vs-UBO document selection as everywhere else.
+  //
+  //    The list document proves the person belongs, and requesting it IS the
+  //    analyst trigger (same principle as removal) — no separate flag. ──
+  {
+    id: 'PERSON-ADDED-DIRECTOR',
+    when: { personScope: true, attribute: 'added', personType: 'director' },
+    then: { workflow: 'doc_required', docType: 'List of Directors' },
+  },
+  {
+    id: 'PERSON-ADDED-UBO',
+    when: { personScope: true, attribute: 'added', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  // The added person's OWN identity evidence, gated on person type exactly as
+  // a correction would be: a UBO needs POI + POA; a director-only person is
+  // identification-only, verified through the list document and the registry.
+  {
+    id: 'PERSON-ADDED-POI-UBO',
+    when: { personScope: true, attribute: 'added_poi', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Identity' },
+  },
+  {
+    id: 'PERSON-ADDED-POI-DIRECTOR',
+    when: { personScope: true, attribute: 'added_poi', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+  {
+    id: 'PERSON-ADDED-POA-UBO',
+    when: { personScope: true, attribute: 'added_poa', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Proof of Address' },
+  },
+  {
+    id: 'PERSON-ADDED-POA-DIRECTOR',
+    when: { personScope: true, attribute: 'added_poa', personType: 'director' },
+    then: { workflow: 'accept_silent', silent: true },
+  },
+
+  // ── Removal. The list document IS the analyst trigger — requesting it means
+  //    an analyst reviews the removal, so there is no separate analyst flag. ──
+  {
+    id: 'PERSON-REMOVAL-DIRECTOR',
+    when: { personScope: true, attribute: 'removal', personType: 'director' },
+    then: { workflow: 'doc_required', docType: 'List of Directors' },
+  },
+  {
+    id: 'PERSON-REMOVAL-UBO',
+    when: { personScope: true, attribute: 'removal', personType: 'ubo' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+];
+
+module.exports = { BASE_RULES, PERSON_RULES };

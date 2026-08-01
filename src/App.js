@@ -3,16 +3,60 @@ import { getTenantId, isPreviewMode } from "./utils/tenant";
 import SearchableSelect from "./components/SearchableSelect";
 import {
   OWNERSHIP_TYPE_LIBRARY,
-  getResearchStrategy,
   ownershipTypeLabel,
 } from "./utils/ownershipTypes";
 import Step2DynamicForm, { DocumentUploadCard } from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import ChangeDialogue from "./components/changeDialogue/ChangeDialogue";
 import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
-import { classifyFieldClass } from "./components/changeDialogue/dialogueContent";
+import { classifyFieldClass, deriveSource } from "./components/changeDialogue/dialogueContent";
 import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
+import ConfirmStep from "./components/companyConfirm/ConfirmStep";
+import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
+// TEST VIEW imports — the analyst strip is commented out at both render sites.
+// Uncomment these two lines together with those blocks to bring it back.
+// import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
+// import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
+import { PersonCorrection, PersonRemovalPrompt } from "./components/companyConfirm/PersonCorrection";
+import AddPersonPanel from "./components/companyConfirm/AddPersonPanel";
+import {
+  resolvePersonType,
+  personFieldId,
+  parsePersonFieldId,
+  PERSON_ATTRIBUTE,
+  ATTRIBUTE_BY_FIELD_KEY,
+} from "./components/companyConfirm/personType";
+import { classifyChange } from "./changeIntelligence/classifyChange";
+import { ownershipCrossing } from "./changeIntelligence/ownershipCrossing";
+// eslint-disable-next-line no-unused-vars -- setHighRiskCountries is used by the
+// SHOW_TEST_TOOLS window affordance below, which the rule does not see.
+import {
+  personHasHighRiskCountry,
+  fieldHasHighRiskCountry,
+  setHighRiskCountries,
+} from "./changeIntelligence/highRiskCountries";
+import { buildSupersedingEvent } from "./components/companyConfirm/supersedingEvent";
+import {
+  ROW_STATE,
+  rowState,
+  rowContext,
+  computeConfirmCounts,
+  submitBlockers,
+  blockerSummary,
+  canonicalDocs,
+  docsNeededFrom,
+  docKey,
+  isSatisfied,
+  isCompanyWideDocType,
+  isPerFieldDocType,
+  canonicalDocType,
+  isGateConfirmedField,
+  prefillBreakdown,
+  isLowConfidence,
+} from "./components/companyConfirm/confirmState";
+import { AmendmentDocCard } from "./components/amendmentDocuments/AmendmentDocCard";
+import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
 import { Notice } from "./components/notices/Notice";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
@@ -82,6 +126,7 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { formatFetchedAt } from "./utils/files";
+import { isDateField, resolveInputType } from "./utils/dateFields";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
@@ -101,6 +146,14 @@ import {
   getApplicantCandidates as deriveApplicantCandidates,
   buildApplicantProvenance as deriveApplicantProvenance,
 } from "./workflows/applicantWorkflow";
+
+// Test affordance, same gate as every other one on this page: the CD-03 EDD
+// check runs against an INJECTABLE high-risk list that is empty until the MLRO
+// supplies it. Exposing the setter under SHOW_TEST_TOOLS lets the mechanism be
+// exercised end-to-end before that list exists. Never present for customers.
+if (SHOW_TEST_TOOLS && typeof window !== "undefined") {
+  window.__setHighRiskCountries = setHighRiskCountries;
+}
 
 export default function KYCAgent({ previewMode = false } = {}) {
   // Tenant config — loaded from /api/config on mount, or from sessionStorage
@@ -370,8 +423,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // empty local state and re-asks already-answered questions. Keyed by fieldId;
   // cleared in resetAll. (`checks` itself already persists — it's parent state.)
   const dialogueStateRef = useRef({});
+  // MERGE (not replace): the dialogue persists {index, answers, emitted, event,
+  // eventId}, while the inline-capture save path (commit 3) stashes its own
+  // keys on the same snapshot (lastSavedValue, the chained eventId of the
+  // latest superseding write). A replace would clobber whichever side wrote
+  // second.
   const persistDialogueState = useCallback((fieldId, snapshot) => {
-    if (fieldId != null) dialogueStateRef.current[fieldId] = snapshot;
+    if (fieldId != null) {
+      dialogueStateRef.current[fieldId] = { ...dialogueStateRef.current[fieldId], ...snapshot };
+    }
   }, []);
   // Per-person rejection for stakeholder fields. Shape:
   //   { [fieldId]: Set<stakeholderId> }
@@ -390,6 +450,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // caller, and the submission payload so the behaviour stays consistent.
   const effectivelyListed = isPubliclyListed || isPubliclyListedOverride;
   const [revealedTs, setRevealedTs] = useState({});
+  // Confirm-page affirmation, keyed by FIELD ID (stable across the tier sort —
+  // unlike `checks`, which is research.found-index-keyed and must stay that
+  // way). Every row arrives pre-ticked, so "ticked" cannot distinguish
+  // "customer agreed" from "customer hasn't looked"; ticking a low-confidence
+  // row records that agreement here so the Needs-you count can reach zero.
+  // Purely additive: it never touches checks, the dialogue, or capture.
+  const [affirmedFields, setAffirmedFields] = useState({});
+  // The same thing for a PERSON's individual attributes, keyed
+  // `<stakeholderId>::<attributeKey>`. Separate map because person attributes
+  // are not research.found rows and have no index of their own.
+  const [affirmedPersonFields, setAffirmedPersonFields] = useState({});
+  // Amendment documents derived server-side from the append-only event store
+  // (authoritative in production). Unioned with the LIVE dialogue outcomes so
+  // the requirement shows the instant a change is classified — before the
+  // round-trip lands, and at all in a DB-less dev environment. De-duped by
+  // docType in canonicalDocs so one real document is never asked for twice.
+  const [persistedAmendmentDocs, setPersistedAmendmentDocs] = useState([]);
+  const [uploadingDocKey, setUploadingDocKey] = useState(null);
+  // Which rows have the inline correction editor open (field id → bool). A
+  // corrected row renders its value inline and re-opens the editor on demand.
+  const [inlineEditOpen, setInlineEditOpen] = useState({});
   const gapRef = useRef({});
   // Per-person stakeholder data on Fill Gaps. Parallel to gapRef, but each
   // field id maps to an array of stakeholder records (objects with full_name,
@@ -599,6 +680,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
+    setAffirmedFields({}); setInlineEditOpen({});
     dialogueStateRef.current = {}; // drop persisted change-dialogue answers on Start Over
     gapRef.current = {}; setFormVersion(v => v + 1);
     stakeholdersRef.current = {}; setStakeholderVersion(v => v + 1); setStakeholderErrors([]);
@@ -941,6 +1023,89 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
+  /**
+   * Per-attribute AFFIRMATION for people — the exact counterpart of
+   * `affirmedFields` on the pre-filled rows, and for the same reason.
+   *
+   * Every attribute arrives ticked, so `isStkFieldConfirmed` alone cannot tell
+   * "the customer agreed" from "the customer hasn't looked". A pre-filled row
+   * from a low-confidence source must be explicitly ticked before it counts as
+   * confirmed; a person attribute from the SAME source was counting as
+   * confirmed untouched, purely because it renders as a card instead of a row.
+   * Three directors sourced from Investor Relations were silently confirmed.
+   *
+   * Additive state, exactly like affirmedFields: it never touches
+   * stakeholderFieldChecks, the dialogue, or what gets submitted.
+   */
+  const personFieldKey = (stakeholderId, key) => `${stakeholderId}::${key}`;
+  const isPersonFieldAffirmed = (stakeholderId, key) =>
+    !!affirmedPersonFields[personFieldKey(stakeholderId, key)];
+  const affirmPersonField = (stakeholderId, key) =>
+    setAffirmedPersonFields((prev) => ({ ...prev, [personFieldKey(stakeholderId, key)]: true }));
+
+  /** Tier of a person's data — their own if present, else the row that carried
+   *  them, which is what the person card's source badge already displays. */
+  const isPersonLowConfidence = (s, item) =>
+    isLowConfidence({ sourceTier: (s && s.sourceTier) || (item && item.sourceTier) });
+
+  /**
+   * THE per-attribute predicate. One rule, three consumers — the attribute row's
+   * tick, the card's "needs you" badge, and the tile/gate counts — so they can
+   * never disagree, exactly as rowState() does for the pre-filled rows.
+   */
+  /**
+   * The customer replaced this attribute's value HERE, inline. Inferred by
+   * comparing what they have now against what research returned, so it needs no
+   * extra state and cannot fall out of sync with the value on screen.
+   */
+  const isPersonAttributeCorrected = (item, s, f) => {
+    const norm = (v) => (v === null || v === undefined ? "" : String(v).trim());
+    const original = (researchStakeholders(item.field).find((x) => x && x.id === s.id) || {})[f.key];
+    const now = s[f.key];
+    return norm(now) !== "" && norm(now) !== norm(original);
+  };
+
+  /**
+   * A corrected attribute is SETTLED — the customer supplied the value, which
+   * is a stronger statement than confirming ours. Otherwise it is settled when
+   * ticked, and additionally affirmed if it came from a low-confidence source.
+   */
+  const isPersonAttributeSettled = (item, s, f, lowConf) =>
+    isPersonAttributeCorrected(item, s, f) ||
+    (isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key)));
+
+  /**
+   * "Confirm all" — settle every outstanding attribute on one person in a
+   * single action. Same outcome as clicking each ✓ in turn, including
+   * restoring anything the customer had marked wrong, so it is a shortcut and
+   * never a different decision.
+   *
+   * Written as ONE update per state map rather than N sequential setStates:
+   * a loop calling the per-field handlers would queue a separate write per
+   * attribute, each computed from a stale snapshot.
+   */
+  const confirmAllPersonAttributes = (item, s, ubo, lowConf) => {
+    const pending = stkConfirmFields(s, ubo).filter(
+      (f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(item, s, f, lowConf)
+    );
+    if (pending.length === 0) return;
+    const toRetick = pending.filter((f) => !isStkFieldConfirmed(s.id, f.key));
+    if (toRetick.length > 0) {
+      setStakeholderFieldChecks((prev) => {
+        const next = { ...(prev[s.id] || {}) };
+        toRetick.forEach((f) => { next[f.key] = true; });
+        return { ...prev, [s.id]: next };
+      });
+      // Re-ticking is the undo path — close any correction editor it opened.
+      setPersonEditing(null);
+    }
+    setAffirmedPersonFields((prev) => {
+      const next = { ...prev };
+      pending.forEach((f) => { next[personFieldKey(s.id, f.key)] = true; });
+      return next;
+    });
+  };
+
   const isStakeholderExpanded = (id) => expandedStakeholders[id] === true;
   const toggleStakeholderExpanded = (id) => {
     setExpandedStakeholders((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -963,14 +1128,42 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setStakeholderErrors([]);
     setStakeholderVersion((v) => v + 1);
   };
+  /** The people research returned for a field, straight from research.found. */
+  const researchStakeholders = (fieldId) =>
+    ((research?.found || []).find((r) => r && r.field === fieldId) || {}).stakeholders || [];
+
+  /**
+   * The person as the customer has them NOW: the research row with any edits
+   * from the ref applied on top.
+   *
+   * The ref is only seeded on entry to Fill Gaps, so on Confirm it is empty and
+   * the card renders research values — which is why an inline correction saved
+   * here did not show up.
+   */
+  const personWithEdits = (fieldId, s) => {
+    const list = stakeholdersRef.current[fieldId];
+    if (!list) return s;
+    return list.find((x) => x && x.id === s.id) || s;
+  };
+
   const updateStakeholderField = (fieldId, stakeholderId, key, value) => {
+    // SEED LAZILY. `current` is [] until Fill Gaps seeds the ref, and mapping
+    // over [] stored [] — so a correction saved on Confirm was silently
+    // dropped, value and all. Fall back to the research list so the edit lands
+    // on a real person rather than on nothing.
     const current = getStakeholders(fieldId);
-    const next = current.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
+    const base = current.length > 0 ? current : researchStakeholders(fieldId);
+    const next = base.map((s) => (s.id === stakeholderId ? { ...s, [key]: value } : s));
     setStakeholders(fieldId, next);
   };
+  // Returns the created person so callers that need its stable sh_ id (the
+  // add-a-person flow addresses its change-events by composite fieldId) can use
+  // it. Existing callers ignore the return value.
   const addStakeholder = (fieldId, overrides = {}) => {
     const current = getStakeholders(fieldId);
-    setStakeholders(fieldId, [...current, makeStakeholder({ customer_added: true, ...overrides })]);
+    const person = makeStakeholder({ customer_added: true, ...overrides });
+    setStakeholders(fieldId, [...current, person]);
+    return person;
   };
   const removeStakeholder = (fieldId, stakeholderId) => {
     const current = getStakeholders(fieldId);
@@ -1062,6 +1255,26 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (step === STEPS.fillGaps) initStakeholdersForFillGaps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, research, rejectedStakeholders]);
+
+  // Amendment documents the store says are currently owed. Refetched on entering
+  // Confirm and whenever a row is crossed/re-checked, so the list reflects the
+  // latest non-superseded event per field. The live-outcome union in
+  // confirmDocs covers the window before this lands (and a DB-less dev run), so
+  // a slow or failed fetch can never make a required document disappear.
+  useEffect(() => {
+    const submissionId = dossierId || onboardingSubmissionId;
+    if (!submissionId || step !== STEPS.confirm) return undefined;
+    let cancelled = false;
+    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setPersistedAmendmentDocs(Array.isArray(data.documents) ? data.documents : []);
+      })
+      .catch((err) => console.warn("[confirm] amendment-documents fetch failed:", err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, dossierId, onboardingSubmissionId, checks]);
 
   const fillTestData = () => {
     getCombinedGaps().forEach(g => {
@@ -1158,7 +1371,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
           field: "corrected_" + item.field,
           label: item.label + " (correction needed)",
           reason: "Original: " + resolveDisplayValue(def, item.value),
-          inputType: def.inputType || "text",
+          // Same detection as the inline editor, so a date corrected here and
+          // a date corrected on Confirm get the same control.
+          inputType: resolveInputType({ ...def, field: item.field, label: item.label }, item.value),
           options: def.options || undefined,
           dependsOn: def.dependsOn || undefined,
           required: true,
@@ -1530,6 +1745,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const c = {};
       mergedFound.forEach((_, i) => { c[i] = true; });
       setChecks(c);
+      setAffirmedFields({}); setInlineEditOpen({});
       setRejectedStakeholders({});
       setStakeholderFieldChecks({});
       setExpandedStakeholders({});
@@ -2379,9 +2595,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const manualEntries = [];
     Object.entries(gapRef.current).forEach(([fieldId, value]) => {
       if (value === undefined || value === null || String(value).trim() === "") return;
-      const key = fieldId.startsWith("corrected_") ? fieldId.slice("corrected_".length) : fieldId;
-      // Mark corrections distinctly so the trail shows the user's overwrite
-      // alongside the original AI-found row.
+      const isCorrection = fieldId.startsWith("corrected_");
+      const key = isCorrection ? fieldId.slice("corrected_".length) : fieldId;
+      // Carry the ORIGINAL registry value on the correction entry. Without it
+      // the original is lost from this trail entirely: finalMeta below drops
+      // the AI entry for any corrected field, so the manual entry would be the
+      // only record and it holds the CUSTOMER's value. The server writes this
+      // into field_provenance.agent_value, giving a corrected scalar a second
+      // durable home for its original — change_events.before_value was
+      // previously the only one.
+      const originalMeta = isCorrection ? fieldMetadata.find(m => m.fieldId === key) : null;
+      const originalRow = isCorrection ? (research?.found || []).find(r => r.field === key) : null;
+      const rawAgentValue = originalMeta && originalMeta.value !== undefined && originalMeta.value !== null
+        ? originalMeta.value
+        : (originalRow ? originalRow.value : null);
       manualEntries.push({
         fieldId: key,
         value: String(value),
@@ -2392,8 +2619,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
         fetchedAt: submittedAt,
         method: "manual",
         confidence: "verified",
-        customerAction: fieldId.startsWith("corrected_") ? "corrected" : "entered",
+        customerAction: isCorrection ? "corrected" : "entered",
         customerActionAt: submittedAt,
+        // The pre-correction registry value + where it came from. Null for a
+        // plain gap entry — the AI never had a value to be corrected.
+        agentValue: rawAgentValue === null || rawAgentValue === undefined
+          ? null
+          : (typeof rawAgentValue === "object" ? JSON.stringify(rawAgentValue) : String(rawAgentValue)),
+        agentSource: isCorrection ? ((originalMeta && originalMeta.source) || (originalRow && originalRow.source) || null) : null,
+        agentSourceTier: isCorrection ? ((originalMeta && originalMeta.sourceTier) || (originalRow && originalRow.sourceTier) || null) : null,
+        agentFetchedAt: isCorrection ? ((originalMeta && originalMeta.fetchedAt) || (originalRow && originalRow.fetchedAt) || null) : null,
       });
     });
     const finalMeta = [...fieldMetadata.filter(m => !manualEntries.some(e => e.fieldId === m.fieldId && e.customerAction === "corrected")), ...manualEntries];
@@ -2542,8 +2777,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
         verificationStatus: m.verificationStatus
           || (research?.found || []).find(r => r.field === m.fieldId)?.verificationStatus
           || "manual",
+        // Did the customer EXPLICITLY tick this low-confidence row, as opposed
+        // to leaving it as it arrived? Every row starts ticked, so without this
+        // the two are indistinguishable in the record — and "the customer
+        // confirmed an unverified value" is exactly the assertion an audit
+        // needs. The server maps it onto customer_action.
+        affirmed: !!affirmedFields[m.fieldId],
       })),
       stakeholders: stakeholderPayload,
+      // PER-ATTRIBUTE person provenance. The stakeholders payload above carries
+      // the values but only as a nested blob; field_provenance wrote ONE row per
+      // person (their name), so nationality / DOB / residence / PEP were not
+      // queryable and had no source or customer action of their own. This is the
+      // per-attribute trail the server turns into one row each.
+      stakeholderAttributes: buildStakeholderAttributeTrail(submittedAt),
+      // Which document was asked for, and which file answered it. Nothing
+      // previously recorded this against the journey at all.
+      amendmentDocuments: buildAmendmentDocumentTrail(),
+      // What the Confirm page showed at submit time — the four tiles and the
+      // pre-fill breakdown, so the numbers can be reconciled after the fact.
+      confirmMetrics: {
+        tiles: {
+          needsYou: confirmCounts.needsYou,
+          confirmed: confirmCounts.confirmed,
+          corrected: confirmCounts.corrected,
+          docsNeeded: confirmCounts.docsNeeded,
+          docsTotal: confirmCounts.docsTotal,
+        },
+        prefill,
+        capturedAt: submittedAt,
+      },
       declaration: {
         ipAddress: device.ipAddress,
         userAgent: device.userAgent,
@@ -2585,6 +2848,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
           ownershipType,
           journeyType,
           fieldValues,
+          // The per-field provenance trail. It was built for the payload log
+          // but never actually transmitted, which is why field_provenance left
+          // agent_value NULL for every scalar. Sending it lets the server
+          // record the AI/registry original alongside the customer's value.
+          fieldMetadata: payload.fieldMetadata,
           stakeholders: stakeholderPayload,
           documents: docSearchResults?.documents || [],
           costSummary,
@@ -2672,7 +2940,349 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
       // that emits a new change event (R6: toggling re-adds the document each time).
       delete dialogueStateRef.current[item.field];
+      // Inline capture (commit 3): a re-check is an undo — drop the inline
+      // corrected value too. gapRef entries always win over accepted AI values
+      // in submitApplication, so a stale correction left behind here would
+      // silently override the value the customer just re-accepted.
+      if (gapRef.current["corrected_" + item.field] !== undefined) {
+        delete gapRef.current["corrected_" + item.field];
+        setFormVersion(v => v + 1);
+      }
     }
+  };
+
+  // Record that the customer explicitly ticked this row. Additive only — it
+  // does not touch `checks`, so nothing downstream (corrections, dialogue,
+  // submit) changes; it exists so an untouched low-confidence row can be told
+  // apart from one the customer actually agreed with. See confirmState.js.
+  const affirmRow = (item) => {
+    if (!item || !item.field) return;
+    setAffirmedFields(prev => (prev[item.field] ? prev : { ...prev, [item.field]: true }));
+  };
+
+  // ── CD-03 person-scoped corrections (commit 6) ──────────────────────────────
+  // Which person-attribute is currently being corrected, keyed by composite
+  // fieldId; and which person is mid-removal, keyed by stakeholder id.
+  const [personEditing, setPersonEditing] = useState(null); // { fieldId, stakeholderId, attribute, fieldKey }
+  const [personRemoving, setPersonRemoving] = useState(null); // { fieldId, stakeholderId, name }
+  const [addingPerson, setAddingPerson] = useState(false);    // commit 7 add-a-person panel
+
+  /**
+   * Emit ONE person-scoped change-event through the SAME pipeline the company
+   * rows use: classify → buildChangeEvent → POST /api/change-events. The only
+   * difference is the composite fieldId (`<personType>::<sh_id>::<attribute>`),
+   * which makes each person-attribute independently addressable, independently
+   * supersedable, and independently resolvable by deriveAmendmentDocuments.
+   *
+   * Snapshots land in dialogueStateRef under that composite key, so the
+   * documents list, the summary panel, the submit gate and the analyst strip
+   * all pick person documents up with no extra wiring — one pipeline, not two.
+   */
+  const emitPersonChange = ({ person, researchFieldId, attribute, value = null, nameCase = null, reason = null }) => {
+    const type = resolvePersonType(person, researchFieldId);
+    const compositeId = personFieldId(type.personType, person.id, attribute);
+    const engineInput = {
+      personScope: true,
+      personType: type.personType,
+      attribute,
+      nameCase,
+      // PEP is add-only: the customer declaring "yes" is what CD-03 rules on.
+      pepValue: attribute === PERSON_ATTRIBUTE.PEP
+        ? (value === true || value === "yes" ? "yes" : "no")
+        : null,
+      // Threshold crossing, COMPUTED from the before/after percentages. It was
+      // hardcoded 'unknown' on the grounds that the person-type stub cannot
+      // supply ownership data — but that is the wrong gap: the person TYPE is
+      // stubbed, the shareholding PERCENTAGE is real (research returns it, and
+      // the correction supplies the new one). ownershipCrossing still answers
+      // 'unknown' for a registry band like "25-50%", where comparing a range to
+      // a threshold would be the guess the engine refuses to make.
+      thresholdCrossing: attribute === PERSON_ATTRIBUTE.OWNERSHIP_PCT
+        ? ownershipCrossing(person.share_percentage, value)
+        : null,
+      // EDD flag: injectable list, empty until the MLRO supplies it.
+      highRiskCountry: personHasHighRiskCountry({
+        ...person,
+        ...(attribute === PERSON_ATTRIBUTE.NATIONALITY ? { nationality: value } : {}),
+        ...(attribute === PERSON_ATTRIBUTE.RESIDENTIAL_ADDRESS ? { residential_country: value } : {}),
+      }),
+    };
+    const engineResult = classifyChange(engineInput);
+
+    const prev = dialogueStateRef.current[compositeId];
+    // Provenance goes through the SAME deriveSource the company path uses.
+    // change_events.source_tier is a SMALLINT, and a stakeholder carries the
+    // string form ("tier1"); deriveSource normalises it to 1. Passing the raw
+    // string makes real Postgres reject the whole INSERT — invisible locally,
+    // because the route always answers 200 and the fake DB never type-checks.
+    const src = deriveSource({ sourceTier: person.sourceTier, source: person.source });
+    const event = buildChangeEvent({
+      field: {
+        fieldId: compositeId,
+        // fieldClass stays inside the existing closed enum — person type maps
+        // onto 'director' / 'ubo', both already valid, so writeEvent's guard
+        // passes with no schema or vocabulary change.
+        fieldClass: type.personType === "director" ? "director" : "ubo",
+        value: person[Object.keys(ATTRIBUTE_BY_FIELD_KEY).find(k => ATTRIBUTE_BY_FIELD_KEY[k] === attribute)] ?? null,
+        sourceType: src.sourceType,
+        sourceProvider: src.sourceProvider,
+        sourceTier: src.sourceTier,
+        verifiability: "structured_registry",
+      },
+      jurisdiction: countryCode || "GB",
+      submissionId: dossierId || onboardingSubmissionId,
+      dossierId,
+      // The stored vocabulary is add|remove|changed. An addition must record as
+      // 'add' — filing it as 'changed' would misdescribe it to an analyst
+      // reading the trail, and deriveChangeType's presence semantics agree
+      // (no prior value → add).
+      storedChangeType:
+        attribute === PERSON_ATTRIBUTE.REMOVAL
+          ? "remove"
+          : (attribute === PERSON_ATTRIBUTE.ADDED
+            || attribute === PERSON_ATTRIBUTE.ADDED_POI
+            || attribute === PERSON_ATTRIBUTE.ADDED_POA)
+            ? "add"
+            : "changed",
+      intent: null,
+      registryStatus: "unknown",
+      engineResult,
+      afterValue: value == null ? null : String(value),
+      // Chain to the tail, never a consumed head (the 3.1 rule).
+      supersedesId: prev && prev.tailEventId != null ? prev.tailEventId : (prev && !prev.headConsumed ? prev.eventId : null),
+    });
+
+    dialogueStateRef.current[compositeId] = {
+      ...prev,
+      emitted: true,
+      event,
+      outcome: engineResult,
+      headConsumed: true,
+      tailEventId: null,
+      personScope: true,
+      reason,
+    };
+
+    if (typeof fetch === "function") {
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          const cur = dialogueStateRef.current[compositeId];
+          if (cur) {
+            dialogueStateRef.current[compositeId] = {
+              ...cur,
+              tailEventId: d && d.success && d.id != null ? d.id : null,
+            };
+          }
+          if (d && d.success === false && d.warning) {
+            console.warn("[confirm] person change-event rejected:", d.warning);
+          }
+        })
+        .catch((err) => console.warn("[confirm] person change-event persist failed:", err));
+    }
+    trackEvent("person_change_captured", event);
+    setFormVersion(v => v + 1);
+    return { compositeId, engineResult, type };
+  };
+
+  /** Resolve one person correction: capture the value, then emit the event(s). */
+  const resolvePersonCorrection = (person, researchFieldId, fieldKey, resolution) => {
+    const { attribute, value, nameCase } = resolution;
+
+    // "This isn't the right person" resolves as a REMOVAL, not a name edit.
+    if (attribute === PERSON_ATTRIBUTE.REMOVAL) {
+      emitPersonChange({ person, researchFieldId, attribute, reason: resolution.reason || null });
+      if (!isStakeholderRejected(researchFieldId, person.id)) {
+        toggleStakeholderRejection(researchFieldId, person.id);
+      }
+      setPersonEditing(null);
+      return;
+    }
+
+    // Capture the value where Fill Gaps already reads it, so nothing is retyped.
+    if (fieldKey && value != null) {
+      updateStakeholderField(researchFieldId, person.id, fieldKey, value);
+      // RE-TICK. Unticking is what opened this editor, and "unticked" is also
+      // what routes an attribute to Fill Gaps for correction — so leaving it
+      // unticked after the customer had already corrected it here asked them
+      // for the same value twice, on two pages. The attribute is resolved: it
+      // carries a customer-supplied value and is settled.
+      if (!isStkFieldConfirmed(person.id, fieldKey)) {
+        toggleStkFieldConfirm(person.id, fieldKey);
+      }
+    }
+    emitPersonChange({ person, researchFieldId, attribute, value, nameCase });
+
+    // A UBO's legal name change needs the ownership chart AS WELL as the POI;
+    // one event carries one docType, so the companion list document is its own
+    // person-attribute event. (Director-only already gets the list doc from the
+    // name rule itself, so no second event there.)
+    const type = resolvePersonType(person, researchFieldId);
+    if (attribute === PERSON_ATTRIBUTE.NAME && nameCase === "legal_change" && type.personType === "ubo") {
+      emitPersonChange({ person, researchFieldId, attribute: "name_list", value });
+    }
+    setPersonEditing(null);
+  };
+
+  /**
+   * Unticking a person attribute now OPENS the CD-03 correction flow instead of
+   * silently routing the field to the next page. Re-ticking closes it. The
+   * existing stakeholderFieldChecks state is preserved exactly as before — this
+   * only adds the correction panel on top of it.
+   */
+  const togglePersonField = (item, s, f) => {
+    const wasConfirmed = isStkFieldConfirmed(s.id, f.key);
+    toggleStkFieldConfirm(s.id, f.key);
+    const attribute = ATTRIBUTE_BY_FIELD_KEY[f.key];
+    if (wasConfirmed && attribute) {
+      setPersonEditing({ researchFieldId: item.field, stakeholderId: s.id, attribute, fieldKey: f.key });
+    } else {
+      setPersonEditing(null);
+    }
+  };
+
+  /** Crossing a person asks WHY first; un-crossing is a plain undo. */
+  const togglePersonRemoval = (item, s) => {
+    if (isStakeholderRejected(item.field, s.id)) {
+      toggleStakeholderRejection(item.field, s.id);
+      setPersonRemoving(null);
+      return;
+    }
+    setPersonRemoving({ researchFieldId: item.field, stakeholderId: s.id, name: s.full_name });
+  };
+
+  /**
+   * ADD A PERSON (commit 7). The customer states the type, so person type here
+   * is EXPLICIT — the created stakeholder carries real isDirector/isUBO flags,
+   * which is the interface personType.js assumes and the stub otherwise fakes.
+   *
+   * Emits the CD-03 events for an addition, each as its own person-scoped
+   * change-event under the composite fieldId, so they flow through the same
+   * derive → scope-aware dedup (6a) → panel → gate path as every other
+   * document. Nothing new is wired: a distinct stakeholderId is all the
+   * per-person keying needs.
+   */
+  const addPersonFromConfirm = ({ type, full_name, date_of_birth, nationality, residential_country, is_pep }) => {
+    const isDirector = type === "director" || type === "both";
+    const isUBO = type === "ubo" || type === "both";
+    // Attach the person to the matching research field so Fill Gaps renders
+    // them alongside the people already found there.
+    const rows = (research?.found || []).filter((r) => isStakeholderField(r.field));
+    const preferred = rows.find((r) => (isUBO ? isUboLikeField(r.field) : !isUboLikeField(r.field)));
+    const targetField = (preferred || rows[0] || {}).field;
+    if (!targetField) return null;
+
+    const person = addStakeholder(targetField, {
+      full_name,
+      date_of_birth: date_of_birth || "",
+      nationality: nationality || "",
+      residential_country: residential_country || "",
+      is_pep: is_pep === true ? true : is_pep === false ? false : null,
+      // The real person-type interface — stated, not inferred.
+      isDirector,
+      isUBO,
+    });
+
+    const emit = (attribute, value) =>
+      emitPersonChange({ person, researchFieldId: targetField, attribute, value });
+
+    // 1. The list document proving the person belongs (director → list of
+    //    directors, UBO → ownership chart). Requesting it IS the analyst review.
+    emit(PERSON_ATTRIBUTE.ADDED, full_name);
+    // 2. The person's own evidence — a no-op for a director-only person, whose
+    //    rules resolve to accept_silent with no document.
+    emit(PERSON_ATTRIBUTE.ADDED_POI, full_name);
+    emit(PERSON_ATTRIBUTE.ADDED_POA, residential_country || full_name);
+    // 3. PEP is add-only, and this is the moment it can be declared.
+    if (is_pep === true) emit(PERSON_ATTRIBUTE.PEP, true);
+
+    setAddingPerson(false);
+    setExpandedStakeholders((prev) => ({ ...prev, [person.id]: true }));
+    return person;
+  };
+
+  /** Confirm-why removal from the person card's own checkbox. */
+  const confirmPersonRemoval = (person, researchFieldId, reason) => {
+    emitPersonChange({ person, researchFieldId, attribute: PERSON_ATTRIBUTE.REMOVAL, reason });
+    if (!isStakeholderRejected(researchFieldId, person.id)) {
+      toggleStakeholderRejection(researchFieldId, person.id);
+    }
+    setPersonRemoving(null);
+  };
+
+  // Commit 3 (Option B core) — save handler for the inline correction editor.
+  // Two consistent destinations, in order:
+  //   1. gapRef["corrected_<field>"] — the SAME client-state key Fill Gaps
+  //      renders and submitApplication/allGapsFilled/field_provenance consume,
+  //      so submit works unchanged and Fill Gaps shows the value pre-filled.
+  //   2. A SUPERSEDING change-event carrying afterValue, cloned from the
+  //      dialogue's initial classification (never re-classified) with
+  //      supersedesId when the initial write returned its id. One event per
+  //      logical save: the editor commits on its Save button (not keystrokes)
+  //      and an unchanged re-save is skipped.
+  const saveInlineCorrection = (item, value) => {
+    const fieldId = item.field;
+    updateGap("corrected_" + fieldId, value);
+    setFormVersion(v => v + 1); // surface the saved state on the Confirm row
+    const snap = dialogueStateRef.current[fieldId];
+    if (!snap || !snap.emitted || !snap.event) return; // nothing to supersede yet
+    if (snap.lastSavedValue === value) return;         // idempotent double-save guard
+    // CD-03 EDD (commit 8) — re-run the SAME country check against the CORRECTED
+    // value. The initial event was classified off the found value; a customer who
+    // corrects "Registered Country" into a high-risk country has to raise the
+    // flag, and the superseding event otherwise clones the original verbatim.
+    const superseding = buildSupersedingEvent(snap, value, {
+      eddFlag: fieldHasHighRiskCountry({ fieldId: item.field, label: item.label }, value),
+    });
+    if (!superseding) return;
+    // Consume the head and clear the tail BEFORE the write lands: from here on
+    // the only safe targets are the id this write returns, or null. Falling
+    // back to an already-superseded row would throw in writeEvent, be swallowed
+    // as a 200 by the route, and lose the event — taking the registry original
+    // with it on any field where change_events is its only durable home.
+    dialogueStateRef.current[fieldId] = {
+      ...snap,
+      lastSavedValue: value,
+      headConsumed: true,
+      tailEventId: null,
+    };
+    // Deliberate observability log (commit-3 verification): the payload must be
+    // inspectable even where the POST can't persist (no DATABASE_URL).
+    // eslint-disable-next-line no-console
+    console.log("[confirm] superseding change-event:", superseding);
+    if (typeof fetch === "function") {
+      fetch("/api/change-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(superseding),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          // Chain the lineage: a later re-edit supersedes THIS event, not the
+          // head. The id is an OPAQUE token (the Neon driver may return a
+          // bigint as a string) — stored and passed back verbatim, never
+          // compared numerically. A failed/no-id write leaves tailEventId null,
+          // which is the safe un-linked path, not an error.
+          const cur = dialogueStateRef.current[fieldId];
+          if (cur) {
+            dialogueStateRef.current[fieldId] = {
+              ...cur,
+              tailEventId: d && d.success && d.id != null ? d.id : null,
+            };
+          }
+          if (d && d.success === false && d.warning) {
+            // The route always answers 200, so a swallowed writeEvent throw is
+            // only visible here. Surface it rather than losing it silently.
+            console.warn("[confirm] superseding event rejected:", d.warning);
+          }
+        })
+        .catch((err) => console.warn("[confirm] superseding event persist failed:", err));
+    }
+    trackEvent("change_event_superseded", superseding);
   };
 
   const card = { background: "rgba(255,255,255,0.95)", borderRadius: 14, border: "1px solid rgba(26,58,74,0.06)", boxShadow: "0 4px 20px rgba(26,58,74,0.05)", padding: "24px 28px", marginBottom: 16 };
@@ -3335,6 +3945,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
     cursor: "pointer",
     display: "inline-block",
   };
+  // Re-skin: provenance is supporting detail, not the headline — quiet
+  // text-only badges (the row's state stripe carries the confidence signal).
+  // Same glyph vocabulary per tier, same click-to-reveal-timestamp behaviour.
   const renderSourceBadge = (item, idx) => {
     const m = metaFor(item.field);
     const ts = (m && m.fetchedAt) || researchTimestamp || "";
@@ -3345,7 +3958,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? `🕒 ${ts}` : `From uploaded ${label}`}
-          style={{ ...badgeBaseStyle, color: "#fff", background: "#0B3D91" }}
+          style={{ ...badgeBaseStyle, color: "#0B3D91", background: "transparent" }}
         >
           {revealedTs[idx] ? `🕒 ${tsShort}` : `📄 ${label}`}
         </span>
@@ -3356,9 +3969,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Click to show fetch timestamp"}
-          style={{ ...badgeBaseStyle, color: "#1a6b56", background: "#dff2ec" }}
+          style={{ ...badgeBaseStyle, color: C.textMuted, background: "transparent" }}
         >
-          {revealedTs[idx] ? `🕒 ${ts}` : `✅ ${item.source}`}
+          {revealedTs[idx] ? `🕒 ${ts}` : `✓ ${item.source}`}
         </span>
       );
     }
@@ -3368,7 +3981,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
           title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence — from unverified source"}
-          style={{ ...badgeBaseStyle, color: "#C2410C", background: "#FFF7ED", border: "1px solid #FED7AA" }}
+          style={{ ...badgeBaseStyle, color: "#C2410C", background: "transparent" }}
         >
           {revealedTs[idx] ? `🕒 ${ts}` : `⚠ ${item.source}`}
         </span>
@@ -3379,7 +3992,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
         title={revealedTs[idx] ? "Click to hide timestamp" : "Probable — from company source, please confirm"}
-        style={{ ...badgeBaseStyle, color: "#8c5500", background: "#fff1d6" }}
+        style={{ ...badgeBaseStyle, color: C.warning, background: "transparent" }}
       >
         {revealedTs[idx] ? `🕒 ${ts}` : `~ ${item.source}`}
       </span>
@@ -3431,7 +4044,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return val;
   };
 
-  const renderFoundRow = ({ item, idx }, n) => {
+  const renderFoundRow = ({ item, idx }) => {
     const fieldDef = findFieldDef(activeSchema, item.field);
     let displayValue =
       item.value !== null && typeof item.value === "object"
@@ -3454,48 +4067,66 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
     const isUnmappedDropdown =
       fieldDef && fieldDef.inputType === "select" && item.unmappedDropdown;
+    // Re-skin: row state drives the visual treatment, from EXISTING data only.
+    // Confirmation lives in checks[idx]; confidence in verificationStatus
+    // (sourceTier fallback covers rows stored before that field existed).
+    // Amber tracks confidence, never "has a control"; a disputed row's info
+    // tone wins over amber while its ChangeDialogue is open.
+    const rowChecked = !!checks[idx];
+    const correction = gapRef.current["corrected_" + item.field];
+    // ONE predicate for the row's state, the tiles AND the submit gate — same
+    // rowState() call, fed by the same rowContext() builder submitBlockers
+    // uses, so the amber styling, the "Needs You" count and blocker kind (a)
+    // are the same set by construction. Never re-derive it here.
+    const state = rowState(item, rowContext(item, idx, {
+      checks,
+      affirmed: affirmedFields,
+      corrections: gapRef.current,
+    }));
+    const isCorrected = state === ROW_STATE.CORRECTED;
+    const isDisputed = !rowChecked && !isCorrected;
+    // Amber = low confidence AND still unresolved. Ticking (affirming) or
+    // correcting resolves it, which is what lets the Needs-you count fall.
+    const needsAttention = state === ROW_STATE.NEEDS_YOU && rowChecked;
+    const stripe = isCorrected || isDisputed ? C.info : needsAttention ? C.warning : C.border;
+    const tint = isCorrected || isDisputed ? C.infoBg : needsAttention ? C.warningTint : "#fff";
+    const labelColor = needsAttention ? C.warning : isCorrected || isDisputed ? C.info : C.textMuted;
+    const btnBase = {
+      width: 26, height: 26, borderRadius: 7, cursor: "pointer",
+      fontSize: 12, fontWeight: 700, lineHeight: 1, padding: 0,
+      fontFamily: "inherit",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+    };
+    // Right-rail status line — the prototype's second line under the source.
+    const statusLine = isCorrected
+      ? { text: "Customer corrected", color: C.info }
+      : isDisputed
+      ? { text: "Correction needed", color: C.info }
+      : needsAttention
+      ? { text: "Please confirm", color: C.warning }
+      : null;
     return (
       <div key={item.field + idx} style={{
         display: "flex",
         flexDirection: "row",
         alignItems: "flex-start",
-        gap: 12,
+        gap: 16,
         width: "100%",
-        padding: "12px 10px",
+        padding: "12px 14px",
         boxSizing: "border-box",
-        background: n % 2 === 0 ? "#fafcfb" : "#fff",
+        background: tint,
+        borderLeft: `3px solid ${stripe}`,
         borderBottom: "1px solid rgba(26,58,74,0.04)",
         // Unchecking a field is NOT disabling it — keep the row fully legible.
-        // The Tier 1 "no action needed" notice below conveys the recorded state.
       }}>
-        {/* Checkbox */}
-        <div style={{ flexShrink: 0, width: 20, paddingTop: 2 }}>
-          <input type="checkbox" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#4a9e8e" }} />
-        </div>
-        {/* Label cell — fixed width */}
-        <span style={{
-          flexShrink: 0,
-          width: 180,
-          minWidth: 180,
-          maxWidth: 180,
-          fontSize: 13,
-          color: C.textMuted,
-          fontWeight: 500,
-          lineHeight: 1.4,
-          wordWrap: "break-word",
-          overflowWrap: "break-word",
-        }}>{item.label}</span>
-        {/* Value cell — takes remaining space; minWidth:0 prevents collapse */}
-        <div style={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: 14,
-          color: C.text,
-          lineHeight: 1.5,
-          wordWrap: "break-word",
-          overflowWrap: "break-word",
-          whiteSpace: "normal",
-        }}>
+        {/* Main block — label ABOVE value (prototype layout), not side-by-side. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: labelColor, lineHeight: 1.3,
+          }}>
+            {item.label}
+          </div>
           {displayValue.length > 150 ? (
             <div style={{
               fontSize: 12,
@@ -3508,22 +4139,32 @@ export default function KYCAgent({ previewMode = false } = {}) {
               wordWrap: "break-word",
               overflowWrap: "break-word",
               whiteSpace: "pre-wrap",
-              marginTop: 2,
+              marginTop: 4,
             }}>
               {displayValue}
             </div>
           ) : (
-            <span style={{
-              fontSize: 14,
-              color: C.text,
-              wordWrap: "break-word",
-              overflowWrap: "break-word",
-              whiteSpace: "normal",
-              lineHeight: 1.5,
-              display: "block",
+            <div style={{
+              fontSize: 14.5, fontWeight: 600, color: C.text, marginTop: 3,
+              wordWrap: "break-word", overflowWrap: "break-word",
+              whiteSpace: "normal", lineHeight: 1.45,
             }}>
-              {displayValue}
-            </span>
+              {/* Corrected: the customer's value leads, the registry value stays
+                  beside it struck through — original + corrected coexist. */}
+              {isCorrected ? (
+                <>
+                  <span>{String(correction)}</span>
+                  <span style={{
+                    marginLeft: 8, fontSize: 13, fontWeight: 500,
+                    color: C.textMuted, textDecoration: "line-through",
+                  }}>
+                    {displayValue}
+                  </span>
+                </>
+              ) : (
+                displayValue
+              )}
+            </div>
           )}
           {item.originalAIValue && item.originalAIValue !== displayValue && (
             <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
@@ -3535,12 +4176,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
               Doesn't match any dropdown option — please correct on the next page
             </div>
           )}
-          {item.sourceTier === "tier2" && (
+          {/* The source prompt is a QUESTION, so it goes once the row answers
+              it. It used to render off item.sourceTier alone, so "please
+              confirm this is correct" stayed under a value the customer had
+              already corrected, confirmed or marked wrong. needsAttention is
+              exactly "low confidence and still unresolved" — the same
+              condition driving the amber stripe. */}
+          {needsAttention && item.sourceTier === "tier2" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
               From a company source — please confirm this is correct.
             </Notice>
           )}
-          {item.sourceTier === "tier3" && (
+          {needsAttention && item.sourceTier === "tier3" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
               From an unverified source — please verify this is correct.
             </Notice>
@@ -3563,32 +4210,209 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
           )}
           {/* Capture-mode change dialogue — mounts beneath an unchecked field,
-              captures intent/registry + records one append-only change_event. */}
+              captures intent/registry + records one append-only change_event.
+              onResolved (commit 3) bumps formVersion so the row re-renders the
+              moment classification completes and the inline editor can appear —
+              the questions always come first, the value input second. */}
           {!checks[idx] && (
             <ChangeDialogue
-              field={{ fieldId: item.field, value: item.value, source: item.source, sourceTier: item.sourceTier }}
+              // `label` is here for the commit-8 country-field check: the schema
+              // marks no field as country-typed, so detection reads the id AND
+              // the label (e.g. field "country" / label "Address Country"). The
+              // row's own label is used — the same string the customer sees.
+              field={{ fieldId: item.field, label: item.label, value: item.value, source: item.source, sourceTier: item.sourceTier }}
               jurisdiction={countryCode || "GB"}
               submissionId={dossierId || onboardingSubmissionId}
               dossierId={dossierId}
               onEvent={(event) => trackEvent("change_event_captured", event)}
+              onResolved={() => setFormVersion(v => v + 1)}
               persisted={dialogueStateRef.current[item.field]}
               onPersist={persistDialogueState}
             />
           )}
+          {/* Inline correction editor (commit 3) — value capture ON Confirm.
+              Gated on the dialogue having emitted (classification first), so a
+              value can never be saved before the initial event exists. Writes
+              through saveInlineCorrection: gapRef["corrected_<field>"] (same
+              key Fill Gaps renders — the value shows pre-filled there) + the
+              superseding change-event. Once saved, the value renders inline on
+              the row above (with the original struck through) and this editor
+              only re-opens on demand via "Edit again".  */}
+          {!checks[idx] && (() => {
+            const snap = dialogueStateRef.current[item.field];
+            if (!snap || !snap.emitted) return null;
+            if (isCorrected && !inlineEditOpen[item.field]) return null;
+            // Reference-value exception: don't prefill a literal cross-reference
+            // like "Same as registered office" — prompt for the real value.
+            const isReferenceValue = typeof item.value === "string" && /\bsame as\b/i.test(item.value);
+            const prefill = isReferenceValue || item.value == null || typeof item.value === "object"
+              ? ""
+              : String(item.value);
+            return (
+              <InlineCorrectionEditor
+                key={"edit-" + item.field}
+                fieldDef={fieldDef || {}}
+                originalDisplay={displayValue}
+                initialValue={isCorrected ? String(correction) : prefill}
+                onSave={(v) => {
+                  saveInlineCorrection(item, v);
+                  setInlineEditOpen(p => ({ ...p, [item.field]: false }));
+                }}
+                onCancel={isCorrected ? () => setInlineEditOpen(p => ({ ...p, [item.field]: false })) : null}
+              />
+            );
+          })()}
+          {/* Inline document request (commit 4) — the upload lives WHERE the
+              change happened. Same card, same store and same upload call as the
+              Fill Gaps panel, so a file added in either place satisfies both.
+              Matched by docType against the canonical list so two fields
+              mapping to one document never ask for it twice. */}
+          {!checks[idx] && (() => {
+            const snap = dialogueStateRef.current[item.field];
+            const live = snap && snap.event && snap.event.workflow === "doc_required" ? snap.event.docType : null;
+            if (!live) return null;
+            // Company-scoped row: match a company entry (no stakeholderId), so
+            // it can never pick up a person's same-named document. Compared on
+            // the merged name — confirmDocs carries the canonical docType. A
+            // per-field document shares its title with the other fields that
+            // triggered it, so it must match THIS row's field, not just the type.
+            const liveType = canonicalDocType(live);
+            const doc = confirmDocs.find((d) =>
+              d.docType === liveType &&
+              !d.stakeholderId &&
+              (isPerFieldDocType(liveType) ? d.fieldId === item.field : true));
+            if (!doc) return null;
+            const k = docKey(doc);
+            // ONE CARD PER DOCUMENT. Several rows can require the same file —
+            // three corrected lines of the registered address are one Notice of
+            // Change of Address — so it renders against the field that asked
+            // first, not once per row.
+            const anchorField = rowDocAnchor.get(k);
+            if (anchorField && anchorField !== item.field) return null;
+            return (
+              <AmendmentDocCard
+                key={"doc-" + k}
+                doc={doc}
+                upload={amendmentUploads[k]}
+                busy={uploadingDocKey === k}
+                onUpload={handleAmendmentUpload}
+                onRemove={handleAmendmentRemove}
+                variant="inline"
+                hint="Required before you can continue."
+              />
+            );
+          })()}
+          {/* TEST VIEW — DISABLED, kept for debugging. Shows what the engine
+              actually decided for this row (rule id, workflow, document,
+              verifiability), including outcomes the customer never sees. It is
+              read-only: it never re-classifies and never affects the gate.
+              Uncomment this block, the twin in renderPersonDocuments, and the
+              two imports at the top of this file to bring it back.
+
+          {(() => {
+            const snap = dialogueStateRef.current[item.field];
+            if (!snap || !snap.emitted || !snap.event) return null;
+            return (
+              <AnalystSignalStrip
+                show={SHOW_TEST_TOOLS}
+                fieldId={item.field}
+                signal={buildAnalystSignal({
+                  event: snap.event,
+                  outcome: snap.outcome,
+                  correctedValue: correction,
+                })}
+              />
+            );
+          })()}
+          */}
         </div>
-        {/* Source badge cell — FIXED width so long source text can never
-            squeeze the value column. Badge text wraps inside. */}
+        {/* Right rail — provenance is supporting detail (quiet, two lines),
+            then the affordances. Fixed width so a long source string can never
+            squeeze the value column. */}
         <div style={{
           flexShrink: 0,
-          width: 180,
-          minWidth: 180,
-          maxWidth: 180,
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 4,
+          alignItems: "flex-start",
+          gap: 10,
         }}>
-          {renderSourceBadge(item, idx)}
+          <div style={{
+            width: 150, minWidth: 150, maxWidth: 150,
+            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
+          }}>
+            {renderSourceBadge(item, idx)}
+            {statusLine && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: statusLine.color, textAlign: "right" }}>
+                {statusLine.text}
+              </span>
+            )}
+          </div>
+          {/* Already confirmed on the Applicant page's five-fact gate, so this
+              row is read-only here — see GATE_CONFIRMED_FIELDS. The spacer
+              keeps the source-badge column aligned with every other row. */}
+          {isGateConfirmedField(item.field) ? (
+            <div style={{ width: 56, flexShrink: 0 }} aria-hidden="true" />
+          ) : (
+          <div style={{ display: "flex", gap: 4, paddingTop: 1 }}>
+            {/* Contextual control PAIR, per the prototype — never three buttons.
+                The prototype only ever shows two row states; ours has four, so
+                the rule is applied by meaning rather than copied by position:
+                  needs-attention / disputed → ✓ ✕  ("is this right or wrong?")
+                  confirmed / corrected      → ✓ ✎  (settled value; tweak it)
+                No capability is lost either way, because ✎ and ✕ enter the SAME
+                flow (toggleCheck → ChangeDialogue → classification → inline
+                editor). A confirmed row is disputed via ✎; an attention row is
+                edited via ✕. Whether a document is owed remains a property of
+                the field-class + change (policyTable), never of which button
+                was pressed.
+                The tick keeps the original checks[idx]/toggleCheck semantics and
+                ALSO records affirmation, which is what moves an untouched
+                low-confidence row out of "needs you". */}
+            <button
+              type="button"
+              onClick={() => { if (!rowChecked) toggleCheck(idx); affirmRow(item); }}
+              aria-label={isCorrected || isDisputed ? `Restore the original value for ${item.label}` : `Confirm ${item.label}`}
+              aria-pressed={rowChecked && !needsAttention}
+              title={isCorrected || isDisputed ? "Undo — keep the original value" : "Correct — keep this value"}
+              style={{
+                ...btnBase,
+                background: rowChecked && !needsAttention ? "#4a9e8e" : "#fff",
+                color: rowChecked && !needsAttention ? "#fff" : C.textMuted,
+                border: rowChecked && !needsAttention ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
+              }}
+            >✓</button>
+            {needsAttention || isDisputed ? (
+              <button
+                type="button"
+                onClick={() => { if (rowChecked) toggleCheck(idx); }}
+                aria-label={`Mark ${item.label} as incorrect`}
+                aria-pressed={isDisputed}
+                title="Wrong — flag this value for correction"
+                style={{
+                  ...btnBase,
+                  background: isDisputed ? C.error : "#fff",
+                  color: isDisputed ? "#fff" : C.textMuted,
+                  border: isDisputed ? `1.5px solid ${C.error}` : `1.5px solid ${C.border}`,
+                }}
+              >✕</button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isCorrected) setInlineEditOpen(p => ({ ...p, [item.field]: true }));
+                  else if (rowChecked) toggleCheck(idx);
+                }}
+                aria-label={`Edit ${item.label}`}
+                title={isCorrected ? "Edit again" : "Edit this value"}
+                style={{
+                  ...btnBase,
+                  background: "#fff",
+                  color: isCorrected ? C.info : C.textMuted,
+                  border: `1.5px solid ${isCorrected ? C.infoBorder : C.border}`,
+                }}
+              >✎</button>
+            )}
+          </div>
+          )}
         </div>
       </div>
     );
@@ -3643,15 +4467,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
             }}>
               {humaniseSection(section)}
             </div>
-            {/* Header — column geometry mirrors renderFoundRow: 20px checkbox,
-                180px label, flex:1 value, 180px source (gap 12). */}
-            <div style={{ display: "flex", flexDirection: "row", gap: 12, padding: "8px 10px", background: "#1a3a4a", borderRadius: "8px 8px 0 0" }}>
-              <span style={{ flexShrink: 0, width: 20, fontSize: 10, fontWeight: 700, color: "#fff" }}>✓</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff" }}>FIELD</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 10, fontWeight: 700, color: "#fff" }}>VALUE</span>
-              <span style={{ flexShrink: 0, width: 180, fontSize: 10, fontWeight: 700, color: "#fff", textAlign: "right" }}>SOURCE</span>
-            </div>
-            {rows.map((r, n) => renderFoundRow(r, n))}
+            {/* Fidelity pass: the prototype has no table header — each row is a
+                self-describing card (tiny uppercase label above its value, with
+                the provenance and affordances on the right), so the column
+                header bar is gone rather than restyled. */}
+            {rows.map((r) => renderFoundRow(r))}
           </div>
         ))}
       </div>
@@ -3708,14 +4528,132 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
     return s[key] != null ? String(s[key]) : "";
   };
+  /**
+   * ONE found-attribute row for a person card, shared by the EDD and the
+   * listed-company branches so the two can never drift apart.
+   *
+   * Carries the SAME contextual control PAIR as a pre-filled row (see
+   * renderFoundRow), by meaning rather than by position:
+   *   needs-confirming / disputed → ✓ ✕  ("is this right or wrong?")
+   *   settled                     → ✓ ✎  (settled value; tweak it)
+   * A lone checkbox could only agree — there was no way to say "this is wrong,
+   * let me edit it", which the rows have always offered. ✕ and ✎ enter the same
+   * flow: untick, and the value is corrected on the next page.
+   *
+   * A low-confidence attribute is UNSETTLED until the customer explicitly
+   * confirms it, exactly as a low-confidence row is: arriving pre-ticked from
+   * an unverified source is not agreement.
+   */
+  const renderPersonAttributeRow = (item, s, f, lowConf) => {
+    const amberTag = {
+      fontSize: 10, fontWeight: 700, color: "#8c5500",
+      background: "#fff8ed", border: "1px solid #e0a040",
+      borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+    };
+    const btn = {
+      width: 22, height: 22, borderRadius: 6, cursor: "pointer",
+      fontSize: 11, fontWeight: 700, lineHeight: 1, padding: 0, fontFamily: "inherit",
+      display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    };
+    const infoTag = {
+      fontSize: 10, fontWeight: 700, color: C.info,
+      background: C.infoBg, border: `1px solid ${C.infoBorder}`,
+      borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+    };
+    const ticked = isStkFieldConfirmed(s.id, f.key);
+    const corrected = isPersonAttributeCorrected(item, s, f);
+    // The research row for this person, for showing what the value WAS.
+    const originalPerson = researchStakeholders(item.field).find((x) => x && x.id === s.id) || null;
+    const settled = isPersonAttributeSettled(item, s, f, lowConf);
+    const needsAffirm = ticked && !settled;
+    // The editor for THIS attribute is open right now.
+    const editingThis =
+      personEditing && personEditing.stakeholderId === s.id && personEditing.fieldKey === f.key;
+    // "Edit on next page" is only true when it IS next-page work. While the
+    // inline editor is open, or once the value has been corrected here, the
+    // edit is happening on this page — saying otherwise was simply wrong.
+    const disputed = !ticked && !corrected && !editingThis;
+    const openEditor = () =>
+      setPersonEditing({
+        researchFieldId: item.field,
+        stakeholderId: s.id,
+        attribute: ATTRIBUTE_BY_FIELD_KEY[f.key],
+        fieldKey: f.key,
+      });
+    return (
+      <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+        <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
+        {/* Corrected: the customer's value leads and the original stays beside
+            it struck through — the same old-beside-new treatment a corrected
+            pre-filled row gets. Overwriting in place lost what changed. */}
+        <span style={{ fontWeight: 600, color: corrected ? C.info : "#1a3a4a", flex: 1, minWidth: 0 }}>
+          {stkFieldDisplay(s, f.key)}
+          {corrected && originalPerson && (
+            <span style={{
+              marginLeft: 8, fontWeight: 500, color: C.textMuted,
+              textDecoration: "line-through",
+            }}>
+              {stkFieldDisplay(originalPerson, f.key)}
+            </span>
+          )}
+        </span>
+        {corrected && <span style={infoTag}>✓ corrected</span>}
+        {needsAffirm && !corrected && <span style={amberTag}>❓ please confirm</span>}
+        {disputed && <span style={amberTag}>✎ edit on next page</span>}
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!ticked) togglePersonField(item, s, f); // undo — restore the value
+              affirmPersonField(s.id, f.key);
+            }}
+            aria-label={disputed ? `Restore the original ${f.label}` : `Confirm ${f.label}`}
+            aria-pressed={settled}
+            title={disputed ? "Undo — keep the original value" : "Correct — keep this value"}
+            style={{
+              ...btn,
+              background: settled ? "#4a9e8e" : "#fff",
+              color: settled ? "#fff" : C.textMuted,
+              border: settled ? "1.5px solid #4a9e8e" : `1.5px solid ${C.border}`,
+            }}
+          >✓</button>
+          <button
+            type="button"
+            onClick={() => {
+              // A corrected value is edited again in place, exactly as a
+              // corrected pre-filled row reopens its editor.
+              if (corrected) openEditor();
+              else if (ticked) togglePersonField(item, s, f);
+            }}
+            aria-label={needsAffirm || disputed ? `Mark ${f.label} as incorrect` : `Edit ${f.label}`}
+            aria-pressed={disputed}
+            title={needsAffirm || disputed
+              ? "Wrong — flag this value for correction"
+              : corrected ? "Edit again" : "Edit this value"}
+            style={{
+              ...btn,
+              background: disputed ? C.error : "#fff",
+              color: disputed ? "#fff" : corrected ? C.info : C.textMuted,
+              border: disputed ? `1.5px solid ${C.error}` : `1.5px solid ${corrected ? C.infoBorder : C.border}`,
+            }}
+          >{needsAffirm || disputed ? "✕" : "✎"}</button>
+        </div>
+      </div>
+    );
+  };
+
   // Field labels that will land on the next page for this person/company: any
   // found field the customer unticked, plus any missing required field.
-  const stkNextPageFields = (s, ubo) =>
+  // `item` is optional — when supplied, an attribute the customer has ALREADY
+  // corrected inline is excluded, because it is finished here and listing it as
+  // next-page work is a false promise.
+  const stkNextPageFields = (s, ubo, item) =>
     stkConfirmFields(s, ubo)
       .filter((f) => {
         const found = stkFieldFound(s, f.key);
-        if (found) return !isStkFieldConfirmed(s.id, f.key);
-        return f.required;
+        if (!found) return f.required;
+        if (item && isPersonAttributeCorrected(item, s, f)) return false;
+        return !isStkFieldConfirmed(s.id, f.key);
       })
       .map((f) => f.label);
 
@@ -3730,39 +4668,169 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   const stkHasCorrections = (s, ubo) => stkCorrectedFields(s, ubo).length > 0;
 
-  // Render a customer-added (pending) stakeholder card on Confirm. The blank
-  // person already lives in stakeholdersRef and will surface on the next page
-  // for the customer to complete; here we just show it + allow removal.
-  const renderPendingAddedStakeholder = (fieldId, s, ubo) => (
-    <div
-      key={s.id}
-      style={{
-        background: "#f3faf8", border: "1.5px dashed #4a9e8e",
-        borderRadius: 8, marginBottom: 8, padding: "12px 16px",
-        display: "flex", alignItems: "center", gap: 12,
-      }}
-    >
-      <span style={{ fontSize: 16, flexShrink: 0 }}>{isCorporateStakeholder(s) ? "🏢" : "➕"}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
-          New {isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added
-        </div>
-        <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
-          You'll complete their details on the next page.
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => removeStakeholder(fieldId, s.id)}
-        title="Remove"
-        aria-label="Remove"
+  // Render a customer-added (pending) stakeholder card on Confirm. Commit 7:
+  // a person added HERE arrives with their details and their CD-03 documents
+  // already requested, so the card names them and carries their evidence —
+  // rather than the old placeholder that only said "complete them next page".
+  const renderPendingAddedStakeholder = (fieldId, s, ubo) => {
+    const addedHere = !!(s.full_name && String(s.full_name).trim());
+    const type = resolvePersonType(s, fieldId);
+    return (
+      <div
+        key={s.id}
         style={{
-          background: "none", border: "none", color: "#1a3a4a70",
-          cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px", fontFamily: "inherit",
+          background: "#f3faf8", border: "1.5px dashed #4a9e8e",
+          borderRadius: 8, marginBottom: 8,
         }}
       >
-        ×
-      </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>{isCorporateStakeholder(s) ? "🏢" : "➕"}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
+              {addedHere
+                ? `${s.full_name} — added by you`
+                : `New ${isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added`}
+            </div>
+            <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
+              {addedHere
+                ? `${type.isUBO ? (type.isDirector ? "Director and beneficial owner" : "Beneficial owner") : "Director"}${s.nationality ? ` · ${s.nationality}` : ""}${s.is_pep ? " · PEP" : ""}`
+                : "You'll complete their details on the next page."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => removeStakeholder(fieldId, s.id)}
+            title="Remove"
+            aria-label="Remove"
+            style={{
+              background: "none", border: "none", color: "#1a3a4a70",
+              cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px", fontFamily: "inherit",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        {/* The added person's own evidence, per-person keyed like everyone else. */}
+        {renderPersonDocuments(s)}
+      </div>
+    );
+  };
+
+  /**
+   * The documents + analyst view for ONE person, resolved per person-attribute.
+   * Shared by the found-person cards and the added-person card so an added
+   * person's evidence surfaces exactly like everyone else's.
+   */
+  const renderPersonDocuments = (s) => {
+    const mine = Object.entries(dialogueStateRef.current)
+      .filter(([k, snap]) => snap && snap.personScope && k.includes(`::${s.id}::`));
+    if (mine.length === 0) return null;
+    /**
+     * ONE CARD PER DOCUMENT, not one per change.
+     *
+     * Correcting John's date of birth AND his nationality both classify to
+     * Proof of Identity — one passport answers both, and canonicalDocs already
+     * collapses them to a single entry keyed (stakeholderId, docType). The
+     * card, though, was rendered per dialogue snapshot, so the customer was
+     * asked for the same passport twice. Both cards even drove the same upload
+     * slot, which made the duplicate purely cosmetic noise.
+     *
+     * Scope rules are unchanged: identity evidence stays per person, and a
+     * company-wide document still renders on its anchor person only.
+     *
+     * The analyst strip stays per SNAPSHOT — it audits each change, so one per
+     * attribute is correct there.
+     */
+    const seenDocKeys = new Set();
+    const seenCoveredNotes = new Set();
+    return (
+      <div style={{ padding: "0 16px 12px" }}>
+        {mine.map(([k, snap]) => {
+          const ev = snap.event || {};
+          // A company-wide document is the SAME single file for everyone, so it
+          // renders on its anchor person only. Identity evidence stays strictly
+          // per person: matched on stakeholderId, never on a company entry.
+          const evDocType = canonicalDocType(ev.docType);
+          const companyWide = isCompanyWideDocType(evDocType);
+          const isAnchor = !companyWide || companyDocAnchor.get(evDocType) === s.id;
+          const match = ev.workflow === "doc_required" && evDocType && isAnchor
+            ? confirmDocs.find((d) =>
+                d.docType === evDocType &&
+                (companyWide ? !d.stakeholderId : d.stakeholderId === s.id))
+            : null;
+          // First change to require this document owns the card; later ones
+          // resolve to the same docKey and render nothing.
+          let doc = null;
+          if (match) {
+            const dk = docKey(match);
+            if (!seenDocKeys.has(dk)) {
+              seenDocKeys.add(dk);
+              doc = match;
+            }
+          }
+          // Same collapse for the "already covered" note.
+          let showCoveredNote = false;
+          if (companyWide && !isAnchor && ev.workflow === "doc_required" && !seenCoveredNotes.has(evDocType)) {
+            seenCoveredNotes.add(evDocType);
+            showCoveredNote = true;
+          }
+          return (
+            <div key={k}>
+              {doc && (
+                <AmendmentDocCard
+                  doc={doc}
+                  upload={amendmentUploads[docKey(doc)]}
+                  busy={uploadingDocKey === docKey(doc)}
+                  onUpload={handleAmendmentUpload}
+                  onRemove={handleAmendmentRemove}
+                  variant="inline"
+                  hint={companyWide
+                    ? `One ${evDocType.toLowerCase()} covers the whole company — upload it once.`
+                    : `Required for ${s.full_name}.`}
+                />
+              )}
+              {/* Same document, already requested against another person — say
+                  so rather than silently showing nothing here. */}
+              {showCoveredNote && (
+                <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", padding: "6px 0" }}>
+                  Covered by the single {evDocType.toLowerCase()} requested for this company — you only upload it once.
+                </div>
+              )}
+              {/* TEST VIEW — DISABLED, kept for debugging. See the twin block
+                  in renderFoundRow for how to re-enable.
+
+              <AnalystSignalStrip
+                show={SHOW_TEST_TOOLS}
+                fieldId={k}
+                signal={buildAnalystSignal({ event: snap.event, outcome: snap.outcome })}
+              />
+              */}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  /** The "add a person the research missed" affordance for the People section. */
+  const renderAddPerson = () => (
+    <div style={{ marginTop: 12 }}>
+      {addingPerson ? (
+        <AddPersonPanel onAdd={addPersonFromConfirm} onCancel={() => setAddingPerson(false)} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingPerson(true)}
+          style={{
+            width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "11px 18px", background: "transparent", color: "#1a6b56",
+            border: "1.5px dashed #4a9e8e", borderRadius: 8,
+            fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+          }}
+        >
+          + Add a director or beneficial owner we missed
+        </button>
+      )}
     </div>
   );
 
@@ -3773,7 +4841,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Exclude registry exemption notices — they are not people. If nothing real
     // remains, render nothing here so the field falls through to the normal
     // confirm row showing the raw registry value.
-    const realStakeholders = item.stakeholders.filter((s) => !isRegistryExemptionNotice(s));
+    // Render the person as the customer has them NOW — research values with any
+    // inline correction applied on top. Without this the card kept showing the
+    // original after a correction was saved.
+    const realStakeholders = item.stakeholders
+      .filter((s) => !isRegistryExemptionNotice(s))
+      .map((s) => personWithEdits(item.field, s));
     if (realStakeholders.length === 0) return null;
     const ubo = isUboLikeField(item.field);
     const fieldDef = findFieldDef(activeSchema, item.field);
@@ -3818,10 +4891,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </span>
           </div>
         </div>
-        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 10px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 4px", lineHeight: 1.5 }}>
           Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}. Expand each
           person to review the details we found — keep the green tick on anything correct, or untick a
           field to edit it on the next page. Anything we couldn't find is collected on the next page too.
+        </p>
+        <p style={{ fontSize: 11, color: C.textMuted, margin: "0 0 10px", fontStyle: "italic" }}>
+          Editing who is on this list is coming soon — for now, untick anyone who doesn't belong.
         </p>
         {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
@@ -3836,14 +4912,35 @@ export default function KYCAgent({ previewMode = false } = {}) {
           const nextPageFields = rejected
             ? []
             : needsEDD
-            ? stkNextPageFields(s, ubo)
-            : stkCorrectedFields(s, ubo).map((f) => f.label);
+            ? stkNextPageFields(s, ubo, item)
+            : stkCorrectedFields(s, ubo)
+                .filter((f) => !isPersonAttributeCorrected(item, s, f))
+                .map((f) => f.label);
+          // What actually needs the customer HERE: a value research returned
+          // that they haven't settled. A pure gap is NOT "needs you" — there
+          // is no control on this card to supply it, the row already says
+          // "collected on next page", and Fill Gaps is where that happens.
+          // Counting it here was telling the customer to act with no way to.
+          // Reads the SAME predicate as the row and the tiles.
+          const personLowConf = isPersonLowConfidence(s, item);
+          const attentionFields = rejected
+            ? []
+            : stkConfirmFields(s, ubo)
+                .filter((f) => stkFieldFound(s, f.key) && !isPersonAttributeSettled(item, s, f, personLowConf))
+                .map((f) => f.label);
+          // A person with outstanding attributes must not LOOK settled. The
+          // header tick means "this person belongs", not "everything about them
+          // is confirmed" — but rendered solid green next to a green avatar it
+          // read as done, identically to a fully verified person. Same rule the
+          // pre-filled rows use: their ✓ is only green when the row is checked
+          // AND needs no attention.
+          const personNeedsAttention = !rejected && attentionFields.length > 0;
           return (
             <div
               key={s.id}
               style={{
-                background: rejected ? "#fef2f2" : "#fafcfb",
-                border: `1.5px solid ${rejected ? "#fecaca" : "rgba(26,58,74,0.08)"}`,
+                background: rejected ? "#fef2f2" : personNeedsAttention ? C.warningTint : "#fafcfb",
+                border: `1.5px solid ${rejected ? "#fecaca" : personNeedsAttention ? C.warningBorder : "rgba(26,58,74,0.08)"}`,
                 borderRadius: 8, marginBottom: 8, overflow: "hidden",
                 transition: "border-color .15s",
               }}
@@ -3859,19 +4956,39 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <input
                   type="checkbox"
                   checked={!rejected}
-                  onChange={() => toggleStakeholderRejection(item.field, s.id)}
+                  onChange={() => togglePersonRemoval(item, s)}
                   onClick={(e) => e.stopPropagation()}
-                  style={{ width: 15, height: 15, flexShrink: 0, accentColor: "#4a9e8e", cursor: "pointer" }}
-                  aria-label={`Confirm ${s.full_name}`}
+                  style={{
+                    width: 15, height: 15, flexShrink: 0, cursor: "pointer",
+                    accentColor: personNeedsAttention ? C.warning : "#4a9e8e",
+                  }}
+                  aria-label={
+                    personNeedsAttention
+                      ? `${s.full_name} belongs on this list — ${attentionFields.length} detail${attentionFields.length === 1 ? "" : "s"} still need confirming`
+                      : `Confirm ${s.full_name}`
+                  }
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {/* Re-skin: initials avatar in place of the person emoji
+                        (companies keep the building glyph). */}
+                    <span style={{
+                      width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                      background: rejected ? "#fde8e8" : C.successBg,
+                      color: rejected ? C.error : C.success,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 800, letterSpacing: "0.02em",
+                    }}>
+                      {isCorporateStakeholder(s)
+                        ? "🏢"
+                        : ((s.full_name || "?").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?")}
+                    </span>
                     <span style={{
                       fontSize: 14, fontWeight: 700,
                       color: rejected ? "#1a3a4a70" : "#1a3a4a",
                       textDecoration: rejected ? "line-through" : "none",
                     }}>
-                      {isCorporateStakeholder(s) ? "🏢" : "👤"} {s.full_name}
+                      {s.full_name}
                     </span>
                     {s.role && (
                       <span style={{
@@ -3896,12 +5013,49 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 3 }}>
                       {rejected
                         ? "⚠ Marked as incorrect — tap to review"
-                        : nextPageFields.length > 0
-                        ? `${nextPageFields.length} field${nextPageFields.length > 1 ? "s" : ""} to complete on next page · tap to expand`
-                        : "✓ All details confirmed · tap to expand"}
+                        : "Tap to expand and review the details we found"}
                     </div>
                   )}
                 </div>
+                {/* Per-card status badge — shown ONLY when this person needs
+                    something from the customer here, i.e. a found value not yet
+                    confirmed. Driven by attentionFields, NOT by everything
+                    routed to the next page: a gap has no control on this card,
+                    so an amber "needs you" on it was a prompt with no action
+                    behind it, and a green "✓ Complete" claimed the person was
+                    finished while their own row still said "added on next
+                    page". Nothing to say here is said with no badge; the gaps
+                    speak for themselves per-row. */}
+                {!rejected && attentionFields.length > 0 && (
+                  <>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: C.warning, background: C.warningBg,
+                      border: `1px solid ${C.warningBorder}`, borderRadius: 99,
+                      padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap",
+                    }}>
+                      {attentionFields.length} need{attentionFields.length === 1 ? "s" : ""} you
+                    </span>
+                    {/* Settle the whole person in one action. stopPropagation
+                        because the header row toggles expand/collapse. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmAllPersonAttributes(item, s, ubo, personLowConf);
+                      }}
+                      title={`Confirm all ${attentionFields.length} outstanding detail${attentionFields.length === 1 ? "" : "s"} for ${s.full_name}`}
+                      aria-label={`Confirm all outstanding details for ${s.full_name}`}
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: "#fff",
+                        background: "#4a9e8e", border: "1px solid #4a9e8e",
+                        borderRadius: 99, padding: "3px 10px", cursor: "pointer",
+                        fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap",
+                      }}
+                    >
+                      ✓ Confirm all
+                    </button>
+                  </>
+                )}
                 {rejected && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fef2f2",
@@ -3919,6 +5073,30 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   ▾
                 </span>
               </div>
+
+              {/* ── CD-03 person correction surface (commit 6) ──────────────
+                  Removal asks why first; the answer picks the list document
+                  (director → list of directors, UBO → ownership chart), and
+                  that document request IS the analyst trigger. Attribute
+                  corrections run the name three-way or the inline editor, then
+                  emit ONE person-scoped change-event under the composite
+                  fieldId. Any resulting document renders on the person, and
+                  because the snapshot lives in the same dialogue store as the
+                  company rows it also lands in the documents panel and the
+                  submit gate automatically. */}
+              {personRemoving && personRemoving.stakeholderId === s.id && (
+                <div style={{ padding: "0 16px 12px" }}>
+                  <PersonRemovalPrompt
+                    personName={s.full_name}
+                    onConfirm={(reason) => confirmPersonRemoval(s, item.field, reason)}
+                    onCancel={() => setPersonRemoving(null)}
+                  />
+                </div>
+              )}
+              {/* Documents + analyst view for every recorded correction on THIS
+                  person. Matches per person, never another person's entry of
+                  the same type (the 6a under-collection fix). */}
+              {renderPersonDocuments(s)}
 
               {/* Validation flag — director/UBO failed a check: stripped share
                   band, non-official source, or cross-source attribute merge.
@@ -3964,21 +5142,36 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   padding: "12px 16px 14px",
                   borderTop: "1px solid rgba(26,58,74,0.08)",
                 }}>
+                  {/* Source badge — SAME click-to-reveal-timestamp interaction as
+                      the pre-filled rows (renderSourceBadge). This used to be a
+                      badge plus a separate "🕐 When?" chip whose timestamp only
+                      appeared in a native title tooltip: two different
+                      behaviours for the same information on one page, and the
+                      chip looked clickable while doing nothing. Now the badge
+                      itself toggles, keyed per person so it can never toggle a
+                      row's badge. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, color: sourceBadge.color,
-                      background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
-                    }}>
-                      {sourceBadge.glyph} {item.source || (tier === "tier1" ? "Official source" : "Source")}
-                    </span>
-                    {(s.fetchedAt || item.fetchedAt) && (
-                      <span
-                        style={{ fontSize: 11, color: "#1a3a4a70", cursor: "default" }}
-                        title={`Fetched: ${s.fetchedAt || item.fetchedAt}`}
-                      >
-                        🕐 When?
-                      </span>
-                    )}
+                    {(() => {
+                      const stkMeta = metaFor(item.field);
+                      const ts = s.fetchedAt || item.fetchedAt || (stkMeta && stkMeta.fetchedAt) || researchTimestamp || "";
+                      const tsKey = `stk:${s.id}`;
+                      const revealed = !!revealedTs[tsKey];
+                      return (
+                        <span
+                          onClick={ts ? () => setRevealedTs(p => ({ ...p, [tsKey]: !p[tsKey] })) : undefined}
+                          title={!ts ? undefined : revealed ? "Click to hide timestamp" : "Click to show fetch timestamp"}
+                          style={{
+                            fontSize: 10, fontWeight: 700, color: sourceBadge.color,
+                            background: sourceBadge.bg, padding: "3px 8px", borderRadius: 4,
+                            cursor: ts ? "pointer" : "default",
+                          }}
+                        >
+                          {revealed
+                            ? `🕒 ${ts}`
+                            : `${sourceBadge.glyph} ${item.source || (tier === "tier1" ? "Official source" : "Source")}`}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {rejected ? (
@@ -3999,28 +5192,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {stkConfirmFields(s, ubo)
                           .filter((f) => stkFieldFound(s, f.key))
-                          .map((f) => {
-                            const amberTag = {
-                              fontSize: 10, fontWeight: 700, color: "#8c5500",
-                              background: "#fff8ed", border: "1px solid #e0a040",
-                              borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
-                            };
-                            const confirmed = isStkFieldConfirmed(s.id, f.key);
-                            return (
-                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={confirmed}
-                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
-                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
-                                  aria-label={`Confirm ${f.label}`}
-                                />
-                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
-                              </label>
-                            );
-                          })}
+                          .map((f) => renderPersonAttributeRow(item, s, f, isPersonLowConfidence(s, item)))}
                       </div>
                       <Notice tier="tier1" style={{ marginTop: 10 }}>
                         Verified from official sources — no additional details required for a listed company.
@@ -4032,35 +5204,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     <>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {stkConfirmFields(s, ubo).map((f) => {
-                          const amberTag = {
-                            fontSize: 10, fontWeight: 700, color: "#8c5500",
-                            background: "#fff8ed", border: "1px solid #e0a040",
+                          // A gap is not a warning. Nothing is wrong with a value
+                          // research simply didn't return, and there is no control
+                          // here to act on it — it is collected on the next page.
+                          // Same calm green as the tick and the shareholding pill.
+                          const deferredTag = {
+                            fontSize: 10, fontWeight: 700, color: "#1a6b56",
+                            background: "#dff2ec", border: "1px solid rgba(74,158,142,0.3)",
                             borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
                           };
                           if (stkFieldFound(s, f.key)) {
-                            const confirmed = isStkFieldConfirmed(s.id, f.key);
-                            return (
-                              <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={confirmed}
-                                  onChange={() => toggleStkFieldConfirm(s.id, f.key)}
-                                  style={{ width: 14, height: 14, accentColor: "#4a9e8e", flexShrink: 0, cursor: "pointer" }}
-                                  aria-label={`Confirm ${f.label}`}
-                                />
-                                <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
-                                <span style={{ fontWeight: 600, color: "#1a3a4a", flex: 1, minWidth: 0 }}>{stkFieldDisplay(s, f.key)}</span>
-                                {!confirmed && <span style={amberTag}>✎ edit on next page</span>}
-                              </label>
-                            );
+                            return renderPersonAttributeRow(item, s, f, isPersonLowConfidence(s, item));
                           }
                           if (!f.required) return null;
                           return (
                             <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                              <span style={{ width: 14, textAlign: "center", color: "#e0a040", flexShrink: 0 }}>＋</span>
+                              <span style={{ width: 14, textAlign: "center", color: "#4a9e8e", flexShrink: 0 }}>＋</span>
                               <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
                               <span style={{ color: "#1a3a4a70", flex: 1, fontStyle: "italic" }}>Not found</span>
-                              <span style={amberTag}>added on next page</span>
+                              <span style={deferredTag}>collected on next page</span>
                             </div>
                           );
                         })}
@@ -4071,6 +5233,30 @@ export default function KYCAgent({ previewMode = false } = {}) {
                           : "All details confirmed — nothing further needed on the next page."}
                       </div>
                     </>
+                  )}
+
+                  {/* Inline correction editor — LAST in the card, under the
+                      next-page line. It used to render above the header, which
+                      pushed the editor away from the row it belongs to and put
+                      it on top of every value. It edits one of the attributes
+                      listed above, so it reads in place here. */}
+                  {personEditing && personEditing.stakeholderId === s.id && (
+                    <div style={{ marginTop: 12 }}>
+                      <PersonCorrection
+                        attribute={personEditing.attribute}
+                        personName={s.full_name}
+                        originalValue={
+                          (researchStakeholders(item.field).find((x) => x && x.id === s.id) || {})[
+                            personEditing.fieldKey
+                          ] ?? ""
+                        }
+                        // Was hardcoded to date_of_birth; detected now, so any
+                        // future person date attribute gets the picker too.
+                        inputType={isDateField({ field: personEditing.fieldKey }) ? "date" : "text"}
+                        onResolve={(res) => resolvePersonCorrection(s, item.field, personEditing.fieldKey, res)}
+                        onCancel={() => setPersonEditing(null)}
+                      />
+                    </div>
                   )}
                 </div>
               )}
@@ -5149,10 +6335,303 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const hasStakeholderForms = stakeholderFormNodes.length > 0;
   const hasStakeholderSummary = stakeholderSummaryNodes.length > 0;
 
+  // Confirm-page documents: persisted (server-derived) ∪ live dialogue
+  // outcomes, collapsed with the SCOPE-AWARE key (commit 6a) — per person for
+  // identity evidence, per type for company evidence. Feeds the inline row
+  // card, the person cards, the summary panel and blocker kind (b): one list,
+  // four surfaces, one satisfaction rule.
+  const stakeholderNameById = (() => {
+    const byId = new Map();
+    (research?.found || []).forEach((row) => {
+      (row.stakeholders || []).forEach((s) => { if (s && s.id) byId.set(s.id, s.full_name || null); });
+    });
+    // Customer-added / edited people live in the ref, and win on name.
+    Object.values(stakeholdersRef.current || {}).forEach((list) => {
+      (list || []).forEach((s) => { if (s && s.id && s.full_name) byId.set(s.id, s.full_name); });
+    });
+    return byId;
+  })();
+  // Field label by field id, so a per-field document request can name the field
+  // that asked for it — several 'Supporting Registration Document' requests
+  // share one title and are otherwise indistinguishable.
+  const fieldLabelById = new Map(
+    (research?.found || []).filter((r) => r && r.field).map((r) => [r.field, r.label || r.field])
+  );
+  // Schema section per field — the group a document belongs to. One Notice of
+  // Change of Address covers the whole registered address however many of its
+  // lines changed, but a second address section is a second address and a
+  // second notice.
+  const fieldSectionById = new Map(
+    (activeSchema?.researchFields || [])
+      .filter((f) => f && f.field)
+      .map((f) => [f.field, f.section || null])
+  );
+  const withPersonName = (list) => (Array.isArray(list) ? list : []).map((d) => {
+    const p = d && d.fieldId ? parsePersonFieldId(d.fieldId) : null;
+    if (p) return { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null };
+    if (!d || !d.fieldId) return d;
+    return {
+      ...d,
+      fieldLabel: fieldLabelById.get(d.fieldId) || null,
+      docGroup: fieldSectionById.get(d.fieldId) || null,
+    };
+  });
+  // Persisted first, then live — canonicalDocs keeps first-occurrence order.
+  const rawAmendmentDocs = [
+    ...withPersonName(persistedAmendmentDocs),
+    ...withPersonName(docsNeededFrom(dialogueStateRef.current)),
+  ];
+  const confirmDocs = canonicalDocs(rawAmendmentDocs);
+
+  // A company-wide document (ownership chart, directors list) is ONE request no
+  // matter how many people's changes asked for it. Anchor it to the first
+  // person who triggered it, so exactly one person card carries the upload and
+  // the others show a pointer instead of a duplicate request for the same file.
+  // Derived here rather than during the person-card render pass: a render-order
+  // "first one wins" mutation would double-fire under StrictMode.
+  const companyDocAnchor = (() => {
+    const anchor = new Map();
+    rawAmendmentDocs.forEach((d) => {
+      if (!d || !d.docType || !isCompanyWideDocType(d.docType)) return;
+      const type = canonicalDocType(d.docType);
+      if (anchor.has(type)) return;
+      const p = parsePersonFieldId(d.fieldId);
+      if (p) anchor.set(type, p.stakeholderId);
+    });
+    return anchor;
+  })();
+
+  // Same idea for the pre-filled ROWS: one document, one card. Correcting three
+  // lines of the registered address is one Notice of Change of Address, so it
+  // shows against the first field that asked for it rather than once per row.
+  const rowDocAnchor = (() => {
+    const anchor = new Map();
+    rawAmendmentDocs.forEach((d) => {
+      if (!d || !d.docType || !d.fieldId) return;
+      if (parsePersonFieldId(d.fieldId)) return; // person docs anchor separately
+      const k = docKey(d);
+      if (!anchor.has(k)) anchor.set(k, d.fieldId);
+    });
+    return anchor;
+  })();
+
+  /**
+   * Per-person attributes as countable items, so the tiles describe the WHOLE
+   * page rather than only the pre-filled table. Built from exactly the same
+   * helpers the person-card badge uses (stkConfirmFields / stkFieldFound /
+   * isStkFieldConfirmed, gated by needsStakeholderDetails), so the badge on a
+   * card and this person's share of the tile can never disagree.
+   *
+   * `resolvableHere` is the load-bearing distinction: a FOUND attribute can be
+   * ticked or corrected on this page, but an attribute research did not return
+   * has no input on the person card — it is collected on Fill Gaps, which is
+   * why the card tags it "collected on next page". Counting it is honest; blocking
+   * on it would strand the customer with no control to clear it.
+   */
+  const personConfirmItems = (() => {
+    const out = [];
+    stakeholderFound.forEach(({ item }) => {
+      const ubo = isUboLikeField(item.field);
+      (item.stakeholders || [])
+        .filter((s) => !isRegistryExemptionNotice(s))
+        // Same overlay the cards render, so a corrected value counts as
+        // corrected rather than still-outstanding.
+        .map((s) => personWithEdits(item.field, s))
+        .forEach((s) => {
+          if (isStakeholderRejected(item.field, s.id)) return;
+          const needsEDD = needsStakeholderDetails(s, item.field, effectivelyListed);
+          const lowConf = isPersonLowConfidence(s, item);
+          stkConfirmFields(s, ubo).forEach((f) => {
+            const found = stkFieldFound(s, f.key);
+            // A low-confidence attribute needs an EXPLICIT tick, exactly as a
+            // low-confidence pre-filled row does — arriving pre-ticked is not
+            // agreement. Same source, same standard, whether it renders as a
+            // row or inside a person card.
+            const corrected = isPersonAttributeCorrected(item, s, f);
+            const settled = isPersonAttributeSettled(item, s, f, lowConf);
+            // Mirrors stkNextPageFields (EDD people) and stkCorrectedFields
+            // (listed read-only people), plus the affirmation requirement.
+            const outstanding = needsEDD ? (found ? !settled : f.required) : found && !settled;
+            out.push({
+              stakeholderId: s.id,
+              fieldId: item.field,
+              key: f.key,
+              label: f.label,
+              personName: s.full_name || null,
+              found,
+              outstanding,
+              // A customer-supplied value is CORRECTED, not merely confirmed —
+              // the same distinction the pre-filled rows draw.
+              corrected: found && corrected,
+              confirmed: found && settled && !corrected,
+              resolvableHere: found,
+            });
+          });
+        });
+    });
+    return out;
+  })();
+
+  // Confirm-page tile counts and the gate's blockers, from the ONE shared
+  // predicate. Computed during render — not memoised — because gapRef and
+  // dialogueStateRef are refs: a memo would serve stale values after an inline
+  // save. Re-render is driven by the same setFormVersion bump the save fires.
+  const confirmStateInput = {
+    // VITAL ROWS ONLY — the rows the customer can actually act on in the
+    // pre-filled table, carrying their original research.found index (checks is
+    // index-keyed). Stakeholder fields render as person cards with their own
+    // affordances and are not gate-eligible until commit 6 wires per-person
+    // corrections; counting them here would block the customer on a control
+    // this page does not give them.
+    rows: regularFound,
+    checks,
+    affirmed: affirmedFields,
+    corrections: gapRef.current,
+    docs: confirmDocs,
+    uploads: amendmentUploads,
+    personItems: personConfirmItems,
+  };
+  const confirmCounts = computeConfirmCounts(confirmStateInput);
+  // requiredGaps is deliberately EMPTY here. Every value the customer can
+  // supply on Confirm is already covered by kind (a) — a crossed row with no
+  // correction is an attention row. The remaining required gaps live on Fill
+  // Gaps and are invisible from this page; blocking on a field the customer
+  // cannot see would be an illegible trap, and allGapsFilled still enforces
+  // them at the Fill Gaps gate (kept as the backstop).
+  const confirmBlockers = submitBlockers({ ...confirmStateInput, requiredGaps: [] });
+  const confirmBlockerMessage = blockerSummary(confirmBlockers);
+
+  /**
+   * The per-attribute trail for every person, built where the UI's own
+   * predicates live so what is stored is exactly what was shown.
+   *
+   * `agentValue` is the value RESEARCH returned and is read from the untouched
+   * research row, never from the edited copy — the same discipline the scalar
+   * trail follows, so a corrected attribute keeps both values.
+   */
+  const buildStakeholderAttributeTrail = (stampedAt) => {
+    const out = [];
+    (research?.found || []).forEach((row) => {
+      if (!isStakeholderField(row.field) || !Array.isArray(row.stakeholders)) return;
+      const ubo = isUboLikeField(row.field);
+      row.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .forEach((orig) => {
+          const cur = personWithEdits(row.field, orig);
+          const rejected = isStakeholderRejected(row.field, orig.id);
+          const lowConf = isPersonLowConfidence(cur, row);
+          stkConfirmFields(cur, ubo).forEach((f) => {
+            const found = stkFieldFound(orig, f.key);
+            const corrected = isPersonAttributeCorrected(row, cur, f);
+            const ticked = isStkFieldConfirmed(orig.id, f.key);
+            const affirmed = isPersonFieldAffirmed(orig.id, f.key);
+            // "affirmed" is the one the page newly earns: the customer
+            // explicitly ticked a low-confidence value rather than leaving it.
+            const customerAction = rejected
+              ? "person_removed"
+              : corrected
+              ? "edited"
+              : !ticked
+              ? "unchecked"
+              : lowConf && affirmed
+              ? "affirmed"
+              : "kept";
+            const asText = (v) =>
+              v === null || v === undefined || v === "" ? null : String(v);
+            out.push({
+              fieldId: row.field,
+              stakeholderId: orig.id,
+              attribute: f.key,
+              label: f.label,
+              personName: cur.full_name || orig.full_name || null,
+              value: asText(cur[f.key]),
+              agentValue: found ? asText(orig[f.key]) : null,
+              customerAction,
+              customerActionAt: stampedAt,
+              researchable: found,
+              source: cur.source || row.source || null,
+              sourceTier: cur.sourceTier || row.sourceTier || null,
+              sourceUrl: cur.sourceUrl || row.sourceUrl || null,
+              fetchedAt: cur.fetchedAt || row.fetchedAt || null,
+            });
+          });
+        });
+    });
+    return out;
+  };
+
+  /** Every document the page asked for, and the file that answered it. */
+  const buildAmendmentDocumentTrail = () =>
+    confirmDocs.map((d) => {
+      const k = docKey(d);
+      const up = amendmentUploads[k] || null;
+      return {
+        docKey: k,
+        docType: d.docType,
+        fieldId: d.fieldId || null,
+        stakeholderId: d.stakeholderId || null,
+        personName: d.personName || null,
+        docGroup: d.docGroup || null,
+        fieldLabel: d.fieldLabel || null,
+        satisfied: isSatisfied(up),
+        filename: (up && up.name) || null,
+        blobUrl: (up && up.blobUrl) || null,
+        pathname: (up && up.pathname) || null,
+        uploadFailed: !!(up && up.uploadFailed),
+        uploadedAt: (up && up.at) || null,
+      };
+    });
+
+  // Upload handler shared by the inline Confirm card and the Fill Gaps panel —
+  // one store (amendmentUploads), keyed fieldId::docType, lifted here so blobs
+  // survive Confirm↔Fill Gaps navigation and land in the dossier payload.
+  const handleAmendmentUpload = async (file, doc) => {
+    const k = docKey(doc);
+    setUploadingDocKey(k);
+    const record = await uploadAmendmentDoc(file);
+    setUploadingDocKey(null);
+    setAmendmentUploads(prev => ({ ...prev, [k]: record }));
+  };
+  const handleAmendmentRemove = (doc) => {
+    const k = docKey(doc);
+    setAmendmentUploads(prev => {
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+  };
+
   const docCount = (research?.found || []).filter(i => i.sourceTier === "document").length;
   const tier1Count = (research?.found || []).filter(i => i.sourceTier === "tier1").length;
   const tier2Count = (research?.found || []).filter(i => i.sourceTier === "tier2").length;
   const tier3Count = (research?.found || []).filter(i => i.sourceTier === "tier3").length;
+
+  /**
+   * How much research actually pre-filled, by source — counted in DATA POINTS.
+   *
+   * A stakeholder row is one row but many values: three directors with five
+   * known attributes each is fifteen pre-filled fields, not one. The old count
+   * used research.found.length, so every people-heavy run was understated by
+   * roughly the number of people on it.
+   *
+   * Attributes inherit their row's tier, which is what the person card's own
+   * source badge already displays ("Companies House"), so the breakdown agrees
+   * with what the customer sees. Rejected people and unticked fields still
+   * count: this measures what research DELIVERED, not what survived review.
+   */
+  const prefill = prefillBreakdown(
+    (research?.found || []).map((item) => {
+      if (!hasRealStakeholders(item)) return { sourceTier: item.sourceTier, count: 1 };
+      const ubo = isUboLikeField(item.field);
+      const count = item.stakeholders
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .reduce(
+          (n, s) => n + stkConfirmFields(s, ubo).filter((f) => stkFieldFound(s, f.key)).length,
+          0
+        );
+      return { sourceTier: item.sourceTier, count };
+    })
+  );
 
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
@@ -5857,6 +7336,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // the upload fails.
     const localUrl = URL.createObjectURL(file);
     let blobUrl = null;
+    // Store path within the Blob store, returned since the private-write fix.
+    // Persisted alongside the URL (raw_research JSONB — no migration) because
+    // signed-URL retrieval is keyed by pathname and addRandomSuffix makes it
+    // unreconstructable. Null for uploads made before that change.
+    let blobPathname = null;
     let uploadFailed = false;
     let filename = file.name;
     try {
@@ -5867,6 +7351,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const data = await resp.json();
       if (!data.blobUrl) throw new Error(data.error || "No blobUrl returned");
       blobUrl = data.blobUrl;
+      blobPathname = data.pathname || null;
       filename = data.filename || file.name;
     } catch (err) {
       // Fall back to the ephemeral URL + a flag so the UI can warn rather than
@@ -5887,6 +7372,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               // failure (uploadFailed flags the UI to warn).
               manualUploadUrl: blobUrl || localUrl,
               manualUploadBlobUrl: blobUrl,
+              manualUploadPathname: blobPathname,
               manuallyUploaded: true,
               uploadFailed,
               manualUploadAt: new Date().toISOString(),
@@ -7393,9 +8879,17 @@ Nium Onboarding Team`;
               item.status === "retrieved" || item.status === "retrieved_unverified";
             // Permanent blob URL for manual uploads (null when the upload failed);
             // automated registry docs link to the registry page instead.
+            //
+            // Blobs are written PRIVATE, so a manual upload can no longer be an
+            // <a href> straight at the blob — a private blob is not fetchable by
+            // URL. Route it through /api/get-document, which reads it with the
+            // store token and streams the bytes back. Registry docs are ordinary
+            // public web pages and are linked directly, unchanged.
             const blobUrl = item.manualUploadBlobUrl || null;
             const viewUrl = uploaded
-              ? (item.uploadFailed ? null : blobUrl)
+              ? (item.uploadFailed || !blobUrl
+                  ? null
+                  : `/api/get-document?url=${encodeURIComponent(blobUrl)}`)
               : (item.searchUrl || item.sourceUrl || null);
             let host = "";
             try {
@@ -7691,7 +9185,8 @@ Nium Onboarding Team`;
                               )}
                             </div>
 
-                            {/* View link — permanent blobUrl for manual uploads,
+                            {/* View link — /api/get-document for manual uploads (the
+                                blob is private and streamed back by the server),
                                 registry/source URL for automated docs. Hidden when a
                                 manual upload failed (blobUrl null / uploadFailed). */}
                             {e.viewUrl && (
@@ -8030,194 +9525,49 @@ Nium Onboarding Team`;
         {step === STEPS.applicant && agentType !== "preboarding" && renderApplicantPage()}
 
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
-          <div>
-            {/* The "is this the right company?" check now lives on the Applicant
-                page as the five-fact FoundationalFactsGate (slice 2), so there is
-                no gate here — avoids a double gate. */}
-            <div style={card}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
-                  <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
-                    {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources · {tier2Count + tier3Count} need your attention
-                  </p>
-                  {servedFromCache && cachedAt && (
-                    <div style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: '#f0fdf4', border: '1px solid #bbf7d0',
-                      borderRadius: 20, padding: '3px 10px', fontSize: 11, color: '#166534',
-                      marginTop: 8
-                    }}>
-                      ✓ Served from cache · fetched {new Date(cachedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div style={{ background: "#f0f9f6", borderRadius: 8, padding: "12px 16px", fontSize: 13, color: "#1a6b56", borderLeft: "4px solid #4a9e8e" }}>
-                Below: every field we pre-filled, sorted by source — documents first (most reliable), then official registries, then company-owned sources, then unverified web. Uncheck anything wrong — it'll move to the next page for correction. Click any source to reveal when it was fetched.
-              </div>
-            </div>
-
-            {/* TEST-ONLY utility — treat the company as publicly listed, which
-                skips the detailed stakeholder EDD forms on the next page. Sets
-                isPubliclyListedOverride (same state + downstream effectivelyListed
-                consumer as before — behaviour unchanged). Gated by SHOW_TEST_TOOLS
-                so real customers never see it; styled to match the dashed
-                "Fill with test data" test control, not a customer selection. */}
-            {SHOW_TEST_TOOLS && (
-              <div
-                onClick={() => setIsPubliclyListedOverride(v => !v)}
-                title="Testing only — treat this company as publicly listed to skip the detailed stakeholder forms on the next page"
-                style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 14px", marginBottom: 16,
-                  background: "transparent",
-                  border: "2px dashed #4a9e8e", borderRadius: 8,
-                  cursor: "pointer", userSelect: "none",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={isPubliclyListedOverride}
-                  onChange={() => setIsPubliclyListedOverride(v => !v)}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ width: 15, height: 15, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
-                  aria-label="TEST: treat as publicly listed (skips stakeholder forms)"
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#4a9e8e", letterSpacing: "0.3px" }}>
-                    🧪 TEST: treat as publicly listed (skips stakeholder forms)
-                  </div>
-                  <div style={{ fontSize: 11, marginTop: 1, color: "#4a9e8e", opacity: 0.8 }}>
-                    {isPubliclyListedOverride
-                      ? "On — detailed stakeholder forms will be skipped on the next page"
-                      : "Test aid only — not shown to customers"}
-                  </div>
-                </div>
-                {isPubliclyListedOverride && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#4a9e8e", border: "1px dashed #4a9e8e", borderRadius: 99, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    Listed ✓
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Part 11 — low-data banner. Threshold is calibrated per ownership
-                type (private companies expect lower fill rates than listed). */}
-            {(() => {
-              if (!coverage) return null;
-              const strat = getResearchStrategy(ownershipType);
-              const showLowDataBanner = coverage.fillRate < strat.lowDataThreshold + 0.10;
-              if (!showLowDataBanner) return null;
-              const parentResult = (research.found || []).find(
-                (r) => r.field === "ubo_parent_company" || r.field === "parent_company" || r.field === "group_structure"
-              );
-              const isPrivateish = ownershipType === "private_limited" || ownershipType === "branch";
-              return (
-                <div style={{ padding: 16, background: C.infoBg, border: `1px solid ${C.infoBorder}`, borderRadius: 10, marginBottom: 16 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.info, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span>ℹ</span>
-                    <span>Limited public information found for {research.companyName || companyName}</span>
-                  </div>
-                  <p style={{ fontSize: 13, color: C.info, marginBottom: 12, lineHeight: 1.5 }}>
-                    {coverage.populatedFields} of {coverage.totalResearchFields} fields were found from public sources.
-                    {isPrivateish
-                      ? " Private companies have limited publicly available information — this is expected."
-                      : " You can improve coverage by uploading documents."}
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {ownershipType === "branch" && (
-                      <div style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: `1px solid ${C.infoBorder}`, fontSize: 13, color: C.text }}>
-                        <strong>Try searching for the parent company:</strong> If this is a branch, searching for the parent entity may return more complete information.
-                        {parentResult && parentResult.value && (
-                          <button
-                            onClick={() => {
-                              setCompanyName(String(parentResult.value));
-                              setJourneyOpen(false);
-                              setSelectedJourneyCard(null);
-                              setError("");
-                              setStep(STEPS.input);
-                            }}
-                            style={{ marginLeft: 8, padding: "4px 12px", background: C.info, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                          >
-                            Search parent →
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {journeyType === "ai_only" && (
-                      <div style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: `1px solid ${C.infoBorder}`, fontSize: 13, color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                        <span>
-                          <strong>Upload documents</strong> to pre-fill more fields — Certificate of Incorporation, Annual Report, or Wolfsberg questionnaire.
-                        </span>
-                        <button
-                          onClick={() => { setJourneyType("ai_documents"); setJourneyOpen(false); setStep(stepsFor("ai_documents").documents); }}
-                          style={{ padding: "6px 14px", background: C.niumBlue, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}
-                        >
-                          📄 Upload docs
-                        </button>
-                      </div>
-                    )}
-                    <p style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", margin: 0 }}>
-                      Or continue below — you can complete the remaining fields manually on the next page.
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Part 9 — coverage summary bar. */}
-            {coverage && (
-              <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-                <div style={{ flex: 1, padding: "12px 16px", background: C.successBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.success, lineHeight: 1 }}>{coverage.verifiedFields}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.success, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified</div>
-                </div>
-                <div style={{ flex: 1, padding: "12px 16px", background: C.warningBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.warning, lineHeight: 1 }}>{coverage.probableFields}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.warning, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Confirm</div>
-                </div>
-                {coverage.indicativeFields > 0 && (
-                  <div style={{ flex: 1, padding: "12px 16px", background: "#FFF7ED", borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#C2410C", lineHeight: 1 }}>{coverage.indicativeFields}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#C2410C", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Low Confidence</div>
-                  </div>
-                )}
-                <div style={{ flex: 1, padding: "12px 16px", background: C.surfaceAlt, textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.textMuted, lineHeight: 1 }}>{coverage.missingFieldCount}</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
-                </div>
-              </div>
-            )}
-
-            {stakeholderFound.length > 0 && (
-              <div style={card}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
-                <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>
-                  Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
-                </p>
-                {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
-              </div>
-            )}
-
-            {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
-
-            {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
-              <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-                ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              {/* PR: Applicant now sits just before Confirm, so the backward action
-                  is to return to the Applicant page (not restart). Plain step
-                  navigation — preserves all field values, checks, applicant data
-                  and uploaded docs; no wipe, no confirmation. Both journeys. */}
-              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.applicant)}>← Back</Btn>
-              <Btn variant="green" onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}>Confirm and Continue →</Btn>
-            </div>
-          </div>
+          <ConfirmStep
+            research={research}
+            companyName={companyName}
+            coverage={coverage}
+            ownershipType={ownershipType}
+            journeyType={journeyType}
+            servedFromCache={servedFromCache}
+            cachedAt={cachedAt}
+            checks={checks}
+            confirmCounts={confirmCounts}
+            confirmDocs={confirmDocs}
+            amendmentUploads={amendmentUploads}
+            uploadingDocKey={uploadingDocKey}
+            onAmendmentUpload={handleAmendmentUpload}
+            onAmendmentRemove={handleAmendmentRemove}
+            blockers={confirmBlockers}
+            blockerMessage={confirmBlockerMessage}
+            isPubliclyListedOverride={isPubliclyListedOverride}
+            setIsPubliclyListedOverride={setIsPubliclyListedOverride}
+            sortedFound={sortedFound}
+            stakeholderFound={stakeholderFound}
+            regularFound={regularFound}
+            docCount={docCount}
+            tier1Count={tier1Count}
+            tier2Count={tier2Count}
+            tier3Count={tier3Count}
+            prefill={prefill}
+            jurisdictionBadge={jurisdictionBadge}
+            entityBadge={entityBadge}
+            cardStyle={card}
+            STEPS={STEPS}
+            stepsFor={stepsFor}
+            setStep={setStep}
+            setCompanyName={setCompanyName}
+            setJourneyOpen={setJourneyOpen}
+            setSelectedJourneyCard={setSelectedJourneyCard}
+            setJourneyType={setJourneyType}
+            setError={setError}
+            scrollAndSetStep={scrollAndSetStep}
+            renderStakeholderConfirmSection={renderStakeholderConfirmSection}
+            renderUnifiedFoundTable={renderUnifiedFoundTable}
+            renderAddPerson={renderAddPerson}
+          />
         )}
 
         {/* Pre-boarding Confirm — Kept for reference — replaced by unified
@@ -8242,6 +9592,7 @@ Nium Onboarding Team`;
               submissionId={dossierId || onboardingSubmissionId}
               initialUploads={amendmentUploads}
               onUploadsChange={setAmendmentUploads}
+              extraDocuments={docsNeededFrom(dialogueStateRef.current)}
             />
             <div style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

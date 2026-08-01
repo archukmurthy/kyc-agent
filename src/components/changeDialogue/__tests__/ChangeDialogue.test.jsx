@@ -65,17 +65,22 @@ describe('ChangeDialogue — question flow + single emit', () => {
     expect(question()).toBeTruthy();
     clickByText('Not yet'); // not_reflected
 
-    // Finalised: exactly one event, doc_required notice (UBO has an update rule).
+    // Finalised: exactly one event (UBO has an update rule).
     expect(onEvent).toHaveBeenCalledTimes(1);
     const event = onEvent.mock.calls[0][0];
     expect(event.fieldClass).toBe('ubo');
     expect(event.customerIntent).toBe('genuine_update');
     expect(event.customerRegistryClaim).toBe('not_reflected');
     expect(event.workflow).toBe('doc_required');
-    expect(notice().textContent).toMatch(/Updated UBO Registry/);
+    // The REQUIREMENT rides on the event; the docType is what the upload card
+    // and the submit gate read.
+    expect(event.docType).toMatch(/Updated UBO Registry/);
+    // No notice for doc_required — the inline upload card beneath this names
+    // the document and takes the file, on this page.
+    expect(notice()).toBeNull();
   });
 
-  test('factualId: no questions → immediate single event + doc notice', () => {
+  test('factualId: no questions → immediate single event, no duplicate notice', () => {
     const onEvent = jest.fn();
     render(
       <ChangeDialogue
@@ -86,17 +91,18 @@ describe('ChangeDialogue — question flow + single emit', () => {
     expect(question()).toBeNull();
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent.mock.calls[0][0].fieldClass).toBe('factualId');
-    expect(notice()).toBeTruthy();
+    expect(onEvent.mock.calls[0][0].workflow).toBe('doc_required');
+    expect(notice()).toBeNull();
   });
 
-  test('generic field: neutral notice, ops_review, one event', () => {
+  test('generic field: ops_review recorded, nothing rendered at the customer', () => {
     const onEvent = jest.fn();
     render(
       <ChangeDialogue field={{ fieldId: 'annual_revenue', value: '1m', sourceTier: 'tier1' }} onEvent={onEvent} />,
     );
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent.mock.calls[0][0].workflow).toBe('ops_review');
-    expect(notice().textContent).toMatch(/review this/i);
+    expect(notice()).toBeNull();
   });
 });
 
@@ -112,9 +118,10 @@ describe('ChangeDialogue — UNDECIDED and escalation both render neutral', () =
     const event = onEvent.mock.calls[0][0];
     expect(event.workflow).toBe('UNDECIDED');
     expect(event.decided).toBe(false);
-    // Neutral treatment, no error, no doc.
-    expect(notice().textContent).toMatch(/review this/i);
-    expect(notice().textContent).not.toMatch(/UNDECIDED|error/i);
+    // Recorded, and nothing leaks to the customer — no notice at all, and the
+    // internal vocabulary never reaches the DOM.
+    expect(notice()).toBeNull();
+    expect(container.textContent).not.toMatch(/UNDECIDED|error/i);
   });
 
   test('escalation (PEP) renders identically to ops_review — never revealed', () => {
@@ -126,8 +133,8 @@ describe('ChangeDialogue — UNDECIDED and escalation both render neutral', () =
     expect(event.workflow).toBe('escalation');
     expect(event.escalation).toBe(true);
     // The customer must NOT see the word escalation or the reason.
-    expect(notice().textContent).toMatch(/review this/i);
-    expect(notice().textContent).not.toMatch(/escalat/i);
+    expect(notice()).toBeNull();
+    expect(container.textContent).not.toMatch(/escalat/i);
   });
 });
 
@@ -145,9 +152,9 @@ describe('ChangeDialogue — verifiability fallback skips the registry question'
     expect(question().textContent).toMatch(/correcting/i);
     clickByText('Correcting what you found'); // ai_correction
 
-    // No second (registry) question — it finalised straight to a notice.
+    // No second (registry) question — it finalised straight away.
     expect(question()).toBeNull();
-    expect(notice()).toBeTruthy();
+    expect(notice()).toBeNull();
     expect(onEvent).toHaveBeenCalledTimes(1);
     const event = onEvent.mock.calls[0][0];
     expect(event.verifiability).toBe('unverified');

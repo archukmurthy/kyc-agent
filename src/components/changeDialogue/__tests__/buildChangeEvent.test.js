@@ -1,4 +1,5 @@
 import { buildChangeEvent } from '../buildChangeEvent';
+import { deriveSource } from '../dialogueContent';
 import { COLUMNS } from '../../../changeIntelligence/events/schema';
 
 // Every key the event may legally carry (table columns + the lineage arg).
@@ -106,5 +107,44 @@ describe('buildChangeEvent', () => {
     });
     expect('id' in event).toBe(false);
     expect('createdAt' in event).toBe(false);
+  });
+});
+
+/**
+ * REGRESSION — change_events.source_tier is a SMALLINT in Postgres, but a
+ * stakeholder object carries the string form ("tier1"). Passing the raw string
+ * makes real Postgres reject the ENTIRE insert, and nothing local catches it:
+ * the route always answers 200 and the fake DB does not type-check. Every
+ * caller must send provenance through deriveSource, which normalises the tier.
+ */
+describe('source_tier is always the smallint the column expects', () => {
+  it.each([
+    ['tier1', 1],
+    ['tier2', 2],
+    ['tier3', 3],
+    [1, 1],
+    [null, null],
+    ['document', null],
+  ])('deriveSource(%s) -> %s', (raw, expected) => {
+    expect(deriveSource({ sourceTier: raw }).sourceTier).toBe(expected);
+  });
+
+  it('a person-shaped stakeholder never puts a string tier on the event', () => {
+    const stakeholder = { sourceTier: 'tier1', source: 'Companies House' };
+    const src = deriveSource(stakeholder);
+    const event = buildChangeEvent({
+      field: {
+        fieldId: 'ubo::sh_x::name',
+        fieldClass: 'ubo',
+        value: 'John Smith',
+        sourceType: src.sourceType,
+        sourceProvider: src.sourceProvider,
+        sourceTier: src.sourceTier,
+      },
+      engineResult: engineDocRequired,
+    });
+    expect(typeof event.sourceTier).toBe('number');
+    expect(event.sourceTier).toBe(1);
+    expect(event.sourceProvider).toBe('Companies House');
   });
 });

@@ -14,6 +14,7 @@
 // src/setupProxy.js can require() it for local dev — mirrors api/config.js,
 // api/benchmark.js, and api/doc-search.js. Vercel supports both forms.
 const { neon } = require("@neondatabase/serverless");
+const { deriveScalarProvenance } = require("../src/utils/fieldProvenance");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Journey-model persistence (migration 003 tables). ADDITIVE — runs alongside
@@ -199,19 +200,38 @@ async function persistJourneyModel(sql, d) {
   const applicantProv = Array.isArray(d.applicantProvenance) ? d.applicantProvenance : [];
   const applicantFieldNames = new Set(applicantProv.map((p) => p.fieldId));
 
+  // Per-field provenance trail from the client, keyed by field id. Scalars used
+  // to write no agent_value at all, which made change_events.before_value the
+  // ONLY durable record of a corrected scalar's original registry value — a
+  // single point of failure for the one thing that must never be lost. With the
+  // trail transmitted, scalars now carry the same agent_value / customer_value /
+  // customer_action discipline the stakeholder and applicant rows already use.
+  const metaByField = new Map();
+  for (const m of Array.isArray(d.fieldMetadata) ? d.fieldMetadata : []) {
+    if (m && m.fieldId) metaByField.set(m.fieldId, m);
+  }
+
   for (const [k, v] of Object.entries(d.fieldValues || {})) {
     if (v === null || v === undefined || v === "") continue;
     if (stake[k]) continue; // handled as stakeholder rows below
     if (applicantFieldNames.has(k)) continue; // handled as applicant rows below
     const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+    const meta = metaByField.get(k);
+    // agent_value is ALWAYS the AI/registry original, never the customer's
+    // value — see src/utils/fieldProvenance.js for the rule and its tests.
+    const { agentValue, customerAction } = deriveScalarProvenance(meta);
     try {
       await sql`
         INSERT INTO field_provenance (
-          journey_id, field_name, final_value, customer_value, layer, model_version
+          journey_id, field_name, final_value, customer_value, layer, model_version,
+          agent_value, customer_action, source_tier, source_identity
         )
         VALUES (
           ${journeyId}, ${k}, ${val}, ${val}, ${scalarLayer},
-          ${scalarLayer === "L3_ai" ? cs?.model || null : null}
+          ${scalarLayer === "L3_ai" ? cs?.model || null : null},
+          ${agentValue}, ${customerAction},
+          ${(meta && (meta.agentSourceTier || meta.sourceTier)) || null},
+          ${(meta && (meta.agentSource || meta.source)) || null}
         )
       `;
     } catch (e) {
@@ -248,6 +268,45 @@ async function persistJourneyModel(sql, d) {
     }
   }
 
+  // PER-ATTRIBUTE stakeholder provenance. The loop above writes ONE row per
+  // person, carrying their name — so nationality, date of birth, residence,
+  // shareholding and PEP existed only inside raw_result JSON, unqueryable and
+  // with no source or customer action of their own. These rows give each
+  // attribute the same discipline a scalar field gets: agent_value is what
+  // research returned and is never overwritten, customer_value is what the
+  // customer has, customer_action says which of the two happened.
+  //
+  // field_name is `<field>.<stakeholderId>.<attribute>`, extending the existing
+  // `<field>.<stakeholderId>` convention rather than inventing a second one.
+  for (const a of Array.isArray(d.stakeholderAttributes) ? d.stakeholderAttributes : []) {
+    if (!a || !a.fieldId || !a.stakeholderId || !a.attribute) continue;
+    // L4 when the value came from the customer, L3 when research supplied it.
+    const layer = a.researchable && a.customerAction !== "edited" ? "L3_ai" : "L4_customer";
+    try {
+      await sql`
+        INSERT INTO field_provenance (
+          journey_id, field_name, final_value, customer_value, layer,
+          source_tier, source_identity, source_url, retrieved_at,
+          agent_value, customer_action, researchable, model_version
+        )
+        VALUES (
+          ${journeyId},
+          ${`${a.fieldId}.${a.stakeholderId}.${a.attribute}`},
+          ${a.value ?? null}, ${a.value ?? null}, ${layer},
+          ${a.sourceTier || null}, ${a.source || null}, ${a.sourceUrl || null},
+          ${toTimestamp(a.fetchedAt)},
+          ${a.agentValue ?? null}, ${a.customerAction || null}, ${a.researchable === true},
+          ${layer === "L3_ai" ? cs?.model || null : null}
+        )
+      `;
+    } catch (e) {
+      console.warn(
+        `[api/submit] field_provenance stakeholder-attribute insert failed (${a.fieldId}.${a.stakeholderId}.${a.attribute}):`,
+        e.message
+      );
+    }
+  }
+
   // Applicant identity provenance — rich rows carrying agent_value + the
   // customer's action (accepted / overridden / provided). Mapped onto the real
   // (journey-keyed) field_provenance columns: field_name, agent_value,
@@ -274,6 +333,37 @@ async function persistJourneyModel(sql, d) {
     }
   }
 
+  // AMENDMENT DOCUMENTS — which document the change engine asked for, and which
+  // file answered it. Nothing wrote a `documents` row anywhere in the codebase
+  // before this: the blob was stored and its URL survived only inside JSON, so
+  // "was the ownership chart provided for this journey?" was not answerable.
+  //
+  // Only SATISFIED requests are written. A failed upload is not evidence, and
+  // the submit gate already refuses to let one through — recording it as a
+  // document row would put a file in the record that does not exist in storage.
+  // session_id and document_type are NOT NULL on this table, so a row without a
+  // session is skipped rather than fabricated.
+  for (const doc of Array.isArray(d.amendmentDocuments) ? d.amendmentDocuments : []) {
+    if (!doc || !doc.satisfied || !doc.docType || !d.sessionId) continue;
+    try {
+      await sql`
+        INSERT INTO documents (
+          session_id, journey_id, document_type, storage_url, blob_key,
+          original_name, uploaded_by, actor_type, source, step,
+          processing_status, is_mandatory, uploaded_at
+        )
+        VALUES (
+          ${d.sessionId}, ${journeyId}, ${doc.docType}, ${doc.blobUrl || null},
+          ${doc.pathname || null}, ${doc.filename || null},
+          'customer', 'customer', 'customer', 'confirm_amendment',
+          'stored', ${true}, ${toTimestamp(doc.uploadedAt) || new Date().toISOString()}
+        )
+      `;
+    } catch (e) {
+      console.warn(`[api/submit] documents insert failed (${doc.docKey}):`, e.message);
+    }
+  }
+
   return journeyId;
 }
 
@@ -289,7 +379,18 @@ module.exports = async function handler(req, res) {
     ownershipType,
     journeyType,
     fieldValues,
+    // Per-field provenance trail. Must be destructured here AND forwarded to
+    // persistJourneyModel below — that call passes an explicitly-constructed
+    // object, so a key missing from either place silently becomes undefined and
+    // every scalar's agent_value falls back to NULL.
+    fieldMetadata,
     stakeholders,
+    // Same seam as fieldMetadata above: destructured HERE and forwarded to
+    // persistJourneyModel below. A key present in only one place silently
+    // becomes undefined and the rows are never written.
+    stakeholderAttributes,
+    amendmentDocuments,
+    confirmMetrics,
     documents,
     costSummary,
     coverage,
@@ -444,6 +545,15 @@ module.exports = async function handler(req, res) {
           coverage: cov || null,
           applicant: applicant || null,
           applicantProvenance: applicantProvenance || [],
+          // What the Confirm page showed at submit time. fields_prefilled above
+          // is coverage.populatedFields — a DIFFERENT metric (schema coverage),
+          // which is why the tile and hover numbers had no home. Stored as JSON
+          // rather than columns so this needs no migration.
+          confirmMetrics: confirmMetrics || null,
+          // The document ask/answer trail, including the UNsatisfied ones. The
+          // documents table only receives satisfied uploads, so this is where a
+          // request that went unanswered stays visible.
+          amendmentDocuments: amendmentDocuments || [],
         })},
 
         NOW()
@@ -550,7 +660,10 @@ module.exports = async function handler(req, res) {
         ownershipType,
         journeyType,
         fieldValues,
+        fieldMetadata,
         stakeholders,
+        stakeholderAttributes,
+        amendmentDocuments,
         costSummary: cs,
         coverage: cov,
         declaration,

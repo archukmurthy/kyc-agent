@@ -381,6 +381,39 @@ module.exports = function (app) {
   // GET uses req.query directly.
   app.get("/api/amendment-documents", adapt(amendmentDocumentsHandler));
 
+  // Blob upload + retrieval. These were the only /api routes NOT mounted here,
+  // so every local upload 404'd, landed as uploadFailed:true, and the submit
+  // gate correctly refused to open — which made the whole amendment-document
+  // flow untestable locally without stubbing fetch in the page.
+  //
+  // Dynamic-imported because both handlers are ESM (they `import` @vercel/blob
+  // and formidable), unlike the CommonJS handlers required at the top. Same
+  // pathToFileURL treatment as researchCache above — a bare import() of a
+  // Windows path fails.
+  //
+  // The multipart stream must reach formidable untouched, so there is no body
+  // parsing here. Needs BLOB_READ_WRITE_TOKEN in .env.local; without it the
+  // handler returns its own 500 and the card still says "not stored", which is
+  // the honest outcome.
+  const esmHandler = (relPath) => {
+    let mod = null;
+    return async (req, res) => {
+      try {
+        if (!mod) {
+          mod = await import(pathToFileURL(path.join(__dirname, "..", "api", relPath)).href);
+        }
+        return adapt(mod.default)(req, res);
+      } catch (err) {
+        console.error(`[setupProxy] ${relPath} failed to load:`, err.message);
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        return res.end(JSON.stringify({ error: `Local handler load failed: ${err.message}` }));
+      }
+    };
+  };
+  app.post("/api/upload-document", esmHandler("upload-document.js"));
+  app.get("/api/get-document", esmHandler("get-document.js"));
+
   // Self-serve re-research — dossier lifecycle reseed decision (full vs derive).
   // POST; parse the JSON body the dev server doesn't auto-parse.
   app.post("/api/dossier-reseed", (req, res) => {
