@@ -23,7 +23,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { classifyChange } from '../../changeIntelligence/classifyChange';
 import { fieldHasHighRiskCountry } from '../../changeIntelligence/highRiskCountries';
-import { Notice } from '../notices/Notice';
+// Notice is no longer rendered here — both finalised outcomes are silent, and
+// the row itself carries the result. Re-add the import if a notice ever returns.
 import { buildChangeEvent } from './buildChangeEvent';
 import { useDialogueState } from './useDialogueState';
 import {
@@ -243,12 +244,15 @@ export function ChangeDialogue({
     return null;
   }
 
-  // Tier 1 — calm. Recorded; nothing required from the customer right now.
-  return (
-    <Notice tier="tier1" testId="change-dialogue-notice">
-      We’ll review this. No action needed from you right now.
-    </Notice>
-  );
+  // Also NO NOTICE. "We'll review this. No action needed from you right now."
+  // belonged to the flow where finishing the dialogue was the end of the
+  // interaction. Now the row itself shows the outcome — the corrected value,
+  // the "corrected" tag, the upload card when one is owed — so a banner saying
+  // nothing is needed is stale reassurance stacked on top of the answer.
+  //
+  // Every outcome is still recorded and emitted; this only stops rendering a
+  // sentence about it.
+  return null;
 }
 
 export default ChangeDialogue;

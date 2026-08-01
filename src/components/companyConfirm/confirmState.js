@@ -201,7 +201,6 @@ export const canonicalDocType = (docType) =>
 export const COMPANY_WIDE_DOC_TYPES = new Set([
   "Ownership Chart",
   "List of Directors",
-  "Notice of Change of Address",
 ]);
 
 /**
@@ -221,6 +220,27 @@ export const COMPANY_WIDE_DOC_TYPES = new Set([
 export const PER_FIELD_DOC_TYPES = new Set([
   "Supporting Registration Document",
 ]);
+
+/**
+ * GROUP-SCOPED DOCUMENT TYPES — one per address, not one per address line.
+ *
+ * A Notice of Change of Address covers ONE address: changing line 1, the city
+ * and the postcode of the registered address is one move and one notice. But
+ * changing the registered address AND an operating address is two different
+ * addresses and two notices — so this cannot collapse to a single company-wide
+ * document either.
+ *
+ * The group is the schema `section` the field belongs to (registered_address,
+ * and any operating/administrative address sections added later), supplied by
+ * the caller as `docGroup`. With no group known it falls back to company scope,
+ * which is the pre-existing behaviour.
+ */
+export const GROUP_SCOPED_DOC_TYPES = new Set([
+  "Notice of Change of Address",
+]);
+
+export const isGroupScopedDocType = (docType) =>
+  GROUP_SCOPED_DOC_TYPES.has(canonicalDocType(docType));
 
 /** Alias-aware, so the pre-merge names resolve too. */
 export const isCompanyWideDocType = (docType) =>
@@ -244,6 +264,7 @@ export const isPerFieldDocType = (docType) =>
 export function docScope(d = {}) {
   if (isCompanyWideDocType(d.docType)) return { kind: "company" };
   if (isPerFieldDocType(d.docType)) return { kind: "field", fieldId: d.fieldId };
+  if (isGroupScopedDocType(d.docType) && d.docGroup) return { kind: "group", groupId: d.docGroup };
   const person = parsePersonFieldId(d.fieldId);
   return person ? { kind: "person", stakeholderId: person.stakeholderId } : { kind: "company" };
 }
@@ -266,6 +287,7 @@ export const docKey = (d) => {
   const type = canonicalDocType(d.docType);
   if (scope.kind === "person") return `${scope.stakeholderId}::${type}`;
   if (scope.kind === "field") return `field::${scope.fieldId}::${type}`;
+  if (scope.kind === "group") return `group::${scope.groupId}::${type}`;
   return `company::${type}`;
 };
 
@@ -277,6 +299,7 @@ export const docDedupeKey = (d) => {
   // type for company evidence (several fields → one document).
   if (scope.kind === "person") return `p:${scope.stakeholderId}:${type}`;
   if (scope.kind === "field") return `f:${scope.fieldId}:${type}`;
+  if (scope.kind === "group") return `g:${scope.groupId}:${type}`;
   return `c:${type}`;
 };
 
@@ -307,6 +330,8 @@ export function canonicalDocs(...sources) {
         // rule-level name survives untouched on the change event itself.
         docType: canonicalDocType(d.docType),
         fieldClass: d.fieldClass || null,
+        // Carried so docKey/docDedupeKey stay derivable from the entry alone.
+        docGroup: d.docGroup || null,
         // Which field asked for it, for the per-field placeholder only: several
         // requests share one docType name, so without this the customer sees
         // the same title repeated with no way to tell them apart.

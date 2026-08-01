@@ -441,6 +441,43 @@ describe("per-field placeholder documents do not collapse", () => {
   });
 });
 
+/**
+ * One Notice of Change of Address per ADDRESS, not per address line and not
+ * one for the whole company. Changing line 1, the city and the postcode of the
+ * registered address is one move and one notice; changing the registered
+ * address AND an operating address is two addresses and two notices.
+ */
+describe("address documents are scoped per address group", () => {
+  const reg = (field) => ({ fieldId: field, docType: "Notice of Change of Address", docGroup: "registered_address" });
+  const op = (field) => ({ fieldId: field, docType: "Notice of Change of Address", docGroup: "operating_address" });
+
+  it("collapses every line of one address to a single notice", () => {
+    const docs = canonicalDocs([reg("addressLine1"), reg("city"), reg("postcode")]);
+    expect(docs).toHaveLength(1);
+    expect(docKey(reg("addressLine1"))).toBe("group::registered_address::Notice of Change of Address");
+    expect(docKey(reg("city"))).toBe(docKey(reg("postcode")));
+  });
+
+  it("keeps two DIFFERENT addresses as two notices", () => {
+    const docs = canonicalDocs([reg("addressLine1"), op("opAddressLine1")]);
+    expect(docs).toHaveLength(2);
+    expect(docKey(reg("addressLine1"))).not.toBe(docKey(op("opAddressLine1")));
+  });
+
+  it("uploading one address's notice leaves the other outstanding", () => {
+    const docs = canonicalDocs([reg("addressLine1"), op("opAddressLine1")]);
+    const uploads = { [docKey(reg("addressLine1"))]: { name: "reg.pdf", uploadFailed: false } };
+    const blockers = submitBlockers({ found: [], docs, uploads });
+    expect(blockers).toHaveLength(1);
+    expect(blockers[0].fieldId).toBe("opAddressLine1");
+  });
+
+  it("falls back to company scope when no group is known", () => {
+    const noGroup = { fieldId: "addressLine1", docType: "Notice of Change of Address" };
+    expect(docKey(noGroup)).toBe("company::Notice of Change of Address");
+  });
+});
+
 describe("an ADDED person's documents are per-person too (commit 7 × 6a)", () => {
   const existingPoi = { fieldId: "ubo::sh_existing::nationality", docType: "Proof of Identity", personName: "John Smith" };
   const addedPoi = { fieldId: "ubo::sh_added::added_poi", docType: "Proof of Identity", personName: "Priya Raman" };

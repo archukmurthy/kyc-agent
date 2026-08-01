@@ -14,8 +14,10 @@ import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocumen
 import FoundationalFactsGate from "./components/companyConfirm/FoundationalFactsGate";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 import InlineCorrectionEditor from "./components/companyConfirm/InlineCorrectionEditor";
-import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
-import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
+// TEST VIEW imports — the analyst strip is commented out at both render sites.
+// Uncomment these two lines together with those blocks to bring it back.
+// import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
+// import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
 import { PersonCorrection, PersonRemovalPrompt } from "./components/companyConfirm/PersonCorrection";
 import AddPersonPanel from "./components/companyConfirm/AddPersonPanel";
 import {
@@ -4236,6 +4238,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
               (isPerFieldDocType(liveType) ? d.fieldId === item.field : true));
             if (!doc) return null;
             const k = docKey(doc);
+            // ONE CARD PER DOCUMENT. Several rows can require the same file —
+            // three corrected lines of the registered address are one Notice of
+            // Change of Address — so it renders against the field that asked
+            // first, not once per row.
+            const anchorField = rowDocAnchor.get(k);
+            if (anchorField && anchorField !== item.field) return null;
             return (
               <AmendmentDocCard
                 key={"doc-" + k}
@@ -4249,13 +4257,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
               />
             );
           })()}
-          {/* Build-time analyst view (commit 5) — what the engine actually
-              decided for this row, including the outcomes the customer never
-              sees, and an explicit "no automated consequence" note where the
-              engine produces nothing. Read-only: it displays the recorded
-              decision, never re-classifies and never affects the gate.
-              SHOW_TEST_TOOLS is passed as a prop so the silence-later
-              guarantee is a testable contract, not a module-load accident. */}
+          {/* TEST VIEW — DISABLED, kept for debugging. Shows what the engine
+              actually decided for this row (rule id, workflow, document,
+              verifiability), including outcomes the customer never sees. It is
+              read-only: it never re-classifies and never affects the gate.
+              Uncomment this block, the twin in renderPersonDocuments, and the
+              two imports at the top of this file to bring it back.
+
           {(() => {
             const snap = dialogueStateRef.current[item.field];
             if (!snap || !snap.emitted || !snap.event) return null;
@@ -4271,6 +4279,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               />
             );
           })()}
+          */}
         </div>
         {/* Right rail — provenance is supporting detail (quiet, two lines),
             then the affordances. Fixed width so a long source string can never
@@ -4729,11 +4738,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
                   Covered by the single {evDocType.toLowerCase()} requested for this company — you only upload it once.
                 </div>
               )}
+              {/* TEST VIEW — DISABLED, kept for debugging. See the twin block
+                  in renderFoundRow for how to re-enable.
+
               <AnalystSignalStrip
                 show={SHOW_TEST_TOOLS}
                 fieldId={k}
                 signal={buildAnalystSignal({ event: snap.event, outcome: snap.outcome })}
               />
+              */}
             </div>
           );
         })}
@@ -6284,10 +6297,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const fieldLabelById = new Map(
     (research?.found || []).filter((r) => r && r.field).map((r) => [r.field, r.label || r.field])
   );
+  // Schema section per field — the group a document belongs to. One Notice of
+  // Change of Address covers the whole registered address however many of its
+  // lines changed, but a second address section is a second address and a
+  // second notice.
+  const fieldSectionById = new Map(
+    (activeSchema?.researchFields || [])
+      .filter((f) => f && f.field)
+      .map((f) => [f.field, f.section || null])
+  );
   const withPersonName = (list) => (Array.isArray(list) ? list : []).map((d) => {
     const p = d && d.fieldId ? parsePersonFieldId(d.fieldId) : null;
     if (p) return { ...d, personName: stakeholderNameById.get(p.stakeholderId) || null };
-    return d && d.fieldId ? { ...d, fieldLabel: fieldLabelById.get(d.fieldId) || null } : d;
+    if (!d || !d.fieldId) return d;
+    return {
+      ...d,
+      fieldLabel: fieldLabelById.get(d.fieldId) || null,
+      docGroup: fieldSectionById.get(d.fieldId) || null,
+    };
   });
   // Persisted first, then live — canonicalDocs keeps first-occurrence order.
   const rawAmendmentDocs = [
@@ -6310,6 +6337,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
       if (anchor.has(type)) return;
       const p = parsePersonFieldId(d.fieldId);
       if (p) anchor.set(type, p.stakeholderId);
+    });
+    return anchor;
+  })();
+
+  // Same idea for the pre-filled ROWS: one document, one card. Correcting three
+  // lines of the registered address is one Notice of Change of Address, so it
+  // shows against the first field that asked for it rather than once per row.
+  const rowDocAnchor = (() => {
+    const anchor = new Map();
+    rawAmendmentDocs.forEach((d) => {
+      if (!d || !d.docType || !d.fieldId) return;
+      if (parsePersonFieldId(d.fieldId)) return; // person docs anchor separately
+      const k = docKey(d);
+      if (!anchor.has(k)) anchor.set(k, d.fieldId);
     });
     return anchor;
   })();
