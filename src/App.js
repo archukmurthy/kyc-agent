@@ -4650,6 +4650,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const mine = Object.entries(dialogueStateRef.current)
       .filter(([k, snap]) => snap && snap.personScope && k.includes(`::${s.id}::`));
     if (mine.length === 0) return null;
+    /**
+     * ONE CARD PER DOCUMENT, not one per change.
+     *
+     * Correcting John's date of birth AND his nationality both classify to
+     * Proof of Identity — one passport answers both, and canonicalDocs already
+     * collapses them to a single entry keyed (stakeholderId, docType). The
+     * card, though, was rendered per dialogue snapshot, so the customer was
+     * asked for the same passport twice. Both cards even drove the same upload
+     * slot, which made the duplicate purely cosmetic noise.
+     *
+     * Scope rules are unchanged: identity evidence stays per person, and a
+     * company-wide document still renders on its anchor person only.
+     *
+     * The analyst strip stays per SNAPSHOT — it audits each change, so one per
+     * attribute is correct there.
+     */
+    const seenDocKeys = new Set();
+    const seenCoveredNotes = new Set();
     return (
       <div style={{ padding: "0 16px 12px" }}>
         {mine.map(([k, snap]) => {
@@ -4660,11 +4678,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
           const evDocType = canonicalDocType(ev.docType);
           const companyWide = isCompanyWideDocType(evDocType);
           const isAnchor = !companyWide || companyDocAnchor.get(evDocType) === s.id;
-          const doc = ev.workflow === "doc_required" && evDocType && isAnchor
+          const match = ev.workflow === "doc_required" && evDocType && isAnchor
             ? confirmDocs.find((d) =>
                 d.docType === evDocType &&
                 (companyWide ? !d.stakeholderId : d.stakeholderId === s.id))
             : null;
+          // First change to require this document owns the card; later ones
+          // resolve to the same docKey and render nothing.
+          let doc = null;
+          if (match) {
+            const dk = docKey(match);
+            if (!seenDocKeys.has(dk)) {
+              seenDocKeys.add(dk);
+              doc = match;
+            }
+          }
+          // Same collapse for the "already covered" note.
+          let showCoveredNote = false;
+          if (companyWide && !isAnchor && ev.workflow === "doc_required" && !seenCoveredNotes.has(evDocType)) {
+            seenCoveredNotes.add(evDocType);
+            showCoveredNote = true;
+          }
           return (
             <div key={k}>
               {doc && (
@@ -4682,7 +4716,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               )}
               {/* Same document, already requested against another person — say
                   so rather than silently showing nothing here. */}
-              {companyWide && !isAnchor && ev.workflow === "doc_required" && (
+              {showCoveredNote && (
                 <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", padding: "6px 0" }}>
                   Covered by the single {evDocType.toLowerCase()} requested for this company — you only upload it once.
                 </div>
