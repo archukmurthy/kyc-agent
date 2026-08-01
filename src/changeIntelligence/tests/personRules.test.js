@@ -236,9 +236,15 @@ describe('the two deliberate UNDECIDED sub-rules (need real ownership data)', ()
     expect(r.silent).toBe(true); // no customer-facing consequence
   });
 
-  it('ownership %: the ratified rules exist for when real data lands', () => {
+  // Updated 2026-08-01: crossing is now COMPUTED from the real percentages, and
+  // Archana ratified that a crossing must ASK for the ownership chart rather
+  // than only flag an analyst — the request IS the analyst trigger, as it is
+  // for removal and add-a-person.
+  it('ownership %: a threshold crossing requests the ownership chart', () => {
     expect(classifyChange(person({ attribute: 'ownership_pct', thresholdCrossing: 'crossed_below' })))
-      .toMatchObject({ workflow: 'analyst_review', decided: true });
+      .toMatchObject({ workflow: 'doc_required', docType: 'Ownership Chart', decided: true });
+    expect(classifyChange(person({ attribute: 'ownership_pct', thresholdCrossing: 'crossed_above' })))
+      .toMatchObject({ workflow: 'doc_required', docType: 'Ownership Chart', decided: true });
     expect(classifyChange(person({ attribute: 'ownership_pct', thresholdCrossing: 'none' })))
       .toMatchObject({ workflow: 'accept_silent', decided: true });
   });

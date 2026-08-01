@@ -247,18 +247,31 @@ const PERSON_RULES = [
     then: { workflow: 'accept_silent', silent: true },
   },
 
-  // ── Ownership %: the change is accepted; only a ≥25%→<25% crossing flags an
-  //    analyst. Crossing cannot be computed from stub data, so 'unknown' — the
-  //    only value produced today — records UNDECIDED rather than guessing. ──
+  // ── Ownership %: a change that crosses the 25% UBO threshold changes WHO the
+  //    beneficial owners are, so the ownership chart has to be re-evidenced.
+  //    Crossing is now computed from the before/after percentages
+  //    (ownershipCrossing.js) instead of being hardcoded 'unknown'; 'unknown'
+  //    survives for registry BANDS ("25-50%"), where a point comparison would
+  //    be a guess. ──
   {
     id: 'PERSON-OWNERSHIP-CROSSING-UNKNOWN',
     when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'unknown' },
     then: { workflow: 'UNDECIDED', decided: false, silent: true },
   },
   {
+    // Was a UBO, now is not. Archana, 2026-08-01: this must ASK for the
+    // ownership chart, not just flag an analyst — the request IS the analyst
+    // trigger, the same principle as removal and add-a-person.
     id: 'PERSON-OWNERSHIP-CROSSED-BELOW',
     when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_below' },
-    then: { workflow: 'analyst_review', silent: true },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
+  },
+  {
+    // Was not a UBO, now is — a NEW beneficial owner, which is at least as
+    // material as losing one. Same document for the same reason.
+    id: 'PERSON-OWNERSHIP-CROSSED-ABOVE',
+    when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_above' },
+    then: { workflow: 'doc_required', docType: 'Ownership Chart' },
   },
   {
     id: 'PERSON-OWNERSHIP-NO-CROSSING',

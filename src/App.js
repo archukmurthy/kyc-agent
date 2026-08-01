@@ -28,6 +28,7 @@ import {
   ATTRIBUTE_BY_FIELD_KEY,
 } from "./components/companyConfirm/personType";
 import { classifyChange } from "./changeIntelligence/classifyChange";
+import { ownershipCrossing } from "./changeIntelligence/ownershipCrossing";
 // eslint-disable-next-line no-unused-vars -- setHighRiskCountries is used by the
 // SHOW_TEST_TOOLS window affordance below, which the rule does not see.
 import {
@@ -2989,10 +2990,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
       pepValue: attribute === PERSON_ATTRIBUTE.PEP
         ? (value === true || value === "yes" ? "yes" : "no")
         : null,
-      // Threshold crossing needs reliable per-person ownership data, which the
-      // person-type stub cannot supply — 'unknown' records UNDECIDED rather
-      // than guessing (CD-03's deliberate gap, see policyTable PERSON_RULES).
-      thresholdCrossing: attribute === PERSON_ATTRIBUTE.OWNERSHIP_PCT ? "unknown" : null,
+      // Threshold crossing, COMPUTED from the before/after percentages. It was
+      // hardcoded 'unknown' on the grounds that the person-type stub cannot
+      // supply ownership data — but that is the wrong gap: the person TYPE is
+      // stubbed, the shareholding PERCENTAGE is real (research returns it, and
+      // the correction supplies the new one). ownershipCrossing still answers
+      // 'unknown' for a registry band like "25-50%", where comparing a range to
+      // a threshold would be the guess the engine refuses to make.
+      thresholdCrossing: attribute === PERSON_ATTRIBUTE.OWNERSHIP_PCT
+        ? ownershipCrossing(person.share_percentage, value)
+        : null,
       // EDD flag: injectable list, empty until the MLRO supplies it.
       highRiskCountry: personHasHighRiskCountry({
         ...person,
