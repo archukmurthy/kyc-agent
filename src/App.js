@@ -9,7 +9,6 @@ import Step2DynamicForm from "./components/Step2DynamicForm";
 import Step5Recompute from "./components/Step5Recompute";
 import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
 import { classifyFieldClass, deriveSource } from "./components/changeDialogue/dialogueContent";
-import AmendmentDocuments from "./components/amendmentDocuments/AmendmentDocuments";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
 // TEST VIEW imports — the analyst strip is commented out at both render sites.
 // Uncomment these two lines together with those blocks to bring it back.
@@ -136,7 +135,7 @@ import { DemoBanner } from "./components/banners/DemoBanner";
 import { DemoToggle } from "./components/banners/DemoToggle";
 import { StableInput } from "./components/inputs/StableInput";
 import { DossierSection } from "./components/dossier/DossierSection";
-import { StakeholderGapForms } from "./components/fillGaps/StakeholderGapForms";
+import { FillGapsPage } from "./components/fillGaps/FillGapsPage";
 import { BUSINESS_TYPE_OPTIONS, stakeholderMissingFields } from "./components/fillGaps/stakeholderHelpers";
 import {
   mapToDocAgentOwnershipType,
@@ -3339,48 +3338,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
     return out;
   };
 
+
   // Build the "who is completing this application?" candidate list from the
   // research results: every active director plus every individual (non-corporate)
   // UBO, de-duplicated by name. Drives the applicant-section person selector.
 
-  const renderGapSection = (sectionKey) => {
-    // "Additional Documents" (documents) section hidden on the Fill Gaps page
-    // for all flows (FI / Corporate, AI-only / document+AI) per request. Kept
-    // restorable: remove this guard to bring the section back.
-    if (sectionKey === "documents") return null;
-    const items = getCombinedGaps()
-      .filter(g => g.section === sectionKey)
-      .filter(dependsOnSatisfied);
-    if (items.length === 0) return null;
-    const cfg = sectionConfig[sectionKey] || { title: humaniseSection(sectionKey), icon: "📋", sub: "", twoCol: true };
-
-    return (
-      <div style={card} key={sectionKey}>
-        <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{cfg.icon} {cfg.title}</h3>
-        <p style={{ fontSize: 12, color: "#1a3a4a60", margin: "0 0 14px" }}>{cfg.sub}</p>
-        <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
-          {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
-        </div>
-        {/* Part 8 — analyst custom questions (from pre-boarding) wired into the
-            customer's Fill Gaps for this section, rendered as fillable fields. */}
-        {customQuestions.filter(q => q.section === sectionKey).map(q => (
-          <div key={q.id} style={{ marginBottom: 4 }}>
-            <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "1px 6px", marginBottom: 4, textTransform: "uppercase" }}>Additional</span>
-            <StableInput
-              id={`custom_${q.id}`}
-              label={q.question}
-              required={q.required}
-              type={q.fieldType === "yesno" ? "select" : q.fieldType}
-              options={q.fieldType === "yesno" ? [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }] : q.fieldType === "select" ? (q.options || []).map(o => ({ value: o, label: o })) : undefined}
-              value={gapRef.current[`custom_${q.id}`] || ""}
-              onUpdate={updateGap}
-              placeholder={q.fieldType === "textarea" ? "Enter your response..." : `Enter ${String(q.question).toLowerCase()}`}
-            />
-          </div>
-        ))}
-      </div>
-    );
-  };
 
   const jurisdictionBadge = activeSchema ? (() => {
     // Region drives only the colour; the label comes from the resolved
@@ -7024,94 +6986,44 @@ Nium Onboarding Team`;
         )}
 
         {step === STEPS.fillGaps && research && activeSchema && agentType !== "preboarding" && (
-          <div>
-            <AmendmentDocuments
-              submissionId={dossierId || onboardingSubmissionId}
-              initialUploads={amendmentUploads}
-              onUploadsChange={setAmendmentUploads}
-              extraDocuments={docsNeededFrom(dialogueStateRef.current)}
-            />
-            <div style={card}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#e0a040,#d09030)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📝</div>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Additional Information Required {jurisdictionBadge}{entityBadge}</h2>
-                  <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>{getCombinedGaps().filter(g => g.section !== "documents").length} fields need your input</p>
-                </div>
-                {SHOW_TEST_TOOLS && (
-                  <button
-                    type="button"
-                    onClick={fillTestData}
-                    title="Testing only — fills all visible fields with sample data"
-                    style={{
-                      marginLeft: "auto", flexShrink: 0,
-                      padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                      background: "transparent", color: "#4a9e8e",
-                      border: "2px dashed #4a9e8e",
-                    }}
-                  >
-                    ✨ Fill with test data
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {stakeholderErrors.length > 0 && (
-              <div style={{
-                background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10,
-                padding: "14px 16px", marginBottom: 16,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
-                  Please fix the following before continuing:
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {stakeholderErrors.map((msg, i) => (
-                    <li key={i} style={{ fontSize: 12, color: "#dc2626", marginBottom: 3 }}>{msg}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* 1. Corrections required + 2. Missing gap fields — corrections
-                come first inside gapSectionOrder(), then missing fields. */}
-            {gapSectionOrder().filter(s => s !== "applicant").map(s => renderGapSection(s))}
-
-            <StakeholderGapForms
-              research={research}
-              activeSchema={activeSchema}
-              effectivelyListed={effectivelyListed}
-              getStakeholders={getStakeholders}
-              updateStakeholderField={updateStakeholderField}
-              addStakeholder={addStakeholder}
-              removeStakeholder={removeStakeholder}
-              isStkFieldConfirmed={isStkFieldConfirmed}
-              stkCorrectedFields={stkCorrectedFields}
-              stkHasCorrections={stkHasCorrections}
-              cardStyle={card}
-            />
-
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.confirm)}>← Back to Review</Btn>
-              <Btn variant="primary" onClick={() => {
-                const stkErrors = validateStakeholders();
-                if (stkErrors.length > 0) {
-                  setStakeholderErrors(stkErrors);
-                  setError("");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                  return;
-                }
-                if (allGapsFilled()) {
-                  setStakeholderErrors([]);
-                  scrollAndSetStep(STEPS.documentRequirements);
-                  setError("");
-                } else {
-                  setError("Please fill all required fields.");
-                }
-              }}>Continue to Documents →</Btn>
-            </div>
-            {error && step === STEPS.fillGaps && <div style={{ marginTop: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
-          </div>
+          <FillGapsPage
+            research={research}
+            activeSchema={activeSchema}
+            gapSectionOrder={gapSectionOrder}
+            getCombinedGaps={getCombinedGaps}
+            dependsOnSatisfied={dependsOnSatisfied}
+            updateGap={updateGap}
+            gapRef={gapRef}
+            allGapsFilled={allGapsFilled}
+            sectionConfig={sectionConfig}
+            customQuestions={customQuestions}
+            fillTestData={fillTestData}
+            validateStakeholders={validateStakeholders}
+            stakeholderErrors={stakeholderErrors}
+            setStakeholderErrors={setStakeholderErrors}
+            effectivelyListed={effectivelyListed}
+            getStakeholders={getStakeholders}
+            updateStakeholderField={updateStakeholderField}
+            addStakeholder={addStakeholder}
+            removeStakeholder={removeStakeholder}
+            isStkFieldConfirmed={isStkFieldConfirmed}
+            stkCorrectedFields={stkCorrectedFields}
+            stkHasCorrections={stkHasCorrections}
+            dossierId={dossierId}
+            onboardingSubmissionId={onboardingSubmissionId}
+            amendmentUploads={amendmentUploads}
+            setAmendmentUploads={setAmendmentUploads}
+            dialogueStateRef={dialogueStateRef}
+            jurisdictionBadge={jurisdictionBadge}
+            entityBadge={entityBadge}
+            step={step}
+            STEPS={STEPS}
+            scrollAndSetStep={scrollAndSetStep}
+            error={error}
+            setError={setError}
+            Btn={Btn}
+            cardStyle={card}
+          />
         )}
 
         {/* Pre-boarding Fill Gaps — Kept for reference — replaced by unified
