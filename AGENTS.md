@@ -197,6 +197,88 @@ If any check fails, do not push.
      customer): Required Docs step shows
      documents (not empty)
 
+## RULE 6 — WORKTREE SETUP
+Extractions and refactors run in a git
+worktree under .claude/worktrees/. Three
+environment landmines fire there and NOT in
+the primary repo. Handle all three BEFORE
+writing code — each one, discovered mid-run,
+reads as a self-inflicted regression.
+
+### 6a. Pull the primary worktree first
+C:\kyc-agent-deploy does NOT auto-follow
+origin/main. Before cutting a branch:
+
+    git -C C:\kyc-agent-deploy pull --ff-only origin main
+
+Skip it and the branch is cut one behind,
+then needs a rebase before merge. This has
+happened before.
+
+### 6b. Baseline the render suite BEFORE editing
+In a worktree the JSX render suites fail with
+"Invalid hook call ... more than one copy of
+React". The worktree has no
+@testing-library/react, so it resolves from
+the parent repo and drags the PARENT's
+react-dom in beside the worktree's react.
+Both are the same version — these are
+duplicate INSTANCES, not a version clash, so
+do not go hunting for a version mismatch.
+
+Pin them at run time. No committed file
+changes, no package install:
+
+    CI=true npx react-scripts test --watchAll=false \
+      --testMatch='**/*.test.{js,jsx}' \
+      --moduleNameMapper='{"^react$":"<rootDir>/node_modules/react","^react-dom$":"<rootDir>/node_modules/react-dom","^react-dom/(.*)$":"<rootDir>/node_modules/react-dom/$1","^react/(.*)$":"<rootDir>/node_modules/react/$1"}'
+
+RUN THIS BEFORE YOU TOUCH ANY CODE. Unmapped,
+it is ~101 red of 374 — all 5 render suites,
+none of them your fault. Establishing that
+baseline first is the only thing that makes a
+LATER red attributable to your change.
+
+### 6c. Smoke harness env + the Jest glob
+npm run test:smoke:db reads .env.test.local
+from process.cwd(), and that gitignored file
+exists only in the primary repo. Copy it into
+the worktree first. It must provide:
+
+  TEST_DATABASE_URL
+    a DISPOSABLE Neon branch — never the
+    application database
+  REAL_DB_SMOKE_CONFIRM
+    = I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN
+
+The harness refuses to run if
+TEST_DATABASE_URL normalises to DATABASE_URL
+(scripts/real-db-smoke.js#requireSafeTestDatabase).
+That is a hard guard, not a convention — but
+set the value correctly rather than relying
+on it.
+
+Same non-inheritance trap applies to the
+sibling .env.local used by the dev server. It
+can be PRESENT but STALE (rotated Neon
+credential, missing BLOB_READ_WRITE_TOKEN),
+which breaks pre-boarding — save-dossier is
+its spine — and looks exactly like a broken
+refactor. Fingerprint both copies before
+blaming code; never print the values:
+
+    for k in DATABASE_URL ANTHROPIC_API_KEY BLOB_READ_WRITE_TOKEN; do
+      v=$(grep -m1 "^$k=" .env.local | cut -d= -f2-)
+      echo "$k ${#v} $(printf %s "$v" | sha256sum | cut -c1-12)"
+    done
+
+Separately, and independent of any env: Jest
+run from a .claude/worktrees/ path finds 0
+tests unless you pass
+--testMatch='**/*.test.{js,jsx}'. The default
+glob breaks on the backslash in the path, and
+the suite silently runs nothing.
+
 ## ARCHITECTURE — THINGS YOU MUST KNOW
 
 ### Two separate stores — never merge them
