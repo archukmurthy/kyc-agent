@@ -4015,18 +4015,24 @@ export default function KYCAgent({ previewMode = false } = {}) {
   }
 
   // ───────────────────────────────────────────────────────────────────────
-  // LANDING PAGE — agent selection. Renders before Step 1. Onboarding Agent
-  // routes into the existing flow; Pre-boarding Agent is password-gated (ARCH)
-  // and shows a coming-soon screen after a correct code.
-  // ───────────────────────────────────────────────────────────────────────
-  // PARKED — not dead. Full landing/intro page, intentionally disabled (call
-  // site commented out in the agentType === null routing block, "hidden for
-  // stakeholder review weekend"). No live replacement exists; retained for
-  // possible re-enable as the production intro screen. Do not delete without a
-  // product decision. NOTE: this is deliberately UNLIKE the superseded
-  // pre-boarding confirm/fill-gaps renderers, which were deleted because live
-  // components (ConfirmStep, FillGapsPage, renderDossierView) took over their
-  // job. Nothing took over this one — it is switched off, not replaced.
+  // AGENT-SELECTION SCREEN — the front-door chooser: user picks the KYC
+  // Onboarding agent vs the Pre-boarding agent. Onboarding routes straight into
+  // the wizard; Pre-boarding routes to the password gate (ARCH) first.
+  //
+  // Currently PARKED — the call site is commented out in the agentType === null
+  // routing block below ("hidden for stakeholder review weekend"). KEPT
+  // deliberately: this is a real screen to be restored, not dead code. Nothing
+  // took over its job — it is switched off, not superseded, which is why it
+  // survived the sweep that deleted the pre-boarding confirm/fill-gaps
+  // renderers (those had live replacements; this does not).
+  //
+  // STAYS IN App.js BY DESIGN. It is the router ABOVE both flows, so it must
+  // NOT be moved into the pre-boarding component — or any single-flow component
+  // — as that would bury the both-flows chooser inside one of the flows it
+  // routes to.
+  //
+  // To restore: re-enable the commented call site. Do not delete without a
+  // product decision.
   // ───────────────────────────────────────────────────────────────────────
   // eslint-disable-next-line no-unused-vars
   function renderLandingPage() {
