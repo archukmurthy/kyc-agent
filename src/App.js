@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getTenantId, isPreviewMode } from "./utils/tenant";
-import SearchableSelect from "./components/SearchableSelect";
 import {
   OWNERSHIP_TYPE_LIBRARY,
   ownershipTypeLabel,
@@ -53,6 +52,7 @@ import { ApplicantPage } from "./components/applicant/ApplicantPage";
 // The journey-selection screen moved out; App now only wires it up. All of its
 // state stayed here — every item has a consumer outside that screen.
 import { JourneyPicker } from "./components/companyLookup/JourneyPicker";
+import { CompanyLookupPage } from "./components/companyLookup/CompanyLookupPage";
 import { AIDocumentsPage } from "./components/aiDocuments/AIDocumentsPage";
 import { FoundFieldsTable } from "./components/companyConfirm/FoundFieldsTable";
 // Slice 2 — the People section moved out; App now only wires it up. The PURE
@@ -72,9 +72,7 @@ import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy"
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
   SOURCE_TRUST,
-  getOwnershipTypeOptions,
   computeResearchStrategy,
-  getApplicableLicence,
   isStakeholderField,
   isUboLikeField,
   isRegistryExemptionNotice,
@@ -86,7 +84,6 @@ import {
   detectPubliclyListed,
   needsStakeholderDetails,
   detectListingEvidence,
-  pickLicence,
   getSchemaFromConfig,
   findFieldDef,
   resolveDisplayValue,
@@ -5366,137 +5363,35 @@ Nium Onboarding Team`;
         </div>
 
         {step === STEPS.input && !journeyOpen && (
-          <div style={card}>
-            <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Company Lookup</h2>
-            <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 20px" }}>Enter the company name and country. The agent will use <strong>jurisdiction-specific requirements</strong> (UK or SG/default) to drive the research and gap collection.</p>
-            <StableInput id="companyName" label="Company Legal Name" type="text" value={companyName} onUpdate={(_, v) => setCompanyName(v)} required placeholder="e.g. Tesco PLC, DBS Group Holdings" />
-            {/* Optional registration / company number. When supplied it's used as
-                the primary search key to pinpoint the exact company; blank = the
-                same name-based search as before (slice 1). */}
-            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => { setRegNumber(v); setRegNumberSource(v.trim() ? "customer" : null); }} placeholder="e.g. 00445790 — the official company / registration number" />
-            <p style={{ fontSize: 11, color: "#1a3a4a80", margin: "-8px 0 16px", lineHeight: 1.4 }}>
-              Optional. If you know the company's official registration number, we'll use it to pinpoint the exact company and sharpen the research. Leave it blank to search by name.
-            </p>
-            <div style={{ marginBottom: 14 }}>
-              <label htmlFor="entity-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Entity Type <span style={{ color: "#d44" }}>*</span></label>
-              <SearchableSelect
-                id="entity-type"
-                value={entityType}
-                onChange={(v) => { setEntityType(v); setOwnershipType(""); }}
-                placeholder="Select or type entity type…"
-                options={activeEntityTypes.map(e => ({
-                  value: e.id,
-                  label: `${e.icon ? e.icon + " " : ""}${e.label || e.id}`,
-                  description: e.description || undefined,
-                }))}
-              />
-            </div>
-            {/* Ownership Type is always visible; its options are populated from
-                the selected entity type. Until an entity type is chosen it shows
-                disabled with a guiding placeholder. */}
-            <div style={{ marginBottom: 14 }}>
-              <label htmlFor="ownership-type" style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 }}>
-                Ownership Type <span style={{ color: C.error }}>*</span>
-              </label>
-              <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
-                How is this company owned and structured?
-              </p>
-              <SearchableSelect
-                id="ownership-type"
-                value={ownershipType}
-                onChange={setOwnershipType}
-                disabled={!entityType}
-                placeholder={entityType ? "Select ownership type…" : "Select an entity type first…"}
-                options={entityType ? getOwnershipTypeOptions(entityType, tenantConfig) : []}
-              />
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label htmlFor="country-reg" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#1a3a4a", marginBottom: 5 }}>Registered Country <span style={{ color: "#d44" }}>*</span></label>
-              <SearchableSelect
-                id="country-reg"
-                value={countryCode}
-                onChange={setCountryCode}
-                placeholder="Select or type country…"
-                options={COUNTRIES.map(c => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
-              />
-            </div>
-            {countryCode && (() => {
-              // Resolve the licence from the tenant's configured licences,
-              // not the hardcoded UK/SG fallback. If tenantConfig is missing
-              // (offline fallback) fall back to the old hardcoded helper.
-              const resolved = tenantConfig ? pickLicence(countryCode, tenantConfig) : null;
-              const primary = tenantConfig ? (tenantConfig.licences || []).find(l => l.isPrimary) || (tenantConfig.licences || [])[0] : null;
-              const isLicensedHere = !!resolved && Array.isArray(resolved.countriesCovered) && resolved.countriesCovered.includes(countryCode);
-              const licenceLabel = resolved
-                ? `${resolved.jurisdictionCode === "GB" ? "🇬🇧 " : resolved.jurisdictionCode === "SG" ? "🇸🇬 " : ""}${resolved.jurisdictionName || resolved.id}${resolved.regulatoryAuthority ? ` (${resolved.regulatoryAuthority})` : ""}${!isLicensedHere ? " — default for non-licensed markets" : ""}`
-                : (getApplicableLicence(countryCode) === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) — default for non-licensed markets");
-              const isFiFlow = entityType === "FI" || entityType === "Platform";
-              const routesNote = entityType === "Platform" || entityType === "Direct"
-                ? ` (${entityType} routes to ${isFiFlow ? "FI" : "Corporate"} schema)`
-                : "";
-              const primaryName = primary?.jurisdictionName || "the default licence";
-              return (
-                <div style={{ padding: "10px 14px", borderRadius: 8, background: isLicensedHere ? "#f0f3f8" : "#fff8ed", fontSize: 12, marginBottom: 14, borderLeft: isLicensedHere ? "3px solid #1a3a4a" : "3px solid #e0a040" }}>
-                  <div style={{ marginBottom: 4 }}><strong>🌍 Researching in:</strong> {countryObj?.name} ({countryCode})</div>
-                  <div><strong>📋 Applicable licence:</strong> {licenceLabel}</div>
-                  {entityType && (
-                    <div style={{ marginTop: 4 }}><strong>📑 Form set:</strong> {isFiFlow ? "FI version" : "Corporate version"}{routesNote}</div>
-                  )}
-                  {!isLicensedHere && <div style={{ marginTop: 4, fontStyle: "italic", color: "#9d6500" }}>{companyName_} has no licence in {countryObj?.name}, so this customer is onboarded under {primaryName}. Public records will be searched in {countryObj?.name}, but {primaryName} requirements apply.</div>}
-                </div>
-              );
-            })()}
-            {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>}
-            {/* Research cache override. Cache-first by default (saves API cost on
-                repeat searches); tick to force a live re-fetch. See
-                lib/researchCache.js + api/research.js. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748b' }}>
-                <input
-                  type="checkbox"
-                  checked={forceRefresh}
-                  onChange={e => setForceRefresh(e.target.checked)}
-                  style={{ width: 15, height: 15, cursor: 'pointer' }}
-                />
-                🔄 Force re-fetch (ignore cache)
-              </label>
-              {!forceRefresh && (
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                  Cache saves API costs — only override for demos or stale data
-                </span>
-              )}
-              {forceRefresh && (
-                <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
-                  ⚠ Live API call — this will cost tokens
-                </span>
-              )}
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-              {SHOW_TEST_TOOLS && <Btn onClick={doDummyResearch} variant="secondary">🧪 Dummy Research (skip API)</Btn>}
-              <Btn
-                disabled={!companyName.trim() || !countryCode || !entityType || !ownershipType}
-                onClick={() => {
-                  if (!companyName.trim()) { setError("Please enter a company name."); return; }
-                  if (!entityType) { setError("Please select an entity type."); return; }
-                  if (!ownershipType) { setError("Please select an ownership type."); return; }
-                  if (!countryCode) { setError("Please select a country."); return; }
-                  setError("");
-                  // Wrong-TYPE re-derive: skip the search journey entirely — keep
-                  // the existing research and re-resolve from the corrected type.
-                  if (pendingReseedMode === "re_derive") { applyReDerive(); return; }
-                  setSelectedJourneyCard(null);
-                  setManualOpened(false);
-                  // Both the onboarding AND pre-boarding flows now show the
-                  // journey-selection page ("How would you like to complete your
-                  // application?"). Pre-boarding previously skipped straight to
-                  // AI research; it now offers the same options so the analyst
-                  // can demo every journey. The pre-boarding auto-save effect
-                  // still folds the result into the dossier once research runs,
-                  // so any AI journey still lands on the Dossier view.
-                  setJourneyOpen(true);
-                }} variant="primary">Continue →</Btn>
-            </div>
-          </div>
+          <CompanyLookupPage
+            companyName={companyName}
+            setCompanyName={setCompanyName}
+            regNumber={regNumber}
+            setRegNumber={setRegNumber}
+            setRegNumberSource={setRegNumberSource}
+            entityType={entityType}
+            setEntityType={setEntityType}
+            ownershipType={ownershipType}
+            setOwnershipType={setOwnershipType}
+            countryCode={countryCode}
+            setCountryCode={setCountryCode}
+            countryObj={countryObj}
+            activeEntityTypes={activeEntityTypes}
+            tenantConfig={tenantConfig}
+            companyName_={companyName_}
+            forceRefresh={forceRefresh}
+            setForceRefresh={setForceRefresh}
+            pendingReseedMode={pendingReseedMode}
+            applyReDerive={applyReDerive}
+            setSelectedJourneyCard={setSelectedJourneyCard}
+            setManualOpened={setManualOpened}
+            setJourneyOpen={setJourneyOpen}
+            doDummyResearch={doDummyResearch}
+            error={error}
+            setError={setError}
+            Btn={Btn}
+            cardStyle={card}
+          />
         )}
 
         {step === STEPS.input && journeyOpen && (
