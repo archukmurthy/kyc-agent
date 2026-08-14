@@ -23,6 +23,89 @@ Live URL: https://kyc-agent-deploy.vercel.app
 Repo: archukmurthy-3271s-projects/kyc-agent-deploy
 
 ═══════════════════════════════════════
+WORKTREE SETUP — DO THIS FIRST
+═══════════════════════════════════════
+
+Extractions and refactors run in a git
+worktree under .claude/worktrees/. Three
+environment landmines fire there and NOT in
+the primary repo. Handle all three BEFORE
+writing code. Each one, discovered mid-run,
+reads as a self-inflicted regression.
+
+1. PULL THE PRIMARY WORKTREE FIRST
+   C:\kyc-agent-deploy does NOT auto-follow
+   origin/main. Before cutting a branch:
+
+     git -C C:\kyc-agent-deploy pull --ff-only origin main
+
+   Skip it and the branch is cut one behind,
+   then needs a rebase before merge. This
+   has happened before.
+
+2. BASELINE THE RENDER SUITE BEFORE EDITING
+   In a worktree the JSX render suites fail
+   with "Invalid hook call — more than one
+   copy of React". The worktree has no
+   @testing-library/react, so it resolves
+   from the parent repo and drags the
+   PARENT's react-dom in beside the
+   worktree's react. Both are the same
+   version: duplicate INSTANCES, not a
+   version clash. Do not hunt for a version
+   mismatch — there isn't one.
+
+   Pin them at run time. No committed file
+   change, no package install:
+
+     CI=true npx react-scripts test --watchAll=false \
+       --testMatch='**/*.test.{js,jsx}' \
+       --moduleNameMapper='{"^react$":"<rootDir>/node_modules/react","^react-dom$":"<rootDir>/node_modules/react-dom","^react-dom/(.*)$":"<rootDir>/node_modules/react-dom/$1","^react/(.*)$":"<rootDir>/node_modules/react/$1"}'
+
+   RUN IT BEFORE TOUCHING ANY CODE. Unmapped
+   it is ~101 red of 374 — all 5 render
+   suites, none of it your doing. That
+   baseline is the only thing that makes a
+   LATER red attributable to your change.
+
+3. SMOKE HARNESS ENV + THE JEST GLOB
+   npm run test:smoke:db reads .env.test.local
+   from process.cwd(), and that gitignored
+   file exists only in the primary repo. Copy
+   it into the worktree first. It must give:
+
+     TEST_DATABASE_URL
+       a DISPOSABLE Neon branch — never the
+       application database
+     REAL_DB_SMOKE_CONFIRM
+       = I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN
+
+   The harness refuses to run when
+   TEST_DATABASE_URL normalises to
+   DATABASE_URL (requireSafeTestDatabase in
+   scripts/real-db-smoke.js). A hard guard,
+   not a convention — still set it correctly
+   rather than leaning on it.
+
+   The sibling .env.local (dev server) has the
+   same non-inheritance trap, and can be
+   PRESENT but STALE — rotated Neon credential,
+   missing BLOB_READ_WRITE_TOKEN. That breaks
+   pre-boarding, because save-dossier is its
+   spine, and it looks exactly like a broken
+   refactor. Fingerprint the worktree copy
+   against the primary before blaming code;
+   never print the values.
+
+   Separately, independent of any env: Jest
+   run from a .claude/worktrees/ path finds 0
+   tests unless you pass
+   --testMatch='**/*.test.{js,jsx}'. The
+   default glob breaks on the backslash in
+   the path and the suite silently runs
+   nothing.
+
+═══════════════════════════════════════
 THE TWO AGENTS
 ═══════════════════════════════════════
 
