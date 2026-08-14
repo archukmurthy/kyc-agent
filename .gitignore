@@ -32,3 +32,7 @@ watch-claude.ps1
 
 # Codex/agent worktrees (local git worktrees — never commit; they are embedded repos)
 .codex-worktrees/
+
+# Local scratch/preview work (standalone HTML previews of parked screens, throwaway
+# harnesses). Kept on disk as a local tool; never tracked.
+scratch/
