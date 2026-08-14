@@ -178,35 +178,34 @@ describe("pre-boarding gate", () => {
    ═══════════════════════════════════════════ */
 describe("back to agent selection", () => {
   /**
-   * ⚠ PINS THE CURRENT *BROKEN* BEHAVIOUR — this is deliberate.
+   * The button is now PARKED (commented out in PreboardingGate.jsx), so this
+   * asserts its ABSENCE. That is a deliberate behaviour change, not a drift.
    *
-   * "← Back to agent selection" calls setAgentType(null). The routing block then
-   * re-derives agentType from the URL, and ?preboarding=1 is STILL set, so it
-   * immediately flips back to "preboarding" and the gate re-traps the user. The
-   * button therefore does nothing observable.
+   * PREVIOUSLY this assertion pinned the button's dead end: clicking it called
+   * setAgentType(null), the routing block re-derived agentType from the still-set
+   * ?preboarding=1 param, and the gate re-trapped the user — so the control did
+   * nothing observable.
    *
-   * Compounding it: the agent-selection screen it targets (renderLandingPage) is
-   * itself parked, so there is nowhere to go back TO even if the param cleared.
+   * It was parked rather than fixed because its destination is parked. The button
+   * points at the agent-selection screen (renderLandingPage in App.js), which is
+   * itself commented out; a control pointing at a parked destination has nowhere
+   * to go even if the param were cleared. Removing the affordance is the honest
+   * state, not papering over a bug.
    *
-   * The fix commit will clear ?preboarding=1 on this action, and THIS ASSERTION
-   * WILL BE UPDATED to expect a return to agent selection. That update is the
-   * visible proof the fix worked. Do not "fix" the test to match a fix that has
-   * not landed.
+   * RE-ENABLE the button together with renderLandingPage, and at that point this
+   * assertion should be rewritten again — to expect an actual return to agent
+   * selection.
    */
-  it("currently DEAD-ENDS — clicking Back leaves the user in pre-boarding", async () => {
+  it("the back-to-agent-selection control is PARKED — no dead-end affordance renders", async () => {
     await mountAtGate();
     expect(codeInput()).toBeInTheDocument();
 
-    fireEvent.click(buttonsWithText(/Back to agent selection/i)[0]);
-    await settle(0);
+    // The button is commented out, so it must not render at all.
+    expect(buttonsWithText(/Back to agent selection/i).length).toBe(0);
+    expect(bodyText()).not.toMatch(/Back to agent selection/i);
 
-    // The param survives the click, so the routing block re-traps us.
-    expect(
-      new URLSearchParams(window.location.search).get("preboarding")
-    ).toBe("1");
-    // Still on the gate — NOT on agent selection.
-    expect(screen.getByPlaceholderText(/Enter access code/i)).toBeInTheDocument();
-    expect(bodyText()).not.toMatch(/Select the agent you would like to work with/i);
+    // The gate itself is unaffected — the access control is still the way through.
+    expect(buttonsWithText(/Access Pre-boarding Agent/i).length).toBe(1);
   });
 });
 
