@@ -106,6 +106,85 @@ reads as a self-inflicted regression.
    nothing.
 
 ═══════════════════════════════════════
+PARALLEL-EDIT SAFETY — TWO AGENTS, SHARED FILES
+═════════════════════
+
+Two agents must NEVER edit src/App.js — or any
+shared file — concurrently in the same working
+tree.
+
+Concurrent edits RACE. An agent that trusts its
+line numbers (the normal, reasonable thing) will
+silently overwrite the other agent's edit. The
+result is a regression found later, when tests
+go red for no explicable reason — exactly the
+silent failure the net-first discipline exists
+to prevent.
+
+Not hypothetical. During the A‖C extraction
+(AIDocumentsPage ‖ JourneyPicker) both agents
+believed they were in separate worktrees. They
+were not — both edited C:\kyc-agent-deploy
+directly. App.js shifted twice mid-surgery
+(6944 → 6704 → 6707). The pair landed green
+ONLY because one agent had improvised the
+guards below. Without them the second move
+would have destroyed the first.
+
+PICK ONE — MANDATORY for any parallel pair
+that touches App.js. There is no third option.
+
+1. GENUINE git worktree isolation. Each agent
+   in a real, separate checkout — its own path
+   with its own working tree. Merge at the end:
+   first agent merges to main, second REBASES
+   onto it, and the SECOND agent runs BOTH
+   nets, because one page's net driver may
+   thread through the other's component. (The
+   AI-Documents net drives through the journey
+   picker to reach its step — a real instance.)
+
+   VERIFY the isolation before relying on it. A
+   .claude/worktrees or .codex-worktrees path
+   did NOT provide it previously. Check that
+   `git rev-parse --show-toplevel` actually
+   differs between the agents.
+
+2. SERIALIZE the App.js edits. Component files
+   and characterisation nets are SEPARATE files
+   and are ALWAYS safe to author in parallel.
+   Only the App.js call-site + import edits
+   race. So author both components and nets in
+   parallel, then apply the two App.js edits
+   one at a time — first agent's move and
+   merge, then the second re-anchors BY SYMBOL
+   against the updated App.js.
+
+WHAT RACES: the App.js call site + import, and
+nothing else. Nets and components are always
+parallel-safe. When in doubt, serialize the
+App.js edit. Cost of serializing: one extra
+sequential step. Cost of getting it wrong:
+silently clobbering another agent's work.
+
+STANDARD DEFENSES — default, not improvised.
+Any App.js edit that could run under
+concurrency must do all three:
+
+  - RE-ANCHOR BY SYMBOL at execution time,
+    never by a cached line number. Numbers from
+    a read taken minutes ago are already stale.
+  - DIFF-VERIFY the moved region is
+    byte-identical to source before installing.
+    If it drifted, someone else edited it —
+    abort.
+  - CHECKSUM-GUARD the target. Record App.js's
+    hash before the rebuild; if it differs at
+    install time, ABORT and re-anchor. Never
+    install over a file that shifted underneath
+    you.
+
+═════════════════════
 THE TWO AGENTS
 ═══════════════════════════════════════
 
