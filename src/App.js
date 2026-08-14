@@ -53,6 +53,11 @@ import { ApplicantPage } from "./components/applicant/ApplicantPage";
 // state stayed here — every item has a consumer outside that screen.
 import { JourneyPicker } from "./components/companyLookup/JourneyPicker";
 import { CompanyLookupPage } from "./components/companyLookup/CompanyLookupPage";
+// Pre-boarding screens. The ?preboarding=1 early-return routing block below stays
+// in App.js as control flow; these are mounted from inside it.
+import { PreboardingGate } from "./components/preboarding/PreboardingGate";
+import { DossierView } from "./components/preboarding/DossierView";
+import { InviteScreen } from "./components/preboarding/InviteScreen";
 import { AIDocumentsPage } from "./components/aiDocuments/AIDocumentsPage";
 import { FoundFieldsTable } from "./components/companyConfirm/FoundFieldsTable";
 // Slice 2 — the People section moved out; App now only wires it up. The PURE
@@ -77,8 +82,6 @@ import {
   isUboLikeField,
   isRegistryExemptionNotice,
   makeStakeholder,
-  formatDOBForDisplay,
-  formatShareholding,
   enrichStakeholders,
   validateAllDirectors,
   detectPubliclyListed,
@@ -131,14 +134,11 @@ import {
   TEST_DATA,
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
-import { formatFetchedAt } from "./utils/files";
 import { resolveInputType } from "./utils/dateFields";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
 // DemoToggle went with the journey picker — that screen was its only mount site.
-import { StableInput } from "./components/inputs/StableInput";
-import { DossierSection } from "./components/dossier/DossierSection";
 import { FillGapsPage } from "./components/fillGaps/FillGapsPage";
 import { BUSINESS_TYPE_OPTIONS, stakeholderMissingFields } from "./components/fillGaps/stakeholderHelpers";
 import {
@@ -4168,109 +4168,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     );
   }
 
-  function renderPreboardingGate() {
-    const handlePasswordSubmit = () => {
-      if (preboardingPassword === PREBOARDING_PASSWORD) {
-        trackEvent("preboarding_password_correct", {
-          unlockedAt: new Date().toISOString(),
-        });
-        setPreboardingUnlocked(true);
-        setPreboardingPasswordError(false);
-        setStep(0); // start the pre-boarding flow at the company-input step
-        setError("");
-      } else {
-        trackEvent("preboarding_password_failed", {
-          attemptedAt: new Date().toISOString(),
-          // Never log the actual password attempt.
-        });
-        setPreboardingPasswordError(true);
-        setPreboardingPassword("");
-      }
-    };
-
-    return (
-      <div style={{
-        minHeight: "100vh",
-        background: C.background,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "40px 20px",
-        fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif",
-        color: C.text,
-      }}>
-        <div style={{
-          width: "100%", maxWidth: 400, background: C.surface, borderRadius: 16,
-          padding: "40px 36px", border: `1px solid ${C.border}`,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.06)", textAlign: "center",
-        }}>
-          <div style={{ fontSize: 40, marginBottom: 20 }}>🔒</div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "0 0 8px 0" }}>
-            Pre-boarding Agent
-          </h2>
-          <p style={{ fontSize: 14, color: C.textSec, marginBottom: 28, lineHeight: 1.5 }}>
-            This feature is currently under development and restricted to authorised access only.
-          </p>
-
-          <div style={{ marginBottom: 16 }}>
-            <input
-              type="password"
-              value={preboardingPassword}
-              onChange={e => {
-                setPreboardingPassword(e.target.value);
-                setPreboardingPasswordError(false);
-              }}
-              onKeyDown={e => { if (e.key === "Enter") handlePasswordSubmit(); }}
-              placeholder="Enter access code"
-              autoFocus
-              style={{
-                width: "100%", padding: "12px 16px", fontSize: 15,
-                border: `1.5px solid ${preboardingPasswordError ? C.error : C.border}`,
-                borderRadius: 8, outline: "none", fontFamily: "inherit",
-                background: C.surface, color: C.text, boxSizing: "border-box",
-                textAlign: "center", letterSpacing: "0.2em",
-              }}
-            />
-            {preboardingPasswordError && (
-              <p style={{ fontSize: 12, color: C.error, marginTop: 6, textAlign: "center" }}>
-                Incorrect access code. Please try again.
-              </p>
-            )}
-          </div>
-
-          <button
-            onClick={handlePasswordSubmit}
-            style={{
-              width: "100%", padding: "12px 0", background: "#7C3AED", color: "#fff",
-              border: "none", borderRadius: 8, fontSize: 15, fontWeight: 700,
-              fontFamily: "inherit", cursor: "pointer", marginBottom: 16,
-            }}
-          >
-            Access Pre-boarding Agent
-          </button>
-
-          <button
-            onClick={() => {
-              trackEvent("returned_to_landing", {
-                fromAgent: agentType,
-                returnedAt: new Date().toISOString(),
-              });
-              setAgentType(null);
-              setPreboardingPassword("");
-              setPreboardingPasswordError(false);
-            }}
-            style={{
-              background: "none", border: "none", fontSize: 13,
-              color: C.textMuted, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            ← Back to agent selection
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
   // Reuse the onboarding research / schema / stakeholder / coverage logic; only
@@ -4287,102 +4184,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .filter((g) => !excludedGapFields.has(g.field))
       .map((g) => g.field);
 
-  const renderAskMorePanel = (sectionName) => (
-    <div style={{ marginTop: 12, padding: "16px", background: "#F3F0FF", border: "1.5px solid #7C3AED", borderRadius: 10 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 12 }}>
-        Add a custom question to this section
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <StableInput
-          id={`pb_q_text_${sectionName}`}
-          label="Question *"
-          type="text"
-          value={newQuestion.text}
-          onUpdate={(_, v) => setNewQuestion((prev) => ({ ...prev, text: v }))}
-          placeholder="e.g. Please provide your primary banking relationship"
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#7C3AED", marginBottom: 4 }}>Answer type</label>
-        <select
-          value={newQuestion.fieldType}
-          onChange={(e) => setNewQuestion((prev) => ({ ...prev, fieldType: e.target.value }))}
-          style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1.5px solid #DDD6FE", fontSize: 14, fontFamily: "inherit", color: "#1a3a4a", background: "#fff", cursor: "pointer" }}
-        >
-          <option value="text">Text (free form)</option>
-          <option value="yesno">Yes / No</option>
-          <option value="date">Date</option>
-          <option value="number">Number</option>
-          <option value="select">Select (multiple choice)</option>
-          <option value="textarea">Long text</option>
-        </select>
-      </div>
-
-      {newQuestion.fieldType === "select" && (
-        <div style={{ marginBottom: 10 }}>
-          <StableInput
-            id={`pb_q_opts_${sectionName}`}
-            label="Options (comma separated)"
-            type="text"
-            value={newQuestion.options}
-            onUpdate={(_, v) => setNewQuestion((prev) => ({ ...prev, options: v }))}
-            placeholder="Option 1, Option 2, Option 3"
-          />
-        </div>
-      )}
-
-      <div
-        style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer" }}
-        onClick={() => setNewQuestion((prev) => ({ ...prev, required: !prev.required }))}
-      >
-        <input type="checkbox" checked={newQuestion.required} onChange={() => {}} style={{ accentColor: "#7C3AED", width: 14, height: 14 }} />
-        <span style={{ fontSize: 12, color: "#7C3AED", fontWeight: 500 }}>Required field</span>
-      </div>
-
-      <button
-        onClick={() => {
-          if (!newQuestion.text.trim()) return;
-          const question = {
-            id: Math.random().toString(36).slice(2, 10),
-            section: sectionName,
-            question: newQuestion.text.trim(),
-            fieldType: newQuestion.fieldType,
-            required: newQuestion.required,
-            options: newQuestion.fieldType === "select"
-              ? newQuestion.options.split(",").map((o) => o.trim()).filter(Boolean)
-              : [],
-            addedAt: new Date().toISOString(),
-            source: "analyst",
-          };
-          setCustomQuestions((prev) => [...prev, question]);
-          setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
-          setAskMoreOpenSection(null);
-        }}
-        disabled={!newQuestion.text.trim()}
-        style={{ padding: "9px 20px", background: newQuestion.text.trim() ? "#7C3AED" : C.border, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: newQuestion.text.trim() ? "pointer" : "not-allowed" }}
-      >
-        Add question
-      </button>
-    </div>
-  );
-
-  const renderAskMoreButton = (sectionName) => {
-    const isOpen = askMoreOpenSection === sectionName;
-    return (
-      <div style={{ marginTop: 8 }}>
-        <button
-          onClick={() => setAskMoreOpenSection(isOpen ? null : sectionName)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "transparent", color: "#7C3AED", border: "1.5px dashed #7C3AED", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", transition: "all 0.15s" }}
-        >
-          <span>{isOpen ? "✕" : "+"}</span>
-          {isOpen ? "Cancel" : "Ask for more information"}
-        </button>
-        {isOpen && renderAskMorePanel(sectionName)}
-      </div>
-    );
-  };
 
   // ─── Pre-boarding dossier (Part 7) ───────────────────────────────────────
 
@@ -4559,699 +4360,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     });
   };
 
-  // Interactive Customer Request — each gap field carries an exclude checkbox
-  // (strike-through + "✕ Excluded" badge when off), custom questions can be
-  // removed, and "Ask for more" adds analyst questions inline. `allFields` is
-  // the full candidate list (excluded or not); the live count reflects only
-  // active (non-excluded) fields plus custom questions.
-  const renderCustomerRequestSection = (allFields, qs) => {
-    if (allFields.length === 0 && qs.length === 0) {
-      return (
-        <div style={{ padding: "16px", background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 10, marginBottom: 16, fontSize: 13, color: C.success, fontWeight: 600 }}>
-          ✅ No fields to request — all information was collected automatically.
-        </div>
-      );
-    }
-    const activeRequestCount =
-      allFields.filter((f) => !excludedGapFields.has(f.field)).length + qs.length;
-    return (
-      <div style={{ marginBottom: 16, borderRadius: 10, border: "1px solid #DDD6FE", overflow: "hidden" }}>
-        <div style={{ padding: "12px 16px", background: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>📋 Customer Request</span>
-            <span style={{ fontSize: 12, color: "#7C3AED", opacity: 0.7, marginLeft: 8 }}>
-              {activeRequestCount} question{activeRequestCount !== 1 ? "s" : ""} will be sent to the customer
-            </span>
-          </div>
-        </div>
-        <div style={{ padding: "12px 16px" }}>
-          {allFields.map((field, i) => {
-            const isExcluded = excludedGapFields.has(field.field);
-            return (
-              <div
-                key={field.field}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 0",
-                  borderBottom: i < allFields.length - 1 || qs.length > 0 ? "1px solid #EDE9FE" : "none",
-                  opacity: isExcluded ? 0.4 : 1,
-                  transition: "opacity 0.15s",
-                }}
-              >
-                {/* Exclude checkbox */}
-                <input
-                  type="checkbox"
-                  checked={!isExcluded}
-                  onChange={() => {
-                    setExcludedGapFields((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(field.field)) next.delete(field.field);
-                      else next.add(field.field);
-                      return next;
-                    });
-                  }}
-                  style={{ width: 15, height: 15, accentColor: "#7C3AED", cursor: "pointer", flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 13, color: isExcluded ? C.textMuted : C.text, flex: 1, textDecoration: isExcluded ? "line-through" : "none" }}>
-                  {field.label}
-                </span>
-                {field.required && !isExcluded && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: C.error, flexShrink: 0 }}>Required</span>
-                )}
-                {isExcluded && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: 99, padding: "1px 6px", flexShrink: 0 }}>
-                    ✕ Excluded
-                  </span>
-                )}
-              </div>
-            );
-          })}
-          {qs.map((q, i) => (
-            <div
-              key={q.id}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < qs.length - 1 ? "1px solid #EDE9FE" : "none" }}
-            >
-              <input type="checkbox" checked readOnly style={{ width: 15, height: 15, accentColor: "#7C3AED", flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: "#4C1D95", flex: 1, fontWeight: 500 }}>{q.question}</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "2px 6px", flexShrink: 0 }}>Custom</span>
-              {/* Remove button */}
-              <button
-                onClick={() => setCustomQuestions((prev) => prev.filter((cq) => cq.id !== q.id))}
-                style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
-                title="Remove question"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          {/* Ask for more — inline in dossier. Section "customer_request" is the
-              bucket for all questions added from the dossier view. */}
-          <div style={{ marginTop: 12 }}>
-            {renderAskMoreButton("customer_request")}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderDossierStakeholders = (stakeholderResults) => (
-    <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", background: C.surfaceAlt, fontSize: 14, fontWeight: 700, color: C.text }}>👥 Stakeholders Found</div>
-      <div style={{ padding: "12px 16px" }}>
-        {stakeholderResults.map((result) => {
-          const realStakeholders = (result.stakeholders || []).filter((s) => !isRegistryExemptionNotice(s));
-          if (realStakeholders.length === 0) return null;
-          const fieldId = result.field;
-          const isUBO = String(fieldId).includes("ubo") || String(fieldId).includes("beneficial");
-          return (
-            <div key={fieldId} style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>
-                {isUBO ? "Beneficial Owners" : "Directors / Officers"}
-              </div>
-              {realStakeholders.map((s) => {
-                const positions = (s.positions || []).filter((p) => p && p.title);
-                // Detail chips mirroring the Fill Gaps stakeholder card: role,
-                // shareholding, nationality, DOB, positions, PEP status. Only
-                // render what the registry actually returned.
-                const details = s.is_company
-                  ? [
-                      s.role,
-                      s.share_percentage != null ? `${formatShareholding(s.share_percentage)} shareholding` : null,
-                      s.business_registration_number ? `Reg: ${s.business_registration_number}` : null,
-                      s.registered_country ? `Registered in ${s.registered_country}` : null,
-                      ...positions.map((p) => p.start_date ? `${p.title} (since ${p.start_date})` : p.title),
-                    ].filter(Boolean)
-                  : [
-                      s.role,
-                      s.share_percentage != null ? `${formatShareholding(s.share_percentage)} shareholding` : null,
-                      s.nationality ? `Nationality: ${s.nationality}` : null,
-                      formatDOBForDisplay(s.date_of_birth) || s.date_of_birth ? `DOB: ${formatDOBForDisplay(s.date_of_birth) || s.date_of_birth}` : null,
-                      s.residential_country ? `Residence: ${s.residential_country}` : null,
-                      s.is_pep === true ? "⚑ PEP" : s.is_pep === false ? "PEP: No" : null,
-                    ].filter(Boolean);
-                return (
-                  <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-                    <span style={{ marginTop: 1 }}>{s.is_company ? "🏢" : "👤"}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.full_name}</span>
-                      {s.sharePercentageWarning && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 600, color: "#92400E",
-                          background: "#FEF3C7", border: "1px solid #FCD34D",
-                          borderRadius: 4, padding: "1px 6px", marginLeft: 6,
-                        }}>
-                          ⚠ Verify band
-                        </span>
-                      )}
-                      {details.length > 0 && (
-                        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.5 }}>
-                          {details.join(" · ")}
-                        </div>
-                      )}
-                      {s.is_pep === true && s.pep_details && (
-                        <div style={{ fontSize: 11, color: C.warning, marginTop: 2 }}>{s.pep_details}</div>
-                      )}
-                    </div>
-                    {s.source && <span style={{ fontSize: 11, color: C.success, fontWeight: 600, flexShrink: 0, whiteSpace: "nowrap" }}>✓ {s.source}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        }).filter(Boolean)}
-      </div>
-    </div>
-  );
-
-  const renderDossierDocuments = () => {
-    const docs = (docSearchResults?.documents || []).filter((d) => d.status === "downloaded" || d.status === "url_found");
-    // Registry documents retrieved by the self-source agent (Companies House /
-    // ACRA / etc.) — these were previously only shown on the Documents step.
-    const registryDocs = (selfSourceResults?.results || []).filter(
-      (r) => r.status === "retrieved" || r.status === "retrieved_unverified" || r.manualReviewFlag || r.status === "manual_retrieval_required"
-    );
-    if (docs.length === 0 && registryDocs.length === 0) return null;
-    return (
-      <div style={{ marginBottom: 16, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        <div style={{ padding: "12px 16px", background: C.surfaceAlt, fontSize: 14, fontWeight: 700, color: C.text }}>📄 Documents Sourced</div>
-        <div style={{ padding: "12px 16px" }}>
-          {docs.map((doc, i) => (
-            <div key={doc.type || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: (i < docs.length - 1 || registryDocs.length > 0) ? `1px solid ${C.border}` : "none" }}>
-              <span>{doc.type === "wolfsberg_questionnaire" ? "📋" : "📊"}</span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{doc.label || doc.type}</span>
-                {doc.year && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{doc.year}</span>}
-              </div>
-              {doc.sourceUrl && (
-                <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none" }}>View →</a>
-              )}
-            </div>
-          ))}
-          {registryDocs.map((item, i) => {
-            const url = item.searchUrl || item.sourceUrl;
-            const retrieved = item.status === "retrieved" || item.status === "retrieved_unverified";
-            const ts = formatFetchedAt(item.retrievedAt);
-            const hasSnapshot = Array.isArray(item.files) && item.files.length > 0;
-            return (
-              <div key={`reg-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", borderBottom: i < registryDocs.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                <span style={{ marginTop: 1 }}>🏛️</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.localEquivalent || item.requirement}</span>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-                    {item.sourceLabel || item.requirement}
-                    {!retrieved && <span style={{ color: C.warning, fontWeight: 600 }}> · ⚠ manual retrieval required</span>}
-                    {ts && <span> · 🕒 {ts}</span>}
-                    {hasSnapshot && retrieved && <span> · 📸 snapshot captured</span>}
-                  </div>
-                </div>
-                {url && (
-                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View →</a>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderDossierView = () => {
-    const found = research?.found || [];
-    const verifiedItems = found.filter((r) => r.verificationStatus === "verified");
-    const probableItems = found.filter((r) => r.verificationStatus === "probable");
-    const indicativeItems = found.filter((r) => r.verificationStatus === "indicative");
-    const includedFields = includedGapFieldObjs();
-    const allGapFields = allRequestableGapFields();
-    const stakeholderResults = found.filter((r) => isStakeholderField(r.field) && r.stakeholders?.length > 0);
-    const company = dossierCompany();
-
-    return (
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 20px 60px", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: C.text }}>
-        {/* Header */}
-        <div style={{ padding: "20px 24px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 12, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 20 }}>🔍</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.8px" }}>Intelligence Dossier</span>
-              </div>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: "#4C1D95", margin: "0 0 4px 0" }}>{company.name}</h1>
-              <div style={{ fontSize: 13, color: "#7C3AED", opacity: 0.8 }}>
-                {company.countryName}
-                {entityType && ` · ${entityType}`}
-                {ownershipType && ` · ${(OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === ownershipType)?.label || ownershipType)}`}
-              </div>
-              <div style={{ fontSize: 11, color: "#7C3AED", opacity: 0.6, marginTop: 4 }}>
-                {dossierId && `ID: ${String(dossierId).slice(0, 8)}…`}
-              </div>
-            </div>
-            {/* Save state — the dossier auto-saves on research complete, so by
-                the time the analyst lands here it is normally already saved.
-                After adjusting exclusions / questions, "Update" re-saves with
-                the current state. */}
-            <div style={{ flexShrink: 0 }}>
-              {dossierSaving && (
-                <span style={{ fontSize: 12, color: "#7C3AED", fontStyle: "italic" }}>
-                  Saving dossier…
-                </span>
-              )}
-
-              {!dossierSaving && dossierSaved && dossierId && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "3px 10px" }}>
-                    ✓ Dossier Saved
-                  </span>
-                  <button
-                    onClick={() => {
-                      setDossierSaved(false);
-                      setDossierId(null);
-                      saveDossier();
-                    }}
-                    disabled={dossierSaving}
-                    style={{ fontSize: 11, color: "#7C3AED", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}
-                  >
-                    Update
-                  </button>
-                </div>
-              )}
-
-              {!dossierSaving && !dossierSaved && (
-                <button
-                  onClick={() => saveDossier()}
-                  style={{ padding: "8px 16px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}
-                >
-                  💾 Save Dossier
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Coverage summary */}
-        {coverage && (
-          <div style={{ display: "flex", gap: 0, marginBottom: 24, borderRadius: 10, border: "1px solid #DDD6FE", overflow: "hidden" }}>
-            {[
-              { count: coverage.verifiedFields || 0, label: "Verified", bg: C.successBg, color: C.success, border: C.successBorder },
-              { count: coverage.probableFields || 0, label: "Probable", bg: C.warningBg, color: C.warning, border: C.warningBorder },
-              { count: coverage.indicativeFields || 0, label: "Indicative", bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
-              { count: includedFields.length + customQuestions.length, label: "To Request", bg: "#F3F0FF", color: "#7C3AED", border: "#DDD6FE" },
-            ].map((tile, i) => (
-              <div key={i} style={{ flex: 1, padding: "14px 12px", background: tile.bg, borderRight: i < 3 ? `1px solid ${tile.border}` : "none", textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: tile.color, lineHeight: 1 }}>{tile.count}</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: tile.color, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>{tile.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <DossierSection title="✅ Verified" subtitle={`${verifiedItems.length} fields from official sources`} items={verifiedItems} bg={C.successBg} borderColor={C.successBorder} color={C.success} getLabel={getFieldLabel} fallbackTs={researchTimestamp} />
-        {probableItems.length > 0 && <DossierSection title="~ Probable" subtitle={`${probableItems.length} fields from company sources`} items={probableItems} bg={C.warningBg} borderColor={C.warningBorder} color={C.warning} getLabel={getFieldLabel} fallbackTs={researchTimestamp} />}
-        {indicativeItems.length > 0 && <DossierSection title="⚠ Indicative" subtitle={`${indicativeItems.length} fields from unverified sources`} items={indicativeItems} bg="#FFF7ED" borderColor="#FED7AA" color="#C2410C" getLabel={getFieldLabel} fallbackTs={researchTimestamp} />}
-
-        {renderCustomerRequestSection(allGapFields, customQuestions)}
-        {stakeholderResults.length > 0 && renderDossierStakeholders(stakeholderResults)}
-        {renderDossierDocuments()}
-
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 12, marginTop: 32, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-            <button
-              onClick={async () => {
-                // The dossier is the source of truth: always fetch fresh from the
-                // DB and reconstruct full research state (raw_research.found,
-                // schema, coverage, stakeholders) rather than relying on in-memory
-                // state — whether Preview is clicked immediately or hours later.
-                // loadDossierAndStartOnboarding handles agentType/step/navigation.
-                if (!dossierId) {
-                  // eslint-disable-next-line no-console
-                  console.warn("[Preview] No dossierId — cannot load from DB");
-                  return;
-                }
-                await loadDossierAndStartOnboarding(dossierId, tenantId);
-                trackEvent("preboarding_to_onboarding", {
-                  dossierId,
-                  via: "preview_button",
-                  companyName: company.name,
-                  includedFields: includedFields.length,
-                  customQuestions: customQuestions.length,
-                });
-              }}
-              style={{
-                padding: '10px 20px',
-                background: '#fff',
-                color: '#1a3a4a',
-                border: '2px dashed #1a3a4a',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                opacity: 0.85,
-              }}
-            >
-              🧪 Preview Customer Onboarding
-            </button>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-              See exactly what your customer will see
-            </div>
-          </div>
-          <button
-            onClick={() => setShowInviteScreen(true)}
-            style={{
-              padding: '10px 20px',
-              background: '#1a3a4a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            ✉ Invite Customer to Onboard
-          </button>
-          <button
-            onClick={() => {
-              // Start a genuinely fresh dossier. Clearing research is essential:
-              // the auto-save effect watches research?.found, so leaving it
-              // populated would immediately re-save and bounce back here.
-              // (preboardingUnlocked is left intact — no re-prompting the gate.)
-              setShowDossierView(false);
-              setDossierId(null);
-              setDossierSaved(false);
-              setResearch(null);
-              setActiveSchema(null);
-              setCoverage(null);
-              setExcludedGapFields(new Set());
-              setCustomQuestions([]);
-              setAskMoreOpenSection(null);
-              gapRef.current = {};
-              setFormVersion((v) => v + 1);
-              setCompanyName("");
-              setEntityType("");
-              setOwnershipType("");
-              setCountryCode("");
-              setError("");
-              setStep(0);
-              trackEvent("preboarding_new_dossier", { previousDossierId: dossierId });
-            }}
-            style={{ padding: "14px 24px", background: "transparent", color: "#7C3AED", border: "1.5px solid #7C3AED", borderRadius: 10, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
-          >
-            + New Dossier
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  function renderInviteScreen() {
-    const companyDisplayName = research?.companyName || companyName || 'the company';
-
-    function generateLink() {
-      const base = window.location.origin;
-      // Preferred: a dossier-backed link. `?dossierId=&journey=customer` lands
-      // the customer on the standalone Applicant page; the mount effect fetches
-      // the dossier server-side (api/get-dossier) and pre-loads company context +
-      // research, so this works cross-device (unlike the legacy ?ref snapshot).
-      if (dossierId) {
-        return `${base}/?tenant=${tenantId}&dossierId=${dossierId}&journey=customer`;
-      }
-      // Fallback (no saved dossier yet): the legacy `?ref=<token>` link, which
-      // rehydrates from a same-browser localStorage snapshot taken at send time.
-      const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
-      return `${base}/?ref=${token}`;
-    }
-
-    // Sends the invite for real via /api/invite (Resend). The server generates
-    // and persists the authoritative token/link; we fall back to a locally
-    // generated link only if the request fails, so the success screen always
-    // has a value to show.
-    async function handleSendInvite() {
-      if (!inviteEmail || !inviteContactName) return;
-      let link = generateLink();
-      try {
-        const resp = await fetch('/api/invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: inviteEmail,
-            contactName: inviteContactName,
-            companyName: companyDisplayName,
-            origin: window.location.origin,
-          }),
-        });
-        const data = await resp.json();
-        // Keep the dossier-backed link when we have one; only adopt the
-        // server-issued ?ref link in the legacy (no-dossier) fallback path.
-        if (!dossierId && data && data.link) link = data.link;
-        console.log('Invite dispatched:', { ...data, email: inviteEmail, contactName: inviteContactName });
-      } catch (err) {
-        console.warn('Invite send failed, using local link:', err);
-      }
-
-      // Snapshot the dossier under the link's token so that opening the invite
-      // link (`?ref=<token>`) rehydrates the populated Confirm page — the same
-      // view "Preview Customer Onboarding" shows. Keyed by the FINAL token
-      // (server-issued if available, else the local one) so it matches the
-      // link that actually went out. See the mount effect that reads this.
-      const finalToken = (link.split('ref=')[1] || '').split('&')[0];
-      if (finalToken) {
-        try {
-          localStorage.setItem('nium_invite_' + finalToken, JSON.stringify({
-            research,
-            activeSchema,
-            coverage,
-            fieldMetadata,
-            checks,
-            companyName,
-            countryCode,
-            entityType,
-            ownershipType,
-            journeyType: journeyType || 'ai_only',
-          }));
-        } catch (e) {
-          console.warn('Could not snapshot dossier for invite link:', e && e.message);
-        }
-      }
-
-      setInviteLink(link);
-      setInviteSent(true);
-    }
-
-    const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
-
-Thank you for your interest in Nium. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
-
-Please complete your onboarding by clicking the link below:
-
-${inviteLink || '[Onboarding link will appear here]'}
-
-This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
-
-If you have any questions, please do not hesitate to reach out to your Nium contact.
-
-Best regards,
-Nium Onboarding Team`;
-
-    const stepLabels = ['Company Input', 'Research', 'Dossier Review', 'Invite Customer'];
-
-    if (inviteSent) {
-      return (
-        <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32, fontSize: 13 }}>
-            {stepLabels.map((s, i) => (
-              <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: '50%', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600,
-                  background: '#1a3a4a', color: '#fff'
-                }}>✓</span>
-                <span style={{ color: i === 3 ? '#1a3a4a' : '#1a3a4a70', fontWeight: i === 3 ? 600 : 400 }}>{s}</span>
-                {i < 3 && <span style={{ color: '#ccc' }}>›</span>}
-              </span>
-            ))}
-          </div>
-
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '24px 28px', marginBottom: 24 }}>
-            <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#14532d', marginBottom: 6 }}>
-              Invite sent to {inviteContactName}
-            </div>
-            <div style={{ fontSize: 14, color: '#166534' }}>
-              An onboarding invitation has been dispatched to <strong>{inviteEmail}</strong>.
-            </div>
-          </div>
-
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px', marginBottom: 24 }}>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Onboarding link
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <code style={{
-                flex: 1, fontSize: 12, color: '#1a3a4a', wordBreak: 'break-all',
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px'
-              }}>
-                {inviteLink}
-              </code>
-              <button
-                onClick={() => navigator.clipboard.writeText(inviteLink)}
-                style={{
-                  padding: '8px 14px', background: '#1a3a4a', color: '#fff',
-                  border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap'
-                }}
-              >
-                Copy link
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button
-              onClick={() => {
-                setInviteSent(false);
-                setInviteEmail('');
-                setInviteContactName('');
-                setInviteLink('');
-              }}
-              style={{
-                padding: '10px 20px', background: '#fff', color: '#1a3a4a',
-                border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
-              }}
-            >
-              Send another invite
-            </button>
-            <button
-              onClick={() => setShowInviteScreen(false)}
-              style={{
-                padding: '10px 20px', background: '#f1f5f9', color: '#1a3a4a',
-                border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
-              }}
-            >
-              ← Back to dossier
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 20px' }}>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32, fontSize: 13 }}>
-          {stepLabels.map((s, i) => (
-            <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                width: 22, height: 22, borderRadius: '50%', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600,
-                background: i <= 3 ? '#1a3a4a' : '#e0e0e0',
-                color: i <= 3 ? '#fff' : '#999'
-              }}>{i < 3 ? '✓' : i + 1}</span>
-              <span style={{ color: i === 3 ? '#1a3a4a' : '#1a3a4a70', fontWeight: i === 3 ? 600 : 400 }}>{s}</span>
-              {i < 3 && <span style={{ color: '#ccc' }}>›</span>}
-            </span>
-          ))}
-        </div>
-
-        <div style={{ marginBottom: 28 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1a3a4a', margin: '0 0 8px' }}>
-            Invite customer to onboard
-          </h2>
-          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
-            The dossier for <strong>{companyDisplayName}</strong> is ready.
-            Send a personalised onboarding link to the customer contact.
-          </p>
-        </div>
-
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '24px 28px', marginBottom: 24 }}>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
-              Contact name <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={inviteContactName}
-              onChange={e => setInviteContactName(e.target.value)}
-              placeholder="e.g. Sarah Chen"
-              style={{
-                width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
-                borderRadius: 8, fontSize: 14, color: '#1a3a4a', boxSizing: 'border-box', outline: 'none'
-              }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
-              Customer email address <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              placeholder="e.g. sarah@company.com"
-              style={{
-                width: '100%', padding: '10px 14px', border: '1px solid #d1d5db',
-                borderRadius: 8, fontSize: 14, color: '#1a3a4a', boxSizing: 'border-box', outline: 'none'
-              }}
-            />
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-            Email preview
-          </div>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px' }}>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-              <strong>To:</strong> {inviteEmail || '[customer email]'}
-              &nbsp;·&nbsp;
-              <strong>Subject:</strong> Your Nium onboarding is ready — {companyDisplayName}
-            </div>
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-              <pre style={{
-                fontSize: 13, color: '#374151', lineHeight: 1.7,
-                margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit'
-              }}>
-                {emailBody}
-              </pre>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button
-            onClick={() => setShowInviteScreen(false)}
-            style={{
-              padding: '10px 20px', background: '#fff', color: '#1a3a4a',
-              border: '1px solid #ddd', borderRadius: 8, fontSize: 14, cursor: 'pointer'
-            }}
-          >
-            ← Back to dossier
-          </button>
-          <button
-            onClick={handleSendInvite}
-            disabled={!inviteEmail || !inviteContactName}
-            style={{
-              padding: '10px 24px',
-              background: (!inviteEmail || !inviteContactName) ? '#9ca3af' : '#1a3a4a',
-              color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
-              cursor: (!inviteEmail || !inviteContactName) ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ✉ Send invite
-          </button>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>
-            Customer receives a unique onboarding link
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
@@ -5283,17 +4391,104 @@ Nium Onboarding Team`;
     }
   }
   if (agentType === "preboarding" && !preboardingUnlocked) {
-    return renderPreboardingGate();
+    return (
+      <PreboardingGate
+        PREBOARDING_PASSWORD={PREBOARDING_PASSWORD}
+        preboardingPassword={preboardingPassword}
+        setPreboardingPassword={setPreboardingPassword}
+        preboardingPasswordError={preboardingPasswordError}
+        setPreboardingPasswordError={setPreboardingPasswordError}
+        setPreboardingUnlocked={setPreboardingUnlocked}
+        setStep={setStep}
+        setError={setError}
+        agentType={agentType}
+        setAgentType={setAgentType}
+        trackEvent={trackEvent}
+      />
+    );
   }
   // Invite screen is the 4th pre-boarding screen — takes priority over the
   // dossier view when showInviteScreen is set.
   if (agentType === "preboarding" && preboardingUnlocked && showInviteScreen) {
-    return renderInviteScreen();
+    return (
+      <InviteScreen
+        research={research}
+        companyName={companyName}
+        countryCode={countryCode}
+        entityType={entityType}
+        ownershipType={ownershipType}
+        activeSchema={activeSchema}
+        coverage={coverage}
+        fieldMetadata={fieldMetadata}
+        checks={checks}
+        journeyType={journeyType}
+        tenantId={tenantId}
+        dossierId={dossierId}
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        inviteContactName={inviteContactName}
+        setInviteContactName={setInviteContactName}
+        inviteLink={inviteLink}
+        setInviteLink={setInviteLink}
+        inviteSent={inviteSent}
+        setInviteSent={setInviteSent}
+        setShowInviteScreen={setShowInviteScreen}
+      />
+    );
   }
   // Dossier view is the final pre-boarding screen — takes priority over the
   // confirm/fill-gaps render below when showDossierView is set.
   if (agentType === "preboarding" && preboardingUnlocked && showDossierView) {
-    return renderDossierView();
+    return (
+      <DossierView
+        research={research}
+        researchTimestamp={researchTimestamp}
+        coverage={coverage}
+        customQuestions={customQuestions}
+        excludedGapFields={excludedGapFields}
+        dossierId={dossierId}
+        dossierSaved={dossierSaved}
+        dossierSaving={dossierSaving}
+        companyName={companyName}
+        entityType={entityType}
+        ownershipType={ownershipType}
+        agentType={agentType}
+        preboardingUnlocked={preboardingUnlocked}
+        docSearchResults={docSearchResults}
+        selfSourceResults={selfSourceResults}
+        tenantId={tenantId}
+        setShowDossierView={setShowDossierView}
+        setShowInviteScreen={setShowInviteScreen}
+        setDossierId={setDossierId}
+        setDossierSaved={setDossierSaved}
+        setResearch={setResearch}
+        setActiveSchema={setActiveSchema}
+        setCoverage={setCoverage}
+        setCompanyName={setCompanyName}
+        setCountryCode={setCountryCode}
+        setEntityType={setEntityType}
+        setOwnershipType={setOwnershipType}
+        setCustomQuestions={setCustomQuestions}
+        setExcludedGapFields={setExcludedGapFields}
+        setError={setError}
+        setStep={setStep}
+        setFormVersion={setFormVersion}
+        askMoreOpenSection={askMoreOpenSection}
+        setAskMoreOpenSection={setAskMoreOpenSection}
+        newQuestion={newQuestion}
+        setNewQuestion={setNewQuestion}
+        saveDossier={saveDossier}
+        getFieldLabel={getFieldLabel}
+        dossierCompany={dossierCompany}
+        includedGapFieldObjs={includedGapFieldObjs}
+        allRequestableGapFields={allRequestableGapFields}
+        isStakeholderField={isStakeholderField}
+        loadDossierAndStartOnboarding={loadDossierAndStartOnboarding}
+        trackEvent={trackEvent}
+        gapRef={gapRef}
+        cardStyle={card}
+      />
+    );
   }
   // Pre-boarding (unlocked) and onboarding share the main render below. The
   // pre-boarding flow swaps in its own Confirm / Fill Gaps presentation
