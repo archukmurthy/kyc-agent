@@ -7,10 +7,12 @@
  * close over App's scope, and now arrive through the prop interface declared on
  * the component.
  *
- * gapSectionOrder did NOT move, despite reading as part of the same cluster: the
- * pre-boarding/dossier path calls it too (App.js#getGapSections), so it stays in
- * App.js and is drilled. Same rule the earlier slices followed — anything with a
- * consumer outside this page stays put.
+ * gapSectionOrder did NOT move, despite reading as part of the same cluster: at
+ * the time of the extraction the pre-boarding/dossier path called it too (via
+ * App.js#getGapSections), so it stayed in App.js and is drilled. Same rule the
+ * earlier slices followed — anything with a consumer outside this page stays
+ * put. That second consumer has since been deleted as superseded legacy, so
+ * this page is now its only caller; the drill is kept rather than churned.
  *
  * THIS ONE AUTHORED ITS OWN BOUNDARY. Confirm, Applicant and slice 1 each had a
  * named render function to relocate; this page was inline JSX in App's return,

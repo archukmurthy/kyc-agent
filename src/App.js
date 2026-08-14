@@ -45,9 +45,10 @@ import {
   prefillBreakdown,
 } from "./components/companyConfirm/confirmState";
 // The pre-filled-fields table moved out of this file; App now only wires it up.
-// humaniseSection/safeRenderValue moved with it but are still used elsewhere
-// here (the dossier view and the section-label builder), so they are imported
-// back rather than duplicated.
+// humaniseSection/safeRenderValue moved with it and used to be imported back
+// for the section-label builder (getGapSections) and the stakeholder fallback
+// row; both were superseded legacy and have been deleted, so the import went
+// with them. They now live solely in foundTableHelpers, used by that component.
 import { ApplicantPage } from "./components/applicant/ApplicantPage";
 import { FoundFieldsTable } from "./components/companyConfirm/FoundFieldsTable";
 // Slice 2 — the People section moved out; App now only wires it up. The PURE
@@ -59,7 +60,6 @@ import {
   stkFieldFound,
   isPersonLowConfidence,
 } from "./components/companyConfirm/peopleHelpers";
-import { humaniseSection, safeRenderValue } from "./components/companyConfirm/foundTableHelpers";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
 import { evaluateSearchCap, LEGAL_NAME_ALERT, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
@@ -3377,8 +3377,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
    * explicitly instead of the component reaching into scope.
    *
    * Kept as a function with the same (items, title, subtitle) signature because
-   * both call sites — ConfirmStep's renderUnifiedFoundTable prop and the
-   * pre-boarding renderConfirmFields — invoke it that way.
+   * that is how ConfirmStep's renderUnifiedFoundTable prop invokes it. (The
+   * pre-boarding renderConfirmFields was the second call site; it was deleted
+   * as superseded legacy, leaving ConfirmStep the only consumer.)
    *
    * gapRef and dialogueStateRef go across AS REFS, deliberately: gapRef backs
    * the gap inputs (lifting it into state re-renders on every keystroke and
@@ -3521,9 +3522,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
    * companyConfirm/StakeholderConfirmSection.jsx; what remains here is the
    * wiring, because App still owns this state.
    *
-   * Kept as a function with the same (item, idx) signature: there are THREE
-   * call sites — ConfirmStep's prop, the pre-boarding renderConfirmFields, and
-   * renderStakeholderFallback — and all three invoke it that way.
+   * Kept as a function with the same (item, idx) signature, which is how
+   * ConfirmStep's prop invokes it. (Two further call sites — the pre-boarding
+   * renderConfirmFields and renderStakeholderFallback — were deleted as
+   * superseded legacy, leaving ConfirmStep the only consumer.)
    *
    * The IMPURE helpers go across as props rather than moving, so one
    * implementation still serves both this component and the App-side
@@ -3678,60 +3680,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     item.stakeholders.some((s) => !isRegistryExemptionNotice(s));
   const stakeholderFound = sortedFound.filter(({ item }) => hasRealStakeholders(item));
   const regularFound = sortedFound.filter(({ item }) => !hasRealStakeholders(item));
-
-  // Pre-boarding confirm only: a stakeholder field can fall into regularFound
-  // when its .stakeholders array is empty/exemption-only — the plain field table
-  // would then show the raw JSON-array value. Split these out so renderConfirmFields
-  // can parse them into cards (or a clean message) instead of raw JSON. Onboarding
-  // confirm is untouched (it renders stakeholderFound/regularFound directly).
-  const stakeholderRegular = regularFound.filter(({ item }) => isStakeholderField(item.field));
-  const trueRegular = regularFound.filter(({ item }) => !isStakeholderField(item.field));
-
-  // Render a stakeholder field that fell through to the regular list. Parse a
-  // JSON-array value into stakeholder cards; if no real persons remain, show a
-  // clean message rather than raw JSON; non-JSON values render as a labelled row.
-  const renderStakeholderFallback = (item, idx) => {
-    const val = typeof item.value === "string" ? item.value.trim() : "";
-    const niceLabel = String(item.label || item.field || "")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-    if (val.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) {
-          const stakeholders = parsed
-            .map((p) => makeStakeholder({
-              full_name: p.full_name || p.name || "",
-              role: p.role || p.position || "",
-              share_percentage: p.share_percentage ?? p.ownership_percentage ?? null,
-              source: item.source,
-              sourceUrl: item.sourceUrl,
-              sourceTier: item.sourceTier,
-              fetchedAt: item.fetchedAt,
-            }))
-            .filter((s) => s.full_name)
-            .filter((s) => !isRegistryExemptionNotice(s));
-          if (stakeholders.length > 0) {
-            return renderStakeholderConfirmSection({ ...item, stakeholders }, idx);
-          }
-        }
-      } catch (_) {
-        // not valid JSON — fall through to the labelled row below
-      }
-      // JSON array but no registrable persons (e.g. publicly listed company).
-      return (
-        <div key={`stk-fallback-${item.field}-${idx}`} style={{ padding: "10px 14px", background: C.surfaceAlt, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, color: C.textMuted, fontStyle: "italic", marginBottom: 12 }}>
-          {niceLabel}: No registrable persons found (publicly listed company)
-        </div>
-      );
-    }
-    // Non-JSON stakeholder value — show a clean labelled row, never raw JSON.
-    return (
-      <div key={`stk-fallback-${item.field}-${idx}`} style={{ padding: "10px 14px", background: C.surfaceAlt, borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, color: C.text, marginBottom: 12 }}>
-        <strong>{niceLabel}:</strong> {safeRenderValue(item.value)}
-      </div>
-    );
-  };
 
   // Confirm-page documents: persisted (server-derived) ∪ live dialogue
   // outcomes, collapsed with the SCOPE-AWARE key (commit 6a) — per person for
@@ -4066,8 +4014,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // LANDING PAGE — agent selection. Renders before Step 1. Onboarding Agent
   // routes into the existing flow; Pre-boarding Agent is password-gated (ARCH)
   // and shows a coming-soon screen after a correct code.
-  // Currently unrouted: the landing page is hidden for the stakeholder review
-  // weekend (see the agentType === null routing block). Kept for restore.
+  // ───────────────────────────────────────────────────────────────────────
+  // PARKED — not dead. Full landing/intro page, intentionally disabled (call
+  // site commented out in the agentType === null routing block, "hidden for
+  // stakeholder review weekend"). No live replacement exists; retained for
+  // possible re-enable as the production intro screen. Do not delete without a
+  // product decision. NOTE: this is deliberately UNLIKE the superseded
+  // pre-boarding confirm/fill-gaps renderers, which were deleted because live
+  // components (ConfirmStep, FillGapsPage, renderDossierView) took over their
+  // job. Nothing took over this one — it is switched off, not replaced.
   // ───────────────────────────────────────────────────────────────────────
   // eslint-disable-next-line no-unused-vars
   function renderLandingPage() {
@@ -4310,150 +4265,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
   // Reuse the onboarding research / schema / stakeholder / coverage logic; only
   // the presentation differs. Purple accent (#7C3AED) replaces niumBlue. These
-  // are called from inside the main return (agentType === "preboarding"), so
-  // they close over all the confirm/fill-gaps render vars.
-
-  // Shared confirm field content (coverage bar, listed toggle, people found,
-  // pre-filled fields, unchecked warning). Called by BOTH onboarding confirm and
-  // pre-boarding confirm — reused, not duplicated.
-  const renderConfirmFields = () => (
-    <>
-      {/* Part 9 — coverage summary bar. */}
-      {coverage && (
-        <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-          <div style={{ flex: 1, padding: "12px 16px", background: C.successBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.success, lineHeight: 1 }}>{coverage.verifiedFields}</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.success, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified</div>
-          </div>
-          <div style={{ flex: 1, padding: "12px 16px", background: C.warningBg, borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.warning, lineHeight: 1 }}>{coverage.probableFields}</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.warning, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Confirm</div>
-          </div>
-          {coverage.indicativeFields > 0 && (
-            <div style={{ flex: 1, padding: "12px 16px", background: "#FFF7ED", borderRight: `1px solid ${C.border}`, textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#C2410C", lineHeight: 1 }}>{coverage.indicativeFields}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#C2410C", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Low Confidence</div>
-            </div>
-          )}
-          <div style={{ flex: 1, padding: "12px 16px", background: C.surfaceAlt, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.textMuted, lineHeight: 1 }}>{coverage.missingFieldCount}</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>To Complete</div>
-          </div>
-        </div>
-      )}
-
-      {SHOW_TEST_TOOLS && (
-        <div
-          onClick={() => setIsPubliclyListedOverride(v => !v)}
-          style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "12px 16px",
-            background: isPubliclyListedOverride ? "#f3faf8" : "#f2f1ed",
-            border: `1.5px solid ${isPubliclyListedOverride ? "#4a9e8e" : "rgba(26,58,74,0.14)"}`,
-            borderRadius: 10, marginBottom: 16,
-            cursor: "pointer", transition: "all 0.15s", userSelect: "none",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={isPubliclyListedOverride}
-            onChange={() => setIsPubliclyListedOverride(v => !v)}
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 16, height: 16, accentColor: "#4a9e8e", cursor: "pointer", flexShrink: 0 }}
-            aria-label="This is a publicly listed company"
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a" }}>
-              🏛 This is a publicly listed company
-            </div>
-            <div style={{ fontSize: 12, marginTop: 2, color: isPubliclyListedOverride ? "#1a6b56" : "#1a3a4a70" }}>
-              {isPubliclyListedOverride
-                ? "✓ Stakeholder compliance details will not be collected on the next page"
-                : "Check this box to skip detailed stakeholder forms on the next page"}
-            </div>
-          </div>
-          {isPubliclyListedOverride && (
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#1a6b56", background: "#f3faf8", border: "1px solid #4a9e8e", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap", flexShrink: 0 }}>
-              Listed ✓
-            </span>
-          )}
-        </div>
-      )}
-
-      {(stakeholderFound.length > 0 || stakeholderRegular.length > 0) && (
-        <div style={card}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>People Found</h3>
-          <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "0 0 12px" }}>
-            Directors and beneficial owners we identified from official sources. Verify each name; you'll provide additional compliance details on the next page.
-          </p>
-          {stakeholderFound.map(({ item, idx }) => renderStakeholderConfirmSection(item, idx))}
-          {stakeholderRegular.map(({ item, idx }) => renderStakeholderFallback(item, idx))}
-        </div>
-      )}
-
-      {trueRegular.length > 0 && renderUnifiedFoundTable(trueRegular, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
-
-      {(research.found || []).filter((_, i) => !checks[i]).length > 0 && (
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#fff8ed", borderRadius: 6, fontSize: 12, color: "#b07d10", borderLeft: "3px solid #e0a040" }}>
-          ⚠️ {(research.found || []).filter((_, i) => !checks[i]).length} field(s) unchecked — will appear on next page for correction.
-        </div>
-      )}
-    </>
-  );
-
-  const preboardingBanner = (icon, title, subtitle) => (
-    <div style={{ padding: "12px 16px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>{title}</div>
-        <div style={{ fontSize: 12, color: "#7C3AED", opacity: 0.8, marginTop: 2 }}>{subtitle}</div>
-      </div>
-      <div style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap", flexShrink: 0 }}>
-        🔒 Analyst View
-      </div>
-    </div>
-  );
-
-  // Kept for reference — replaced by unified dossier view (June 2026).
-  // No longer routed; pre-boarding goes Company → Research → Dossier.
-  // eslint-disable-next-line no-unused-vars
-  const renderPreboardingConfirm = () => (
-    <div>
-      <div style={card}>
-        {preboardingBanner("🔍", "Pre-boarding Intelligence Review", "Review what we found. Uncheck anything that needs further investigation or clarification.")}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#7C3AED,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🔍</div>
-          <div>
-            <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{research.companyName || companyName} {jurisdictionBadge}{entityBadge}</h2>
-            <p style={{ fontSize: 12, color: "#1a3a4a70", margin: 0 }}>
-              {sortedFound.length} fields pre-filled · {docCount} from documents · {tier1Count} from official sources
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {renderConfirmFields()}
-
-      <button
-        onClick={() => { scrollAndSetStep(STEPS.fillGaps); setError(""); }}
-        style={{ width: "100%", padding: "14px 0", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginTop: 24 }}
-      >
-        Review Gaps →
-      </button>
-    </div>
-  );
-
-  // Gap fields grouped by section, in the same order onboarding uses.
-  const getGapSections = () =>
-    gapSectionOrder()
-      .filter((key) => key !== "documents")
-      .map((key) => {
-        const fields = getCombinedGaps().filter((g) => g.section === key).filter(dependsOnSatisfied);
-        if (fields.length === 0) return null;
-        const cfg = sectionConfig[key] || {};
-        return { name: key, label: cfg.title || humaniseSection(key), fields };
-      })
-      .filter(Boolean);
+  // close over the confirm/fill-gaps render vars and are reached from the
+  // pre-boarding early returns above the main return (the dossier and invite
+  // screens), NOT from the step switch.
 
   // Gap fields the analyst is still requesting (not excluded). Used in dossier.
   const getIncludedGapFields = () =>
@@ -4462,48 +4276,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .filter(dependsOnSatisfied)
       .filter((g) => !excludedGapFields.has(g.field))
       .map((g) => g.field);
-
-  // Single gap field input — reuses the exact StableInput the onboarding fill
-  // gaps step renders (label + input).
-  const renderGapField = (field) => (
-    <StableInput
-      id={field.field}
-      label={field.label}
-      type={field.inputType}
-      value={gapRef.current[field.field] || ""}
-      onUpdate={updateGap}
-      required={field.required}
-      options={field.options}
-      placeholder={field.placeholder || ("Enter " + String(field.label || "").toLowerCase())}
-    />
-  );
-
-  const renderCustomQuestion = (question) => (
-    <div
-      key={question.id}
-      style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12, padding: "12px 14px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 8 }}
-    >
-      <input type="checkbox" checked readOnly style={{ width: 16, height: 16, marginTop: 3, flexShrink: 0, accentColor: "#7C3AED" }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#7C3AED" }}>{question.question}</span>
-          {question.required && <span style={{ fontSize: 11, color: C.error }}>*</span>}
-          <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #DDD6FE", borderRadius: 99, padding: "1px 6px", textTransform: "uppercase", letterSpacing: "0.3px" }}>Custom</span>
-        </div>
-        <div style={{ fontSize: 11, color: "#7C3AED", opacity: 0.7 }}>
-          Answer type: {question.fieldType}
-          {question.options?.length > 0 && ` · Options: ${question.options.join(", ")}`}
-        </div>
-      </div>
-      <button
-        onClick={() => setCustomQuestions((prev) => prev.filter((q) => q.id !== question.id))}
-        style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 4px", flexShrink: 0 }}
-        title="Remove question"
-      >
-        ×
-      </button>
-    </div>
-  );
 
   const renderAskMorePanel = (sectionName) => (
     <div style={{ marginTop: 12, padding: "16px", background: "#F3F0FF", border: "1.5px solid #7C3AED", borderRadius: 10 }}>
@@ -4601,84 +4373,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
       </div>
     );
   };
-
-  const renderPreboardingGapSections = () => {
-    const sections = getGapSections();
-    if (sections.length === 0) {
-      return <div style={{ padding: "16px", color: C.textMuted, fontSize: 13 }}>No outstanding gaps — every required field was found.</div>;
-    }
-    return sections.map((section) => {
-      const selectedCount = section.fields.filter((f) => !excludedGapFields.has(f.field)).length;
-      return (
-        <div key={section.name} style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 12, paddingBottom: 8, borderBottom: "2px solid #DDD6FE", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>{section.label || section.name}</span>
-            <span style={{ fontSize: 10, color: "#7C3AED", opacity: 0.6, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-              {selectedCount} of {section.fields.length} selected
-            </span>
-          </div>
-
-          {section.fields.map((field) => {
-            const isExcluded = excludedGapFields.has(field.field);
-            return (
-              <div key={field.field} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12, opacity: isExcluded ? 0.45 : 1, transition: "opacity 0.15s" }}>
-                <input
-                  type="checkbox"
-                  checked={!isExcluded}
-                  onChange={() => {
-                    setExcludedGapFields((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(field.field)) next.delete(field.field);
-                      else next.add(field.field);
-                      return next;
-                    });
-                  }}
-                  style={{ width: 16, height: 16, marginTop: 3, flexShrink: 0, accentColor: "#7C3AED", cursor: "pointer" }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ pointerEvents: isExcluded ? "none" : "auto" }}>
-                    {renderGapField(field)}
-                  </div>
-                  {isExcluded && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, color: C.textMuted, background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: 99, padding: "2px 8px" }}>
-                      ✕ Not requesting
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {customQuestions.filter((q) => q.section === section.name).map((q) => renderCustomQuestion(q))}
-
-          {renderAskMoreButton(section.name)}
-        </div>
-      );
-    });
-  };
-
-  // Kept for reference — replaced by unified dossier view (June 2026).
-  // No longer routed; exclude checkboxes + ask-for-more now live inline in the
-  // Customer Request section of renderDossierView().
-  // eslint-disable-next-line no-unused-vars
-  const renderPreboardingFillGaps = () => (
-    <div>
-      <div style={card}>
-        {preboardingBanner("📋", "Gap Analysis — What We Still Need", "Check the fields you want to request from the customer. Uncheck to exclude. Add custom questions using the button below each section.")}
-      </div>
-
-      <div style={card}>
-        {renderPreboardingGapSections()}
-      </div>
-
-      <button
-        onClick={() => saveDossier()}
-        style={{ width: "100%", padding: "14px 0", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginTop: 24 }}
-      >
-        Generate Customer Request →
-      </button>
-    </div>
-  );
 
   // ─── Pre-boarding dossier (Part 7) ───────────────────────────────────────
 
@@ -6969,11 +6663,6 @@ Nium Onboarding Team`;
           />
         )}
 
-        {/* Pre-boarding Confirm — Kept for reference — replaced by unified
-            dossier view (June 2026). No longer routed: pre-boarding goes
-            Company → Research → Dossier (auto-saved on research complete). */}
-        {/* {step === STEPS.confirm && research && agentType === "preboarding" && renderPreboardingConfirm()} */}
-
         {/* Pre-boarding: brief "building dossier" state covering the short
             window between research completing and the auto-saved Dossier View
             rendering (saveDossier flips showDossierView → true). */}
@@ -7025,11 +6714,6 @@ Nium Onboarding Team`;
             cardStyle={card}
           />
         )}
-
-        {/* Pre-boarding Fill Gaps — Kept for reference — replaced by unified
-            dossier view (June 2026). Exclude checkboxes + ask-for-more now live
-            inline in the Customer Request section of renderDossierView(). */}
-        {/* {step === STEPS.fillGaps && research && activeSchema && agentType === "preboarding" && renderPreboardingFillGaps()} */}
 
         {/* DRS — dynamic document-requirements step (Step 2 of the CDD brief),
             placed after Fill Gaps so classifiers + research are settled. */}

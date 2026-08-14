@@ -686,6 +686,14 @@ export function StakeholderGapForms({
     );
   };
 
+  // KEPT, not dead by accident. Unreachable via any current UI path: an
+  // unticked attribute blocks the Confirm footer, and resolving it re-ticks the
+  // field (see resolvePersonCorrection), so stkHasCorrections can't survive to
+  // Fill Gaps. Retained for a possible seeded/resumed-dossier load that arrives
+  // mid-correction. Delete-vs-keep decision pending (see register). Do not
+  // remove without that call. Applies to BOTH renderCorrectionField below and
+  // renderFieldCorrectionCard, its only caller.
+  //
   // One editable input for a single corrected field, reusing the exact
   // components the private EDD card uses (StableInput / PrePopulatedField).
   // Pre-filled with the AI value and opened for editing (the field is unticked
@@ -744,6 +752,11 @@ export function StakeholderGapForms({
     }
   };
 
+  // KEPT, not dead by accident — see the note above renderCorrectionField.
+  // Unreachable via any current UI path (stkHasCorrections can't survive to
+  // Fill Gaps); retained for a possible seeded/resumed-dossier load that
+  // arrives mid-correction. Delete-vs-keep decision pending.
+  //
   // Field-level correction card for a listed-company person the customer did
   // NOT remove but whose AI-returned value(s) they unticked on Confirm. Renders
   // ONLY the unticked fields as editable — correction, not collection. Mirrors
