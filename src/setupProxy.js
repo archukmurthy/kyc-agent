@@ -37,6 +37,7 @@ const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "ame
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
+const evidenceStatusHandler = require(path.join(__dirname, "..", "api", "evidence", "status.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -461,4 +462,7 @@ module.exports = function (app) {
   // Read-only Change Intelligence dashboard metrics (aggregations over
   // change_events). GET only.
   app.get("/api/change-intelligence-metrics", adapt(changeIntelligenceMetricsHandler));
+
+  // Evidence Platform Stage A0 — isolated server-boundary availability check.
+  app.get("/api/evidence/status", adapt(evidenceStatusHandler));
 };

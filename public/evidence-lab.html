@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evidence Lab</title>
+    <style>
+      :root { color-scheme: light; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #f5f7fa; color: #17212b; }
+      main { max-width: 42rem; margin: 12vh auto; padding: 2rem; }
+      section { background: white; border: 1px solid #d9e0e7; border-radius: 12px; padding: 2rem; }
+      h1 { margin-top: 0; }
+      #status { font-weight: 700; }
+      .available { color: #147a45; }
+      .unavailable { color: #a12622; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section aria-labelledby="lab-title">
+        <p>Internal test harness</p>
+        <h1 id="lab-title">Evidence Lab</h1>
+        <p>This Stage A0 shell verifies that the isolated Evidence server boundary is callable.</p>
+        <p id="status" role="status">Checking server boundary…</p>
+      </section>
+    </main>
+    <script>
+      const statusNode = document.getElementById("status");
+
+      fetch("/api/evidence/status")
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((result) => {
+          statusNode.textContent = `Server boundary: ${result.status} (Stage ${result.stage})`;
+          statusNode.className = "available";
+        })
+        .catch(() => {
+          statusNode.textContent = "Server boundary: unavailable";
+          statusNode.className = "unavailable";
+        });
+    </script>
+  </body>
+</html>
