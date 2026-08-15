@@ -292,3 +292,72 @@ When Codex believes architecture should change, it should submit:
 **Recommendation:**
 
 No implementation of the proposed architectural change should occur until the decision is approved.
+
+---
+
+## ADR-009 — Build Evidence Platform Independently Before Legacy Integration
+
+**Status:** APPROVED
+
+### Context
+
+Repository diagnosis established that evidence-related functionality currently exists across multiple fragmented mechanisms, including dossier JSON, document records, field provenance, change events, UBO evidence structures, temporary capture files, selected Blob-backed uploads, browser-local files, and an older unmerged Evidence Collection MVP.
+
+Attempting to transform these mechanisms incrementally into the target Evidence Platform would tightly couple new platform development to existing KYC implementation details and increase migration risk.
+
+### Decision
+
+Evidence Platform V1 will initially be built as a new bounded module inside the existing repository and deployment ecosystem.
+
+It will have:
+
+* its own domain boundary;
+* its own service/API boundary;
+* new forward-only Evidence-specific persistence where required;
+* an internal Evidence Lab/test harness;
+* no dependency on the existing customer onboarding UX for demonstrating its core lifecycle.
+
+Existing KYC and Pre-boarding evidence mechanisms will initially remain operational and unchanged.
+
+Evidence Platform V1 must first demonstrate its architecture independently.
+
+Once proven, existing producers and consumers will be integrated progressively through adapters and bounded integration changes.
+
+Legacy evidence mechanisms will only be retired after replacement paths are proven.
+
+This is a strangler migration strategy.
+
+### Physical Architecture
+
+Logical separation is required now.
+
+Physical infrastructure separation is not required now.
+
+Initially remain within the existing:
+
+* Git repository;
+* deployment ecosystem;
+* database infrastructure;
+* authentication/security ecosystem where appropriate.
+
+Do not create a separate repository, database platform, microservice estate, or deployment stack merely to achieve logical separation.
+
+The architecture should preserve the option for later physical separation.
+
+### Existing System Protection
+
+During Stage A and Stage B, existing KYC and Pre-boarding behavior is a protected boundary.
+
+Do not modify existing flows unless a Current Build Brief explicitly authorizes integration.
+
+### Consequences
+
+Evidence Platform development can proceed without requiring simultaneous migration of legacy evidence flows.
+
+The platform can be tested independently.
+
+Existing products can continue shipping.
+
+Integration occurs later and deliberately.
+
+Some temporary duplication between legacy evidence mechanisms and the new Evidence Platform is accepted during migration.

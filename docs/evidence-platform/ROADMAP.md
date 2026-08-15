@@ -1,349 +1,195 @@
 # Evidence Platform — Controlled Implementation Roadmap
 
-## Objective
+## Stage A — Build Evidence Platform V1 Independently
 
-Build the Evidence Platform incrementally while preserving existing KYC behavior and preventing architectural drift.
+Goal:
 
-Each phase must have a bounded implementation authorization.
+Demonstrate the complete Evidence lifecycle independently of existing KYC/Pre-boarding UX.
 
-Completing one phase does not authorize the next.
-
----
-
-# Phase 0 — Repository and Architecture Reconciliation
-
-**Status:** FIRST PRIORITY
-
-Before significant new implementation, establish the relationship between the target Evidence Platform architecture and the existing repository.
-
-Codex should inspect:
-
-- existing evidence-related models;
-- document/file persistence;
-- browser/capture implementation;
-- Evidence Agent work;
-- RFI-related evidence handling;
-- DRS/evidence interactions;
-- dossier concepts;
-- provenance-related implementation;
-- hashing/fingerprinting;
-- audit/event history;
-- existing KYC domain ownership;
-- APIs and services likely to interact with Evidence;
-- existing tests;
-- database migrations.
-
-Output:
+Target lifecycle:
 
 ```text
-CURRENT STATE
-TARGET STATE
-GAPS
-CONFLICTS
-REUSABLE COMPONENTS
-TECHNICAL DEBT RELEVANT TO EVIDENCE
-MIGRATION RISKS
-ARCHITECTURE QUESTIONS
-RECOMMENDED IMPLEMENTATION SEQUENCE
+Case / Investigation Context
+        ↓
+Evidence Requirement
+        ↓
+Acquisition
+        ↓
+Evidence Asset
+        ↓
+Durable Raw Artifact
+        ↓
+Integrity / Fingerprint
+        ↓
+Provenance
+        ↓
+Extraction
+        ↓
+Observation / Fact
+        ↓
+Evidence Match
+        ↓
+Requirement Satisfaction
+        ↓
+Evidence Ledger
+        ↓
+Evidence Package
 ```
 
-This phase is diagnostic.
+An internal Evidence Lab/test harness should allow this lifecycle to be exercised without navigating the existing onboarding journey.
 
-Do not perform architectural restructuring during Phase 0 unless separately authorized.
+Stage A should be delivered through small bounded build briefs rather than one large implementation.
 
----
+### Stage A0 — Platform Boundary and Evidence Lab Foundation
 
-# Phase 1 — Canonical Evidence Foundation
+Establish the bounded Evidence Platform module, contracts, test boundary, and internal Evidence Lab shell.
 
-Goal:
+No legacy integration.
 
-Create the minimum durable Evidence domain foundation.
+### Stage A1 — Core Evidence Domain
 
-Expected scope, subject to repository diagnosis:
+Introduce the minimum durable domain required for:
 
-- Evidence Asset identity;
-- canonical persistence;
-- basic evidence metadata;
-- source/acquisition lineage;
-- integrity/fingerprint semantics;
-- ingestion boundary;
-- retrieval;
-- lifecycle foundations;
-- foundational tests.
+* Case/investigation context;
+* Evidence Requirement;
+* Evidence Acquisition;
+* Evidence Asset;
+* provenance;
+* integrity/fingerprint;
+* durable raw evidence.
 
-Key question:
+### Stage A2 — First Representative Producer
 
-> Can the platform ingest and later retrieve a canonical piece of evidence while proving what it is and where it came from?
+Use automated web/regulator evidence as the first demanding producer.
 
-Explicitly out of scope unless separately authorized:
-
-- broad Evidence Agent orchestration;
-- requirement matching;
-- advanced extraction;
-- dossier assembly;
-- decisioning;
-- broad KYC migration.
-
----
-
-# Phase 2 — Provenance and Acquisition
-
-Goal:
-
-Establish durable evidence lineage.
-
-Potential scope:
-
-- Evidence Source;
-- Acquisition Event;
-- actor/process provenance;
-- capture metadata;
-- acquisition timestamps;
-- acquisition mechanism;
-- transformations;
-- lineage queries;
-- provenance reconstruction.
-
-Key question:
-
-> Can we reconstruct how this Evidence Asset entered the platform?
-
----
-
-# Phase 3 — Evidence Collection Integration
-
-Goal:
-
-Connect evidence acquisition mechanisms to canonical Evidence ingestion.
-
-Potential sources include:
-
-- public websites;
-- browser captures;
-- screenshots;
-- PDFs;
-- official registries;
-- APIs;
-- analyst uploads;
-- agent-generated acquisition workflows.
-
-Key architectural requirement:
-
-Collection mechanisms produce/submit evidence.
-
-They do not become owners of canonical evidence semantics.
-
----
-
-# Phase 4 — Observation and Extraction Lineage
-
-Goal:
-
-Allow systems and agents to derive structured observations while retaining exact lineage to source evidence.
-
-Potential scope:
-
-- Observation model;
-- extraction run identity;
-- extraction actor/model/process;
-- evidence-to-observation relationships;
-- confidence where appropriate;
-- transformation history;
-- re-extraction behavior.
-
-Key question:
-
-> For every material extracted value, can we identify exactly which evidence produced it and how?
-
----
-
-# Phase 5 — Facts / Assertions and Evidentiary Support
-
-Goal:
-
-Represent normalized application knowledge separately from source observations.
-
-Potential scope:
-
-- assertion identity;
-- normalization;
-- observation-to-assertion lineage;
-- multiple supporting sources;
-- contradiction;
-- supersession;
-- confidence/quality semantics where approved;
-- temporal validity.
-
-Key question:
-
-> Can the system distinguish what a source stated from what the platform concluded?
-
----
-
-# Phase 6 — Evidence Requirements
-
-Goal:
-
-Represent what evidence is needed independently of the evidence itself.
-
-Potential scope:
-
-- requirement identity;
-- requirement lifecycle;
-- requirement target;
-- evidence-to-requirement relationships;
-- satisfaction;
-- insufficiency;
-- missing evidence;
-- potentially contradictory evidence.
-
-Key question:
-
-> Can the system explain what evidence was required and why particular evidence did or did not satisfy the requirement?
-
----
-
-# Phase 7 — Dossier and Evidence Packaging
-
-Goal:
-
-Construct coherent evidentiary views for workflows and decisions.
-
-Potential scope:
-
-- dossier identity;
-- evidence membership;
-- relevant assertions;
-- point-in-time representation;
-- dossier evolution;
-- packaging/export boundaries.
-
-Key question:
-
-> Can we reconstruct the evidence picture presented for a defined purpose at a defined point in time?
-
----
-
-# Phase 8 — Decision Provenance
-
-Goal:
-
-Connect material decisions to the information available when they were made.
-
-Potential scope:
-
-- decision event;
-- decision actor;
-- decision inputs;
-- supporting assertions;
-- supporting evidence;
-- rules/models/process versions;
-- decision explanation;
-- subsequent change.
-
-Key question:
-
-> Can we explain why a decision was reasonable based on what was known at the time?
-
----
-
-# Phase 9 — Regulatory Reconstruction
-
-Goal:
-
-Provide controlled historical reconstruction capabilities.
-
-Potential queries:
+The target representative journey is conceptually:
 
 ```text
-Show the complete evidentiary history for this customer.
-
-Why did this field have value X on date T?
-
-What evidence caused the value to change?
-
-What evidence existed when this decision was made?
-
-Who acquired this evidence?
-
-What source produced it?
-
-Has the retained artifact changed?
-
-What conflicting information existed?
-
-Which subsequent evidence superseded it?
+Company
+→ Requirement
+→ FCA/regulator source
+→ browser/rendered acquisition
+→ point-in-time capture
+→ durable Evidence Asset
+→ provenance + fingerprint
 ```
 
-Security and authorization must be explicit.
+Do not assume existing capture implementations should simply be restored. Reuse appropriate components only where they fit the approved architecture.
 
----
+### Stage A3 — Interpretation
 
-# Phase 10 — Advanced Evidence Agent Automation
+Add:
 
-Goal:
+* extraction;
+* observations;
+* normalized facts/assertions;
+* derivation lineage.
 
-Allow Evidence Agents to automate larger portions of evidence acquisition and interpretation using the stable platform underneath them.
+Maintain the distinction between source evidence and derived knowledge.
 
-Agents should consume the Evidence Platform rather than create a parallel evidence model.
+### Stage A4 — Matching and Satisfaction
 
-Potential capabilities:
+Add:
 
-- source selection;
-- automated acquisition;
-- source-specific collection;
-- evidence quality assessment;
-- retry/fallback;
-- requirement-driven collection;
-- change detection;
-- automated refresh;
-- analyst escalation.
+* Evidence Match;
+* acceptance evaluation;
+* requirement satisfaction;
+* contradiction/insufficiency where required.
 
----
+### Stage A5 — Ledger and Package
 
-# Parallel Work Rule
+Add:
 
-Parallel implementation is permitted only where ownership and integration boundaries are sufficiently stable.
+* case Evidence Ledger;
+* historical/evidentiary view;
+* Evidence Package;
+* package manifest sufficient to demonstrate the complete independent lifecycle.
 
-Two workstreams must not independently invent competing definitions for:
+### Stage A6 — End-to-End Evidence Lab Validation
 
-- Evidence Asset;
-- provenance;
-- requirement;
-- observation;
-- assertion;
-- dossier;
-- lifecycle;
-- evidence relationships.
+Exercise and demonstrate the complete lifecycle through the Evidence Lab.
 
-Where multiple branches/worktrees are used, shared contracts must be explicitly identified.
-
----
-
-# Phase Gate
-
-Before moving from one material phase to another, review:
+Stage A is complete when Evidence Platform V1 can independently demonstrate:
 
 ```text
-1. What was implemented?
-2. Which invariants were demonstrated?
-3. What assumptions became visible?
-4. Did implementation expose an architectural conflict?
-5. Were any ADRs created?
-6. Is existing KYC behavior intact?
-7. Are migrations safe?
-8. What technical debt was intentionally deferred?
-9. Is the next boundary sufficiently defined?
+Requirement
+→ acquisition
+→ durable evidence
+→ provenance
+→ integrity
+→ interpretation
+→ matching
+→ satisfaction
+→ ledger
+→ package
 ```
 
-Only then authorize the next phase.
+without depending on the existing KYC customer journey.
 
 ---
 
-# Immediate Authorized Direction
+## Stage B — Prove the Producer Abstraction
 
-The first build-control exercise should be:
+Prove that materially different evidence producers fit naturally into the same platform model.
 
-**Phase 0 — Repository and Architecture Reconciliation.**
+At minimum validate:
 
-Do not authorize a broad Evidence Platform build until that diagnostic has been reviewed against the architecture.
+### Producer 1 — Automated web/regulator evidence
+
+Example: FCA/regulatory source.
+
+### Producer 2 — Customer document
+
+Example: passport or proof of address.
+
+### Producer 3 — Authoritative registry/API evidence
+
+Example: Companies House or equivalent structured authoritative source.
+
+### Producer 4 — Analyst evidence
+
+Manual analyst-provided evidence with actor attribution.
+
+Stage B should test the architecture rather than create producer-specific parallel evidence models.
+
+---
+
+## Stage C — Integrate Existing Products
+
+Once the independent Evidence Platform is proven, progressively integrate KYC and Pre-boarding.
+
+Use adapters and bounded integration changes.
+
+Potential integration surfaces include:
+
+* existing DRS;
+* Required Documents;
+* amendment evidence;
+* customer uploads;
+* analyst uploads;
+* self-source;
+* Companies House;
+* internet research;
+* Applicant evidence;
+* UBO evidence;
+* dossier lifecycle;
+* final submission.
+
+Integration should proceed producer-by-producer/capability-by-capability rather than by rewriting the entire application.
+
+Feature flags or equivalent controlled activation should be used where appropriate.
+
+---
+
+## Stage D — Retire Legacy Evidence Architecture
+
+Only after replacement behavior is proven:
+
+* retire ephemeral upload paths;
+* retire regex/string-based evidence satisfaction;
+* retire duplicated evidence metadata;
+* migrate/archive obsolete Evidence MVP structures;
+* remove superseded evidence storage paths;
+* remove legacy integrations that no longer have consumers.
+
+Deletion is the final step, not the migration strategy.

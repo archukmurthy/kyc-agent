@@ -1,355 +1,132 @@
 # Evidence Platform — Current Build Brief
 
-**Current phase:** Phase 0 — Repository and Architecture Reconciliation
+# Stage A0 — Platform Boundary and Evidence Lab Foundation
 
-**Authorization type:** Diagnostic only
+## Objective
 
-**Architecture changes authorized:** None
+Establish the initial Evidence Platform implementation boundary without implementing the substantive Evidence lifecycle yet.
 
-**Production behavior changes authorized:** None
+This phase creates the place in which subsequent Evidence Platform capabilities will be built and tested.
 
-**Database migrations authorized:** None
+## Authorized Scope
 
-**Broad refactoring authorized:** None
+Inspect the existing repository conventions and establish an Evidence Platform structure consistent with them.
 
----
-
-# Objective
-
-Inspect the existing repository and determine how the current implementation relates to the approved Evidence Platform architecture.
-
-The purpose is to establish the safest implementation path before new Evidence Platform foundations are built.
-
----
-
-# Required Inputs
-
-Read and follow:
-
-1. Evidence Platform — Architecture and Design Authority
-2. Evidence Platform — Architecture Decision Log
-3. Evidence Platform — Controlled Implementation Roadmap
-4. Evidence Platform — Standing Instructions for Codex
-5. This Current Build Brief
-
-Where repository behavior conflicts with these documents, do not silently resolve the conflict.
-
-Report it.
-
----
-
-# Investigation Scope
-
-Inspect the repository for implementation related to:
-
-- evidence;
-- documents and attachments;
-- source/citation/provenance concepts;
-- capture/browser/screenshot/PDF functionality;
-- Evidence Agent functionality;
-- RFI evidence collection;
-- DRS/evidence interaction;
-- dossier/case packaging;
-- UBO-related evidence/provenance;
-- audit trails;
-- hashing/fingerprinting;
-- historical state;
-- workflow events;
-- existing KYC persistence and domain models;
-- external source acquisition;
-- extraction/normalization;
-- existing tests covering any of the above.
-
-Follow references rather than relying only on filename searches.
-
----
-
-# Questions to Answer
-
-## Existing Evidence Model
-
-What currently represents evidence?
-
-Is evidence currently:
-
-- a file;
-- attachment;
-- document;
-- URL;
-- screenshot;
-- database entity;
-- workflow artifact;
-- combination of these?
-
-Where is its identity defined?
-
-Who owns it?
-
----
-
-## Persistence
-
-Where are evidence-like artifacts persisted?
-
-What database entities, object storage, or external systems are involved?
-
-What lifecycle exists?
-
-Are records mutated, replaced, versioned, or appended?
-
----
-
-## Provenance
-
-What provenance is currently retained?
-
-Can the system determine:
-
-- original source;
-- URL/source identifier;
-- acquisition time;
-- acquisition actor/process;
-- capture mechanism;
-- transformation history;
-- evidence-to-fact lineage?
-
-Identify what exists and what is missing.
-
----
-
-## Integrity
-
-Search for:
-
-- hashes;
-- fingerprints;
-- checksums;
-- immutable storage;
-- content-addressed storage;
-- audit signatures;
-- tamper detection.
-
-For each mechanism found, establish what it actually guarantees.
-
----
-
-## Collection
-
-Identify current mechanisms for:
-
-- browser collection;
-- screenshots;
-- PDF generation;
-- registry lookup;
-- API acquisition;
-- analyst upload;
-- Evidence Agent collection.
-
-Determine where collected artifacts currently go.
-
----
-
-## Interpretation
-
-Identify current mechanisms for:
-
-- OCR;
-- extraction;
-- normalization;
-- fact creation;
-- LLM interpretation;
-- analyst interpretation.
-
-Determine whether source lineage survives these transformations.
-
----
-
-## Requirements / RFI
-
-Determine how evidence requests are currently represented.
-
-Establish whether requirement semantics are mixed with evidence persistence.
-
----
-
-## Dossier / Decision
-
-Determine whether evidence is currently associated with:
-
-- cases;
-- customers;
-- investigations;
-- decisions;
-- reviews;
-- dossiers.
-
-Determine whether historical reconstruction is currently possible.
-
----
-
-## Existing KYC Dependencies
-
-Identify existing KYC modules that would be affected by introducing canonical Evidence Platform capability.
-
-Do not modify them.
-
-Map dependencies and integration boundaries.
-
----
-
-# Required Deliverable
-
-Return a structured diagnostic with these sections.
-
-## 1. Executive Summary
-
-Concise description of the current Evidence-related architecture and the most important gaps.
-
-## 2. Repository Map
-
-Relevant files/modules/services/tables and their responsibilities.
-
-## 3. Current Evidence Flow
-
-Trace at least the major existing flow(s):
+The conceptual boundary should accommodate capabilities equivalent to:
 
 ```text
-source/request
-→ collection
-→ persistence
-→ extraction
-→ KYC usage
-→ audit/history
+evidence/
+    domain
+    acquisition
+    assets
+    provenance
+    extraction
+    requirements
+    matching
+    ledger
+    packaging
 ```
 
-Use actual repository components.
+Do not mechanically create empty directories merely to mirror this example.
 
-## 4. Current Domain Model
+Use repository conventions and create only scaffolding that has immediate purpose.
 
-Describe existing evidence-related entities and ownership.
+Establish a server-side Evidence Platform module/service boundary.
 
-## 5. Architecture Comparison
+Establish the minimal route/API boundary needed for Evidence Lab health/status interaction.
 
-For each major target concept:
+Create an internal Evidence Lab shell/test harness that is isolated from the existing customer onboarding journey.
 
-```text
-Evidence Source
-Acquisition
-Evidence Asset
-Provenance
-Integrity
-Observation
-Assertion
-Evidence Requirement
-Dossier
-Decision lineage
-Historical reconstruction
-```
+The Evidence Lab does not need substantive Evidence functionality yet.
 
-classify current support as:
+It should prove:
 
-```text
-EXISTS
-PARTIAL
-ABSENT
-CONFLICTS WITH TARGET
-UNCLEAR
-```
+* the Evidence module can be invoked;
+* the Evidence Lab can communicate with it;
+* the new boundary is independently testable;
+* existing application behavior remains unchanged.
 
-and provide repository evidence for the classification.
+Add appropriate tests for the new boundary.
 
-## 6. Reusable Components
+Document the resulting module/API/test structure.
 
-What existing implementation should probably be preserved?
+## Evidence Lab
 
-Explain why.
+The Evidence Lab is an internal development and validation surface.
 
-## 7. Architectural Conflicts
+It is not customer-facing product functionality.
 
-Anything in the current implementation that conflicts with an approved invariant.
+At this stage it may be minimal.
 
-Do not solve these automatically.
+Do not build a polished UI.
 
-## 8. Migration Risks
+Do not implement the full lifecycle.
 
-Identify persistence, compatibility, operational, or historical-data risks.
+Its purpose is to become the controlled harness through which later Stage A capabilities are exercised.
 
-## 9. Test Coverage
+## Explicitly Not Authorized
 
-What relevant behavior is already protected by tests?
+Do not yet implement:
 
-What critical behavior lacks tests?
+* canonical Evidence Asset persistence;
+* Evidence Requirement persistence;
+* acquisition workflows;
+* browser/regulator capture;
+* Blob evidence storage;
+* extraction;
+* observations;
+* facts/assertions;
+* matching;
+* requirement satisfaction;
+* Evidence Ledger;
+* Evidence Packages;
+* DRS integration;
+* existing upload migration;
+* KYC integration;
+* Pre-boarding integration;
+* UBO integration;
+* legacy migration;
+* production feature flags unless technically necessary merely to keep the internal harness inaccessible.
 
-## 10. Recommended Phase 1 Boundary
+Do not modify existing database tables.
 
-Based on repository reality, propose the smallest safe implementation scope for:
+Do not create speculative Evidence database schema during A0.
 
-**Canonical Evidence Foundation**
+## Existing Application Protection
 
-Do not implement it.
+Existing KYC and Pre-boarding behavior must remain unchanged.
 
-## 11. Proposed Architecture Decisions
+Avoid modifying existing high-coupling application files unless absolutely necessary to expose the internal Evidence Lab.
 
-If repository reality exposes decisions that Architecture Authority must make, list each as a separate proposed ADR.
+If such a modification is required, minimize it and explain why.
 
-## 12. Out-of-Scope Findings
+Prefer an isolated development/internal route.
 
-Anything important discovered that should be handled later.
+## Architecture Questions
 
----
+If implementation of A0 exposes decisions that would prematurely constrain:
 
-# Evidence Standard for the Diagnostic
+* Case identity;
+* Evidence Asset identity;
+* tenancy;
+* authorization;
+* database schema;
+* Evidence lifecycle;
+* producer contracts;
+* deployment topology;
 
-For every important claim, identify the concrete repository evidence supporting it:
+do not invent those decisions simply to complete scaffolding.
 
-- file;
-- class/function;
-- schema/migration;
-- test;
-- runtime configuration;
-- call path.
+Surface them for Architecture Authority.
 
-Separate:
+## Completion Criteria
 
-**OBSERVED IN CODE**
+A0 is complete when:
 
-from:
-
-**ASSUMPTION**
-
-from:
-
-**RECOMMENDATION**
-
-from:
-
-**ARCHITECTURE CHANGE PROPOSED**
-
----
-
-# Constraints
-
-Do not:
-
-- implement the Evidence Platform;
-- create new architecture;
-- perform broad refactors;
-- modify existing KYC behavior;
-- introduce migrations;
-- rename major domain concepts;
-- remove apparently obsolete Evidence-related code;
-- "clean up" architecture while investigating.
-
-Minor temporary investigative tooling is acceptable if necessary, but avoid material repository changes.
-
----
-
-# Completion Condition
-
-Phase 0 is complete when Architecture Authority can answer:
-
-> Given what actually exists in the repository, what is the smallest safe first implementation that moves us toward the approved Evidence Platform architecture without accidentally rewriting KYC or creating a second competing evidence architecture?
-
-Stop after delivering the diagnostic.
-
-Wait for Architecture Authority review before implementing Phase 1.
+1. the Evidence Platform has a clear bounded code location;
+2. the Evidence Platform has a minimal callable server-side boundary;
+3. an internal Evidence Lab/test harness can call that boundary;
+4. automated tests demonstrate the boundary works;
+5. existing KYC/Pre-boarding tests and behavior remain intact;
+6. no substantive Evidence domain semantics have been invented prematurely;
+7. the implementation provides a clean location for Stage A1.
