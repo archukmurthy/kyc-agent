@@ -13,6 +13,9 @@
       #status { font-weight: 700; }
       .available { color: #147a45; }
       .unavailable { color: #a12622; }
+      dl { display: grid; grid-template-columns: minmax(10rem, 1fr) 2fr; gap: .75rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; }
     </style>
   </head>
   <body>
@@ -20,12 +23,26 @@
       <section aria-labelledby="lab-title">
         <p>Internal test harness</p>
         <h1 id="lab-title">Evidence Lab</h1>
-        <p>This Stage A0 shell verifies that the isolated Evidence server boundary is callable.</p>
+        <p>This internal harness verifies the isolated Evidence boundary and Stage A1 fixture model.</p>
         <p id="status" role="status">Checking server boundary…</p>
+        <div id="a1" hidden>
+          <h2>Stage A1 fixture proof</h2>
+          <dl id="a1-details"></dl>
+        </div>
       </section>
     </main>
     <script>
       const statusNode = document.getElementById("status");
+      const a1Node = document.getElementById("a1");
+      const a1Details = document.getElementById("a1-details");
+
+      function addDetail(label, value) {
+        const term = document.createElement("dt");
+        const detail = document.createElement("dd");
+        term.textContent = label;
+        detail.textContent = Array.isArray(value) ? value.join(" → ") : String(value);
+        a1Details.append(term, detail);
+      }
 
       fetch("/api/evidence/status")
         .then((response) => {
@@ -39,6 +56,29 @@
         .catch(() => {
           statusNode.textContent = "Server boundary: unavailable";
           statusNode.className = "unavailable";
+        });
+
+      fetch("/api/evidence/a1-fixture")
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((result) => {
+          addDetail("Subject", `${result.subject.displayName} · ${result.subject.jurisdiction} ${result.subject.identifierValue}`);
+          addDetail("Acquisition outcomes", JSON.stringify(result.acquisitionOutcomes));
+          addDetail("August assets", result.assetsFromAugustAcquisition);
+          addDetail("Profile artifacts", result.augustProfileArtifactTypes);
+          addDetail("Recollection", result.recollection);
+          addDetail("Independent extractions", result.independentExtractions);
+          addDetail("Public reuse contexts", result.publicReuseContextCount);
+          addDetail("Private evidence scopes", result.privateEvidence.scopeCount);
+          addDetail("Identical bytes retain provenance", result.identicalFingerprintSeparateProvenance);
+          addDetail("Schema version", result.schemaVersionReference ?? "current/latest (no explicit version)");
+          a1Node.hidden = false;
+        })
+        .catch(() => {
+          addDetail("Fixture demonstration", "unavailable");
+          a1Node.hidden = false;
         });
     </script>
   </body>

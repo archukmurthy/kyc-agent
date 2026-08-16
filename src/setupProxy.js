@@ -38,6 +38,7 @@ const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const evidenceStatusHandler = require(path.join(__dirname, "..", "api", "evidence", "status.js"));
+const evidenceA1FixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a1-fixture.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -465,4 +466,7 @@ module.exports = function (app) {
 
   // Evidence Platform Stage A0 — isolated server-boundary availability check.
   app.get("/api/evidence/status", adapt(evidenceStatusHandler));
+
+  // Evidence Platform Stage A1 — fixture-only domain and lineage demonstration.
+  app.get("/api/evidence/a1-fixture", adapt(evidenceA1FixtureHandler));
 };

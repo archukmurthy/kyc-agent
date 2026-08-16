@@ -1,4 +1,4 @@
-# Evidence Platform Stage A0 Structure
+# Evidence Platform Structure
 
 Stage A0 establishes an isolated, callable seam without implementing Evidence Platform domain behavior.
 
@@ -8,4 +8,16 @@ Stage A0 establishes an isolated, callable seam without implementing Evidence Pl
 - `evidence/__tests__/platform.nodetest.js` verifies the module and route contract without external services.
 - `src/setupProxy.js` registers the same GET route for local CRA development.
 
-This scaffold does not define domain identities, persistence, tenancy, authorization, capture, extraction, requirements, matching, audit semantics, external integrations, or production workflow behavior. The existing KYC and Pre-boarding customer journeys remain separate and unchanged.
+At Stage A0, this scaffold intentionally defined no substantive Evidence domain behavior. The existing KYC and Pre-boarding customer journeys remain separate and unchanged.
+
+## Stage A1 additions
+
+- `evidence/a1/domain.js` validates the approved core-domain and lineage invariants without owning KYC decisioning.
+- `evidence/a1/fixtures.js` defines deterministic Companies House and customer-upload scenarios, including recollection and independent extraction results.
+- `evidence/a1/repository.js` provides memory and injected-PostgreSQL persistence boundaries for the same validated graph.
+- `evidence/a1/service.js` exercises the fixture graph through the repository boundary.
+- `api/evidence/a1-fixture.js` exposes the fixture-only demonstration to Evidence Lab; it does not connect a real producer.
+- `db/migrations/010_evidence_platform_a1.sql` defines additive, bounded Evidence persistence without altering legacy tables.
+- `public/evidence-lab.html` renders the fixture demonstration separately from the customer journey.
+
+Stage A1 does not implement real acquisition, AI extraction, verification decisioning, matching, satisfaction, ledger, packaging, or KYC integration.

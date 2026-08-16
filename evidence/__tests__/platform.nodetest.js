@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { getPlatformStatus } = require("../platform");
 const statusHandler = require("../../api/evidence/status");
+const fixtureHandler = require("../../api/evidence/a1-fixture");
 
 function responseRecorder() {
   return {
@@ -18,10 +19,10 @@ function responseRecorder() {
   };
 }
 
-test("the server boundary exposes only the A0 availability status", () => {
+test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A0",
+    stage: "A1",
     status: "available",
   });
 });
@@ -33,7 +34,7 @@ test("GET /api/evidence/status returns the boundary status", () => {
   assert.deepEqual(res.body, getPlatformStatus());
 });
 
-test("the status route rejects methods outside the A0 contract", () => {
+test("the status route rejects methods outside its GET contract", () => {
   const res = responseRecorder();
   statusHandler({ method: "POST" }, res);
   assert.equal(res.statusCode, 405);
@@ -45,4 +46,14 @@ test("the Evidence Lab calls the verified status route", () => {
   const labPath = path.join(__dirname, "..", "..", "public", "evidence-lab.html");
   const lab = fs.readFileSync(labPath, "utf8");
   assert.match(lab, /fetch\("\/api\/evidence\/status"\)/);
+  assert.match(lab, /fetch\("\/api\/evidence\/a1-fixture"\)/);
+});
+
+test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {
+  const res = responseRecorder();
+  await fixtureHandler({ method: "GET" }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.stage, "A1");
+  assert.deepEqual(res.body.acquisitionOutcomes, { successful: 3, failed: 1, inconclusive: 1 });
+  assert.equal(res.body.identicalFingerprintSeparateProvenance, true);
 });
