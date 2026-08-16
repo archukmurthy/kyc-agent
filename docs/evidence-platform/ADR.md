@@ -361,3 +361,106 @@ Existing products can continue shipping.
 Integration occurs later and deliberately.
 
 Some temporary duplication between legacy evidence mechanisms and the new Evidence Platform is accepted during migration.
+
+---
+
+## ADR-010 — Core Evidence Domain, Capture, Reuse, and Extraction Lineage
+
+**Status:** APPROVED
+
+### Context
+
+Stage A1 needs a durable model that distinguishes a business evidence need, attempts to obtain evidence, logical evidence obtained, preserved point-in-time representations, and values derived from those representations. It must support reuse and historical reconstruction without coupling collection to onboarding presentation or KYC decisioning.
+
+### Decision
+
+#### Evidence Requirement is a business-level need
+
+An Evidence Requirement represents a meaningful business evidence need and may contain multiple information needs aligned to the applicable existing KYC/KYB schema. It is not one requirement per field. Evidence Platform must not create a competing vocabulary where the product schema already defines the concept. Requirements may later be partially or fully supported by evidence; detailed matching and satisfaction semantics are outside Stage A1.
+
+#### Acquisition is distinct from evidence obtained
+
+An Acquisition records an attempt to obtain evidence and must support successful, failed, and inconclusive outcomes. Failed and inconclusive attempts remain in the historical/audit record even when they produce no Evidence Asset. A successful Acquisition may produce zero, one, or many Evidence Assets. Acquisition must never be modeled as synonymous with Evidence Asset.
+
+#### Evidence Asset and Artifact are separate concepts
+
+An Evidence Asset is a distinct logical piece of evidence that can be preserved, referenced, reused, independently reasoned about, and linked to one or more Artifacts. It is not an Acquisition, raw file/blob, extracted field value, or onboarding UI document.
+
+An Artifact is a preserved point-in-time representation of an Evidence Asset. Examples include machine-readable HTML, structured JSON/API responses, screenshots, PDFs, customer-provided documents, registry-sourced documents, and other appropriate source representations. The requirement is to preserve representation sufficient to reconstruct and verify what was observed, not to mandate HTML or every artifact type for every producer. Where appropriate, preserve both a machine-readable representation for primary extraction and a human-viewable representation for audit and independent verification.
+
+#### Artifact integrity is explicit
+
+Artifacts must support cryptographic fingerprinting using SHA-256 or an architecture-approved equivalent. The fingerprint demonstrates whether preserved content has changed. Fingerprint equality does not establish semantic equality of acquisitions or business context.
+
+#### Historical evidence is append-only
+
+Recollection does not overwrite prior evidence. The platform retains the history needed to reconstruct what was collected, when, from where, and what the source showed at that time. Newer evidence may become more current or relevant without destroying older evidence. Customer replacement evidence likewise does not erase previously self-sourced evidence; both remain with their respective provenance.
+
+#### Physical deduplication must not erase provenance
+
+Independent Acquisitions remain separate evidentiary facts even when they produce byte-identical Artifacts. Physical storage may later be deduplicated when safe, but A1 does not require that optimization and the model must not prevent it. Separate acquisition and provenance histories must remain intact. Fingerprint equality never grants reuse, visibility, or access. Any future physical deduplication must preserve logical access isolation.
+
+#### Evidence may be reused
+
+An Evidence Asset is not owned exclusively by the first Requirement, case, investigation, or onboarding context that caused its collection. It may support multiple Requirements and contexts through separate relationships without copying or re-owning the asset. Reuse eligibility is governed by acceptance policy, including freshness and staleness. Stale evidence remains historical evidence even when no longer eligible for a current freshness-sensitive Requirement. Freshness configuration and decisioning are not Stage A1 scope unless separately authorized.
+
+Reuse eligibility also depends on provenance/access class:
+
+* Public evidence independently obtained from public registries or publicly accessible sources may be structurally eligible for reuse across tenant/customer contexts, subject to later freshness, suitability, security, and policy rules. A1 does not implement the complete cross-tenant reuse engine, but its model must not make eligible future public-evidence reuse impossible.
+* Customer-provided or otherwise private evidence is context/tenant restricted in A1 and must not be reused across unrelated tenants or customer contexts. Identical fingerprints do not authorize cross-tenant sharing or visibility.
+
+#### Evidence records subject identity without becoming a master entity system
+
+Evidence must be able to record the real-world subject to which it relates using available stable identifiers or references from the surrounding platform and, where appropriate, authoritative source identifiers—for example, a UK company number. The same real-world company must not automatically become a different subject merely because it appears in multiple cases or customer contexts.
+
+A1 must not create a global master-entity/company identity system. Evidence owns the relationship between evidence and its subject; it does not own global entity resolution. If repository inspection finds no safe existing subject reference capable of meeting A1 needs without a new canonical identity decision, implementation must stop and report that issue.
+
+#### Collection structure does not dictate product presentation
+
+Evidence Platform records how evidence was acquired and related internally. KYC/Onboarding may present assets independently across company details, directors, ownership/UBO, required documents, or other surfaces. Evidence domain structure must not be coupled to current onboarding screens.
+
+#### Extraction is derived from evidence and schema-aligned
+
+An extracted value is derived from evidence and is not original evidence. Each value must retain lineage to its Extraction Run, underlying Evidence Asset, and preserved Artifact. Multiple Extraction Runs may operate on the same preserved evidence over time, and the evidence must remain independently inspectable when deterministic or AI extraction is wrong.
+
+Primary extraction targets the finite applicable KYC/KYB schema rather than discovering unlimited “interesting information.” Evidence Platform must not create a competing field ontology where an existing schema concept is available. Sources should be captured broadly enough for later audit and re-extraction, while structured extraction remains limited to applicable schema fields supported by the source. Stage A1 establishes the lineage/data contract with fixtures and does not implement real AI extraction.
+
+The existing configurable KYC/KYB schema remains authoritative. Extraction Run lineage should record a stable schema/version identifier when one exists. The current configurable schema has no explicit version identifier; this does not block A1. Until versioning exists, the version reference may be absent/null or use a clearly documented, non-breaking `current/latest` compatibility convention consistent with repository conventions. A1 must not invent historical version numbers, implement a schema-versioning subsystem, or fail extraction lineage merely because an explicit version is unavailable. The lineage design should allow a real version identifier to be recorded later without destructive migration or redesign where reasonably possible.
+
+#### Independent verification must remain possible
+
+Where multiple representations exist, the architecture must allow a later independent verification path, such as primary extraction from a machine-readable Artifact and independent re-extraction from a screenshot. Stage A1 does not implement verification workflows, triggers, model selection, comparison logic, discrepancy decisioning, or analyst routing, but must not make them impossible.
+
+An extraction discrepancy—two extraction methods disagreeing about what the same evidence says—is distinct from an evidence discrepancy—two independently understood pieces of evidence reporting different values.
+
+#### Evidence Platform does not own KYC decisioning or schema semantics
+
+Evidence Platform owns evidence collection records, acquisition history, preservation, artifact integrity, provenance, extraction lineage, support for independent verification, and historical reconstruction.
+
+KYC/Onboarding owns customer presentation and correction workflows, operative onboarding values, semantic interpretation between schema concepts, source priority for KYC questions, conflict consequences, risk decisions, analyst routing, and whether onboarding continues. For example, `registered_address` and `operating_address` are distinct concepts and are not necessarily contradictory merely because their values differ. Evidence records what was extracted; KYC/schema reasoning decides whether comparison is meaningful.
+
+The intended product strategy is to self-source where possible, permit customer replacement evidence when self-sourced evidence is unavailable, unsuitable, outdated, or contested, and allow KYC to select the operative evidence/value while Evidence Platform retains both histories and their provenance. Stage A1 supports this historical story but does not implement customer workflow behavior.
+
+### Consequences
+
+Stage A1 may establish model contracts and bounded persistence for:
+
+```text
+Evidence Requirement
+        ↓
+Acquisition
+        ↓
+Evidence Asset
+        ↓
+Artifact
+        ↓
+Provenance + Integrity
+        ↓
+Extraction Run
+        ↓
+Schema-aligned extracted values
+```
+
+Real producers, AI extraction, independent verification, matching, satisfaction, ledger, packaging, and KYC integration remain later-stage work.
+
+Exact table names, internal API/service names, lifecycle enum names, migration mechanics, and reversible code organization remain implementation decisions within the approved architecture. Detailed retention/deletion policy, storage-provider optimization/selection beyond minimum A1 need, source-specific trust ranking, detailed freshness semantics, the full cross-tenant reuse engine, global entity resolution, and schema-versioning implementation are deliberately deferred and must not be solved during A1.

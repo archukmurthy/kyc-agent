@@ -1,132 +1,316 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A0 — Platform Boundary and Evidence Lab Foundation
+# Stage A1 — Core Evidence Domain + Extraction Lineage
 
 ## Objective
 
-Establish the initial Evidence Platform implementation boundary without implementing the substantive Evidence lifecycle yet.
-
-This phase creates the place in which subsequent Evidence Platform capabilities will be built and tested.
-
-## Authorized Scope
-
-Inspect the existing repository conventions and establish an Evidence Platform structure consistent with them.
-
-The conceptual boundary should accommodate capabilities equivalent to:
+Build the minimum durable Evidence Platform domain required to represent:
 
 ```text
-evidence/
-    domain
-    acquisition
-    assets
-    provenance
-    extraction
-    requirements
-    matching
-    ledger
-    packaging
+business evidence need
+        ↓
+attempt to obtain evidence
+        ↓
+evidence obtained
+        ↓
+preserved representations
+        ↓
+provenance/integrity
+        ↓
+schema-aligned extraction lineage
 ```
 
-Do not mechanically create empty directories merely to mirror this example.
+This phase establishes the core model.
 
-Use repository conventions and create only scaffolding that has immediate purpose.
+It does not connect a real external evidence producer yet.
 
-Establish a server-side Evidence Platform module/service boundary.
+---
 
-Establish the minimal route/API boundary needed for Evidence Lab health/status interaction.
+## Required Stage A1 capabilities
 
-Create an internal Evidence Lab shell/test harness that is isolated from the existing customer onboarding journey.
+Implement the minimum architecture necessary to represent and persist:
 
-The Evidence Lab does not need substantive Evidence functionality yet.
+### Evidence Requirement
 
-It should prove:
+A business-level evidence requirement containing one or more information needs aligned to existing KYC/KYB schema concepts.
 
-* the Evidence module can be invoked;
-* the Evidence Lab can communicate with it;
-* the new boundary is independently testable;
-* existing application behavior remains unchanged.
+Do not create one Evidence Requirement per field.
 
-Add appropriate tests for the new boundary.
+### Evidence Acquisition
 
-Document the resulting module/API/test structure.
+Record an attempt to obtain evidence.
 
-## Evidence Lab
+Support at minimum:
 
-The Evidence Lab is an internal development and validation surface.
+* success;
+* failure;
+* inconclusive.
 
-It is not customer-facing product functionality.
+Retain timestamps, source/method context, outcome and failure/inconclusive reason where applicable.
 
-At this stage it may be minimal.
+### Evidence Asset
 
-Do not build a polished UI.
+Represent a distinct logical piece of evidence produced by a successful acquisition.
 
-Do not implement the full lifecycle.
+One Acquisition may produce zero, one or many Evidence Assets.
 
-Its purpose is to become the controlled harness through which later Stage A capabilities are exercised.
+### Evidence Artifact
 
-## Explicitly Not Authorized
+Represent a preserved source representation belonging to an Evidence Asset.
 
-Do not yet implement:
+Support metadata necessary to distinguish artifact type/representation and durable storage reference.
 
-* canonical Evidence Asset persistence;
-* Evidence Requirement persistence;
-* acquisition workflows;
-* browser/regulator capture;
-* Blob evidence storage;
-* extraction;
-* observations;
-* facts/assertions;
-* matching;
+Do not implement speculative support for every possible artifact format.
+
+### Integrity
+
+Persist cryptographic artifact fingerprint information sufficient for tamper/integrity verification.
+
+Use the architecture-approved SHA-256 approach unless repository constraints reveal a reason requiring Architecture Authority review.
+
+### Provenance
+
+Preserve sufficient provenance to reconstruct:
+
+* source;
+* acquisition;
+* method;
+* actor/system where applicable;
+* collection time;
+* subject/context where appropriate;
+* source locator/reference where available.
+
+Do not force all producer-specific metadata into the canonical asset if it belongs in producer/acquisition metadata.
+
+### Evidence Subject Reference
+
+Record the real-world subject of evidence using available stable surrounding-platform references and/or authoritative source identifiers where appropriate.
+
+The same real-world company must not be treated as a different subject solely because it appears in different cases or customer contexts.
+
+Do not build a new global master-entity/company identity system. Evidence owns the evidence-to-subject relationship, not global entity resolution.
+
+If repository inspection finds no safe existing way to represent the necessary subject reference without making a new canonical identity decision, STOP and report that specific issue.
+
+### Provenance/access class and reuse boundary
+
+Represent provenance/access class sufficiently to distinguish:
+
+* independently self-sourced public evidence, which may be structurally eligible for reuse across tenant/customer contexts subject to later acceptance, freshness, suitability, security and policy rules; and
+* customer-provided/private evidence, which is context/tenant restricted and must not be reused across unrelated tenants/customer contexts.
+
+A1 does not implement the full cross-tenant reuse decision engine. Its model must permit future eligible public-evidence reuse while prohibiting cross-tenant private-evidence reuse or visibility.
+
+Identical fingerprints do not authorize reuse or access. Any future physical deduplication must preserve logical isolation.
+
+### Extraction Run
+
+Represent a derivation/extraction operation performed against preserved evidence.
+
+The design must support multiple extraction runs against the same evidence over time.
+
+### Schema-aligned Extracted Values
+
+Represent extracted values mapped to existing applicable KYC/KYB schema concepts.
+
+Each extracted value must retain lineage to the Extraction Run and underlying evidence/artifact.
+
+The existing configurable KYC/KYB schema is authoritative. Do not create a parallel Evidence field ontology.
+
+Where a stable schema/version identifier exists, record it in Extraction Run lineage. The current configurable schema has no explicit version identifier, so A1 must allow the version reference to be absent/null or use a clearly documented non-breaking `current/latest` compatibility convention consistent with repository conventions.
+
+Do not invent historical version numbers, build schema versioning inside Evidence Platform, or fail lineage because no explicit version exists. Preserve a non-destructive path for recording real schema versions later where reasonably possible.
+
+Do not implement actual AI extraction in A1.
+
+Use fixtures/test data to prove the lineage model.
+
+---
+
+# 5. Persistence
+
+Stage A1 may introduce new forward-only Evidence Platform persistence/migrations as required.
+
+Do not alter or repurpose existing KYC evidence tables.
+
+Do not migrate legacy evidence during A1.
+
+Do not dual-write existing KYC flows.
+
+The new persistence belongs to the bounded Evidence Platform.
+
+Before finalizing schema design, inspect existing repository/database conventions and follow them where they do not conflict with approved Evidence architecture.
+
+If a schema decision would materially constrain future architecture and is not resolved by the approved ADRs, STOP and raise it rather than guessing.
+
+---
+
+# 6. Minimal Service/API Surface
+
+Extend the A0 Evidence Platform boundary only as necessary to exercise and test the Stage A1 domain.
+
+Do not build a broad public API.
+
+Prefer a minimal internal service boundary.
+
+Evidence Lab may be extended enough to demonstrate/test A1 using dummy data.
+
+Do not create a polished UI.
+
+A useful A1 Evidence Lab demonstration might show:
+
+```text
+Requirement:
+Verify company registration details
+
+Acquisition:
+Companies House simulation
+SUCCESS
+
+Evidence:
+Company profile
+
+Artifacts:
+machine-readable capture
+screenshot
+
+Extraction:
+legal_name -> ABC Limited
+company_number -> 12345678
+status -> Active
+registered_address -> 25 King Street
+
+Lineage:
+each value traces back to extraction + artifact + evidence + acquisition
+```
+
+This is fixture/simulated evidence.
+
+Do not connect Companies House yet.
+
+---
+
+# 7. Required Tests
+
+Tests should demonstrate at minimum:
+
+1. one Requirement can contain multiple schema-aligned information needs;
+2. failed Acquisition exists without Evidence Asset;
+3. inconclusive Acquisition exists without Evidence Asset;
+4. successful Acquisition can produce multiple Evidence Assets;
+5. one Evidence Asset can have multiple Artifacts;
+6. artifacts have integrity fingerprints;
+7. recollection can create new evidence without overwriting old evidence;
+8. identical artifact content does not require loss of separate provenance/acquisition history;
+9. one Evidence Asset is structurally capable of being associated with multiple requirements/contexts without copying the evidence;
+10. multiple Extraction Runs can reference the same preserved evidence;
+11. extracted values trace back to their Extraction Run and underlying evidence/artifact;
+12. schema concepts distinguish values such as `registered_address` and `operating_address`;
+13. eligible public evidence is structurally reusable across contexts while private/customer evidence remains context/tenant restricted;
+14. identical fingerprints do not collapse separate access/provenance boundaries;
+15. evidence can reference a stable real-world subject without introducing a global entity-resolution system;
+16. extraction lineage works without an explicit schema version and can accommodate a future real version identifier;
+17. no existing KYC evidence behavior is changed.
+
+Do not build Stage A4 matching/satisfaction merely to satisfy test #9.
+
+Test structural capability only.
+
+---
+
+# 8. Explicitly Out of Scope
+
+Do NOT implement:
+
+* real Companies House integration;
+* FCA integration;
+* general internet research;
+* browser automation;
+* real screenshot capture;
+* real AI extraction;
+* second/verification extractor;
+* automatic discrepancy detection;
+* source trust ranking;
+* freshness admin UI;
+* freshness decision engine;
+* Evidence Match;
 * requirement satisfaction;
 * Evidence Ledger;
-* Evidence Packages;
+* Evidence Package;
+* customer contest workflow;
+* customer replacement UX;
+* analyst routing;
+* KYC decisioning;
 * DRS integration;
+* Required Documents integration;
 * existing upload migration;
-* KYC integration;
-* Pre-boarding integration;
-* UBO integration;
-* legacy migration;
-* production feature flags unless technically necessary merely to keep the internal harness inaccessible.
+* UBO migration;
+* legacy Evidence migration;
+* deletion or modification of existing evidence mechanisms.
 
-Do not modify existing database tables.
+---
 
-Do not create speculative Evidence database schema during A0.
+# 9. Existing Application Protection
 
-## Existing Application Protection
+Existing KYC and Pre-boarding behavior remains a protected boundary.
 
-Existing KYC and Pre-boarding behavior must remain unchanged.
+Prefer additive Evidence Platform files, tables and internal routes/services.
 
-Avoid modifying existing high-coupling application files unless absolutely necessary to expose the internal Evidence Lab.
+Any required modification to an existing application file must be:
 
-If such a modification is required, minimize it and explain why.
+* minimal;
+* explicitly reported;
+* justified;
+* regression tested.
 
-Prefer an isolated development/internal route.
+Do not refactor unrelated existing code.
 
-## Architecture Questions
+---
 
-If implementation of A0 exposes decisions that would prematurely constrain:
+# 10. Implementation Authority and Deferred Decisions
 
-* Case identity;
-* Evidence Asset identity;
-* tenancy;
-* authorization;
-* database schema;
-* Evidence lifecycle;
-* producer contracts;
-* deployment topology;
+Codex may choose the following as implementation details within the approved architecture:
 
-do not invent those decisions simply to complete scaffolding.
+* exact Evidence table names;
+* internal API/service contract names;
+* exact lifecycle enum/status names;
+* migration implementation details;
+* normal reversible code organization decisions.
 
-Surface them for Architecture Authority.
+The following are deliberately deferred and must not be solved during A1:
 
-## Completion Criteria
+* detailed evidence retention/deletion policy;
+* storage-provider optimization/selection beyond the minimum A1 need;
+* source-specific trust ranking;
+* detailed freshness semantics/configuration;
+* full cross-tenant reuse decision engine;
+* global entity resolution;
+* schema-versioning implementation.
 
-A0 is complete when:
+Use the smallest reversible implementation where a technical choice is necessary but does not alter approved product semantics. Stop and raise any newly discovered issue that would materially constrain architecture and is not resolved by the approved ADRs.
 
-1. the Evidence Platform has a clear bounded code location;
-2. the Evidence Platform has a minimal callable server-side boundary;
-3. an internal Evidence Lab/test harness can call that boundary;
-4. automated tests demonstrate the boundary works;
-5. existing KYC/Pre-boarding tests and behavior remain intact;
-6. no substantive Evidence domain semantics have been invented prematurely;
-7. the implementation provides a clean location for Stage A1.
+---
+
+# 11. Completion Criteria
+
+Stage A1 will be complete when the system can demonstrate, using fixtures/simulated data:
+
+```text
+Business Requirement
+        ↓
+Acquisition attempts
+        ↓
+Successful Evidence Asset(s)
+        ↓
+Preserved Artifact(s)
+        ↓
+Fingerprint + Provenance
+        ↓
+Extraction Run
+        ↓
+Schema-aligned extracted values
+        ↓
+Complete lineage back to preserved evidence
+```
+
+while also demonstrating failed/inconclusive acquisition history and preserving existing KYC behavior.

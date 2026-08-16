@@ -46,17 +46,27 @@ Establish the bounded Evidence Platform module, contracts, test boundary, and in
 
 No legacy integration.
 
-### Stage A1 — Core Evidence Domain
+### Stage A1 — Core Evidence Domain + Extraction Lineage
 
-Introduce the minimum durable domain required for:
+Establish the durable model, contracts, and bounded persistence necessary for:
 
-* Case/investigation context;
-* Evidence Requirement;
-* Evidence Acquisition;
-* Evidence Asset;
-* provenance;
-* integrity/fingerprint;
-* durable raw evidence.
+```text
+Evidence Requirement
+        ↓
+Acquisition
+        ↓
+Evidence Asset
+        ↓
+Artifact
+        ↓
+Provenance + Integrity
+        ↓
+Extraction Run
+        ↓
+Schema-aligned extracted values
+```
+
+Stage A1 uses fixtures/simulated data to prove this domain and lineage. It does not implement real Companies House acquisition, AI extraction, screenshot verification, matching, satisfaction, Evidence Ledger, Evidence Package, or KYC integration.
 
 ### Stage A2 — First Representative Producer
 
@@ -76,14 +86,14 @@ Company
 
 Do not assume existing capture implementations should simply be restored. Reuse appropriate components only where they fit the approved architecture.
 
-### Stage A3 — Interpretation
+### Stage A3 — Interpretation and Verification
 
 Add:
 
-* extraction;
 * observations;
 * normalized facts/assertions;
-* derivation lineage.
+* richer interpretation and derivation lineage;
+* independent re-extraction and verification capabilities.
 
 Maintain the distinction between source evidence and derived knowledge.
 
