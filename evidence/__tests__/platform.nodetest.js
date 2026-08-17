@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A1",
+    stage: "A2",
     status: "available",
   });
 });
@@ -42,11 +42,17 @@ test("the status route rejects methods outside its GET contract", () => {
   assert.deepEqual(res.body, { error: "Method not allowed" });
 });
 
-test("the Evidence Lab calls the verified status route", () => {
+test("the Evidence Lab exposes the isolated A2 live and fixture route", () => {
   const labPath = path.join(__dirname, "..", "..", "public", "evidence-lab.html");
   const lab = fs.readFileSync(labPath, "utf8");
-  assert.match(lab, /fetch\("\/api\/evidence\/status"\)/);
-  assert.match(lab, /fetch\("\/api\/evidence\/a1-fixture"\)/);
+  assert.match(lab, /\/api\/evidence\/a2-config/);
+  assert.match(lab, /\/api\/evidence\/a2-collect/);
+  assert.match(lab, /FIXTURE \/ SIMULATED/);
+  assert.match(lab, /LIVE COMPANIES HOUSE COLLECTION/);
+  assert.match(lab, /Structured evidence/);
+  assert.match(lab, /Human-viewable evidence/);
+  assert.match(lab, /OFFICERS — HUMAN-VIEWABLE WEBPAGE/);
+  assert.match(lab, /PSC \/ OWNERSHIP — HUMAN-VIEWABLE WEBPAGE/);
 });
 
 test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {

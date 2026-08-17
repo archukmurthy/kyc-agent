@@ -21,3 +21,14 @@ At Stage A0, this scaffold intentionally defined no substantive Evidence domain 
 - `public/evidence-lab.html` renders the fixture demonstration separately from the customer journey.
 
 Stage A1 does not implement real acquisition, AI extraction, verification decisioning, matching, satisfaction, ledger, packaging, or KYC integration.
+
+## Stage A2 additions
+
+- `evidence/a2/` contains the producer-neutral collection identity boundary and the bounded six-acquisition Companies House producer, exact-byte artifact storage, deterministic API extraction, paginated Overview/Officers/PSC website capture, fixtures, and transactional repository.
+- `api/evidence/a2-collect.js` exposes the internal live/fixture collection operation to Evidence Lab without changing existing KYC routes.
+- `db/migrations/011_evidence_platform_a2.sql` adds collection-operation identity and an additive acquisition relationship.
+- `public/evidence-lab.html` clearly separates fixture and live collection, distinguishes structured API completeness from supplementary human-viewable capture completeness, and renders acquisitions, page artifacts, fingerprints, failures, and extraction lineage.
+
+The standalone A2 Lab uses an explicitly named default extraction context only to demonstrate deterministic lineage. It does not make the Companies House producer inherently dependent on `FI:uk-licence`; the future upstream KYC/Onboarding context handoff remains outside A2.
+
+Stage A2 does not redirect existing Companies House, KYC, self-source, dossier, or UBO behavior.

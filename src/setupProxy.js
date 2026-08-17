@@ -39,6 +39,8 @@ const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-a
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const evidenceStatusHandler = require(path.join(__dirname, "..", "api", "evidence", "status.js"));
 const evidenceA1FixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a1-fixture.js"));
+const evidenceA2CollectHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-collect.js"));
+const evidenceA2ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-config.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -469,4 +471,16 @@ module.exports = function (app) {
 
   // Evidence Platform Stage A1 — fixture-only domain and lineage demonstration.
   app.get("/api/evidence/a1-fixture", adapt(evidenceA1FixtureHandler));
+
+  // Evidence Platform Stage A2 — isolated Companies House producer/Lab route.
+  app.post("/api/evidence/a2-collect", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(evidenceA2CollectHandler)(req, res);
+    });
+  });
+  app.get("/api/evidence/a2-config", adapt(evidenceA2ConfigHandler));
 };

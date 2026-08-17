@@ -1,85 +1,38 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evidence Lab</title>
-    <style>
-      :root { color-scheme: light; font-family: system-ui, sans-serif; }
-      body { margin: 0; background: #f5f7fa; color: #17212b; }
-      main { max-width: 42rem; margin: 12vh auto; padding: 2rem; }
-      section { background: white; border: 1px solid #d9e0e7; border-radius: 12px; padding: 2rem; }
-      h1 { margin-top: 0; }
-      #status { font-weight: 700; }
-      .available { color: #147a45; }
-      .unavailable { color: #a12622; }
-      dl { display: grid; grid-template-columns: minmax(10rem, 1fr) 2fr; gap: .75rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <section aria-labelledby="lab-title">
-        <p>Internal test harness</p>
-        <h1 id="lab-title">Evidence Lab</h1>
-        <p>This internal harness verifies the isolated Evidence boundary and Stage A1 fixture model.</p>
-        <p id="status" role="status">Checking server boundary…</p>
-        <div id="a1" hidden>
-          <h2>Stage A1 fixture proof</h2>
-          <dl id="a1-details"></dl>
-        </div>
-      </section>
-    </main>
-    <script>
-      const statusNode = document.getElementById("status");
-      const a1Node = document.getElementById("a1");
-      const a1Details = document.getElementById("a1-details");
-
-      function addDetail(label, value) {
-        const term = document.createElement("dt");
-        const detail = document.createElement("dd");
-        term.textContent = label;
-        detail.textContent = Array.isArray(value) ? value.join(" → ") : String(value);
-        a1Details.append(term, detail);
-      }
-
-      fetch("/api/evidence/status")
-        .then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json();
-        })
-        .then((result) => {
-          statusNode.textContent = `Server boundary: ${result.status} (Stage ${result.stage})`;
-          statusNode.className = "available";
-        })
-        .catch(() => {
-          statusNode.textContent = "Server boundary: unavailable";
-          statusNode.className = "unavailable";
-        });
-
-      fetch("/api/evidence/a1-fixture")
-        .then((response) => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json();
-        })
-        .then((result) => {
-          addDetail("Subject", `${result.subject.displayName} · ${result.subject.jurisdiction} ${result.subject.identifierValue}`);
-          addDetail("Acquisition outcomes", JSON.stringify(result.acquisitionOutcomes));
-          addDetail("August assets", result.assetsFromAugustAcquisition);
-          addDetail("Profile artifacts", result.augustProfileArtifactTypes);
-          addDetail("Recollection", result.recollection);
-          addDetail("Independent extractions", result.independentExtractions);
-          addDetail("Public reuse contexts", result.publicReuseContextCount);
-          addDetail("Private evidence scopes", result.privateEvidence.scopeCount);
-          addDetail("Identical bytes retain provenance", result.identicalFingerprintSeparateProvenance);
-          addDetail("Schema version", result.schemaVersionReference ?? "current/latest (no explicit version)");
-          a1Node.hidden = false;
-        })
-        .catch(() => {
-          addDetail("Fixture demonstration", "unavailable");
-          a1Node.hidden = false;
-        });
-    </script>
-  </body>
-</html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Evidence Lab — Companies House A2</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#183044;background:#f4f7f9}body{margin:0}.wrap{max-width:1050px;margin:32px auto;padding:0 20px}h1{margin-bottom:4px}.sub{color:#61717e}.card{background:#fff;border:1px solid #dbe3e8;border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 2px 8px #1730440d}.row{display:flex;gap:14px;flex-wrap:wrap}.field{flex:1;min-width:190px}label{font-size:12px;font-weight:700;display:block;margin-bottom:6px}input,select,button{box-sizing:border-box;width:100%;padding:10px;border:1px solid #b8c5cd;border-radius:7px;background:#fff}button{width:auto;background:#075985;color:#fff;border:0;font-weight:700;cursor:pointer}.badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}.fixture{background:#fff3cd;color:#7c5200}.live{background:#d9f4e5;color:#166534}.success{color:#166534}.failed{color:#b42318}.partial{color:#9a6700}.source{border-top:1px solid #e5eaed;padding:14px 0}.source:first-child{border-top:0}.meta{font-size:13px;color:#61717e}.artifact{background:#f7fafb;padding:10px;border-radius:7px;margin:7px 0;word-break:break-all}details pre{white-space:pre-wrap;max-height:360px;overflow:auto;background:#102a3a;color:#eaf2f5;padding:12px;border-radius:8px}img{max-width:100%;border:1px solid #ccd7dd}.error{background:#fff0f0;color:#9b1c1c;padding:12px;border-radius:8px}.hidden{display:none}.status-grid{display:flex;gap:8px;flex-wrap:wrap}.status-grid span{background:#edf2f5;padding:6px 9px;border-radius:6px;font-size:12px}
+  </style>
+</head>
+<body><main class="wrap">
+  <h1>Evidence Platform Lab</h1><div class="sub">Stage A2 — Companies House evidence producer</div>
+  <section class="card">
+    <div class="row">
+      <div class="field"><label>Mode</label><select id="mode"><option value="fixture">FIXTURE / simulated</option><option value="live">LIVE Companies House</option></select></div>
+      <div class="field"><label>Jurisdiction</label><input value="GB" disabled /></div>
+      <div class="field"><label>Companies House company number</label><input id="number" value="12345678" maxlength="8" /></div>
+      <div class="field"><label>Producer request key</label><input id="key" /></div>
+    </div>
+    <p><span id="modeBadge" class="badge fixture">FIXTURE / SIMULATED — NOT LIVE SOURCED EVIDENCE</span></p>
+    <div id="config" class="status-grid"></div><p><button id="collect">Collect Companies House evidence</button></p>
+    <div id="error" class="error hidden"></div>
+  </section>
+  <section id="result" class="card hidden"></section>
+</main>
+<script>
+const $=id=>document.getElementById(id), mode=$("mode"), badge=$("modeBadge"), result=$("result"), errorBox=$("error");
+$("key").value=`lab-${Date.now()}`;
+mode.onchange=()=>{const live=mode.value==="live";badge.className=`badge ${live?'live':'fixture'}`;badge.textContent=live?'LIVE COMPANIES HOUSE COLLECTION':'FIXTURE / SIMULATED — NOT LIVE SOURCED EVIDENCE';};
+fetch('/api/evidence/a2-config').then(r=>r.json()).then(c=>{$('config').innerHTML=Object.entries(c.live||{}).map(([k,v])=>`<span>${esc(k)}: ${v?'ready':'not configured'}</span>`).join('')}).catch(()=>{});
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function sourceTitle(v){return ({profile:'PROFILE — API EVIDENCE',officers:'OFFICERS — API EVIDENCE',psc:'PSC / OWNERSHIP — API EVIDENCE',overview_website:'PROFILE — OVERVIEW WEBPAGE',officers_website:'OFFICERS — HUMAN-VIEWABLE WEBPAGE',psc_website:'PSC / OWNERSHIP — HUMAN-VIEWABLE WEBPAGE'})[v]||v;}
+function captureLabel(a){return a.metadata?.captureStatus?` · capture ${a.metadata.captureStatus}`:'';}
+function render(data){const s=data.summary, inspections=data.inspection?.artifacts||{};const assets=Object.fromEntries((s.assets||[]).map(a=>[a.id,a]));const artifacts=(s.artifacts||[]);const runs=s.extractionRuns||[], values=s.extractedValues||[];
+ result.classList.remove('hidden');result.innerHTML=`<span class="badge ${s.mode==='live'?'live':'fixture'}">${s.mode==='live'?'LIVE':'FIXTURE / SIMULATED'}</span><h2>${esc(s.subject?.displayName||'Companies House collection')}</h2><p>Company No. ${esc(s.coordinates.companyNumber)} · <b class="${esc(s.status)}">${esc(s.status.toUpperCase())}</b></p><div class="status-grid"><span>Structured evidence: <b>${esc(s.structuredEvidenceStatus||'unknown')}</b></span><span>Human-viewable evidence: <b>${esc(s.humanViewableEvidenceStatus||'unknown')}</b></span></div><div class="meta">Collection ${esc(s.collectionId)} · ${esc(s.startedAt)}</div>`+
+ (s.acquisitions||[]).map(a=>{const areaAssets=(s.assets||[]).filter(x=>x.acquisitionId===a.id);const areaArtifacts=artifacts.filter(x=>areaAssets.some(y=>y.id===x.assetId));const areaRuns=runs.filter(x=>areaAssets.some(y=>y.id===x.assetId));const areaValues=values.filter(v=>areaRuns.some(r=>r.id===v.extractionRunId));const representationFailures=(a.metadata?.representationOutcomes||[]).filter(x=>x.outcome!=='successful');return `<div class="source"><h3>${esc(sourceTitle(a.sourceArea))} <span class="${a.outcome==='successful'&&a.metadata?.captureStatus!=='incomplete'?'success':a.outcome==='successful'?'partial':'failed'}">${esc(a.outcome.toUpperCase())}${esc(captureLabel(a))}</span></h3><div class="meta">${esc(a.source||'No source artifact')} ${a.metadata?.pageCount?`· ${a.metadata.pageCount} page(s) · pagination ${a.metadata.paginationComplete?'complete':'incomplete'}`:''}</div>${a.reason?`<p class="error">${esc(a.reason)}. Other successful evidence remains valid.</p>`:''}${a.metadata?.captureReason?`<p class="error">${esc(a.metadata.captureReason)}. Preserved representations remain available.</p>`:''}${representationFailures.map(x=>`<p class="error">Page ${esc(x.pageNumber)} ${esc(x.representationType)}: ${esc(x.reason)}</p>`).join('')}${areaArtifacts.map(x=>{const i=inspections[x.id];const page=x.artifactMetadata?.pageNumber;return `<div class="artifact"><b>${page?`Page ${esc(page)} · `:''}${esc(x.representationType)}</b> · ${esc(x.sizeBytes)} bytes<br><span class="meta">${esc(x.artifactMetadata?.url||'')} ${x.capturedAt?`· captured ${esc(x.capturedAt)}`:''}</span><br>SHA-256 ${esc(x.fingerprintValue)}${i?`<details><summary>View preserved source${page?` page ${esc(page)}`:''}</summary>${i.kind==='image'?`<img alt="Companies House ${esc(a.sourceArea)} page ${esc(page||1)} screenshot" src="data:${esc(i.mediaType)};base64,${i.content}">`:`<pre>${esc(i.content)}</pre>`}</details>`:''}</div>`}).join('')}${areaValues.length?`<details><summary>Extracted information (${areaValues.length})</summary><pre>${esc(JSON.stringify(areaValues.map(v=>({field:v.schemaFieldId,value:v.extractedValue,sourceRun:v.extractionRunId})),null,2))}</pre></details>`:''}</div>`}).join('');}
+$("collect").onclick=async()=>{errorBox.classList.add('hidden');result.classList.add('hidden');$('collect').disabled=true;try{const r=await fetch('/api/evidence/a2-collect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:mode.value,producerRequestKey:$('key').value,collectionCoordinates:{jurisdiction:'GB',companyNumber:$('number').value}})});const d=await r.json();if(!r.ok)throw new Error(d.message||d.error);render(d);}catch(e){errorBox.textContent=e.message;errorBox.classList.remove('hidden')}finally{$('collect').disabled=false}};
+</script></body></html>
