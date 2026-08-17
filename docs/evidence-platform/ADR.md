@@ -475,7 +475,7 @@ Exact table names, internal API/service names, lifecycle enum names, migration m
 
 Stage A1 established Evidence Requirement, Acquisition, Evidence Asset, Artifact, integrity, public/private access classification, and extraction lineage. It did not establish a real producer or a durable parent identity for a multi-source collection operation.
 
-Stage A2 introduces Companies House as the first real producer. One requested collection obtains materially distinct source areas: Company Profile API, Officers API, PSC API, and the public Company Overview website. These source areas can succeed or fail independently. Real producer retries must be distinguished from intentional recollection, and identical artifact hashes must not collapse acquisition history.
+Stage A2 introduces Companies House as the first real producer. One requested collection may obtain six materially distinct source areas: Company Profile API, Officers API, PSC API, the public Company Overview website, the public Officers website, and the public PSC website. These source areas can succeed or fail independently. Real producer retries must be distinguished from intentional recollection, and identical artifact hashes must not collapse acquisition history.
 
 ### Decision
 
@@ -506,9 +506,17 @@ A2 does not implement name-only Companies House matching. A supplied Companies H
 
 Repeating the same producer request key is a retry of the same logical collection. An intentional recollection uses a new request key and creates new historical acquisitions and evidence even when source bytes are unchanged.
 
-Company Profile API, Officers API, PSC API, and Company Overview website are separate Acquisitions. A successful Acquisition may produce its corresponding Evidence Asset and Artifacts. A failed or inconclusive Acquisition remains durable history and produces no Evidence Asset. The overall collection may be successful, partial, failed, or inconclusive.
+Company Profile API, Officers API, PSC API, Company Overview website, Officers website, and PSC website are six separate Acquisitions. The API and website retrievals retain separate provenance and produce separate Evidence Assets; Officers or PSC website Artifacts must not be attached to the corresponding API Evidence Asset. A successful Acquisition may produce its corresponding Evidence Asset and Artifacts. A failed or inconclusive Acquisition remains durable history. A partially completed website capture may retain its successfully preserved Artifacts while recording the missing or failed representation and marking that website capture incomplete.
 
-For structured Companies House APIs, exact response-body bytes are the primary machine-readable Artifacts and are fingerprinted with SHA-256. Paginated Officers and PSC responses are preserved page-by-page. Rendered website HTML and screenshot bytes are separate Artifacts on a separate website Evidence Asset. Website evidence does not replace or impersonate API evidence.
+Company Profile, Officers, and PSC API acquisitions remain the authoritative structured source evidence. Website acquisitions provide supplementary human-viewable point-in-time evidence. Browser availability or website failure does not invalidate or downgrade otherwise successful authoritative API evidence. Collection and product presentation distinguish structured-evidence completeness from human-viewable-capture completeness, including complete, incomplete, or unavailable human-viewable capture.
+
+For structured Companies House APIs, exact response-body bytes are the primary machine-readable Artifacts and are fingerprinted with SHA-256. Paginated Officers and PSC responses are preserved page-by-page. Rendered website HTML and screenshot bytes are separate Artifacts on their applicable separate website Evidence Asset. The intended complete website package contains both representations and preserves each representation's observable outcome. If HTML succeeds but screenshot creation fails, the HTML remains preserved, the screenshot failure is recorded, and the website capture is incomplete rather than falsely complete. Equivalent semantics apply to other partial website-capture failures.
+
+Officers and PSC website acquisitions follow every explicit Companies House pagination link necessary to preserve the complete human-viewable source representation. First-page-only capture is not complete when additional pages are explicitly present. Each page preserves its URL, ordering, capture time, Artifact fingerprint, and relevant non-secret retrieval metadata.
+
+PSC website acquisition preserves the legitimate state Companies House presents, including current PSCs, ceased PSCs, PSC statements, no registrable PSC, and unavailable or exempt PSC information. A statement or exemption page is valid source evidence and is not a capture failure merely because it displays no PSC person.
+
+Website evidence does not replace, strengthen by assumption, or impersonate API evidence. A2 does not extract or compare webpage facts. Preserving these pages supports point-in-time reconstruction now and possible independently authorized extraction and API-to-web verification later without recollecting the historical webpage.
 
 Source representations are preserved before deterministic schema-aligned extraction. Derived values retain lineage to the applicable Artifact and do not rewrite source facts. Ownership bands remain bands or explicitly identified minimums and are not converted into false exact percentages.
 
@@ -520,6 +528,6 @@ Stage A2 does not create a general evidence retrieval service, private-evidence 
 
 ### Consequences
 
-Stage A2 requires a small durable, producer-neutral collection-operation and idempotency boundary, transactional A1 graph persistence, durable artifact storage, an Evidence-owned Companies House producer, deterministic extractors, and an internal Evidence Lab acceptance surface.
+Stage A2 requires a small durable, producer-neutral collection-operation and idempotency boundary, transactional A1 graph persistence, durable artifact storage, an Evidence-owned Companies House producer, deterministic API extractors, and an internal Evidence Lab acceptance surface. One browser session may be reused across website captures as an implementation optimization, but each webpage remains a separate Acquisition, Evidence Asset, and provenance history.
 
-Successful source areas survive and remain valid when another source area fails. Intentional recollection creates new history. Existing KYC, self-source, and UBO behavior remains unchanged.
+Successful source areas survive and remain valid when another source area fails. Supplementary website failure does not downgrade authoritative structured evidence completeness. Intentional recollection creates new history. Existing KYC, self-source, and UBO behavior remains unchanged.

@@ -84,14 +84,15 @@ independently collect and preserve:
 * official Company Profile API response;
 * complete paginated Officers API responses;
 * complete paginated PSC API responses;
-* rendered Company Overview HTML;
-* Company Overview screenshot.
+* rendered Company Overview HTML and screenshot;
+* complete paginated Officers website HTML and screenshots;
+* complete paginated PSC website HTML and screenshots, including legitimate statement, no-registrable-PSC, and unavailable or exempt states.
 
 These inputs are producer-specific collection coordinates, not universal Evidence Platform identity fields. The core Evidence Collection Operation remains producer-neutral. The broader multi-jurisdiction and multi-producer input model remains deferred, and Stage A2 must not design it or structurally prevent future source-appropriate contracts.
 
 KYC/Onboarding identifies the subject, resolves ambiguity or conflict, and determines the appropriate source and collection coordinates. Evidence Platform receives the resolved collection request, acquires and preserves evidence, fingerprints Artifacts, performs deterministic schema-aligned extraction, and maintains provenance. Stage A2 does not implement name-only Companies House matching or further identity resolution and discrepancy decisioning.
 
-Treat Company Profile API, Officers API, PSC API, and Company Overview website as four independent Acquisitions coordinated by one durable collection operation. Preserve exact source representations, SHA-256 integrity, public-evidence provenance, deterministic schema-aligned extraction lineage, partial-success history, retry idempotency, and intentional recollection.
+Treat Company Profile API, Officers API, PSC API, Company Overview website, Officers website, and PSC website as six independent Acquisitions coordinated by one durable collection operation. API evidence remains the authoritative structured source evidence; website evidence is supplementary and retains separate Evidence Assets and provenance. Preserve exact source representations, SHA-256 integrity, public-evidence provenance, deterministic API extraction lineage, independently observable website-capture completeness, retry idempotency, and intentional recollection. Website failure must not downgrade otherwise complete authoritative API evidence, and A2 does not add webpage extraction or API-to-web comparison.
 
 Evidence Lab must visibly distinguish live collection from fixtures and allow Architecture Authority to inspect acquisitions, artifacts, fingerprints, failures, extracted values, and lineage.
 
