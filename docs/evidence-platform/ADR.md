@@ -464,3 +464,62 @@ Schema-aligned extracted values
 Real producers, AI extraction, independent verification, matching, satisfaction, ledger, packaging, and KYC integration remain later-stage work.
 
 Exact table names, internal API/service names, lifecycle enum names, migration mechanics, and reversible code organization remain implementation decisions within the approved architecture. Detailed retention/deletion policy, storage-provider optimization/selection beyond minimum A1 need, source-specific trust ranking, detailed freshness semantics, the full cross-tenant reuse engine, global entity resolution, and schema-versioning implementation are deliberately deferred and must not be solved during A1.
+
+---
+
+## ADR-011 — Companies House Collection Producer, Partial Success, and Collection Identity
+
+**Status:** APPROVED
+
+### Context
+
+Stage A1 established Evidence Requirement, Acquisition, Evidence Asset, Artifact, integrity, public/private access classification, and extraction lineage. It did not establish a real producer or a durable parent identity for a multi-source collection operation.
+
+Stage A2 introduces Companies House as the first real producer. One requested collection obtains materially distinct source areas: Company Profile API, Officers API, PSC API, and the public Company Overview website. These source areas can succeed or fail independently. Real producer retries must be distinguished from intentional recollection, and identical artifact hashes must not collapse acquisition history.
+
+### Decision
+
+A Companies House collection is one producer operation with durable collection identity and multiple independent Evidence Acquisitions.
+
+The core Evidence Collection Operation is producer-neutral. It records a stable producer request key, producer-specific structured collection coordinates, an optional subject reference where safely established, live/fixture mode, lifecycle status, timestamps, and failure context. It does not define universal company-number fields or a universal producer-input schema.
+
+For Stage A2 only, the Companies House producer input contract is:
+
+```text
+producer = companies_house
+collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }
+```
+
+The Companies House company number is a producer-specific collection identifier and authoritative source coordinate, not a mandatory global Evidence Platform subject identifier. Future producers may use different coordinates, including source-specific identifiers, URLs, legal name plus jurisdiction, licence or certificate references, or other source-appropriate inputs. The broader multi-jurisdiction and multi-producer input model is deferred. A2 must not structurally prevent those future contracts and must not design them now.
+
+The responsibility boundary is:
+
+```text
+KYC / Onboarding responsibility
+identify subject → resolve ambiguity/conflict → determine appropriate source and collection coordinates
+
+Evidence Platform responsibility
+receive resolved collection request → acquire → preserve → fingerprint → extract → maintain provenance
+```
+
+A2 does not implement name-only Companies House matching. A supplied Companies House collection request goes directly to the authoritative Companies House identity using the requested `GB` company number. The Companies House producer must verify that the company number represented by the authoritative Companies House response corresponds to the company number requested. If it does not, the response must not be silently associated with the requested subject. No further identity resolution or discrepancy decisioning is performed by Evidence.
+
+Repeating the same producer request key is a retry of the same logical collection. An intentional recollection uses a new request key and creates new historical acquisitions and evidence even when source bytes are unchanged.
+
+Company Profile API, Officers API, PSC API, and Company Overview website are separate Acquisitions. A successful Acquisition may produce its corresponding Evidence Asset and Artifacts. A failed or inconclusive Acquisition remains durable history and produces no Evidence Asset. The overall collection may be successful, partial, failed, or inconclusive.
+
+For structured Companies House APIs, exact response-body bytes are the primary machine-readable Artifacts and are fingerprinted with SHA-256. Paginated Officers and PSC responses are preserved page-by-page. Rendered website HTML and screenshot bytes are separate Artifacts on a separate website Evidence Asset. Website evidence does not replace or impersonate API evidence.
+
+Source representations are preserved before deterministic schema-aligned extraction. Derived values retain lineage to the applicable Artifact and do not rewrite source facts. Ownership bands remain bands or explicitly identified minimums and are not converted into false exact percentages.
+
+Companies House evidence is public independently self-sourced evidence and may later be associated with multiple contexts without copying the canonical Asset, subject to separately authorized acceptance and freshness rules.
+
+The final A1 evidence graph for a collection is persisted transactionally. Artifact storage and database persistence must use deterministic retry-safe identities so a persistence retry does not create uncontrolled duplicates. SHA-256 equality does not define Acquisition identity, Asset identity, authorization, semantic equivalence, or reuse eligibility.
+
+Stage A2 does not create a general evidence retrieval service, private-evidence API, filing/document producer, UBO redesign, matching engine, satisfaction engine, freshness engine, or KYC integration.
+
+### Consequences
+
+Stage A2 requires a small durable, producer-neutral collection-operation and idempotency boundary, transactional A1 graph persistence, durable artifact storage, an Evidence-owned Companies House producer, deterministic extractors, and an internal Evidence Lab acceptance surface.
+
+Successful source areas survive and remain valid when another source area fails. Intentional recollection creates new history. Existing KYC, self-source, and UBO behavior remains unchanged.

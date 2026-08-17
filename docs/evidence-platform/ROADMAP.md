@@ -68,23 +68,34 @@ Schema-aligned extracted values
 
 Stage A1 uses fixtures/simulated data to prove this domain and lineage. It does not implement real Companies House acquisition, AI extraction, screenshot verification, matching, satisfaction, Evidence Ledger, Evidence Package, or KYC integration.
 
-### Stage A2 — First Representative Producer
+### Stage A2 — Companies House Evidence Producer
 
-Use automated web/regulator evidence as the first demanding producer.
+Build the first real Evidence Platform producer using UK Companies House.
 
-The target representative journey is conceptually:
+Using the Stage A2 Companies House producer input contract:
 
 ```text
-Company
-→ Requirement
-→ FCA/regulator source
-→ browser/rendered acquisition
-→ point-in-time capture
-→ durable Evidence Asset
-→ provenance + fingerprint
+producer = companies_house
+collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }
 ```
 
-Do not assume existing capture implementations should simply be restored. Reuse appropriate components only where they fit the approved architecture.
+independently collect and preserve:
+
+* official Company Profile API response;
+* complete paginated Officers API responses;
+* complete paginated PSC API responses;
+* rendered Company Overview HTML;
+* Company Overview screenshot.
+
+These inputs are producer-specific collection coordinates, not universal Evidence Platform identity fields. The core Evidence Collection Operation remains producer-neutral. The broader multi-jurisdiction and multi-producer input model remains deferred, and Stage A2 must not design it or structurally prevent future source-appropriate contracts.
+
+KYC/Onboarding identifies the subject, resolves ambiguity or conflict, and determines the appropriate source and collection coordinates. Evidence Platform receives the resolved collection request, acquires and preserves evidence, fingerprints Artifacts, performs deterministic schema-aligned extraction, and maintains provenance. Stage A2 does not implement name-only Companies House matching or further identity resolution and discrepancy decisioning.
+
+Treat Company Profile API, Officers API, PSC API, and Company Overview website as four independent Acquisitions coordinated by one durable collection operation. Preserve exact source representations, SHA-256 integrity, public-evidence provenance, deterministic schema-aligned extraction lineage, partial-success history, retry idempotency, and intentional recollection.
+
+Evidence Lab must visibly distinguish live collection from fixtures and allow Architecture Authority to inspect acquisitions, artifacts, fingerprints, failures, extracted values, and lineage.
+
+Stage A2 does not include Companies House filing history or filing documents, KYC integration, UBO redesign, matching, satisfaction, verification, freshness/reuse decisioning, Ledger, Package, private-evidence APIs, other jurisdictions, or other producers.
 
 ### Stage A3 — Interpretation and Verification
 

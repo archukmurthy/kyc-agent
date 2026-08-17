@@ -1,316 +1,357 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A1 — Core Evidence Domain + Extraction Lineage
+# Stage A2 — Companies House Evidence Producer
 
-## Objective
+## 1. Objective
 
-Build the minimum durable Evidence Platform domain required to represent:
+Implement the first real Evidence Platform producer. Given a resolved UK Companies House collection request, independently acquire, preserve, fingerprint, and deterministically extract Company Profile, complete Officers, complete PSC, and Company Overview website evidence into the Stage A1 Evidence domain.
+
+The evidence itself is the primary product of A2. Extracted KYC/KYB information is derived from preserved evidence.
+
+---
+
+## 2. Producer Input and Identity Boundary
+
+The core Evidence Collection Operation must remain producer-neutral. Do not add universal company-number fields or a universal producer-input schema.
+
+For A2 only, the Companies House producer contract is:
 
 ```text
-business evidence need
-        ↓
-attempt to obtain evidence
-        ↓
-evidence obtained
-        ↓
-preserved representations
-        ↓
-provenance/integrity
-        ↓
-schema-aligned extraction lineage
+producer = companies_house
+collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }
 ```
 
-This phase establishes the core model.
+The Companies House company number is a Companies House producer-specific collection identifier and source coordinate, not a mandatory global Evidence Platform subject identifier.
 
-It does not connect a real external evidence producer yet.
+Different future producers may require source-specific identifiers, URLs, legal name plus jurisdiction, licence or certificate references, or other source-appropriate inputs. The broader multi-jurisdiction and multi-producer input model is deferred. A2 must avoid structurally preventing it but must not design other jurisdictions or producers now.
 
----
-
-## Required Stage A1 capabilities
-
-Implement the minimum architecture necessary to represent and persist:
-
-### Evidence Requirement
-
-A business-level evidence requirement containing one or more information needs aligned to existing KYC/KYB schema concepts.
-
-Do not create one Evidence Requirement per field.
-
-### Evidence Acquisition
-
-Record an attempt to obtain evidence.
-
-Support at minimum:
-
-* success;
-* failure;
-* inconclusive.
-
-Retain timestamps, source/method context, outcome and failure/inconclusive reason where applicable.
-
-### Evidence Asset
-
-Represent a distinct logical piece of evidence produced by a successful acquisition.
-
-One Acquisition may produce zero, one or many Evidence Assets.
-
-### Evidence Artifact
-
-Represent a preserved source representation belonging to an Evidence Asset.
-
-Support metadata necessary to distinguish artifact type/representation and durable storage reference.
-
-Do not implement speculative support for every possible artifact format.
-
-### Integrity
-
-Persist cryptographic artifact fingerprint information sufficient for tamper/integrity verification.
-
-Use the architecture-approved SHA-256 approach unless repository constraints reveal a reason requiring Architecture Authority review.
-
-### Provenance
-
-Preserve sufficient provenance to reconstruct:
-
-* source;
-* acquisition;
-* method;
-* actor/system where applicable;
-* collection time;
-* subject/context where appropriate;
-* source locator/reference where available.
-
-Do not force all producer-specific metadata into the canonical asset if it belongs in producer/acquisition metadata.
-
-### Evidence Subject Reference
-
-Record the real-world subject of evidence using available stable surrounding-platform references and/or authoritative source identifiers where appropriate.
-
-The same real-world company must not be treated as a different subject solely because it appears in different cases or customer contexts.
-
-Do not build a new global master-entity/company identity system. Evidence owns the evidence-to-subject relationship, not global entity resolution.
-
-If repository inspection finds no safe existing way to represent the necessary subject reference without making a new canonical identity decision, STOP and report that specific issue.
-
-### Provenance/access class and reuse boundary
-
-Represent provenance/access class sufficiently to distinguish:
-
-* independently self-sourced public evidence, which may be structurally eligible for reuse across tenant/customer contexts subject to later acceptance, freshness, suitability, security and policy rules; and
-* customer-provided/private evidence, which is context/tenant restricted and must not be reused across unrelated tenants/customer contexts.
-
-A1 does not implement the full cross-tenant reuse decision engine. Its model must permit future eligible public-evidence reuse while prohibiting cross-tenant private-evidence reuse or visibility.
-
-Identical fingerprints do not authorize reuse or access. Any future physical deduplication must preserve logical isolation.
-
-### Extraction Run
-
-Represent a derivation/extraction operation performed against preserved evidence.
-
-The design must support multiple extraction runs against the same evidence over time.
-
-### Schema-aligned Extracted Values
-
-Represent extracted values mapped to existing applicable KYC/KYB schema concepts.
-
-Each extracted value must retain lineage to the Extraction Run and underlying evidence/artifact.
-
-The existing configurable KYC/KYB schema is authoritative. Do not create a parallel Evidence field ontology.
-
-Where a stable schema/version identifier exists, record it in Extraction Run lineage. The current configurable schema has no explicit version identifier, so A1 must allow the version reference to be absent/null or use a clearly documented non-breaking `current/latest` compatibility convention consistent with repository conventions.
-
-Do not invent historical version numbers, build schema versioning inside Evidence Platform, or fail lineage because no explicit version exists. Preserve a non-destructive path for recording real schema versions later where reasonably possible.
-
-Do not implement actual AI extraction in A1.
-
-Use fixtures/test data to prove the lineage model.
-
----
-
-# 5. Persistence
-
-Stage A1 may introduce new forward-only Evidence Platform persistence/migrations as required.
-
-Do not alter or repurpose existing KYC evidence tables.
-
-Do not migrate legacy evidence during A1.
-
-Do not dual-write existing KYC flows.
-
-The new persistence belongs to the bounded Evidence Platform.
-
-Before finalizing schema design, inspect existing repository/database conventions and follow them where they do not conflict with approved Evidence architecture.
-
-If a schema decision would materially constrain future architecture and is not resolved by the approved ADRs, STOP and raise it rather than guessing.
-
----
-
-# 6. Minimal Service/API Surface
-
-Extend the A0 Evidence Platform boundary only as necessary to exercise and test the Stage A1 domain.
-
-Do not build a broad public API.
-
-Prefer a minimal internal service boundary.
-
-Evidence Lab may be extended enough to demonstrate/test A1 using dummy data.
-
-Do not create a polished UI.
-
-A useful A1 Evidence Lab demonstration might show:
+The approved responsibility boundary is:
 
 ```text
-Requirement:
-Verify company registration details
+KYC / Onboarding responsibility
+identify subject → resolve ambiguity/conflict → determine appropriate source and collection coordinates
 
-Acquisition:
-Companies House simulation
-SUCCESS
-
-Evidence:
-Company profile
-
-Artifacts:
-machine-readable capture
-screenshot
-
-Extraction:
-legal_name -> ABC Limited
-company_number -> 12345678
-status -> Active
-registered_address -> 25 King Street
-
-Lineage:
-each value traces back to extraction + artifact + evidence + acquisition
+Evidence Platform responsibility
+receive resolved collection request → acquire → preserve → fingerprint → extract → maintain provenance
 ```
 
-This is fixture/simulated evidence.
+A2 does not implement name-only Companies House matching. The Companies House producer must verify that the company number represented by the authoritative Companies House response corresponds to the company number requested. If it does not, the response must not be silently associated with the requested subject. No further identity resolution or discrepancy decisioning is performed by Evidence.
 
-Do not connect Companies House yet.
-
----
-
-# 7. Required Tests
-
-Tests should demonstrate at minimum:
-
-1. one Requirement can contain multiple schema-aligned information needs;
-2. failed Acquisition exists without Evidence Asset;
-3. inconclusive Acquisition exists without Evidence Asset;
-4. successful Acquisition can produce multiple Evidence Assets;
-5. one Evidence Asset can have multiple Artifacts;
-6. artifacts have integrity fingerprints;
-7. recollection can create new evidence without overwriting old evidence;
-8. identical artifact content does not require loss of separate provenance/acquisition history;
-9. one Evidence Asset is structurally capable of being associated with multiple requirements/contexts without copying the evidence;
-10. multiple Extraction Runs can reference the same preserved evidence;
-11. extracted values trace back to their Extraction Run and underlying evidence/artifact;
-12. schema concepts distinguish values such as `registered_address` and `operating_address`;
-13. eligible public evidence is structurally reusable across contexts while private/customer evidence remains context/tenant restricted;
-14. identical fingerprints do not collapse separate access/provenance boundaries;
-15. evidence can reference a stable real-world subject without introducing a global entity-resolution system;
-16. extraction lineage works without an explicit schema version and can accommodate a future real version identifier;
-17. no existing KYC evidence behavior is changed.
-
-Do not build Stage A4 matching/satisfaction merely to satisfy test #9.
-
-Test structural capability only.
+Evidence may associate the collection with an available stable subject reference where safely established, but must not become a global master-entity or identity-resolution system.
 
 ---
 
-# 8. Explicitly Out of Scope
+## 3. Required Collection Model
 
-Do NOT implement:
+One durable, producer-neutral Evidence Collection Operation coordinates four independent Companies House Acquisitions:
 
-* real Companies House integration;
-* FCA integration;
-* general internet research;
-* browser automation;
-* real screenshot capture;
-* real AI extraction;
-* second/verification extractor;
-* automatic discrepancy detection;
-* source trust ranking;
-* freshness admin UI;
-* freshness decision engine;
-* Evidence Match;
-* requirement satisfaction;
-* Evidence Ledger;
-* Evidence Package;
-* customer contest workflow;
-* customer replacement UX;
-* analyst routing;
-* KYC decisioning;
-* DRS integration;
-* Required Documents integration;
-* existing upload migration;
-* UBO migration;
-* legacy Evidence migration;
-* deletion or modification of existing evidence mechanisms.
+1. Company Profile API;
+2. Officers API;
+3. PSC API;
+4. Company Overview website.
 
----
+The Collection Operation is an orchestration, lifecycle, and idempotency boundary. It is not an Evidence Asset and does not replace Evidence Acquisition.
 
-# 9. Existing Application Protection
+Each source records success, failure, or inconclusive outcome independently. The overall collection may be successful, partial, failed, or inconclusive.
 
-Existing KYC and Pre-boarding behavior remains a protected boundary.
+The intended result is:
 
-Prefer additive Evidence Platform files, tables and internal routes/services.
+```text
+Companies House Collection Operation
+        │
+        ├── Profile API Acquisition
+        │      └── Profile Evidence Asset
+        │             └── Raw JSON Artifact
+        │
+        ├── Officers API Acquisition
+        │      └── Officers Evidence Asset
+        │             ├── Raw page 1 JSON Artifact
+        │             ├── Raw page 2 JSON Artifact
+        │             └── ...
+        │
+        ├── PSC API Acquisition
+        │      └── PSC Evidence Asset
+        │             ├── Raw page 1 JSON Artifact
+        │             ├── Raw page 2 JSON Artifact
+        │             └── ...
+        │
+        └── Website Acquisition
+               └── Company Overview Evidence Asset
+                      ├── Rendered HTML Artifact
+                      └── Screenshot Artifact
+```
 
-Any required modification to an existing application file must be:
-
-* minimal;
-* explicitly reported;
-* justified;
-* regression tested.
-
-Do not refactor unrelated existing code.
+A failed or inconclusive Acquisition remains in the historical record and produces no Evidence Asset.
 
 ---
 
-# 10. Implementation Authority and Deferred Decisions
+## 4. Required Source Surfaces
 
-Codex may choose the following as implementation details within the approved architecture:
+### Company Profile API
 
-* exact Evidence table names;
-* internal API/service contract names;
-* exact lifecycle enum/status names;
-* migration implementation details;
-* normal reversible code organization decisions.
+Collect the official structured Companies House company-profile response. Preserve the full response before deriving configured KYB values.
 
-The following are deliberately deferred and must not be solved during A1:
+### Officers API
 
-* detailed evidence retention/deletion policy;
-* storage-provider optimization/selection beyond the minimum A1 need;
-* source-specific trust ranking;
-* detailed freshness semantics/configuration;
-* full cross-tenant reuse decision engine;
+Collect every applicable response page according to Companies House pagination semantics. Preserve all returned source records, including resigned officers. Current-officer filtering is a downstream interpretation and must not alter source evidence.
+
+### PSC API
+
+Collect every applicable response page according to Companies House pagination semantics. Preserve current and ceased PSC records, nature-of-control codes, dates, available identity attributes, and available corporate jurisdiction/registration information.
+
+Do not convert ownership bands into false exact percentages. A derived lower bound must remain explicitly identified as a minimum or band.
+
+### Company Overview Website
+
+Collect the public Companies House company overview page as a separate Acquisition from the APIs. Where technically available, preserve rendered HTML and a screenshot as separate Artifacts on the same website Evidence Asset.
+
+The website Artifacts are supplementary human-viewable representations. They do not replace or impersonate official API evidence.
+
+---
+
+## 5. Artifact Preservation and Integrity
+
+For Company Profile, Officers, and PSC, preserve exact HTTP response-body bytes before interpretation wherever safely available. If runtime behavior requires serialization after parsing, use and document one deterministic canonical serialization at receipt time; hash and store those exact bytes rather than a later reconstruction.
+
+Preserve every Officers and PSC page as a distinct Artifact on its applicable Evidence Asset. Record page order and non-secret request/response metadata sufficient to reconstruct the acquisition.
+
+For website capture:
+
+* preserve post-render DOM serialization as a rendered HTML Artifact encoded deterministically;
+* preserve exact screenshot bytes as a separate screenshot Artifact;
+* identify both as website representations, not API representations.
+
+For every Artifact:
+
+```text
+exact preserved bytes
+        ↓
+SHA-256
+        ↓
+artifact fingerprint
+```
+
+The fingerprint demonstrates byte integrity only. It does not determine Acquisition identity, Evidence Asset identity, authorization, semantic equivalence, or reuse eligibility. Separate acquisitions remain separate history even when their Artifacts have identical hashes.
+
+Artifacts must use durable storage. Database records must not point to missing or ephemeral artifact content. Credentials and authorization headers must never be preserved in artifact metadata or exposed in Evidence Lab.
+
+---
+
+## 6. Extraction
+
+Use deterministic extraction and mapping wherever Companies House provides structured fields. Do not call an LLM merely to reinterpret authoritative structured API data.
+
+All extracted values must reference concepts from the current applicable configurable KYC/KYB schema. Do not create a competing Evidence field ontology. Where no applicable configured schema concept exists, preserve the information in source evidence without forcing an extracted field.
+
+Schema version may remain absent/null or use the approved non-breaking current/latest compatibility convention under ADR-010. Do not implement schema versioning.
+
+Preserve the distinction between what Companies House returned and what the deterministic mapper derived. Each value must retain lineage to its Extraction Run, Evidence Asset, and exact Artifact/page.
+
+For PSC, preserve original nature-of-control values. Any derived ownership minimum or band must retain its bounded meaning and must not be represented as an exact ownership percentage.
+
+A2 does not require AI extraction or independent screenshot re-extraction/verification.
+
+---
+
+## 7. Transactional and Resumable Persistence
+
+The final intended Evidence graph for a collection must be persisted transactionally:
+
+```text
+all graph rows succeed
+OR
+all graph rows roll back
+```
+
+The implementation must not leave an unexplained half-created acquisition, asset, artifact, or extraction graph.
+
+Artifact storage and database persistence do not share one transaction. Use deterministic, retry-safe collection and artifact identities. Store and verify durable artifact bytes before committing database references. If database persistence fails, retain sufficient collection failure state to retry safely without uncontrolled duplicate logical history or references to missing bytes.
+
+Do not silently lose a collection attempt merely because final graph persistence failed.
+
+---
+
+## 8. Producer Identity, Retry, and Recollection
+
+The Collection Operation must record a stable producer request key.
+
+### Retry
+
+The same intended collection operation is retried after processing, storage, or persistence failure. The same producer request key identifies the same logical collection and must not create uncontrolled duplicate history.
+
+### Recollection
+
+A new intentional collection at a later time uses a new producer request key and creates new Acquisitions, Evidence Assets, Artifacts, and Extraction Runs.
+
+### Same bytes
+
+Identical SHA-256 fingerprints do not collapse recollection history. May and August remain separate collection histories even if a source response did not change.
+
+### Accidental duplicate processing
+
+Repeated handling of the same producer request key must return, resume, or safely complete the same logical collection rather than creating a second collection.
+
+---
+
+## 9. Partial Success
+
+Failure of one source area must not invalidate evidence successfully acquired from another source area.
+
+For example:
+
+```text
+Profile API:  SUCCESS
+Officers API: SUCCESS
+PSC API:      FAILED — temporary upstream error
+Website:      FAILED — CAPTCHA
+```
+
+must result in:
+
+* durable Profile and Officers evidence with complete lineage;
+* a failed PSC Acquisition with its reason and no PSC Evidence Asset;
+* a failed Website Acquisition with its reason and no Website Evidence Asset;
+* overall collection status `partial`.
+
+If expected pagination cannot be completed, the applicable source Acquisition must not be represented as successful complete evidence.
+
+---
+
+## 10. Public Evidence and Access Boundary
+
+Companies House evidence is independently self-sourced public evidence. The model must remain capable of associating an eligible public Evidence Asset with multiple requirements or contexts later without copying or re-owning the asset.
+
+A2 does not implement freshness, suitability, acceptance, or the complete cross-context reuse engine. An explicit recollection creates new evidence history even when earlier public evidence exists.
+
+A2 must not create a general unauthenticated Evidence retrieval service or expand customer/private evidence ingestion and access. The A1 private-evidence authorization limitation remains outside this public producer scope.
+
+---
+
+## 11. Evidence Lab Acceptance Surface
+
+Extend the internal Evidence Lab so Architecture Authority can initiate and inspect an A2 collection without reading database rows.
+
+Evidence Lab must clearly and persistently distinguish:
+
+```text
+LIVE COMPANIES HOUSE COLLECTION
+```
+
+from:
+
+```text
+FIXTURE / SIMULATED — NOT LIVE SOURCED EVIDENCE
+```
+
+For each collection, display:
+
+* requested Companies House collection coordinates;
+* producer request/collection identity;
+* overall status;
+* per-source Acquisition outcome, timestamps, and failure reason;
+* Evidence Assets and Artifacts;
+* artifact representation, size, and SHA-256 fingerprint;
+* safe raw-response, HTML, and screenshot inspection where applicable;
+* deterministic extracted values and lineage to the applicable source Artifact;
+* current and resigned officer counts while confirming both remain preserved;
+* current and ceased PSC records and source ownership bands without false exact percentages.
+
+For live mode, report whether required credentials, database, durable artifact storage, and browser capability are configured without displaying secrets.
+
+Browser or website capture failure must be visibly separate from successful API evidence.
+
+This is an internal acceptance surface, not final customer UI and not a general Evidence retrieval API.
+
+---
+
+## 12. Existing-System Protection
+
+Stage A2 implementation must be additive and Evidence-owned wherever practical.
+
+Do not alter current KYC, Pre-boarding, company-search, dossier, registry self-source, officer injection, or UBO behavior. Do not redesign UBO domain semantics.
+
+Existing Companies House authentication, officer pagination, registry URL construction, and browser capture concepts may be reused or adapted behind bounded Evidence-owned interfaces where they fit the approved architecture. Existing callers must not be migrated or refactored merely for convenience.
+
+Any unavoidable existing-application modification must be minimal, explicitly reported, justified, and regression tested.
+
+---
+
+## 13. Required Tests
+
+Use fixtures/mocks for automated producer tests. Do not require live Companies House calls in the normal test suite.
+
+Tests must demonstrate at minimum:
+
+1. the A2 input contract requires `producer = companies_house` and `collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }` without introducing universal company-number fields;
+2. A2 does not perform name-only company matching;
+3. the producer verifies that the authoritative response company number corresponds to the requested company number and does not silently associate a mismatch;
+4. exact API bytes are stored and fingerprinted;
+5. Officers and PSC pagination is complete;
+6. resigned officers and ceased PSC source records remain preserved;
+7. ownership bands are not converted into exact percentages;
+8. HTML and screenshot are separate website Artifacts;
+9. browser failure does not invalidate successful API evidence;
+10. partial success persists all source outcomes correctly;
+11. transactional failure leaves no partial Evidence graph;
+12. retry does not duplicate the logical collection;
+13. recollection creates new history despite identical hashes;
+14. extracted values trace to exact Artifacts and existing schema concepts;
+15. public assets remain structurally associable with multiple contexts;
+16. live and fixture Lab results are unmistakably different;
+17. no generalized private-evidence access is introduced;
+18. existing KYC, self-source, officer injection, and UBO behavior remains unchanged.
+
+Any separately authorized database smoke test must use a disposable test database and existing repository safety guards. Do not run A2 migrations against the normal application database during implementation verification.
+
+---
+
+## 14. Explicit Exclusions
+
+Do not implement:
+
+* name-only Companies House matching;
+* other jurisdictions or producers;
+* a universal producer-input schema;
+* Companies House filing-history API;
+* Companies House Document API;
+* filing PDFs or filing-document extraction;
+* incorporation, accounts, or confirmation-statement document retrieval;
+* document classification;
+* AI extraction of authoritative structured API data;
+* screenshot AI extraction or independent verification;
 * global entity resolution;
-* schema-versioning implementation.
-
-Use the smallest reversible implementation where a technical choice is necessary but does not alter approved product semantics. Stop and raise any newly discovered issue that would materially constrain architecture and is not resolved by the approved ADRs.
+* identity discrepancy decisioning;
+* full evidence reuse/freshness decisioning;
+* Evidence Match or requirement satisfaction;
+* Evidence Ledger or Evidence Package;
+* generalized customer/private evidence ingestion or retrieval;
+* legacy KYC dual-write or integration;
+* UBO redesign;
+* schema-versioning implementation;
+* unrelated refactoring or behavior changes.
 
 ---
 
-# 11. Completion Criteria
+## 15. Completion Criteria
 
-Stage A1 will be complete when the system can demonstrate, using fixtures/simulated data:
+Stage A2 is complete when Evidence Lab and automated fixtures demonstrate:
 
 ```text
-Business Requirement
+resolved Companies House collection request
         ↓
-Acquisition attempts
+producer-neutral Collection Operation
         ↓
-Successful Evidence Asset(s)
+four independent source Acquisitions
         ↓
-Preserved Artifact(s)
+durable exact source Artifacts
         ↓
-Fingerprint + Provenance
+SHA-256 integrity + provenance
         ↓
-Extraction Run
+deterministic schema-aligned Extraction Runs and values
         ↓
-Schema-aligned extracted values
+complete A1 lineage
         ↓
-Complete lineage back to preserved evidence
+visible success, partial failure, retry, and recollection behavior
 ```
 
-while also demonstrating failed/inconclusive acquisition history and preserving existing KYC behavior.
+while preserving existing KYC, Pre-boarding, self-source, officer injection, dossier, and UBO behavior.
