@@ -98,16 +98,25 @@ Evidence Lab must visibly distinguish live collection from fixtures and allow Ar
 
 Stage A2 does not include Companies House filing history or filing documents, KYC integration, UBO redesign, matching, satisfaction, verification, freshness/reuse decisioning, Ledger, Package, private-evidence APIs, other jurisdictions, or other producers.
 
-### Stage A3 — Interpretation and Verification
+### Stage A3 — Extraction, Interpretation, and Verification Lineage
 
-Add:
+Extend the A1/A2 Evidence domain so preserved Artifacts can produce reconstructable evidence-grounded facts through:
 
-* observations;
-* normalized facts/assertions;
-* richer interpretation and derivation lineage;
-* independent re-extraction and verification capabilities.
+* deterministic extraction of reliably addressable structured values;
+* AI-assisted semantic extraction where unstructured or ambiguous evidence requires interpretation;
+* schema-directed extraction against upstream-supplied KYC/KYB information needs;
+* bounded discovery of additional KYC/KYB-relevant facts without silently expanding the configured schema;
+* explicit separation of requested and discovered facts;
+* explicit separation of direct/source facts and derived/interpreted facts;
+* explainable extraction-support states kept independent from source-trust policy;
+* selective, on-demand independent re-extraction and verification;
+* immutable Extraction Run and verification history, including disagreement;
+* extractor, model, prompt/instruction, transformation, Artifact, and temporal lineage;
+* qualified downstream outputs that remain useful when verification is still needed.
 
-Maintain the distinction between source evidence and derived knowledge.
+A3 extends the existing Artifact, Extraction Run, and extracted-value lineage. It may add the minimum persistence needed to represent discovered facts without fake schema identifiers and derived facts with explicit input/transformation lineage. Reuse or re-extraction must not restamp historical source observation or Artifact capture time.
+
+A3 does not own source-trust policy, redesign existing KYC source steering, decide requirement satisfaction, select a winning source/value, resolve customer disputes, mutate schemas, or make KYC/compliance decisions. Final KYC context handoff and downstream UI integration remain deferred.
 
 ### Stage A4 — Matching and Satisfaction
 
@@ -116,7 +125,8 @@ Add:
 * Evidence Match;
 * acceptance evaluation;
 * requirement satisfaction;
-* contradiction/insufficiency where required.
+* contradiction/insufficiency where required;
+* conflict evaluation and operative evidence/value selection under approved downstream policy.
 
 ### Stage A5 — Ledger and Package
 

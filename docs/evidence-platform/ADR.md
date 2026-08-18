@@ -531,3 +531,111 @@ Stage A2 does not create a general evidence retrieval service, private-evidence 
 Stage A2 requires a small durable, producer-neutral collection-operation and idempotency boundary, transactional A1 graph persistence, durable artifact storage, an Evidence-owned Companies House producer, deterministic API extractors, and an internal Evidence Lab acceptance surface. One browser session may be reused across website captures as an implementation optimization, but each webpage remains a separate Acquisition, Evidence Asset, and provenance history.
 
 Successful source areas survive and remain valid when another source area fails. Supplementary website failure does not downgrade authoritative structured evidence completeness. Intentional recollection creates new history. Existing KYC, self-source, and UBO behavior remains unchanged.
+
+---
+
+## ADR-012 — Evidence Interpretation, Discovered Facts, and Verification Lineage
+
+**Status:** PROPOSED FOR ARCHITECTURE AUTHORITY REVIEW
+
+### Context
+
+Stages A1 and A2 established preserved Artifacts, integrity, provenance, deterministic Extraction Runs, schema-aligned extracted values, and immutable recollection history. Stage A3 must turn preserved evidence into evidence-grounded facts using deterministic and semantic methods while preserving the differences between source evidence, source facts, derived interpretations, extraction attempts, verification attempts, and downstream KYC or compliance decisions.
+
+The current A1 persistence model requires every extracted value to carry a non-null `schema_field_id`. That is sufficient for A1/A2 schema-aligned extraction, but it cannot honestly represent a discovered KYC/KYB-relevant fact for which no configured information need or schema field exists. A1 Extraction Runs can represent multiple attempts against preserved Artifacts, but derived facts also need explicit lineage to their input fact or facts and to the transformation or classification that produced them.
+
+### Decision
+
+#### A3 is an interpretation and verification-lineage layer, not a decision engine
+
+A3 determines what preserved evidence says, identifies relevant source facts, records explicitly permitted derived facts, assesses how strongly the evidence supports each result, and supports selective independent verification. It does not determine requirement satisfaction, choose a winning source or value, decide whether a customer is correct, route analysts, assess risk, or decide whether onboarding proceeds.
+
+#### Upstream schema and information needs remain authoritative
+
+A3 may receive subject/context, jurisdiction, applicable schema context, requested information needs, and source/producer context from an upstream KYC/KYB process. The final KYC-to-Evidence integration contract remains deferred. Where supplied, existing configurable KYC/KYB schema concepts and information needs are authoritative; Evidence must not create a parallel customer schema or silently alter the configured schema.
+
+If a real schema version is supplied, preserve it. If none exists, lineage may retain a null/absent version or an approved non-breaking current/latest convention. Do not fabricate historical versions or build schema versioning in A3.
+
+#### Extraction is semantic where needed and deterministic where reliable
+
+A3 must not be limited to literal field-name matching. It may recognize semantic relevance between source terminology and a requested concept, but it must not silently equate non-equivalent concepts.
+
+Deterministic extraction remains preferred for reliably addressable structured values. AI is appropriate where it adds value for unstructured documents, rendered webpages, images, screenshots, ambiguous labels, semantic concept mapping, discovered-fact identification, or explicitly permitted derivation. Deterministic and AI Extraction Runs use common lineage semantics. A3 must not introduce AI merely to reinterpret structured values that code can extract reliably.
+
+#### Schema-directed and discovered facts are distinct
+
+A3 supports both:
+
+* schema-directed extraction, which seeks facts responsive to supplied information needs; and
+* bounded discovery of additional facts reasonably relevant to KYC/KYB/compliance.
+
+A discovered fact must be explicitly distinguishable from a requested fact. It does not create or modify a customer schema field, become a KYC requirement, satisfy an existing requirement, or change an onboarding form. It may leave Evidence as additional qualified information for downstream systems to evaluate.
+
+Discovery is bounded to information reasonably relevant to the supplied KYC/KYB/compliance context. A3 does not extract every piece of incidental content and does not freeze a universal closed list of relevant facts.
+
+Because the A1 extracted-value structure requires a schema field, A3 requires an additive persistence extension that can represent a discovered concept without inventing a fake schema field or information-need identifier. Exact table names, concept-reference representation, and internal contracts are implementation details, but requested-versus-discovered status and any authoritative external concept reference must remain explicit.
+
+#### Source facts and derived facts remain distinct
+
+A direct/source fact records what the preserved evidence itself states. A derived fact records an interpretation, classification, normalization, or transformation and must never be represented as though the source stated it directly.
+
+A3 requires additive lineage capable of relating a derived fact to its input source fact or facts, source Artifact or Artifacts, producing Extraction Run, transformation/classification identity and version where available, derived value, and derivation time. Exact relationship and table names are implementation details. Inventing a schema field or flattening the derivation into a direct extracted value is prohibited.
+
+#### Source trust and extraction support are independent
+
+Source trust asks how authoritative or reliable a source is for the applicable business purpose. Extraction support asks how strongly the captured evidence supports the produced value or interpretation. They must not be combined into one confidence score or derived mechanically from one another.
+
+A3 may carry source identity, producer identity, and supplied policy context. It does not hard-code universal source-trust tiers, redesign legacy KYC source steering, or treat Companies House, a customer upload, or any other provision channel as inherently authoritative for every jurisdiction and information need. Provision channel, document issuer/source identity, and source authority remain distinct.
+
+Extraction support must be explainable and able to reflect readability, direct versus derived grounding, extraction method, reading certainty, semantic ambiguity, multiple plausible values, and independent-verification outcome where applicable. A3 supports downstream semantics equivalent to:
+
+```text
+SUPPORTED
+SUPPORTED_WITH_QUALIFICATION
+NEEDS_VERIFICATION
+NOT_SUPPORTED
+```
+
+Exact internal names may follow repository conventions. These are evidence-support states, not source-trust tiers. A qualified or tentative value may be returned downstream with its qualifier; downstream KYC owns presentation and acceptance.
+
+#### Independent verification is selective and preserves every attempt
+
+A3 supports on-demand independent re-extraction or verification without automatically running a second AI extraction for every value. Triggers may include degraded evidence, weak grounding, multiple plausible readings, material semantic ambiguity, an explicit downstream request, or a customer contest. Numerical thresholds and automatic calibration remain deferred.
+
+Where practical, an independent verifier inspects preserved evidence without being anchored on the first extractor's answer. Every Extraction Run and verification attempt remains immutable and reconstructable, including disagreements and errors. A later run or correction never rewrites an earlier run. Evidence reports lineage and disagreement; it does not decide which value wins.
+
+Existing A1 Extraction Runs are extended rather than replaced. A3 may require additive relationships or metadata to identify independent verification, the run or fact being examined, and the verification outcome without collapsing either run. The implementation must stop for Architecture Authority if this cannot be achieved without weakening A1/A2 history.
+
+#### Extractor and model lineage is durable
+
+Each run preserves, where applicable, extractor type, deterministic-versus-AI method, provider/model and model version, prompt/instruction or extractor version/reference, extraction context, source Artifact or Artifacts, start/completion times, output, support assessment, and failure state. Secrets and credentials are never stored.
+
+The lineage must permit later analysis of disagreement and error rates by extractor/model/version without requiring destructive redesign. A3 does not build analytics dashboards, training pipelines, fine-tuning, automatic prompt optimization, or automatic schema recommendations.
+
+#### Temporal provenance remains event-specific
+
+A3 builds on A1/A2 acquisition, observation, capture, and storage lineage rather than duplicating or restamping it. It separately records extraction start/completion and independent-verification time where applicable. Reuse or re-extraction never changes the historical observation or Artifact capture time: evidence captured on Monday and extracted on Friday remains represented as those two different events.
+
+Customer confirmation and correction times remain downstream KYC concerns unless a future integration explicitly returns them to Evidence.
+
+#### Downstream output remains qualified and reconstructable
+
+A3 outputs preserve enough information for a later downstream contract to expose, where applicable: value, source/producer, evidence reference, source observation/capture time, extraction time, extraction-support state, requested-versus-discovered status, and direct/source-versus-derived status. The final KYC UI and integration contracts remain out of scope.
+
+#### Relationship to ADR-010 and ADR-011
+
+ADR-012 refines ADR-010's A1-stage limitation that structured extracted values remain confined to applicable schema fields. Schema-directed facts remain schema-aligned, but A3 may additionally preserve explicitly marked discovered facts through the additive extension above. This is not permission to create or modify KYC schema concepts.
+
+ADR-010 assigns downstream semantic comparison and KYC business meaning to KYC/Onboarding. A3 does not take that responsibility. Its semantic work is limited to explaining what evidence directly says, how source terminology relates to a supplied concept, and how an explicitly identified derivation was produced. KYC continues to decide whether concepts are operationally equivalent, conflicting, acceptable, or useful for a decision.
+
+ADR-011's description of Companies House APIs as authoritative structured source evidence remains the approved A2 collection and presentation boundary. It does not establish a universal A3 source-trust tier for every jurisdiction, information need, tenant, or business policy. A3 preserves that provenance and any supplied policy context without deriving extraction support from it.
+
+### Consequences
+
+A3 extends the existing Evidence domain; it does not create a parallel extraction subsystem. The A1/A2 Artifact, Extraction Run, extracted-value, integrity, reuse, recollection, and access semantics remain authoritative.
+
+An additive schema extension is required for discovered facts that have no configured schema destination. An additive lineage relationship is also required for derived facts and may be required to make independent verification relationships explicit. These extensions must preserve current A1/A2 records and cannot require fake schema concepts, fake information needs, or destructive rewriting.
+
+Implementation may choose reversible module organization, table and internal enum names consistent with these semantics, fixture organization, internal API naming, and prompt/extractor packaging. Implementation must stop for Architecture Authority before changing schema meanings, automatically adopting discovered facts into KYC, combining source trust with extraction support, defining universal trust tiers, selecting a winning fact, changing downstream KYC behavior, coupling irreversibly to an AI provider, changing A1/A2 identity/reuse semantics, or weakening historical provenance.
+
+Stage A3 explicitly excludes final KYC integration, KYC UI integration, legacy source-steering redesign, universal trust policy, admin trust configuration, matching and satisfaction, conflict resolution, customer/analyst/risk decisioning, Ledger, Package, DRS, automatic schema expansion, global entity resolution, broad document-authenticity determination, automatic verification of every result, numerical confidence calibration, AI training, and a source-specific optimization library.

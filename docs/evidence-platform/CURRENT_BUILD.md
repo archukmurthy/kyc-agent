@@ -1,412 +1,353 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A2 — Companies House Evidence Producer
+# Stage A3 — Extraction, Interpretation, and Verification Lineage
 
 ## 1. Objective
 
-Implement the first real Evidence Platform producer. Given a resolved UK Companies House collection request, independently acquire, preserve, fingerprint, and deterministically extract authoritative Company Profile, complete Officers, and complete PSC API evidence, and preserve supplementary human-viewable Company Overview, Officers, and PSC website evidence into the Stage A1 Evidence domain.
+Extend the accepted A1/A2 Evidence domain so preserved Evidence Artifacts can produce reconstructable, evidence-grounded facts through deterministic extraction, AI-assisted semantic interpretation, bounded KYC/KYB-relevant discovery, explicit derivation lineage, explainable extraction-support assessment, and selective independent verification.
 
-The evidence itself is the primary product of A2. Extracted KYC/KYB information is derived from preserved evidence.
+A3 is an Evidence interpretation and verification-lineage stage. It does not become the KYC decision engine, redesign existing source steering, or implement matching and requirement satisfaction.
 
 ---
 
-## 2. Producer Input and Identity Boundary
+## 2. Existing Domain Must Be Extended
 
-The core Evidence Collection Operation must remain producer-neutral. Do not add universal company-number fields or a universal producer-input schema.
-
-For A2 only, the Companies House producer contract is:
+Build on the existing A1/A2 entities and invariants:
 
 ```text
-producer = companies_house
-collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }
+Acquisition
+    ↓
+Evidence Asset
+    ↓
+Artifact + fingerprint + temporal provenance
+    ↓
+Extraction Run
+    ↓
+Evidence-grounded result
 ```
 
-The Companies House company number is a Companies House producer-specific collection identifier and source coordinate, not a mandatory global Evidence Platform subject identifier.
+Do not create parallel Artifact, extraction-run, provenance, integrity, collection, identity, access, retry, or recollection concepts.
 
-Different future producers may require source-specific identifiers, URLs, legal name plus jurisdiction, licence or certificate references, or other source-appropriate inputs. The broader multi-jurisdiction and multi-producer input model is deferred. A2 must avoid structurally preventing it but must not design other jurisdictions or producers now.
+The current A1 extracted-value persistence requires a non-null schema field. A3 must add the minimum additive persistence needed to represent discovered facts without fabricating a schema field or information-need identifier. Derived facts likewise require explicit lineage to their input fact or facts and the transformation/classification that produced them. Existing A1/A2 data and behavior must remain valid.
 
-The approved responsibility boundary is:
+Exact table names, internal API names, module organization, reversible enum names, test-fixture organization, and prompt/extractor packaging are implementation details.
+
+---
+
+## 3. Upstream Context Boundary
+
+A3 must be capable of receiving an extraction context that may describe:
+
+* subject and Evidence context;
+* jurisdiction;
+* applicable schema/context;
+* requested information needs or concepts;
+* source/producer context and supplied policy references.
+
+Do not design the final KYC-to-Evidence integration contract. Use a bounded internal/Lab contract or fixture context sufficient to prove A3.
+
+Where an existing configurable KYC/KYB schema concept or information need is supplied, it is authoritative. Do not create a parallel Evidence-owned customer schema or silently change the meaning of an existing concept.
+
+Preserve a real schema/version reference where supplied. If no explicit version exists, allow null/absent version lineage or the already approved non-breaking current/latest compatibility convention. Do not invent historical versions or implement schema versioning.
+
+---
+
+## 4. Extraction Modes
+
+Support deterministic and AI Extraction Runs under common lineage.
+
+Use deterministic extraction when a structured Artifact exposes a reliably addressable value. Do not call AI merely to reinterpret a value that can be safely extracted in code.
+
+Use AI where semantic interpretation adds material value, including representative cases involving:
+
+* unstructured documents;
+* rendered webpages;
+* images or screenshots;
+* ambiguous labels or readings;
+* semantic mapping between source language and a requested concept;
+* discovered-fact identification;
+* explicitly permitted derived interpretation.
+
+Semantic matching must not silently equate non-equivalent concepts. The extractor must retain the source representation and explanation/lineage needed to understand the mapping.
+
+Do not build a large source- or document-specific deterministic extractor library. Small deterministic fixtures/adapters needed to demonstrate the common architecture are allowed. Existing Companies House producer behavior must not be expanded or refactored merely for convenience.
+
+---
+
+## 5. Requested and Discovered Facts
+
+A3 has two bounded responsibilities:
+
+1. seek facts responsive to supplied schema information needs; and
+2. identify additional facts reasonably relevant to KYC/KYB/compliance context.
+
+Every produced fact must state whether it was requested or discovered.
+
+A discovered fact:
+
+* may have an authoritative external concept reference where one genuinely exists;
+* must not use an invented schema field or fake information-need identifier;
+* must not modify a configured KYC schema;
+* must not automatically create or satisfy a requirement;
+* must not change an onboarding form;
+* may be returned as additional qualified information for downstream evaluation.
+
+Discovery must be bounded. Do not extract arbitrary incidental content and do not create a universal closed ontology of every possible KYC/KYB fact.
+
+---
+
+## 6. Direct and Derived Facts
+
+A direct/source fact records what the preserved evidence itself states.
+
+A derived fact records an interpretation, normalization, classification, or transformation. It must never be represented as if the source stated it directly.
+
+For a derived fact preserve, where applicable:
+
+* input source fact or facts;
+* source Artifact or Artifacts;
+* producing Extraction Run;
+* transformation, reference, or classification identity;
+* transformation version where available;
+* derived value;
+* derivation time.
+
+For the Lab, demonstrate a source fact such as `SIC code = 62020` and a separately identified derived interpretation produced through an explicit, versioned fixture classification. Do not silently transform SIC into an existing field with different semantics.
+
+---
+
+## 7. Source Trust and Extraction Support
+
+Keep source trust and extraction support independent.
 
 ```text
-KYC / Onboarding responsibility
-identify subject → resolve ambiguity/conflict → determine appropriate source and collection coordinates
+source trust
+= policy view of source authority/reliability for a business purpose
 
-Evidence Platform responsibility
-receive resolved collection request → acquire → preserve → fingerprint → extract → maintain provenance
+extraction support
+= how strongly the preserved evidence supports the produced value or interpretation
 ```
 
-A2 does not implement name-only Companies House matching. The Companies House producer must verify that the company number represented by the authoritative Companies House response corresponds to the company number requested. If it does not, the response must not be silently associated with the requested subject. No further identity resolution or discrepancy decisioning is performed by Evidence.
+Do not derive extraction support directly from a source tier. Do not derive source trust from extraction certainty. Do not combine both into one percentage.
 
-Evidence may associate the collection with an available stable subject reference where safely established, but must not become a global master-entity or identity-resolution system.
+A3 may preserve supplied source-policy context, but it must not:
 
----
+* hard-code universal trust tiers;
+* encode Companies House as universally Tier 1;
+* encode customer upload as authoritative;
+* conflate provision channel, document issuer, and source authority;
+* redesign existing KYC source-steering behavior;
+* add admin source-trust configuration.
 
-## 3. Required Collection Model
+Extraction support must be explainable and accommodate signals such as readability, direct/derived grounding, extraction method, reading certainty, semantic ambiguity, multiple plausible values, and verification outcome.
 
-One durable, producer-neutral Evidence Collection Operation coordinates six independent Companies House Acquisitions:
-
-1. Company Profile API;
-2. Officers API;
-3. PSC API;
-4. Company Overview website;
-5. Officers website;
-6. PSC website.
-
-The Collection Operation is an orchestration, lifecycle, and idempotency boundary. It is not an Evidence Asset and does not replace Evidence Acquisition.
-
-Each source records success, failure, incomplete capture, or inconclusive outcome as applicable and independently. Structured-evidence completeness and supplementary human-viewable-capture completeness must remain separately observable. Browser availability or website failure must not determine or downgrade authoritative API completeness.
-
-The intended result is:
+Support a downstream state with semantics equivalent to:
 
 ```text
-Companies House Collection Operation
-        │
-        ├── Profile API Acquisition
-        │      └── Profile Evidence Asset
-        │             └── Raw JSON Artifact
-        │
-        ├── Officers API Acquisition
-        │      └── Officers Evidence Asset
-        │             ├── Raw page 1 JSON Artifact
-        │             ├── Raw page 2 JSON Artifact
-        │             └── ...
-        │
-        ├── PSC API Acquisition
-        │      └── PSC Evidence Asset
-        │             ├── Raw page 1 JSON Artifact
-        │             ├── Raw page 2 JSON Artifact
-        │             └── ...
-        │
-        ├── Company Overview Website Acquisition
-        │      └── Company Overview Website Evidence Asset
-        │             ├── Rendered HTML Artifact
-        │             └── Screenshot Artifact
-        │
-        ├── Officers Website Acquisition
-        │      └── Officers Website Evidence Asset
-        │             ├── Page 1 HTML Artifact
-        │             ├── Page 1 Screenshot Artifact
-        │             ├── Page 2 HTML Artifact
-        │             ├── Page 2 Screenshot Artifact
-        │             └── ...
-        │
-        └── PSC Website Acquisition
-               └── PSC Website Evidence Asset
-                      ├── Page 1 HTML Artifact
-                      ├── Page 1 Screenshot Artifact
-                      └── ...
+SUPPORTED
+SUPPORTED_WITH_QUALIFICATION
+NEEDS_VERIFICATION
+NOT_SUPPORTED
 ```
 
-A failed or inconclusive Acquisition remains in the historical record and normally produces no Evidence Asset. When a website acquisition preserves one representation but another fails, retain the successful Artifact and its Evidence Asset, record the failed representation, and mark the website capture incomplete.
+Exact names may be refined consistently in implementation. These states describe evidence/extraction support, not source authority. A `NEEDS_VERIFICATION` value may still be returned downstream with its qualifier; A3 must not decide how KYC presents or accepts it.
 
 ---
 
-## 4. Required Source Surfaces
+## 8. Selective Independent Verification
 
-### Company Profile API
+Support independent re-extraction/verification on demand. Do not automatically run a second AI extraction for every value and do not hard-code a numerical confidence threshold.
 
-Collect the official structured Companies House company-profile response. Preserve the full response before deriving configured KYB values.
+The fixture/Lab contract may request verification for cases such as degraded evidence, multiple plausible readings, semantic ambiguity, an explicit downstream request, or a simulated customer contest.
 
-### Officers API
+Where practical, the independent verifier must inspect the preserved evidence without being given the first extractor's answer. Preserve:
 
-Collect every applicable response page according to Companies House pagination semantics. Preserve all returned source records, including resigned officers. Current-officer filtering is a downstream interpretation and must not alter source evidence.
+* the original run and output;
+* the independent run and output;
+* the relationship between the verification attempt and the result under review;
+* support assessments and disagreement;
+* all extractor/model lineage and timestamps.
 
-### PSC API
-
-Collect every applicable response page according to Companies House pagination semantics. Preserve current and ceased PSC records, nature-of-control codes, dates, available identity attributes, and available corporate jurisdiction/registration information.
-
-Do not convert ownership bands into false exact percentages. A derived lower bound must remain explicitly identified as a minimum or band.
-
-### Company Overview Website
-
-Collect the public Companies House company overview page as a separate Acquisition from the APIs. Where technically available, preserve rendered HTML and a screenshot as separate Artifacts on the same website Evidence Asset.
-
-The website Artifacts are supplementary human-viewable representations. They do not replace or impersonate official API evidence.
-
-### Officers Website
-
-Collect the public Companies House Officers page as a separate Acquisition and Evidence Asset from the Officers API. Follow all explicit Companies House pagination necessary to preserve the complete human-viewable source representation. Preserve rendered HTML and screenshot Artifacts for every page. First-page-only capture is not complete when additional pages are explicitly present.
-
-### PSC Website
-
-Collect the public Companies House persons-with-significant-control page as a separate Acquisition and Evidence Asset from the PSC API. Follow all explicit Companies House pagination necessary to preserve the complete human-viewable source representation. Preserve rendered HTML and screenshot Artifacts for every page.
-
-Preserve the legitimate state Companies House presents, including current PSCs, ceased PSCs, PSC statements, no registrable PSC, and unavailable or exempt PSC information. A statement or exemption page is valid source evidence and is not a capture failure merely because no PSC person is displayed.
-
-Company Profile, Officers, and PSC API acquisitions remain the authoritative structured source evidence. Website evidence is supplementary. API and website provenance must not be collapsed, and Officers or PSC website Artifacts must not be attached to the corresponding API Evidence Asset.
+Do not overwrite or correct the original run in place. Evidence reports agreement or disagreement and provenance; it does not decide which value wins or whether a customer assertion is correct.
 
 ---
 
-## 5. Artifact Preservation and Integrity
+## 9. Extractor and Model Lineage
 
-For Company Profile, Officers, and PSC, preserve exact HTTP response-body bytes before interpretation wherever safely available. If runtime behavior requires serialization after parsing, use and document one deterministic canonical serialization at receipt time; hash and store those exact bytes rather than a later reconstruction.
+Each Extraction Run must retain, where applicable:
 
-Preserve every Officers and PSC page as a distinct Artifact on its applicable Evidence Asset. Record page order and non-secret request/response metadata sufficient to reconstruct the acquisition.
+* deterministic or AI extractor type;
+* extractor name and version;
+* model provider, model, and model/version identifier;
+* prompt/instruction or extractor reference/version;
+* extraction context;
+* exact source Artifact or Artifacts;
+* start and completion timestamps;
+* success, failure, or other explicit outcome;
+* produced result and extraction-support assessment;
+* non-secret error context.
 
-For website capture:
+Never store credentials, API keys, authorization headers, or other secrets.
 
-* preserve post-render DOM serialization as a rendered HTML Artifact encoded deterministically;
-* preserve exact screenshot bytes as a separate screenshot Artifact;
-* identify both as website representations, not API representations;
-* preserve page URL, page order, capture time, Artifact fingerprint, and relevant non-secret retrieval metadata;
-* follow all explicit Officers and PSC website pagination required for complete capture;
-* preserve separately observable HTML and screenshot outcomes.
+The design must permit later measurement of disagreement and error rates by extractor/model/version without destructive migration, but A3 does not build analytics, training, fine-tuning, prompt optimization, or automatic model selection.
 
-The intended complete website evidence package contains both HTML and screenshot representations for every applicable page. If HTML succeeds but screenshot creation fails, retain the successfully preserved HTML, record the screenshot failure, and mark the website acquisition/capture incomplete rather than falsely complete. Apply equivalent semantics to other partial website-capture failures. Do not weaken successful API evidence.
-
-For every Artifact:
-
-```text
-exact preserved bytes
-        ↓
-SHA-256
-        ↓
-artifact fingerprint
-```
-
-The fingerprint demonstrates byte integrity only. It does not determine Acquisition identity, Evidence Asset identity, authorization, semantic equivalence, or reuse eligibility. Separate acquisitions remain separate history even when their Artifacts have identical hashes.
-
-Artifacts must use durable storage. Database records must not point to missing or ephemeral artifact content. Credentials and authorization headers must never be preserved in artifact metadata or exposed in Evidence Lab.
+Avoid irreversible coupling of persisted meaning to one AI provider. Provider-specific adapters are allowed behind the common lineage boundary.
 
 ---
 
-## 6. Extraction
+## 10. Temporal Provenance and Reuse
 
-Use deterministic extraction and mapping wherever Companies House provides structured fields. Do not call an LLM merely to reinterpret authoritative structured API data.
+Retain the distinct meanings of existing A1/A2 timestamps and add only A3 interpretation events:
 
-All extracted values must reference concepts from the current applicable configurable KYC/KYB schema. Do not create a competing Evidence field ontology. Where no applicable configured schema concept exists, preserve the information in source evidence without forcing an extracted field.
+* acquisition requested/started and completed/retrieved;
+* source observed;
+* Artifact captured and stored;
+* extraction started and completed;
+* independent verification performed.
 
-Schema version may remain absent/null or use the approved non-breaking current/latest compatibility convention under ADR-010. Do not implement schema versioning.
+Do not duplicate or overwrite existing acquisition/capture timestamps. Reuse and re-extraction must not fabricate freshness.
 
-Preserve the distinction between what Companies House returned and what the deterministic mapper derived. Each value must retain lineage to its Extraction Run, Evidence Asset, and exact Artifact/page.
+For evidence captured on Monday and re-extracted on Friday, downstream lineage must continue to show Monday as source observation/capture and Friday as extraction time.
 
-For PSC, preserve original nature-of-control values. Any derived ownership minimum or band must retain its bounded meaning and must not be represented as an exact ownership percentage.
-
-A2 does not require or authorize AI extraction from website evidence, independent screenshot or HTML re-extraction, or API-to-webpage comparison. Website preservation supports point-in-time reconstruction now and future independently authorized verification without requiring recollection of the historical webpage.
-
----
-
-## 7. Transactional and Resumable Persistence
-
-The final intended Evidence graph for a collection must be persisted transactionally:
-
-```text
-all graph rows succeed
-OR
-all graph rows roll back
-```
-
-The implementation must not leave an unexplained half-created acquisition, asset, artifact, or extraction graph.
-
-Artifact storage and database persistence do not share one transaction. Use deterministic, retry-safe collection and artifact identities. Store and verify durable artifact bytes before committing database references. If database persistence fails, retain sufficient collection failure state to retry safely without uncontrolled duplicate logical history or references to missing bytes.
-
-Do not silently lose a collection attempt merely because final graph persistence failed.
+Customer confirmation/correction timestamps remain downstream KYC concerns unless a future authorized integration supplies them back to Evidence.
 
 ---
 
-## 8. Producer Identity, Retry, and Recollection
+## 11. Downstream Qualified Output
 
-The Collection Operation must record a stable producer request key.
+Provide an internal/Lab output capable of retaining, where applicable:
 
-### Retry
+* extracted or derived value;
+* source and producer identity;
+* Evidence Asset and Artifact reference;
+* source observation/capture timestamp;
+* extraction timestamp;
+* extraction-support state and explanation/signals;
+* requested-versus-discovered status;
+* direct/source-versus-derived status;
+* extractor/model/transformation lineage;
+* independent-verification relationship and outcome.
 
-The same intended collection operation is retried after processing, storage, or persistence failure. The same producer request key identifies the same logical collection and must not create uncontrolled duplicate history.
-
-### Recollection
-
-A new intentional collection at a later time uses a new producer request key and creates new Acquisitions, Evidence Assets, Artifacts, and Extraction Runs.
-
-### Same bytes
-
-Identical SHA-256 fingerprints do not collapse recollection history. May and August remain separate collection histories even if a source response did not change.
-
-### Accidental duplicate processing
-
-Repeated handling of the same producer request key must return, resume, or safely complete the same logical collection rather than creating a second collection.
+The final KYC UI and Evidence-to-KYC integration contract are not part of A3.
 
 ---
 
-## 9. Independent Structured and Website Outcomes
+## 12. Evidence Lab Acceptance Scenarios
 
-Failure of one source area must not invalidate evidence successfully acquired from another source area.
+Extend the isolated Evidence Lab using fixtures/synthetic evidence. Do not require real customer data or live external requests.
 
-For example:
+The Lab and automated tests must demonstrate at minimum:
 
-```text
-Profile API:  SUCCESS
-Officers API: SUCCESS
-PSC API:      SUCCESS
-Overview website: SUCCESS
-Officers website: FAILED — CAPTCHA
-PSC website:      INCOMPLETE — HTML preserved; screenshot failed
-```
+1. **Deterministic structured extraction:** Companies House-style JSON produces a direct, schema-aligned fact through a deterministic run with `SUPPORTED` semantics.
+2. **Semantic document extraction:** a supplied schema concept and differently worded document content are semantically related through an AI-capable extraction boundary with full lineage.
+3. **Discovered fact:** an unrequested previous legal name is retained as discovered without inventing a schema field or satisfying a requirement.
+4. **Derived fact:** a direct SIC-code fact and its explicit fixture-classified interpretation remain separate with transformation lineage.
+5. **Uncertain extraction:** degraded synthetic evidence yields a tentative value with `NEEDS_VERIFICATION`, and the qualified value remains available in output.
+6. **Independent verification:** original and independent runs disagree; both remain immutable and visible without a selected winner.
+7. **Temporal lineage:** evidence captured at date A and re-extracted at date B visibly retains both dates.
+8. **Source-trust separation:** a lower-trust policy context may still have strong extraction support, and authoritative policy context may still have weak support, without either value being mechanically derived from the other.
+9. **Failure history:** failed extraction/verification remains reconstructable and does not corrupt the preserved Artifact or prior successful runs.
+10. **Existing-system protection:** A1/A2 fixtures and Companies House producer behavior remain unchanged, and existing KYC regression tests remain green.
 
-must result in:
-
-* structured evidence reported as complete, with durable Profile, Officers, and PSC API evidence and complete lineage;
-* human-viewable capture reported as incomplete;
-* a failed Officers website Acquisition with its reason and no Officers website Evidence Asset;
-* a PSC website Evidence Asset retaining its successfully preserved HTML, an observable screenshot failure, and an incomplete capture outcome;
-* no invalidation or downgrade of the successful authoritative API evidence.
-
-Collection and product presentation must distinguish:
-
-```text
-Structured evidence: complete / partial / failed / inconclusive
-Human-viewable capture: complete / incomplete / unavailable
-```
-
-Failure of the Overview, Officers, or PSC website acquisition must not determine authoritative API completeness. Successful source areas always survive and remain valid when another source area fails.
-
-If expected API or website pagination cannot be completed, the applicable Acquisition must not be represented as successful complete evidence. This does not change the outcome of its independently acquired counterpart.
+The Lab is an internal product-review surface, not a final customer UI or decision engine.
 
 ---
 
-## 10. Public Evidence and Access Boundary
+## 13. Persistence and Historical Invariants
 
-Companies House evidence is independently self-sourced public evidence. The model must remain capable of associating an eligible public Evidence Asset with multiple requirements or contexts later without copying or re-owning the asset.
+Tests must prove:
 
-A2 does not implement freshness, suitability, acceptance, or the complete cross-context reuse engine. An explicit recollection creates new evidence history even when earlier public evidence exists.
+* A1/A2 Artifacts and Extraction Runs are extended, not duplicated;
+* discovered facts persist without fake schema or information-need identifiers;
+* requested/discovered and direct/derived status are explicit;
+* every direct fact traces to preserved evidence and its producing run;
+* every derived fact traces to its input fact(s), Artifact(s), run, and transformation;
+* every verification run remains separate from the original run;
+* later runs never rewrite prior output;
+* source/capture time is not changed by reuse or re-extraction;
+* source trust and extraction support remain independently representable;
+* provider/model/prompt or extractor-version lineage is queryable without exposing secrets;
+* qualified values can be returned without implying requirement satisfaction or acceptance;
+* existing A1/A2 persistence remains compatible and historical provenance is not weakened.
 
-A2 must not create a general unauthenticated Evidence retrieval service or expand customer/private evidence ingestion and access. The A1 private-evidence authorization limitation remains outside this public producer scope.
-
----
-
-## 11. Evidence Lab Acceptance Surface
-
-Extend the internal Evidence Lab so Architecture Authority can initiate and inspect an A2 collection without reading database rows.
-
-Evidence Lab must clearly and persistently distinguish:
-
-```text
-LIVE COMPANIES HOUSE COLLECTION
-```
-
-from:
-
-```text
-FIXTURE / SIMULATED — NOT LIVE SOURCED EVIDENCE
-```
-
-For each collection, display:
-
-* requested Companies House collection coordinates;
-* producer request/collection identity;
-* overall status;
-* per-source Acquisition outcome, timestamps, and failure reason;
-* Evidence Assets and Artifacts;
-* artifact representation, size, and SHA-256 fingerprint;
-* safe raw-response, HTML, and screenshot inspection where applicable;
-* deterministic extracted values and lineage to the applicable source Artifact;
-* current and resigned officer counts while confirming both remain preserved;
-* current and ceased PSC records and source ownership bands without false exact percentages;
-* structured-evidence completeness separately from human-viewable-capture completeness;
-* every Overview, Officers, and PSC website page, including page order and separate HTML/screenshot outcomes;
-* legitimate PSC statement, no-registrable-PSC, and unavailable or exempt website states without misrepresenting them as capture failures.
-
-For live mode, report whether required credentials, database, durable artifact storage, and browser capability are configured without displaying secrets.
-
-Browser or website capture failure must be visibly separate from successful API evidence and must not downgrade authoritative API completeness.
-
-This is an internal acceptance surface, not final customer UI and not a general Evidence retrieval API.
+Use additive migrations only. Do not modify migrations 010 or 011. Any database smoke test requires separate authorization and a disposable test database under existing safety guards.
 
 ---
 
-## 12. Existing-System Protection
+## 14. Existing-System Protection
 
-Stage A2 implementation must be additive and Evidence-owned wherever practical.
+A3 implementation must remain Evidence-owned and additive.
 
-Do not alter current KYC, Pre-boarding, company-search, dossier, registry self-source, officer injection, or UBO behavior. Do not redesign UBO domain semantics.
+Do not modify existing KYC/Pre-boarding source classification, prompts, customer confirmation, dossier persistence, submission provenance, Companies House officer injection, self-source, UBO, source configuration, or customer UI behavior.
 
-Existing Companies House authentication, officer pagination, registry URL construction, and browser capture concepts may be reused or adapted behind bounded Evidence-owned interfaces where they fit the approved architecture. Existing callers must not be migrated or refactored merely for convenience.
-
-Any unavoidable existing-application modification must be minimal, explicitly reported, justified, and regression tested.
+Do not integrate A3 into the existing KYC workflow during this stage. Reuse accepted A1/A2 interfaces and fixtures without changing their semantics. Any unavoidable legacy-system modification requires Architecture Authority review before implementation.
 
 ---
 
-## 13. Required Tests
-
-Use fixtures/mocks for automated producer tests. Do not require live Companies House calls in the normal test suite.
-
-Tests must demonstrate at minimum:
-
-1. the A2 input contract requires `producer = companies_house` and `collection_coordinates = { jurisdiction: "GB", companyNumber: "..." }` without introducing universal company-number fields;
-2. A2 does not perform name-only company matching;
-3. the producer verifies that the authoritative response company number corresponds to the requested company number and does not silently associate a mismatch;
-4. exact API bytes are stored and fingerprinted;
-5. Officers and PSC pagination is complete;
-6. resigned officers and ceased PSC source records remain preserved;
-7. ownership bands are not converted into exact percentages;
-8. Company Overview, Officers, and PSC websites are separate Acquisitions and Evidence Assets from their API counterparts;
-9. complete Officers and PSC website pagination preserves HTML and screenshot Artifacts for every explicit page;
-10. HTML and screenshot outcomes are separately observable, and a partial capture retains successful Artifacts while remaining incomplete;
-11. current and ceased PSCs, PSC statements, no registrable PSC, and unavailable or exempt PSC pages are preserved as legitimate website evidence states;
-12. browser failure does not invalidate or downgrade successful authoritative API evidence;
-13. structured-evidence completeness and human-viewable-capture completeness are presented separately;
-14. partial success persists all source outcomes correctly;
-15. transactional failure leaves no unexplained partial Evidence graph;
-16. retry does not duplicate the logical collection;
-17. recollection creates new history despite identical hashes;
-18. extracted values trace to exact API Artifacts and existing schema concepts;
-19. no website extraction or API-to-web comparison is introduced;
-20. public assets remain structurally associable with multiple contexts;
-21. live and fixture Lab results are unmistakably different;
-22. no generalized private-evidence access is introduced;
-23. existing KYC, self-source, officer injection, and UBO behavior remains unchanged.
-
-Any separately authorized database smoke test must use a disposable test database and existing repository safety guards. Do not run A2 migrations against the normal application database during implementation verification.
-
----
-
-## 14. Explicit Exclusions
+## 15. Explicit Exclusions
 
 Do not implement:
 
-* name-only Companies House matching;
-* other jurisdictions or producers;
-* a universal producer-input schema;
-* Companies House filing-history API;
-* Companies House Document API;
-* filing PDFs or filing-document extraction;
-* incorporation, accounts, or confirmation-statement document retrieval;
-* document classification;
-* AI extraction of authoritative structured API data;
-* screenshot AI extraction or independent verification;
-* deterministic extraction from preserved website HTML or screenshots;
-* API-to-webpage fact comparison;
+* final KYC-to-Evidence context handoff;
+* final Evidence-to-KYC API or UI integration;
+* redesign or cleanup of legacy KYC source steering;
+* universal source-trust or jurisdiction trust tiers;
+* admin source-trust configuration;
+* automatic source winner or conflicting-value selection;
+* Evidence Match, acceptance evaluation, or requirement satisfaction;
+* customer, analyst, compliance, or risk decisioning;
+* customer correction workflow;
+* Evidence Ledger, Evidence Package, or DRS;
+* automatic schema expansion, mutation, or recommendations;
 * global entity resolution;
-* identity discrepancy decisioning;
-* full evidence reuse/freshness decisioning;
-* Evidence Match or requirement satisfaction;
-* Evidence Ledger or Evidence Package;
-* generalized customer/private evidence ingestion or retrieval;
-* legacy KYC dual-write or integration;
-* UBO redesign;
-* schema-versioning implementation;
-* unrelated refactoring or behavior changes.
+* broad document-authenticity determination;
+* automatic independent verification for every result;
+* numerical confidence calibration or a fixed confidence threshold;
+* AI training, fine-tuning, analytics dashboards, or automatic prompt optimization;
+* a broad source/document-specific optimization library;
+* new Companies House collection surfaces or live external requests;
+* changes to existing KYC behavior.
 
 ---
 
-## 15. Completion Criteria
+## 16. Stop Conditions
 
-Stage A2 is complete when Evidence Lab and automated fixtures demonstrate:
+Stop and report to Architecture Authority before implementation proceeds if it would require:
+
+* changing the meaning of an existing KYC/KYB schema concept;
+* inventing a schema field, information need, or schema version;
+* automatically adopting discovered facts into a configured schema;
+* combining source trust and extraction support;
+* defining universal trust tiers;
+* selecting which conflicting fact wins;
+* changing downstream KYC behavior;
+* making derived facts indistinguishable from direct/source facts;
+* weakening or rewriting A1/A2 history, identity, access, reuse, or recollection semantics;
+* irreversible coupling to one AI/model provider;
+* modifying legacy source steering or KYC persistence to make A3 convenient.
+
+---
+
+## 17. Completion Criteria
+
+Stage A3 is complete when fixtures, automated tests, and the isolated Evidence Lab demonstrate:
 
 ```text
-resolved Companies House collection request
+preserved A1/A2 Artifact
         ↓
-producer-neutral Collection Operation
+deterministic or semantic Extraction Run
         ↓
-six independent source Acquisitions
+requested or discovered fact
         ↓
-durable exact source Artifacts
+direct/source or explicitly derived meaning
         ↓
-SHA-256 integrity + provenance
+explainable extraction-support state
         ↓
-deterministic schema-aligned Extraction Runs and values
+optional independent verification
         ↓
-complete A1 lineage
+immutable, temporally correct, reconstructable lineage
         ↓
-separately visible structured completeness, human-viewable capture completeness, partial failure, retry, and recollection behavior
+qualified downstream output without KYC decisioning
 ```
 
-while preserving existing KYC, Pre-boarding, self-source, officer injection, dossier, and UBO behavior.
+while leaving matching, satisfaction, conflict resolution, Ledger/Package, final integration, source-trust policy, and existing KYC behavior outside A3.
