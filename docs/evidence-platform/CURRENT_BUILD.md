@@ -1,12 +1,12 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A3 — Extraction, Interpretation, and Verification Lineage
+# Stage A3 — Extraction, Interpretation, Verification Lineage, and Bounded Live-Artifact Integration
 
 ## 1. Objective
 
 Extend the accepted A1/A2 Evidence domain so preserved Evidence Artifacts can produce reconstructable, evidence-grounded facts through deterministic extraction, AI-assisted semantic interpretation, bounded KYC/KYB-relevant discovery, explicit derivation lineage, explainable extraction-support assessment, and selective independent verification.
 
-A3 is an Evidence interpretation and verification-lineage stage. It does not become the KYC decision engine, redesign existing source steering, or implement matching and requirement satisfaction.
+A3 is an Evidence interpretation and verification-lineage stage. Its acceptance boundary now includes proving that A3 can interpret a real persisted Artifact previously produced by A2. It does not become the KYC decision engine, redesign existing source steering, or implement matching and requirement satisfaction.
 
 ---
 
@@ -31,6 +31,28 @@ Do not create parallel Artifact, extraction-run, provenance, integrity, collecti
 The current A1 extracted-value persistence requires a non-null schema field. A3 must add the minimum additive persistence needed to represent discovered facts without fabricating a schema field or information-need identifier. Derived facts likewise require explicit lineage to their input fact or facts and the transformation/classification that produced them. Existing A1/A2 data and behavior must remain valid.
 
 Exact table names, internal API names, module organization, reversible enum names, test-fixture organization, and prompt/extractor packaging are implementation details.
+
+### Real persisted-Artifact append path
+
+Add a bounded real execution path with these semantics:
+
+```text
+existing A2 Acquisition
+    ↓
+existing Evidence Asset
+    ↓
+existing persisted Artifact
+    ↓ server-side load + SHA-256 verification
+NEW A3 Extraction Run
+    ↓
+NEW requested / discovered / derived facts and lineage
+```
+
+The path must not recollect Companies House evidence, recreate or re-persist the Acquisition, Evidence Asset, Artifact, or complete A1/A2 graph, change Artifact identity, change capture/observation time, or change its fingerprint. The existing fixture bundle path may remain for deterministic acceptance tests.
+
+The server, not the browser, must resolve the authorized Artifact metadata and A1/A2 provenance, storage reference, media/representation type, timestamps, stored SHA-256 fingerprint, and supplied extraction context. It must load preserved bytes from authorized Evidence storage and verify them against the persisted fingerprint before interpretation. Browser-supplied bytes must not be treated as the authoritative preserved evidence. Do not expose unrestricted storage references, filesystem paths, credentials, database credentials, or arbitrary file-reading capability.
+
+Add only the bounded storage read and append-only persistence capability needed for this path. A real A3 run must append against existing A1/A2 foreign keys rather than re-persisting the base graph.
 
 ---
 
@@ -71,6 +93,12 @@ Use AI where semantic interpretation adds material value, including representati
 Semantic matching must not silently equate non-equivalent concepts. The extractor must retain the source representation and explanation/lineage needed to understand the mapping.
 
 Do not build a large source- or document-specific deterministic extractor library. Small deterministic fixtures/adapters needed to demonstrate the common architecture are allowed. Existing Companies House producer behavior must not be expanded or refactored merely for convenience.
+
+Do not automatically copy existing Companies House deterministic values from `evidence_extracted_values` into new A3 facts. Their original A2 run and Artifact lineage is the truthful extraction history. A unified read projection may display A2 values beside A3 facts if useful without fabricating a new run or backfilling the A3 fact model.
+
+One optional real semantic AI provider adapter is authorized for local Evidence Lab acceptance behind the provider-neutral contract. Keep the deterministic fixture provider so automated tests require no paid AI call. Credentials are environment-only, never committed or displayed, never returned from configuration endpoints, and never persisted in facts or provenance.
+
+The provider boundary may be enriched with a provider-neutral, media-aware input containing Artifact identity, media and representation type, exact verified bytes or protected server-side content, optional decoded text/structured representation, extraction context, and requested concepts. Provider-specific message structures must remain in adapters. The first real path may support Companies House structured JSON and rendered HTML. Screenshot/image interpretation is permitted through this boundary but may remain an explicit controlled follow-on if correct image support is materially larger; do not pass image bytes through a text-only contract or imply that screenshots were interpreted.
 
 ---
 
@@ -234,7 +262,7 @@ The final KYC UI and Evidence-to-KYC integration contract are not part of A3.
 
 ## 12. Evidence Lab Acceptance Scenarios
 
-Extend the isolated Evidence Lab using fixtures/synthetic evidence. Do not require real customer data or live external requests.
+Retain the isolated fixture/synthetic scenarios so deterministic automated acceptance does not require real customer data, live external requests, or paid AI calls.
 
 The Lab and automated tests must demonstrate at minimum:
 
@@ -248,6 +276,42 @@ The Lab and automated tests must demonstrate at minimum:
 8. **Source-trust separation:** a lower-trust policy context may still have strong extraction support, and authoritative policy context may still have weak support, without either value being mechanically derived from the other.
 9. **Failure history:** failed extraction/verification remains reconstructable and does not corrupt the preserved Artifact or prior successful runs.
 10. **Existing-system protection:** A1/A2 fixtures and Companies House producer behavior remain unchanged, and existing KYC regression tests remain green.
+
+Also add the bounded real A2-to-A3 product-review journey:
+
+```text
+Collect real Companies House company through A2
+    ↓
+inspect and select an eligible persisted Artifact
+    ↓
+server retrieves preserved bytes and verifies SHA-256
+    ↓
+run A3 interpretation
+    ↓
+inspect real facts and complete A2/A3 lineage
+```
+
+The initial real path must support eligible Companies House structured JSON and rendered HTML Artifacts. It must not require recollection. A real result must visibly identify at least:
+
+* input mode: `LIVE PRESERVED ARTIFACT`;
+* Collection, Evidence Asset, Artifact, Artifact type, source, and producer;
+* capture/observation timestamp separately from extraction timestamp;
+* extraction method and provider/model/instruction lineage where applicable;
+* requested, discovered, and derived facts where produced;
+* support state and signals;
+* complete provenance/lineage.
+
+The fixture area must be labelled with the meaning:
+
+```text
+A3 SYNTHETIC FIXTURE SCENARIOS
+
+This demonstration uses built-in ABC Limited fixture evidence.
+It does not use or interpret the A2 collection shown above.
+No live Artifact is selected.
+```
+
+Use action wording equivalent to `Run synthetic A3 fixture scenarios` so a reviewer cannot infer that the fixture output came from the preceding live A2 collection.
 
 The Lab is an internal product-review surface, not a final customer UI or decision engine.
 
@@ -268,7 +332,12 @@ Tests must prove:
 * source trust and extraction support remain independently representable;
 * provider/model/prompt or extractor-version lineage is queryable without exposing secrets;
 * qualified values can be returned without implying requirement satisfaction or acceptance;
-* existing A1/A2 persistence remains compatible and historical provenance is not weakened.
+* existing A1/A2 persistence remains compatible and historical provenance is not weakened;
+* a real A2 Artifact can be loaded by server-side identity, fingerprint-verified, and interpreted without recreating or changing its A1/A2 graph;
+* the real path appends A3 runs and facts against existing provenance;
+* existing A2 deterministic extracted values are not duplicated into A3 facts;
+* fixture and live preserved-Artifact inputs are clearly distinguishable;
+* unsupported media and integrity/provider/storage/persistence failures do not fabricate facts or mutate preserved evidence.
 
 Use additive migrations only. Do not modify migrations 010 or 011. Any database smoke test requires separate authorization and a disposable test database under existing safety guards.
 
@@ -306,7 +375,21 @@ Do not implement:
 * AI training, fine-tuning, analytics dashboards, or automatic prompt optimization;
 * a broad source/document-specific optimization library;
 * new Companies House collection surfaces or live external requests;
-* changes to existing KYC behavior.
+* changes to existing KYC behavior;
+* materializing or backfilling A2 deterministic extracted values into A3 facts;
+* browser-authoritative Artifact byte submission or unrestricted Artifact/storage access;
+* bulk reinterpretation or model-evaluation infrastructure;
+* pretending screenshot/image interpretation occurred through a text-only provider.
+
+---
+
+## 15A. Failure, Retry, and Re-interpretation Semantics
+
+Truthfully handle Artifact not found, unauthorized Artifact/context access, Artifact storage unavailable, SHA-256 mismatch, unsupported media, AI provider unavailable, provider authentication failure, timeout, malformed output, no supported facts, and database persistence failure.
+
+No failure may mutate or delete the Artifact or A2 evidence, fabricate facts, or silently report successful interpretation. Preserve non-secret failure lineage where appropriate.
+
+Do not silently conflate a retry of a failed execution, an idempotent replay, and a deliberate later interpretation of the same preserved Artifact using a new model, prompt, or context. A legitimate later interpretation may create a new immutable Extraction Run while retaining the original Artifact and every prior run. Exact idempotency mechanics are implementation discretion; stop for Architecture Authority if they require a new material run-identity policy.
 
 ---
 
@@ -324,7 +407,10 @@ Stop and report to Architecture Authority before implementation proceeds if it w
 * making derived facts indistinguishable from direct/source facts;
 * weakening or rewriting A1/A2 history, identity, access, reuse, or recollection semantics;
 * irreversible coupling to one AI/model provider;
-* modifying legacy source steering or KYC persistence to make A3 convenient.
+* modifying legacy source steering or KYC persistence to make A3 convenient;
+* treating browser-supplied bytes as authoritative preserved evidence;
+* interpreting bytes after a fingerprint mismatch;
+* defining a new material retry/replay/re-interpretation identity policy.
 
 ---
 
@@ -351,3 +437,17 @@ qualified downstream output without KYC decisioning
 ```
 
 while leaving matching, satisfaction, conflict resolution, Ledger/Package, final integration, source-trust policy, and existing KYC behavior outside A3.
+
+Completion also requires a bounded live preserved-Artifact demonstration:
+
+```text
+real persisted A2 Artifact
+        ↓ server-side retrieval
+verified stored SHA-256
+        ↓
+NEW immutable A3 Extraction Run
+        ↓
+real facts + support + complete A2/A3 provenance
+```
+
+with truthful failure behavior, separate capture and extraction times, no duplicate A2 deterministic extraction, explicit fixture-versus-live labeling, and no KYC integration or later-stage functionality.

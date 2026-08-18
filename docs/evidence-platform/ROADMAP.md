@@ -116,6 +116,8 @@ Extend the A1/A2 Evidence domain so preserved Artifacts can produce reconstructa
 
 A3 extends the existing Artifact, Extraction Run, and extracted-value lineage. It may add the minimum persistence needed to represent discovered facts without fake schema identifiers and derived facts with explicit input/transformation lineage. Reuse or re-extraction must not restamp historical source observation or Artifact capture time.
 
+To complete A3 acceptance, the isolated Evidence Lab must also prove a bounded A2-to-A3 integration path: select an existing persisted A2 Artifact, retrieve its bytes server-side from authorized Evidence storage, verify its stored SHA-256 fingerprint, and append a new A3 Extraction Run and facts against the existing provenance without recollecting or re-persisting the A1/A2 graph. The first real path may support Companies House JSON and rendered HTML; screenshot/image interpretation may follow through the same media-aware provider boundary rather than being forced through a text-only interface. Deterministic A2 extracted values retain their original history and must not be automatically duplicated as A3 facts. Synthetic fixture scenarios remain available but must be visibly distinguished from live preserved-Artifact interpretation.
+
 A3 does not own source-trust policy, redesign existing KYC source steering, decide requirement satisfaction, select a winning source/value, resolve customer disputes, mutate schemas, or make KYC/compliance decisions. Final KYC context handoff and downstream UI integration remain deferred.
 
 ### Stage A4 — Matching and Satisfaction
