@@ -27,9 +27,11 @@ Extraction
         ↓
 Observation / Fact
         ↓
-Evidence Match
+Evidence-to-Need Evaluation
         ↓
-Requirement Satisfaction
+Provisional Requirement Assessment
+        ↓
+Downstream KYC Satisfaction / Decisioning
         ↓
 Evidence Ledger
         ↓
@@ -122,15 +124,35 @@ A3 also includes interpretation of an explicitly selected coherent set of existi
 
 A3 does not own source-trust policy, redesign existing KYC source steering, decide requirement satisfaction, select a winning source/value, resolve customer disputes, mutate schemas, or make KYC/compliance decisions. Final KYC context handoff and downstream UI integration remain deferred.
 
-### Stage A4 — Matching and Satisfaction
+### Stage A4 — Evidence-to-Need Evaluation and Provisional Assessment
 
-Add:
+Stage A4 is split at a controlled semantic boundary.
 
-* Evidence Match;
-* acceptance evaluation;
-* requirement satisfaction;
-* contradiction/insufficiency where required;
-* conflict evaluation and operative evidence/value selection under approved downstream policy.
+#### Stage A4a — Fact-to-Information-Need Evaluation
+
+Add immutable, reconstructable Evidence-to-Need Evaluation that determines how a Fact relates to an explicitly supplied Information Need.
+
+A4a may use exact typed matching, explicit versioned normalization, structured/component comparison under an upstream-supplied structure, semantic concept matching, and approved derived/equivalence relationships with explicit transformation lineage. Provider-neutral AI-assisted semantic evaluation is permitted where deterministic comparison is insufficient.
+
+A4a keeps A3 evidence support, Evidence-to-Need evaluation, and downstream KYC satisfaction separate. It may report that a Fact addresses, partially addresses, ambiguously addresses, is insufficient for, does not address, or cannot yet be evaluated against a Need. Exact internal enum names remain implementation details and must not imply final KYC acceptance.
+
+An A3 discovered Fact may become the input to an immutable candidate evaluation against a supplied Information Need. The discovered Fact remains discovered and is not mutated into a requested Fact, assigned a fabricated schema field or Information Need, or used to change the upstream schema.
+
+Comparable disagreement may be identified and explained without choosing a winning Fact. Source trust, extraction support, and Evidence-to-Need evaluation remain independent. Supplied/versioned policy context may be consumed, but Evidence does not define a universal source hierarchy or latest-wins rule. Re-evaluation is append-only.
+
+A4a does not implement final KYC requirement satisfaction, operative-value selection, customer correction or acceptance, analyst/risk decisions, onboarding progression, or changes to existing KYC behavior.
+
+#### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
+
+A4b may later reason across candidate evaluations to assess evidence coverage, collections/cardinality, comparable conflicts, legitimate empty sets, temporal applicability, and other requirement-level evidence conditions.
+
+A4b is deferred until separately governed semantics and upstream policy inputs exist for scalar-versus-collection shape, cardinality, complete sets and `all current X`, minimum/maximum counts, legitimate empty sets, required/optional status, temporal scope, freshness, source suitability, comparable-conflict rules, and aggregation to requirement-level coverage.
+
+A4b remains provisional evidence assessment. It does not select the operative evidence/value or determine final KYC satisfaction.
+
+#### Downstream KYC/Onboarding
+
+KYC/Onboarding retains source/value winner selection, operative customer values, customer dispute resolution, corroboration requirements, final KYC satisfaction, analyst/risk decisions, and approve/reject/refer/escalate or onboarding-progression decisions.
 
 ### Stage A5 — Ledger and Package
 
@@ -154,8 +176,8 @@ Requirement
 → provenance
 → integrity
 → interpretation
-→ matching
-→ satisfaction
+→ Evidence-to-Need evaluation
+→ provisional evidence assessment
 → ledger
 → package
 ```

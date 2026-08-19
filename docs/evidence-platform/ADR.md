@@ -536,7 +536,9 @@ Successful source areas survive and remain valid when another source area fails.
 
 ## ADR-012 — Evidence Interpretation, Discovered Facts, and Verification Lineage
 
-**Status:** PROPOSED FOR ARCHITECTURE AUTHORITY REVIEW
+**Status:** APPROVED
+
+**Implementation:** Stage A3 accepted and implemented in `b1a23dfe8ba871c089c67e0203e527fce32854a9`.
 
 ### Context
 
@@ -683,3 +685,181 @@ An additive schema extension is required for discovered facts that have no confi
 Implementation may choose reversible module organization, table and internal enum names consistent with these semantics, fixture organization, internal API naming, and prompt/extractor packaging. Implementation must stop for Architecture Authority before changing schema meanings, automatically adopting discovered facts into KYC, combining source trust with extraction support, defining universal trust tiers, selecting a winning fact, changing downstream KYC behavior, coupling irreversibly to an AI provider, changing A1/A2 identity/reuse semantics, or weakening historical provenance.
 
 Stage A3 explicitly excludes final KYC integration, KYC UI integration, legacy source-steering redesign, universal trust policy, admin trust configuration, matching and satisfaction, conflict resolution, customer/analyst/risk decisioning, Ledger, Package, DRS, automatic schema expansion, global entity resolution, broad document-authenticity determination, automatic verification of every result, numerical confidence calibration, AI training, and a source-specific optimization library.
+
+---
+
+## ADR-013 — Evidence-to-Need Evaluation and the A4a/A4b Boundary
+
+**Status:** APPROVED
+
+**Date:** 2026-08-19
+
+**Raised by:** Architecture Authority
+
+### Context
+
+Stages A1–A3 establish Evidence Requirements, schema-aligned Information Needs, immutable Evidence Assets and Artifacts, Extraction Runs, requested and discovered Facts, direct and derived grounding, extraction-support states, independent-verification lineage, and precise Fact-to-Artifact support.
+
+They do not establish a durable evaluation of how a Fact relates to an Information Need. Existing relationships must not be misread as that evaluation: an Asset associated with a Requirement is not proof of satisfaction; a requested Fact carrying schema or Information Need lineage is not an acceptance result; A3 extraction support describes whether evidence supports a Fact, not whether KYC accepts that Fact for a requirement.
+
+The previously contemplated Stage A4 combined candidate matching, evidence coverage, conflict assessment, requirement satisfaction, and operative-value selection. Repository diagnosis established that these responsibilities require different semantics and ownership. In particular, Information Needs do not yet express scalar-versus-collection shape, cardinality, complete-set or legitimate-empty-set semantics, requiredness, temporal scope, freshness, or source suitability. Final KYC satisfaction and operative-value selection are downstream business decisions under ADR-010 and ADR-012.
+
+### Decision
+
+#### Stage A4 is split at a semantic boundary
+
+Stage A4 is divided into:
+
+* **A4a — Fact-to-Information-Need Evaluation**, which evaluates how an immutable Evidence Fact relates to an explicitly supplied Information Need; and
+* **A4b — Coverage, Conflict, and Provisional Requirement Assessment**, which may later reason across candidate evaluations once the required collection, cardinality, temporal, source-policy, and aggregation semantics are separately governed.
+
+A4a may be implemented only through a separately authorized build task. A4b is not authorized for implementation by this decision.
+
+#### Three meanings remain separate
+
+The platform must preserve three distinct concepts:
+
+```text
+A3 Evidence Support
+= does preserved evidence support this Fact?
+
+A4a Evidence-to-Need Evaluation
+= does this Fact address this supplied Information Need?
+
+Downstream KYC Satisfaction
+= is this evidence acceptable and sufficient under current KYC policy?
+```
+
+No status, score, or projection may collapse these meanings.
+
+#### Evidence-to-Need Evaluation is immutable and relational
+
+A4a introduces the architectural concept of an immutable **Evidence-to-Need Evaluation**. Exact internal names remain an implementation detail.
+
+An evaluation relates:
+
+```text
+immutable Fact
+      ↓
+explicitly supplied Information Need
+      ↓
+evaluation method and version
+      ↓
+result, explanation, qualifications, ambiguity, and limitations
+```
+
+The relationship must not be represented by mutating either the Fact or the Information Need.
+
+An evaluation must retain reconstructable lineage sufficient to identify its Fact and Information Need inputs, evaluator or method identity and version, evaluation time, relevant supplied comparison or policy context, result, explanation/signals, and limitations. Where normalization or transformation is used, raw values remain unchanged and the named/versioned normalization or transformation remains explicit.
+
+#### Bounded evaluation methods are permitted
+
+A4a may use appropriately bounded methods including:
+
+* exact typed matching;
+* explicit deterministic normalization;
+* structured or component comparison where an upstream structure is supplied;
+* semantic concept matching; and
+* approved derived or equivalence relationships where explicit transformation lineage exists.
+
+Normalization must be explicit and versioned. A normalized comparison value does not replace or rewrite the original Fact.
+
+Provider-neutral AI-assisted semantic evaluation is permitted where deterministic comparison is insufficient. Semantic evaluation must preserve provider, model, instruction or evaluator version, inputs, evaluation time, explanation/signals, and relevant limitations. AI does not become schema authority, fabricate an Information Need, establish final KYC satisfaction, or select an operative value.
+
+#### Discovered Facts remain discovered
+
+An A3 discovered Fact may be evaluated as a candidate for an explicitly supplied Information Need through a new immutable A4a evaluation.
+
+```text
+A3 discovered Fact
+      ↓
+A4a immutable candidate evaluation
+      ↓
+supplied Information Need
+```
+
+The discovered Fact must not be mutated to add `schema_field_id` or `information_need_id`, converted into a requested Fact, treated as an automatic schema recommendation, or used to modify the upstream KYC/KYB schema.
+
+#### Evaluation results are not acceptance decisions
+
+A4a must support a bounded, neutral vocabulary capable of representing meanings such as:
+
+* addresses;
+* partially addresses;
+* ambiguous;
+* insufficient;
+* does not address; and
+* indeterminate or not evaluated.
+
+Exact enum spelling remains an implementation detail unless subsequently frozen. Terms must not imply final KYC acceptance or satisfaction.
+
+A4a may identify disagreement between genuinely comparable candidate Facts and explain the comparison, but it must not choose a winner. Comparability must not be inferred merely because values look similar or share a broad subject. For example, registered and operating addresses remain different concepts unless an upstream contract explicitly establishes a meaningful comparison.
+
+#### Source trust, temporal context, and evaluation remain distinct
+
+Source trust and A3 extraction support remain separate from A4a evaluation. A4a may consume explicitly supplied and versioned source-policy context where relevant, but it must not invent or embed a universal source hierarchy or copy the current KYC application's primary/secondary/tertiary mechanism into Evidence as universal policy. Companies House must not become a generic rule that always wins.
+
+A4a may expose Artifact observation/capture time, source-effective dates actually present in evidence, Fact and Extraction Run timestamps, evaluation time, and supplied temporal context. It must not implement `latest value wins`, silently treat later evidence as operative, or invent freshness policy.
+
+Re-evaluation is append-only. A later evaluation using new evidence, a new evaluator, or new supplied context creates new history and does not rewrite a prior evaluation.
+
+#### Additive persistence is expected but not yet implemented
+
+A future A4a implementation may add forward-only persistence conceptually equivalent to:
+
+* an evaluation run or header identifying the Information Need, evaluator/method/version, supplied comparison or policy context, evaluation time, and limitations; and
+* one or more candidate evaluations identifying the Fact, relation/result, comparison method, normalized comparison inputs where applicable, normalization/transformation reference, reasons/signals, ambiguity, and limitations.
+
+The implementation must not overload:
+
+* `evidence_facts.support_state`;
+* `evidence_verification_attempts`;
+* `evidence_requirement_assets`;
+* `evidence_requirements.status`; or
+* mutable JSON on existing Facts.
+
+Existing A1–A3 records remain immutable. No migration is authorized by this governance-only task.
+
+#### A4b requires separate governance
+
+A4b cannot be implemented honestly until separately governed semantics or upstream inputs exist for at least:
+
+* scalar versus collection shape;
+* cardinality and minimum/maximum counts where applicable;
+* complete-set and `all current X` semantics;
+* legitimate empty-set semantics;
+* required versus optional status;
+* temporal scope and current-as-of meaning;
+* freshness policy;
+* source suitability and acceptability;
+* genuinely comparable conflict rules; and
+* aggregation from candidate evaluations to requirement-level evidence coverage.
+
+Complete capture or interpretation of all Artifacts in an Evidence Asset does not by itself establish satisfaction of an Information Need meaning `all current directors`. Likewise, authoritative evidence stating that no registrable PSC exists is materially different from unavailable evidence, failed capture, or no extracted Facts.
+
+#### Final KYC ownership remains downstream
+
+KYC/Onboarding retains exclusive responsibility for:
+
+* final KYC requirement satisfaction;
+* source or value winner selection;
+* operative customer values;
+* customer correctness and dispute resolution;
+* corroboration requirements;
+* analyst, compliance, and risk decisions;
+* approve, reject, refer, or escalate decisions; and
+* onboarding progression.
+
+Evidence may provide qualified, reconstructable assessments for downstream consumption. It must not make those decisions itself.
+
+#### Relationship to ADR-010 and ADR-012
+
+This decision clarifies rather than silently reinterprets ADR-010 and ADR-012. ADR-010 assigns operative onboarding values, source priority, conflict consequences, and KYC decisioning to KYC/Onboarding. ADR-012 limits A3 to explaining what preserved evidence says and how strongly it supports a Fact. ADR-013 adds the intervening Evidence-to-Need relationship without moving downstream ownership into Evidence.
+
+The former roadmap wording assigning A4 `operative evidence/value selection under approved downstream policy` is superseded by this clarification. Evidence may expose candidates, qualified evaluations, coverage, and comparable disagreement under separately governed inputs; KYC/Onboarding selects the operative value and determines final satisfaction.
+
+### Consequences
+
+A4a can establish durable candidate-evaluation lineage without pretending to complete KYC decisioning. Discovered Facts remain useful without schema mutation. Deterministic and AI-assisted evaluation can share provider-neutral lineage. Historical re-evaluation remains reconstructable.
+
+A4a explicitly excludes source-winner or operative-value selection, final KYC satisfaction, customer correction decisions, analyst/risk decisions, universal trust tiers, freshness/latest-wins policy, identity resolution, cross-tenant private-evidence discovery, schema mutation, automatic adoption of discovered Facts, unsupported transformations such as ungoverned SIC-to-industry mapping, recollection, automatic reinterpretation, A5 Ledger/Package work, legacy KYC source-steering redesign, and changes to normal KYC behavior.
