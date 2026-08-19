@@ -26,9 +26,29 @@ Stage A1 does not implement real acquisition, AI extraction, verification decisi
 
 - `evidence/a2/` contains the producer-neutral collection identity boundary and the bounded six-acquisition Companies House producer, exact-byte artifact storage, deterministic API extraction, paginated Overview/Officers/PSC website capture, fixtures, and transactional repository.
 - `api/evidence/a2-collect.js` exposes the internal live/fixture collection operation to Evidence Lab without changing existing KYC routes.
+- `evidence/a2/historyService.js` and `api/evidence/a2-existing.js` reopen the latest usable public live Companies House collection by producer coordinates using read-only persistence queries. They do not invoke Companies House, start a browser, create Evidence records, or expose Artifact storage locations.
 - `db/migrations/011_evidence_platform_a2.sql` adds collection-operation identity and an additive acquisition relationship.
 - `public/evidence-lab.html` clearly separates fixture and live collection, distinguishes structured API completeness from supplementary human-viewable capture completeness, and renders acquisitions, page artifacts, fingerprints, failures, and extraction lineage.
 
 The standalone A2 Lab uses an explicitly named default extraction context only to demonstrate deterministic lineage. It does not make the Companies House producer inherently dependent on `FI:uk-licence`; the future upstream KYC/Onboarding context handoff remains outside A2.
 
 Stage A2 does not redirect existing Companies House, KYC, self-source, dossier, or UBO behavior.
+
+## Stage A3 additions
+
+- `evidence/a3/domain.js` validates requested/discovered, direct/derived, support, derivation, verification, and immutable-lineage invariants while continuing to validate the underlying A1 graph.
+- `evidence/a3/providers.js` defines the substitutable, media-aware semantic-extraction provider boundary, a no-cost fixture adapter, and an optional environment-configured Anthropic adapter for local live acceptance.
+- `evidence/a3/extractor.js` converts provider output into common Evidence facts and derives explainable support states from evidence signals rather than source trust.
+- `evidence/a3/artifactReader.js` resolves bounded server-side reads through the existing Evidence filesystem or private Blob storage providers without exposing storage access to the browser/provider.
+- `evidence/a3/liveService.js` resolves one or more persisted A2 Artifacts from the same Evidence Asset, authorizes and verifies each SHA-256 independently, preserves persisted input order and completeness limitations, filters duplicate A2 deterministic values, and appends one immutable A3 interpretation against the existing graph.
+- `evidence/a3/fixtures.js` demonstrates deterministic and semantic extraction, discovered facts, SIC derivation, qualified output, agreement/disagreement verification, failed attempts, and capture-versus-re-extraction time.
+- `evidence/a3/repository.js` extends existing A1 Extraction Runs, resolves authorized persisted Artifacts, and appends A3 facts and lineage without re-persisting or modifying the A1/A2 graph.
+- `evidence/a3/service.js` provides the isolated fixture demonstration used by `api/evidence/a3-fixture.js` and Evidence Lab.
+- `db/migrations/012_evidence_platform_a3.sql` additively extends Extraction Run lineage and adds fact, derivation, multi-Artifact input, and verification relationships.
+- `db/migrations/013_evidence_fact_artifact_support.sql` additively records the precise one-or-many input Artifacts that support each Fact; migration 012 remains immutable.
+- `scripts/evidence-a3-db-smoke.js` applies A1 and A3 migrations only to the guarded disposable Evidence test database and verifies representative persisted lineage.
+- `api/evidence/a3-interpret.js` and `api/evidence/a3-config.js` expose the internal live preserved-Artifact operation and non-secret readiness state.
+- `evidence/a3/historyService.js` and `api/evidence/a3-history.js` reopen persisted interpretation runs and Facts for an authorized Artifact without reading Artifact bytes or invoking a semantic provider.
+- `public/evidence-lab.html`, `public/evidence-lab.js`, and `public/evidence-lab-state.js` keep view-existing, view-interpretation-history, explicit fresh interpretation, and explicit recollection separate; retain interpretation cards across Artifact selections; and guard repeated submissions with truthful indeterminate execution state.
+
+Stage A3 does not implement matching, satisfaction, source winner selection, trust policy, customer or analyst decisioning, schema mutation, KYC integration, Ledger, Package, or later roadmap stages.

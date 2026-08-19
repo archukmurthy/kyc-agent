@@ -642,6 +642,28 @@ The real path must report truthful outcomes for Artifact not found, unauthorized
 
 This bounded A2-to-A3 path is Evidence Platform integration, not KYC integration. It does not authorize matching, satisfaction, source-winner or trust-policy decisions, customer/analyst decisioning, schema mutation, bulk reinterpretation, analytics/model evaluation infrastructure, Ledger, Package, DRS, or later roadmap stages.
 
+#### Same-Evidence-Asset multi-Artifact interpretation is an A3 input boundary
+
+One logical Evidence Asset may contain multiple preserved Artifacts that together form the meaningful interpretation input, including ordered registry pages, paginated API responses, multi-page web captures, and other multi-part source material. A3 may interpret either one Artifact or an explicitly selected coherent set of existing Artifacts belonging to the same Evidence Asset. The Evidence Asset is the grouping boundary for this A3 increment. A3 must not automatically combine Artifacts from different Evidence Assets, acquisitions, recollections, contexts, or API and website Evidence Assets, or combine public and private evidence merely because it concerns the same subject.
+
+This uses the existing Evidence Asset and Artifact identities and the existing ability for one Extraction Run to reference multiple input Artifacts. It does not create a document identity, page-bundle identity, global document abstraction, source-specific pagination object, or second Evidence Asset concept.
+
+Every input Artifact must be resolved and authorized server-side, loaded from authoritative Evidence storage, and independently verified against its persisted SHA-256 fingerprint before provider execution. Each retains its own source provenance, capture timestamp, representation identity, and Artifact boundary. Browser-supplied paths, storage references, bytes, fingerprints, or credentials are not authoritative. If the existing same-Evidence-Asset access model cannot safely authorize every selected input without inventing a cross-context access policy, implementation must stop for Architecture Authority.
+
+Where persisted source ordering or page ordering exists, A3 may construct the provider input in that order. It must not invent source-specific ordering in the generic A3 layer. If ordering is absent or ambiguous and materially affects interpretation, A3 must report that limitation rather than fabricate an order.
+
+Input completeness and extraction completeness remain explicit. When an Evidence Asset is known to contain a required ordered set, interpreting fewer than that complete set cannot be represented as complete interpretation of the Evidence Asset. Missing, unreadable, unauthorized, unverifiable, skipped, sampled, truncated, or provider-limited inputs must remain observable through the existing complete/incomplete, limitations, and support semantics. Required-input failure must not silently produce a complete result.
+
+The provider-neutral boundary may receive a coherent ordered set of verified Artifact inputs. Each input retains sufficient identity and representation context for the provider and normalizer to distinguish Artifact boundaries. The provider may reason across the selected Evidence Asset input, but every resulting fact must identify the Artifact or Artifacts that actually support it; unsupported cross-Artifact inference must not be represented as a directly stated source fact.
+
+#### Facts retain precise Artifact support lineage
+
+Extraction Run input lineage alone does not establish that every fact is supported by every input Artifact. A3 therefore authorizes an additive, immutable Fact-to-Artifact support relationship where the current single `artifact_id` cannot represent support honestly. One fact may be supported by one Artifact or multiple Artifacts without duplicating the fact. Existing single-Artifact facts remain valid. Source Artifacts remain unchanged, and the implementation must not fabricate support merely because an Artifact participated in the run. Exact relationship, table, and API names remain implementation details. If persistence is required, use a new additive forward-only migration; do not modify migration 012.
+
+#### Exact raw provider exchange remains deferred
+
+Exact AI request/response persistence is not authorized in this increment. Current A3 lineage continues to preserve input Artifact identities, provider, model, instruction/extractor reference, extraction timestamps, normalized outcomes, persisted facts, and support/completeness metadata, but must not claim byte-for-byte provider-response reconstructability. Policy for duplication of private evidence, request and response retention, access inheritance across multiple inputs, encryption/redaction, retention/deletion, and malformed or failed response retention remains deferred to the Production Readiness Register and a later Architecture Authority decision.
+
 #### Relationship to ADR-010 and ADR-011
 
 ADR-012 refines ADR-010's A1-stage limitation that structured extracted values remain confined to applicable schema fields. Schema-directed facts remain schema-aligned, but A3 may additionally preserve explicitly marked discovered facts through the additive extension above. This is not permission to create or modify KYC schema concepts.
@@ -654,9 +676,9 @@ ADR-011's description of Companies House APIs as authoritative structured source
 
 A3 extends the existing Evidence domain; it does not create a parallel extraction subsystem. The A1/A2 Artifact, Extraction Run, extracted-value, integrity, reuse, recollection, and access semantics remain authoritative.
 
-A3 acceptance now includes appending a real interpretation to an existing persisted A2 Artifact through server-authoritative storage retrieval and SHA-256 verification. This requires a bounded Artifact read path and append-only repository/service path, but no Evidence-domain redesign. Existing A2 deterministic extraction is not duplicated, provider-neutrality is retained, and fixture execution remains available for deterministic tests.
+A3 acceptance now includes appending a real interpretation to one existing persisted A2 Artifact or an explicitly selected coherent set of Artifacts from the same Evidence Asset through server-authoritative storage retrieval and independent SHA-256 verification. This requires bounded Artifact read paths and an append-only repository/service path, but no new Evidence identity. Existing A2 deterministic extraction is not duplicated, provider-neutrality is retained, and fixture execution remains available for deterministic tests.
 
-An additive schema extension is required for discovered facts that have no configured schema destination. An additive lineage relationship is also required for derived facts and may be required to make independent verification relationships explicit. These extensions must preserve current A1/A2 records and cannot require fake schema concepts, fake information needs, or destructive rewriting.
+An additive schema extension is required for discovered facts that have no configured schema destination. Additive lineage relationships are also required for derived facts and precise Fact-to-Artifact support, and may be required to make independent verification relationships explicit. These extensions must preserve current A1/A2 records and cannot require fake schema concepts, fake information needs, duplicated facts, modification of migration 012, or destructive rewriting.
 
 Implementation may choose reversible module organization, table and internal enum names consistent with these semantics, fixture organization, internal API naming, and prompt/extractor packaging. Implementation must stop for Architecture Authority before changing schema meanings, automatically adopting discovered facts into KYC, combining source trust with extraction support, defining universal trust tiers, selecting a winning fact, changing downstream KYC behavior, coupling irreversibly to an AI provider, changing A1/A2 identity/reuse semantics, or weakening historical provenance.
 

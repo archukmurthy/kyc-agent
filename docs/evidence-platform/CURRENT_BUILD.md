@@ -1,12 +1,12 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A3 — Extraction, Interpretation, Verification Lineage, and Bounded Live-Artifact Integration
+# Stage A3 — Extraction, Interpretation, Verification Lineage, and Same-Evidence-Asset Multi-Artifact Integration
 
 ## 1. Objective
 
 Extend the accepted A1/A2 Evidence domain so preserved Evidence Artifacts can produce reconstructable, evidence-grounded facts through deterministic extraction, AI-assisted semantic interpretation, bounded KYC/KYB-relevant discovery, explicit derivation lineage, explainable extraction-support assessment, and selective independent verification.
 
-A3 is an Evidence interpretation and verification-lineage stage. Its acceptance boundary now includes proving that A3 can interpret a real persisted Artifact previously produced by A2. It does not become the KYC decision engine, redesign existing source steering, or implement matching and requirement satisfaction.
+A3 is an Evidence interpretation and verification-lineage stage. Its acceptance boundary includes proving that A3 can interpret a real persisted Artifact previously produced by A2 and one explicitly selected coherent set of Artifacts belonging to the same Evidence Asset. It does not become the KYC decision engine, redesign existing source steering, or implement matching and requirement satisfaction.
 
 ---
 
@@ -54,6 +54,31 @@ The server, not the browser, must resolve the authorized Artifact metadata and A
 
 Add only the bounded storage read and append-only persistence capability needed for this path. A real A3 run must append against existing A1/A2 foreign keys rather than re-persisting the base graph.
 
+### Same-Evidence-Asset multi-Artifact append path
+
+Add the remaining bounded A3 capability:
+
+```text
+existing Evidence Asset
+    ├── existing Artifact A
+    ├── existing Artifact B
+    └── existing Artifact C
+            ↓ server-side authorization, load, ordering, and SHA-256 verification
+NEW A3 Extraction Run referencing the selected coherent Artifact set
+            ↓
+NEW facts with precise supporting-Artifact lineage
+```
+
+The Evidence Asset is the grouping boundary. A request may interpret one Artifact or an explicitly selected coherent set belonging to the same Evidence Asset. Do not automatically combine Artifacts from different Evidence Assets, acquisitions, recollections, contexts, or API and website Evidence Assets, or combine public and private evidence merely because it concerns the same subject. Do not introduce a document identity, page-bundle identity, global document abstraction, source-specific pagination object, or second Evidence Asset concept.
+
+For every selected input, the server must resolve its existing identity and provenance, verify authorization under the supplied interpretation context, load authoritative stored bytes, calculate and verify SHA-256, and retain its original capture timestamp and Artifact boundary. The browser must supply only bounded selection identity, never authoritative bytes, paths, storage references, fingerprints, or credentials. If safe authorization would require a new cross-context access policy, stop for Architecture Authority.
+
+Use persisted source/page ordering where it exists. Do not invent source-specific ordering inside generic A3. If order is absent or ambiguous and materially affects interpretation, fail or report an explicit limitation rather than fabricate order.
+
+When the Evidence Asset records a required complete ordered set, interpreting only a subset must be marked incomplete with limitations and appropriate support qualification. Do not silently skip, sample, truncate, or summarize away required inputs. Input-size, provider, or token limits must not turn partial interpretation into a complete result.
+
+One Extraction Run may reference every selected input Artifact, but that alone does not establish support for each Fact. Add the minimum additive immutable relationship required so each Fact identifies the one or more input Artifacts that actually support it. Existing single-Artifact Facts remain valid, a jointly supported Fact must not be duplicated merely to record multiple supporting Artifacts, and no support relationship may be fabricated from run participation. A new forward-only migration is permitted if required; migration 012 must not be modified.
+
 ---
 
 ## 3. Upstream Context Boundary
@@ -98,7 +123,7 @@ Do not automatically copy existing Companies House deterministic values from `ev
 
 One optional real semantic AI provider adapter is authorized for local Evidence Lab acceptance behind the provider-neutral contract. Keep the deterministic fixture provider so automated tests require no paid AI call. Credentials are environment-only, never committed or displayed, never returned from configuration endpoints, and never persisted in facts or provenance.
 
-The provider boundary may be enriched with a provider-neutral, media-aware input containing Artifact identity, media and representation type, exact verified bytes or protected server-side content, optional decoded text/structured representation, extraction context, and requested concepts. Provider-specific message structures must remain in adapters. The first real path may support Companies House structured JSON and rendered HTML. Screenshot/image interpretation is permitted through this boundary but may remain an explicit controlled follow-on if correct image support is materially larger; do not pass image bytes through a text-only contract or imply that screenshots were interpreted.
+The provider boundary may be enriched with a provider-neutral, media-aware input containing one Artifact or a coherent ordered set of verified Artifacts from the same Evidence Asset. For every input preserve Artifact identity, media and representation type, exact verified bytes or protected server-side content, optional decoded text/structured representation, persisted ordering where available, extraction context, and requested concepts. Provider-specific message structures must remain in adapters, and original Artifact boundaries must remain reconstructable. Provider-produced facts must identify their actual supporting Artifact or Artifacts; unsupported cross-Artifact inference must not masquerade as directly stated evidence. The first real path may support Companies House structured JSON and rendered HTML. Screenshot/image interpretation is permitted through this boundary but may remain an explicit controlled follow-on if correct image support is materially larger; do not pass image bytes through a text-only contract or imply that screenshots were interpreted.
 
 ---
 
@@ -291,6 +316,20 @@ run A3 interpretation
 inspect real facts and complete A2/A3 lineage
 ```
 
+Complete the additional same-Evidence-Asset acceptance journey:
+
+```text
+select one ordered multi-Artifact Evidence Asset
+    ↓
+resolve, authorize, load, and fingerprint-verify every selected Artifact
+    ↓
+run one provider-neutral interpretation over the coherent ordered set
+    ↓
+inspect input completeness, Artifact boundaries, facts, and per-Fact Artifact support
+```
+
+The immediate product-review case may use the complete persisted Officers Website Evidence Asset, including all preserved ordered HTML pages, but the implementation and tests must remain generic rather than creating Companies House-specific interpretation or ordering rules. Do not introduce a universal officer/director ontology. First observe whether complete context improves representation consistency.
+
 The initial real path must support eligible Companies House structured JSON and rendered HTML Artifacts. It must not require recollection. A real result must visibly identify at least:
 
 * input mode: `LIVE PRESERVED ARTIFACT`;
@@ -325,6 +364,11 @@ Tests must prove:
 * discovered facts persist without fake schema or information-need identifiers;
 * requested/discovered and direct/derived status are explicit;
 * every direct fact traces to preserved evidence and its producing run;
+* a multi-Artifact run references only explicitly selected, authorized Artifacts from one Evidence Asset;
+* every selected input is independently loaded and fingerprint-verified before provider execution;
+* every fact identifies the Artifact or Artifacts that actually support it, without treating all run inputs as automatic support;
+* persisted ordering is honored and ambiguous material ordering is not fabricated;
+* incomplete input sets, skipped inputs, and provider/input limits cannot masquerade as complete interpretation;
 * every derived fact traces to its input fact(s), Artifact(s), run, and transformation;
 * every verification run remains separate from the original run;
 * later runs never rewrite prior output;
@@ -379,7 +423,11 @@ Do not implement:
 * materializing or backfilling A2 deterministic extracted values into A3 facts;
 * browser-authoritative Artifact byte submission or unrestricted Artifact/storage access;
 * bulk reinterpretation or model-evaluation infrastructure;
-* pretending screenshot/image interpretation occurred through a text-only provider.
+* pretending screenshot/image interpretation occurred through a text-only provider;
+* automatic interpretation across different Evidence Assets, acquisitions, recollections, contexts, or API and website Assets;
+* a new document, page-bundle, or global evidence identity;
+* a universal officer/director ontology or Companies House-specific semantic normalization;
+* exact raw AI request/response persistence, which remains deferred pending security, access, encryption/redaction, and retention policy.
 
 ---
 
@@ -410,7 +458,9 @@ Stop and report to Architecture Authority before implementation proceeds if it w
 * modifying legacy source steering or KYC persistence to make A3 convenient;
 * treating browser-supplied bytes as authoritative preserved evidence;
 * interpreting bytes after a fingerprint mismatch;
-* defining a new material retry/replay/re-interpretation identity policy.
+* defining a new material retry/replay/re-interpretation identity policy;
+* authorizing multiple selected Artifacts safely only by inventing a new cross-context access-intersection policy;
+* representing precise multi-Artifact Fact support only by weakening existing Artifact lineage or duplicating Facts.
 
 ---
 
@@ -451,3 +501,5 @@ real facts + support + complete A2/A3 provenance
 ```
 
 with truthful failure behavior, separate capture and extraction times, no duplicate A2 deterministic extraction, explicit fixture-versus-live labeling, and no KYC integration or later-stage functionality.
+
+Completion additionally requires one coherent same-Evidence-Asset interpretation demonstrating ordered verified inputs, truthful complete/incomplete input semantics, immutable per-Fact support by one or multiple Artifacts, preserved Artifact boundaries and timestamps, and no automatic cross-Asset combination. Exact raw provider request/response persistence remains deferred and byte-for-byte provider-response reconstructability must not be claimed.

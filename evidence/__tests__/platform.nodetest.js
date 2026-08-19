@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A2",
+    stage: "A3",
     status: "available",
   });
 });
@@ -45,6 +45,7 @@ test("the status route rejects methods outside its GET contract", () => {
 test("the Evidence Lab exposes the isolated A2 live and fixture route", () => {
   const labPath = path.join(__dirname, "..", "..", "public", "evidence-lab.html");
   const lab = fs.readFileSync(labPath, "utf8");
+  const labJs = fs.readFileSync(path.join(__dirname, "..", "..", "public", "evidence-lab.js"), "utf8");
   assert.match(lab, /\/api\/evidence\/a2-config/);
   assert.match(lab, /\/api\/evidence\/a2-collect/);
   assert.match(lab, /FIXTURE \/ SIMULATED/);
@@ -53,6 +54,43 @@ test("the Evidence Lab exposes the isolated A2 live and fixture route", () => {
   assert.match(lab, /Human-viewable evidence/);
   assert.match(lab, /OFFICERS — HUMAN-VIEWABLE WEBPAGE/);
   assert.match(lab, /PSC \/ OWNERSHIP — HUMAN-VIEWABLE WEBPAGE/);
+  assert.match(labJs, /\/api\/evidence\/a2-existing/);
+  assert.match(lab, /Freshness policy not evaluated by Evidence Lab/);
+  assert.match(lab, /FETCH FRESH EVIDENCE/);
+  assert.match(labJs, /freshProducerRequestKey/);
+  assert.match(lab, /\.activity\.hidden\{display:none\}/);
+  assert.match(labJs, /received a non-JSON response/);
+  assert.match(labJs, /Diagnostic reference/);
+});
+
+test("the Evidence Lab exposes the isolated A3 interpretation scenarios", () => {
+  const lab = fs.readFileSync(path.join(__dirname, "..", "..", "public", "evidence-lab.html"), "utf8");
+  const labJs = fs.readFileSync(path.join(__dirname, "..", "..", "public", "evidence-lab.js"), "utf8");
+  assert.match(lab, /\/api\/evidence\/a3-fixture/);
+  assert.match(lab, /\/api\/evidence\/a3-interpret/);
+  assert.match(lab, /LIVE PRESERVED ARTIFACT/);
+  assert.match(lab, /Requested versus discovered/);
+  assert.match(lab, /Direct source fact/);
+  assert.match(lab, /Selective independent verification/);
+  assert.match(lab, /A3 SYNTHETIC FIXTURE SCENARIOS/);
+  assert.match(lab, /does not use or interpret the A2 collection shown above/);
+  assert.match(labJs, /\/api\/evidence\/a3-history/);
+  assert.match(labJs, /Earlier failed interpretation attempt/);
+  assert.match(labJs, /This is not the current interpretation and no facts were persisted/);
+  assert.match(lab, /Run fresh interpretation/);
+  assert.match(lab, /may make a paid AI request/);
+  assert.match(lab, /VIEW PREVIOUS INTERPRETATION/);
+  assert.match(labJs, /Provider extraction evaluation/);
+  assert.match(labJs, /Already represented by A2/);
+  assert.match(labJs, /No duplicate A3 fact was persisted/);
+  assert.match(lab, /Select complete Evidence Asset/);
+  assert.match(lab, /Selected Artifacts must belong to one Evidence Asset/);
+  assert.match(labJs, /artifactIds:ids/);
+  assert.match(labJs, /Supporting Artifacts/);
+  assert.match(lab, /Clear displayed results/);
+  assert.match(lab, /Selecting an Artifact does not load history or call AI/);
+  assert.match(labJs, /Result from the fresh interpretation run/);
+  assert.doesNotMatch(labJs, /renderArtifactSet\(a\);loadHistory\(a\.id\)/);
 });
 
 test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {
