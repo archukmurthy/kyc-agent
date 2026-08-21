@@ -4,10 +4,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { DiditAdapter } = require("../providers/diditAdapter");
 const { VeriffAdapter } = require("../providers/veriffAdapter");
-const { REQUIRED_METHODS } = require("../contracts/providerAdapter");
 const { hmacHex, canonicalJson } = require("../security/webhookSignatures");
 const { CANONICAL_STATUSES } = require("../domain/constants");
 const { fixture, QueueHttpClient, response } = require("./helpers");
+const { assertProviderContractShape, assertCanonicalProviderResult } = require("../testing/providerContractAssertions");
 
 const NOW = new Date("2030-01-01T00:01:00.000Z");
 const DIDIT_SECRET = "didit-synthetic-secret";
@@ -76,7 +76,7 @@ function cases() {
 for (const contract of cases()) {
   test(`${contract.name} implements the complete provider-neutral contract`, () => {
     const adapter = contract.adapter();
-    for (const method of REQUIRED_METHODS) assert.equal(typeof adapter[method], "function", method);
+    assertProviderContractShape(adapter);
   });
 
   test(`${contract.name} creates a canonical hosted session without persisting its token`, async () => {
@@ -95,6 +95,7 @@ for (const contract of cases()) {
   test(`${contract.name} authenticates and normalizes the same canonical concepts`, async () => {
     const adapter = contract.adapter();
     const event = await adapter.handleWebhook(contract.webhook());
+    assertCanonicalProviderResult(event.result, contract.provider);
     assert.equal(event.provider, contract.provider);
     assert.equal(event.providerSessionId, contract.sessionId);
     assert.equal(event.canonicalStatus, CANONICAL_STATUSES.VERIFIED);

@@ -1,87 +1,87 @@
 # Standalone Identity Verification
 
-This module implements provider-neutral hosted IDV for Didit Full KYC and
-Veriff Essential. It runs without the KYC UI and without the Evidence Platform.
+Provider-neutral hosted IDV for Didit Full KYC and Veriff Essential / Full Auto.
+The module runs independently of the KYC UI and Evidence Platform.
 
-## Safety boundary
-
-- Raw document, selfie, video, NFC and biometric material remains with the
-  provider. Canonical persistence rejects binary payloads, data URLs and known
-  raw-artifact keys.
-- Hosted URLs are returned to the caller for redirect but are excluded from the
-  stored canonical session.
-- Identity attributes are sent only to `SecureIdentityStore`. The repository
-  currently has no production PII vault, so the default store rejects PII.
-- `SyntheticOnlySecureIdentityStore` exists solely for labelled synthetic POC
-  fixtures when `IDV_SYNTHETIC_ONLY=1`.
-- Browser return records `CUSTOMER_RETURNED`; it never changes a session to
-  `VERIFIED`.
-
-## Structure
+## Architecture
 
 ```text
-idv/domain        canonical session, facts, observations, decisions, states
-idv/contracts     provider, secure PII, repository, future Evidence boundaries
-idv/providers     Didit v3 and Veriff v1 hosted-flow adapters
-idv/security      webhook HMAC and replay-window verification
-idv/services      orchestration, routing, costs, lifecycle metrics
-idv/stores        standalone in-memory stores and synthetic-only PII store
-idv/harness       engineering-only HTTP harness
-idv/fixtures      sanitized synthetic provider payloads
-idv/__tests__     provider contract, lifecycle, security and metrics tests
+KYC consumer contract / controlled POC
+                 |
+                 v
+             IdvService
+       +---------+----------+
+       |                    |
+ ProviderAdapter      operational stores
+ Didit / Veriff       session/result/event/cost
+       |
+ vendor-hosted media custody
+
+structured identity attributes
+       |
+       v
+SecureIdentityStore -> envelope encryption -> ManagedKeyProvider
+       |
+PostgreSQL ciphertext + forced tenant RLS + PII-free access audit
 ```
 
-The future Evidence adapter is intentionally empty. IDV exposes
-`external_evidence_references` with provider custody metadata; it does not
-invent or import an Evidence schema.
+Raw documents, selfies, videos, NFC payloads, biometric templates/vectors, and
+hosted-session tokens are never persisted. They remain with the provider.
+Structured identity PII is removed before operational result persistence and is
+stored only through `SecureIdentityStore`.
 
-## Test
+## Security boundary
+
+- Production uses a provider-neutral `ManagedKeyProvider`. A random per-item
+  256-bit DEK encrypts JSON with AES-256-GCM; the managed provider wraps the DEK.
+- The database stores ciphertext, nonce/tag, wrapped DEK, KMS provider/key
+  identity/version, classification, retention state, and non-PII audit metadata.
+- `LocalTestManagedKeyProvider` takes an explicit in-memory key, never reads an
+  environment master key, and refuses production mode.
+- OIDC/JWT authentication validates asymmetric signature, issuer, audience,
+  expiry/not-before, subject, and the configured signed tenant claim via JWKS.
+- `subject_id` comes from an authorized KYC resource resolver. Purpose is chosen
+  by server code. Neither is trusted from a client query/header.
+- Every protected operation requires actor, tenant, subject, purpose,
+  correlation ID, scopes/roles, and an explicit field allowlist.
+- PostgreSQL transactions set `app.tenant_id` transaction-locally. Forced RLS
+  default-denies when it is absent; explicit application authorization remains.
+
+See `docs/idv/SECURITY_AND_DEPLOYMENT.md` for deployment requirements.
+
+## Persistence and route surfaces
+
+The idempotent module-local schema is
+`idv/persistence/migrations/001_idv_module_schema.sql`. It does not consume a
+repository-global migration number, avoiding collision with parallel Evidence
+migrations. At integration time it may be applied independently with
+`npm run idv:migrate` or assigned the then-current global number.
+
+`idv/http/handlerFactories.js` keeps provider webhooks and trusted internal IDV
+APIs separate. `idv/harness/server.js` is a separately enabled POC-only server;
+production configuration rejects it. No KYC or Evidence route is mounted by
+this branch.
+
+## Validation
 
 ```powershell
 npm run idv:test
+npm run idv:security-scan
+npm run build
 ```
 
-The tests use synthetic payloads and make no network calls.
+All committed fixtures are synthetic and make no network calls. Real provider
+testing requires credentials, configured workflows, approved encrypted PII
+storage, OIDC identities, and public HTTPS webhook/return endpoints.
 
-## Run the POC harness
+## Provider and measurement documentation
 
-Set the variables shown in `.env.idv.example` in the shell, then:
+- `docs/idv/ADDING_A_PROVIDER.md`
+- `docs/idv/METRICS.md`
+- `docs/idv/POC_PROTOCOL.md`
+- `docs/idv/SECURITY_AND_DEPLOYMENT.md`
+- `docs/idv/MERGE_STRATEGY.md`
 
-```powershell
-npm run idv:harness
-```
-
-Open `http://127.0.0.1:3100`. Provider webhooks must target:
-
-```text
-POST https://<public-host>/webhooks/didit
-POST https://<public-host>/webhooks/veriff
-```
-
-The harness binds to loopback by default. Remote binding requires both
-`IDV_HARNESS_ALLOW_REMOTE=1` and `IDV_HARNESS_TOKEN`; remote requests then need
-`Authorization: Bearer <token>`.
-
-Didit configuration uses the v3 Sessions API and `X-Signature-V2` first, with
-raw-body and envelope-only fallbacks. Envelope-only authentication always
-forces an authenticated decision API read before result data is trusted.
-
-Veriff signs create-session bodies and session IDs with the shared secret,
-verifies signed API responses, and authenticates webhook raw bytes together
-with `x-auth-client`.
-
-## Production activation gates
-
-The standalone domain and adapters are complete, but production activation is
-blocked until these platform-owned implementations/configuration exist:
-
-1. A reviewed `SecureIdentityStore` providing encryption, authorization,
-   retention, deletion and audit.
-2. Durable implementations of the session, result, webhook-receipt and event
-   repository contracts. Migration numbering is intentionally deferred to the
-   integration PR so it cannot collide with parallel Evidence migrations.
-3. Didit and Veriff sandbox credentials, workflow configuration and public
-   webhook endpoints for controlled live POC runs.
-
-These gates fail closed. The module does not fall back to the repository's
-generic KV/filesystem store for PII.
+The future Evidence adapter remains deliberately empty. Canonical external
+evidence references preserve vendor custody and provenance without creating or
+depending on Evidence Platform objects.

@@ -5,7 +5,8 @@ const { PROVIDERS } = require("../domain/constants");
 const MATCH_FIELDS = Object.freeze(["tenantId", "country", "documentType", "workflow"]);
 
 class ProviderRouter {
-  constructor({ defaultProvider = PROVIDERS.DIDIT, overrides = [] } = {}) {
+  constructor({ defaultProvider = PROVIDERS.DIDIT, overrides = [], availableProviders = Object.values(PROVIDERS) } = {}) {
+    this.availableProviders = new Set(availableProviders.map((item) => String(item).toUpperCase()));
     this.defaultProvider = defaultProvider;
     this.overrides = overrides.map((rule, index) => ({ ...rule, _index: index }));
     this.validateProvider(defaultProvider);
@@ -13,7 +14,7 @@ class ProviderRouter {
   }
 
   validateProvider(provider) {
-    if (!Object.values(PROVIDERS).includes(provider)) throw new TypeError(`Unsupported IDV provider: ${provider}`);
+    if (!this.availableProviders.has(String(provider).toUpperCase())) throw new TypeError(`Unsupported IDV provider: ${provider}`);
   }
 
   select(context = {}) {

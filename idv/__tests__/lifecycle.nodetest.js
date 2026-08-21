@@ -60,7 +60,7 @@ function buildService({ secureIdentityStore = new SyntheticOnlySecureIdentitySto
 async function start(service, syntheticTestData = true) {
   const result = await service.startVerification({
     provider: "DIDIT", tenantId: "synthetic-tenant", customerContextId: "synthetic-customer",
-    country: "GB", documentIssuingCountry: "GB", documentType: "PASSPORT", syntheticTestData,
+    subjectPersonId: "synthetic-subject", country: "GB", documentIssuingCountry: "GB", documentType: "PASSPORT", syntheticTestData,
   });
   await service.markHostedFlowOpened(result.session.internal_idv_session_id);
   return result;
@@ -105,10 +105,11 @@ test("customer correction is append-only and does not rewrite provider extractio
   const context = { synthetic: true };
   const before = await identity.getProviderExtractions(started.session.internal_idv_session_id, context);
   const attribute = before.find((item) => item.attribute_concept === "first_name");
-  await service.recordAttributesPresented(started.session.internal_idv_session_id, [attribute.attribute_id]);
+  await service.recordAttributesPresented(started.session.internal_idv_session_id, [attribute.attribute_id], { fields: [attribute.attribute_concept] });
   await service.recordCustomerResponse({
     internalIdvSessionId: started.session.internal_idv_session_id,
     attributeId: attribute.attribute_id,
+    attributeConcept: attribute.attribute_concept,
     action: CUSTOMER_RESPONSE_ACTIONS.CORRECTED,
     submittedValue: "SYNTHETIC_CORRECTED_001",
   });
@@ -124,7 +125,7 @@ test("non-synthetic identity result is rejected when no production secure store 
   const started = await start(service, false);
   await assert.rejects(
     service.processWebhook("DIDIT", signedDidit(fixture("didit", "approved-webhook.json"))),
-    (error) => error.code === "IDV_SECURE_STORE_REQUIRED",
+    (error) => ["IDV_AUTHENTICATION_REQUIRED", "IDV_SECURE_STORE_REQUIRED"].includes(error.code),
   );
   const stored = await stores.sessionRepository.get(started.session.internal_idv_session_id);
   assert.equal(stored.canonical_status, CANONICAL_STATUSES.STARTED);
@@ -135,8 +136,9 @@ test("scorecard remains sliceable by provider and includes percentile distributi
   const { service } = buildService();
   await start(service);
   const scorecard = await service.getMetrics();
-  assert.equal(scorecard.DIDIT.counts.created, 1);
-  assert.equal(scorecard.DIDIT.customer_business.hosted_flow_launch_rate, 1);
-  assert.ok(Object.hasOwn(scorecard.DIDIT.speed_ms.total_customer_verification_time, "p95"));
-  assert.equal(scorecard.VERIFF.counts.created, 0);
+  assert.equal(scorecard.providers.DIDIT.counts.test_journeys, 1);
+  assert.equal(scorecard.providers.DIDIT.customer_business.hosted_flow_launch_rate.value, 1);
+  assert.equal(scorecard.providers.DIDIT.customer_business.hosted_flow_launch_rate.status, "AVAILABLE_WITH_LIMITATION");
+  assert.equal(scorecard.providers.DIDIT.speed_ms.total_customer_verification_time.status, "UNAVAILABLE");
+  assert.equal(scorecard.providers.VERIFF, undefined);
 });

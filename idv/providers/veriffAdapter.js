@@ -151,9 +151,10 @@ class VeriffAdapter extends ProviderAdapter {
         validUntil: "expiry_date", validFrom: "valid_from", issuedBy: "issuing_authority",
       }),
     ];
-    identityAttributes.push(...fields.map((field) => createIdentityAttribute({
+    identityAttributes.push(...fields.map((field, stableOrdinal) => createIdentityAttribute({
       ...field, provider: PROVIDER, providerSessionId, providerReportReference: reportReference,
-      sourceDocumentType: documentType, sourceDocumentCountry: issuingCountry, extractedAt,
+      sourceDocumentReference: reportReference, sourceDocumentType: documentType,
+      sourceDocumentCountry: issuingCountry, extractedAt, stableOrdinal,
     })));
 
     const observations = [];
@@ -230,7 +231,8 @@ class VeriffAdapter extends ProviderAdapter {
     return {
       provider: PROVIDER, adapter_version: ADAPTER_VERSION, hosted_flow: true,
       document_verification: true, extraction: true, passive_liveness: true, face_match: true,
-      nfc: "OPTIONAL_INTEGRATION_CAPABILITY", database_verification: "OPTIONAL_INTEGRATION_CAPABILITY",
+      nfc: "NOT_CONFIGURED", nfc_support: "UNKNOWN",
+      database_verification: "NOT_CONFIGURED", database_verification_support: "UNKNOWN",
       raw_evidence_custody: "PROVIDER",
     };
   }
@@ -239,7 +241,7 @@ class VeriffAdapter extends ProviderAdapter {
 
   getProviderCostInformation(result) {
     const modules = [...new Set((result?.verification_observations || []).map((item) => item.observation_type))];
-    return this.costPolicy.estimate({ provider: PROVIDER, workflow: this.config.workflow, modules });
+    return this.costPolicy.estimate({ provider: PROVIDER, workflow: result?.provider_workflow || this.config.workflow, modules });
   }
 }
 

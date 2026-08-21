@@ -142,9 +142,10 @@ class DiditAdapter extends ProviderAdapter {
         issuing_country: "issuing_country", issuing_state: "issuing_country", expiration_date: "expiry_date",
         expiry_date: "expiry_date", address: "address", parsed_address: "parsed_address",
       });
-      identityAttributes.push(...fields.map((field) => createIdentityAttribute({
+      identityAttributes.push(...fields.map((field, stableOrdinal) => createIdentityAttribute({
         ...field, provider: PROVIDER, providerSessionId, providerReportReference: reference,
-        sourceDocumentType: documentType, sourceDocumentCountry: issuingCountry, extractedAt,
+        sourceDocumentReference: reference, sourceDocumentType: documentType,
+        sourceDocumentCountry: issuingCountry, extractedAt, stableOrdinal,
       })));
       observations.push(createVerificationObservation({
         type: OBSERVATION_TYPES.DOCUMENT_AUTHENTICITY,
@@ -217,7 +218,8 @@ class DiditAdapter extends ProviderAdapter {
     return {
       provider: PROVIDER, adapter_version: ADAPTER_VERSION, hosted_flow: true,
       document_verification: true, extraction: true, passive_liveness: true, face_match: true,
-      nfc: "OPTIONAL_WORKFLOW_CAPABILITY", database_verification: "OPTIONAL_WORKFLOW_CAPABILITY",
+      nfc: "NOT_CONFIGURED", nfc_support: "SUPPORTED",
+      database_verification: "NOT_CONFIGURED", database_verification_support: "UNKNOWN",
       raw_evidence_custody: "PROVIDER",
     };
   }
@@ -226,7 +228,7 @@ class DiditAdapter extends ProviderAdapter {
 
   getProviderCostInformation(result) {
     const modules = [...new Set((result?.verification_observations || []).map((item) => item.observation_type))];
-    return this.costPolicy.estimate({ provider: PROVIDER, workflow: this.config.workflowId, modules });
+    return this.costPolicy.estimate({ provider: PROVIDER, workflow: result?.provider_workflow || this.config.workflowId, modules });
   }
 }
 

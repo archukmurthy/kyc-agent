@@ -5,6 +5,7 @@ class IdvSessionRepository {
   async get() { throw new Error("Not implemented"); }
   async getByProviderSession() { throw new Error("Not implemented"); }
   async save() { throw new Error("Not implemented"); }
+  async list() { throw new Error("Not implemented"); }
 }
 
 class IdvResultRepository {
@@ -24,4 +25,22 @@ class IdvEventStore {
   async listForSession() { throw new Error("Not implemented"); }
 }
 
-module.exports = { IdvSessionRepository, IdvResultRepository, WebhookReceiptStore, IdvEventStore };
+class IdvCostLedgerRepository {
+  async append() { throw new Error("Not implemented"); }
+  async list() { throw new Error("Not implemented"); }
+}
+
+class IdvPocGroundTruthRepository {
+  async save() { throw new Error("Not implemented"); }
+  async get() { throw new Error("Not implemented"); }
+  async list() { throw new Error("Not implemented"); }
+}
+
+module.exports = {
+  IdvSessionRepository,
+  IdvResultRepository,
+  WebhookReceiptStore,
+  IdvEventStore,
+  IdvCostLedgerRepository,
+  IdvPocGroundTruthRepository,
+};

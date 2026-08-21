@@ -44,6 +44,24 @@ class SecureStoreRequiredError extends IdvError {
   }
 }
 
+class IdentityAuthorizationError extends IdvError {
+  constructor(message = "Identity data access is not authorized") {
+    super(message, { code: "IDV_IDENTITY_ACCESS_DENIED" });
+  }
+}
+
+class IdentityAuthenticationError extends IdvError {
+  constructor(message = "Trusted identity authentication is required") {
+    super(message, { code: "IDV_AUTHENTICATION_REQUIRED" });
+  }
+}
+
+class ManagedKeyRequiredError extends IdvError {
+  constructor(message = "An approved production ManagedKeyProvider is required") {
+    super(message, { code: "IDV_MANAGED_KEY_REQUIRED" });
+  }
+}
+
 module.exports = {
   IdvError,
   ConfigurationError,
@@ -51,4 +69,7 @@ module.exports = {
   WebhookAuthenticationError,
   SessionNotFoundError,
   SecureStoreRequiredError,
+  IdentityAuthorizationError,
+  IdentityAuthenticationError,
+  ManagedKeyRequiredError,
 };

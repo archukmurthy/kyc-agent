@@ -3,11 +3,13 @@
 const { SecureStoreRequiredError } = require("../domain/errors");
 
 class SecureIdentityStore {
-  async persistProviderExtraction() { throw new SecureStoreRequiredError(); }
-  async getProviderExtractions() { throw new SecureStoreRequiredError(); }
-  async appendCustomerResponse() { throw new SecureStoreRequiredError(); }
-  async getCustomerResponses() { throw new SecureStoreRequiredError(); }
-  async deleteSubjectIdentityData() { throw new SecureStoreRequiredError(); }
+  async storeExtractedIdentity() { throw new SecureStoreRequiredError(); }
+  async retrieveIdentityForAuthorizedPurpose() { throw new SecureStoreRequiredError(); }
+  async recordCustomerConfirmation() { throw new SecureStoreRequiredError(); }
+  async recordCustomerCorrection() { throw new SecureStoreRequiredError(); }
+  async recordCustomerRejection() { throw new SecureStoreRequiredError(); }
+  async deleteOrScheduleDeletion() { throw new SecureStoreRequiredError(); }
+  async getRetentionMetadata() { throw new SecureStoreRequiredError(); }
 }
 
 class UnavailableSecureIdentityStore extends SecureIdentityStore {}
