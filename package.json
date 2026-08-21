@@ -20,6 +20,8 @@
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "test": "react-scripts test",
     "test:smoke:db": "node scripts/real-db-smoke.js",
+    "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js",
+    "idv:harness": "node idv/harness/server.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
