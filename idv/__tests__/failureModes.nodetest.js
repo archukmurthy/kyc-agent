@@ -20,6 +20,56 @@ test("provider HTTP rate-limit and server errors are sanitized and retryable", a
   );
 });
 
+test("Didit development HTTP diagnostics contain only allowlisted metadata", async () => {
+  const diagnostics = [];
+  const client = new ProviderHttpClient({
+    diagnosticLogger: (entry) => diagnostics.push(entry),
+    fetchImpl: async () => new Response(JSON.stringify({
+      code: "invalid_workflow",
+      detail: "Workflow 11111111-2222-4333-8444-555555555555 rejected https://private.example user@example.com 5551234567",
+      sensitive: "must-not-leak",
+    }), { status: 400 }),
+  });
+  await assert.rejects(client.request({
+    provider: "DIDIT",
+    url: "https://verification.didit.me/v3/session/?api_key=must-not-leak",
+    headers: { "x-api-key": "secret-api-key" },
+    diagnostic: {
+      enabled: true,
+      runtimeMode: "poc",
+      workflowId: "safe-workflow-id",
+      callbackSupplied: true,
+      environment: "sandbox",
+    },
+  }));
+  assert.deepEqual(diagnostics, [{
+    event: "idv_provider_http_error",
+    provider: "DIDIT",
+    http_status: 400,
+    response_error_code: "invalid_workflow",
+    response_error_message: "Workflow [redacted-identifier] rejected [redacted-url] [redacted-email] [redacted-number]",
+    request_url: "https://verification.didit.me/v3/session/",
+    workflow_id: "safe-workflow-id",
+    callback_supplied: true,
+    environment: "sandbox",
+  }]);
+  assert.equal(JSON.stringify(diagnostics).includes("must-not-leak"), false);
+});
+
+test("Didit HTTP diagnostics cannot run in production mode", async () => {
+  const diagnostics = [];
+  const client = new ProviderHttpClient({
+    diagnosticLogger: (entry) => diagnostics.push(entry),
+    fetchImpl: async () => new Response(JSON.stringify({ detail: "Unauthorized" }), { status: 401 }),
+  });
+  await assert.rejects(client.request({
+    provider: "DIDIT",
+    url: "https://verification.didit.me/v3/session/",
+    diagnostic: { enabled: true, runtimeMode: "production", environment: "live" },
+  }));
+  assert.deepEqual(diagnostics, []);
+});
+
 test("provider timeout becomes a retryable provider error", async () => {
   const client = new ProviderHttpClient({
     timeoutMs: 2,

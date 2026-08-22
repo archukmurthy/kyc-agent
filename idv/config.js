@@ -31,6 +31,8 @@ function loadConfig(env = process.env) {
   if (!enabledProviders.includes(defaultProvider)) throw new ConfigurationError("IDV_DEFAULT_PROVIDER must be enabled");
   const production = runtimeMode === "production";
   const controlledPoc = runtimeMode === "poc";
+  const debugDiditHttp = env.IDV_DEBUG_DIDIT_HTTP === "1";
+  if (production && debugDiditHttp) throw new ConfigurationError("Didit HTTP diagnostics are forbidden in production");
   const syntheticOnlyStore = env.IDV_SYNTHETIC_ONLY === "1";
   const pocHarnessEnabled = env.IDV_POC_HARNESS_ENABLED === "1";
   if (production && syntheticOnlyStore) throw new ConfigurationError("Synthetic identity storage is forbidden in production");
@@ -50,8 +52,12 @@ function loadConfig(env = process.env) {
     required(oidc.audience, "IDV_OIDC_AUDIENCE");
   }
 
+  const diditEnvironment = String(env.DIDIT_ENVIRONMENT || (["test", "sandbox"].includes(runtimeMode) ? "sandbox" : "live")).toLowerCase();
+  if (!["sandbox", "live"].includes(diditEnvironment)) throw new ConfigurationError("DIDIT_ENVIRONMENT must be sandbox or live");
   const didit = {
-    environment: runtimeMode,
+    environment: diditEnvironment,
+    runtimeMode,
+    debugHttp: debugDiditHttp,
     baseUrl: httpsUrl(env.DIDIT_BASE_URL, "DIDIT_BASE_URL", "https://verification.didit.me"),
     apiKey: env.DIDIT_API_KEY,
     workflowId: env.DIDIT_WORKFLOW_ID,

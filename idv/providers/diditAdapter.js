@@ -53,12 +53,20 @@ class DiditAdapter extends ProviderAdapter {
     };
     if (!body.callback) delete body.callback;
     if (this.config.environment === "sandbox" && input.sandboxScenario) body.sandbox_scenario = input.sandboxScenario;
+    const requestUrl = `${this.config.baseUrl.replace(/\/$/, "")}/v3/session/`;
     const response = await this.http.request({
       provider: PROVIDER,
-      url: `${this.config.baseUrl.replace(/\/$/, "")}/v3/session/`,
+      url: requestUrl,
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": this.config.apiKey },
       body: JSON.stringify(body),
+      diagnostic: {
+        enabled: this.config.debugHttp === true,
+        runtimeMode: this.config.runtimeMode,
+        workflowId: body.workflow_id,
+        callbackSupplied: Boolean(body.callback),
+        environment: this.config.environment,
+      },
     });
     const session = response.data || {};
     if (!session.session_id || !session.url) throw new Error("Didit create-session response omitted session_id or url");
