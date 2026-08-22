@@ -102,7 +102,25 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const registry = await ensureRegistry();
-      return res.status(200).json({ tenants: registry });
+      // Reflect the live company name set in each tenant's admin config
+      // (Open Admin → Company → Name) instead of the name captured once at
+      // tenant-creation time. Keeps the super-admin list in sync with admin
+      // edits so the display name never has to be maintained in two places.
+      // Read-only enrichment: the stored registry is untouched, and any
+      // missing/unreadable config falls back to the registry's companyName.
+      const tenants = await Promise.all(
+        registry.map(async (t) => {
+          try {
+            const cfg = await storage.get(configKey(t.tenantId));
+            const liveName = cfg && cfg.company && cfg.company.name;
+            if (typeof liveName === "string" && liveName.trim()) {
+              return { ...t, companyName: liveName.trim() };
+            }
+          } catch (_) { /* fall back to the registry entry below */ }
+          return t;
+        })
+      );
+      return res.status(200).json({ tenants });
     }
 
     if (req.method === "POST") {

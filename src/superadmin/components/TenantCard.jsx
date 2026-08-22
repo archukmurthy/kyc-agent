@@ -6,6 +6,7 @@ import { adminColors, adminStyles } from "../../admin/adminDesign";
 // beyond hiding the deactivate button (Nium can never be turned off).
 export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) {
   const isNium = tenant.tenantId === "nium" || tenant.isInternal;
+  const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   const adminUrl =
@@ -38,8 +39,35 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
             </div>
             <StatusBadge isInternal={isNium} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
           </div>
-          <div style={{ fontSize: 11, color: adminColors.textMuted, marginTop: 4, fontFamily: "monospace" }}>
-            tenant ID: {tenant.tenantId}
+          {/* Tenant ID is the routing/storage key, not a display name — kept
+              behind an expander so it stays available to operators without
+              surfacing "nium" on the branded dashboard. A full rename to a
+              prod-ready ID is tracked separately (see the Notion task). */}
+          <div style={{ marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setShowTechnical((v) => !v)}
+              aria-expanded={showTechnical}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                fontSize: 11,
+                color: adminColors.textMuted,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span>{showTechnical ? "▾" : "▸"}</span>
+              Technical details
+            </button>
+            {showTechnical && (
+              <div style={{ fontSize: 11, color: adminColors.textMuted, marginTop: 4, fontFamily: "monospace" }}>
+                tenant ID: {tenant.tenantId}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap", fontSize: 12, color: adminColors.textMuted }}>
