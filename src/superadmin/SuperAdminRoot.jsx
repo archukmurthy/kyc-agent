@@ -102,9 +102,9 @@ function PasswordGate({ onSuccess }) {
               margin: "0 auto 12px",
             }}
           >
-            N
+            Z
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Nium Platform Administration</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Zayzo Platform Administration</h1>
           <p style={{ fontSize: 12, color: adminColors.textMuted, margin: "4px 0 0" }}>
             Super Admin Access
           </p>
@@ -123,7 +123,7 @@ function PasswordGate({ onSuccess }) {
             textAlign: "center",
           }}
         >
-          ⚠ Internal use only — Nium personnel only
+          ⚠ Internal use only — Zayzo personnel only
         </div>
 
         <label style={adminStyles.label}>Password</label>

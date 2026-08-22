@@ -220,9 +220,9 @@ function TopBar({ onSignOut }) {
             fontSize: 14,
           }}
         >
-          N
+          Z
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Nium</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Zayzo</div>
         <span style={{ color: "rgba(255,255,255,0.4)" }}>|</span>
         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.7)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
           Platform Administration
