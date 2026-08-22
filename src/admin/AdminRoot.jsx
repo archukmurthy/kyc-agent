@@ -120,6 +120,30 @@ function PasswordGate({ tenantId, onSuccess }) {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Company name for the gate chip, read from the live tenant config (public
+  // GET, no auth) so the gate reflects the brand set in Admin / Super-Admin
+  // rather than the raw tenant id. Live API only — no fallback — so it never
+  // shows a hardcoded/stale name or the internal id; if it can't resolve, the
+  // chip is hidden. Full tenant-id rename is tracked separately (Production
+  // Readiness Register).
+  const [gateCompanyName, setGateCompanyName] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const cfg = await r.json();
+        const name = cfg && cfg.company && cfg.company.name;
+        if (!cancelled && typeof name === "string" && name.trim()) {
+          setGateCompanyName(name.trim());
+        }
+      } catch (_) {
+        // Leave gateCompanyName empty — the gate chip stays hidden.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tenantId]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -188,9 +212,11 @@ function PasswordGate({ tenantId, onSuccess }) {
           <p style={{ fontSize: 12, color: adminColors.textMuted, margin: "4px 0 0" }}>
             Intelligence-Led Onboarding Platform
           </p>
-          <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
-            Tenant: {tenantId || "nium"}
-          </div>
+          {gateCompanyName && (
+            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
+              {gateCompanyName}
+            </div>
+          )}
         </div>
 
         <label style={adminStyles.label}>Password</label>
