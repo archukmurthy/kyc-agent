@@ -18,6 +18,8 @@ function completeForm() {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  delete URL.createObjectURL;
+  delete URL.revokeObjectURL;
 });
 
 describe('policy configuration', () => {
@@ -37,6 +39,19 @@ describe('policy configuration', () => {
     expect(screen.getByLabelText(/Other vendor/)).toBeRequired();
     fireEvent.click(screen.getByLabelText('Other'));
     expect(screen.queryByLabelText(/Other vendor/)).not.toBeInTheDocument();
+  });
+
+  it('selects and clears complete checkbox groups', () => {
+    render(<App />);
+    const selectAllCustomers = screen.getByLabelText('Select all customer types');
+    fireEvent.click(screen.getByLabelText('UK Private Limited Companies'));
+    expect(selectAllCustomers.indeterminate).toBe(true);
+    fireEvent.click(selectAllCustomers);
+    expect(screen.getByLabelText('Crypto-asset businesses')).toBeChecked();
+    expect(selectAllCustomers).toBeChecked();
+    fireEvent.click(selectAllCustomers);
+    expect(screen.getByLabelText('UK Private Limited Companies')).not.toBeChecked();
+    expect(selectAllCustomers).not.toBeChecked();
   });
 
   it('serializes selected configuration and omits unselected options', () => {
@@ -67,6 +82,12 @@ describe('generation and output', () => {
     let resolveFetch;
     vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
     const writeText = vi.fn().mockResolvedValue(undefined);
+    const createObjectURL = vi.fn().mockReturnValue('blob:policy');
+    const revokeObjectURL = vi.fn();
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    let downloadName = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloadName = this.download; });
     Object.assign(navigator, { clipboard: { writeText } });
     vi.stubGlobal('scrollTo', vi.fn());
     render(<App />);
@@ -84,6 +105,10 @@ describe('generation and output', () => {
     expect(disclaimer.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Copy to clipboard' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Required control.')));
+    fireEvent.click(screen.getByRole('button', { name: 'Download policy' }));
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(downloadName).toBe('KYB-Policy.html');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:policy');
     fireEvent.click(screen.getByRole('button', { name: 'Start again' }));
     expect(screen.getByRole('button', { name: 'Generate Policy' })).toBeDisabled();
     expect(screen.getByLabelText(/Firm type/)).toHaveValue('');
