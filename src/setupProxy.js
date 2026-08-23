@@ -37,6 +37,7 @@ const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "ame
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
+const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -55,6 +56,17 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  // UK KYB Policy Simulator. Keep the Anthropic credential and prompt server-side.
+  app.post("/api/generate-policy", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(generatePolicyHandler)(req, res);
+    });
+  });
+
   app.post("/api/research", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");

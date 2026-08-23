@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import App, { buildUserMessage, createInitialForm, sanitizePolicyHtml } from './App.jsx';
+import '@testing-library/jest-dom';
+import PolicySimulator, { buildUserMessage, createInitialForm, sanitizePolicyHtml } from './PolicySimulator';
 
 function completeForm() {
   fireEvent.change(screen.getByLabelText(/Firm type/), { target: { value: 'Authorised EMI' } });
@@ -17,14 +17,15 @@ function completeForm() {
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
+  jest.restoreAllMocks();
+  delete global.fetch;
   delete URL.createObjectURL;
   delete URL.revokeObjectURL;
 });
 
 describe('policy configuration', () => {
   it('keeps generation disabled until required configuration is complete', () => {
-    render(<App />);
+    render(<PolicySimulator />);
     expect(screen.getByRole('button', { name: 'Generate Policy' })).toBeDisabled();
     const disclaimer = screen.getByLabelText(/Include the mandatory/);
     expect(disclaimer).toBeChecked();
@@ -34,7 +35,7 @@ describe('policy configuration', () => {
   });
 
   it('shows and requires the conditional Other vendor field', () => {
-    render(<App />);
+    render(<PolicySimulator />);
     fireEvent.click(screen.getByLabelText('Other'));
     expect(screen.getByLabelText(/Other vendor/)).toBeRequired();
     fireEvent.click(screen.getByLabelText('Other'));
@@ -42,7 +43,7 @@ describe('policy configuration', () => {
   });
 
   it('selects and clears complete checkbox groups', () => {
-    render(<App />);
+    render(<PolicySimulator />);
     const selectAllCustomers = screen.getByLabelText('Select all customer types');
     fireEvent.click(screen.getByLabelText('UK Private Limited Companies'));
     expect(selectAllCustomers.indeterminate).toBe(true);
@@ -80,17 +81,17 @@ describe('policy configuration', () => {
 describe('generation and output', () => {
   it('shows loading, sanitizes output, copies text, and resets', async () => {
     let resolveFetch;
-    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    const createObjectURL = vi.fn().mockReturnValue('blob:policy');
-    const revokeObjectURL = vi.fn();
+    global.fetch = jest.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    const createObjectURL = jest.fn().mockReturnValue('blob:policy');
+    const revokeObjectURL = jest.fn();
     URL.createObjectURL = createObjectURL;
     URL.revokeObjectURL = revokeObjectURL;
     let downloadName = '';
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloadName = this.download; });
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloadName = this.download; });
     Object.assign(navigator, { clipboard: { writeText } });
-    vi.stubGlobal('scrollTo', vi.fn());
-    render(<App />);
+    window.scrollTo = jest.fn();
+    render(<PolicySimulator />);
     completeForm();
     fireEvent.click(screen.getByRole('button', { name: 'Generate Policy' }));
     expect(screen.getByText('Generating your KYB Policy document...')).toBeInTheDocument();
@@ -115,8 +116,8 @@ describe('generation and output', () => {
   });
 
   it('returns to a usable form when the API fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'API unavailable.' }) }));
-    render(<App />);
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'API unavailable.' }) });
+    render(<PolicySimulator />);
     completeForm();
     fireEvent.click(screen.getByRole('button', { name: 'Generate Policy' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('API unavailable.');

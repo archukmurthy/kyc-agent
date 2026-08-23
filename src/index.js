@@ -4,6 +4,7 @@ import KYCAgent from "./App";
 import AdminRoot from "./admin/AdminRoot";
 import SuperAdminRoot from "./superadmin/SuperAdminRoot";
 import ChangeIntelligenceRoot from "./components/changeIntelligenceDashboard/ChangeIntelligenceRoot";
+import PolicySimulator from "./policySimulator/PolicySimulator";
 
 const path = window.location.pathname;
 // Pre-boarding agent vs. the plain customer onboarding flow is distinguished by
@@ -18,7 +19,13 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 // name with no separator rather than guessing at a label.
 let tree;
 let title = "KYC Onboarding Agent";
-if (path === "/super-admin" || path.startsWith("/super-admin/")) {
+const isPolicySimulator = path === "/policy-simulator" || path.startsWith("/policy-simulator/");
+document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
+
+if (isPolicySimulator) {
+  tree = <PolicySimulator />;
+  title = "UK KYB Policy Simulator";
+} else if (path === "/super-admin" || path.startsWith("/super-admin/")) {
   tree = <SuperAdminRoot />;
   title = "KYC Onboarding Agent | Super Admin";
 } else if (path === "/insights" || path.startsWith("/insights/")) {

@@ -5,7 +5,8 @@
   "framework": "create-react-app",
   "functions": {
     "api/doc-search.js": { "maxDuration": 60 },
-    "api/self-source.js": { "maxDuration": 60 }
+    "api/self-source.js": { "maxDuration": 60 },
+    "api/generate-policy.js": { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
@@ -14,6 +15,8 @@
     { "source": "/admin/(.*)", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/preview", "destination": "/index.html" },
+    { "source": "/policy-simulator", "destination": "/index.html" },
+    { "source": "/policy-simulator/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -1,4 +1,4 @@
-export const SYSTEM_PROMPT = `You are a senior financial crime compliance expert with deep expertise in UK AML/CTF regulations, FCA requirements, and KYB/KYC policy design for regulated payment and e-money institutions.
+const SYSTEM_PROMPT = `You are a senior financial crime compliance expert with deep expertise in UK AML/CTF regulations, FCA requirements, and KYB/KYC policy design for regulated payment and e-money institutions.
 
 Your task is to generate a professional, structured KYB (Know Your Business) Policy document based on a configuration provided by the user. This document will be used for discussion purposes—to demonstrate regulatory understanding to MLROs and compliance professionals. It is not a substitute for legal advice.
 
@@ -16,7 +16,7 @@ RULES YOU MUST FOLLOW:
 
 6. TONE, LENGTH, AND FORMAT: Write plain, professional English suitable for a regulated firm's policy. Use active voice, numbered headings and subheadings, and compact tables where useful. Target 2,500–3,200 words and treat 3,200 words as a hard maximum. Keep each numbered section to roughly 120–180 words on average; use concise cross-references instead of repeating controls. Completion of every required section is more important than exhaustive detail in early sections. End the final Policy Governance and Review section with the exact text “End of Policy”. Return only clean HTML using h1, h2, h3, p, ul, ol, li, table, thead, tbody, tr, th, td, strong, and em. Do not use Markdown, code fences, inline styles, attributes, links, or div elements.`;
 
-export function extractPolicyHtml(payload) {
+function extractPolicyHtml(payload) {
   if (payload?.stop_reason === 'max_tokens') {
     throw new Error('Claude reached its output limit before completing the policy. Please try again.');
   }
@@ -33,7 +33,7 @@ export function extractPolicyHtml(payload) {
   return withoutFences;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   res.setHeader?.('Content-Type', 'application/json; charset=utf-8');
   if (req.method !== 'POST') {
     res.statusCode = 405;
@@ -80,3 +80,7 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: error.message || 'Policy generation failed. Please try again.' }));
   }
 }
+
+module.exports = handler;
+module.exports.extractPolicyHtml = extractPolicyHtml;
+module.exports.SYSTEM_PROMPT = SYSTEM_PROMPT;

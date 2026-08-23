@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
+import './policySimulator.css';
 
 const FIRM_TYPES = ['Authorised EMI', 'Small EMI', 'Authorised PI', 'Small PI'];
 const CUSTOMER_TYPES = [
@@ -379,7 +380,7 @@ function OutputView({ policyHtml, policyName, onStartAgain }) {
   );
 }
 
-export default function App() {
+export default function PolicySimulator() {
   const [view, setView] = useState('form');
   const [form, setForm] = useState(createInitialForm);
   const [policyHtml, setPolicyHtml] = useState('');
@@ -416,7 +417,7 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 sm:py-14">
+    <main className="policy-simulator-root min-h-screen bg-slate-50 px-4 py-10 sm:px-6 sm:py-14">
       <div className={view === 'output' ? 'mx-auto max-w-5xl' : 'mx-auto max-w-3xl'}>
         <header className="mb-9">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">UK financial crime compliance</p>
