@@ -21,6 +21,10 @@
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "test": "react-scripts test",
     "test:smoke:db": "node scripts/real-db-smoke.js",
+    "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js idv/__tests__/secureIdentity.nodetest.js idv/__tests__/metrics.nodetest.js idv/__tests__/productionGuards.nodetest.js",
+    "idv:security-scan": "node idv/scripts/securityScan.js",
+    "idv:migrate": "node idv/persistence/applyModuleSchema.js",
+    "idv:harness": "node idv/harness/server.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

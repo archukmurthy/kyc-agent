@@ -1,0 +1,32 @@
+{
+  "status": "success",
+  "verification": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "attemptId": "55555555-5555-4555-8555-555555555555",
+    "vendorData": "synthetic-internal-session",
+    "status": "approved",
+    "code": 9001,
+    "reason": null,
+    "reasonCode": null,
+    "acceptanceTime": "2030-01-01T00:00:00.000Z",
+    "submissionTime": "2030-01-01T00:00:10.000Z",
+    "decisionTime": "2030-01-01T00:00:30.000Z",
+    "person": {
+      "firstName": "SYNTHETIC_GIVEN_002",
+      "lastName": "SYNTHETIC_FAMILY_002",
+      "dateOfBirth": "2000-02-02",
+      "nationality": "GBR"
+    },
+    "document": {
+      "number": "TEST000002",
+      "type": "PASSPORT",
+      "country": "GB",
+      "validUntil": "2035-02-02",
+      "nfcValidated": false
+    },
+    "documentAuthenticity": "passed",
+    "documentValidity": "passed",
+    "liveness": { "status": "passed", "method": "passive" },
+    "faceMatch": "strong_match"
+  }
+}

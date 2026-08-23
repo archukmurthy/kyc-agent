@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "verification": {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "status": "created",
+    "url": "https://magic.veriff.example/v/synthetic-token",
+    "sessionToken": "synthetic-token-never-persisted",
+    "acceptanceTime": "2030-01-01T00:00:00.000Z",
+    "vendorData": "synthetic-internal-session"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "event_id": "22222222-2222-4222-8222-222222222222",
+  "webhook_type": "status.updated",
+  "timestamp": 1893456060,
+  "created_at": 1893456030,
+  "environment": "sandbox",
+  "session_id": "11111111-1111-4111-8111-111111111111",
+  "workflow_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "workflow_version": 3,
+  "status": "Approved",
+  "decision": {
+    "decision_id": "33333333-3333-4333-8333-333333333333",
+    "status": "Approved",
+    "decision_at": "2030-01-01T00:00:30.000Z",
+    "submitted_at": "2030-01-01T00:00:10.000Z",
+    "extracted_at": "2030-01-01T00:00:20.000Z",
+    "id_verifications": [
+      {
+        "node_id": "synthetic-document-node",
+        "status": "Approved",
+        "first_name": "SYNTHETIC_GIVEN_001",
+        "last_name": "SYNTHETIC_FAMILY_001",
+        "date_of_birth": "2000-01-01",
+        "nationality": "GBR",
+        "document_number": "TEST000001",
+        "document_type": "PASSPORT",
+        "issuing_country": "GB",
+        "expiration_date": "2035-01-01"
+      }
+    ],
+    "liveness_checks": [{ "node_id": "synthetic-liveness-node", "status": "Approved", "method": "passive" }],
+    "face_matches": [{ "node_id": "synthetic-face-node", "status": "Approved", "score": 95 }],
+    "nfc_verifications": [],
+    "database_verifications": []
+  }
+}
