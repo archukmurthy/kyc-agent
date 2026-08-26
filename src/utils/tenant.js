@@ -5,15 +5,15 @@
 
 /**
  * Sanitise a tenant ID: lowercase, strip anything non-alphanumeric (excluding
- * hyphens), clamp to 32 chars. Falls back to "nium" if the result is empty.
+ * hyphens), clamp to 32 chars. Falls back to "demo" if the result is empty.
  */
 export function sanitiseTenantId(id) {
   return (
-    (id || "nium")
+    (id || "demo")
       .toString()
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, "")
-      .slice(0, 32) || "nium"
+      .slice(0, 32) || "demo"
   );
 }
 
@@ -23,7 +23,7 @@ export function sanitiseTenantId(id) {
  * Priority:
  *   1. ?tenant= URL query parameter
  *   2. REACT_APP_TENANT_ID build-time env var (rare)
- *   3. "nium"
+ *   3. "demo"
  */
 export function getTenantId() {
   if (typeof window !== "undefined") {
@@ -39,17 +39,17 @@ export function getTenantId() {
   if (typeof process !== "undefined" && process.env && process.env.REACT_APP_TENANT_ID) {
     return sanitiseTenantId(process.env.REACT_APP_TENANT_ID);
   }
-  return "nium";
+  return "demo";
 }
 
 /**
  * Build a URL that preserves the active tenant parameter. The default tenant
- * ("nium" on this deployment) is omitted from the URL so primary-tenant links
+ * ("demo" on this deployment) is omitted from the URL so primary-tenant links
  * stay clean.
  */
 export function tenantUrl(path, tenantId) {
   const defaultTenant = sanitiseTenantId(
-    (typeof process !== "undefined" && process.env && process.env.REACT_APP_TENANT_ID) || "nium"
+    (typeof process !== "undefined" && process.env && process.env.REACT_APP_TENANT_ID) || "demo"
   );
   const t = sanitiseTenantId(tenantId);
   if (t === defaultTenant) return path;

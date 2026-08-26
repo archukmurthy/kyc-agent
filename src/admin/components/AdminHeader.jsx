@@ -15,7 +15,7 @@ export default function AdminHeader({
   onSignOut,
 }) {
   const previewReady = !!tenantConfig;
-  const companyName = tenantConfig?.company?.name || "Nium";
+  const companyName = tenantConfig?.company?.name || "Demo";
   const logo = tenantConfig?.company?.logo;
 
   return (
@@ -46,7 +46,7 @@ export default function AdminHeader({
               width: 28,
               height: 28,
               borderRadius: 6,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -78,7 +78,7 @@ export default function AdminHeader({
               fontSize: 12,
               fontWeight: 600,
               background: "rgba(11,61,145,0.08)",
-              color: adminColors.niumBlue,
+              color: adminColors.brandBlue,
               border: `1px solid rgba(11,61,145,0.16)`,
             }}
           >

@@ -13,8 +13,8 @@
  * IMPORTANT — render the WHOLE checklist, drop nothing:
  *   Each checklist item carries a `selfSource` tag, one of:
  *     - "Client-provided only"      → customer must upload it
- *     - "Preferred self-source"     → Nium retrieves it
- *     - "Supplementary self-source" → Nium retrieves it
+ *     - "Preferred self-source"     → Demo retrieves it
+ *     - "Supplementary self-source" → Demo retrieves it
  *   and an `rfi` tag ("Required from client" | "Request if self-source insufficient").
  *   The previous version only showed items where rfi === "Required from client"
  *   (cards) or selfSource === "Preferred self-source" (a banner) — so anything
@@ -22,9 +22,9 @@
  *   activity, UK signatory authority evidence) was dropped entirely, and the
  *   "Preferred self-source" items (Legal existence, Constitution) were buried in
  *   a one-line banner. We now partition the FULL checklist into client-provided
- *   vs Nium-sourced and render every item.
+ *   vs Demo-sourced and render every item.
  *
- * Styling uses the app's inline palette (Nium navy + teal), matching App.js.
+ * Styling uses the app's inline palette (Demo navy + teal), matching App.js.
  */
 
 import { useState } from 'react';
@@ -163,9 +163,9 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
     </label>
   );
 
-  // Badge: client-provided → Required/Optional; Nium-sourced → auto badge.
+  // Badge: client-provided → Required/Optional; Demo-sourced → auto badge.
   const badge = selfSource
-    ? <span style={styles.autoBadge}>Nium-sourced</span>
+    ? <span style={styles.autoBadge}>Demo-sourced</span>
     : <span style={item.mandatory ? styles.mandatoryBadge : styles.optionalBadge}>{item.mandatory ? 'Required' : 'Optional'}</span>;
 
   return (
@@ -184,7 +184,7 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
           <div style={styles.selfSourceNote}>
             <span>🔍</span>
             <span>
-              Nium retrieves this automatically.{' '}
+              Demo retrieves this automatically.{' '}
               {clientMayAlsoProvide(item)
                 ? 'Upload only if you already have it — it can speed up review.'
                 : 'No action needed.'}
@@ -213,7 +213,7 @@ function WolfsbergSection({ uploaded, onComplete, onRemove, autoSourcedResult })
     <div style={styles.section}>
       <h3 style={styles.sectionTitle}>Wolfsberg CBDDQ</h3>
       <p style={styles.sectionDesc}>
-        As a Financial Institution, Nium requires a completed Correspondent Banking Due Diligence
+        As a Financial Institution, Demo requires a completed Correspondent Banking Due Diligence
         Questionnaire (CBDDQ). Upload your most recent completed version, or complete one at
         wolfsberg-group.com.
       </p>
@@ -331,7 +331,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
   const handleContinue = () => {
     const submittedRequirements = [
       ...Object.keys(uploads),
-      // Nium-sourced items count as submitted — Nium will retrieve them.
+      // Demo-sourced items count as submitted — Demo will retrieve them.
       ...selfSourced.map(i => i.requirement),
     ];
     onComplete({ uploads, submittedRequirements, checklist, flags });
@@ -346,7 +346,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         {onboardingCountry && (
           <div style={styles.jurisdictionBanner}>
             <span>📋</span>
-            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Nium {onboardingCountry}</strong></span>
+            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Demo {onboardingCountry}</strong></span>
           </div>
         )}
         {requiredTotal > 0 && (
@@ -451,14 +451,14 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         </div>
       )}
 
-      {/* "Nium will retrieve these for you" (self-sourced) section — hidden for
+      {/* "Demo will retrieve these for you" (self-sourced) section — hidden for
           now per request, but kept here for future use. `selfSourced` is still
           computed above and still counted as submitted in handleContinue, so the
           downstream document gate is unaffected; only the UI is hidden. To
           restore, un-comment this block.
       {selfSourced.length > 0 && (
         <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
+          <h3 style={styles.sectionTitle}>Demo will retrieve these for you</h3>
           <p style={styles.sectionDesc}>
             We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
           </p>

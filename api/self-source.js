@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
     incorporationCountry,
     entityType,
     ownershipType,
-    niumEntityType,
+    entityCategory,
     companyRegistrationNumber, // optional — improves second-pass on BR/JP/ID/CN
     tenantId,                  // reserved
   } = req.body || {};
@@ -89,7 +89,7 @@ module.exports = async function handler(req, res) {
     });
 
     // ── Map extracted fields → dossier schema ─────────────────────────────
-    const flow = niumEntityType === "fi" ? "fi" : "corporate";
+    const flow = entityCategory === "fi" ? "fi" : "corporate";
     const selfSourcedFields = mapSelfSourcedFields(agentResult.results, flow);
     const manualReviewItems = getManualReviewItems(agentResult.results);
 

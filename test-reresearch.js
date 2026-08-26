@@ -24,7 +24,7 @@ const callAttempt = async (method, dossierId) => {
 
 (async () => {
   const sql = neon(process.env.DATABASE_URL);
-  const tenantId = "nium";
+  const tenantId = "demo";
   let ok = true;
 
   // 1) Save a customer-seeded dossier with attempt 1.

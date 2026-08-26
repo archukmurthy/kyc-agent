@@ -463,7 +463,7 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                         cursor: "pointer",
                         background: has ? adminColors.statusCompleteBg : adminColors.statusIncompleteBg,
                         color: has ? adminColors.statusComplete : adminColors.statusIncomplete,
-                        border: isSel ? `2px solid ${adminColors.niumBlue}` : `1px solid transparent`,
+                        border: isSel ? `2px solid ${adminColors.brandBlue}` : `1px solid transparent`,
                         fontFamily: "inherit",
                         fontWeight: 700,
                         fontSize: 14,
@@ -562,8 +562,8 @@ function NoSchemaOptions({ schemas, entityId, onCopy, onTemplate, onScratch }) {
                   borderRadius: 99,
                   fontSize: 11,
                   fontWeight: 700,
-                  border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                  background: on ? adminColors.niumBlue : "#fff",
+                  border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                  background: on ? adminColors.brandBlue : "#fff",
                   color: on ? "#fff" : adminColors.text,
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -597,7 +597,7 @@ function OptionCard({ icon, title, body, recommended, children }) {
     <div
       style={{
         background: "#fff",
-        border: `${recommended ? 2 : 1}px solid ${recommended ? adminColors.niumBlue : adminColors.border}`,
+        border: `${recommended ? 2 : 1}px solid ${recommended ? adminColors.brandBlue : adminColors.border}`,
         borderRadius: 10,
         padding: 14,
         display: "flex",
@@ -608,7 +608,7 @@ function OptionCard({ icon, title, body, recommended, children }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 18 }}>{icon}</div>
         {recommended && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.niumBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.brandBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
             RECOMMENDED
           </span>
         )}
@@ -713,8 +713,8 @@ function TabButton({ on, onClick, children }) {
         fontFamily: "inherit",
         fontSize: 13,
         fontWeight: 700,
-        color: on ? adminColors.niumBlue : adminColors.textMuted,
-        borderBottom: on ? `2px solid ${adminColors.niumBlue}` : "2px solid transparent",
+        color: on ? adminColors.brandBlue : adminColors.textMuted,
+        borderBottom: on ? `2px solid ${adminColors.brandBlue}` : "2px solid transparent",
         cursor: "pointer",
         marginBottom: -1,
       }}

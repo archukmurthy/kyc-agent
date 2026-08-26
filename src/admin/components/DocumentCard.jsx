@@ -23,8 +23,8 @@ export default function DocumentCard({
     <div
       style={{
         background: "#fff",
-        border: `1px solid ${checked ? adminColors.niumBlue : adminColors.border}`,
-        borderLeft: checked ? `3px solid ${adminColors.niumBlue}` : `1px solid ${adminColors.border}`,
+        border: `1px solid ${checked ? adminColors.brandBlue : adminColors.border}`,
+        borderLeft: checked ? `3px solid ${adminColors.brandBlue}` : `1px solid ${adminColors.border}`,
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -62,7 +62,7 @@ export default function DocumentCard({
             <span>📎 {acceptLabel(doc.acceptedTypes)}</span>
             <span>🤖 AI Extraction: {doc.aiExtraction === false ? "Off" : "On"}</span>
             <span>{doc.required ? "● Required" : "○ Optional"}</span>
-            {doc.isWolfsberg && <span style={{ color: adminColors.niumBlue }}>★ Wolfsberg</span>}
+            {doc.isWolfsberg && <span style={{ color: adminColors.brandBlue }}>★ Wolfsberg</span>}
           </div>
         </button>
       </div>
@@ -113,8 +113,8 @@ export default function DocumentCard({
                         borderRadius: 99,
                         fontSize: 11,
                         fontWeight: 600,
-                        border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                        background: on ? adminColors.niumBlue : "#fff",
+                        border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                        background: on ? adminColors.brandBlue : "#fff",
                         color: on ? "#fff" : adminColors.text,
                         cursor: "pointer",
                         fontFamily: "inherit",

@@ -10,8 +10,8 @@ function normalise(value) { return String(value || "").trim().toLowerCase().repl
 function identity({ entityName, registrationNumber, jurisdiction }) {
   return createHash("sha256").update([normalise(entityName), normalise(registrationNumber), normalise(jurisdiction)].join("|")).digest("hex");
 }
-function resultKey(input, tenantId) { return `ubo:result:${CACHE_VERSION}:${normalise(tenantId || "nium")}:${identity(input)}`; }
-function entityKey(entity, tenantId) { return `ubo:web:${CACHE_VERSION}:${normalise(tenantId || "nium")}:${identity({ entityName: entity.name, registrationNumber: entity.registrationNumber, jurisdiction: entity.jurisdiction })}`; }
+function resultKey(input, tenantId) { return `ubo:result:${CACHE_VERSION}:${normalise(tenantId || "demo")}:${identity(input)}`; }
+function entityKey(entity, tenantId) { return `ubo:web:${CACHE_VERSION}:${normalise(tenantId || "demo")}:${identity({ entityName: entity.name, registrationNumber: entity.registrationNumber, jurisdiction: entity.jurisdiction })}`; }
 
 async function getFresh(key) {
   const record = await storage.get(key);

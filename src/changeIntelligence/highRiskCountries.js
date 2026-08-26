@@ -7,7 +7,7 @@
  *
  * DO NOT wire this to documentRequirements.js's RESTRICTED_COUNTRIES. That list
  * ("China, India, Japan, Malaysia, South Africa") is an ONBOARDING-restriction
- * list — where Nium can onboard from — not an AML high-risk list. Treating Japan
+ * list — where Demo can onboard from — not an AML high-risk list. Treating Japan
  * as AML high-risk would be a compliance error.
  *
  * KNOWN GAP (flagged, not papered over): the values this is asked about come in

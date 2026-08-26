@@ -88,13 +88,13 @@ export default function StepPublish({
     if (!config) return;
     try {
       sessionStorage.setItem("preview_config", JSON.stringify(config));
-      sessionStorage.setItem("preview_tenant_id", activeTenant || "nium");
+      sessionStorage.setItem("preview_tenant_id", activeTenant || "demo");
       sessionStorage.setItem("preview_timestamp", new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("Could not write preview config:", e);
     }
-    const tenantParam = activeTenant && activeTenant !== "nium"
+    const tenantParam = activeTenant && activeTenant !== "demo"
       ? `&tenant=${encodeURIComponent(activeTenant)}`
       : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");

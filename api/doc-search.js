@@ -16,12 +16,12 @@ module.exports = async function handler(req, res) {
     companyName,
     country,
     ownershipType,
-    niumEntityType,
+    entityCategory,
     tenantId, // reserved for future per-tenant doc search behaviour
   } = req.body || {};
 
   if (!companyName || !country ||
-      !ownershipType || !niumEntityType) {
+      !ownershipType || !entityCategory) {
     return res.status(400).json({
       error: "Missing required fields",
     });
@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
       companyName,
       country,
       ownershipType,
-      niumEntityType,
+      entityCategory,
       outputDir: `${baseDir}/${caseId}`,
     });
 

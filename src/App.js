@@ -162,7 +162,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // current unsaved config under the "preview_config" key).
   //
   // Tenant resolution comes from the URL (?tenant=X) so this component can
-  // serve any tenant; "nium" is the default for plain /. Preview mode is
+  // serve any tenant; "demo" is the default for plain /. Preview mode is
   // either triggered by the /preview route (index.js sets previewMode prop)
   // or by ?preview=true in the URL.
   const [tenantId] = useState(() => getTenantId());
@@ -363,8 +363,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // into the web-research prompt. Blank or unresolved silently falls back to the
   // existing name-based search (the company name is always in the prompt+body,
   // so there's no dead end). Provenance is "customer" here (customer-typed);
-  // slice 2's confirmation gate verifies it. Distinct from `niumRegNumber`,
-  // which is the test-gated Nium-journey field.
+  // slice 2's confirmation gate verifies it.
   const [regNumber, setRegNumber] = useState("");
   // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
   // the string is non-empty. Set to "customer" ONLY by the lookup-page input
@@ -762,7 +761,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Wolfsberg before running extraction). Without the step gate that partial
   // seed would immediately auto-save and jump to the Dossier, skipping doc
   // selection and the real extraction + AI research pass. doResearch /
-  // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
+  // doDummyResearch all advance to stepsFor(journey).confirm
   // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
     // The dossier auto-saves for the analyst pre-boarding flow AND for a customer
@@ -803,7 +802,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     inviteHydratedRef.current = true;
     let snap = null;
     try {
-      const raw = localStorage.getItem("nium_invite_" + ref);
+      const raw = localStorage.getItem("demo_invite_" + ref);
       if (raw) snap = JSON.parse(raw);
     } catch (_) { /* ignore malformed/unavailable storage */ }
     if (!snap || !snap.research) return;
@@ -849,7 +848,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
-      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
+      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "demo")}`);
       const data = await res.json();
       if (data.success && data.dossier) {
         const d = data.dossier;
@@ -1980,7 +1979,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         incorporationCountry: countryObj ? countryObj.name : countryCode,
         entityType,
         ownershipType,
-        niumEntityType: (entityType || "").toLowerCase(),
+        entityCategory: (entityType || "").toLowerCase(),
         companyRegistrationNumber: null,
         tenantId,
       }),
@@ -2066,7 +2065,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         companyName,
         country: countryObj ? countryObj.name : countryCode,
         ownershipType: docOwnershipType,
-        niumEntityType: (entityType || "").toLowerCase(),
+        entityCategory: (entityType || "").toLowerCase(),
         tenantId,
       }),
     })
@@ -2360,8 +2359,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setManualOpened(true);
     } else if (selectedJourneyCard === "E") {
       // Max Prefill. TODO: implement the dedicated max-prefill pipeline that
-      // pulls from every source at once (documents + registries + web + Nium
-      // KYB). For now route through standard AI research so both the onboarding
+      // pulls from every source at once (documents + registries + web). For
+      // now route through standard AI research so both the onboarding
       // and pre-boarding demos flow end to end and land on Confirm / Dossier.
       setJourneyType("max_prefill");
       setJourneyOpen(false);
@@ -3789,7 +3788,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
-  const companyName_ = tenantConfig?.company?.name || "Nium";
+  const companyName_ = tenantConfig?.company?.name || "Demo";
   const companyLogo_ = tenantConfig?.company?.logo || null;
   const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
   const activeEntityTypes = (tenantConfig?.entityTypes || [])
@@ -3863,7 +3862,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               />
             ) : (
               <div style={{
-                width: 48, height: 48, borderRadius: 12, background: C.niumBlue,
+                width: 48, height: 48, borderRadius: 12, background: C.brandBlue,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 22, fontWeight: 800, color: "#fff",
               }}>
@@ -3872,7 +3871,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
           </div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px 0", letterSpacing: "-0.5px" }}>
-            {tenantConfig?.company?.name || "Nium"} Intelligence Platform
+            {tenantConfig?.company?.name || "Demo"} Intelligence Platform
           </h1>
           <p style={{ fontSize: 16, color: C.textSec, margin: 0, maxWidth: 480, lineHeight: 1.5 }}>
             Select the agent you would like to work with today.
@@ -3896,7 +3895,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               cursor: "pointer", transition: "all 0.15s", textAlign: "left",
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.borderColor = C.niumBlue;
+              e.currentTarget.style.borderColor = C.brandBlue;
               e.currentTarget.style.transform = "translateY(-2px)";
               e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
             }}
@@ -3913,7 +3912,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <div style={{ fontSize: 14, color: C.textSec, lineHeight: 1.6, marginBottom: 20 }}>
               AI-powered KYC/KYB onboarding. Research, confirm, fill gaps and submit a complete application.
             </div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.niumBlue }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.brandBlue }}>
               Start onboarding →
             </div>
           </div>
@@ -3966,7 +3965,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {/* Footer note */}
         <p style={{ marginTop: 40, fontSize: 12, color: C.textMuted, textAlign: "center" }}>
-          Powered by Nium Intelligence Platform
+          Powered by Demo Intelligence Platform
         </p>
       </div>
     );
@@ -3975,7 +3974,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
   // Reuse the onboarding research / schema / stakeholder / coverage logic; only
-  // the presentation differs. Purple accent (#7C3AED) replaces niumBlue. These
+  // the presentation differs. Purple accent (#7C3AED) replaces brandBlue. These
   // close over the confirm/fill-gaps render vars and are reached from the
   // pre-boarding early returns above the main return (the dossier and invite
   // screens), NOT from the step switch.

@@ -39,8 +39,8 @@ export default function AdminRoot() {
       // eslint-disable-next-line no-console
       console.error("Admin config load failed, falling back to client default:", err);
       setConfigError(err.message);
-      // Offline fallback: Nium gets the defaults, other tenants get a blank.
-      setTenantConfig(tenantId === "nium" ? buildDefaultConfig(tenantId) : buildBlankConfig(tenantId));
+      // Offline fallback: Demo gets the defaults, other tenants get a blank.
+      setTenantConfig(tenantId === "demo" ? buildDefaultConfig(tenantId) : buildBlankConfig(tenantId));
     } finally {
       setConfigLoading(false);
     }
@@ -76,11 +76,11 @@ export default function AdminRoot() {
 
   // First-login wizard fires for brand-new blank tenants (created via
   // /super-admin) and for any tenant that has zero licences configured.
-  // The Nium tenant is excluded because it ships with default seed config —
+  // The Demo tenant is excluded because it ships with default seed config —
   // pushing it into the wizard on every fresh session would be annoying.
   const firstLogin =
     tenantConfig._isBlank === true ||
-    ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "nium");
+    ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "demo");
 
   return (
     <>
@@ -151,9 +151,9 @@ function PasswordGate({ tenantId, onSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "nium")}`, {
+      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "demo")}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "nium" },
+        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "demo" },
         body: JSON.stringify({ password }),
       });
       if (!r.ok) {
@@ -196,7 +196,7 @@ function PasswordGate({ tenantId, onSuccess }) {
               width: 56,
               height: 56,
               borderRadius: 14,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -213,7 +213,7 @@ function PasswordGate({ tenantId, onSuccess }) {
             Intelligence-Led Onboarding Platform
           </p>
           {gateCompanyName && (
-            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
+            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.brandBlue, fontSize: 11, fontWeight: 600 }}>
               {gateCompanyName}
             </div>
           )}
@@ -283,7 +283,7 @@ function Loading() {
             width: 56,
             height: 56,
             borderRadius: 14,
-            background: adminColors.niumBlue,
+            background: adminColors.brandBlue,
             color: "#fff",
             display: "flex",
             alignItems: "center",

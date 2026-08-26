@@ -24,11 +24,12 @@ chains, unresolved items, and budget use as JSON.
 
 Start the application with `npm start`, then open
 `http://localhost:3000/ubo-lab.html`. This separate page calls
-`POST /api/ubo-discovery`, which uses the configured Nium KYB integration to
-retrieve direct disclosed stakeholders and recursively looks up corporate
-owners. The optional web-research checkbox supplements Nium with source-cited
-web research. These are real external lookups and may be chargeable; only use
-them for companies you are authorised to investigate.
+`POST /api/ubo-discovery`, which uses the configured registry integration
+(Companies House) to retrieve direct disclosed stakeholders and recursively
+looks up corporate owners. The optional web-research checkbox supplements the
+registry data with source-cited web research. These are real external lookups
+and may be chargeable; only use them for companies you are authorised to
+investigate.
 
 ## Agent modules
 

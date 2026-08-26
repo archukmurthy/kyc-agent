@@ -15,7 +15,7 @@ export const buildLocalDefaultConfig = () => ({
   _version: 0,
   _seededAt: new Date().toISOString(),
   company: {
-    name: "Nium",
+    name: "Demo",
     logo: null,
     manualFormUrl: MANUAL_FORM_URL,
     privacyPolicyUrl: "",

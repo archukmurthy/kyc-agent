@@ -107,7 +107,7 @@ function fetchHtml(url, timeoutMs = 15000) {
   return new Promise((resolve) => {
     const mod = url.startsWith("https") ? https : http;
     const req = mod.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NiumKYCAgent/1.2; compliance-research)", "Accept": "text/html,application/xhtml+xml" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; KYBResearchAgent/1.2; compliance-research)", "Accept": "text/html,application/xhtml+xml" },
       timeout: timeoutMs,
     }, (res) => {
       if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location)
@@ -164,7 +164,7 @@ function downloadBinary(url, destPath, timeoutMs = 15000) {
     const mod = url.startsWith("https") ? https : http;
     const file = fs.createWriteStream(destPath);
     const cleanup = () => { try { file.close(); } catch (_) {} fs.unlink(destPath, () => {}); };
-    const request = mod.get(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; NiumKYCAgent/1.2)" }, timeout: timeoutMs }, (res) => {
+    const request = mod.get(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; KYBResearchAgent/1.2)" }, timeout: timeoutMs }, (res) => {
       if (res.statusCode === 200) {
         res.pipe(file);
         file.on("finish", () => { file.close(); resolve({ success: true, path: destPath }); });

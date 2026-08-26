@@ -23,7 +23,7 @@ async function authorizeAdmin(tenant, token) {
     const stored = await storage.get(`tenant-auth:${tenant}`);
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  if (tenant === "nium") {
+  if (tenant === "demo") {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }

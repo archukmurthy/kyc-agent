@@ -42,7 +42,7 @@ export const TEST_FLAG =
   new URLSearchParams(window.location.search).get("test") === "1";
 export const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
-export const MANUAL_FORM_URL = "https://app.nium.com";
+export const MANUAL_FORM_URL = "https://example.com/apply";
 // TODO: replace with actual product form URL
 
 export const CACHE_STALE_DAYS = 90;

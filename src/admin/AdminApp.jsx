@@ -56,7 +56,7 @@ export default function AdminApp() {
     return <AdminSetup token={token} onLogout={handleLogout} />;
   }
 
-  const companyName = tenantConfig?.company?.name || "Nium";
+  const companyName = tenantConfig?.company?.name || "Demo";
   const logo = tenantConfig?.company?.logo;
 
   return (
@@ -76,7 +76,7 @@ export default function AdminApp() {
           ) : (
             <div style={{
               width: 64, height: 64, borderRadius: 14,
-              background: tokens.niumBlue, color: "#fff",
+              background: tokens.brandBlue, color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontWeight: 800, fontSize: 28, margin: "0 auto 10px",
             }}>{companyName[0] || "N"}</div>

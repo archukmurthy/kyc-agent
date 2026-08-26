@@ -8,7 +8,7 @@ import { tokens as legacyTokens } from "./styles";
 export const adminColors = {
   // Shared brand palette
   ...legacyTokens,
-  niumBlue: legacyTokens.niumBlue,
+  brandBlue: legacyTokens.brandBlue,
   navy: legacyTokens.navy,
   teal: legacyTokens.teal,
   amber: legacyTokens.amber,
@@ -123,7 +123,7 @@ export const adminStyles = {
     cursor: "pointer",
     fontFamily: "inherit",
     border: "none",
-    background: adminColors.niumBlue,
+    background: adminColors.brandBlue,
     color: "#fff",
   },
 
@@ -135,8 +135,8 @@ export const adminStyles = {
     cursor: "pointer",
     fontFamily: "inherit",
     background: "#fff",
-    color: adminColors.niumBlue,
-    border: `1.5px solid ${adminColors.niumBlue}`,
+    color: adminColors.brandBlue,
+    border: `1.5px solid ${adminColors.brandBlue}`,
   },
 
   btnGhost: {

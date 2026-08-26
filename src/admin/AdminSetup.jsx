@@ -69,7 +69,7 @@ export default function AdminSetup({ token, onLogout }) {
   }
 
   async function handleReset() {
-    if (!window.confirm("Reset to default Nium config?\n\nThis wipes the live config AND every archived version for this tenant. The admin UI will reload with the seeded defaults.")) return;
+    if (!window.confirm("Reset to default Demo config?\n\nThis wipes the live config AND every archived version for this tenant. The admin UI will reload with the seeded defaults.")) return;
     setPublishing(true);
     setPublishResult(null);
     try {
@@ -86,7 +86,7 @@ export default function AdminSetup({ token, onLogout }) {
       const cfg = await cfgRes.json();
       setConfig(cfg);
       setSavedModules(new Set());
-      setPublishResult({ ok: true, message: "Reset to defaults — Nium config is live" });
+      setPublishResult({ ok: true, message: "Reset to defaults — Demo config is live" });
       loadVersions();
     } catch (err) {
       setPublishResult({ ok: false, message: "Reset failed: " + err.message });
@@ -133,7 +133,7 @@ export default function AdminSetup({ token, onLogout }) {
       // keys keep config, tenant, and capture-timestamp paired so the preview
       // banner can show when the snapshot was taken.
       sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(config));
-      sessionStorage.setItem(PREVIEW_TENANT_KEY, "nium");
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, "demo");
       sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -155,7 +155,7 @@ export default function AdminSetup({ token, onLogout }) {
         <div style={{ textAlign: "center", color: tokens.navy }}>
           <div style={{
             width: 36, height: 36, border: "3px solid rgba(11,61,145,0.15)",
-            borderTopColor: tokens.niumBlue, borderRadius: "50%", margin: "0 auto 12px",
+            borderTopColor: tokens.brandBlue, borderRadius: "50%", margin: "0 auto 12px",
             animation: "spin 0.9s linear infinite",
           }} />
           <div style={{ fontSize: 14, fontWeight: 600 }}>Loading configuration...</div>
@@ -177,7 +177,7 @@ export default function AdminSetup({ token, onLogout }) {
       {/* Sidebar */}
       <aside style={{
         width: 240, flex: "0 0 240px",
-        background: tokens.niumBlue,
+        background: tokens.brandBlue,
         color: "#fff",
         padding: "24px 0",
         position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh",
@@ -187,7 +187,7 @@ export default function AdminSetup({ token, onLogout }) {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.7 }}>
             Admin Console
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{config.company?.name || "Nium"}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{config.company?.name || "Demo"}</div>
           <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>Tenant: {config._tenantId} · v{config._version}</div>
         </div>
 
@@ -203,7 +203,7 @@ export default function AdminSetup({ token, onLogout }) {
                   display: "flex", alignItems: "center", gap: 10,
                   width: "100%", padding: "11px 22px",
                   background: isActive ? "#fff" : "transparent",
-                  color: isActive ? tokens.niumBlue : "#fff",
+                  color: isActive ? tokens.brandBlue : "#fff",
                   borderLeft: isActive ? "3px solid #fff" : "3px solid transparent",
                   borderTop: 0, borderRight: 0, borderBottom: 0,
                   fontFamily: "inherit",
@@ -254,7 +254,7 @@ export default function AdminSetup({ token, onLogout }) {
             <button
               onClick={handleReset}
               disabled={publishing}
-              title="Wipe stored config and re-seed Nium defaults"
+              title="Wipe stored config and re-seed Demo defaults"
               style={{ ...btnSecondary, color: tokens.danger, borderColor: tokens.danger, opacity: publishing ? 0.6 : 1 }}
             >↺ Reset to default</button>
             <button

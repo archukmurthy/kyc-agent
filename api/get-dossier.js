@@ -60,7 +60,7 @@ module.exports = async function handler(req, res) {
         saved_at AS generated_at
       FROM entity_dossiers
       WHERE id = ${id}
-      AND tenant_id = ${tenant || "nium"}
+      AND tenant_id = ${tenant || "demo"}
       AND status != 'deleted'
       LIMIT 1
     `;

@@ -18,7 +18,7 @@ Setup: `npm start` → open `http://localhost:3000/?demo=true`
 
 Baseline run 2026-07-20 (pre-refactor): all 6 checks PASS. Reusable local demo
 dossier for check 6:
-`http://localhost:3000/?tenant=nium&dossierId=3398b56a-4b23-499c-b566-dad8481a27a9&journey=customer`
+`http://localhost:3000/?tenant=demo&dossierId=3398b56a-4b23-499c-b566-dad8481a27a9&journey=customer`
 (dev filesystem store; regenerate via the pre-boarding flow if missing).
 
 Also after every commit: `npm run build` must succeed with no new warnings-as-errors.

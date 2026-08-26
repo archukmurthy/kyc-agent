@@ -26,15 +26,11 @@
  *     resetAll drive them, and ConfirmStep resets them on a re-search.
  *   - searchAttempts stays (read-only here); the server counter is authoritative
  *     and buildDossierPayload carries it.
- *   - companyName / countryCode are READ-ONLY here — three references, all in
- *     the Nium fixture check and the resolver button. They belong to the Company
- *     Lookup screen, which is still inline in App.js (its own later slice).
  *
- * The research kickoffs (proceedFromJourney, startNiumApiLookup,
- * findNiumRegNumber) stay in App.js and are drilled. Their call sites moved; the
- * functions did not — proceedFromJourney in particular writes searchAttempts,
- * posts to /api/search-attempt and routes into the AI-Documents step, none of
- * which is this component's business.
+ * The research kickoff (proceedFromJourney) stays in App.js and is drilled. Its
+ * call site moved; the function did not — proceedFromJourney in particular
+ * writes searchAttempts, posts to /api/search-attempt and routes into the
+ * AI-Documents step, none of which is this component's business.
  *
  * The oracle is JourneyPicker.render.test.jsx (37 tests), written against the
  * INLINE picker before this move and which must stay green UNCHANGED.
@@ -207,7 +203,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Nium's KYB data — to pre-fill as much of your application as possible.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Demo's KYB data — to pre-fill as much of your application as possible.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
             </div>
           );

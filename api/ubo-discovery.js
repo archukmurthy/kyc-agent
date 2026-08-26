@@ -23,7 +23,7 @@ function forReviewer(result) {
 // called by the onboarding application.
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false } = req.body || {};
+  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "demo", forceRefresh = false } = req.body || {};
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
   const threshold = Number(uboThreshold || 25);
   const discovery = Number(discoveryThreshold || 5);

@@ -2,8 +2,8 @@
  * /api/company-search
  *
  * Resolve a company NAME → registration number via the UK Companies House
- * public search API (free). Feeds the Nium API Lookup journey, which needs a
- * registration number because the Nium eKYB registry cannot search by name.
+ * public search API (free). Used to look up a registration number when only
+ * the company name is known.
  *
  * Method: GET
  * Query:

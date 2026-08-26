@@ -144,7 +144,7 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
         <Card title="Which licences support this entity type?">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {licences.map((l) => (
-              <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${draft.associatedLicenceIds?.includes(l.id) ? adminColors.niumBlue : adminColors.border}`, borderRadius: 8, cursor: "pointer", background: draft.associatedLicenceIds?.includes(l.id) ? "rgba(11,61,145,0.04)" : "#fff" }}>
+              <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${draft.associatedLicenceIds?.includes(l.id) ? adminColors.brandBlue : adminColors.border}`, borderRadius: 8, cursor: "pointer", background: draft.associatedLicenceIds?.includes(l.id) ? "rgba(11,61,145,0.04)" : "#fff" }}>
                 <input type="checkbox" checked={draft.associatedLicenceIds?.includes(l.id) || false} onChange={() => toggleLicence(l.id)} />
                 <span style={{ fontSize: 14 }}>
                   {flagFor(l.jurisdictionCode)} {l.jurisdictionName}

@@ -545,7 +545,7 @@ export function ApplicantPage({
               }}
               style={{
                 padding: "12px 28px",
-                background: continueBlocked ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
+                background: continueBlocked ? "#9CA3AF" : (C.brandBlue || "#0B3D91"),
                 color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
                 fontFamily: "inherit", cursor: continueBlocked ? "not-allowed" : "pointer",
               }}
