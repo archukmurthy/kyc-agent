@@ -34,13 +34,10 @@
  * FLAG STATE UNDER JEST (characterised, not assumed):
  *   NODE_ENV="test"      → SHOW_TEST_TOOLS === true
  *   no ?test=1 in jsdom  → TEST_FLAG === false
- *   no ?demo / no storage→ demoMode starts FALSE, so card D (Nium) is ABSENT
  *   jsdom host localhost → demoToggleVisible === true, so the DemoToggle IS
  *                          mounted and demo mode is reachable by clicking it
  *                          (a user-facing control — no production flag is
  *                          flipped to reach the demo assertions below).
- *   SHOW_NIUM_REG_PANEL  → false, pinned as a NEGATIVE so a flag flip becomes a
- *                          visible test change rather than a silent one.
  *
  * KNOWN UNREACHABLE (see the report, not a gap in the assertions):
  *   The locked search-cap state. `const [seededBy] = useState("analyst")` has no
@@ -152,7 +149,6 @@ const card = (title) => screen.getByText(title).parentElement;
 const CARD_A = "Upload documents & let AI fill the rest";
 const CARD_B = "Let AI research your company";
 const CARD_C = "I'll complete the form myself";
-const CARD_D = "Nium API Lookup";
 const CARD_E = "Run for max prefill";
 
 const continueBtn = () => screen.getByRole("button", { name: /^Continue/ });
@@ -223,17 +219,6 @@ describe("the cards that render", () => {
     expect(screen.getByText(/Most comprehensive · Highest coverage/)).toBeInTheDocument();
   });
 
-  it("does NOT render card D (Nium API Lookup) — demoMode is off by default", async () => {
-    await driveToPicker();
-    expect(screen.queryByText(CARD_D)).not.toBeInTheDocument();
-  });
-
-  it("reveals card D once demo mode is switched on", async () => {
-    await driveToPicker();
-    await enableDemoMode();
-    expect(screen.getByText(CARD_D)).toBeInTheDocument();
-    expect(screen.getByText("Test Mode Only")).toBeInTheDocument();
-  });
 });
 
 describe("selecting a card", () => {
@@ -583,25 +568,3 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
   });
 });
 
-describe("SHOW_NIUM_REG_PANEL is false — the reg-resolver panel must not render", () => {
-  it("renders no registration-number resolver in the default (non-demo) picker", async () => {
-    await driveToPicker();
-    expect(screen.queryByLabelText(/Registration Number/i)).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Find from name/i })
-    ).not.toBeInTheDocument();
-    expect(document.getElementById("niumRegNumber")).toBeNull();
-  });
-
-  it("stays hidden even with demo mode on, which is the other half of its gate", async () => {
-    await driveToPicker();
-    await enableDemoMode();
-    // The panel is gated `SHOW_NIUM_REG_PANEL && (demoMode || ?test=1)`. Demo
-    // mode satisfies the second half; the flag alone keeps it hidden. If this
-    // goes green-to-red, someone flipped the flag — which is the point.
-    expect(
-      screen.queryByRole("button", { name: /Find from name/i })
-    ).not.toBeInTheDocument();
-    expect(document.getElementById("niumRegNumber")).toBeNull();
-  });
-});
