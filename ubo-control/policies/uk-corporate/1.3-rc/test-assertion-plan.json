@@ -1,0 +1,112 @@
+[
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "COMPANY: direct qualifying share owner is identified from supported evidence.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "LLP: qualifying rights to surplus assets are evaluated using LLP semantics.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "Corporate holder creates an InformationNeed until ultimate natural persons are resolved.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Percentage chains multiply deterministically.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Independent qualifying paths aggregate.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Ranges remain ranges/min-max rather than being silently converted to exact percentages.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Cycles cannot silently produce a numeric answer.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "COMPANY: qualifying board-majority appointment right produces controller_appointment.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "LLP: qualifying majority-management appointment right produces controller_appointment.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Positive registry control fact may create a candidate claim.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Absence of PSC condition-4 data does not negatively resolve the requirement.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination.",
+    "status": "G1.2B_SCENARIO"
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Customer declaration alone cannot resolve R08.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Numeric evidence strength alone cannot bypass independent-source requirement.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Companies House PSC information may corroborate but must not automatically become final UBO conclusion.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Material missing PSC may create reportable discrepancy workflow.",
+    "status": "LATER_INTEGRATION"
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Non-material discrepancy records rationale without automatically invoking report workflow.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Fallback cannot activate merely because DiscoveryService returned NO_DATA.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Fallback cannot activate when required measures were not actually completed.",
+    "status": "GATE_2_REASONING"
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Snapshot records measures taken and reason fallback was permitted.",
+    "status": "GATE_2_REASONING"
+  }
+]

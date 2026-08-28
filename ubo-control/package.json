@@ -4,6 +4,6 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "test": "node --test __tests__/architecture.nodetest.js __tests__/contracts.nodetest.js __tests__/policyPack.nodetest.js __tests__/composition.nodetest.js"
+    "test": "node --test __tests__/architecture.nodetest.js __tests__/contracts.nodetest.js __tests__/conditionLanguage.nodetest.js __tests__/policyPack.nodetest.js __tests__/ukPolicyPack.nodetest.js __tests__/composition.nodetest.js"
   }
 }
