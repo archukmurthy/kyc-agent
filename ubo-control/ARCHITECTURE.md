@@ -50,6 +50,22 @@ A `CandidatePartyReference` may refer to an existing canonical `entityId`, but n
 
 Identity resolution is explicit and auditable through `IdentityResolutionDecision`. It supports `RESOLVED`, `UNRESOLVED`, and `REJECTED`. Gate 1 does not implement matching doctrine or automatic name-based merging.
 
+## G2.1 case and claim boundary
+
+`OwnershipCase` is the aggregate root for UBO-owned reasoning state. It has a stable case ID, an external customer/subject reference, optional opaque host references, and deterministic revision/event identities. Every change returns a new deeply frozen case projection; prior projections, claim creation state, identity decisions, adjudications, capability-operation records and case events remain reconstructable. The aggregate stores no raw evidence artifact and has no persistence or host-case dependency.
+
+Canonical entities are UBO-owned records with stable entity IDs and one of `NATURAL_PERSON`, `LEGAL_ENTITY`, `TRUST_OR_LEGAL_ARRANGEMENT`, `OTHER` or `UNKNOWN`. Names, aliases, external identifiers, jurisdiction and entity-type metadata are retained as assertions. Equal or normalized names never create an identity match, merge or canonical key.
+
+Validated capability results enter through a pure intake operation. Intake does not call a capability or provider. It records the capability request/outcome and opaque operation evidence references, then creates separate UBO candidate claims for claimable candidate facts. Each claim has a deterministic stable ID scoped to the case and intake operation, a reference to the originating request/fact, preserved grammatical direction, typed measurement, qualifiers and fact-level evidence references. Capability inputs are cloned rather than mutated. `NO_DATA`, `UNAVAILABLE`, `FAILED` and other non-claimable outcomes create no ownership/control claim and never become negative conclusions.
+
+Every claim starts in `CANDIDATE`. A different claim state can be projected only from an explicit immutable adjudication record containing its prior/resulting state, reason code, origin, time and relevant evidence/claim references. G2.1 implements no evidence precedence, conflict winner, recency, exact-versus-range or duplicate-interest doctrine. Competing and apparently duplicate claims remain separately addressable. `SUPERSEDED` and `REJECTED` are terminal mechanical states; prior claim content and adjudications are retained.
+
+Each claim endpoint has a claim-scoped candidate-party key. Resolution to an existing or newly created canonical entity, deliberate non-resolution, and rejection of a proposed match all require an explicit `IdentityResolutionDecision`. A supplied candidate `entityId` is not an automatic resolution. Repeated names across candidate endpoints or canonical entities have no matching effect.
+
+G2.1 exposes only a structural graph-eligibility projection. A relationship claim is `GRAPH_ELIGIBLE` only when it is `OPERATIVE` and both candidate endpoints have current explicit `RESOLVED` decisions to canonical entities in the case. Entity-attribute claims, non-operative claims and unresolved/rejected endpoints are not eligible. This projection does not create an edge or graph and performs no traversal, arithmetic, policy evaluation or UBO determination.
+
+The G2.1 modules remain internal beneath `domain/`; the deliberate public `index.js` surface is unchanged pending an approved consumer contract.
+
 ## Percentage values
 
 Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar and does not implement threshold crossing or indirect arithmetic.
