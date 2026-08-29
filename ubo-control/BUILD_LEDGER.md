@@ -6,9 +6,9 @@
 | Branch | `codex/ubo-control-g1-2b` |
 | Base commit | `92af704a9b39d141578cf47669ecbd228893f571` (G1.2A merge on `origin/main`) |
 | Prior accepted PR | [#28 — UBO Control G1.2A policy schema and UK pack](https://github.com/archukmurthy/kyc-agent/pull/28), merged with merge commit `92af704a9b39d141578cf47669ecbd228893f571`; remote G1.2A branch deleted |
-| Current PR | Pending for this branch |
+| Current PR | [#29 — UBO Control G1.2B deterministic scenario universe](https://github.com/archukmurthy/kyc-agent/pull/29) |
 | Completed implementation | Explicitly injected sequential Discovery/Extraction stubs; strict scenario validation and isolated runner; 20 required core scenarios; 8 policy-focused input fixtures; one-to-one executable representability links for all 22 policy assertions; honest Gate 2/integration deferrals; architecture and test governance |
-| Outstanding implementation | Current-main rebase if required, final diff review, commit/push, and PR creation |
+| Outstanding implementation | None within approved G1.2B scope; awaiting Control Room review |
 | Tests / status | G1.2A merged baseline: 45/45 passed. G1.2B: 88/88 passed; 98.88% line / 96.14% branch coverage. Host: 25 suites / 482 tests passed. Legacy UBO framework and recalculation smoke tests passed. Production build passed. |
 | Active escalations | None. Eight assertions previously labelled `G1.2B_SCENARIO` require qualification, claim creation, requirement resolution, information-need creation, controller projection, or review routing; their inputs are scenario-protected and their behavior is reclassified to Gate 2. |
 | Next approved step | Finalize and report G1.2B only; do not start Gate 2. |
