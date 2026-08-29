@@ -32,6 +32,22 @@
 | Supersession remains reconstructable | `__tests__/ownershipCase.nodetest.js` — S19 original claims, source references and superseded-by decision remain present |
 | Structural graph eligibility only | `__tests__/ownershipCase.nodetest.js` — requires OPERATIVE relationship plus two explicit resolved canonical endpoints; creates no graph |
 | G2.1 remains internal/offline | `__tests__/ownershipCase.nodetest.js` and `__tests__/architecture.nodetest.js` — unchanged public exports and no provider/host/external package dependency |
+| Operative-claims-only immutable graph | `__tests__/ownershipGraph.nodetest.js` — revision-pinned frozen graph; candidate/non-resolved filtering remains protected by the G2.1 eligibility suite |
+| Canonical graph identity and ordering | `__tests__/ownershipGraph.nodetest.js` — fixed algorithm identity, canonical SHA-256 fingerprint, entity/fact/object-key reordering equivalence, and material-change divergence |
+| Grammatical graph direction and fact-only content | `__tests__/ownershipGraph.nodetest.js` — canonical subject/object IDs, relationship bases, measurements, qualifiers and no policy conclusion fields |
+| Corroborating-claim coalescence | `__tests__/ownershipGraph.nodetest.js` — S19 and focused duplicate 40% assertions produce one relationship with all supporting claim IDs and one 40% contribution |
+| Distinct parallel interests | `__tests__/ownershipGraph.nodetest.js` — explicit interest qualifiers preserve separate relationships and separate path contributions |
+| Conflicting operative truth set | `__tests__/ownershipGraph.nodetest.js` — incompatible same-slot values and explicitly identity-resolved S09 fail with `CONFLICTING_OPERATIVE_CLAIMS` before arithmetic |
+| Exact rational percentage arithmetic | `__tests__/ownershipGraph.nodetest.js` — 40%, 60%×70%=42%, 80%×50%×40%=16%, and 0.1%+0.2%=0.3% without binary floating-point artifacts |
+| Range multiplication and endpoint attainability | `__tests__/ownershipGraph.nodetest.js` — product bounds, open/closed endpoints, attainable zero lower bound and exact-zero/open-factor product |
+| Multiple-path and interval aggregation | `__tests__/ownershipGraph.nodetest.js` — 18%+12%=30%, shared downstream relationship, range bound sums, and deterministic 100% cap |
+| Minimum-total graph invariant | `__tests__/ownershipGraph.nodetest.js` — current same-dimension minimum interests above 100% fail with `IMPOSSIBLE_MINIMUM_TOTAL` rather than normalization |
+| UNKNOWN and temporal uncertainty | `__tests__/ownershipGraph.nodetest.js` — known contribution retained as `PARTIAL`, unknown-only `UNRESOLVED`, unrelated unknown ignored, ceased excluded, unknown currentness surfaced, contradictory time state rejected |
+| `NO_PATH` is not 0% | `__tests__/ownershipGraph.nodetest.js` — absent path returns non-numeric `NO_PATH` while an explicit zero path returns complete exact 0 |
+| Relevant-cycle fail-safe | `__tests__/ownershipGraph.nodetest.js` — relevant cycle recorded and blocks `COMPLETE`; unrelated cycle leaves the requested calculation complete |
+| Economic/voting dimension separation | `__tests__/ownershipGraph.nodetest.js` — independent values, no mixed-chain look-through, and non-percentage appointment relationship retained without multiplication |
+| Gate 1 scenarios through explicit G2.1 decisions | `__tests__/ownershipGraph.nodetest.js` — unchanged S01, S02, S03, S04, S09, S10, S14, S18 and S19 inputs materially exercise graph semantics |
+| G2.2 remains internal/offline and policy-free | `__tests__/ownershipGraph.nodetest.js` and `__tests__/architecture.nodetest.js` — no public export expansion, host/provider/network dependency, threshold or UBO/PSC/controller conclusion |
 | Policy Pack top-level/data-only validation | `__tests__/policyPack.nodetest.js` — malformed, executable, duplicate, and unknown-reference rejection |
 | Schema identity separate from policy version | `__tests__/policyPack.nodetest.js` — exact schema ID/version and independent policy version validation |
 | Versioned engine-semantic pins | `__tests__/policyPack.nodetest.js` — every approved semantic version is required and exact |
@@ -70,17 +86,17 @@
 
 ## UK Corporate supplied assertion plan
 
-These are the 22 behavioral assertions supplied with the Control Room source. G1.2B now protects the representability and input setup for every assertion through executable scenarios. It does not claim the later calculation, qualification, policy decision, workflow, or projection. Final classifications are 21 `GATE_2_REASONING` and one `LATER_INTEGRATION`; no assertion remains `G1.2B_SCENARIO` merely to improve a count.
+These are the 22 behavioral assertions supplied with the Control Room source. G1.2B protects the representability and input setup for every assertion through executable scenarios. G2.2 now additionally protects the four R02 arithmetic assertions as `G2_2_EXECUTABLE`; this does not claim threshold qualification, policy decision, workflow, or projection. The remaining classifications are 17 `GATE_2_REASONING` and one `LATER_INTEGRATION`; no assertion remains `G1.2B_SCENARIO` merely to improve a count.
 
 | Requirement | Supplied assertion | Status | G1.2B scenario input | Deferred behavior |
 |---|---|---|---|---|
 | UBO-R01 | COMPANY: direct qualifying share owner is identified from supported evidence. | `GATE_2_REASONING` | S01 | Qualification and identification |
 | UBO-R01 | LLP: qualifying rights to surplus assets are evaluated using LLP semantics. | `GATE_2_REASONING` | S02 | LLP qualification and evaluation |
 | UBO-R01 | Corporate holder creates an InformationNeed until ultimate natural persons are resolved. | `GATE_2_REASONING` | S05, S11 | Information-need creation |
-| UBO-R02 | Percentage chains multiply deterministically. | `GATE_2_REASONING` | S03 | Indirect arithmetic |
-| UBO-R02 | Independent qualifying paths aggregate. | `GATE_2_REASONING` | S04 | Aggregation doctrine |
-| UBO-R02 | Ranges remain ranges/min-max rather than being silently converted to exact percentages. | `GATE_2_REASONING` | S10 | Range threshold reasoning |
-| UBO-R02 | Cycles cannot silently produce a numeric answer. | `GATE_2_REASONING` | S18 | Cycle detection/reasoning |
+| UBO-R02 | Percentage chains multiply deterministically. | `G2_2_EXECUTABLE` | S03 + focused exact fixtures | Protected: exact homogeneous-chain arithmetic; qualification remains deferred |
+| UBO-R02 | Independent qualifying paths aggregate. | `G2_2_EXECUTABLE` | S04 + focused multipath fixtures | Protected: distinct-path arithmetic; “qualifying” policy remains deferred |
+| UBO-R02 | Ranges remain ranges/min-max rather than being silently converted to exact percentages. | `G2_2_EXECUTABLE` | S10 + focused interval fixtures | Protected: range/endpoint arithmetic; threshold interpretation remains deferred |
+| UBO-R02 | Cycles cannot silently produce a numeric answer. | `G2_2_EXECUTABLE` | S18 + focused relevant-cycle fixture | Protected: relevant-cycle recording blocks `COMPLETE`; policy consequence remains deferred |
 | UBO-R05 | COMPANY: qualifying board-majority appointment right produces controller_appointment. | `GATE_2_REASONING` | S15 | Qualification and role projection |
 | UBO-R05 | LLP: qualifying majority-management appointment right produces controller_appointment. | `GATE_2_REASONING` | S15 | Qualification and role projection |
 | UBO-R05 | Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic. | `GATE_2_REASONING` | P08 | Resolution restriction and gap generation |
