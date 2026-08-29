@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g3-1-legacy-discovery-adapter` |
 | Base commit | `ec68bb803ec7a2a9f691b0bcc46e2a8c81df7088` (PR #36 normal merge on `origin/main`) |
 | Latest accepted PR | [#36 — UBO Control G2.4C decision history](https://github.com/archukmurthy/kyc-agent/pull/36), merged normally with merge commit `ec68bb803ec7a2a9f691b0bcc46e2a8c81df7088`; remote G2.4C branch deleted |
-| Current PR | Pending dedicated G3.1 PR — do not merge without Control Room acceptance |
+| Current PR | [#37 — UBO Control G3.1 legacy Discovery adapter](https://github.com/archukmurthy/kyc-agent/pull/37) — do not merge without Control Room acceptance |
 | Completed implementation | Disposable external legacy Discovery anti-corruption adapter; injected transport; minimum request mapping; provider-neutral candidate-fact translation; exact/range/unknown preservation; voting/economic separation; conservative capability outcomes; stable adapter issues; conclusion-field invariance |
 | Scenario coverage | L01–L14 cover exact ownership, reconstructable band, voting, ambiguity, legal-entity identity, ignored conclusions/gaps/projection, conflicting assertions, NO_DATA, PARTIAL, malformed response, service/operational failures and weak provenance |
 | Public/product boundary | Adapter lives under `integrations/`; imports only public `ubo-control`; no `index.js` expansion; core imports no adapter; no legacy implementation, provider, Evidence Platform, onboarding, persistence or live endpoint wiring |
