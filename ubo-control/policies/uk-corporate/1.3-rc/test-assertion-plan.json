@@ -5,7 +5,7 @@
     "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 protects COMPANY economic qualification and beneficial_owner projection from an operative S01-shaped fact; evidence sufficiency and final requirement status remain G2.4."
+    "deferredBehavior": "G2.3 protects COMPANY economic qualification and beneficial_owner projection; G2.4A separately protects evidence sufficiency and requirement resolution."
   },
   {
     "requirementId": "UBO-R01",
@@ -13,15 +13,15 @@
     "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 protects LLP surplus-asset qualification and beneficial_owner projection using LLP policy semantics; evidence sufficiency remains G2.4."
+    "deferredBehavior": "G2.3 protects LLP surplus-asset qualification and beneficial_owner projection; G2.4A separately applies the same evidence-sufficiency boundary."
   },
   {
     "requirementId": "UBO-R01",
     "assertion": "Corporate holder creates an InformationNeed until ultimate natural persons are resolved.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["S05", "S11"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 preserves a qualifying legal-entity holder as unresolved without emitting a natural person; InformationNeed creation remains G2.4."
+    "deferredBehavior": "G2.4A protects one semantic CURRENT_OWNERSHIP_AND_CONTROL InformationNeed for a potentially qualifying legal-entity holder without selecting a question or document action."
   },
   {
     "requirementId": "UBO-R02",
@@ -61,7 +61,7 @@
     "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S15"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 protects explicit COMPANY board-majority qualification and controller_appointment projection; evidence sufficiency remains G2.4."
+    "deferredBehavior": "G2.3 protects explicit COMPANY board-majority qualification and controller_appointment projection; G2.4A separately protects evidence-based resolution and legal-entity needs."
   },
   {
     "requirementId": "UBO-R05",
@@ -69,15 +69,15 @@
     "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S15"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 protects explicit LLP majority-management qualification and controller_appointment projection; evidence sufficiency remains G2.4."
+    "deferredBehavior": "G2.3 protects explicit LLP majority-management qualification and controller_appointment projection; G2.4A separately protects evidence-based resolution and legal-entity needs."
   },
   {
     "requirementId": "UBO-R05",
     "assertion": "Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["P08"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P08 preserves high-risk and negative-attestation inputs; closure, sufficiency and documentary gap generation remain G2.4."
+    "deferredBehavior": "G2.4A protects policy-driven strength/risk sufficiency: HIGH risk prevents attestation-only closure and produces a semantic PolicyGap/InformationNeed without generating a document request."
   },
   {
     "requirementId": "UBO-R06",
@@ -85,15 +85,15 @@
     "status": "G2_1_EXECUTABLE",
     "scenarioIds": ["P02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.1 protects candidate-claim creation. G2.3 separately proves an explicit operative significant-control fact can qualify; PSC evidence sufficiency remains G2.4."
+    "deferredBehavior": "G2.1 protects candidate-claim creation; G2.3 protects explicit qualification; G2.4A separately protects policy evidence sufficiency."
   },
   {
     "requirementId": "UBO-R06",
     "assertion": "Absence of PSC condition-4 data does not negatively resolve the requirement.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["P02", "S06"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P02 and S06 preserve absence/NO_DATA inputs; negative-evidence and final requirement-resolution semantics remain G2.4."
+    "deferredBehavior": "G2.4A protects POSITIVE_ONLY/PSC-silence semantics and NO_DATA: neither may negatively resolve R06."
   },
   {
     "requirementId": "UBO-R06",
@@ -101,31 +101,31 @@
     "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S16"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.3 protects REVIEW_REQUIRED assessment and prevents automatic person qualification for S16-style ambiguity; analyst action generation remains G2.4."
+    "deferredBehavior": "G2.3 protects REVIEW_REQUIRED assessment and prevents automatic qualification; G2.4A preserves that precedence while analyst action generation remains G2.4B."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Customer declaration alone cannot resolve R08.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["P01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 separates declaration and independent evidence; corroboration sufficiency and final requirement state remain G2.4."
+    "deferredBehavior": "G2.4A protects that applicant-originated declaration evidence does not satisfy R08's configured independent-source requirement."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Numeric evidence strength alone cannot bypass independent-source requirement.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["P01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 supplies source-type inputs; independent-source sufficiency remains G2.4."
+    "deferredBehavior": "G2.4A protects explicit source-origin classification, distinct durable-source counting and the configured independent-source minimum independently of numeric strength."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Companies House PSC information may corroborate but must not automatically become final UBO conclusion.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4A_EXECUTABLE",
     "scenarioIds": ["P01", "P02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 and P02 preserve corroborative PSC inputs; corroboration sufficiency and final requirement status remain G2.4."
+    "deferredBehavior": "G2.4A permits explicitly independent PSC evidence to resolve R08 corroboration while proving it creates no qualifying-person or R01 UBO conclusion."
   },
   {
     "requirementId": "UBO-R09",
@@ -138,41 +138,41 @@
   {
     "requirementId": "UBO-R09",
     "assertion": "Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4B_DEFERRED",
     "scenarioIds": ["P07"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P07 preserves PSC and MLR comparison bases; discrepancy materiality and reportability remain G2.4/later integration."
+    "deferredBehavior": "P07 preserves PSC and MLR comparison bases; discrepancy materiality and reportability remain G2.4B/later integration."
   },
   {
     "requirementId": "UBO-R09",
     "assertion": "Non-material discrepancy records rationale without automatically invoking report workflow.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4B_DEFERRED",
     "scenarioIds": ["P07"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P07 preserves differing assertions; discrepancy materiality, rationale and workflow remain G2.4/later integration."
+    "deferredBehavior": "P07 preserves differing assertions; discrepancy materiality, rationale and workflow remain G2.4B/later integration."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Fallback cannot activate merely because DiscoveryService returned NO_DATA.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4B_DEFERRED",
     "scenarioIds": ["S06", "P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S06 and P03 separate NO_DATA from fallback inputs; fallback eligibility and activation remain G2.4."
+    "deferredBehavior": "G2.4A protects NO_DATA as non-negative and non-operational; fallback eligibility and activation remain G2.4B."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Fallback cannot activate when required measures were not actually completed.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4B_DEFERRED",
     "scenarioIds": ["P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P03 records incomplete measures; fallback-precondition evaluation remains G2.4."
+    "deferredBehavior": "P03 records incomplete measures; fallback-precondition evaluation remains G2.4B."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Snapshot records measures taken and reason fallback was permitted.",
-    "status": "G2_4_DEFERRED",
+    "status": "G2_4B_DEFERRED",
     "scenarioIds": ["P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P03 preserves measures-taken inputs; immutable decision snapshot production remains G2.4."
+    "deferredBehavior": "P03 preserves measures-taken inputs; immutable decision snapshot production remains G2.4B."
   }
 ]
