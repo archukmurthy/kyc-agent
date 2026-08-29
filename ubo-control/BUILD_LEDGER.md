@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g3-2-live-discovery-composition` |
 | Base commit | `44190814dfc74d241f0884dd6ff625188822bbe2` (PR #37 normal merge on `origin/main`) |
 | Latest accepted PR | [#37 — UBO Control G3.1 legacy Discovery adapter](https://github.com/archukmurthy/kyc-agent/pull/37), merged normally with merge commit `44190814dfc74d241f0884dd6ff625188822bbe2`; remote G3.1 branch deleted |
-| Current PR | Pending dedicated G3.2 PR — do not merge without Control Room acceptance |
+| Current PR | [#38 — UBO Control G3.2 live Discovery composition](https://github.com/archukmurthy/kyc-agent/pull/38) — do not merge without Control Room acceptance |
 | Completed implementation | Approved stateless/versioned Decision Application façade; protected serializable case state; explicit decision targets/operations; internal calculation planner; typed application errors; actual configured HTTP transport; one external composition point; offline D1–D4 full-pipeline proof; failure and anti-corruption invariance; opt-in live verifier |
 | Scenario coverage | G3.1 L01–L14 remain protected. G3.2 D1 direct exact, D2 multilayer fresh 60%×50%=30%, D3 unresolved branch, D4 voting/control separation, polluted legacy conclusions, unavailable/malformed/NO_DATA/PARTIAL paths |
 | Public/product boundary | Integration consumes only the deliberate public façade; `OwnershipCase`, graph, calculation, policy, requirement, orchestration and snapshot constructors stay private; core imports no integration; no provider credential or environment type enters UBO |
