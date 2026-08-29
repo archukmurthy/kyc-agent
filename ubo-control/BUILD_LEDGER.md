@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g2-1-case-claims` |
 | Base commit | `5096f75f01e3b776117818da70bf75be26ca6fec` (PR #30 merge on `origin/main`) |
 | Latest accepted PR | [#30 — UBO Control practitioner research hypotheses](https://github.com/archukmurthy/kyc-agent/pull/30), merged with merge commit `5096f75f01e3b776117818da70bf75be26ca6fec`; remote documentation branch deleted |
-| Current PR | G2.1 implementation PR pending |
+| Current PR | [#31 — UBO Control G2.1 ownership cases and candidate claims](https://github.com/archukmurthy/kyc-agent/pull/31) — do not merge without Control Room acceptance |
 | Completed implementation | Pure immutable `OwnershipCase`; UBO-owned canonical entities; validated capability-result intake; deterministic candidate claims; explicit identity decisions; explicit claim-state adjudication history; structural graph-eligibility projection only |
 | Scenario coverage | G2.1 materially exercises S01, S02, S05, S06, S07, S08, S09, S10, S14, S16, S17 and S19, including newly discovered, canonical, same-name and explicitly rejected identity cases |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
