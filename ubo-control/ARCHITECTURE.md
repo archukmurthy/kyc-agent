@@ -17,6 +17,8 @@ UBO Control has exactly two candidate-fact acquisition ports:
 
 They are asynchronous duck-typed contracts, not framework base classes. Providers are explicitly injected. Missing or invalid providers fail composition with `UboConfigurationError`; no provider or stub is auto-selected.
 
+G1.2B supplies deterministic `StubDiscoveryService` and `StubExtractionService` implementations under `test-support/`. They are internal test infrastructure, are absent from the public entry point, and can be used only when a test or development harness injects them explicitly. They contain no provider selection, environment configuration, network access, persistence, or production fallback behavior.
+
 Both requests carry `contractVersion`, `requestId`, `caseId`, and `informationNeeds`. Discovery additionally carries `subject`. Extraction additionally carries `artifactEvidenceReferences`, which point to externally held evidence.
 
 Both capabilities return:
@@ -86,6 +88,12 @@ The engine owns the provider-neutral resolution strategy vocabulary (`DISCOVERY`
 
 Lifecycle checkpoints in a Policy Pack are host-neutral metadata. They do not subscribe to host events and do not trigger autonomous re-resolution. A host may request a future evaluation explicitly, but G1.2A contains no lifecycle engine or host integration.
 
+## Scenario-corpus boundary
+
+The G1.2B corpus is an internal, reusable universe of contract-valid capability requests and configured results. It is not a public product contract or a reasoning DSL. Each run creates isolated stub queues, validates requests and results through the production contracts, and returns defensive data copies. A repeated run starts with fresh queue state and is deterministic.
+
+Scenarios preserve directed candidate facts, exact/range/unknown percentages, fact-level and operation-level evidence, capability outcomes, entity-specific qualifiers, ambiguity, conflicts, cycles, and sequential Discovery/Extraction calls. They never join a graph, calculate effective ownership, qualify thresholds, merge identities, choose claims, determine UBO/PSC/controller status, resolve requirements, create information needs or gaps, activate fallback, route a case, or evaluate policy. Later-Gate expectations are labelled non-executed metadata only.
+
 ## Testing boundary
 
-Every behavior and architectural invariant is protected in the same PR that introduces it. The architecture suite denies non-built-in imports outside the product root, protects the deliberate public export set, and verifies explicit provider composition.
+Every behavior and architectural invariant is protected in the same PR that introduces it. The architecture suite denies non-built-in imports outside the product root, protects the deliberate public export set, and verifies explicit provider composition. The scenario suite runs offline using only explicitly constructed internal stubs and production contract validators; it imports no legacy, Evidence Platform, onboarding, provider, database, or deployment implementation.
