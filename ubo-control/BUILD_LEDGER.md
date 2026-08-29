@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g2-2-graph-calculation` |
 | Base commit | `ee79b4581429dcafa600a48f1692bb6cd2fbdda4` (PR #31 normal merge on `origin/main`) |
 | Latest accepted PR | [#31 — UBO Control G2.1 ownership cases and candidate claims](https://github.com/archukmurthy/kyc-agent/pull/31), merged normally with merge commit `ee79b4581429dcafa600a48f1692bb6cd2fbdda4`; remote G2.1 branch deleted |
-| Current PR | G2.2 PR pending opening after the recorded acceptance net — do not merge without Control Room acceptance |
+| Current PR | [#32 — UBO Control G2.2 canonical graph and deterministic calculation](https://github.com/archukmurthy/kyc-agent/pull/32) — do not merge without Control Room acceptance |
 | Completed implementation | Immutable `ubo-graph-v1` graph from eligible operative claims; corroborating-claim coalescence; typed truth-set/invariant errors; exact rational and interval arithmetic; homogeneous economic/voting look-through; distinct-path aggregation; relevant-cycle/unknown/no-path statuses |
 | Scenario coverage | G2.2 materially exercises unchanged S01, S02, S03, S04, S09, S10, S14, S18 and S19 through explicit G2.1 identity and operative-claim decisions, plus focused exact/range/unknown/temporal/path fixtures |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
