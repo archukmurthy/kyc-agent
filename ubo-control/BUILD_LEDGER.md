@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g2-4b-resolution-orchestration` |
 | Base commit | `f688e102da4b68e24efceca140b4040af60f3ffb` (PR #34 normal merge on `origin/main`) |
 | Latest accepted PR | [#34 — UBO Control G2.4A requirement resolution](https://github.com/archukmurthy/kyc-agent/pull/34), merged normally with merge commit `f688e102da4b68e24efceca140b4040af60f3ffb`; remote G2.4A branch deleted |
-| Current PR | Pending — dedicated G2.4B PR will be opened after full verification and must not be merged without Control Room acceptance |
+| Current PR | [#35 — UBO Control G2.4B resolution orchestration](https://github.com/archukmurthy/kyc-agent/pull/35) — do not merge without Control Room acceptance |
 | Completed implementation | UK Corporate 1.4-RC/schema 1.1; immutable ResolutionOptions, ActionIntents and append-only ResolutionAttempts; semantic action coalescence without generic priority; asynchronous FALLBACK_EXHAUSTION ReviewRequirement/package/decision; senior-management candidate preparation; current-state-derived fallback eligibility and explicit SMO application; R09 discrepancy, R10/R11/R13 risk signals, R14 closing attestation, customer interaction projection and deterministic terminal precedence |
 | Scenario coverage | G2.4B covers S06/P03 fallback negatives and P07 discrepancy semantics plus focused option/action/attempt, shared-need, operational, senior-candidate, stale-review, positive/negative exhaustion, PSC, depth/cross-border, trust, residual-attestation and ordinary/fallback/specialist/CDD terminal fixtures |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
