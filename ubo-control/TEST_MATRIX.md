@@ -5,7 +5,17 @@
 | Product-root dependency direction | `__tests__/architecture.nodetest.js` — production imports remain inside root or use Node built-ins |
 | No legacy UBO or Evidence Platform implementation import | `__tests__/architecture.nodetest.js` — prohibited import scan |
 | Deliberate public entry point | `__tests__/architecture.nodetest.js` — exact export set |
+| Versioned stateless Decision Application façade | `__tests__/decisionApplication.nodetest.js` — exact three-operation surface, explicit version validation, immutable opaque state and no hidden application memory |
+| Serializable application state | decision-application round trip — intake → JSON → apply decisions → JSON → evaluate works in a new façade instance |
+| Explicit decision targets and operations | decision-application target/decision tests — stable party/claim IDs, entity registration, identity resolution, claim adjudication, undecided-target rejection and explicit uncertainty |
+| Internal calculation planning / small evaluation output | decision-application full-pipeline test — policy-profile economic/voting planning, fresh deterministic snapshot, no public `calculationRequests`, graph or duplicate policy output |
+| Typed application error contract | decision-application invalid version/input/state/target/decision/evaluation tests — one public error type with stable codes and protected-state tamper rejection |
 | Optional adapter dependency direction | `../integrations/ubo-control/legacy-discovery/__tests__/architecture.nodetest.js` — core never imports integrations; adapter imports only the public UBO root |
+| Production legacy HTTP transport | adapter `httpTransport.nodetest.js` — configured HTTP(S) base, JSON POST, timeout mapping, malformed JSON preservation and no embedded credential/hostname |
+| One external composition point | adapter architecture suite — HTTP transport → legacy adapter plus public Decision Application, no core deep import, endpoint implementation import or stub fallback |
+| Fresh G3.2 composition proof | adapter `liveComposition.e2e.nodetest.js` — D1 direct exact, D2 multilayer 60%×50%=30%, D3 unresolved branch and D4 voting/economic separation through a fresh snapshot |
+| Integration anti-corruption invariance | G3.2 E2E pollution test — changed legacy `ubos`, effective result and threshold cannot change capability facts or fresh snapshot semantics |
+| Composition failure paths | G3.2 E2E failure test — unavailable, malformed, NO_DATA and PARTIAL remain distinct and create no false qualifying owner |
 | No legacy implementation import | adapter architecture suite — no `agents/ubo`, endpoint module, provider, persistence or onboarding source import |
 | Legacy request minimization and transport injection | adapter L01/unsupported/configuration tests — public request validation; name/jurisdiction/explicit registration only; no thresholds/provider selection; no implicit transport |
 | Legacy conclusion anti-corruption | adapter L06/L07 and invariance tests — UBO/effective ownership/control/threshold/gaps/stakeholders/reviewer/cache changes cannot alter candidate output |

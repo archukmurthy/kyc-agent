@@ -4,6 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "test": "node --test __tests__/architecture.nodetest.js __tests__/legacyDiscoveryAdapter.nodetest.js"
+    "test": "node --test __tests__/architecture.nodetest.js __tests__/legacyDiscoveryAdapter.nodetest.js __tests__/httpTransport.nodetest.js __tests__/liveComposition.e2e.nodetest.js",
+    "verify:live": "node scripts/liveVerify.js"
   }
 }

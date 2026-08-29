@@ -2,6 +2,10 @@
 
 const { createUboControl } = require("./composition/createUboControl");
 const {
+  DECISION_APPLICATION_CONTRACT_VERSION,
+  createUboDecisionApplication,
+} = require("./application/createUboDecisionApplication");
+const {
   APPLICABILITY_MODEL_VERSION,
   APPLICABILITY_RESULT,
   CAPABILITY_CONTRACT_VERSION,
@@ -35,7 +39,9 @@ const { validateEvidenceReference } = require("./contracts/evidenceReference");
 const { validateIdentityResolutionDecision } = require("./contracts/identityResolutionDecision");
 const { validatePercentageValue } = require("./contracts/percentageValue");
 const {
+  DECISION_APPLICATION_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
+  DecisionApplicationError,
   UboConfigurationError,
   UboContractError,
   PolicyPackIntegrityError,
@@ -55,6 +61,8 @@ module.exports = Object.freeze({
   CLAIM_STATE,
   CLAIM_STATE_MODEL_VERSION,
   CONDITION_LANGUAGE_VERSION,
+  DECISION_APPLICATION_CONTRACT_VERSION,
+  DECISION_APPLICATION_ERROR_CODE,
   IDENTITY_RESOLUTION_STATUS,
   PERCENTAGE_VALUE_TYPE,
   POLICY_PACK_SCHEMA_ID,
@@ -68,11 +76,13 @@ module.exports = Object.freeze({
   RISK_LEVEL,
   RISK_LEVEL_MODEL_VERSION,
   UBO_CONFIGURATION_ERROR_CODE,
+  DecisionApplicationError,
   PolicyPackIntegrityError,
   PolicyPackValidationError,
   UboConfigurationError,
   UboContractError,
   canonicalizeJson,
+  createUboDecisionApplication,
   createUboControl,
   hashPolicyPack,
   loadPolicyPack,

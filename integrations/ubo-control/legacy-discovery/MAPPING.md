@@ -2,6 +2,8 @@
 
 This disposable host integration implements the public `DiscoveryService` shape by translating the existing `POST /api/ubo-discovery` capability. It is not an ownership determination and does not make legacy UBO conclusions authoritative in UBO Control.
 
+G3.2 adds an actual HTTP transport and one composition point: `createLegacyDiscoveryComposition({ baseUrl, policyPack, fetchImpl?, timeoutMs? })`. The configured HTTP base URL is infrastructure input; no hostname, credential, provider model, search budget or cache setting enters UBO Control. The composition returns the adapter as `discoveryService` and the public stateless decision façade as `decisionApplication`. It imports no legacy endpoint implementation.
+
 ## Request mapping
 
 The adapter validates the public Discovery request and sends only:
@@ -19,8 +21,8 @@ It sends no UBO threshold, discovery-materiality threshold, tenant/provider sele
 Only direct source relationship material retained on `ownershipGraph.edges`, its endpoint identity assertions and its specifically referenced evidence entries are considered. Edge direction is normalized as legacy `from` owner/controller to legacy `to` owned/controlled entity, yielding grammatical `subject relationship object` facts.
 
 - an explicit ownership edge without contradictory nature metadata becomes `ECONOMIC_OWNERSHIP`;
-- explicit `ownership-of-shares-*` nature becomes `ECONOMIC_OWNERSHIP`;
-- explicit `voting-rights-*` nature becomes `VOTING_RIGHTS`;
+- explicit `ownership-of-shares-*` nature becomes `ECONOMIC_OWNERSHIP` with the explicit `SHARE_OWNERSHIP` policy concept;
+- explicit `voting-rights-*` nature becomes `VOTING_RIGHTS` with the explicit `VOTING_RIGHTS` policy concept;
 - explicit appointment/removal or significant-influence nature becomes the corresponding provider-neutral control relationship;
 - trust-role relationship types are retained only where the legacy type is explicit;
 - a legal-entity registration number becomes a candidate external identifier, never a canonical UBO entity ID;
@@ -54,3 +56,11 @@ Fact-level references are created only from the specific legacy evidence IDs att
 The adapter cannot repair information already discarded upstream. Known limitations include ceased PSCs filtered before the response, unrecognized/non-band PSC data potentially dropped, voting/economic semantics sometimes collapsed, percentage ranges sometimes reduced to lower bounds, raw Companies House payloads not durably retained, incomplete PSC pagination, pre-adapter conflict resolution/deduplication, threshold/materiality filtering and provenance weaker than Evidence Platform provenance. These limitations produce stable integration issues and conservative outcomes; they do not become PolicyGaps automatically.
 
 The integration is disposable because production code inside `ubo-control/` never imports it. A later evidence-backed Discovery implementation can replace it at host composition without changing UBO Control.
+
+## Deterministic and live verification
+
+Ordinary tests use an injected `fetch` boundary and never require a network or credential. E2E-D1 through E2E-D4 prove direct exact ownership, multilayer look-through, unresolved branches and voting/economic separation through adapter → public decision façade → fresh `DecisionSnapshot`. A polluted legacy `ubos`/threshold result cannot alter fresh snapshot semantics.
+
+`npm run verify:live` is separately opt-in. It requires `UBO_LEGACY_BASE_URL`, `UBO_POLICY_PACK_PATH`, `UBO_LIVE_ENTITY_NAME`, and optional subject fields. The first run performs real discovery and reports stable decision targets. It does not evaluate until an operator reviews them and supplies `UBO_LIVE_DECISION_PLAN_PATH` containing explicit entity registrations, identity decisions and claim adjudications. A live failure is reported as failure; the verifier never falls back to fixtures. Reports summarize outcomes, fresh fingerprints/calculations/policy/hash and omit the raw provider payload.
+
+The sanitized G3.2 run record is in [`docs/live-verification/2026-08-29.md`](docs/live-verification/2026-08-29.md).

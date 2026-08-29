@@ -6,9 +6,11 @@ const {
   CANDIDATE_FACT_TYPE,
   PERCENTAGE_VALUE_TYPE,
   RELATIONSHIP_TYPE,
+  createUboDecisionApplication,
   validateCapabilityResult,
   validateDiscoveryRequest,
 } = require("../../../ubo-control");
+const { createHttpLegacyDiscoveryTransport } = require("./httpTransport");
 
 const LEGACY_DISCOVERY_ENDPOINT = "/api/ubo-discovery";
 const ADAPTER_ISSUE_CODE = Object.freeze({
@@ -180,6 +182,10 @@ function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex
     ...evidenceItems.flatMap((item) => Array.isArray(item.naturesOfControl) ? item.naturesOfControl : []),
   ].map(String);
   const descriptors = [];
+  const explicitCurrentState = String(metadata.currentState || edge.currentState || "").toUpperCase();
+  const temporalQualifiers = ["CURRENT", "ACTIVE", "CEASED", "HISTORICAL"].includes(explicitCurrentState)
+    ? { currentState: explicitCurrentState }
+    : {};
 
   for (const nature of [...new Set(natures)]) {
     const normalized = nature.toLowerCase();
@@ -191,14 +197,22 @@ function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex
         { sourceIndex, nature },
       ));
     } else if (normalized.includes("ownership-of-shares")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP, measurement });
+      descriptors.push({
+        relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+        measurement,
+        qualifiers: { ...temporalQualifiers, economicInterestConcept: "SHARE_OWNERSHIP" },
+      });
     } else if (normalized.includes("voting-rights")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS, measurement });
+      descriptors.push({
+        relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
+        measurement,
+        qualifiers: { ...temporalQualifiers, votingConcept: "VOTING_RIGHTS" },
+      });
     } else if (normalized.includes("right-to-appoint-and-remove-directors")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT });
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT });
+      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT, qualifiers: temporalQualifiers });
+      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT, qualifiers: temporalQualifiers });
     } else if (normalized.includes("significant-influence-or-control")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL });
+      descriptors.push({ relationship: RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL, qualifiers: temporalQualifiers });
     } else {
       adapterIssues.push(issue(
         ADAPTER_ISSUE_CODE.AMBIGUOUS_RELATIONSHIP_SEMANTICS,
@@ -209,10 +223,10 @@ function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex
   }
 
   if (natures.length === 0) {
-    if (edge.type === "ownership") descriptors.push({ relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP });
-    else if (edge.type === "trustee_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.TRUSTEE });
-    else if (edge.type === "settlor_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.SETTLOR });
-    else if (edge.type === "protector_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.PROTECTOR });
+    if (edge.type === "ownership") descriptors.push({ relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP, qualifiers: temporalQualifiers });
+    else if (edge.type === "trustee_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.TRUSTEE, qualifiers: temporalQualifiers });
+    else if (edge.type === "settlor_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.SETTLOR, qualifiers: temporalQualifiers });
+    else if (edge.type === "protector_relationship") descriptors.push({ relationship: RELATIONSHIP_TYPE.PROTECTOR, qualifiers: temporalQualifiers });
     else {
       adapterIssues.push(issue(
         ADAPTER_ISSUE_CODE.UNSUPPORTED_LEGACY_FIELD,
@@ -323,7 +337,11 @@ function translateLegacyResponse(request, body) {
         relationship: descriptor.relationship,
         object,
         evidenceReferences,
-        qualifiers: { adapter: "legacy-discovery-anti-corruption-v1", sourceAssertionIndex: sourceIndex },
+        qualifiers: {
+          adapter: "legacy-discovery-anti-corruption-v1",
+          sourceAssertionIndex: sourceIndex,
+          ...(descriptor.qualifiers || {}),
+        },
       };
       if (descriptor.measurement !== undefined) fact.measurement = descriptor.measurement;
       candidateFacts.push(fact);
@@ -433,4 +451,18 @@ function createLegacyDiscoveryAdapter({ transport } = {}) {
   });
 }
 
-module.exports = Object.freeze({ ADAPTER_ISSUE_CODE, LEGACY_DISCOVERY_ENDPOINT, createLegacyDiscoveryAdapter });
+function createLegacyDiscoveryComposition({ baseUrl, policyPack, fetchImpl, timeoutMs } = {}) {
+  const transport = createHttpLegacyDiscoveryTransport({ baseUrl, fetchImpl, timeoutMs });
+  return Object.freeze({
+    discoveryService: createLegacyDiscoveryAdapter({ transport }),
+    decisionApplication: createUboDecisionApplication({ policyPack }),
+  });
+}
+
+module.exports = Object.freeze({
+  ADAPTER_ISSUE_CODE,
+  LEGACY_DISCOVERY_ENDPOINT,
+  createHttpLegacyDiscoveryTransport,
+  createLegacyDiscoveryAdapter,
+  createLegacyDiscoveryComposition,
+});
