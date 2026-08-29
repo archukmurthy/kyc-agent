@@ -10,8 +10,8 @@
 | Completed implementation | Disposable external legacy Discovery anti-corruption adapter; injected transport; minimum request mapping; provider-neutral candidate-fact translation; exact/range/unknown preservation; voting/economic separation; conservative capability outcomes; stable adapter issues; conclusion-field invariance |
 | Scenario coverage | L01–L14 cover exact ownership, reconstructable band, voting, ambiguity, legal-entity identity, ignored conclusions/gaps/projection, conflicting assertions, NO_DATA, PARTIAL, malformed response, service/operational failures and weak provenance |
 | Public/product boundary | Adapter lives under `integrations/`; imports only public `ubo-control`; no `index.js` expansion; core imports no adapter; no legacy implementation, provider, Evidence Platform, onboarding, persistence or live endpoint wiring |
-| Outstanding implementation | Complete full verification and open the G3.1 PR. Actual endpoint composition/execution is outside G3.1 and must not begin automatically. |
-| Tests / status | Adapter 26/26 passed in focused development. Full verification pending. |
+| Outstanding implementation | Open and report the dedicated G3.1 PR only. Actual endpoint composition/execution is outside G3.1 and must not begin automatically. |
+| Tests / status | Adapter 29/29 passed. Full UBO 225/225 passed. Host 25 suites / 482 tests passed. Architecture 6/6 passed (2 core + 4 adapter). Legacy UBO framework and recalculation smokes passed. Production build passed. `git diff --check` passed. |
 | Active escalations | None. The existing deliberate public API was sufficient; no public export expansion was required. |
 | Next approved step | Complete verification, open and report the dedicated G3.1 PR only; do not merge it and do not begin G3.2. |
 
