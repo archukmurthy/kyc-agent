@@ -2,7 +2,8 @@
 
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
-**Status:** APPROVED — NOT YET IMPLEMENTED  
+**Status:** APPROVED — NOT YET IMPLEMENTED
+
 **Target:** Gate 5.1
 
 UBO Control must expose a provider-neutral ownership/control graph projection capable of powering an interactive visual explanation of established structure, effective-interest paths, qualifying bases, unresolved branches, conflicts and historical decision states.
