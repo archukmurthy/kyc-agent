@@ -2,19 +2,19 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | **Gate 1 — COMPLETE AND ACCEPTED**; Gate 2 remains unopened |
-| Branch | `docs/ubo-practitioner-research-001` |
-| Base commit | `d9c0a28b9558c8d6529949b83e2bb1849d94ff85` (G1.2B merge on `origin/main`) |
-| Latest accepted PR | [#29 — UBO Control G1.2B deterministic scenario universe](https://github.com/archukmurthy/kyc-agent/pull/29), merged with merge commit `d9c0a28b9558c8d6529949b83e2bb1849d94ff85`; remote G1.2B branch deleted |
-| Current PR | [#30 — UBO Control practitioner research hypotheses](https://github.com/archukmurthy/kyc-agent/pull/30) — documentation-only; do not merge without Control Room acceptance |
-| Completed implementation | UBO Control now exists as a separately bounded product with explicit external capability contracts, canonical policy infrastructure, UK Corporate policy pack, deterministic test stubs and a reusable executable scenario universe, with no dependency on legacy/provider/onboarding implementations and no premature UBO reasoning engine. |
-| Practitioner evidence | `PRACTITIONER-001` recorded as `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; architecture change `NONE`; policy change `NONE`; contract change `NONE` |
-| Future-gate hypotheses | JH-001 through JH-007 recorded for future Journey/Resolution work; none is approved execution logic |
-| Outstanding implementation | Gate 2 remains unopened pending a Control Room implementation specification |
-| Tests / status | Documentation branch: UBO 88/88 passed; host 25 suites / 482 tests passed; architecture 2/2 passed; `git diff --check` passed. Accepted G1.2B coverage: 98.88% line / 96.14% branch. |
-| Active escalations | None. Practitioner evidence cannot amend policy, architecture, capability contracts, fallback eligibility or Evidence/UBO boundaries. |
-| Next approved step | Complete the documentation-only practitioner research PR, then stop; do not begin Gate 2. |
+| Gate / sub-gate | Gate 2 / **G2.1 — OwnershipCase + Candidate Claims** |
+| Branch | `codex/ubo-control-g2-1-case-claims` |
+| Base commit | `5096f75f01e3b776117818da70bf75be26ca6fec` (PR #30 merge on `origin/main`) |
+| Latest accepted PR | [#30 — UBO Control practitioner research hypotheses](https://github.com/archukmurthy/kyc-agent/pull/30), merged with merge commit `5096f75f01e3b776117818da70bf75be26ca6fec`; remote documentation branch deleted |
+| Current PR | [#31 — UBO Control G2.1 ownership cases and candidate claims](https://github.com/archukmurthy/kyc-agent/pull/31) — do not merge without Control Room acceptance |
+| Completed implementation | Pure immutable `OwnershipCase`; UBO-owned canonical entities; validated capability-result intake; deterministic candidate claims; explicit identity decisions; explicit claim-state adjudication history; structural graph-eligibility projection only |
+| Scenario coverage | G2.1 materially exercises S01, S02, S05, S06, S07, S08, S09, S10, S14, S16, S17 and S19, including newly discovered, canonical, same-name and explicitly rejected identity cases |
+| Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
+| Outstanding implementation | PR review within G2.1. G2.2 graph construction/calculation remains unopened. |
+| Tests / status | UBO 113/113 passed; 98.44% line / 93.25% branch coverage. Host 25 suites / 482 tests passed. Architecture 2/2 passed. Legacy UBO framework and recalculation smoke tests passed. Production build passed. `git diff --check` passed. |
+| Active escalations | None. No conflict winner, evidence/temporal precedence, duplicate-interest, automatic identity, graph, calculation, policy sufficiency or public API doctrine was introduced. |
+| Next approved step | Complete and report the G2.1 PR only; do not start G2.2. |
 
 ## Scope guard
 
-Gate 1 is complete and accepted. This documentation branch records practitioner evidence and future-gate hypotheses only. It changes no architecture, policy, contract, scenario semantics, stub, domain/public code, deterministic calculation, UBO reasoning, onboarding, Evidence Platform or legacy UBO behavior. Gate 2 has not started.
+G2.1 converts validated capability candidate facts into auditable UBO-owned case and claim records. It contains no graph construction/traversal, ownership or range arithmetic, threshold/control qualification, Policy Pack evaluation, requirement resolution, InformationNeed/gap/action generation, UBO/PSC/controller determination, SMO fallback, decision snapshot, onboarding projection, live provider or persistence behavior. G2.2 has not started.

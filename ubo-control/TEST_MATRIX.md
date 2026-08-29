@@ -16,6 +16,22 @@
 | Fact-level versus operation-level evidence | `__tests__/contracts.nodetest.js` — operation references never populate fact support |
 | EvidenceReference opacity and integrity metadata | `__tests__/contracts.nodetest.js` — provider-neutral reference validation |
 | Explicit identity resolution audit record | `__tests__/contracts.nodetest.js` — statuses, resolved ID, evidence, actor/time |
+| OwnershipCase stable identity and deterministic revisions | `__tests__/ownershipCase.nodetest.js` — equivalent creation, revision/event IDs, immutable projections and external references |
+| Canonical entity categories and metadata | `__tests__/ownershipCase.nodetest.js` — natural person, legal entity, trust/legal arrangement, other and unknown categories plus aliases, external IDs, jurisdiction and metadata preservation |
+| Names never become canonical identity keys | `__tests__/ownershipCase.nodetest.js` — same-name canonical entities and S09 candidate endpoints remain distinct |
+| Pure candidate-fact intake and source immutability | `__tests__/ownershipCase.nodetest.js` — S01 input/result cloning, stable source references and no graph mutation |
+| Stable UBO candidate-claim identity and direction | `__tests__/ownershipCase.nodetest.js` — deterministic case/operation/fact IDs and original subject/relationship/object order |
+| Company/LLP candidate-claim semantics | `__tests__/ownershipCase.nodetest.js` — S01 and S02 relationship/qualifier preservation |
+| Range, voting, significant-control and trust claim integrity | `__tests__/ownershipCase.nodetest.js` — S10, S14, S16 and S17 exact typed structures |
+| Temporal/current-state qualifier preservation | `__tests__/ownershipCase.nodetest.js` — supplied ceased/historical qualifiers remain unchanged and unadjudicated |
+| Failure/no-data intake cannot create conclusions | `__tests__/ownershipCase.nodetest.js` — S06/S07 and defensive FAILED-with-fact case create operation records but zero claims |
+| Conflict and duplicate candidate preservation | `__tests__/ownershipCase.nodetest.js` — S09 and S19 claims remain independently addressable and evidence-backed |
+| Explicit identity operations | `__tests__/ownershipCase.nodetest.js` — existing/new entity resolution, unresolved endpoints, rejected match, unknown-key/entity and party-mismatch failures |
+| Explicit claim-state transitions and append-only adjudication | `__tests__/ownershipCase.nodetest.js` — CANDIDATE→PROVISIONAL→OPERATIVE history and prior immutable projections |
+| Invalid and terminal claim-state transitions | `__tests__/ownershipCase.nodetest.js` — previous-state mismatch, no-op, return-to-CANDIDATE and terminal-state rejection |
+| Supersession remains reconstructable | `__tests__/ownershipCase.nodetest.js` — S19 original claims, source references and superseded-by decision remain present |
+| Structural graph eligibility only | `__tests__/ownershipCase.nodetest.js` — requires OPERATIVE relationship plus two explicit resolved canonical endpoints; creates no graph |
+| G2.1 remains internal/offline | `__tests__/ownershipCase.nodetest.js` and `__tests__/architecture.nodetest.js` — unchanged public exports and no provider/host/external package dependency |
 | Policy Pack top-level/data-only validation | `__tests__/policyPack.nodetest.js` — malformed, executable, duplicate, and unknown-reference rejection |
 | Schema identity separate from policy version | `__tests__/policyPack.nodetest.js` — exact schema ID/version and independent policy version validation |
 | Versioned engine-semantic pins | `__tests__/policyPack.nodetest.js` — every approved semantic version is required and exact |
