@@ -5,6 +5,15 @@
 | Product-root dependency direction | `__tests__/architecture.nodetest.js` — production imports remain inside root or use Node built-ins |
 | No legacy UBO or Evidence Platform implementation import | `__tests__/architecture.nodetest.js` — prohibited import scan |
 | Deliberate public entry point | `__tests__/architecture.nodetest.js` — exact export set |
+| Optional adapter dependency direction | `../integrations/ubo-control/legacy-discovery/__tests__/architecture.nodetest.js` — core never imports integrations; adapter imports only the public UBO root |
+| No legacy implementation import | adapter architecture suite — no `agents/ubo`, endpoint module, provider, persistence or onboarding source import |
+| Legacy request minimization and transport injection | adapter L01/unsupported/configuration tests — public request validation; name/jurisdiction/explicit registration only; no thresholds/provider selection; no implicit transport |
+| Legacy conclusion anti-corruption | adapter L06/L07 and invariance tests — UBO/effective ownership/control/threshold/gaps/stakeholders/reviewer/cache changes cannot alter candidate output |
+| Economic/voting and percentage fidelity | adapter L01–L04 plus lower-bound test — exact ownership, reconstructable range, voting separation, ambiguous omission and UNKNOWN precision loss |
+| Candidate identity and direction | adapter L01/L05 — grammatical owner-to-owned direction, legal-entity registry identifier, no legacy-node canonical identity or name merge |
+| Duplicate/conflicting assertion preservation | adapter L08 — distinct source assertions remain separate candidate facts with separate support |
+| Conservative capability outcomes | adapter L09–L13 — PARTIAL/NO_DATA/INCONCLUSIVE/UNSUPPORTED/UNAVAILABLE/FAILED remain distinct; no operational failure becomes NO_DATA |
+| Legacy evidence-reference limits | adapter L14 — fact/operation references remain separate and no source, hash, locator or integrity proof is invented |
 | Explicit provider injection / no stub fallback | `__tests__/composition.nodetest.js` — missing-provider failures and exact injected provider calls |
 | Typed composition errors and stable codes | `__tests__/composition.nodetest.js` — every approved configuration code |
 | Discovery and Extraction request contracts | `__tests__/contracts.nodetest.js` — common and capability-specific request validation |

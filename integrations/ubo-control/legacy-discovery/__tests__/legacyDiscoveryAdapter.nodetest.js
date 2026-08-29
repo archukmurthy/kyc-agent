@@ -1,0 +1,278 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const {
+  CAPABILITY_CONTRACT_VERSION,
+  CAPABILITY_OUTCOME_STATE,
+  PERCENTAGE_VALUE_TYPE,
+  RELATIONSHIP_TYPE,
+  validateCapabilityResult,
+} = require("../../../../ubo-control");
+const {
+  ADAPTER_ISSUE_CODE,
+  LEGACY_DISCOVERY_ENDPOINT,
+  createLegacyDiscoveryAdapter,
+} = require("..");
+const { cloneFixture, response, edge } = require("../test-support/legacyResponseFixtures");
+
+function discoveryRequest(overrides = {}) {
+  return {
+    contractVersion: CAPABILITY_CONTRACT_VERSION,
+    requestId: "g31-request-1",
+    caseId: "g31-case-1",
+    informationNeeds: [{ needId: "current-structure", concepts: ["CURRENT_OWNERSHIP_AND_CONTROL"] }],
+    subject: {
+      entityId: "canonical-customer",
+      name: "Example Customer Ltd",
+      entityType: "COMPANY",
+      jurisdiction: "GB",
+      externalIdentifiers: [{ namespace: "GB_COMPANIES_HOUSE", value: "01234567" }],
+    },
+    ...overrides,
+  };
+}
+
+function transportReturning(body, status = 200, calls = []) {
+  return { async invoke(input) { calls.push(input); return { status, body }; } };
+}
+
+async function discoverFixture(id, options = {}) {
+  const calls = [];
+  const adapter = createLegacyDiscoveryAdapter({ transport: transportReturning(cloneFixture(id), options.status || 200, calls) });
+  const result = await adapter.discover(options.request || discoveryRequest());
+  validateCapabilityResult(result, { expectedRequestId: (options.request || discoveryRequest()).requestId });
+  return { result, calls };
+}
+
+test("L01 exact direct ownership maps the minimum request and a directed EXACT economic candidate", async () => {
+  const { result, calls } = await discoverFixture("L01");
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: LEGACY_DISCOVERY_ENDPOINT,
+    body: { entityName: "Example Customer Ltd", jurisdiction: "GB", registrationNumber: "01234567" },
+  }]);
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.PARTIAL);
+  assert.equal(result.candidateFacts.length, 1);
+  const fact = result.candidateFacts[0];
+  assert.equal(fact.relationship, RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP);
+  assert.deepEqual(fact.measurement, { type: PERCENTAGE_VALUE_TYPE.EXACT, value: 40 });
+  assert.equal(fact.subject.name, "Alice Owner");
+  assert.equal(fact.object.entityId, "canonical-customer");
+  assert.equal(Object.hasOwn(fact.subject, "entityId"), false);
+  assert.equal(Object.isFrozen(result), true);
+});
+
+test("L02 Companies House band preserves RANGE endpoints and never scalarizes the lower bound", async () => {
+  const { result } = await discoverFixture("L02");
+  assert.deepEqual(result.candidateFacts[0].measurement, {
+    type: PERCENTAGE_VALUE_TYPE.RANGE,
+    lowerBound: 25,
+    upperBound: 50,
+    lowerInclusive: false,
+    upperInclusive: true,
+  });
+  assert.notEqual(result.candidateFacts[0].measurement.type, PERCENTAGE_VALUE_TYPE.EXACT);
+});
+
+test("L03 voting source becomes VOTING_RIGHTS and never economic ownership", async () => {
+  const { result } = await discoverFixture("L03");
+  assert.deepEqual(result.candidateFacts.map((fact) => fact.relationship), [RELATIONSHIP_TYPE.VOTING_RIGHTS]);
+  assert.deepEqual(result.candidateFacts[0].measurement, {
+    type: PERCENTAGE_VALUE_TYPE.RANGE,
+    lowerBound: 50,
+    upperBound: 75,
+    lowerInclusive: false,
+    upperInclusive: true,
+  });
+});
+
+test("L04 ambiguous voting/economic source is omitted and remains INCONCLUSIVE with a stable issue", async () => {
+  const { result } = await discoverFixture("L04");
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.INCONCLUSIVE);
+  assert.deepEqual(result.candidateFacts, []);
+  assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.AMBIGUOUS_RELATIONSHIP_SEMANTICS));
+});
+
+test("L05 legal-entity owner retains registry identity without adopting a legacy node ID", async () => {
+  const { result } = await discoverFixture("L05");
+  const owner = result.candidateFacts[0].subject;
+  assert.equal(owner.entityType, "COMPANY");
+  assert.deepEqual(owner.externalIdentifiers, [{ namespace: "legacy-company-register:GB", value: "09876543" }]);
+  assert.equal(Object.hasOwn(owner, "entityId"), false);
+});
+
+test("L06 legacy UBO and effective-ownership conclusions cannot alter candidate output", async () => {
+  const first = await discoverFixture("L06");
+  const changed = cloneFixture("L06");
+  changed.ubos = [{ personId: "someone-else", ownership: 100, basis: "changed" }];
+  changed.ownership = { individuals: [{ effectiveOwnership: 0 }] };
+  changed.control = [{ personId: "someone-else", legacyController: false }];
+  changed.threshold = 99;
+  const second = await createLegacyDiscoveryAdapter({ transport: transportReturning(changed) }).discover(discoveryRequest());
+  assert.deepEqual(second, first.result);
+});
+
+test("L07 legacy gaps, stakeholder projection, remediation and reviewer state are ignored", async () => {
+  const { result } = await discoverFixture("L07");
+  const serialized = JSON.stringify(result);
+  for (const forbidden of ["needs_customer_evidence", "Ask customer", "legacy remediation", "legacy-approved", "confidence"]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("L08 distinct conflicting source assertions remain separate candidate facts", async () => {
+  const { result } = await discoverFixture("L08");
+  assert.equal(result.candidateFacts.length, 2);
+  assert.deepEqual(result.candidateFacts.map(({ measurement }) => measurement.value), [40, 45]);
+  assert.deepEqual(result.candidateFacts.map(({ evidenceReferences }) => evidenceReferences[0].referenceId), ["source-a", "source-b"]);
+});
+
+test("L09 successful empty discovery is NO_DATA and creates no negative fact", async () => {
+  const { result } = await discoverFixture("L09");
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.NO_DATA);
+  assert.deepEqual(result.candidateFacts, []);
+});
+
+test("L10 useful legacy output remains PARTIAL even when legacy status says resolved", async () => {
+  const { result } = await discoverFixture("L10");
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.PARTIAL);
+  assert.notEqual(result.outcome.state, CAPABILITY_OUTCOME_STATE.COMPLETE);
+  assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.KNOWN_COVERAGE_LIMITATION));
+});
+
+test("L11 malformed legacy response becomes FAILED, not NO_DATA", async () => {
+  const { result } = await discoverFixture("L11");
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.FAILED);
+  assert.equal(result.outcome.code, "LEGACY_MALFORMED_RESPONSE");
+  assert.deepEqual(result.candidateFacts, []);
+});
+
+test("L12 connection/service failure becomes UNAVAILABLE and creates no fact", async () => {
+  const error = Object.assign(new Error("offline fixture"), { code: "ECONNREFUSED" });
+  const adapter = createLegacyDiscoveryAdapter({ transport: { async invoke() { throw error; } } });
+  const result = await adapter.discover(discoveryRequest());
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.UNAVAILABLE);
+  assert.equal(result.outcome.code, "LEGACY_SERVICE_UNAVAILABLE");
+  assert.deepEqual(result.candidateFacts, []);
+});
+
+test("L13 rate limit, authentication, dependency 5xx and timeout remain operational outcomes", async (t) => {
+  const cases = [
+    [429, "LEGACY_RATE_LIMITED", true],
+    [401, "LEGACY_AUTHENTICATION_UNAVAILABLE", false],
+    [503, "LEGACY_SERVICE_UNAVAILABLE", true],
+  ];
+  for (const [status, code, retryable] of cases) {
+    await t.test(String(status), async () => {
+      const adapter = createLegacyDiscoveryAdapter({ transport: transportReturning({}, status) });
+      const result = await adapter.discover(discoveryRequest());
+      assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.UNAVAILABLE);
+      assert.equal(result.outcome.code, code);
+      assert.equal(result.outcome.retryable, retryable);
+      assert.notEqual(result.outcome.state, CAPABILITY_OUTCOME_STATE.NO_DATA);
+    });
+  }
+  await t.test("timeout", async () => {
+    const adapter = createLegacyDiscoveryAdapter({ transport: { async invoke() {
+      throw Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    } } });
+    const result = await adapter.discover(discoveryRequest());
+    assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.UNAVAILABLE);
+    assert.equal(result.outcome.code, "LEGACY_TIMEOUT");
+  });
+});
+
+test("L14 weak provenance stays fact-level empty and produces no invented evidence proof", async () => {
+  const { result } = await discoverFixture("L14");
+  assert.deepEqual(result.candidateFacts[0].evidenceReferences, []);
+  assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.MISSING_DURABLE_EVIDENCE_REFERENCE));
+  assert.deepEqual(result.operationEvidenceReferences.map(({ referenceType }) => referenceType), ["DISCOVERY_RUN", "DISCOVERY_AUDIT"]);
+  assert.equal(JSON.stringify(result).includes("operation-only-source"), false);
+  assert.equal(JSON.stringify(result).includes("integrity"), false);
+});
+
+test("anti-corruption invariance ignores every legacy conclusion and presentation category", async () => {
+  const baseline = response();
+  const polluted = JSON.parse(JSON.stringify(baseline));
+  Object.assign(polluted, {
+    ubos: [{ final: true }],
+    ownership: { effectiveOwnership: 88 },
+    threshold: 10,
+    control: { finalController: true },
+    ownershipGaps: { recommendation: "collect passport" },
+    stakeholders: [{ roles: ["ubo"] }],
+    reviewerPresentation: { status: "green" },
+    cache: { hit: true, determination: "cached" },
+  });
+  const first = await createLegacyDiscoveryAdapter({ transport: transportReturning(baseline) }).discover(discoveryRequest());
+  const second = await createLegacyDiscoveryAdapter({ transport: transportReturning(polluted) }).discover(discoveryRequest());
+  assert.deepEqual(second, first);
+});
+
+test("lower-bound scalar without reconstructable range becomes UNKNOWN with precision-loss issue", async () => {
+  const body = response({ edges: [edge("lower-only", "legacy-owner-node", "legacy-root-node", {
+    ownershipPercentage: 25, ownershipIsMinimum: true, metadata: { ownershipIsMinimum: true },
+  })] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.equal(result.candidateFacts[0].measurement.type, PERCENTAGE_VALUE_TYPE.UNKNOWN);
+  assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS));
+});
+
+test("explicit economic and voting natures produce separate candidates while explicit control stays non-percentage", async () => {
+  const body = response({ edges: [
+    edge("dual", "legacy-owner-node", "legacy-root-node", {
+      ownershipPercentage: 25,
+      metadata: { naturesOfControl: [
+        "ownership-of-shares-25-to-50-percent",
+        "voting-rights-25-to-50-percent",
+      ] },
+    }),
+    edge("appointment", "legacy-owner-node", "legacy-root-node", {
+      ownershipPercentage: null,
+      metadata: { naturesOfControl: ["right-to-appoint-and-remove-directors"] },
+    }),
+  ] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.deepEqual(result.candidateFacts.map(({ relationship }) => relationship), [
+    RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+    RELATIONSHIP_TYPE.VOTING_RIGHTS,
+    RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT,
+    RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT,
+  ]);
+  assert.equal(Object.hasOwn(result.candidateFacts[2], "measurement"), false);
+  assert.equal(Object.hasOwn(result.candidateFacts[3], "measurement"), false);
+});
+
+test("unknown legacy relationship type is quarantined with the stable unsupported-field issue", async () => {
+  const body = response({ edges: [edge("unknown", "legacy-owner-node", "legacy-root-node", {
+    type: "legacy_magic_control", ownershipPercentage: null,
+  })] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.INCONCLUSIVE);
+  assert.deepEqual(result.candidateFacts, []);
+  assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.UNSUPPORTED_LEGACY_FIELD));
+});
+
+test("unsupported subject or InformationNeed does not invoke transport", async () => {
+  let calls = 0;
+  const adapter = createLegacyDiscoveryAdapter({ transport: { async invoke() { calls += 1; } } });
+  const result = await adapter.discover(discoveryRequest({
+    informationNeeds: [{ needId: "identity", concepts: ["IDENTITY_VERIFICATION"] }],
+  }));
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.UNSUPPORTED);
+  assert.equal(calls, 0);
+});
+
+test("transport injection and production request validation are mandatory", async () => {
+  assert.throws(() => createLegacyDiscoveryAdapter(), /injected transport/);
+  const adapter = createLegacyDiscoveryAdapter({ transport: transportReturning({}) });
+  await assert.rejects(() => adapter.discover({ ...discoveryRequest(), contractVersion: "wrong" }), /supported contract version/);
+});
+
+test("malformed transport envelope and non-availability HTTP rejection remain FAILED", async () => {
+  const malformed = createLegacyDiscoveryAdapter({ transport: { async invoke() { return { body: {} }; } } });
+  assert.equal((await malformed.discover(discoveryRequest())).outcome.state, CAPABILITY_OUTCOME_STATE.FAILED);
+  const badRequest = createLegacyDiscoveryAdapter({ transport: transportReturning({}, 400) });
+  assert.equal((await badRequest.discover(discoveryRequest())).outcome.code, "LEGACY_HTTP_ERROR");
+});

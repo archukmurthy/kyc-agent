@@ -36,6 +36,14 @@ Both capabilities return:
 
 Candidate facts, operation evidence references, and issues are always arrays. Provider-specific response structures do not cross this boundary.
 
+## Optional host integration boundary
+
+Host/provider adapters live outside the standalone product root and depend inward on the deliberate `ubo-control/index.js` surface. Production code inside `ubo-control/` never imports `integrations/`; an integration may not deep-import private core modules.
+
+G3.1 adds the disposable `integrations/ubo-control/legacy-discovery/` anti-corruption adapter. It implements `DiscoveryService` using an explicitly injected transport for the external `POST /api/ubo-discovery` capability. The adapter imports no legacy implementation, provider SDK, persistence, onboarding or Evidence Platform code. It translates only sufficiently definite direct source assertions into candidate facts and ignores legacy UBO, effective-ownership, threshold, control, gap, stakeholder, reviewer and cached-determination conclusions. Known legacy loss is expressed through conservative capability outcomes and stable integration issues, never by weakening core candidate-fact, graph, calculation, policy, evidence or decision-history semantics.
+
+The adapter remains outside core because it is host-specific disposable infrastructure. Removing it requires no change to UBO Control. G3.1 contains no live endpoint composition; deterministic tests inject response fixtures.
+
 ## Candidate facts and graph direction
 
 Capabilities return candidate facts, never authoritative owners, PSCs, controllers, UBO decisions, or graph mutations. Supported fact forms are `RELATIONSHIP` and `ENTITY_ATTRIBUTE`.
