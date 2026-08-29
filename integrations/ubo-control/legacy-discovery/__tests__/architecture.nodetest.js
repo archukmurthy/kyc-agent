@@ -31,7 +31,7 @@ test("standalone UBO production code never imports outward from integrations", (
 
 test("legacy adapter depends inward only on the approved UBO public entry point", () => {
   const source = fs.readFileSync(path.join(ADAPTER_ROOT, "index.js"), "utf8");
-  assert.deepEqual(importSpecifiers(source), ["../../../ubo-control"]);
+  assert.deepEqual(importSpecifiers(source), ["../../../ubo-control", "./httpTransport"]);
   assert.equal(source.includes("../../../ubo-control/"), false);
 });
 
@@ -51,4 +51,14 @@ test("G3.1 adapter has no built-in network or credential dependency", () => {
   const source = fs.readFileSync(path.join(ADAPTER_ROOT, "index.js"), "utf8");
   assert.equal(/\bfetch\s*\(/.test(source), false);
   assert.equal(/ANTHROPIC|COMPANIES_HOUSE_API_KEY|process\.env/.test(source), false);
+});
+
+test("G3.2 has one explicit HTTP composition point and no production stub fallback", () => {
+  const source = fs.readFileSync(path.join(ADAPTER_ROOT, "index.js"), "utf8");
+  const transport = fs.readFileSync(path.join(ADAPTER_ROOT, "httpTransport.js"), "utf8");
+  assert.equal(source.includes("createLegacyDiscoveryComposition"), true);
+  assert.equal(source.includes("createUboDecisionApplication"), true);
+  assert.equal(transport.includes("/api/ubo-discovery"), false);
+  assert.equal(/stub|fixture|mock/i.test(transport), false);
+  assert.equal(/ANTHROPIC|COMPANIES_HOUSE_API_KEY|process\.env/.test(source + transport), false);
 });

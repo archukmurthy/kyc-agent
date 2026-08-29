@@ -2,19 +2,20 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | Gate 3 / **G3.1 — Legacy Discovery Adapter** |
-| Branch | `codex/ubo-control-g3-1-legacy-discovery-adapter` |
-| Base commit | `ec68bb803ec7a2a9f691b0bcc46e2a8c81df7088` (PR #36 normal merge on `origin/main`) |
-| Latest accepted PR | [#36 — UBO Control G2.4C decision history](https://github.com/archukmurthy/kyc-agent/pull/36), merged normally with merge commit `ec68bb803ec7a2a9f691b0bcc46e2a8c81df7088`; remote G2.4C branch deleted |
-| Current PR | [#37 — UBO Control G3.1 legacy Discovery adapter](https://github.com/archukmurthy/kyc-agent/pull/37) — do not merge without Control Room acceptance |
-| Completed implementation | Disposable external legacy Discovery anti-corruption adapter; injected transport; minimum request mapping; provider-neutral candidate-fact translation; exact/range/unknown preservation; voting/economic separation; conservative capability outcomes; stable adapter issues; conclusion-field invariance |
-| Scenario coverage | L01–L14 cover exact ownership, reconstructable band, voting, ambiguity, legal-entity identity, ignored conclusions/gaps/projection, conflicting assertions, NO_DATA, PARTIAL, malformed response, service/operational failures and weak provenance |
-| Public/product boundary | Adapter lives under `integrations/`; imports only public `ubo-control`; no `index.js` expansion; core imports no adapter; no legacy implementation, provider, Evidence Platform, onboarding, persistence or live endpoint wiring |
-| Outstanding implementation | Open and report the dedicated G3.1 PR only. Actual endpoint composition/execution is outside G3.1 and must not begin automatically. |
-| Tests / status | Adapter 29/29 passed. Full UBO 225/225 passed. Host 25 suites / 482 tests passed. Architecture 6/6 passed (2 core + 4 adapter). Legacy UBO framework and recalculation smokes passed. Production build passed. `git diff --check` passed. |
-| Active escalations | None. The existing deliberate public API was sufficient; no public export expansion was required. |
-| Next approved step | Complete verification, open and report the dedicated G3.1 PR only; do not merge it and do not begin G3.2. |
+| Gate / sub-gate | Gate 3 / **G3.2 — Live Discovery Composition** |
+| Branch | `codex/ubo-control-g3-2-live-discovery-composition` |
+| Base commit | `44190814dfc74d241f0884dd6ff625188822bbe2` (PR #37 normal merge on `origin/main`) |
+| Latest accepted PR | [#37 — UBO Control G3.1 legacy Discovery adapter](https://github.com/archukmurthy/kyc-agent/pull/37), merged normally with merge commit `44190814dfc74d241f0884dd6ff625188822bbe2`; remote G3.1 branch deleted |
+| Current PR | Pending dedicated G3.2 PR — do not merge without Control Room acceptance |
+| Completed implementation | Approved stateless/versioned Decision Application façade; protected serializable case state; explicit decision targets/operations; internal calculation planner; typed application errors; actual configured HTTP transport; one external composition point; offline D1–D4 full-pipeline proof; failure and anti-corruption invariance; opt-in live verifier |
+| Scenario coverage | G3.1 L01–L14 remain protected. G3.2 D1 direct exact, D2 multilayer fresh 60%×50%=30%, D3 unresolved branch, D4 voting/control separation, polluted legacy conclusions, unavailable/malformed/NO_DATA/PARTIAL paths |
+| Public/product boundary | Integration consumes only the deliberate public façade; `OwnershipCase`, graph, calculation, policy, requirement, orchestration and snapshot constructors stay private; core imports no integration; no provider credential or environment type enters UBO |
+| Outstanding implementation | Complete full regression/smoke/build verification, run controlled live verification only if explicitly configured, open and report the dedicated G3.2 PR. Do not merge and do not begin Gate 4. |
+| Tests / status | Focused Decision Application and integration suites pass; full final verification pending. |
+| Active escalations | Public application API escalation accepted and implemented as `createUboDecisionApplication({ policyPack })`; no further escalation is active. |
+| Future requirement | [PR-VIS-001](docs/product/product-requirements.md) — approved ownership graph projection and interactive renderer, not implemented, target Gate 5.1 |
+| Next approved step | Finish G3.2 verification and open/report its PR only. |
 
 ## Scope guard
 
-G3.1 translates only sufficiently definite source assertions retained by the legacy capability into provider-neutral candidate facts. It does not trust legacy UBO/control/effective-ownership/threshold/gap/reviewer conclusions, repair upstream source loss, adjudicate claims, build a fresh graph, calculate interests, apply policy, select providers, execute a live endpoint or integrate onboarding.
+G3.2 proves real legacy output can traverse the anti-corruption adapter and the public Decision Application into fresh UBO reasoning. The harness applies only explicitly supplied identity/adjudication decisions. It does not trust legacy conclusions, repair source loss, introduce fuzzy matching, auto-operate claims, persist snapshots, integrate onboarding/Extraction/Evidence, or implement PR-VIS-001.

@@ -176,6 +176,16 @@ History is append-only and linear per `OwnershipCase`. Genesis records an explic
 
 Where SMO fallback exists, the snapshot carries the full R10 measures-taken manifest: attempts, material capability operations, durable evidence and calculation references, requirement resolutions, current ReviewRequirement and authoritative FallbackExhaustionDecision. G2.4C remains internal and persistence-ready only: no database, filesystem/KV/object store, scheduler, provider adapter, UI, host integration, notification, webhook, public `index.js` export or Gate 3 behavior is introduced.
 
+## G3.2 public Decision Application and live-composition boundary
+
+`createUboDecisionApplication({ policyPack })` is the standalone product's deliberately small `ubo-decision-application-v1` reasoning boundary. It is separate from the existing capability-oriented `createUboControl`. The application retains only immutable Policy Pack configuration; mutable case state is always supplied and returned explicitly through an integrity-protected, data-only, JSON-serializable `DecisionApplicationCaseState` envelope.
+
+The only public operations are `intake`, `applyDecisions`, and `evaluate`. Intake creates/restores the private case and records a validated capability result without adjudication. Stable candidate-party and claim targets require explicit entity registration, identity decisions and claim adjudication. Evaluation refuses undecided targets, privately plans economic/voting calculations from the applicable Policy Pack entity profile, runs the existing full case → graph → calculation → policy → requirement → orchestration → snapshot pipeline, and returns the authoritative fresh `DecisionSnapshot`. Calculation requests and every private Gate 2 stage remain absent from the public surface. One typed `DecisionApplicationError` surface protects the wire contract with stable codes.
+
+The real legacy HTTP transport and `createLegacyDiscoveryComposition` live outside the product root under `integrations/ubo-control/legacy-discovery/`. They depend only on `ubo-control/index.js`; the core never imports them. Base URL, HTTP timeout and optional injected fetch are infrastructure configuration. Provider credentials, endpoint implementation, legacy conclusions and production stub selection remain behind/outside the boundary. Deterministic E2E tests are offline; controlled live verification is a separate opt-in command and requires explicit harness decisions before evaluation.
+
+No onboarding, Extraction/Evidence Platform integration, persistence, UI or graph renderer is introduced. The approved future graph projection/renderer is recorded as PR-VIS-001 for Gate 5.1 and must use the fresh canonical graph/DecisionSnapshot rather than legacy graph authority.
+
 ## Percentage values
 
 Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar. G2.2 consumes the unchanged validated input shape through exact internal rational and interval arithmetic. G2.3 interprets only the resulting exact/range aggregate against a Policy Pack threshold; it does not alter the calculation.
