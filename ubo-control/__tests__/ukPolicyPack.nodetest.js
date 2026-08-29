@@ -151,14 +151,16 @@ test("every supplied policy test assertion has exactly one honest gate classific
     "G2_1_EXECUTABLE",
     "G2_2_EXECUTABLE",
     "G2_3_EXECUTABLE",
-    "G2_4_DEFERRED",
+    "G2_4A_EXECUTABLE",
+    "G2_4B_DEFERRED",
     "LATER_INTEGRATION",
   ]);
   assertionPlan.forEach((entry) => assert.ok(allowedStatuses.has(entry.status)));
   assert.equal(assertionPlan.filter((entry) => entry.status === "G2_1_EXECUTABLE").length, 1);
   assert.equal(assertionPlan.filter((entry) => entry.status === "G2_2_EXECUTABLE").length, 4);
   assert.equal(assertionPlan.filter((entry) => entry.status === "G2_3_EXECUTABLE").length, 5);
-  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_4_DEFERRED").length, 11);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_4A_EXECUTABLE").length, 6);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_4B_DEFERRED").length, 5);
   assert.equal(assertionPlan.filter((entry) => entry.status === "LATER_INTEGRATION").length, 1);
 });
 

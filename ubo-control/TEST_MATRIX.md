@@ -58,6 +58,19 @@
 | Natural-person-only qualifying projection | `__tests__/policyDetermination.nodetest.js` — multiple bases merge into one canonical natural person; qualifying legal entities remain explicitly unresolved and are never emitted as people |
 | Policy determination pinning and purity | `__tests__/policyDetermination.nodetest.js` — exact pack ID/version/hash/schema and algorithm identity, deterministic deep-frozen output, source/calculation immutability, and tampered identity rejection |
 | G2.3 remains internal/offline and stops before resolution planning | `__tests__/policyDetermination.nodetest.js` and `__tests__/architecture.nodetest.js` — no public export expansion, InformationNeed/gap/action/question/document/analyst-task/SMO/snapshot/persistence/provider/onboarding behavior |
+| EvidencePolicyClassification identity and audit boundary | `__tests__/requirementResolution.nodetest.js` — deterministic policy-hash/case-revision pin, explicit source origin/support, malformed rejection, case-reference linkage, immutability, and retained unclassified evidence |
+| Non-additive evidence strength and independent constraints | `__tests__/requirementResolution.nodetest.js` — minimum pass/fail, two low items never add, `canResolveAlone`, corroboration, `POSITIVE_ONLY`, `CORROBORATIVE_ONLY`, and no provider numeric authority |
+| Evidence currentness and deterministic freshness | `__tests__/requirementResolution.nodetest.js` — supplied evaluation date, Policy Pack calendar-month maximum age, and current versus stale/historical handling without system time |
+| Distinct independent-source corroboration | `__tests__/requirementResolution.nodetest.js` — applicant declaration failure, configured one/two-source thresholds, same durable source deduplication, distinct-source counting, and `UNKNOWN` origin exclusion |
+| Approved requirement-state precedence | `__tests__/requirementResolution.nodetest.js` — `N_A`, applicability `UNRESOLVED`, explicitly relevant `CONFLICT`, G2.3 `REVIEW_REQUIRED`, evidenced `RESOLVED`, substantive `GAP`, and operational-only `UNRESOLVED` |
+| R01/R02/R03 resolution semantics | `__tests__/requirementResolution.nodetest.js` — evidenced direct natural person, unresolved legal holder need, COMPLETE calculation, partial/cycle gap, and separately evidenced intermediate existence/relationships |
+| R04/R05/R06 control resolution | `__tests__/requirementResolution.nodetest.js` — separate evidenced voting/appointment/other-control bases, shared legal-entity resolution need, S16 review precedence, HIGH-risk attestation restriction, and PSC silence non-negativity |
+| R07 identity-attribute boundary | `__tests__/requirementResolution.nodetest.js` — canonical name/control basis plus operative `ENTITY_ATTRIBUTE` claims, only explicitly required missing attributes, and no IDV/POI/POA/screening need |
+| R08 corroboration without UBO inference | `__tests__/requirementResolution.nodetest.js` — independent PSC evidence may resolve corroboration while creating no qualifying person or R01 conclusion |
+| R11/R12 specialist and explicit-fact boundaries | `__tests__/requirementResolution.nodetest.js` — trust presence remains specialist review, incomplete structure cannot prove no trust, nominee positive needs a principal, and silence cannot prove no nominee/bearer arrangement |
+| Capability outcomes remain distinct | `__tests__/requirementResolution.nodetest.js` — COMPLETE/PARTIAL/NO_DATA/INCONCLUSIVE/UNSUPPORTED/UNAVAILABLE/FAILED semantics; only unavailable/failed create OperationalBlockers and never PolicyGaps by themselves |
+| InformationNeed semantics and lifecycle | `__tests__/requirementResolution.nodetest.js` — shared semantic need deduplication, different-concept separation, OPEN→SATISFIED→reopened append-only reconstruction, and unordered permitted strategies |
+| G2.4A purity and exclusions | `__tests__/requirementResolution.nodetest.js` and `__tests__/architecture.nodetest.js` — deterministic deep-frozen output/input immutability, no public export, action/priority/question/document/task/fallback/outcome/snapshot/provider/persistence/onboarding behavior |
 | Policy Pack top-level/data-only validation | `__tests__/policyPack.nodetest.js` — malformed, executable, duplicate, and unknown-reference rejection |
 | Schema identity separate from policy version | `__tests__/policyPack.nodetest.js` — exact schema ID/version and independent policy version validation |
 | Versioned engine-semantic pins | `__tests__/policyPack.nodetest.js` — every approved semantic version is required and exact |
@@ -70,7 +83,7 @@
 | Source/runtime separation | `__tests__/policyPack.nodetest.js` — architecture/runtime-contract top-level data rejected; `__tests__/ukPolicyPack.nodetest.js` — source traceability pinned |
 | UK Corporate 1.3-RC canonical runtime identity | `__tests__/ukPolicyPack.nodetest.js` — source byte hash, runtime canonical hash, identity/status, counts, immutability, and closed references |
 | Missing B1/B2/B4 and E01/E02/E08/E10 content remains unresolved | `__tests__/ukPolicyPack.nodetest.js` — exact unresolved reference sets and no invented text |
-| Supplied assertion inventory is complete without false behavioral coverage | `__tests__/ukPolicyPack.nodetest.js` — exact 22-item one-to-one plan with 1 G2.1, 4 G2.2, 5 G2.3, 11 G2.4-deferred and 1 later-integration classifications |
+| Supplied assertion inventory is complete without false behavioral coverage | `__tests__/ukPolicyPack.nodetest.js` — exact 22-item one-to-one plan with 1 G2.1, 4 G2.2, 5 G2.3, 6 G2.4A, 5 G2.4B-deferred and 1 later-integration classifications |
 | Canonical policy serialization | `__tests__/policyPack.nodetest.js` — fixed canonicalization vector |
 | Stable policy hash across insignificant formatting | `__tests__/policyPack.nodetest.js` — whitespace/order/line-ending equivalence |
 | Material policy change changes identity | `__tests__/policyPack.nodetest.js` — changed-data hash vector |
@@ -96,29 +109,29 @@
 
 ## UK Corporate supplied assertion plan
 
-These are the 22 behavioral assertions supplied with the Control Room source. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, eleven `G2_4_DEFERRED`, and one `LATER_INTEGRATION`. G2.3 claims only policy applicability, basis assessment, and qualifying-person projection; evidence sufficiency, final requirement resolution, InformationNeeds, gaps, actions, fallback, snapshots, and workflows remain deferred.
+These are the 22 behavioral assertions supplied with the Control Room source. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_DEFERRED`, and one `LATER_INTEGRATION`. G2.4A claims only evidence sufficiency, requirement resolution, InformationNeeds, PolicyGaps, and OperationalBlockers; actions, priority, fallback, discrepancy orchestration, final outcome, and snapshots remain deferred.
 
 | Requirement | Supplied assertion | Status | G1.2B scenario input | Deferred behavior |
 |---|---|---|---|---|
-| UBO-R01 | COMPANY: direct qualifying share owner is identified from supported evidence. | `G2_3_EXECUTABLE` | S01 | Protected: economic qualification and `beneficial_owner` projection; sufficiency/final resolution deferred |
-| UBO-R01 | LLP: qualifying rights to surplus assets are evaluated using LLP semantics. | `G2_3_EXECUTABLE` | S02 | Protected: LLP surplus-asset qualification and `beneficial_owner` projection; sufficiency deferred |
-| UBO-R01 | Corporate holder creates an InformationNeed until ultimate natural persons are resolved. | `G2_4_DEFERRED` | S05, S11 | Protected now: legal entity retained as unresolved and never emitted as a person; InformationNeed creation deferred |
+| UBO-R01 | COMPANY: direct qualifying share owner is identified from supported evidence. | `G2_3_EXECUTABLE` | S01 | Protected at G2.3: qualification/projection; G2.4A separately protects sufficiency/resolution |
+| UBO-R01 | LLP: qualifying rights to surplus assets are evaluated using LLP semantics. | `G2_3_EXECUTABLE` | S02 | Protected at G2.3: LLP qualification/projection; G2.4A separately applies sufficiency |
+| UBO-R01 | Corporate holder creates an InformationNeed until ultimate natural persons are resolved. | `G2_4A_EXECUTABLE` | S05, S11 + focused shared-need fixture | Protected: semantic `CURRENT_OWNERSHIP_AND_CONTROL` need without question/document selection |
 | UBO-R02 | Percentage chains multiply deterministically. | `G2_2_EXECUTABLE` | S03 + focused exact fixtures | Protected: exact homogeneous-chain arithmetic; qualification remains deferred |
 | UBO-R02 | Independent qualifying paths aggregate. | `G2_2_EXECUTABLE` | S04 + focused multipath fixtures | Protected: distinct-path arithmetic; “qualifying” policy remains deferred |
 | UBO-R02 | Ranges remain ranges/min-max rather than being silently converted to exact percentages. | `G2_2_EXECUTABLE` | S10 + focused interval fixtures | Protected: range/endpoint arithmetic; threshold interpretation remains deferred |
 | UBO-R02 | Cycles cannot silently produce a numeric answer. | `G2_2_EXECUTABLE` | S18 + focused relevant-cycle fixture | Protected: relevant-cycle recording blocks `COMPLETE`; policy consequence remains deferred |
-| UBO-R05 | COMPANY: qualifying board-majority appointment right produces controller_appointment. | `G2_3_EXECUTABLE` | S15 | Protected: explicit COMPANY board-majority qualification and role projection; sufficiency deferred |
-| UBO-R05 | LLP: qualifying majority-management appointment right produces controller_appointment. | `G2_3_EXECUTABLE` | S15 | Protected: explicit LLP management-majority qualification and role projection; sufficiency deferred |
-| UBO-R05 | Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic. | `G2_4_DEFERRED` | P08 | Resolution restriction and gap generation |
+| UBO-R05 | COMPANY: qualifying board-majority appointment right produces controller_appointment. | `G2_3_EXECUTABLE` | S15 | Protected at G2.3: COMPANY qualification/role; G2.4A separately applies sufficiency |
+| UBO-R05 | LLP: qualifying majority-management appointment right produces controller_appointment. | `G2_3_EXECUTABLE` | S15 | Protected at G2.3: LLP qualification/role; G2.4A separately applies sufficiency |
+| UBO-R05 | Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic. | `G2_4A_EXECUTABLE` | P08 + focused HIGH-risk attestation fixture | Protected: semantic PolicyGap/InformationNeed; document request remains deferred |
 | UBO-R06 | Positive registry control fact may create a candidate claim. | `G2_1_EXECUTABLE` | P02 | Protected: candidate-claim creation; G2.3 separately protects explicit established-control qualification |
-| UBO-R06 | Absence of PSC condition-4 data does not negatively resolve the requirement. | `G2_4_DEFERRED` | P02, S06 | Negative-evidence and final requirement-resolution semantics |
+| UBO-R06 | Absence of PSC condition-4 data does not negatively resolve the requirement. | `G2_4A_EXECUTABLE` | P02, S06 + focused PSC-silence fixture | Protected: `POSITIVE_ONLY` and NO_DATA never prove negative control |
 | UBO-R06 | Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination. | `G2_3_EXECUTABLE` | S16 | Protected: review-required assessment with no automatic person qualification; analyst action deferred |
-| UBO-R08 | Customer declaration alone cannot resolve R08. | `G2_4_DEFERRED` | P01 | Evidence sufficiency |
-| UBO-R08 | Numeric evidence strength alone cannot bypass independent-source requirement. | `G2_4_DEFERRED` | P01 | Independent-source sufficiency |
-| UBO-R08 | Companies House PSC information may corroborate but must not automatically become final UBO conclusion. | `G2_4_DEFERRED` | P01, P02 | Corroboration and final conclusion |
+| UBO-R08 | Customer declaration alone cannot resolve R08. | `G2_4A_EXECUTABLE` | P01 + focused origin fixture | Protected: applicant-originated evidence does not count independently |
+| UBO-R08 | Numeric evidence strength alone cannot bypass independent-source requirement. | `G2_4A_EXECUTABLE` | P01 + focused configured-count fixtures | Protected: strength and distinct independence are separate constraints |
+| UBO-R08 | Companies House PSC information may corroborate but must not automatically become final UBO conclusion. | `G2_4A_EXECUTABLE` | P01, P02 + focused PSC fixture | Protected: R08 corroboration may resolve without a person/R01 conclusion |
 | UBO-R09 | Material missing PSC may create reportable discrepancy workflow. | `LATER_INTEGRATION` | P07 | Reporting workflow |
-| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `G2_4_DEFERRED` | P07 | Definition-mismatch determination |
-| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `G2_4_DEFERRED` | P07 | Materiality and rationale |
-| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4_DEFERRED` | S06, P03 | Fallback determination |
-| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4_DEFERRED` | P03 | Fallback preconditions |
-| UBO-R10 | Snapshot records measures taken and reason fallback was permitted. | `G2_4_DEFERRED` | P03 | Decision snapshot production |
+| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `G2_4B_DEFERRED` | P07 | Definition-mismatch determination |
+| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `G2_4B_DEFERRED` | P07 | Materiality and rationale |
+| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4B_DEFERRED` | S06, P03 | G2.4A protects NO_DATA as non-negative; fallback determination remains deferred |
+| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4B_DEFERRED` | P03 | Fallback preconditions |
+| UBO-R10 | Snapshot records measures taken and reason fallback was permitted. | `G2_4B_DEFERRED` | P03 | Decision snapshot production |
