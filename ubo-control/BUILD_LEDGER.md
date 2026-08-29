@@ -6,7 +6,7 @@
 | Branch | `docs/ubo-practitioner-research-001` |
 | Base commit | `d9c0a28b9558c8d6529949b83e2bb1849d94ff85` (G1.2B merge on `origin/main`) |
 | Latest accepted PR | [#29 — UBO Control G1.2B deterministic scenario universe](https://github.com/archukmurthy/kyc-agent/pull/29), merged with merge commit `d9c0a28b9558c8d6529949b83e2bb1849d94ff85`; remote G1.2B branch deleted |
-| Current PR | Documentation-only practitioner research capture (pending) |
+| Current PR | [#30 — UBO Control practitioner research hypotheses](https://github.com/archukmurthy/kyc-agent/pull/30) — documentation-only; do not merge without Control Room acceptance |
 | Completed implementation | UBO Control now exists as a separately bounded product with explicit external capability contracts, canonical policy infrastructure, UK Corporate policy pack, deterministic test stubs and a reusable executable scenario universe, with no dependency on legacy/provider/onboarding implementations and no premature UBO reasoning engine. |
 | Practitioner evidence | `PRACTITIONER-001` recorded as `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; architecture change `NONE`; policy change `NONE`; contract change `NONE` |
 | Future-gate hypotheses | JH-001 through JH-007 recorded for future Journey/Resolution work; none is approved execution logic |
