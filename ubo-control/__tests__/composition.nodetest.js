@@ -3,8 +3,17 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  APPLICABILITY_MODEL_VERSION,
+  CANONICALIZATION_ALGORITHM,
   CAPABILITY_CONTRACT_VERSION,
   CAPABILITY_OUTCOME_STATE,
+  CLAIM_STATE_MODEL_VERSION,
+  CONDITION_LANGUAGE_VERSION,
+  POLICY_PACK_SCHEMA_ID,
+  POLICY_PACK_SCHEMA_VERSION,
+  REQUIREMENT_STATE_MODEL_VERSION,
+  RESOLUTION_SEMANTICS_VERSION,
+  RISK_LEVEL_MODEL_VERSION,
   UBO_CONFIGURATION_ERROR_CODE,
   UboConfigurationError,
   createUboControl,
@@ -13,14 +22,31 @@ const {
 
 function policyPack() {
   return {
-    schemaVersion: "1.0.0",
+    schemaId: POLICY_PACK_SCHEMA_ID,
+    schemaVersion: POLICY_PACK_SCHEMA_VERSION,
     policyPackId: "test.pack",
     version: "1.0.0",
+    status: "DRAFT",
     jurisdiction: "GB",
     applicability: {},
     effectivePeriod: {},
+    engineSemantics: {
+      capabilityContractVersion: CAPABILITY_CONTRACT_VERSION,
+      conditionLanguageVersion: CONDITION_LANGUAGE_VERSION,
+      requirementStateModelVersion: REQUIREMENT_STATE_MODEL_VERSION,
+      claimStateModelVersion: CLAIM_STATE_MODEL_VERSION,
+      applicabilityModelVersion: APPLICABILITY_MODEL_VERSION,
+      resolutionSemanticsVersion: RESOLUTION_SEMANTICS_VERSION,
+      riskLevelModelVersion: RISK_LEVEL_MODEL_VERSION,
+      canonicalizationAlgorithm: CANONICALIZATION_ALGORITHM,
+    },
+    parameters: {},
+    definitions: {},
+    entityProfiles: {},
+    evidenceCatalogue: { items: [] },
     requirements: [],
     rules: [],
+    actionTemplates: {},
   };
 }
 
