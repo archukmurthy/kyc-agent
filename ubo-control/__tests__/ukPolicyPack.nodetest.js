@@ -140,7 +140,7 @@ test("all unresolved lifecycle events are explicit and no host event model is in
   assert.equal(Object.prototype.hasOwnProperty.call(policyPack.lifecyclePolicy, "eventCatalogue"), false);
 });
 
-test("every supplied policy test assertion has exactly one honest future-test classification", () => {
+test("every supplied policy test assertion has exactly one honest gate classification", () => {
   const supplied = policyPack.requirements.flatMap((requirement) =>
     (requirement.testAssertions || []).map((assertion) => `${requirement.requirementId}\u0000${assertion}`));
   const planned = assertionPlan.map((entry) => `${entry.requirementId}\u0000${entry.assertion}`);
@@ -148,19 +148,21 @@ test("every supplied policy test assertion has exactly one honest future-test cl
   assert.equal(new Set(planned).size, planned.length);
   assert.deepEqual([...planned].sort(), [...supplied].sort());
   const allowedStatuses = new Set([
-    "SCHEMA_PROTECTED_NOW",
-    "G1.2B_SCENARIO",
-    "GATE_2_REASONING",
+    "G2_1_EXECUTABLE",
+    "G2_2_EXECUTABLE",
+    "G2_3_EXECUTABLE",
+    "G2_4_DEFERRED",
     "LATER_INTEGRATION",
   ]);
   assertionPlan.forEach((entry) => assert.ok(allowedStatuses.has(entry.status)));
-  assert.equal(assertionPlan.some((entry) => entry.status === "SCHEMA_PROTECTED_NOW"), false);
-  assert.equal(assertionPlan.some((entry) => entry.status === "G1.2B_SCENARIO"), false);
-  assert.equal(assertionPlan.filter((entry) => entry.status === "GATE_2_REASONING").length, 21);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_1_EXECUTABLE").length, 1);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_2_EXECUTABLE").length, 4);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_3_EXECUTABLE").length, 5);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "G2_4_DEFERRED").length, 11);
   assert.equal(assertionPlan.filter((entry) => entry.status === "LATER_INTEGRATION").length, 1);
 });
 
-test("all policy assertions link to executable representability scenarios without claiming reasoning coverage", () => {
+test("all policy assertions link to executable scenario inputs and an honest execution/defer status", () => {
   const scenarioIds = new Set(allScenarios.map(({ id }) => id));
   assertionPlan.forEach((entry) => {
     assert.ok(Array.isArray(entry.scenarioIds) && entry.scenarioIds.length > 0);

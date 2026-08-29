@@ -2,130 +2,130 @@
   {
     "requirementId": "UBO-R01",
     "assertion": "COMPANY: direct qualifying share owner is identified from supported evidence.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Qualification and identification require Gate 2 reasoning; S01 protects the direct COMPANY input shape only."
+    "deferredBehavior": "G2.3 protects COMPANY economic qualification and beneficial_owner projection from an operative S01-shaped fact; evidence sufficiency and final requirement status remain G2.4."
   },
   {
     "requirementId": "UBO-R01",
     "assertion": "LLP: qualifying rights to surplus assets are evaluated using LLP semantics.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Qualification and evaluation require Gate 2 reasoning; S02 protects LLP surplus-asset semantics only."
+    "deferredBehavior": "G2.3 protects LLP surplus-asset qualification and beneficial_owner projection using LLP policy semantics; evidence sufficiency remains G2.4."
   },
   {
     "requirementId": "UBO-R01",
     "assertion": "Corporate holder creates an InformationNeed until ultimate natural persons are resolved.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["S05", "S11"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Creating an InformationNeed is Gate 2 behavior; S05 and S11 protect unresolved corporate-layer inputs."
+    "deferredBehavior": "G2.3 preserves a qualifying legal-entity holder as unresolved without emitting a natural person; InformationNeed creation remains G2.4."
   },
   {
     "requirementId": "UBO-R02",
     "assertion": "Percentage chains multiply deterministically.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_2_EXECUTABLE",
     "scenarioIds": ["S03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S03 preserves the percentage chain; multiplication remains Gate 2 reasoning."
+    "deferredBehavior": "G2.2 protects exact percentage-chain multiplication; G2.3 consumes the pinned result without recomputing it."
   },
   {
     "requirementId": "UBO-R02",
     "assertion": "Independent qualifying paths aggregate.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_2_EXECUTABLE",
     "scenarioIds": ["S04"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S04 preserves independent paths; aggregation remains Gate 2 reasoning."
+    "deferredBehavior": "G2.2 protects independent-path aggregation; G2.3 separately interprets the pinned aggregate under policy."
   },
   {
     "requirementId": "UBO-R02",
     "assertion": "Ranges remain ranges/min-max rather than being silently converted to exact percentages.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_2_EXECUTABLE",
     "scenarioIds": ["S10"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S10 preserves range bounds and endpoints; range reasoning remains Gate 2."
+    "deferredBehavior": "G2.2 protects range arithmetic; G2.3 protects exclusive-threshold interpretation with exact endpoint semantics."
   },
   {
     "requirementId": "UBO-R02",
     "assertion": "Cycles cannot silently produce a numeric answer.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_2_EXECUTABLE",
     "scenarioIds": ["S18"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S18 preserves directed cycle facts; cycle detection and non-numeric reasoning remain Gate 2."
+    "deferredBehavior": "G2.2 protects relevant-cycle detection; G2.3 preserves incomplete cycle-bearing results as indeterminate."
   },
   {
     "requirementId": "UBO-R05",
     "assertion": "COMPANY: qualifying board-majority appointment right produces controller_appointment.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S15"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Qualification and controller role projection require Gate 2; S15 protects COMPANY appointment-right inputs."
+    "deferredBehavior": "G2.3 protects explicit COMPANY board-majority qualification and controller_appointment projection; evidence sufficiency remains G2.4."
   },
   {
     "requirementId": "UBO-R05",
     "assertion": "LLP: qualifying majority-management appointment right produces controller_appointment.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S15"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Qualification and controller role projection require Gate 2; S15 protects LLP management-right inputs."
+    "deferredBehavior": "G2.3 protects explicit LLP majority-management qualification and controller_appointment projection; evidence sufficiency remains G2.4."
   },
   {
     "requirementId": "UBO-R05",
     "assertion": "Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P08"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P08 preserves high-risk and negative-attestation inputs; closure and gap generation remain Gate 2."
+    "deferredBehavior": "P08 preserves high-risk and negative-attestation inputs; closure, sufficiency and documentary gap generation remain G2.4."
   },
   {
     "requirementId": "UBO-R06",
     "assertion": "Positive registry control fact may create a candidate claim.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_1_EXECUTABLE",
     "scenarioIds": ["P02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Candidate-claim creation is Gate 2 behavior; P02 protects positive PSC candidate inputs."
+    "deferredBehavior": "G2.1 protects candidate-claim creation. G2.3 separately proves an explicit operative significant-control fact can qualify; PSC evidence sufficiency remains G2.4."
   },
   {
     "requirementId": "UBO-R06",
     "assertion": "Absence of PSC condition-4 data does not negatively resolve the requirement.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P02", "S06"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "Negative requirement resolution is Gate 2 behavior; P02 and S06 protect absence/NO_DATA inputs."
+    "deferredBehavior": "P02 and S06 preserve absence/NO_DATA inputs; negative-evidence and final requirement-resolution semantics remain G2.4."
   },
   {
     "requirementId": "UBO-R06",
     "assertion": "Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_3_EXECUTABLE",
     "scenarioIds": ["S16"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "REVIEW_REQUIRED routing is Gate 2 behavior; S16 preserves an ambiguous control candidate."
+    "deferredBehavior": "G2.3 protects REVIEW_REQUIRED assessment and prevents automatic person qualification for S16-style ambiguity; analyst action generation remains G2.4."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Customer declaration alone cannot resolve R08.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 separates declaration and independent evidence; sufficiency remains Gate 2."
+    "deferredBehavior": "P01 separates declaration and independent evidence; corroboration sufficiency and final requirement state remain G2.4."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Numeric evidence strength alone cannot bypass independent-source requirement.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P01"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 supplies source-type inputs; evidence sufficiency remains Gate 2."
+    "deferredBehavior": "P01 supplies source-type inputs; independent-source sufficiency remains G2.4."
   },
   {
     "requirementId": "UBO-R08",
     "assertion": "Companies House PSC information may corroborate but must not automatically become final UBO conclusion.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P01", "P02"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P01 and P02 preserve corroborative PSC inputs; final-conclusion semantics remain Gate 2."
+    "deferredBehavior": "P01 and P02 preserve corroborative PSC inputs; corroboration sufficiency and final requirement status remain G2.4."
   },
   {
     "requirementId": "UBO-R09",
@@ -138,41 +138,41 @@
   {
     "requirementId": "UBO-R09",
     "assertion": "Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P07"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P07 preserves PSC and MLR comparison bases; definition-mismatch determination remains Gate 2."
+    "deferredBehavior": "P07 preserves PSC and MLR comparison bases; discrepancy materiality and reportability remain G2.4/later integration."
   },
   {
     "requirementId": "UBO-R09",
     "assertion": "Non-material discrepancy records rationale without automatically invoking report workflow.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P07"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P07 preserves differing assertions; materiality and rationale generation remain Gate 2."
+    "deferredBehavior": "P07 preserves differing assertions; discrepancy materiality, rationale and workflow remain G2.4/later integration."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Fallback cannot activate merely because DiscoveryService returned NO_DATA.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["S06", "P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "S06 and P03 separate NO_DATA from fallback inputs; fallback determination remains Gate 2."
+    "deferredBehavior": "S06 and P03 separate NO_DATA from fallback inputs; fallback eligibility and activation remain G2.4."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Fallback cannot activate when required measures were not actually completed.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P03 records incomplete measures; fallback-precondition evaluation remains Gate 2."
+    "deferredBehavior": "P03 records incomplete measures; fallback-precondition evaluation remains G2.4."
   },
   {
     "requirementId": "UBO-R10",
     "assertion": "Snapshot records measures taken and reason fallback was permitted.",
-    "status": "GATE_2_REASONING",
+    "status": "G2_4_DEFERRED",
     "scenarioIds": ["P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "P03 preserves measures-taken inputs; decision snapshot production remains Gate 2."
+    "deferredBehavior": "P03 preserves measures-taken inputs; immutable decision snapshot production remains G2.4."
   }
 ]
