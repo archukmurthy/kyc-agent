@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g2-4c-decision-history` |
 | Base commit | `a6c7d147ff23c758681491c9e5053ad058217111` (PR #35 normal merge on `origin/main`) |
 | Latest accepted PR | [#35 — UBO Control G2.4B resolution orchestration](https://github.com/archukmurthy/kyc-agent/pull/35), merged normally with merge commit `a6c7d147ff23c758681491c9e5053ad058217111`; remote G2.4B branch deleted |
-| Current PR | Not opened yet — G2.4C implementation and verification in progress |
+| Current PR | [#36 — UBO Control G2.4C decision history](https://github.com/archukmurthy/kyc-agent/pull/36) — do not merge without Control Room acceptance |
 | Completed implementation | Immutable `ubo-decision-snapshot-v1`; canonical decision-content hash with recording metadata excluded; complete normalized reasoning/output manifest; append-only linear history with typed stale-head rejection; policy/algorithm/checkpoint pinning; offline verification and historical reconstruction; explicit pure Gate 2 checkpoint re-resolution coordinator; R10 measures-taken snapshot manifest |
 | Scenario coverage | G2.4C covers resolved, partial/open need, internal review, SMO fallback, specialist and conflict reconstruction; customer-fact and analyst-review successors; historical policy/algorithm change; hash-critical material changes; mixed-artifact rejection; CASE_OPEN/SESSION_START/SUBMIT_GATE/CASE_EVENT behavior and end-to-end offline determinism |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
