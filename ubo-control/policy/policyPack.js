@@ -16,10 +16,12 @@ const { PolicyPackIntegrityError, PolicyPackValidationError } = require("../erro
 const {
   APPLICABILITY_MODEL_VERSION,
   CAPABILITY_CONTRACT_VERSION,
+  CAPABILITY_OUTCOME_STATE,
   CLAIM_STATE_MODEL_VERSION,
   CONDITION_LANGUAGE_VERSION,
   POLICY_PACK_SCHEMA_ID,
   POLICY_PACK_SCHEMA_VERSION,
+  REQUIREMENT_STATE,
   REQUIREMENT_STATE_MODEL_VERSION,
   RESOLUTION_EFFECT,
   RESOLUTION_SEMANTICS_VERSION,
@@ -53,6 +55,8 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "requirements",
   "rules",
   "informationNeedPolicy",
+  "fallbackReviewPolicy",
+  "resolutionOrchestrationPolicy",
   "terminalOutcomes",
   "actionTemplates",
 ]);
@@ -81,6 +85,130 @@ const ACTION_CONTENT_STATUS = Object.freeze({
   SUPPLIED: "SUPPLIED",
   UNRESOLVED_SOURCE_REFERENCE: "UNRESOLVED_SOURCE_REFERENCE",
 });
+
+const SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS = new Set([POLICY_PACK_SCHEMA_VERSION, "1.1"]);
+const FALLBACK_REVIEW_STATE = Object.freeze({
+  PENDING: "PENDING",
+  RESOLVED: "RESOLVED",
+  SUPERSEDED: "SUPERSEDED",
+});
+const FALLBACK_EXHAUSTION_DECISION = Object.freeze({
+  ALL_POSSIBLE_MEANS_EXHAUSTED: "ALL_POSSIBLE_MEANS_EXHAUSTED",
+  FURTHER_MEASURES_AVAILABLE: "FURTHER_MEASURES_AVAILABLE",
+});
+const FALLBACK_DECISION_ORIGIN = Object.freeze({ ANALYST: "ANALYST", COMPLIANCE: "COMPLIANCE" });
+const TERMINAL_OUTCOME = Object.freeze({
+  CDD_FAILURE: "CDD_FAILURE",
+  SPECIALIST_REVIEW_REQUIRED: "SPECIALIST_REVIEW_REQUIRED",
+  RESOLVED_VIA_SMO_FALLBACK: "RESOLVED_VIA_SMO_FALLBACK",
+  RESOLVED_PROVISIONALLY: "RESOLVED_PROVISIONALLY",
+  RESOLVED: "RESOLVED",
+  UNRESOLVABLE: "UNRESOLVABLE",
+});
+
+function validateUniqueEnumArray(values, allowed, path) {
+  assertArray(values, path);
+  values.forEach((value, index) => assertEnum(value, allowed, `${path}[${index}]`));
+  assertUniqueStrings(values, path);
+}
+
+function validateSchema11Orchestration(policyPack, context) {
+  if (policyPack.schemaVersion === POLICY_PACK_SCHEMA_VERSION) {
+    if (policyPack.fallbackReviewPolicy !== undefined || policyPack.resolutionOrchestrationPolicy !== undefined) {
+      policyError("Policy Pack schema 1.0 cannot contain schema 1.1 orchestration policy");
+    }
+    return;
+  }
+
+  const fallback = policyPack.fallbackReviewPolicy;
+  assertPlainObject(fallback, "policyPack.fallbackReviewPolicy");
+  assertAllowedKeys(fallback, [
+    "reviewType",
+    "candidateState",
+    "readyRecommendation",
+    "fallbackNecessityStates",
+    "requiredPreFallbackRequirementIds",
+    "conditionalPreFallbackRequirementIds",
+    "satisfactoryRequirementStates",
+    "blockingRequirementStates",
+    "customerResolvableStrategies",
+    "specialistRequirementIds",
+    "operationalOutcomesThatNeverProveExhaustion",
+    "reviewRequirementStates",
+    "decisionValues",
+    "authoritativeDecisionOrigins",
+    "positiveDecision",
+    "derivedEligibilityFactKey",
+    "negativeDecisionRequiresConcreteInformationNeed",
+    "candidateRole",
+    "fallbackRole",
+    "candidateCollectionActionTemplateId",
+  ], "policyPack.fallbackReviewPolicy");
+  ["reviewType", "candidateState", "readyRecommendation", "positiveDecision", "derivedEligibilityFactKey",
+    "candidateRole", "fallbackRole", "candidateCollectionActionTemplateId"].forEach((field) => {
+    assertNonEmptyString(fallback[field], `policyPack.fallbackReviewPolicy.${field}`);
+  });
+  assertUniqueStrings(fallback.fallbackNecessityStates, "policyPack.fallbackReviewPolicy.fallbackNecessityStates");
+  const approvedNecessityStates = ["NO_QUALIFYING_PERSON_ESTABLISHED", "FIRM_UNSATISFIED_WITH_IDENTIFIED_PERSON"];
+  if (canonicalizeJson([...fallback.fallbackNecessityStates].sort()) !== canonicalizeJson(approvedNecessityStates.sort())) {
+    policyError("schema 1.1 fallback necessity states must preserve no-person/firm-unsatisfied doctrine");
+  }
+  ["requiredPreFallbackRequirementIds", "conditionalPreFallbackRequirementIds", "specialistRequirementIds"].forEach((field) => {
+    assertUniqueStrings(fallback[field], `policyPack.fallbackReviewPolicy.${field}`);
+    fallback[field].forEach((requirementId, index) => assertReferenceExists(
+      requirementId,
+      context.requirements,
+      `policyPack.fallbackReviewPolicy.${field}[${index}]`,
+      "requirement",
+    ));
+  });
+  validateUniqueEnumArray(fallback.satisfactoryRequirementStates, REQUIREMENT_STATE, "policyPack.fallbackReviewPolicy.satisfactoryRequirementStates");
+  validateUniqueEnumArray(fallback.blockingRequirementStates, REQUIREMENT_STATE, "policyPack.fallbackReviewPolicy.blockingRequirementStates");
+  validateUniqueEnumArray(fallback.customerResolvableStrategies, RESOLUTION_STRATEGY, "policyPack.fallbackReviewPolicy.customerResolvableStrategies");
+  validateUniqueEnumArray(fallback.operationalOutcomesThatNeverProveExhaustion, CAPABILITY_OUTCOME_STATE, "policyPack.fallbackReviewPolicy.operationalOutcomesThatNeverProveExhaustion");
+  validateUniqueEnumArray(fallback.reviewRequirementStates, FALLBACK_REVIEW_STATE, "policyPack.fallbackReviewPolicy.reviewRequirementStates");
+  validateUniqueEnumArray(fallback.decisionValues, FALLBACK_EXHAUSTION_DECISION, "policyPack.fallbackReviewPolicy.decisionValues");
+  validateUniqueEnumArray(fallback.authoritativeDecisionOrigins, FALLBACK_DECISION_ORIGIN, "policyPack.fallbackReviewPolicy.authoritativeDecisionOrigins");
+  if (!fallback.decisionValues.includes(fallback.positiveDecision)) policyError("fallback positiveDecision must be an allowed decision");
+  if (fallback.negativeDecisionRequiresConcreteInformationNeed !== true) policyError("schema 1.1 fallback review requires a concrete InformationNeed for further measures");
+  assertReferenceExists(fallback.candidateCollectionActionTemplateId, context.actionTemplates,
+    "policyPack.fallbackReviewPolicy.candidateCollectionActionTemplateId", "action template");
+
+  const orchestration = policyPack.resolutionOrchestrationPolicy;
+  assertPlainObject(orchestration, "policyPack.resolutionOrchestrationPolicy");
+  assertAllowedKeys(orchestration, [
+    "terminalPrecedence",
+    "engineNonTerminalState",
+    "provisionalRequirementIds",
+    "specialistReviewRequirementIds",
+    "customerProjectionStates",
+    "pscDiscrepancyStates",
+    "riskSignalTypes",
+  ], "policyPack.resolutionOrchestrationPolicy");
+  validateUniqueEnumArray(orchestration.terminalPrecedence, TERMINAL_OUTCOME, "policyPack.resolutionOrchestrationPolicy.terminalPrecedence");
+  if (orchestration.engineNonTerminalState !== "IN_PROGRESS") policyError("schema 1.1 engine non-terminal state must be IN_PROGRESS");
+  ["provisionalRequirementIds", "specialistReviewRequirementIds"].forEach((field) => {
+    assertUniqueStrings(orchestration[field], `policyPack.resolutionOrchestrationPolicy.${field}`);
+    orchestration[field].forEach((requirementId, index) => assertReferenceExists(
+      requirementId,
+      context.requirements,
+      `policyPack.resolutionOrchestrationPolicy.${field}[${index}]`,
+      "requirement",
+    ));
+  });
+  assertUniqueStrings(orchestration.customerProjectionStates, "policyPack.resolutionOrchestrationPolicy.customerProjectionStates");
+  assertUniqueStrings(orchestration.pscDiscrepancyStates, "policyPack.resolutionOrchestrationPolicy.pscDiscrepancyStates");
+  assertUniqueStrings(orchestration.riskSignalTypes, "policyPack.resolutionOrchestrationPolicy.riskSignalTypes");
+  const approvedRiskSignals = new Set(orchestration.riskSignalTypes);
+  policyPack.requirements.forEach((requirement, requirementIndex) => {
+    (requirement.riskSignals || []).forEach((signal, signalIndex) => {
+      assertNonEmptyString(signal.emit, `policyPack.requirements[${requirementIndex}].riskSignals[${signalIndex}].emit`);
+      if (!approvedRiskSignals.has(signal.emit)) {
+        policyError(`policyPack.requirements[${requirementIndex}].riskSignals[${signalIndex}].emit is not approved by resolutionOrchestrationPolicy`);
+      }
+    });
+  });
+}
 
 function policyError(message, code = "INVALID_POLICY_PACK") {
   throw new PolicyPackValidationError(message, { code });
@@ -426,9 +554,9 @@ function validatePolicyPack(input) {
     if (policyPack.schemaId !== POLICY_PACK_SCHEMA_ID) {
       policyError(`policyPack.schemaId must equal ${POLICY_PACK_SCHEMA_ID}`, "UNSUPPORTED_POLICY_SCHEMA");
     }
-    if (policyPack.schemaVersion !== POLICY_PACK_SCHEMA_VERSION) {
+    if (!SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS.has(policyPack.schemaVersion)) {
       policyError(
-        `policyPack.schemaVersion must equal ${POLICY_PACK_SCHEMA_VERSION}`,
+        `policyPack.schemaVersion must be one of: ${[...SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS].join(", ")}`,
         "UNSUPPORTED_POLICY_SCHEMA",
       );
     }
@@ -476,8 +604,10 @@ function validatePolicyPack(input) {
     };
 
     validateRequirements(policyPack, context, conceptsByProfile);
+    context.requirements = new Set(policyPack.requirements.map(({ requirementId }) => requirementId));
     validateRoleProjection(policyPack.roleProjection);
     validateEmbeddedReferences(policyPack, context);
+    validateSchema11Orchestration(policyPack, context);
 
     if (policyPack.informationNeedPolicy?.permittedResolutionStrategies !== undefined) {
       assertArray(

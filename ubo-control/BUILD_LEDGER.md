@@ -2,19 +2,19 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | Gate 2 / **G2.4A — Requirement Resolution** |
-| Branch | `codex/ubo-control-g2-4a-requirement-resolution` |
-| Base commit | `3e33502f4ed71b6ab32f1a012bdb3c0222cbde14` (PR #33 normal merge on `origin/main`) |
-| Latest accepted PR | [#33 — UBO Control G2.3 policy determination](https://github.com/archukmurthy/kyc-agent/pull/33), merged normally with merge commit `3e33502f4ed71b6ab32f1a012bdb3c0222cbde14`; remote G2.3 branch deleted |
-| Current PR | [#34 — UBO Control G2.4A requirement resolution](https://github.com/archukmurthy/kyc-agent/pull/34) — do not merge without Control Room acceptance |
-| Completed implementation | Policy-hash/case-revision-pinned `EvidencePolicyClassification`; pack-owned non-additive evidence sufficiency; `ubo-requirement-resolution-v1` approved state precedence; R01/R02/R03/R04/R05/R06/R07/R08/R11/R12 resolution; immutable semantic InformationNeeds, PolicyGaps and OperationalBlockers; distinct-source/freshness/current-state handling; append-only need lifecycle |
-| Scenario coverage | G2.4A exercises S01/S03/S05/S06/S07/S08/S13/S15/S16/S17/S18 plus P01/P02/P08-shaped inputs through focused direct/indirect/legal-holder/control/identity/corroboration/trust/nominee/capability fixtures, including shared needs and distinct evidence-source cases |
+| Gate / sub-gate | Gate 2 / **G2.4B — Resolution Orchestration** |
+| Branch | `codex/ubo-control-g2-4b-resolution-orchestration` |
+| Base commit | `f688e102da4b68e24efceca140b4040af60f3ffb` (PR #34 normal merge on `origin/main`) |
+| Latest accepted PR | [#34 — UBO Control G2.4A requirement resolution](https://github.com/archukmurthy/kyc-agent/pull/34), merged normally with merge commit `f688e102da4b68e24efceca140b4040af60f3ffb`; remote G2.4A branch deleted |
+| Current PR | Pending — dedicated G2.4B PR will be opened after full verification and must not be merged without Control Room acceptance |
+| Completed implementation | UK Corporate 1.4-RC/schema 1.1; immutable ResolutionOptions, ActionIntents and append-only ResolutionAttempts; semantic action coalescence without generic priority; asynchronous FALLBACK_EXHAUSTION ReviewRequirement/package/decision; senior-management candidate preparation; current-state-derived fallback eligibility and explicit SMO application; R09 discrepancy, R10/R11/R13 risk signals, R14 closing attestation, customer interaction projection and deterministic terminal precedence |
+| Scenario coverage | G2.4B covers S06/P03 fallback negatives and P07 discrepancy semantics plus focused option/action/attempt, shared-need, operational, senior-candidate, stale-review, positive/negative exhaustion, PSC, depth/cross-border, trust, residual-attestation and ordinary/fallback/specialist/CDD terminal fixtures |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
-| Outstanding implementation | Verification and PR review within G2.4A. Resolution option/action selection, priority, SMO fallback, discrepancy orchestration, risk signals, residual completeness, terminal outcome, full decision snapshots, re-resolution orchestration and all integration remain unopened G2.4B/later work. |
-| Tests / status | Focused G2.4A suite 29/29 passed. Full UBO 180/180 passed with 98.04% line / 89.45% branch / 98.08% function coverage. Host 25 suites / 482 tests passed. Architecture 2/2 passed. Legacy UBO framework and recalculation smoke tests passed. Production build passed. `git diff --check` passed. |
-| Active escalations | None. R07 uses the existing canonical name, G2.3 role/basis, and operative `ENTITY_ATTRIBUTE` claim representation; no public person/EvidenceReference/capability contract, evidence precedence, temporal winner, automatic conflict resolution, inferred independence, Policy Pack semantic, action priority, fallback or public API change was required. |
-| Next approved step | Complete verification, open and report the dedicated G2.4A PR only; do not merge it and do not start G2.4B. |
+| Outstanding implementation | Verification and PR review within G2.4B. Immutable complete DecisionSnapshot, snapshot hashing/supersession, deterministic reconstruction, re-resolution checkpoints/history, persistence, providers, host risk mutation, case-management/onboarding UI and integrations remain G2.4C/later work. |
+| Tests / status | Focused schema/orchestration suite 41/41 passed. Full UBO 211/211 passed with 98.00% line / 89.01% branch / 96.85% function coverage. Host 25 suites / 482 tests passed. Architecture 2/2 passed. Legacy UBO framework and recalculation smoke tests passed. Production build passed. `git diff --check` passed. |
+| Active escalations | None. The prior exhausted-measures ambiguity was resolved by the accepted asynchronous-review doctrine: the machine emits review readiness; only a current ANALYST/COMPLIANCE decision derives eligibility. No public contract, generic action priority, reportability/materiality law, evidence acceptance rule, provider or host workflow semantic was invented. |
+| Next approved step | Complete verification, open and report the dedicated G2.4B PR only; do not merge it and do not start G2.4C. |
 
 ## Scope guard
 
-G2.4A deterministically resolves individual requirements from pinned G2.2/G2.3 artifacts and explicit evidence-policy classifications. It may emit semantic InformationNeeds, substantive PolicyGaps, and operational-only blockers, but it does not select or prioritize an action and produces no question, document request, analyst task, fallback, discrepancy workflow, risk signal, terminal case outcome, full snapshot, journey projection, provider call or persistence behavior. G2.4B has not started.
+G2.4B deterministically converts pinned G2.4A reasoning into policy-permitted options, uniquely actionable host-neutral intents, attempt/review records, discrepancy/risk/completeness assessments and a policy terminal orchestration state. Human fallback review is asynchronous and externally hosted. The module contains no generic priority, UI, assignment, messaging, provider execution, regulatory submission, authoritative risk mutation, full DecisionSnapshot/history, persistence or public API expansion. G2.4C has not started.
