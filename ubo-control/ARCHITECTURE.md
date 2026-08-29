@@ -66,9 +66,37 @@ G2.1 exposes only a structural graph-eligibility projection. A relationship clai
 
 The G2.1 modules remain internal beneath `domain/`; the deliberate public `index.js` surface is unchanged pending an approved consumer contract.
 
+## G2.2 canonical graph boundary
+
+`ubo-graph-v1` constructs a deeply frozen canonical graph from one immutable `OwnershipCase` revision. Construction reads only relationship claims that are `OPERATIVE` and whose subject and object have explicit current `RESOLVED` identity decisions. It never mutates the case. Graph nodes use canonical UBO entity IDs; relationships preserve grammatical subject-to-object direction, relationship type, measurement, qualifiers, interpreted temporal state, and every supporting operative claim ID.
+
+Relationship slots are identified by canonical endpoints, relationship type, and the complete data-only qualifier set. Equal operative assertions in one slot coalesce into one semantic graph relationship and retain their sorted supporting claim IDs. Materially different values in an otherwise equal slot fail with a typed graph-domain error. Callers distinguish genuinely separate instruments or rights through explicit source qualifiers such as a share class or interest identifier; G2.2 does not guess whether unqualified observations are duplicates or separate interests.
+
+The graph includes percentage and non-percentage facts but no policy conclusion. Economic ownership and voting rights are separate percentage dimensions. Appointment, removal, formal-control, significant-influence, trust, and similar relationships remain graph facts and are not percentage-multiplied. No relationship basis is converted into another.
+
+The graph fingerprint is SHA-256 over `ubo-canonical-json-v1` serialization of the `ubo-graph-v1` algorithm identity, source case ID/revision/revision ID, sorted canonical nodes, and sorted semantic relationships including qualifiers, temporal state, measurements, and supporting claim IDs. It is independent of insertion order, object-key order, memory layout, and wall-clock generation timing. A changed reasoning input changes the fingerprint.
+
+For a current graph, explicit ceased/historical relationships remain visible but are excluded from current arithmetic. Explicitly contradictory current/ceased qualifiers fail deterministically. Unknown currentness remains `UNKNOWN` and makes only a relevant percentage path unresolved. G2.2 applies no temporal precedence rule.
+
+Distinct current percentage relationships into the same entity and dimension cannot have minimum interests totalling more than 100%. Such a graph fails with a typed inconsistency error; percentages are never normalized or proportionally repaired. Upper bounds over 100% alone are not rejected.
+
+## G2.2 deterministic percentage calculation
+
+`ubo-percentage-lookthrough-v1` traverses edge-distinct, node-simple paths in one homogeneous dimension: `ECONOMIC` or `VOTING`. Each path multiplies every percentage edge, and distinct valid paths are summed even when they converge on a shared downstream relationship. A semantic relationship is counted once regardless of how many claims corroborate it. Mixed economic/voting/control paths are not inferred.
+
+Authoritative arithmetic uses normalized `BigInt` rationals derived deterministically from the existing validated JSON-number percentage inputs. No binary floating-point multiplication or addition determines an ownership value. Internal calculated values serialize exact finite decimals as strings; this remains an internal G2.2 artifact and does not widen the public percentage or `index.js` contract.
+
+Ranges use non-negative interval multiplication and addition, preserving lower/upper endpoint attainability, including zero-factor cases. Multiple path ranges sum bound-wise. The universal percentage domain caps a raw aggregate upper bound at an attainable inclusive 100%, while the separate graph invariant prevents that cap from concealing impossible minimum totals. Ranges remain ranges and no threshold is applied.
+
+An `UNKNOWN` percentage or unknown temporal state is never coerced to zero, 100, or a midpoint. Known independent contributions remain available diagnostically. Results distinguish `COMPLETE`, `PARTIAL`, `UNRESOLVED`, and `NO_PATH`; `NO_PATH` has no numeric result and is not exact zero. Each result pins its graph version, algorithm identity, subject, target, dimension, contributing known paths, unresolved paths, relevant cycles, and known aggregate when one exists.
+
+Traversal records a cycle only when it lies in the requested subject-to-target percentage subgraph. It stops at the repeated node, retains any separately calculable acyclic contribution, and prevents a result with a relevant unresolved cycle from being `COMPLETE`. G2.2 does not solve circular ownership algebraically.
+
+Graph construction and calculation remain internal under `domain/`. They contain no threshold qualification, UBO/PSC/controller determination, Policy Pack evaluation, evidence sufficiency, gap/action generation, provider call, persistence, host integration, or public API expansion.
+
 ## Percentage values
 
-Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar and does not implement threshold crossing or indirect arithmetic.
+Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar. G2.2 consumes the unchanged validated input shape through exact internal rational and interval arithmetic, and still performs no threshold crossing or qualification.
 
 ## Evidence boundary
 
@@ -108,8 +136,8 @@ Lifecycle checkpoints in a Policy Pack are host-neutral metadata. They do not su
 
 The G1.2B corpus is an internal, reusable universe of contract-valid capability requests and configured results. It is not a public product contract or a reasoning DSL. Each run creates isolated stub queues, validates requests and results through the production contracts, and returns defensive data copies. A repeated run starts with fresh queue state and is deterministic.
 
-Scenarios preserve directed candidate facts, exact/range/unknown percentages, fact-level and operation-level evidence, capability outcomes, entity-specific qualifiers, ambiguity, conflicts, cycles, and sequential Discovery/Extraction calls. They never join a graph, calculate effective ownership, qualify thresholds, merge identities, choose claims, determine UBO/PSC/controller status, resolve requirements, create information needs or gaps, activate fallback, route a case, or evaluate policy. Later-Gate expectations are labelled non-executed metadata only.
+Scenarios preserve directed candidate facts, exact/range/unknown percentages, fact-level and operation-level evidence, capability outcomes, entity-specific qualifiers, ambiguity, conflicts, cycles, and sequential Discovery/Extraction calls. The corpus itself never pre-bakes a graph, identity merge, claim decision, effective ownership, threshold qualification, UBO/PSC/controller status, requirement resolution, information need, gap, fallback, route, or policy result. G2.2 tests explicitly create G2.1 identity/adjudication decisions around selected unchanged scenario inputs before exercising graph construction. Later-Gate expectations remain labelled non-executed metadata only.
 
 ## Testing boundary
 
-Every behavior and architectural invariant is protected in the same PR that introduces it. The architecture suite denies non-built-in imports outside the product root, protects the deliberate public export set, and verifies explicit provider composition. The scenario suite runs offline using only explicitly constructed internal stubs and production contract validators; it imports no legacy, Evidence Platform, onboarding, provider, database, or deployment implementation.
+Every behavior and architectural invariant is protected in the same PR that introduces it. The architecture suite denies non-built-in imports outside the product root, protects the deliberate public export set, and verifies explicit provider composition. The scenario suite and G2.2 graph/calculation suite run offline using only internal production modules, explicitly constructed test inputs or stubs, and production contract validators; they import no legacy, Evidence Platform, onboarding, provider, database, or deployment implementation.
