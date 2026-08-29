@@ -128,6 +128,32 @@ G2.4A resolves R01/R02/R03/R04/R05/R06/R07/R08/R11/R12 only within their approve
 
 No resolution priority, question/document/task generation, final action, SMO fallback, terminal outcome, full decision snapshot, persistence, provider behavior, onboarding projection, or public `index.js` expansion exists in G2.4A.
 
+## G2.4B resolution-orchestration boundary
+
+`ubo-resolution-orchestration-v1` is a pure internal stage over the exact G2.4A result and its pinned case, graph, calculations, policy assessment, and UK Corporate `1.4-RC` Policy Pack. It does not mutate a requirement merely because an action or capability attempt succeeded: returned facts/evidence must re-enter the normal candidate-fact → claim → graph → calculation → policy → requirement-resolution pipeline.
+
+An `InformationNeed` remains distinct from a `ResolutionOption`, which remains distinct from an `ActionIntent`. Every open semantic need exposes all currently policy-permitted options without generic ranking. Applicability may reflect explicit runtime availability, held evidence, or unresolved canonical question content. An ActionIntent is emitted automatically only when one policy option is uniquely applicable or when policy directly requires review/operational handling. Equivalent semantic intents coalesce while retaining all need, gap, requirement and option references. No universal existing-evidence/discovery/customer/analyst priority doctrine exists.
+
+ActionIntents are host-neutral and limited to discovery, held-artifact interpretation, customer information/evidence/attestation, analyst/specialist review, and operational retry/hold. They contain no UI, message delivery, assignment, SLA, provider request, ticket, or regulatory submission. Operational failure never becomes a customer evidence request. Unresolved Policy Pack wording remains a visible non-actionable option and is never fabricated.
+
+`ResolutionAttempt` is an immutable append-only record with deterministic sequence metadata, referenced needs/options/intents, strategy, domain outcome, optional underlying capability outcome/reference, and returned fact/evidence references. `FAILED`/`UNAVAILABLE` stay `OPERATIONALLY_BLOCKED`; `NO_DATA` is retained as no resolution. Attempts store no raw evidence and never directly resolve requirements.
+
+Human fallback review is asynchronous. The machine may produce `FALLBACK_REVIEW_CANDIDATE` only when no qualifying person has been established or the firm is explicitly unsatisfied with an identified person, the Policy Pack's pre-fallback requirement states are complete, no substantive customer-resolvable ownership/control need or relevant operational blocker remains, and no specialist route would be bypassed. An operational failure becomes irrelevant only when another route has resolved its affected requirement/need. Missing explicit senior-management candidate data creates a preparatory semantic collection need. `SENIOR_MANAGEMENT_CANDIDATE` is not the `senior_managing_official_fallback` role.
+
+Once candidate data is complete, UBO Control emits an immutable `FALLBACK_EXHAUSTION` ReviewRequirement and a review-ready package of durable case/policy/graph, requirement, need, attempt, capability, evidence, calculation, conflict/review and candidate-person references. The package duplicates no raw evidence and is not the complete G2.4C DecisionSnapshot. Human review is a domain output, never a synchronous customer-journey dependency; the consuming product decides where review occurs.
+
+Only a current case/policy/graph/manifest-pinned `ALL_POSSIBLE_MEANS_EXHAUSTED` decision from `ANALYST` or `COMPLIANCE` derives fallback eligibility. Caller facts, attempt counts, `NO_DATA`, `FAILED`, and `UNAVAILABLE` cannot do so. `FURTHER_MEASURES_AVAILABLE` requires a concrete InformationNeed and never directly creates a generic RFI. A stale decision is rejected after material reasoning-state change. Final SMO role application requires an explicit selection from canonical natural persons already established as senior-management candidates; it preserves existing ownership/control roles, the exhaustion decision and measures-taken attempt references.
+
+R09 compares explicit normalized current UBO/control facts with explicit PSC facts. PSC silence is not negative proof. Results are limited to `NO_DISCREPANCY`, `POTENTIAL_DISCREPANCY`, `NON_REPORTABLE_DEFINITION_DIFFERENCE`, and `REVIEW_REQUIRED`; unmatched facts emit review intent, never a regulator report. Definition-difference and non-material results require explicit rationale rather than invented legal materiality doctrine.
+
+R13 derives chain depth and cross-border graph character and emits only Policy Pack-owned `RATING_FLOOR`/`RATING_SET` signals with graph/calculation basis. R10 and R11 emit their configured HIGH signals only when their own policy conditions hold. UBO Control never imports or mutates authoritative host risk.
+
+R14 is a closing completeness backstop. It becomes actionable only when underlying applicable requirements are complete. A positive referenced attestation resolves R14 only; it never repairs a graph, cures another gap, or proves ownership/control. Missing/refused closing attestation prevents ordinary final resolution.
+
+Terminal orchestration follows Policy Pack precedence: `CDD_FAILURE`, `SPECIALIST_REVIEW_REQUIRED`, `RESOLVED_VIA_SMO_FALLBACK`, expressly permitted `RESOLVED_PROVISIONALLY`, `RESOLVED`, then explicit `UNRESOLVABLE`; otherwise the engine remains non-terminal `IN_PROGRESS`. Requirement counts alone never select an outcome. Conflicts, fallback state, specialist routes, closing attestation and explicit CDD semantics are considered independently.
+
+The customer projection is host-neutral: `CUSTOMER_INPUT_REQUIRED`, `CUSTOMER_INPUT_COMPLETE`, or `INTERNAL_REVIEW_REQUIRED`. It expresses interaction ownership, not an onboarding screen. G2.4B adds no public `index.js` export, persistence, provider execution, host risk mutation, case-management UI, full DecisionSnapshot, snapshot hash/supersession, or G2.4C reconstruction/history behavior.
+
 ## Percentage values
 
 Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar. G2.2 consumes the unchanged validated input shape through exact internal rational and interval arithmetic. G2.3 interprets only the resulting exact/range aggregate against a Policy Pack threshold; it does not alter the calculation.
@@ -146,7 +172,7 @@ Capability outcomes, information needs, requirement states, resolution strategie
 
 ## Policy Packs
 
-Policy Packs are data-only versioned JSON runtime artifacts. The schema identity (`ubo-policy-pack` / `1.0`) is independent of the tenant policy version. A pack pins the exact engine-owned semantic contract versions it requires: capability outcomes, requirement states, claim states, three-valued applicability, resolution semantics, risk levels, condition language, and canonicalization. Engine vocabulary is not duplicated or redefined as tenant data.
+Policy Packs are data-only versioned JSON runtime artifacts. The schema identity is independent of the tenant policy version. Historical packs use `ubo-policy-pack` / `1.0`; schema `1.1` adds validated fallback-review and resolution-orchestration policy data while retaining `1.0` loading compatibility. A pack pins the exact engine-owned semantic contract versions it requires: capability outcomes, requirement states, claim states, three-valued applicability, resolution semantics, risk levels, condition language, and canonicalization. Engine vocabulary is not duplicated or redefined as tenant data.
 
 The runtime schema validates identity, status, jurisdiction, applicability, effective period, entity profiles, parameters, definitions, evidence catalogue references, requirements, action templates, resolution strategies/effects, and lifecycle source references. References are closed and strict. Missing source content remains an explicit unresolved source reference; a runtime artifact must not silently map it to a host ID or invent policy text.
 

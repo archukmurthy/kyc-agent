@@ -71,6 +71,20 @@
 | Capability outcomes remain distinct | `__tests__/requirementResolution.nodetest.js` — COMPLETE/PARTIAL/NO_DATA/INCONCLUSIVE/UNSUPPORTED/UNAVAILABLE/FAILED semantics; only unavailable/failed create OperationalBlockers and never PolicyGaps by themselves |
 | InformationNeed semantics and lifecycle | `__tests__/requirementResolution.nodetest.js` — shared semantic need deduplication, different-concept separation, OPEN→SATISFIED→reopened append-only reconstruction, and unordered permitted strategies |
 | G2.4A purity and exclusions | `__tests__/requirementResolution.nodetest.js` and `__tests__/architecture.nodetest.js` — deterministic deep-frozen output/input immutability, no public export, action/priority/question/document/task/fallback/outcome/snapshot/provider/persistence/onboarding behavior |
+| UK Corporate 1.4-RC schema successor | `__tests__/ukPolicyPack14.nodetest.js` — schema 1.1 identity/hash, immutable 1.3-RC compatibility, exact asynchronous fallback policy, senior-candidate distinction, terminal precedence, source traceability and data-only boundary |
+| ResolutionOption versus ActionIntent | `__tests__/resolutionOrchestration.nodetest.js` — multiple unranked policy options, unique applicable action, policy-content blocking, fact/evidence/template references and no generic priority field |
+| Semantic action coalescence | `__tests__/resolutionOrchestration.nodetest.js` — shared need/requirement references produce one intent while unrelated semantic targets remain distinct |
+| Operational intent separation | `__tests__/resolutionOrchestration.nodetest.js` — failed/unavailable capability produces retry/hold and never automatic customer evidence collection |
+| Append-only ResolutionAttempt | `__tests__/resolutionOrchestration.nodetest.js` — deterministic sequence, retained NO_DATA followed by success, operationally blocked provider outcome, reference-only results and no direct requirement mutation |
+| Asynchronous fallback-review candidate | `__tests__/resolutionOrchestration.nodetest.js` — pre-requirement/customer-need/specialist/operational preconditions, no synchronous analyst dependency, preparatory senior-management collection and repeat-question suppression |
+| Review package and decision pins | `__tests__/resolutionOrchestration.nodetest.js` — exact case/policy/graph/manifest references, durable measures-taken summary, current analyst/compliance decision, stale-decision rejection and caller-eligibility bypass protection |
+| Negative exhaustion decision | `__tests__/resolutionOrchestration.nodetest.js` — concrete further InformationNeed required, no generic RFI, and InformationNeed precedes later option/action planning |
+| Valid SMO application | `__tests__/resolutionOrchestration.nodetest.js` — explicit canonical senior candidate only, role after positive exhaustion decision, measures/decision references, existing role isolation and Policy Pack HIGH signal |
+| R09 discrepancy states | `__tests__/resolutionOrchestration.nodetest.js` — explicit match, potential mismatch/review, PSC silence protection, PSC/MLR definition difference, non-material rationale and no reporting submission |
+| R13 and UBO risk signals | `__tests__/resolutionOrchestration.nodetest.js` — configured depth/cross-border signals with graph/calculation basis, R11 trust and R10 fallback signals, and no authoritative host-risk mutation |
+| R14 residual completeness | `__tests__/resolutionOrchestration.nodetest.js` — not actionable before closing boundary, one attestation action when ready, referenced positive resolution of R14 only, and missing/refused blocking of normal resolution |
+| Terminal precedence | `__tests__/resolutionOrchestration.nodetest.js` — ordinary/fallback/specialist/CDD outcomes, conflict/incomplete IN_PROGRESS, no unapproved provisional path and no terminal-count shortcut |
+| G2.4B purity and exclusions | `__tests__/resolutionOrchestration.nodetest.js` and `__tests__/architecture.nodetest.js` — deterministic frozen offline output, unchanged public exports, no snapshot/hash/history/provider/persistence/UI/onboarding/AI-reviewer behavior |
 | Policy Pack top-level/data-only validation | `__tests__/policyPack.nodetest.js` — malformed, executable, duplicate, and unknown-reference rejection |
 | Schema identity separate from policy version | `__tests__/policyPack.nodetest.js` — exact schema ID/version and independent policy version validation |
 | Versioned engine-semantic pins | `__tests__/policyPack.nodetest.js` — every approved semantic version is required and exact |
@@ -109,7 +123,7 @@
 
 ## UK Corporate supplied assertion plan
 
-These are the 22 behavioral assertions supplied with the Control Room source. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_DEFERRED`, and one `LATER_INTEGRATION`. G2.4A claims only evidence sufficiency, requirement resolution, InformationNeeds, PolicyGaps, and OperationalBlockers; actions, priority, fallback, discrepancy orchestration, final outcome, and snapshots remain deferred.
+These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, and six `G2_4B_EXECUTABLE`. G2.4B protects host-neutral resolution orchestration, asynchronous fallback review, discrepancy assessment, risk signals and terminal policy state; full DecisionSnapshot/history and host integrations remain later work.
 
 | Requirement | Supplied assertion | Status | G1.2B scenario input | Deferred behavior |
 |---|---|---|---|---|
@@ -129,9 +143,9 @@ These are the 22 behavioral assertions supplied with the Control Room source. G1
 | UBO-R08 | Customer declaration alone cannot resolve R08. | `G2_4A_EXECUTABLE` | P01 + focused origin fixture | Protected: applicant-originated evidence does not count independently |
 | UBO-R08 | Numeric evidence strength alone cannot bypass independent-source requirement. | `G2_4A_EXECUTABLE` | P01 + focused configured-count fixtures | Protected: strength and distinct independence are separate constraints |
 | UBO-R08 | Companies House PSC information may corroborate but must not automatically become final UBO conclusion. | `G2_4A_EXECUTABLE` | P01, P02 + focused PSC fixture | Protected: R08 corroboration may resolve without a person/R01 conclusion |
-| UBO-R09 | Material missing PSC may create reportable discrepancy workflow. | `LATER_INTEGRATION` | P07 | Reporting workflow |
-| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `G2_4B_DEFERRED` | P07 | Definition-mismatch determination |
-| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `G2_4B_DEFERRED` | P07 | Materiality and rationale |
-| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4B_DEFERRED` | S06, P03 | G2.4A protects NO_DATA as non-negative; fallback determination remains deferred |
-| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4B_DEFERRED` | P03 | Fallback preconditions |
-| UBO-R10 | Snapshot records measures taken and reason fallback was permitted. | `G2_4B_DEFERRED` | P03 | Decision snapshot production |
+| UBO-R09 | Material missing PSC may create reportable discrepancy workflow. | `G2_4B_EXECUTABLE` | P07 + focused explicit-difference fixture | Protected as `POTENTIAL_DISCREPANCY` plus host-neutral analyst review; legal report submission remains outside UBO Control |
+| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `G2_4B_EXECUTABLE` | P07 + focused definition fixture | Protected as `NON_REPORTABLE_DEFINITION_DIFFERENCE` only from explicit rationale |
+| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `G2_4B_EXECUTABLE` | P07 + focused non-material fixture | Protected: explicit rationale retained, no regulatory action generated |
+| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4B_EXECUTABLE` | S06, P03 + attempt fixture | Protected: NO_DATA remains a no-resolution attempt and cannot derive eligibility |
+| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4B_EXECUTABLE` | P03 + candidate-precondition fixtures | Protected: incomplete requirements/needs/specialist/operational state blocks review candidacy |
+| UBO-R10 | Review package and positive exhaustion decision record measures taken and reason fallback was permitted. | `G2_4B_EXECUTABLE` | P03 + package/decision fixtures | Protected: case/policy/graph/manifest-pinned review package, attempts and explicit human decision; full DecisionSnapshot remains G2.4C |
