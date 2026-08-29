@@ -6,7 +6,7 @@
 | Branch | `codex/ubo-control-g2-3-policy-determination` |
 | Base commit | `3e47fce6db31e7dde15323f3133aa7424875a698` (PR #32 normal merge on `origin/main`) |
 | Latest accepted PR | [#32 — UBO Control G2.2 canonical graph and deterministic calculation](https://github.com/archukmurthy/kyc-agent/pull/32), merged normally with merge commit `3e47fce6db31e7dde15323f3133aa7424875a698`; remote G2.2 branch deleted |
-| Current PR | Pending — dedicated G2.3 PR will be opened after full verification and must not be merged without Control Room acceptance |
+| Current PR | [#33 — UBO Control G2.3 policy determination](https://github.com/archukmurthy/kyc-agent/pull/33) — do not merge without Control Room acceptance |
 | Completed implementation | Pure `ubo-condition-v1` three-valued evaluator; separate pack/requirement applicability; policy-hash-pinned `ubo-policy-determination-v1`; pack-owned exclusive threshold and exact interval interpretation; G2.2 calculation consumption; separate economic/voting/appointment/other-control bases; explicit ambiguity review; natural-person-only role projection with unresolved legal-entity preservation |
 | Scenario coverage | G2.3 protects S01/S02-shaped COMPANY/LLP economics, R02 calculation consumption, R04 voting separation, S15 explicit COMPANY/LLP appointment-majority semantics, P02-style established significant control, S16 ambiguity, multiple-role grouping, legal-entity unresolved handling, and focused threshold/range/partial/no-path/applicability fixtures |
 | Public/product boundary | No `index.js` expansion; no provider, legacy UBO, Evidence Platform, onboarding, host database, migration, Vercel or persistence dependency |
