@@ -34,32 +34,49 @@
 | Material policy change changes identity | `__tests__/policyPack.nodetest.js` — changed-data hash vector |
 | Policy hash pinning and immutable load | `__tests__/policyPack.nodetest.js` — expected hash and frozen result |
 | Composition validates capability traffic | `__tests__/composition.nodetest.js` — request/result validation and request ID correlation |
+| Scripted Discovery/Extraction service shapes | `__tests__/scriptedStubs.nodetest.js` — approved duck types and production composition with explicit injection |
+| Exact sequential stub responses and exhaustion | `__tests__/scriptedStubs.nodetest.js` — configured ordering, exact outcomes, request correlation, and visible queue exhaustion |
+| Stub defensive copying and fixture immutability | `__tests__/scriptedStubs.nodetest.js` and `__tests__/scenarioCorpus.nodetest.js` — configuration isolation, frozen run results, repeat runs |
+| No implicit/public stub selection | `__tests__/scriptedStubs.nodetest.js` and `__tests__/architecture.nodetest.js` — no composition import/fallback and unchanged exact public exports |
+| Required scenario universe | `__tests__/scenarioCorpus.nodetest.js` — exact S01–S20 and P01–P08 indexes |
+| Every scenario is contract-valid and executable | `__tests__/scenarioCorpus.nodetest.js` — per-core named tests, focused-fixture execution, and production-validator corruption cases |
+| COMPANY/LLP semantics remain distinct | `__tests__/scenarioCorpus.nodetest.js` — SHARE_OWNERSHIP versus SURPLUS_ASSET_RIGHTS and board versus LLP management concepts |
+| Ownership/voting/control bases are not retyped | `__tests__/scenarioCorpus.nodetest.js` — S14–S16 exact relationship and qualifier assertions |
+| Multilayer/multipath/conflict/cycle/duplicate facts remain separate | `__tests__/scenarioCorpus.nodetest.js` — S03, S04, S09, S18, and S19 direction/order/cardinality |
+| Exact/range/unknown values survive scenario execution | `__tests__/scenarioCorpus.nodetest.js` — S01, S10, and S12 exact structures with no scalar coercion |
+| Fact versus operation evidence in scenarios | `__tests__/scenarioCorpus.nodetest.js` — S03 different subsets and operation-only reference |
+| NO_DATA versus UNAVAILABLE/FAILED | `__tests__/scenarioCorpus.nodetest.js` — S06, S07, and S13 exact outcomes with no fabricated facts |
+| New/canonical/same-name candidate identities | `__tests__/scenarioCorpus.nodetest.js` — S01, P06, and S09 without name-based merging |
+| Trust and listed/out-of-scope representability | `__tests__/scenarioCorpus.nodetest.js` — S17 trust relationships and S20 policy route input without routing |
+| Future reasoning remains non-executed metadata | `__tests__/scenarioCorpus.nodetest.js` — forbidden decision-output scan and exact future-expectation status |
+| Scenario/policy referential integrity | `__tests__/scenarioCorpus.nodetest.js` and `__tests__/ukPolicyPack.nodetest.js` — requirements/actions/evidence/scenario IDs exist; B/E unresolved references unchanged |
+| Entire corpus runs offline without legacy/provider services | `__tests__/scenarioCorpus.nodetest.js` and `__tests__/architecture.nodetest.js` — blocked network run and prohibited dependency scan |
 
 ## UK Corporate supplied assertion plan
 
-These are the 22 behavioral assertions supplied with the Control Room source. G1.2A protects their exact, one-to-one inventory and deferral classification, but does not claim the behavior itself is implemented. `G1.2B_SCENARIO` means a future policy scenario; `GATE_2_REASONING` means a future reasoning test; `LATER_INTEGRATION` means a test requiring a later integration boundary.
+These are the 22 behavioral assertions supplied with the Control Room source. G1.2B now protects the representability and input setup for every assertion through executable scenarios. It does not claim the later calculation, qualification, policy decision, workflow, or projection. Final classifications are 21 `GATE_2_REASONING` and one `LATER_INTEGRATION`; no assertion remains `G1.2B_SCENARIO` merely to improve a count.
 
-| Requirement | Supplied assertion | Status | Current executable protection |
-|---|---|---|---|
-| UBO-R01 | COMPANY: direct qualifying share owner is identified from supported evidence. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R01 | LLP: qualifying rights to surplus assets are evaluated using LLP semantics. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R01 | Corporate holder creates an InformationNeed until ultimate natural persons are resolved. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R02 | Percentage chains multiply deterministically. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R02 | Independent qualifying paths aggregate. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R02 | Ranges remain ranges/min-max rather than being silently converted to exact percentages. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R02 | Cycles cannot silently produce a numeric answer. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R05 | COMPANY: qualifying board-majority appointment right produces controller_appointment. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R05 | LLP: qualifying majority-management appointment right produces controller_appointment. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R05 | Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R06 | Positive registry control fact may create a candidate claim. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R06 | Absence of PSC condition-4 data does not negatively resolve the requirement. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R06 | Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination. | `G1.2B_SCENARIO` | Plan integrity only; behavior deferred |
-| UBO-R08 | Customer declaration alone cannot resolve R08. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R08 | Numeric evidence strength alone cannot bypass independent-source requirement. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R08 | Companies House PSC information may corroborate but must not automatically become final UBO conclusion. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R09 | Material missing PSC may create reportable discrepancy workflow. | `LATER_INTEGRATION` | Plan integrity only; integration deferred |
-| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
-| UBO-R10 | Snapshot records measures taken and reason fallback was permitted. | `GATE_2_REASONING` | Plan integrity only; behavior deferred |
+| Requirement | Supplied assertion | Status | G1.2B scenario input | Deferred behavior |
+|---|---|---|---|---|
+| UBO-R01 | COMPANY: direct qualifying share owner is identified from supported evidence. | `GATE_2_REASONING` | S01 | Qualification and identification |
+| UBO-R01 | LLP: qualifying rights to surplus assets are evaluated using LLP semantics. | `GATE_2_REASONING` | S02 | LLP qualification and evaluation |
+| UBO-R01 | Corporate holder creates an InformationNeed until ultimate natural persons are resolved. | `GATE_2_REASONING` | S05, S11 | Information-need creation |
+| UBO-R02 | Percentage chains multiply deterministically. | `GATE_2_REASONING` | S03 | Indirect arithmetic |
+| UBO-R02 | Independent qualifying paths aggregate. | `GATE_2_REASONING` | S04 | Aggregation doctrine |
+| UBO-R02 | Ranges remain ranges/min-max rather than being silently converted to exact percentages. | `GATE_2_REASONING` | S10 | Range threshold reasoning |
+| UBO-R02 | Cycles cannot silently produce a numeric answer. | `GATE_2_REASONING` | S18 | Cycle detection/reasoning |
+| UBO-R05 | COMPANY: qualifying board-majority appointment right produces controller_appointment. | `GATE_2_REASONING` | S15 | Qualification and role projection |
+| UBO-R05 | LLP: qualifying majority-management appointment right produces controller_appointment. | `GATE_2_REASONING` | S15 | Qualification and role projection |
+| UBO-R05 | Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic. | `GATE_2_REASONING` | P08 | Resolution restriction and gap generation |
+| UBO-R06 | Positive registry control fact may create a candidate claim. | `GATE_2_REASONING` | P02 | Candidate-claim creation |
+| UBO-R06 | Absence of PSC condition-4 data does not negatively resolve the requirement. | `GATE_2_REASONING` | P02, S06 | Requirement resolution semantics |
+| UBO-R06 | Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination. | `GATE_2_REASONING` | S16 | Review routing and determination |
+| UBO-R08 | Customer declaration alone cannot resolve R08. | `GATE_2_REASONING` | P01 | Evidence sufficiency |
+| UBO-R08 | Numeric evidence strength alone cannot bypass independent-source requirement. | `GATE_2_REASONING` | P01 | Independent-source sufficiency |
+| UBO-R08 | Companies House PSC information may corroborate but must not automatically become final UBO conclusion. | `GATE_2_REASONING` | P01, P02 | Corroboration and final conclusion |
+| UBO-R09 | Material missing PSC may create reportable discrepancy workflow. | `LATER_INTEGRATION` | P07 | Reporting workflow |
+| UBO-R09 | Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable. | `GATE_2_REASONING` | P07 | Definition-mismatch determination |
+| UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `GATE_2_REASONING` | P07 | Materiality and rationale |
+| UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `GATE_2_REASONING` | S06, P03 | Fallback determination |
+| UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `GATE_2_REASONING` | P03 | Fallback preconditions |
+| UBO-R10 | Snapshot records measures taken and reason fallback was permitted. | `GATE_2_REASONING` | P03 | Decision snapshot production |

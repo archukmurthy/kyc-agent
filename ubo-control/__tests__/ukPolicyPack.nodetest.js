@@ -21,6 +21,7 @@ const policyPack = JSON.parse(fs.readFileSync(path.join(POLICY_DIRECTORY, "polic
 const assertionPlan = JSON.parse(
   fs.readFileSync(path.join(POLICY_DIRECTORY, "test-assertion-plan.json"), "utf8"),
 );
+const { allScenarios } = require("../test-support/scenarioCorpus");
 const EXPECTED_POLICY_HASH = "sha256:6bb687ae0c65de7063473db7d34c4f693279dafdd7ef293c79d22347aab29496";
 
 function walk(value, visit) {
@@ -154,6 +155,20 @@ test("every supplied policy test assertion has exactly one honest future-test cl
   ]);
   assertionPlan.forEach((entry) => assert.ok(allowedStatuses.has(entry.status)));
   assert.equal(assertionPlan.some((entry) => entry.status === "SCHEMA_PROTECTED_NOW"), false);
+  assert.equal(assertionPlan.some((entry) => entry.status === "G1.2B_SCENARIO"), false);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "GATE_2_REASONING").length, 21);
+  assert.equal(assertionPlan.filter((entry) => entry.status === "LATER_INTEGRATION").length, 1);
+});
+
+test("all policy assertions link to executable representability scenarios without claiming reasoning coverage", () => {
+  const scenarioIds = new Set(allScenarios.map(({ id }) => id));
+  assertionPlan.forEach((entry) => {
+    assert.ok(Array.isArray(entry.scenarioIds) && entry.scenarioIds.length > 0);
+    entry.scenarioIds.forEach((scenarioId) => assert.equal(scenarioIds.has(scenarioId), true));
+    assert.equal(entry.g1_2bProtection, "REPRESENTABILITY_INPUT_ONLY");
+    assert.equal(typeof entry.deferredBehavior, "string");
+    assert.ok(entry.deferredBehavior.length > 0);
+  });
 });
 
 test("the artifact remains pure JSON data with no callback or executable rule field", () => {
