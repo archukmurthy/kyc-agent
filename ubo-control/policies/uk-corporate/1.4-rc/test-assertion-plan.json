@@ -170,9 +170,9 @@
   {
     "requirementId": "UBO-R10",
     "assertion": "Review package and positive exhaustion decision record measures taken and reason fallback was permitted.",
-    "status": "G2_4B_EXECUTABLE",
+    "status": "G2_4C_EXECUTABLE",
     "scenarioIds": ["P03"],
     "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
-    "deferredBehavior": "G2.4B creates a case/policy/graph-pinned review package from durable attempt, evidence, calculation and reasoning references; the full immutable DecisionSnapshot remains G2.4C."
+    "deferredBehavior": "G2.4C protects the actual immutable DecisionSnapshot measures-taken manifest, pinned review requirement and authoritative exhaustion decision, and reconstructs why fallback was permitted."
   }
 ]

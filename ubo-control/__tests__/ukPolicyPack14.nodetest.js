@@ -76,11 +76,12 @@ test("terminal precedence and customer projections are policy-owned without addi
     ["CUSTOMER_INPUT_REQUIRED", "CUSTOMER_INPUT_COMPLETE", "INTERNAL_REVIEW_REQUIRED"]);
 });
 
-test("all six G2.4B policy assertions are honestly executable and no assertion remains G2.4B-deferred", () => {
-  assert.equal(assertionPlan.filter(({ status }) => status === "G2_4B_EXECUTABLE").length, 6);
+test("the R10 measures assertion advances to G2.4C while the other five G2.4B assertions remain executable", () => {
+  assert.equal(assertionPlan.filter(({ status }) => status === "G2_4B_EXECUTABLE").length, 5);
+  assert.equal(assertionPlan.filter(({ status }) => status === "G2_4C_EXECUTABLE").length, 1);
   assert.equal(assertionPlan.filter(({ status }) => status === "G2_4B_DEFERRED").length, 0);
   assert.equal(assertionPlan.find(({ requirementId, assertion }) => requirementId === "UBO-R10"
-    && assertion.startsWith("Review package")).status, "G2_4B_EXECUTABLE");
+    && assertion.startsWith("Review package")).status, "G2_4C_EXECUTABLE");
 });
 
 test("1.4-RC remains data-only and contains no host, provider, UI or AI reviewer dependency", () => {
