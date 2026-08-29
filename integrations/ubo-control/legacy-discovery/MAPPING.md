@@ -62,3 +62,5 @@ The integration is disposable because production code inside `ubo-control/` neve
 Ordinary tests use an injected `fetch` boundary and never require a network or credential. E2E-D1 through E2E-D4 prove direct exact ownership, multilayer look-through, unresolved branches and voting/economic separation through adapter → public decision façade → fresh `DecisionSnapshot`. A polluted legacy `ubos`/threshold result cannot alter fresh snapshot semantics.
 
 `npm run verify:live` is separately opt-in. It requires `UBO_LEGACY_BASE_URL`, `UBO_POLICY_PACK_PATH`, `UBO_LIVE_ENTITY_NAME`, and optional subject fields. The first run performs real discovery and reports stable decision targets. It does not evaluate until an operator reviews them and supplies `UBO_LIVE_DECISION_PLAN_PATH` containing explicit entity registrations, identity decisions and claim adjudications. A live failure is reported as failure; the verifier never falls back to fixtures. Reports summarize outcomes, fresh fingerprints/calculations/policy/hash and omit the raw provider payload.
+
+The sanitized G3.2 run record is in [`docs/live-verification/2026-08-29.md`](docs/live-verification/2026-08-29.md).
