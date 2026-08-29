@@ -24,10 +24,16 @@ class PolicyPackValidationError extends UboControlError {}
 
 class PolicyPackIntegrityError extends UboControlError {}
 
+class DecisionSnapshotValidationError extends UboControlError {}
+
+class StaleDecisionHistoryError extends UboControlError {}
+
 module.exports = {
   UBO_CONFIGURATION_ERROR_CODE,
   UboConfigurationError,
   UboContractError,
   PolicyPackValidationError,
   PolicyPackIntegrityError,
+  DecisionSnapshotValidationError,
+  StaleDecisionHistoryError,
 };

@@ -85,6 +85,16 @@
 | R14 residual completeness | `__tests__/resolutionOrchestration.nodetest.js` — not actionable before closing boundary, one attestation action when ready, referenced positive resolution of R14 only, and missing/refused blocking of normal resolution |
 | Terminal precedence | `__tests__/resolutionOrchestration.nodetest.js` — ordinary/fallback/specialist/CDD outcomes, conflict/incomplete IN_PROGRESS, no unapproved provisional path and no terminal-count shortcut |
 | G2.4B purity and exclusions | `__tests__/resolutionOrchestration.nodetest.js` and `__tests__/architecture.nodetest.js` — deterministic frozen offline output, unchanged public exports, no snapshot/hash/history/provider/persistence/UI/onboarding/AI-reviewer behavior |
+| DecisionSnapshot canonical identity | `__tests__/decisionSnapshot.nodetest.js` — stable object-order identity, SHA-256 canonical hash, recording-metadata exclusion, checkpoint/event inclusion and tamper rejection |
+| Material hash sensitivity | `__tests__/decisionSnapshot.nodetest.js` — Policy Pack hash, effective parameter, operative claim, graph, calculation, qualifying person, requirement resolution, InformationNeed, review decision and terminal changes all diverge |
+| Snapshot consistency validation | `__tests__/decisionSnapshot.nodetest.js` — mixed case/graph revision, stale Policy Pack identity, evaluation-time mismatch and inconsistent terminal state fail deterministically |
+| Append-only linear DecisionHistory | `__tests__/decisionSnapshot.nodetest.js` — explicit genesis, predecessor link, immutable prior snapshot, typed stale-head rejection and no silent fork |
+| Historical policy and algorithm pinning | `__tests__/decisionSnapshot.nodetest.js` — later policy/algorithm checkpoint creates a successor while the old snapshot remains reconstructable under its original identity |
+| Historical reconstruction | `__tests__/decisionSnapshot.nodetest.js` — resolved, partial/open need, internal review, SMO fallback, specialist and conflict states reproduce exactly without recalculation |
+| R10 snapshot measures manifest | `__tests__/decisionSnapshot.nodetest.js` — fallback snapshot retains review manifest hash, attempts/capability/evidence/calculation/requirement references, review requirement, decision, role and HIGH signal |
+| Explicit checkpoint re-resolution | `__tests__/decisionSnapshot.nodetest.js` — customer fact and analyst review CASE_EVENT successors, unchanged predecessors, SUBMIT_GATE non-final truth and deterministic history append |
+| End-to-end Gate 2 determinism | `__tests__/decisionSnapshot.nodetest.js` — same case/policy/checkpoint/algorithm inputs produce equivalent content/hash entirely offline with no system time or provider/persistence dependency |
+| G2.4C purity and exclusions | `__tests__/decisionSnapshot.nodetest.js` and `__tests__/architecture.nodetest.js` — internal-only coordinator, unchanged public exports, no provider execution, persistence, host/UI, scheduler or Gate 3 behavior |
 | Policy Pack top-level/data-only validation | `__tests__/policyPack.nodetest.js` — malformed, executable, duplicate, and unknown-reference rejection |
 | Schema identity separate from policy version | `__tests__/policyPack.nodetest.js` — exact schema ID/version and independent policy version validation |
 | Versioned engine-semantic pins | `__tests__/policyPack.nodetest.js` — every approved semantic version is required and exact |
@@ -123,7 +133,7 @@
 
 ## UK Corporate supplied assertion plan
 
-These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, and six `G2_4B_EXECUTABLE`. G2.4B protects host-neutral resolution orchestration, asynchronous fallback review, discrepancy assessment, risk signals and terminal policy state; full DecisionSnapshot/history and host integrations remain later work.
+These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_EXECUTABLE`, and one `G2_4C_EXECUTABLE`. G2.4C now protects the actual immutable R10 measures-taken DecisionSnapshot; persistence and host integrations remain later work.
 
 | Requirement | Supplied assertion | Status | G1.2B scenario input | Deferred behavior |
 |---|---|---|---|---|
@@ -148,4 +158,4 @@ These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B s
 | UBO-R09 | Non-material discrepancy records rationale without automatically invoking report workflow. | `G2_4B_EXECUTABLE` | P07 + focused non-material fixture | Protected: explicit rationale retained, no regulatory action generated |
 | UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4B_EXECUTABLE` | S06, P03 + attempt fixture | Protected: NO_DATA remains a no-resolution attempt and cannot derive eligibility |
 | UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4B_EXECUTABLE` | P03 + candidate-precondition fixtures | Protected: incomplete requirements/needs/specialist/operational state blocks review candidacy |
-| UBO-R10 | Review package and positive exhaustion decision record measures taken and reason fallback was permitted. | `G2_4B_EXECUTABLE` | P03 + package/decision fixtures | Protected: case/policy/graph/manifest-pinned review package, attempts and explicit human decision; full DecisionSnapshot remains G2.4C |
+| UBO-R10 | Review package and positive exhaustion decision record measures taken and reason fallback was permitted. | `G2_4C_EXECUTABLE` | P03 + package/decision/snapshot fixtures | Protected by the actual immutable DecisionSnapshot measures-taken manifest and reconstructable fallback decision |
