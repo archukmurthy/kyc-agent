@@ -2,17 +2,19 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | Gate 1 / G1.2B — Deterministic Stubs + Scenario Universe |
-| Branch | `codex/ubo-control-g1-2b` |
-| Base commit | `92af704a9b39d141578cf47669ecbd228893f571` (G1.2A merge on `origin/main`) |
-| Prior accepted PR | [#28 — UBO Control G1.2A policy schema and UK pack](https://github.com/archukmurthy/kyc-agent/pull/28), merged with merge commit `92af704a9b39d141578cf47669ecbd228893f571`; remote G1.2A branch deleted |
-| Current PR | [#29 — UBO Control G1.2B deterministic scenario universe](https://github.com/archukmurthy/kyc-agent/pull/29) |
-| Completed implementation | Explicitly injected sequential Discovery/Extraction stubs; strict scenario validation and isolated runner; 20 required core scenarios; 8 policy-focused input fixtures; one-to-one executable representability links for all 22 policy assertions; honest Gate 2/integration deferrals; architecture and test governance |
-| Outstanding implementation | None within approved G1.2B scope; awaiting Control Room review |
-| Tests / status | G1.2A merged baseline: 45/45 passed. G1.2B: 88/88 passed; 98.88% line / 96.14% branch coverage. Host: 25 suites / 482 tests passed. Legacy UBO framework and recalculation smoke tests passed. Production build passed. |
-| Active escalations | None. Eight assertions previously labelled `G1.2B_SCENARIO` require qualification, claim creation, requirement resolution, information-need creation, controller projection, or review routing; their inputs are scenario-protected and their behavior is reclassified to Gate 2. |
-| Next approved step | Finalize and report G1.2B only; do not start Gate 2. |
+| Gate / sub-gate | **Gate 1 — COMPLETE AND ACCEPTED**; Gate 2 remains unopened |
+| Branch | `docs/ubo-practitioner-research-001` |
+| Base commit | `d9c0a28b9558c8d6529949b83e2bb1849d94ff85` (G1.2B merge on `origin/main`) |
+| Latest accepted PR | [#29 — UBO Control G1.2B deterministic scenario universe](https://github.com/archukmurthy/kyc-agent/pull/29), merged with merge commit `d9c0a28b9558c8d6529949b83e2bb1849d94ff85`; remote G1.2B branch deleted |
+| Current PR | [#30 — UBO Control practitioner research hypotheses](https://github.com/archukmurthy/kyc-agent/pull/30) — documentation-only; do not merge without Control Room acceptance |
+| Completed implementation | UBO Control now exists as a separately bounded product with explicit external capability contracts, canonical policy infrastructure, UK Corporate policy pack, deterministic test stubs and a reusable executable scenario universe, with no dependency on legacy/provider/onboarding implementations and no premature UBO reasoning engine. |
+| Practitioner evidence | `PRACTITIONER-001` recorded as `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; architecture change `NONE`; policy change `NONE`; contract change `NONE` |
+| Future-gate hypotheses | JH-001 through JH-007 recorded for future Journey/Resolution work; none is approved execution logic |
+| Outstanding implementation | Gate 2 remains unopened pending a Control Room implementation specification |
+| Tests / status | Documentation branch: UBO 88/88 passed; host 25 suites / 482 tests passed; architecture 2/2 passed; `git diff --check` passed. Accepted G1.2B coverage: 98.88% line / 96.14% branch. |
+| Active escalations | None. Practitioner evidence cannot amend policy, architecture, capability contracts, fallback eligibility or Evidence/UBO boundaries. |
+| Next approved step | Complete the documentation-only practitioner research PR, then stop; do not begin Gate 2. |
 
 ## Scope guard
 
-G1.2B adds test infrastructure and representability fixtures only. It contains no policy evaluation, graph join/mutation, ownership arithmetic, threshold qualification, identity merge, claim adjudication, UBO/PSC/controller determination, requirement resolution, information-need orchestration, gap/customer-action generation, fallback/routing determination, live provider, Evidence Platform/onboarding integration, persistence, migration, UI, or legacy refactor.
+Gate 1 is complete and accepted. This documentation branch records practitioner evidence and future-gate hypotheses only. It changes no architecture, policy, contract, scenario semantics, stub, domain/public code, deterministic calculation, UBO reasoning, onboarding, Evidence Platform or legacy UBO behavior. Gate 2 has not started.
