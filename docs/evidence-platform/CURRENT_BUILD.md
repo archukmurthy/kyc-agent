@@ -1,462 +1,455 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A4a — Fact-to-Information-Need Evaluation
+# Evidence Consumer Readiness R1 — Private Artifact Ingestion
 
 ## Governance Status
 
-This brief defines the controlled Stage A4a architecture and future acceptance boundary.
+This brief defines the approved R1 architecture and implementation boundary after completed Stage A4a and before deferred Stage A4b.
 
-This governance task does not authorize implementation. Do not create production code, migrations, APIs, Evidence Lab behavior, tests, or persistence until a separate A4a implementation authorization is issued.
+Architecture Authority has approved ADR-014 and authorized R1 implementation within this brief. Do not broaden that authorization beyond R1.
 
-Stage A4b is explicitly deferred and is not authorized by this brief.
+Stage A4b and Evidence Consumer Readiness R2, R3, and R4 remain deferred. UBO and existing KYC behavior are outside this build.
 
 ---
 
 ## 1. Objective
 
-Extend the accepted A1–A3 Evidence domain with an immutable and reconstructable evaluation of how an Evidence Fact relates to an explicitly supplied Information Need.
+Create the smallest production-capable generic Evidence boundary through which an already-authorized server-side private/customer upload can become immutable Evidence and later be reopened by an authorized server-side consumer.
 
-A4a answers:
+```text
+Authorized host upload
+        ↓
+Evidence private-artifact ingestion
+        ↓
+immutable context-restricted Evidence Asset
+        ↓
+immutable original-byte Artifact
+        ↓
+SHA-256 + media + provenance + timestamps
+        ↓
+strictly authorized server-side reopen
+```
 
-> Does this Fact address this Information Need, by what method, with what qualifications or ambiguity, and with what reconstructable lineage?
-
-A4a does not determine final KYC satisfaction, select an operative value, decide which source wins, resolve a customer dispute, or make an onboarding decision.
+R1 preserves bytes and provenance. It does not interpret the document or decide what it proves.
 
 ---
 
-## 2. Mandatory Semantic Separation
+## 2. Observed Existing Capability
 
-Preserve three distinct concepts:
+The existing implementation already provides:
 
-```text
-A3 Evidence Support
-    ↓
-Does preserved evidence support this Fact?
+### Persistence
 
-A4a Evidence-to-Need Evaluation
-    ↓
-Does this Fact address this supplied Information Need?
+* `evidence_collection_operations` for producer/request operation identity, mode, status, coordinates, and lifecycle timestamps;
+* `evidence_acquisitions` for tenant, context, subject, source, method, actor, outcome, and acquisition timestamps;
+* `evidence_assets` for durable logical Evidence identity, subject, type/title, access class, and observation time;
+* `evidence_asset_access_scopes` for tenant/context visibility;
+* `evidence_artifacts` for Artifact identity, representation/media type, original name, storage provider/key/reference, exact size, SHA-256, capture time, and metadata; and
+* forward-only transactional graph persistence through the A1/A2 repositories.
 
-Downstream KYC Satisfaction
-    ↓
-Is this evidence acceptable and sufficient under current KYC policy?
-```
+### Raw-byte storage
 
-These concepts must never be collapsed into one status, score, field, or projection.
+* `VercelBlobArtifactStore` is the current production storage adapter and writes private Blob objects;
+* `FileArtifactStore` is the local Evidence-only adapter;
+* `MemoryArtifactStore` and `fixture_content` are fixture/test mechanisms; and
+* each adapter accepts opaque bytes independently of extraction support.
 
-In particular:
+### Integrity and reopen
 
-* `evidence_facts.support_state` remains A3 evidence support;
-* an Asset associated with a Requirement does not imply satisfaction;
-* a requested Fact carrying schema or Information Need lineage does not imply acceptance;
-* an independent-verification agreement does not imply final correctness; and
-* capture or interpretation completeness does not imply requirement satisfaction.
+* `sha256()` calculates lowercase SHA-256 over exact bytes;
+* A2 persists the calculated fingerprint and byte size with every Artifact;
+* `EvidenceArtifactReader` reopens filesystem, private Vercel Blob, or fixture bytes server-side; and
+* A2 history and A3 live interpretation demonstrate read-time SHA-256 verification before bytes are exposed or interpreted.
+
+### Existing access model
+
+* public Assets are structurally reusable subject to later policy;
+* private/customer Assets use `access_class = context_restricted` plus an explicit tenant/context access scope;
+* Acquisition carries tenant, context, and subject lineage; and
+* Evidence context already belongs to a tenant and subject reference.
+
+The current A3 interpretation repository also contains a same-tenant authorization shortcut. This is a bounded implementation defect against the existing private/context-restricted invariant, not a new architecture decision. It is not an acceptable private-reopen predicate for R1. R1 implementation is authorized to correct it narrowly while leaving public Evidence behavior unchanged.
 
 ---
 
 ## 3. Existing Domain Must Be Reused
 
-Build on the accepted A1–A3 domain:
+R1 reuses the existing domain chain:
 
 ```text
-Evidence Requirement
-    ↓
-Information Need
-
+Collection Operation
+        ↓
+Acquisition
+        ↓
 Evidence Asset
-    ↓
+        ↓
+Asset Access Scope
+        ↓
 Artifact
-    ↓
-Extraction Run
-    ↓
-Fact + A3 support + Artifact/derivation/verification lineage
-```
-
-Do not create parallel Requirement, Information Need, Fact, Artifact, Extraction Run, support, derivation, verification, subject, context, access, collection, or provenance concepts.
-
-A4a evaluates existing immutable Facts against existing explicitly supplied Information Needs. It does not recollect evidence or reinterpret an Artifact merely to perform the evaluation.
-
----
-
-## 4. Evidence-to-Need Evaluation
-
-Introduce the architectural concept of an immutable Evidence-to-Need Evaluation, or a semantically equivalent neutral implementation name.
-
-An evaluation relates:
-
-```text
-immutable Fact
-      ↓
-explicitly supplied Information Need
-      ↓
-evaluation method and version
-      ↓
-result + explanation + qualifications + limitations
-```
-
-Do not mutate the Fact or Information Need to represent this relationship.
-
-Every evaluation must retain enough lineage to reconstruct, where applicable:
-
-* the evaluated Information Need;
-* the candidate Fact;
-* the Fact's existing Extraction Run, Artifact support, derivation, and verification lineage by reference;
-* evaluator type, identity, and version;
-* deterministic method, normalization, transformation, provider/model, or instruction reference and version;
-* raw and normalized comparison inputs where normalization is used;
-* supplied comparison, schema, temporal, or policy context;
-* result;
-* explanation, reasons, or signals;
-* ambiguity, qualifications, and limitations; and
-* evaluation time.
-
-Exact table names, internal API names, module organization, and enum spelling remain implementation details unless a later decision freezes them.
-
----
-
-## 5. Permitted Evaluation Methods
-
-A4a may use bounded methods including:
-
-### Exact typed matching
-
-Compare values only under a supplied or authoritative type/identifier meaning, such as the same identifier scheme. String equality alone must not create subject identity or semantic equivalence.
-
-### Deterministic normalization
-
-Apply a named and versioned normalization method while preserving the original Fact unchanged.
-
-Example:
-
-```text
-Raw Fact:       TESCO PLC
-Need concept:   business_name
-Comparison:     Tesco Plc
-Method:         <named/versioned normalization>
-```
-
-The normalized comparison input is evaluation lineage, not a replacement Fact.
-
-### Structured or component comparison
-
-Compare structured values or components only where the upstream Information Need or supplied evaluation context defines the relevant structure. Partial component coverage and incompatible shapes must remain explicit.
-
-### Semantic concept matching
-
-Determine whether differently expressed concepts are candidates for the same supplied Information Need. Semantic evaluation must not silently equate concepts that may carry different business meanings.
-
-### Approved derived or equivalence relationships
-
-Use an approved transformation or equivalence relationship only where explicit transformation lineage exists. Do not invent semantic transformations to force a match.
-
-Deterministic methods are preferred when they can evaluate the relationship reliably. AI must not be introduced merely to repeat deterministic comparison.
-
----
-
-## 6. Provider-Neutral AI-Assisted Evaluation
-
-Provider-neutral AI-assisted semantic evaluation is permitted where deterministic comparison is insufficient.
-
-This is particularly relevant when an A3 discovered Fact uses source terminology that may relate to a supplied KYC/KYB Information Need.
-
-AI evaluation must retain reconstructable lineage including, where applicable:
-
-* provider and model/version;
-* instruction or evaluator reference/version;
-* Fact and Information Need inputs;
-* supplied schema and evaluation context;
-* evaluation timestamp;
-* result and explanation/signals; and
-* ambiguity and limitations.
-
-AI does not:
-
-* become schema authority;
-* create or fabricate an Information Need;
-* modify the upstream schema;
-* convert a discovered Fact into a requested Fact;
-* establish final KYC satisfaction;
-* choose a winning source or value; or
-* make a customer, analyst, risk, or onboarding decision.
-
-Persisted semantics must remain provider-neutral. Credentials and secrets remain environment-only and must never appear in evaluation records or browser responses.
-
----
-
-## 7. Discovered Facts
-
-Preserve this flow:
-
-```text
-A3 discovered Fact
-      ↓
-A4a immutable candidate evaluation
-      ↓
-explicitly supplied Information Need
-```
-
-The discovered Fact remains discovered.
-
-Do not:
-
-* add `schema_field_id` or `information_need_id` to the Fact;
-* rewrite it as requested;
-* fabricate schema lineage;
-* automatically recommend or perform schema mutation;
-* change an onboarding form; or
-* treat a candidate evaluation as automatic KYC adoption.
-
----
-
-## 8. Evaluation Outcomes
-
-A4a must support a bounded, neutral vocabulary capable of expressing meanings such as:
-
-* addresses;
-* partially addresses;
-* ambiguous;
-* insufficient;
-* does not address; and
-* indeterminate or not evaluated.
-
-Exact enum spelling may follow repository conventions. Names must not imply final KYC acceptance, approval, or satisfaction.
-
-An evaluation must be allowed to retain a candidate even when the A3 Fact has `needs_verification` support. Fact support and Need evaluation remain independently visible.
-
-If disagreement is represented in A4a, it is limited to genuinely comparable Facts or comparison inputs. A4a may identify and explain disagreement but must not calculate a universal source preference or choose a winner.
-
-Registered and operating address, current and historical value, or different identifier schemes must not be treated as comparable merely because their displayed strings look similar.
-
----
-
-## 9. Source Trust and Policy Context
-
-Source trust, A3 extraction support, and A4a Evidence-to-Need evaluation remain independent.
-
-A4a may consume explicitly supplied and versioned source-policy or comparison context where relevant to the evaluation. It must preserve that supplied context as lineage without becoming its owner.
-
-Do not:
-
-* define universal source-trust tiers;
-* copy the current KYC application's coarse primary/secondary/tertiary mechanism into Evidence;
-* treat Companies House as universally authoritative for every concept, jurisdiction, tenant, or purpose;
-* treat customer-provided evidence as universally weak or authoritative; or
-* derive an A4a result mechanically from source tier or A3 support state.
-
----
-
-## 10. Temporal Behavior and Re-evaluation
-
-A4a may compare and expose:
-
-* Evidence Asset observation time;
-* Artifact capture time;
-* source-effective dates actually represented by evidence or Facts;
-* Extraction Run and Fact timestamps;
-* evaluation time; and
-* supplied temporal context or policy reference.
-
-Do not invent source-effective dates, freshness policy, or a `latest value wins` rule. Later evidence must not silently become operative merely because it is newer.
-
-Re-evaluation is append-only:
-
-```text
-Monday
-Evaluation 1 → Fact A addresses Need X
-
-Friday
-New Fact B or new supplied context
-Evaluation 2 → new assessment
-```
-
-Evaluation 2 must not rewrite Evaluation 1. Both evaluations, inputs, methods, contexts, results, and timestamps remain reconstructable.
-
-Retries, idempotent replay, and deliberate later evaluation must not be silently conflated if doing so would weaken history. Exact implementation mechanics remain discretionary unless they create a new material evaluation-identity policy.
-
----
-
-## 11. Future Additive Persistence Direction
-
-A4a is expected to require forward-only additive persistence conceptually equivalent to:
-
-### Evaluation Run or Header
-
-* Information Need;
-* evaluator or method identity/version;
-* supplied comparison, schema, temporal, or policy context;
-* evaluation time; and
-* limitations.
-
-### Candidate Evaluation
-
-* evaluation;
-* Fact;
-* relation/result;
-* comparison method;
-* normalized comparison inputs where applicable;
-* normalization/transformation reference;
-* reasons/signals; and
-* ambiguity, qualifications, or limitations.
-
-The future implementation must not overload:
-
-* `evidence_facts.support_state`;
-* `evidence_verification_attempts`;
-* `evidence_requirement_assets`;
-* `evidence_requirements.status`; or
-* mutable JSON on existing Facts.
-
-Existing A1–A3 records remain immutable. Do not modify migrations 010–013. This governance task does not authorize creation of migration 014 or any other migration.
-
----
-
-## 12. Evidence Lab Acceptance Scenarios
-
-A future A4a implementation must provide deterministic, isolated acceptance scenarios covering at least:
-
-1. **Exact identifier match** — a typed identifier Fact exactly addresses the supplied identifier Need.
-2. **Normalized business-name match** — raw values remain unchanged while a named/versioned normalization is visible.
-3. **Qualified semantic concept match** — differently worded concepts produce an explained, qualified candidate relationship.
-4. **Clear mismatch** — the relationship is recorded truthfully without subject reassignment or fabricated equivalence.
-5. **Comparable competing Facts** — disagreement is visible and explained without a selected winner.
-6. **Fact needing verification** — A3 support remains `needs_verification` while A4a separately evaluates whether the Fact addresses the Need.
-7. **Discovered Fact candidate** — a discovered Fact is evaluated against a supplied Need without mutating the Fact or schema.
-8. **Collection boundary** — complete capture/interpretation is shown separately from requirement satisfaction where cardinality semantics are absent.
-9. **Legitimate empty set** — authoritative no-PSC/no-registrable-member evidence is distinguishable from unavailable evidence, capture failure, or no extracted Facts.
-10. **Historical re-evaluation** — two evaluations remain append-only and separately inspectable after new evidence or context arrives.
-
-Every scenario must visibly distinguish:
-
-```text
-A3 Fact support
-A4a Need evaluation
-evidence/input completeness
-downstream KYC decision: NOT PERFORMED
-```
-
-Fixtures and automated tests must not require live external collection or paid AI calls. Optional live/provider acceptance requires separate authorization and must remain explicit rather than automatic.
-
----
-
-## 13. Stage A4b Is Deferred
-
-A4b — Coverage, Conflict, and Provisional Requirement Assessment — is not authorized for implementation.
-
-Before A4b can begin, Architecture Authority must separately govern or approve upstream inputs for at least:
-
-* scalar versus collection shape;
-* zero-or-one, one, one-or-many, or other cardinality;
-* minimum and maximum counts where applicable;
-* complete-set and `all current X` semantics;
-* legitimate empty-set semantics;
-* required versus optional status;
-* temporal scope and current-as-of meaning;
-* freshness policy;
-* source suitability and acceptability;
-* genuinely comparable conflict rules; and
-* aggregation from candidate evaluations to requirement-level evidence coverage.
-
-For example, complete capture and interpretation of three Companies House Officers pages proves the preserved input was complete under its capture contract. It does not establish that an Information Need meaning `all current directors` is satisfied unless upstream requirement semantics define the required set.
-
-Authoritative PSC evidence stating that no registrable PSC exists is positive evidence of a legitimate empty state. It is not equivalent to an unavailable PSC source, capture failure, incomplete input, or no extracted Facts.
-
-A4b will remain provisional evidence assessment. It will not select the operative value or determine final KYC satisfaction.
-
----
-
-## 14. Final KYC/Onboarding Boundary
-
-KYC/Onboarding retains responsibility for:
-
-* final KYC requirement satisfaction;
-* source and value winner selection;
-* operative customer values;
-* customer correctness and dispute resolution;
-* corroboration requirements;
-* analyst, compliance, and risk decisions;
-* approve, reject, refer, or escalate decisions; and
-* onboarding progression.
-
-Evidence may produce qualified, reconstructable evaluations and later provisional coverage assessments for downstream systems to consume. It must not make those decisions itself.
-
----
-
-## 15. Existing-System Protection
-
-A4a must remain Evidence-owned and additive.
-
-Do not modify existing KYC/Pre-boarding source classification, schemas, prompts, customer confirmation, customer correction, dossier persistence, submission provenance, Companies House integration, self-source, UBO, source configuration, decision policies, or customer UI behavior.
-
-Do not design or implement the final KYC-to-Evidence or Evidence-to-KYC integration contract during A4a. Any unavoidable change to existing KYC behavior requires separate Architecture Authority review and explicit authorization.
-
-Public/private access rules remain authoritative. A4a must not discover or evaluate context-restricted Facts across unrelated tenants or contexts. If safe candidate access would require a new cross-context policy, stop for Architecture Authority.
-
----
-
-## 16. Explicit Exclusions
-
-Do not implement:
-
-* A4b coverage aggregation or requirement-level provisional assessment;
-* final KYC satisfaction;
-* source or value winner selection;
-* operative-value selection;
-* customer acceptance, correctness, or correction decisions;
-* analyst, compliance, or risk decisions;
-* approve, reject, refer, escalate, or onboarding-progression decisions;
-* universal source-trust tiers;
-* freshness policy or latest-wins behavior;
-* global identity resolution;
-* cross-tenant private-evidence discovery;
-* schema creation, mutation, or recommendation;
-* automatic adoption of discovered Facts;
-* unsupported SIC-to-industry or similar transformations;
-* evidence recollection;
-* automatic Artifact reinterpretation;
-* automatic semantic evaluation merely because a Fact or Need exists;
-* cross-Requirement or cross-context evaluation without explicit authorization;
-* A5 Ledger or Evidence Package work;
-* redesign of existing KYC source steering; or
-* changes to normal KYC behavior.
-
----
-
-## 17. Stop Conditions
-
-Stop and report to Architecture Authority before implementation proceeds if A4a would require:
-
-* inventing or changing Information Need meaning;
-* silently treating schema-field lineage as a satisfaction result;
-* mutating a Fact to record an evaluation;
-* converting a discovered Fact into a requested Fact;
-* creating a universal semantic-equivalence or source-trust policy;
-* deciding which candidate wins;
-* defining final satisfaction, freshness, cardinality, or complete-set semantics;
-* weakening A1–A3 immutability, provenance, access, or historical reconstruction;
-* evaluating private evidence outside its authorized context;
-* irreversible coupling to one AI provider;
-* modifying migrations 010–013;
-* changing existing KYC behavior; or
-* implementing any A4b or later-stage capability.
-
----
-
-## 18. Future Completion Criteria
-
-When separately authorized and implemented, Stage A4a will be complete when fixtures, automated tests, and the isolated Evidence Lab demonstrate:
-
-```text
-explicitly supplied Information Need
-        +
-immutable A3 Fact with complete evidence lineage
         ↓
-named/versioned deterministic or semantic evaluation
-        ↓
-neutral result + explanation + qualifications
-        ↓
-append-only reconstructable evaluation history
-        ↓
-downstream KYC decision: NOT PERFORMED
+Storage + SHA-256 + Provenance
 ```
 
-Completion must preserve the separate meanings of A3 support, A4a evaluation, evidence/input completeness, and downstream satisfaction while leaving A4b, KYC decisioning, Ledger/Package, and existing KYC behavior outside A4a.
+Do not create parallel upload-document, blob, evidence, subject, context, access, provenance, fingerprint, or history concepts.
+
+R1 creates no Evidence Requirement, Information Need, Extraction Run, extracted value, A3 Fact, verification attempt, A4a evaluation, or A4b assessment.
+
+The implementation may add a generic `evidence/ingestion` module and service/repository interfaces. It may reuse or semantics-preservingly extract the existing Artifact-store implementation from its A2-oriented module location. It must not duplicate the storage adapters.
+
+---
+
+## 4. Proposed Service Boundary
+
+The future service input is conceptually equivalent to:
+
+```text
+ingestPrivateArtifact({
+  idempotencyKey,
+  authorizedTenantId,
+  authorizedContextId,
+  subjectReferenceId?,
+  actorType,
+  actorId?,
+  sourceChannel,
+  sourceLocator?,
+  bytesOrServerStream,
+  declaredMediaType,
+  originalFilename?,
+  sourceEffectiveDate?
+})
+```
+
+Exact names and transport remain implementation details.
+
+The boundary receives an upload only after the host has authorized Evidence Platform custody. Tenant, context, and actor identity come from trusted server-side authorization/session context. A browser must not be able to assert an arbitrary tenant, context, actor, storage path, storage reference, fingerprint, or subject association.
+
+The context must exist and belong to the authorized tenant. R1 derives its subject from that context. If a subject reference is supplied, it is a consistency constraint and must match the context; R1 does not resolve identity or create a new canonical subject.
+
+The successful response may expose:
+
+* Collection Operation ID;
+* Acquisition ID;
+* Evidence Asset ID;
+* Artifact ID;
+* canonical media type;
+* byte size;
+* SHA-256;
+* ingestion/capture timestamp;
+* explicitly supplied source-effective date; and
+* safe provenance summary.
+
+It must not expose storage credentials, private storage paths/keys/references, raw authorization context, or unrelated private Evidence.
+
+---
+
+## 5. Media Support and Validation
+
+R1 must support storage/ingestion for at least:
+
+| Media | Canonical MIME type | Minimum server-side signature check |
+|---|---|---|
+| PDF | `application/pdf` | PDF file signature |
+| PNG | `image/png` | PNG binary signature |
+| JPEG | `image/jpeg` | JPEG binary signature |
+
+This is preservation support, not interpretation support.
+
+The implementation must:
+
+* accept bytes or a bounded server-side stream rather than a browser storage reference;
+* enforce configured byte-size limits before unbounded buffering/storage;
+* validate supported file signatures and reject declared-MIME/signature conflict;
+* derive a canonical media type from the validated format;
+* reject empty, malformed, unsupported, or forbidden media;
+* preserve exact original bytes without transcoding, recompression, PDF rewriting, EXIF modification, or image normalization; and
+* treat original filename as optional untrusted display metadata.
+
+Filename sanitization must prevent path traversal, header injection, and use as a storage key. The filename does not establish content type, subject, evidence class, or authorization.
+
+Use a generic representation type such as `original_upload` and a generic Evidence type such as `private_uploaded_artifact`. R1 must not create UBO-specific or other consumer-specific media classifications.
+
+It is valid for R1 to preserve an Artifact that A3 cannot interpret. Unsupported interpretation is not unsupported storage.
+
+---
+
+## 6. Storage and Integrity Sequence
+
+For a valid, authorized request:
+
+1. validate operation identity, context, metadata, size, and media signature;
+2. calculate SHA-256 over the exact input bytes;
+3. store the exact bytes using the configured authoritative Artifact store;
+4. read the stored object back through that storage boundary;
+5. verify byte size and SHA-256 against the input calculation;
+6. persist the Collection Operation, successful Acquisition, context-restricted Asset, access scope, and Artifact in one logical database transaction; and
+7. return a non-secret Evidence identity/provenance summary.
+
+No successful Artifact may be reported before read-back integrity and persistence succeed.
+
+SHA-256 means only:
+
+> The reopened Artifact bytes are byte-for-byte identical to the bytes accepted by R1.
+
+SHA-256 is not Evidence identity, semantic equivalence, source trust, reuse permission, or access permission.
+
+Physical deduplication is outside R1. A later optimization must not merge logical Evidence history or weaken private access isolation.
+
+---
+
+## 7. Idempotent Retry and Genuine Repeat Upload
+
+R1 uses the existing producer/request-key uniqueness boundary with a neutral private-ingestion producer identity.
+
+### Retry of one logical operation
+
+The same idempotency key, tenant, context, provenance-affecting metadata, media, and SHA-256 identify the same intended upload operation.
+
+Retry must:
+
+* reopen or resume the existing operation;
+* return the same logical operation/Acquisition/Asset/Artifact identities after success;
+* make no second successful logical Evidence history; and
+* never mutate a previously completed Artifact.
+
+Using the same key with different tenant, context, bytes, canonical media, or material provenance metadata is an `idempotency_conflict`.
+
+### Deliberate repeat upload/recollection
+
+A deliberate new upload uses a new idempotency key and creates new immutable Collection Operation, Acquisition, Asset, and Artifact identities.
+
+This remains true when:
+
+```text
+old SHA-256 = new SHA-256
+```
+
+Identical bytes do not automatically mean the same evidentiary event.
+
+---
+
+## 8. Private Access and Security
+
+Every R1 Asset must be:
+
+```text
+access_class = context_restricted
+```
+
+and have an explicit access scope for its authorized tenant and Evidence context.
+
+Authorized reopen requires all of:
+
+* Artifact and Asset exist;
+* Asset is context restricted;
+* explicit asset scope matches authorized tenant;
+* explicit asset scope matches authorized Evidence context;
+* context belongs to that tenant;
+* subject association remains the one persisted through the context/acquisition; and
+* stored bytes pass SHA-256 verification.
+
+Same tenant without the matching context is insufficient. Cross-context and cross-tenant private discovery/reuse are forbidden. Artifact IDs and fingerprints are not bearer tokens.
+
+The identified A3 same-tenant shortcut must be corrected through this same invariant: context-restricted interpretation requires the exact authorized tenant and context. Do not broaden the correction into a new authorization model or change public Evidence access.
+
+The future reopen boundary is conceptually equivalent to:
+
+```text
+readAuthorizedArtifact({ artifactId, authorizedTenantId, authorizedContextId })
+```
+
+It resolves metadata and authorization before storage access, reads only the persisted server-side storage location, verifies SHA-256, and returns bytes or an approved server-side stream to the authorized caller. Browser-facing inspection must not expose storage credentials or references.
+
+R1 does not implement retention/deletion, malware scanning policy beyond bounded media validation, content-disarm/reconstruction, antivirus vendor selection, DLP, legal hold, or a general secret/biometric vault. If production security requires any of those before accepting a real consumer, that control must be separately authorized or supplied by the host boundary.
+
+---
+
+## 9. Provenance and Time Semantics
+
+Successful ingestion preserves:
+
+* Evidence Asset and Artifact identities;
+* exact original bytes;
+* canonical MIME type and byte size;
+* optional sanitized original filename;
+* Acquisition source channel/provider/locator where applicable;
+* acquisition method;
+* authorized actor type and identifier where available;
+* tenant, Evidence context, and context-derived subject reference;
+* private access scope;
+* SHA-256 and algorithm;
+* acquisition start/completion time;
+* Asset observation time;
+* Artifact capture/ingestion time; and
+* an explicitly supplied source/document effective date.
+
+These times must remain distinct:
+
+```text
+source-effective date (optional, host supplied)
+≠ acquisition/upload time
+≠ Artifact capture time
+≠ database creation time
+≠ future extraction time
+```
+
+R1 must not inspect the document to infer an effective date. It must not use client filesystem modification time as source-effective evidence. A supplied effective date is preserved under the canonical Evidence-owned `artifact_metadata.sourceEffectiveDate` property with its host-supplied provenance and ISO precision. It does not replace `captured_at` or `observed_at`, and it does not establish freshness or current applicability.
+
+---
+
+## 10. Failure Model
+
+The service/API must distinguish at least:
+
+| Failure | Meaning |
+|---|---|
+| `invalid_request` | required operation/media/context metadata is absent or malformed |
+| `access_denied` | trusted authorization does not permit the tenant/context/subject operation |
+| `unsupported_media_type` | format is not in the R1 preservation allowlist |
+| `invalid_media` | bytes are empty, malformed, or conflict with declared media metadata |
+| `idempotency_conflict` | an existing key is reused for materially different input |
+| `artifact_storage_failed` | authoritative object storage did not accept or reopen the bytes |
+| `artifact_integrity_mismatch` | stored bytes/length do not match the accepted input |
+| `evidence_persistence_failed` | logical Evidence transaction did not commit |
+
+Exact internal code spelling may follow repository conventions, but these meanings must remain separately observable without secrets.
+
+None of these failures means:
+
+```text
+document contains no facts
+```
+
+R1 performs no extraction. A failed or denied request creates no successful Asset or Artifact. Where a failed Collection Operation or Acquisition can be safely and truthfully recorded, it must contain no fabricated evidence result. A persistence failure must not be reported as success even if object storage already contains an orphaned object.
+
+Cleanup of an R1-created orphan storage object may be implemented only as a scoped operational mechanism that cannot delete any previously persisted Artifact or shared physical object.
+
+---
+
+## 11. Production Storage Boundary
+
+Do not assume a new storage subsystem is required.
+
+The minimum R1 implementation should reuse:
+
+* private Vercel Blob for deployed production storage;
+* the configured Evidence-only filesystem directory for local acceptance;
+* memory/fixture storage only for tests; and
+* the existing server-side reader for provider-specific reads.
+
+The production API must fail closed when no approved durable Artifact store is configured. Memory storage and database `fixture_content` are not production fallbacks.
+
+Storage provider selection remains an infrastructure configuration. It must not change Evidence identity, access class, provenance, or retry semantics.
+
+---
+
+## 12. Persistence and Migration Direction
+
+The minimum R1 model is representable without a new migration:
+
+* Collection Operation — migration 011;
+* Acquisition, Asset, access scope, and Artifact — migration 010;
+* media type and original filename — existing Artifact columns;
+* actor/source provenance — existing Acquisition columns and producer metadata;
+* source-effective date — canonical `artifact_metadata.sourceEffectiveDate`, distinct from capture time; and
+* SHA-256, byte size, capture time, and storage lineage — existing Artifact columns.
+
+Implementation must not rewrite migrations 010–014.
+
+If repository implementation shows a new typed column or state is necessary to preserve these semantics, stop for Architecture Authority. Any approved migration must be additive and forward-only. R1 must not overload extraction or A4a tables.
+
+---
+
+## 13. Required Characterization
+
+When separately authorized, R1 implementation must prove at minimum:
+
+1. PDF ingest and authorized reopen are byte-for-byte exact;
+2. PNG ingest and authorized reopen are byte-for-byte exact;
+3. JPEG ingest and authorized reopen are byte-for-byte exact;
+4. stored SHA-256 matches accepted and reopened bytes;
+5. Artifact identity is immutable;
+6. tenant/context-restricted visibility succeeds only for the exact authorized scope;
+7. cross-context and cross-tenant reads are denied before storage access;
+8. canonical media type, size, optional filename, and source metadata are correct;
+9. upload/capture time and supplied source-effective date remain distinct;
+10. malformed and unsupported media fail without Evidence conclusions;
+11. storage, integrity, and persistence failure are separately observable;
+12. an idempotent retry creates no second logical evidence event;
+13. a deliberate new upload with identical bytes creates new immutable Evidence identities;
+14. prior Artifact history is never mutated;
+15. API responses expose no storage credentials/references; and
+16. no extraction, Fact, evaluation, UBO, KYC, or A4b record is created.
+
+Tests must use fixture bytes and disposable infrastructure. No paid AI request or external evidence-source call is required.
+
+---
+
+## 14. Explicit Exclusions
+
+R1 does not implement:
+
+* document extraction or interpretation;
+* PDF text extraction, OCR, vision, or AI provider calls;
+* Facts, derived Facts, support states, or verification;
+* Evidence-to-Need evaluation;
+* A4b coverage/conflict/provisional assessment;
+* Requirement satisfaction;
+* source trust or suitability;
+* operative-value or winner selection;
+* evidence reuse or discovery policy;
+* private cross-context or cross-tenant access;
+* UBO types, IDs, ownership claims, Information Needs, media types, or contract changes;
+* KYC/KYB, EDD, source-of-funds, analyst, or other consumer workflow integration;
+* creation or resolution of global subject identity;
+* direct browser authority to select storage or access scope;
+* external-custody IDV passport, selfie, or biometric retention;
+* general identity/biometric vault design;
+* retention/deletion policy;
+* physical deduplication;
+* R2, R3, or R4; or
+* changes to existing KYC behavior.
+
+---
+
+## 15. Stop Conditions
+
+Stop and report before R1 implementation proceeds if it would require:
+
+* weakening exact tenant/context private access;
+* trusting browser-supplied tenant, context, actor, subject, hash, bytes reference, or storage reference as authoritative;
+* treating SHA-256 as logical identity or authorization;
+* interpreting a document to ingest it;
+* creating consumer-specific or UBO domain records;
+* taking custody of external-custody IDV/biometric artifacts without separate governance;
+* mutating an existing Asset or Artifact on retry or repeated upload;
+* using upload time as an inferred document-effective date;
+* reporting an extraction/no-facts conclusion for an ingestion failure;
+* exposing private storage references or credentials;
+* using memory/fixture storage as a production fallback;
+* rewriting migrations 010–014;
+* implementing A4b, R2, R3, or R4; or
+* changing normal KYC/Pre-boarding/UBO behavior.
+
+---
+
+## 16. Future Completion Criteria
+
+After separate implementation authorization, R1 is complete when the isolated Evidence boundary demonstrates:
+
+```text
+already-authorized private PDF/PNG/JPEG
+        ↓
+validated media + exact bytes
+        ↓
+private durable storage + read-back SHA-256
+        ↓
+immutable operation/acquisition/asset/artifact provenance
+        ↓
+exact tenant/context access scope
+        ↓
+authorized server-side reopen
+        ↓
+interpretation and downstream decision: NOT PERFORMED
+```
+
+Completion must prove idempotent retry and genuine identical-byte repeat uploads as different cases, preserve prior history, and leave R2/R3/R4, A4b, UBO, consumer integration, and existing KYC behavior untouched.

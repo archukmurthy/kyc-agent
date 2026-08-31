@@ -863,3 +863,195 @@ The former roadmap wording assigning A4 `operative evidence/value selection unde
 A4a can establish durable candidate-evaluation lineage without pretending to complete KYC decisioning. Discovered Facts remain useful without schema mutation. Deterministic and AI-assisted evaluation can share provider-neutral lineage. Historical re-evaluation remains reconstructable.
 
 A4a explicitly excludes source-winner or operative-value selection, final KYC satisfaction, customer correction decisions, analyst/risk decisions, universal trust tiers, freshness/latest-wins policy, identity resolution, cross-tenant private-evidence discovery, schema mutation, automatic adoption of discovered Facts, unsupported transformations such as ungoverned SIC-to-industry mapping, recollection, automatic reinterpretation, A5 Ledger/Package work, legacy KYC source-steering redesign, and changes to normal KYC behavior.
+
+---
+
+## ADR-014 — Generic Private Artifact Ingestion and Authorized Reopen
+
+**Status:** APPROVED
+
+**Date:** 2026-08-31
+
+**Raised by:** Architecture Authority
+
+### Context
+
+Stage A1 established immutable Evidence Acquisitions, Assets, Artifacts, access scopes, SHA-256 integrity metadata, and storage references. Stage A2 proved production-backed storage and transactional persistence for public Companies House evidence. Stage A3 proved server-side Artifact retrieval and fingerprint verification before interpretation. Stage A4a is complete, while A4b remains deferred.
+
+Future Evidence consumers need a smaller prerequisite before broader integration: an already-authorized private/customer file must be preservable as generic Evidence without requiring the Evidence Platform to understand UBO, KYC satisfaction, document contents, or downstream operative values.
+
+Repository diagnosis established that the current model already contains the necessary logical evidence primitives. The missing capability is a generic production service boundary that validates and stores opaque private binary media, creates the existing immutable provenance graph, and later reopens it under exact private access scope.
+
+### Observed Repository Evidence
+
+* `evidence_artifacts` already records Artifact identity, representation type, media type, original name, storage provider/key/reference, size, SHA-256, capture time, metadata, and creation time.
+* `evidence_acquisitions` already records tenant, context, subject, source type/provider/locator, acquisition method, actor, outcome, timestamps, and producer metadata.
+* `evidence_assets` and `evidence_asset_access_scopes` already support `context_restricted` evidence with tenant/context scope.
+* `evidence_collection_operations` already supplies producer-neutral operation identity and a unique producer/request-key boundary suitable for retry idempotency.
+* the existing Artifact stores accept opaque bytes; Vercel Blob is the current production adapter, filesystem storage is the local adapter, and memory/fixture content is test-only.
+* the existing server-side Artifact reader can reopen filesystem and private Vercel Blob bytes, while A3 demonstrates SHA-256 verification after read.
+* the current A3 interpretation lookup contains a same-tenant authorization shortcut in addition to access-scope checks. This is a bounded implementation defect against the already-approved private/context-restricted Evidence invariant, not a new architecture decision. It is not sufficient for R1 private reopen and must not be copied into the generic private boundary.
+
+### Decision
+
+#### R1 is generic Evidence infrastructure
+
+Insert **Evidence Consumer Readiness R1 — Private Artifact Ingestion** after A4a and before A4b.
+
+R1 accepts an upload only after a trusted host has authorized Evidence Platform custody. It creates generic Evidence provenance and does not create or import consumer-domain concepts.
+
+Conceptually:
+
+```text
+authorized host upload
+        ↓
+generic Evidence ingestion boundary
+        ↓
+Collection Operation + successful Acquisition
+        ↓
+immutable context-restricted Evidence Asset
+        ↓
+immutable original-byte Artifact + SHA-256
+        ↓
+strictly authorized server-side reopen
+```
+
+R1 is not a UBO upload feature. UBO, KYC/KYB, EDD, source-of-funds, analyst workflows, and other domains may later reference the resulting Evidence identities through separately governed consumer integration.
+
+#### The boundary receives trusted context rather than deciding authorization
+
+The normal service input is conceptually equivalent to:
+
+```text
+ingestPrivateArtifact({
+  idempotencyKey,
+  authorizedTenantId,
+  authorizedContextId,
+  optionalSubjectReferenceId,
+  actor/sourceChannel metadata,
+  originalBytes or server-side stream,
+  declaredMediaType,
+  optionalOriginalFilename,
+  optionalExplicitSourceEffectiveDate
+})
+```
+
+Exact API and internal service names remain implementation details.
+
+Tenant, context, actor, and authorization are derived from trusted server-side host context, not accepted as authoritative browser assertions. The context must already exist and belong to the authorized tenant. Its existing subject reference is authoritative for R1; if the caller supplies a subject reference, it must match the context. R1 does not create a master identity system or resolve subject ambiguity.
+
+The boundary returns Evidence operation, Acquisition, Asset, and Artifact identities plus non-secret integrity and media metadata. It never returns storage credentials or treats a browser-supplied storage path/reference as authoritative.
+
+#### Existing Evidence persistence and storage primitives are reused
+
+R1 reuses:
+
+* producer-neutral Collection Operation identity;
+* Acquisition provenance and outcomes;
+* Evidence Asset identity;
+* `context_restricted` access class and explicit tenant/context access scope;
+* Artifact identity and metadata;
+* the existing Artifact storage abstraction;
+* SHA-256 fingerprinting; and
+* the existing server-side storage read capability.
+
+The implementation may introduce a generic `evidence/ingestion` service/repository boundary and may reuse or semantics-preservingly extract the existing Artifact-store adapter from its A2-oriented module location. It must not create parallel Evidence, storage, fingerprint, access, context, subject, or provenance concepts.
+
+R1 creates no Requirement, Information Need, Extraction Run, extracted value, Fact, evaluation, or provisional assessment.
+
+#### Media preservation is independent from interpretation
+
+R1 must support preservation of at least:
+
+* `application/pdf`;
+* `image/png`; and
+* `image/jpeg`.
+
+Declared MIME type, filename extension, and client-supplied metadata are not sufficient by themselves. The implementation must apply bounded server-side media validation, including format-signature validation, configured size limits, and a canonical stored media type. Original filenames are optional untrusted display metadata; they must be sanitized and must not determine storage paths, identity, or authorization.
+
+The preserved Artifact uses a generic representation such as `original_upload`. The logical Evidence type remains generic, such as `private_uploaded_artifact`, unless a separately governed upstream contract supplies a more specific approved classification. Media support for storage does not imply interpretation support. A valid PDF or image may be durably preserved even when no current extractor/provider can interpret it.
+
+#### SHA-256 is integrity metadata, not identity or authorization
+
+The ingestion service calculates SHA-256 from the exact server-side bytes before persistence. After storage, the service must read the stored object through the authoritative storage boundary and verify byte length and SHA-256 before recording successful Artifact persistence.
+
+Fingerprint equality answers only whether bytes are equal. It does not establish that two uploads are the same evidentiary event, the same Evidence Asset, semantically equivalent, reusable, or mutually visible.
+
+Physical deduplication is not an R1 requirement. If introduced later, it must preserve distinct logical provenance and strict access isolation.
+
+#### Retry identity and genuine repeat uploads remain distinct
+
+The authorized host supplies an idempotency key for one logical upload operation. R1 reuses the Collection Operation producer/request-key uniqueness boundary with a neutral private-ingestion producer identity.
+
+* Repeating the same idempotency key for the same authorized tenant, context, media metadata, and byte fingerprint reopens or resumes the same logical operation and must not create a second Acquisition, Asset, or Artifact.
+* Reusing the key with different tenant, context, media, metadata that affects provenance, or bytes is an idempotency conflict and must not mutate the existing operation.
+* A deliberate new upload/recollection uses a new idempotency key and creates new immutable operation, Acquisition, Asset, and Artifact identities, even when the bytes and SHA-256 are identical.
+
+An implementation may use deterministic internal IDs derived from the operation identity or independently generated immutable IDs. The semantics above, rather than the hash, define retry identity.
+
+#### Private access is exact tenant-and-context access
+
+Every R1 Evidence Asset is `context_restricted` and has an explicit access-scope row for the authorized tenant and Evidence context.
+
+Authorized reopen must require:
+
+```text
+Artifact
+  → Asset access_class = context_restricted
+  → matching explicit asset access scope
+  → matching authorized tenant
+  → matching authorized Evidence context
+```
+
+Same-tenant membership alone is not sufficient. Cross-context and cross-tenant private discovery, reuse, interpretation, or download is not authorized. Fingerprint equality never grants visibility.
+
+R1 implementation is authorized to correct the identified A3 shortcut narrowly so that context-restricted Evidence requires the same exact tenant-and-context access scope before interpretation. Public Evidence behavior remains unchanged. This correction must not become a redesign of Evidence authorization.
+
+R1 must provide or reuse a generic server-side metadata resolver plus Artifact reader that performs authorization before storage access, reads only the persisted storage location, verifies the persisted SHA-256, and returns bytes only to the authorized server-side consumer. Storage keys/references and credentials remain server-only.
+
+#### Upload, capture, observation, and source-effective time remain distinct
+
+R1 records:
+
+* Acquisition start/completion time for the ingestion event;
+* Artifact `captured_at` for the time Evidence accepted the exact uploaded bytes;
+* Evidence Asset `observed_at` consistently with the ingestion observation; and
+* database creation time independently.
+
+An explicitly supplied source/document effective date is preserved separately under the canonical Evidence-owned Artifact metadata property `sourceEffectiveDate`, including that it was host-supplied. R1 does not extract or infer a date from document contents, use filesystem modification time, overwrite capture time with a document date, implement freshness, or make later evidence operative. The existing metadata field is sufficient for minimum R1 preservation; a typed/queryable effective-date column requires a later additive decision only if a real consumer requirement needs it.
+
+#### Failure categories remain non-semantic
+
+R1 must distinguish at least:
+
+* invalid request or media metadata;
+* authorization/access denial;
+* unsupported or forbidden media;
+* idempotency conflict;
+* storage failure;
+* integrity verification failure; and
+* persistence failure.
+
+No failure is represented as `document contains no facts`, unsupported evidence content, or an extraction conclusion. R1 has not interpreted the Artifact.
+
+No successful Asset or Artifact may be claimed unless storage, read-back integrity verification, and logical persistence succeed. Logical Evidence rows are persisted transactionally. If external object storage succeeds but database persistence fails, the operation remains failed/incomplete, no successful Artifact is reported, and any orphan-object cleanup is an operational concern that must not delete prior evidence.
+
+#### External-custody identity evidence remains separate
+
+R1 handles private Evidence that the authorized host has deliberately permitted Evidence Platform to retain. It does not create a general identity/biometric vault. Raw IDV passports, selfies, biometric templates, or other material whose authoritative custody remains in an external identity-verification provider require a separately governed external-custody Evidence capability.
+
+#### No new migration is required by the minimum design
+
+The accepted A1/A2 schema already represents the minimum R1 operation, Acquisition, Asset, access scope, Artifact, media metadata, storage lineage, SHA-256, timestamps, and optional source-effective metadata. The minimum implementation is therefore expected to require no migration.
+
+If implementation discovers that these records cannot be persisted or authorized without changing their semantics, weakening isolation, or overloading observation/effective time, it must stop for Architecture Authority. Existing migrations must not be rewritten; any subsequently approved schema change must be additive and forward-only.
+
+#### Relationship to prior decisions
+
+ADR-014 applies ADR-005 collection/interpretation separation and ADR-010 Asset/Artifact, integrity, append-only history, deduplication, private access, and KYC-ownership decisions to generic private ingestion. It does not reinterpret ADR-012 or ADR-013 and does not authorize A3 interpretation, A4a evaluation, or A4b assessment for the ingested Artifact.
+
+### Consequences
+
+R1 can make PDF and image Evidence durable and reopenable before interpretation support exists. Future consumers receive stable generic Evidence identities rather than owning storage and provenance internals. Retried operations do not create duplicate logical evidence, while deliberate repeated uploads retain independent evidentiary history even when byte-identical.
+
+R1 requires careful server-side authorization, media validation, integrity read-back, and non-secret responses. It explicitly excludes direct browser authority, private-evidence discovery, cross-context reuse, extraction, trust assessment, satisfaction, operative-value selection, UBO semantics, external-custody identity evidence, R2/R3/R4, A4b, and existing KYC behavior changes.

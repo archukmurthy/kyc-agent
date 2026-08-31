@@ -142,6 +142,16 @@ Comparable disagreement may be identified and explained without choosing a winni
 
 A4a does not implement final KYC requirement satisfaction, operative-value selection, customer correction or acceptance, analyst/risk decisions, onboarding progression, or changes to existing KYC behavior.
 
+#### Evidence Consumer Readiness R1 — Private Artifact Ingestion
+
+Before A4b, add the generic production boundary required for an already-authorized host upload to become immutable private Evidence.
+
+R1 accepts server-side authorized PDF, PNG, and JPEG bytes; validates bounded media metadata; preserves the exact original bytes in approved Evidence storage; calculates and verifies SHA-256; and creates the existing Collection Operation, Acquisition, context-restricted Evidence Asset, explicit tenant/context access scope, and Artifact provenance. The same boundary must support strictly authorized server-side reopen with fingerprint verification while keeping storage references and credentials private.
+
+R1 reuses the approved A1/A2 Evidence and storage primitives. It distinguishes idempotent retry of one logical upload from a deliberate new upload that happens to contain identical bytes. SHA-256 remains integrity metadata and never becomes Evidence identity, reuse authority, or access authority. Upload/capture time remains separate from an explicitly supplied source-effective date.
+
+R1 is generic Evidence infrastructure, not a UBO or KYC upload feature. It performs no extraction, interpretation, Fact creation, Evidence-to-Need evaluation, trust assessment, satisfaction, operative-value selection, or external-custody identity/biometric storage. R2, R3, R4, consumer integration, and A4b remain separately governed and deferred.
+
 #### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
 
 A4b may later reason across candidate evaluations to assess evidence coverage, collections/cardinality, comparable conflicts, legitimate empty sets, temporal applicability, and other requirement-level evidence conditions.
