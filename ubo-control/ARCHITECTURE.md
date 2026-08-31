@@ -8,6 +8,24 @@ UBO Control is a standalone product temporarily co-located in the KYC host repos
 
 The host application will eventually depend on UBO Control through the public entry point. Dependency direction never points from UBO Control into the host.
 
+## Ownership graph projection boundary
+
+G5.1A adds the deliberately public, stateless `ubo-ownership-graph-projection-v1` consumer contract:
+
+```text
+DecisionSnapshot
+      ↓
+provider-neutral OwnershipGraphProjection
+      ↓
+renderer / host / API consumer
+```
+
+`projectOwnershipGraph({ decisionSnapshot })` accepts one already-created DecisionSnapshot, verifies its schema and canonical hash, and returns an immutable, deterministic, data-only and JSON-serializable projection. It purposefully selects canonical subject/node identity, graph relationships, already-recorded calculations and ordered paths, policy qualifications, semantic unresolved needs, conflicts, reviews, snapshot/history identity and machine-derived summary counts. Evidence remains opaque provider-neutral `EvidenceReference` data.
+
+Projection is not another reasoning stage. It never adjudicates claims, rebuilds the canonical graph, recalculates percentages, reevaluates policy, resolves requirements or chooses a conflict winner. Presentation layers may explain UBO reasoning but may not recompute or reinterpret UBO domain conclusions. The contract carries semantic flags and durable references, never colours, layout coordinates, SVG/Canvas/DOM instructions, React components or customer-screen wording.
+
+The projection has no dependency on the legacy Discovery graph, legacy calculations, provider responses, a document graph, Evidence Platform, onboarding state or renderer implementation. Historical snapshots are projected using their recorded reasoning and algorithm identities; G5.1A does not implement historical comparison. G5.1B owns the interactive renderer and its presentation choices.
+
 ## External capability ports
 
 UBO Control has exactly two candidate-fact acquisition ports:

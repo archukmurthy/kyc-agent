@@ -5,6 +5,16 @@
 | Product-root dependency direction | `__tests__/architecture.nodetest.js` — production imports remain inside root or use Node built-ins |
 | No legacy UBO or Evidence Platform implementation import | `__tests__/architecture.nodetest.js` — prohibited import scan |
 | Deliberate public entry point | `__tests__/architecture.nodetest.js` — exact export set |
+| Versioned public ownership-graph projection | `__tests__/ownershipGraphProjection.nodetest.js` — `ubo-ownership-graph-projection-v1`, result identity and separate stateless `projectOwnershipGraph` operation |
+| Verified DecisionSnapshot authority | projection public-error tests — malformed, unsupported schema, hash-verification and inconsistent-reference failures use stable typed codes |
+| Direct/multilayer/multipath projection | projection V01–V03 — canonical relationships, recorded path contributions and aggregate effective interest without projection/renderer arithmetic |
+| Range, voting and non-percentage control fidelity | projection V04–V06 — endpoint semantics, dimension separation and appointment-control relationship preservation |
+| Unresolved, conflict, trust and review semantics | projection V07–V10 — InformationNeed linkage, adversarial claims/evidence, special structures and review indicators without false qualification |
+| Historical SMO fallback projection | projection V11 — terminal outcome, fallback basis, exhaustion decision and measures-taken attempt references remain linked |
+| Provider/source neutrality | projection V12 — deterministic scenario, legacy Discovery and future Extraction source identities yield equivalent core graph/qualification semantics |
+| End-to-end projection explainability | projection explainability test — qualification → requirement/calculation → path → relationship → supporting claims/evidence |
+| Data-only deterministic serialization | projection round-trip test — input immutability, repeated equivalence, deep-frozen output and lossless JSON stringify/parse |
+| Projection containment and no renderer dependency | `__tests__/architecture.nodetest.js` — standalone-root imports and exact public exports; no legacy graph, Evidence, host, React, DOM or graph-layout dependency |
 | Versioned stateless Decision Application façade | `__tests__/decisionApplication.nodetest.js` — exact three-operation surface, explicit version validation, immutable opaque state and no hidden application memory |
 | Serializable application state | decision-application round trip — intake → JSON → apply decisions → JSON → evaluate works in a new façade instance |
 | Explicit decision targets and operations | decision-application target/decision tests — stable party/claim IDs, entity registration, identity resolution, claim adjudication, undecided-target rejection and explicit uncertainty |
