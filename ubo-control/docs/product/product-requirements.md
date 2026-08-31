@@ -2,7 +2,7 @@
 
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
-**Status:** IN_IMPLEMENTATION — G5.1A ACCEPTED / G5.1B IN REVIEW
+**Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED
 
 **Target:** Gate 5.1
 
@@ -21,4 +21,24 @@ Acceptance principles:
 - The old legacy graph renderer is interaction/design reference only; none of its graph, calculation or UBO domain logic is authoritative.
 - API-only customers can consume the projection without using our renderer.
 
-G5.1A implements the accepted public, provider-neutral projection contract. G5.1B implements a reusable interactive renderer and deterministic standalone demo outside the headless product root; it is not marked implemented until Control Room acceptance. Host-screen integration and historical comparison remain outstanding.
+G5.1A implements the accepted public, provider-neutral projection contract. G5.1B implements the accepted reusable interactive renderer and deterministic standalone demo outside the headless product root. Host-screen integration and historical comparison remain outstanding.
+
+## PR-JRN-001 — Adaptive UBO Journey Projection
+
+**Status:** IN_IMPLEMENTATION — G5.2A IN REVIEW
+
+**Target:** Gate 5.2A
+
+UBO Control must expose a provider-neutral, host-neutral journey projection from a verified DecisionSnapshot. The projection organizes already-recorded InformationNeeds, ResolutionOptions, ActionIntents, operational blockers, reviews and qualifying-person handoff data without rerunning discovery, graph construction, calculation, policy determination or resolution orchestration.
+
+Acceptance principles:
+
+- Customer work is emitted only from open customer-resolvable ActionIntents.
+- Known information is not requested again; partial identity work contains only missing R07 attributes.
+- Shared facts, needs and acceptable artifacts coalesce into stable semantic work items.
+- Resolution options remain unranked; JH-006 is not execution logic.
+- System work, operational blockers and internal/specialist review remain separate from customer work.
+- Policy wording is referenced, never invented; unresolved source wording remains explicitly unresolved.
+- Customer work is entity-profile aware and contains no host route, screen, form or component identifiers.
+- Qualifying-person handoff stops at canonical identity, roles, basis and R07 completeness; downstream IDV, screening, POI and POA remain outside UBO Control.
+- Re-projecting a later verified DecisionSnapshot naturally removes satisfied work.

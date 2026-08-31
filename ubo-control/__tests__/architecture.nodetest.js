@@ -90,8 +90,11 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "DECISION_APPLICATION_ERROR_CODE",
     "OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION",
     "OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE",
+    "UBO_JOURNEY_PROJECTION_CONTRACT_VERSION",
+    "UBO_JOURNEY_PROJECTION_ERROR_CODE",
     "DecisionApplicationError",
     "OwnershipGraphProjectionError",
+    "UboJourneyProjectionError",
     "IDENTITY_RESOLUTION_STATUS",
     "PERCENTAGE_VALUE_TYPE",
     "POLICY_PACK_SCHEMA_ID",
@@ -115,6 +118,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "hashPolicyPack",
     "loadPolicyPack",
     "projectOwnershipGraph",
+    "projectUboJourney",
     "validateCandidateFact",
     "validateCandidatePartyReference",
     "validateCapabilityOutcome",
@@ -127,4 +131,11 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "validatePercentageValue",
     "validatePolicyPack",
   ].sort());
+});
+
+test("the journey projection is host/UI neutral and contains no resolution ranking logic", () => {
+  const source = fs.readFileSync(path.join(PRODUCT_ROOT, "projection", "uboJourneyProjection.js"), "utf8");
+  assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);
+  assert.doesNotMatch(source, /priorityScore|recommendedOption|rankResolution|JH-006/);
+  assert.doesNotMatch(source, /createUboDecisionApplication|orchestrateResolution|buildCanonicalOwnershipGraph|calculateEffectivePercentage/);
 });

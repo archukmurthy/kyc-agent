@@ -41,9 +41,11 @@ const { validatePercentageValue } = require("./contracts/percentageValue");
 const {
   DECISION_APPLICATION_ERROR_CODE,
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
+  UBO_JOURNEY_PROJECTION_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
   OwnershipGraphProjectionError,
+  UboJourneyProjectionError,
   UboConfigurationError,
   UboContractError,
   PolicyPackIntegrityError,
@@ -53,6 +55,10 @@ const {
   OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
   projectOwnershipGraph,
 } = require("./projection/ownershipGraphProjection");
+const {
+  UBO_JOURNEY_PROJECTION_CONTRACT_VERSION,
+  projectUboJourney,
+} = require("./projection/uboJourneyProjection");
 const { canonicalizeJson, CANONICALIZATION_ALGORITHM } = require("./policy/canonicalJson");
 const { validateConditionExpression } = require("./policy/conditionLanguage");
 const { hashPolicyPack, loadPolicyPack, validatePolicyPack } = require("./policy/policyPack");
@@ -71,6 +77,8 @@ module.exports = Object.freeze({
   DECISION_APPLICATION_ERROR_CODE,
   OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
+  UBO_JOURNEY_PROJECTION_CONTRACT_VERSION,
+  UBO_JOURNEY_PROJECTION_ERROR_CODE,
   IDENTITY_RESOLUTION_STATUS,
   PERCENTAGE_VALUE_TYPE,
   POLICY_PACK_SCHEMA_ID,
@@ -86,6 +94,7 @@ module.exports = Object.freeze({
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
   OwnershipGraphProjectionError,
+  UboJourneyProjectionError,
   PolicyPackIntegrityError,
   PolicyPackValidationError,
   UboConfigurationError,
@@ -96,6 +105,7 @@ module.exports = Object.freeze({
   hashPolicyPack,
   loadPolicyPack,
   projectOwnershipGraph,
+  projectUboJourney,
   validateCandidateFact,
   validateCandidatePartyReference,
   validateCapabilityOutcome,

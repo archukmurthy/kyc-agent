@@ -6,6 +6,8 @@
 | No legacy UBO or Evidence Platform implementation import | `__tests__/architecture.nodetest.js` — prohibited import scan |
 | Deliberate public entry point | `__tests__/architecture.nodetest.js` — exact export set |
 | Versioned public ownership-graph projection | `__tests__/ownershipGraphProjection.nodetest.js` — `ubo-ownership-graph-projection-v1`, result identity and separate stateless `projectOwnershipGraph` operation |
+| Versioned adaptive journey projection | `__tests__/uboJourneyProjection.nodetest.js` — `ubo-journey-projection-v1`, verified DecisionSnapshot input, immutable deterministic output and separate stateless `projectUboJourney` operation |
+| G5.2A journey scenarios | `__tests__/uboJourneyProjection.nodetest.js` — J01–J16 resolved/unresolved control, R07 partial identity, coalescing, blocker/review separation, specialist stop, policy wording, LLP semantics and before/after disappearance |
 | Verified DecisionSnapshot authority | projection public-error tests — malformed, unsupported schema, hash-verification and inconsistent-reference failures use stable typed codes |
 | Direct/multilayer/multipath projection | projection V01–V03 — canonical relationships, recorded path contributions and aggregate effective interest without projection/renderer arithmetic |
 | Range, voting and non-percentage control fidelity | projection V04–V06 — endpoint semantics, dimension separation and appointment-control relationship preservation |
