@@ -35,6 +35,18 @@
     <p><button id="runA3">Run synthetic A3 fixture scenarios</button></p><div id="fixtureActivity" class="activity hidden"><span class="spinner"></span><span></span></div><div id="a3Error" class="error hidden"></div>
   </section>
   <section id="a3Result" class="card hidden"></section>
+  <section class="card">
+    <div class="a3head"><span class="badge live">A4a — FACT → INFORMATION NEED</span><h2>Evaluate existing evidence against an explicit need</h2><p class="meta">Load an existing Evidence collection above, then choose human-readable persisted Needs and Facts. Internal IDs are resolved by the Lab. A4a does not select a winner, decide final KYC satisfaction, or change A3 support.</p></div>
+    <div id="a4aConfig" class="status-grid"></div>
+    <div id="a4aContext" class="notice">Load or collect an Evidence company above to populate persisted options.</div><p><button id="refreshA4a" disabled>Refresh persisted Needs and Facts</button></p>
+    <p><label>Information Need</label><select id="a4aNeed" disabled><option value="">Load an Evidence collection first</option></select></p><div id="a4aNeedMeta" class="artifact hidden"></div>
+    <div><label>Facts — select one or more</label><div id="a4aFacts" class="artifact"><span class="meta">Load an Evidence collection first.</span></div></div>
+    <div id="a4aPath" class="notice">Select one Information Need and at least one Fact. Selection makes no AI call.</div>
+    <details class="artifact"><summary><b>Advanced/testing controls</b></summary><p><label>Evaluation method</label><select id="a4aMethod"><option value="automatic">Automatic — recommended</option><option value="exact_typed">Exact typed equality</option><option value="normalized_text">Conservative normalized text</option><option value="semantic">Semantic evaluation</option></select></p><p><label>Explicit comparison value</label><input id="a4aComparison" placeholder="Only required for deterministic value comparison" /></p><p class="meta">Current standalone Information Needs identify required schema concepts but do not persist an expected comparison value. The Lab never fabricates one. Automatic mode uses a supplied target when available; otherwise it truthfully indicates when semantic relationship evaluation is needed.</p></details>
+    <p><button id="loadA4a" disabled>Load previous evaluations</button> <button id="runA4aLive" disabled>Run new evaluation</button> <button id="clearA4a">Clear displayed evaluations</button></p><p class="meta"><b>Loading history makes no provider call.</b> Running a new evaluation is always explicit. It does not recollect or reinterpret evidence.</p>
+    <div id="a4aActivity" class="activity hidden"><span class="spinner"></span><span></span></div><div id="a4aMessage" class="notice hidden"></div><div id="a4aError" class="error hidden"></div><div id="a4aHistory"></div>
+  </section>
+  <section class="card"><div class="a3head"><span class="badge fixture">A4a SYNTHETIC FIXTURE SCENARIOS</span><h2>A4a product review</h2><p class="meta">Ten bounded scenarios plus the second append-only run. No external source or paid AI call.</p></div><p><button id="runA4aFixture">Run A4a fixture scenarios</button></p><div id="a4aFixtureActivity" class="activity hidden"><span class="spinner"></span><span></span></div><div id="a4aFixtureError" class="error hidden"></div></section><section id="a4aFixtureResult" class="card hidden"></section>
 </main>
 <script type="text/plain" id="previous-lab-script">
 const $=id=>document.getElementById(id), mode=$("mode"), badge=$("modeBadge"), result=$("result"), errorBox=$("error");

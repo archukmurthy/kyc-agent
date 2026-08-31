@@ -46,6 +46,11 @@ const evidenceA3FixtureHandler = require(path.join(__dirname, "..", "api", "evid
 const evidenceA3ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-config.js"));
 const evidenceA3InterpretHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-interpret.js"));
 const evidenceA3HistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-history.js"));
+const evidenceA4aFixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-fixture.js"));
+const evidenceA4aConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-config.js"));
+const evidenceA4aEvaluateHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-evaluate.js"));
+const evidenceA4aHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-history.js"));
+const evidenceA4aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-options.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -509,4 +514,13 @@ module.exports = function (app) {
     let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
     req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA3HistoryHandler)(req, res); });
   });
+  // Evidence Platform Stage A4a — isolated Fact-to-Information-Need evaluation.
+  app.get("/api/evidence/a4a-fixture", adapt(evidenceA4aFixtureHandler));
+  app.get("/api/evidence/a4a-config", adapt(evidenceA4aConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a4a-options", evidenceA4aOptionsHandler], ["/api/evidence/a4a-evaluate", evidenceA4aEvaluateHandler], ["/api/evidence/a4a-history", evidenceA4aHistoryHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
 };

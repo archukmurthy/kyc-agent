@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A3",
+    stage: "A4a",
     status: "available",
   });
 });
@@ -91,6 +91,30 @@ test("the Evidence Lab exposes the isolated A3 interpretation scenarios", () => 
   assert.match(lab, /Selecting an Artifact does not load history or call AI/);
   assert.match(labJs, /Result from the fresh interpretation run/);
   assert.doesNotMatch(labJs, /renderArtifactSet\(a\);loadHistory\(a\.id\)/);
+});
+
+test("the Evidence Lab exposes explicit A4a evaluation and no-cost history", () => {
+  const root = path.join(__dirname, "..", "..", "public");
+  const lab = fs.readFileSync(path.join(root, "evidence-lab.html"), "utf8");
+  const labJs = fs.readFileSync(path.join(root, "evidence-lab.js"), "utf8");
+  assert.match(lab, /A4a — FACT → INFORMATION NEED/);
+  assert.match(lab, /does not select a winner, decide final KYC satisfaction/);
+  assert.match(lab, /Loading history makes no provider call/);
+  assert.match(labJs, /\/api\/evidence\/a4a-history/);
+  assert.match(labJs, /\/api\/evidence\/a4a-evaluate/);
+  assert.match(labJs, /\/api\/evidence\/a4a-fixture/);
+  assert.match(labJs, /A3 support remains independent/);
+  assert.match(lab, /Automatic — recommended/);
+  assert.match(lab, /Advanced\/testing controls/);
+  assert.match(lab, /Current standalone Information Needs identify required schema concepts but do not persist an expected comparison value/);
+  assert.doesNotMatch(lab, /placeholder="UUID/);
+  assert.match(labJs, /\/api\/evidence\/a4a-options/);
+  assert.match(labJs, /Paid semantic-provider call expected/);
+  assert.match(labJs, /Selection makes no AI call/);
+  assert.match(labJs, /A3 FACT SUPPORT/);
+  assert.match(labJs, /A4a FACT → INFORMATION NEED EVALUATION/);
+  assert.match(labJs, /DOWNSTREAM KYC SATISFACTION — NOT PERFORMED/);
+  assert.match(labJs, /Source and technical details/);
 });
 
 test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {

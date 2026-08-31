@@ -52,3 +52,15 @@ Stage A2 does not redirect existing Companies House, KYC, self-source, dossier, 
 - `public/evidence-lab.html`, `public/evidence-lab.js`, and `public/evidence-lab-state.js` keep view-existing, view-interpretation-history, explicit fresh interpretation, and explicit recollection separate; retain interpretation cards across Artifact selections; and guard repeated submissions with truthful indeterminate execution state.
 
 Stage A3 does not implement matching, satisfaction, source winner selection, trust policy, customer or analyst decisioning, schema mutation, KYC integration, Ledger, Package, or later roadmap stages.
+
+## Stage A4a additions
+
+- `evidence/a4a/` evaluates explicitly selected immutable A3 Facts against one existing persisted Information Need using exact typed comparison, versioned conservative normalization, or a provider-neutral semantic evaluator.
+- `db/migrations/014_evidence_need_evaluations.sql` adds immutable evaluation runs and per-Fact conclusions without changing migrations 010-013 or existing Facts and Information Needs.
+- `api/evidence/a4a-evaluate.js` resolves submitted Fact and Information Need IDs server-side within tenant, context, subject, and public/private access boundaries; `a4a-history.js` reopens prior evaluations without a provider call.
+- `api/evidence/a4a-options.js` provides a read-only, tenant/context-scoped view of existing human-readable Information Needs and A3 Facts for a loaded Evidence collection. Evidence Lab submits the underlying persisted IDs; it does not fabricate selector records.
+- `api/evidence/a4a-fixture.js` and Evidence Lab expose the ten approved no-cost product scenarios. A live semantic action is explicit and separately identified.
+
+Evidence Lab defaults to an automatic routing preview over the existing exact-typed, conservative-normalization, and semantic methods. It truthfully reports that standalone Information Needs currently carry a schema concept but no expected comparison value, keeps manual comparison input under advanced testing controls, and never invokes a provider merely because a reviewer selects a Need or Fact.
+
+A4a records only whether a Fact addresses an Information Need, with reasoning, qualifications, comparison inputs, evaluator lineage, and timestamps. It does not select a winner or operative value, decide final KYC satisfaction, aggregate conflicts, infer collection completeness, create Facts or derivations, or implement A4b.
