@@ -7,7 +7,7 @@
 | Branch | `codex/ubo-control-g5-1a-ownership-graph-projection` |
 | Base commit | `8f844b6bd4a4266bdac7850eb91ceae5edb45a53` (latest `origin/main` at branch creation) |
 | Latest accepted PR | Gate 4.0 diagnosis is accepted; its clean local diagnosis branch contained no implementation and was removed after confirming it matched `origin/main`. Evidence prerequisite worktrees and branches remain untouched. |
-| Current PR | Dedicated G5.1A PR to be opened after the complete verification net; do not merge without Control Room acceptance. |
+| Current PR | [#39 — G5.1A ownership graph projection](https://github.com/archukmurthy/kyc-agent/pull/39) — open and unmerged; do not merge without Control Room acceptance. |
 | Completed implementation | Public stateless `projectOwnershipGraph({ decisionSnapshot })`; explicit `ubo-ownership-graph-projection-v1` contract; verified-snapshot-only projection; typed stable errors; immutable deterministic data-only nodes, relationships, recorded calculations/paths, qualifications, unresolved needs, conflicts, reviews, snapshot identity and summary. |
 | Scenario coverage | V01 direct economic, V02 multilayer, V03 multiple paths, V04 range endpoints, V05 voting separation, V06 appointment control, V07 unresolved foreign branch, V08 conflict, V09 trust, V10 internal review, V11 SMO fallback, V12 deterministic/legacy Discovery/future Extraction provider neutrality; explainability and JSON round-trip invariants. |
 | Public/product boundary | `DecisionSnapshot → OwnershipGraphProjection → renderer / host / API consumer`. Projection never imports/re-runs claim adjudication, graph construction, percentage calculation, policy determination or requirement resolution. No legacy graph, host, provider, Evidence Platform, UI or renderer dependency enters the standalone product. |
@@ -15,7 +15,7 @@
 | Tests / status | Projection 15/15 passed with 86.55% line / 68.52% branch / 89.72% function coverage; standalone UBO 248/248 passed; adapter/composition 43/43 passed; architecture 7/7 passed; host 25 suites / 482 tests passed; legacy framework and recalculation smokes passed; production build passed; `git diff --check` passed. |
 | Active escalations | None. The Control Room explicitly approved the separate public projection operation and parallel Gate 5.1 execution. |
 | Product requirement | [PR-VIS-001](docs/product/product-requirements.md) — `IN_IMPLEMENTATION — G5.1A PROJECTION`; renderer remains outstanding. |
-| Next approved step | Complete verification and open/report the dedicated G5.1A PR only. Do not merge and do not begin G5.1B. |
+| Next approved step | Control Room review of PR #39 only. Do not merge and do not begin G5.1B. |
 
 ## Scope guard
 
