@@ -2,7 +2,7 @@
 
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
-**Status:** IN_IMPLEMENTATION — G5.1A PROJECTION
+**Status:** IN_IMPLEMENTATION — G5.1A ACCEPTED / G5.1B IN REVIEW
 
 **Target:** Gate 5.1
 
@@ -21,4 +21,4 @@ Acceptance principles:
 - The old legacy graph renderer is interaction/design reference only; none of its graph, calculation or UBO domain logic is authoritative.
 - API-only customers can consume the projection without using our renderer.
 
-G5.1A implements the public, provider-neutral projection contract. The interactive renderer remains outstanding for G5.1B; no renderer or host-screen implementation is part of G5.1A.
+G5.1A implements the accepted public, provider-neutral projection contract. G5.1B implements a reusable interactive renderer and deterministic standalone demo outside the headless product root; it is not marked implemented until Control Room acceptance. Host-screen integration and historical comparison remain outstanding.

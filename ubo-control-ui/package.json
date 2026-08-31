@@ -1,0 +1,16 @@
+{
+  "name": "@ubo-control/ownership-graph-ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "style": "ownership-graph.css",
+  "scripts": {
+    "demo": "node demo/server.js",
+    "fixtures": "node fixtures/buildFixtureProjections.js",
+    "test": "node --test __tests__/*.nodetest.js"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  }
+}
