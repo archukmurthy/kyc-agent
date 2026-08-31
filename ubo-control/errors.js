@@ -21,6 +21,14 @@ const DECISION_APPLICATION_ERROR_CODE = Object.freeze({
   STALE_OR_INCONSISTENT_STATE: "STALE_OR_INCONSISTENT_STATE",
 });
 
+const OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE = Object.freeze({
+  UNSUPPORTED_CONTRACT_VERSION: "UNSUPPORTED_CONTRACT_VERSION",
+  MALFORMED_DECISION_SNAPSHOT: "MALFORMED_DECISION_SNAPSHOT",
+  UNSUPPORTED_DECISION_SNAPSHOT_SCHEMA: "UNSUPPORTED_DECISION_SNAPSHOT_SCHEMA",
+  DECISION_SNAPSHOT_VERIFICATION_FAILED: "DECISION_SNAPSHOT_VERIFICATION_FAILED",
+  INCONSISTENT_DECISION_SNAPSHOT: "INCONSISTENT_DECISION_SNAPSHOT",
+});
+
 class UboControlError extends Error {
   constructor(message, { code, cause } = {}) {
     super(message, cause === undefined ? undefined : { cause });
@@ -35,6 +43,8 @@ class UboContractError extends UboControlError {}
 
 class DecisionApplicationError extends UboControlError {}
 
+class OwnershipGraphProjectionError extends UboControlError {}
+
 class PolicyPackValidationError extends UboControlError {}
 
 class PolicyPackIntegrityError extends UboControlError {}
@@ -45,8 +55,10 @@ class StaleDecisionHistoryError extends UboControlError {}
 
 module.exports = {
   DECISION_APPLICATION_ERROR_CODE,
+  OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
+  OwnershipGraphProjectionError,
   UboConfigurationError,
   UboContractError,
   PolicyPackValidationError,

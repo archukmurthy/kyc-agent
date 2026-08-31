@@ -40,13 +40,19 @@ const { validateIdentityResolutionDecision } = require("./contracts/identityReso
 const { validatePercentageValue } = require("./contracts/percentageValue");
 const {
   DECISION_APPLICATION_ERROR_CODE,
+  OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
+  OwnershipGraphProjectionError,
   UboConfigurationError,
   UboContractError,
   PolicyPackIntegrityError,
   PolicyPackValidationError,
 } = require("./errors");
+const {
+  OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
+  projectOwnershipGraph,
+} = require("./projection/ownershipGraphProjection");
 const { canonicalizeJson, CANONICALIZATION_ALGORITHM } = require("./policy/canonicalJson");
 const { validateConditionExpression } = require("./policy/conditionLanguage");
 const { hashPolicyPack, loadPolicyPack, validatePolicyPack } = require("./policy/policyPack");
@@ -63,6 +69,8 @@ module.exports = Object.freeze({
   CONDITION_LANGUAGE_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_ERROR_CODE,
+  OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
+  OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   IDENTITY_RESOLUTION_STATUS,
   PERCENTAGE_VALUE_TYPE,
   POLICY_PACK_SCHEMA_ID,
@@ -77,6 +85,7 @@ module.exports = Object.freeze({
   RISK_LEVEL_MODEL_VERSION,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
+  OwnershipGraphProjectionError,
   PolicyPackIntegrityError,
   PolicyPackValidationError,
   UboConfigurationError,
@@ -86,6 +95,7 @@ module.exports = Object.freeze({
   createUboControl,
   hashPolicyPack,
   loadPolicyPack,
+  projectOwnershipGraph,
   validateCandidateFact,
   validateCandidatePartyReference,
   validateCapabilityOutcome,
