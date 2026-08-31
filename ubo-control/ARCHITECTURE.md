@@ -202,7 +202,17 @@ The only public operations are `intake`, `applyDecisions`, and `evaluate`. Intak
 
 The real legacy HTTP transport and `createLegacyDiscoveryComposition` live outside the product root under `integrations/ubo-control/legacy-discovery/`. They depend only on `ubo-control/index.js`; the core never imports them. Base URL, HTTP timeout and optional injected fetch are infrastructure configuration. Provider credentials, endpoint implementation, legacy conclusions and production stub selection remain behind/outside the boundary. Deterministic E2E tests are offline; controlled live verification is a separate opt-in command and requires explicit harness decisions before evaluation.
 
-No onboarding, Extraction/Evidence Platform integration, persistence, UI or graph renderer is introduced. The approved future graph projection/renderer is recorded as PR-VIS-001 for Gate 5.1 and must use the fresh canonical graph/DecisionSnapshot rather than legacy graph authority.
+No onboarding, Extraction/Evidence Platform integration, persistence, UI or graph renderer is introduced by G3.2. The Gate 5.1 projection and renderer use the fresh canonical graph/DecisionSnapshot rather than legacy graph authority.
+
+## G5.1 ownership-visualisation boundary
+
+`projectOwnershipGraph({ decisionSnapshot })` is the only bridge from the headless product into ownership visualisation. It verifies the supplied `ubo-decision-snapshot-v1` and returns the versioned, immutable, data-only `ubo-ownership-graph-projection-v1` consumer contract. API consumers may stop at that boundary.
+
+The optional React renderer lives in the sibling `ubo-control-ui/` package, never inside or below the standalone core. It imports no UBO private module. Its production dependency is React supplied by the host, and its only domain input is a complete projection. Presentation-only layout, formatting, selection, path emphasis and pan/zoom state may occur in the renderer; graph construction, claim selection, effective-interest arithmetic, policy determination, requirement resolution and qualification inference may not.
+
+The renderer shows the projection's recorded nodes, relationship dimensions/types, exact/range/unknown measurements, calculation paths/contributions, qualification bases, unresolved items, conflicts, reviews and opaque support references. `CUSTOMER` and `EXPLAIN` are presentation detail levels, not different decisions. Replacing one projection with another supports explicit historical or before/after viewing without making the renderer a history engine.
+
+The standalone demo is deterministic and offline. UI01–UI12 fixtures are built through the public Decision Application and public projection operation; the demo imports neither legacy Discovery nor Evidence Platform and performs no API call. Host onboarding, analyst workflow, persistence and historical comparison remain later integration concerns.
 
 ## Percentage values
 

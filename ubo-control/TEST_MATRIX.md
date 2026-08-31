@@ -15,6 +15,16 @@
 | End-to-end projection explainability | projection explainability test — qualification → requirement/calculation → path → relationship → supporting claims/evidence |
 | Data-only deterministic serialization | projection round-trip test — input immutability, repeated equivalence, deep-frozen output and lossless JSON stringify/parse |
 | Projection containment and no renderer dependency | `__tests__/architecture.nodetest.js` — standalone-root imports and exact public exports; no legacy graph, Evidence, host, React, DOM or graph-layout dependency |
+| Renderer consumes only the public projection | `../ubo-control-ui/__tests__/architecture.nodetest.js` — component production imports are React-only; core never imports UI; no host, Evidence, legacy renderer or private UBO module dependency |
+| UI01–UI12 projection-derived visual coverage | `../ubo-control-ui/__tests__/OwnershipGraph.nodetest.js` and `fixtures.nodetest.js` — every committed state renders and the generator exactly reproduces its JSON through public operations; UI07 protects partial live-style economic/voting/control facts, unknown currentness and zero fabricated qualifications |
+| Node and relationship visual semantics | renderer component tests — person/entity/trust, customer/qualifying/unresolved/conflict/review/special badges and economic/voting/appointment/trust relationships remain text/shape/line-style distinguishable |
+| Parallel relationship legibility | renderer component test — same-source/target economic and voting paths have distinct geometry and non-colliding labels |
+| Exact/range/unknown fidelity | renderer component tests — exact percentages, endpoint-aware detailed ranges and unknown values preserve the projection without coercion |
+| Recorded calculation explanation only | renderer interaction tests — `80% × 50% = 40%` is assembled from recorded path measurements/contribution and the selected path is highlighted without UI arithmetic |
+| Interactive reasoning navigation | renderer interaction tests — entity, relationship, path, conflict and review selection expose only projected reasoning/support references and call the host selection callback |
+| Customer/explain detail boundary | renderer component tests — customer mode hides audit-only snapshot metadata; explain mode shows snapshot/support references without changing the decision |
+| Renderer accessibility and navigation | renderer component/interaction tests — named SVG/description, screen-reader graph narrative, keyboard selection/focus, zoom and fit controls |
+| Explicit before/after projection replacement | renderer interaction test — UI12 swaps unresolved and resolved projections cleanly without deriving or merging history in the UI |
 | Versioned stateless Decision Application façade | `__tests__/decisionApplication.nodetest.js` — exact three-operation surface, explicit version validation, immutable opaque state and no hidden application memory |
 | Serializable application state | decision-application round trip — intake → JSON → apply decisions → JSON → evaluate works in a new façade instance |
 | Explicit decision targets and operations | decision-application target/decision tests — stable party/claim IDs, entity registration, identity resolution, claim adjudication, undecided-target rejection and explicit uncertainty |
