@@ -184,6 +184,7 @@ function buildProjectionFixtures() {
   const holdcoA = entity("holdco-a", "LEGAL_ENTITY", "HoldCo A", "GB", "COMPANY");
   const holdcoB = entity("holdco-b", "LEGAL_ENTITY", "HoldCo B", "GB", "COMPANY");
   const bob = entity("bob", "NATURAL_PERSON", "Bob Chen", "GB", "NATURAL_PERSON");
+  const carol = entity("carol", "NATURAL_PERSON", "Carol Singh", "GB", "NATURAL_PERSON");
   const foreign = entity("foreign-holdco", "LEGAL_ENTITY", "Cayman Strategic Holdings", "KY", "COMPANY");
   const trust = entity("family-trust", "TRUST_OR_LEGAL_ARRANGEMENT", "Morgan Family Trust", "JE", "TRUST");
   const trustee = entity("trustee", "LEGAL_ENTITY", "Channel Trustees Ltd", "JE", "COMPANY");
@@ -206,7 +207,12 @@ function buildProjectionFixtures() {
     relationshipFact({ factId: "bob-economic", owner: bob, owned: CUSTOMER, measurement: exact(30), qualifiers: { entityProfile: "COMPANY", economicInterestConcept: "SHARE_OWNERSHIP" } }),
   ] }));
   const appointment = project(snapshotFor({ caseId: "ui06", entities: [CUSTOMER, ALICE], facts: [relationshipFact({ factId: "appointment", owner: ALICE, owned: CUSTOMER, relationship: RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT, qualifiers: { entityProfile: "COMPANY", controlConcept: "BOARD_APPOINTMENT_RIGHTS", scope: "MAJORITY" } })] }));
-  const unresolved = project(snapshotFor({ caseId: "ui07", entities: [CUSTOMER, foreign], outcomeState: "PARTIAL", facts: [relationshipFact({ factId: "foreign", owner: foreign, owned: CUSTOMER, measurement: unknown("CURRENT_PERCENTAGE_NOT_ESTABLISHED"), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } })] }));
+  const unresolved = project(snapshotFor({ caseId: "ui07", entities: [CUSTOMER, foreign, ALICE, bob, carol], outcomeState: "PARTIAL", facts: [
+    relationshipFact({ factId: "foreign", owner: foreign, owned: CUSTOMER, measurement: unknown("CURRENT_PERCENTAGE_NOT_ESTABLISHED"), qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" } }),
+    relationshipFact({ factId: "partial-alice-economic", owner: ALICE, owned: CUSTOMER, measurement: exact(12), qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" } }),
+    relationshipFact({ factId: "partial-bob-voting", owner: bob, owned: CUSTOMER, relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS, measurement: exact(18), qualifiers: { currentState: "UNKNOWN", votingInterestConcept: "VOTING_RIGHTS" } }),
+    relationshipFact({ factId: "partial-carol-control", owner: carol, owned: CUSTOMER, relationship: RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL, qualifiers: { currentState: "UNKNOWN", ambiguity: "CURRENTNESS_NOT_ESTABLISHED" } }),
+  ] }));
 
   const conflictBase = snapshotFor({ caseId: "ui08", entities: [CUSTOMER, ALICE], facts: [relationshipFact({ factId: "conflict-40", owner: ALICE, owned: CUSTOMER, measurement: exact(40), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } })] });
   const conflictSnapshot = rehash(conflictBase, (content) => {
@@ -255,7 +261,7 @@ function buildProjectionFixtures() {
       fixture("UI04", "Range ownership", "An open/closed 25–50% ownership range is preserved.", ranged),
       fixture("UI05", "Economic and voting", "Economic ownership and voting rights use distinct visual semantics.", economicVoting),
       fixture("UI06", "Appointment control", "Non-percentage board appointment control is shown independently.", appointment),
-      fixture("UI07", "Unresolved foreign branch", "A foreign corporate owner remains unresolved with unknown current interest.", unresolved),
+      fixture("UI07", "Unresolved partial structure", "Known economic, voting and control candidates remain non-qualifying while a foreign branch and currentness are unresolved.", unresolved),
       fixture("UI08", "Competing claims", "Two disputed assertions remain visible as a conflict without a winner.", conflict),
       fixture("UI09", "Trust structure", "Trust, settlor and trustee relationships retain their actual categories.", trustProjection),
       fixture("UI10", "Fallback decision", "A valid historical SMO fallback qualification retains its reasoning references.", fallback),

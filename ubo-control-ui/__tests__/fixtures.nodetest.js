@@ -29,3 +29,16 @@ test("fixture catalogue exercises every required semantic branch", () => {
   assert.equal(projections.some(({ conflicts }) => conflicts.length > 0), true);
   assert.equal(projections.some(({ reviews }) => reviews.length > 0), true);
 });
+
+test("UI07 preserves partial live-style facts without fabricating a qualifying person", () => {
+  const projection = committed.fixtures.find(({ id }) => id === "UI07").states[0].projection;
+  assert.equal(projection.qualifications.length, 0);
+  assert.ok(projection.unresolved.length > 0);
+  assert.deepEqual(new Set(projection.relationships.map(({ relationshipType }) => relationshipType)), new Set([
+    "ECONOMIC_OWNERSHIP",
+    "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+    "VOTING_RIGHTS",
+  ]));
+  assert.ok(projection.relationships.every(({ temporalState }) => temporalState === "UNKNOWN"));
+  assert.ok(projection.relationships.some(({ measurement }) => measurement?.type === "UNKNOWN"));
+});

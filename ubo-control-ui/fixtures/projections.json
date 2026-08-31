@@ -2757,8 +2757,8 @@
     },
     {
       "id": "UI07",
-      "label": "Unresolved foreign branch",
-      "description": "A foreign corporate owner remains unresolved with unknown current interest.",
+      "label": "Unresolved partial structure",
+      "description": "Known economic, voting and control candidates remain non-qualifying while a foreign branch and currentness are unresolved.",
       "states": [
         {
           "id": "current",
@@ -2766,8 +2766,8 @@
           "projection": {
             "contractVersion": "ubo-ownership-graph-projection-v1",
             "decision": {
-              "snapshotId": "sha256:29716efeb1bcb216ea890c67c7bc9b0aec233379b97073f5f2e4da4bcfdd191c",
-              "snapshotHash": "sha256:29716efeb1bcb216ea890c67c7bc9b0aec233379b97073f5f2e4da4bcfdd191c",
+              "snapshotId": "sha256:195390b999315f3123dd2248a85502b434ad7c6444a896c8cbba5afd9978214b",
+              "snapshotHash": "sha256:195390b999315f3123dd2248a85502b434ad7c6444a896c8cbba5afd9978214b",
               "checkpoint": {
                 "type": "CASE_OPEN",
                 "reference": {
@@ -2776,7 +2776,7 @@
                 "evaluationTime": "2026-08-31T10:02:00.000Z"
               },
               "evaluationTime": "2026-08-31T10:02:00.000Z",
-              "graphVersion": "ubo-graph-v1:07c4bc4bfe6a2c5ec24155109ab10892c0cd01b488d3e9e3c001cf3a2a0019ea",
+              "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
               "graphAlgorithm": "ubo-graph-v1",
               "policyIdentity": {
                 "policyPackId": "UBO-UK-CORPORATE",
@@ -2815,6 +2815,66 @@
               }
             },
             "nodes": [
+              {
+                "entityId": "alice",
+                "displayName": "Alice Morgan",
+                "category": "NATURAL_PERSON",
+                "jurisdiction": "GB",
+                "externalIdentifiers": [
+                  {
+                    "namespace": "renderer-demo",
+                    "value": "alice"
+                  }
+                ],
+                "entityTypeMetadata": {
+                  "sourceEntityType": "NATURAL_PERSON"
+                },
+                "qualifyingRoles": [],
+                "semantics": [
+                  "STRUCTURAL_TERMINUS",
+                  "UNRESOLVED_ENTITY"
+                ]
+              },
+              {
+                "entityId": "bob",
+                "displayName": "Bob Chen",
+                "category": "NATURAL_PERSON",
+                "jurisdiction": "GB",
+                "externalIdentifiers": [
+                  {
+                    "namespace": "renderer-demo",
+                    "value": "bob"
+                  }
+                ],
+                "entityTypeMetadata": {
+                  "sourceEntityType": "NATURAL_PERSON"
+                },
+                "qualifyingRoles": [],
+                "semantics": [
+                  "STRUCTURAL_TERMINUS",
+                  "UNRESOLVED_ENTITY"
+                ]
+              },
+              {
+                "entityId": "carol",
+                "displayName": "Carol Singh",
+                "category": "NATURAL_PERSON",
+                "jurisdiction": "GB",
+                "externalIdentifiers": [
+                  {
+                    "namespace": "renderer-demo",
+                    "value": "carol"
+                  }
+                ],
+                "entityTypeMetadata": {
+                  "sourceEntityType": "NATURAL_PERSON"
+                },
+                "qualifyingRoles": [],
+                "semantics": [
+                  "STRUCTURAL_TERMINUS",
+                  "UNRESOLVED_ENTITY"
+                ]
+              },
               {
                 "entityId": "customer",
                 "displayName": "Northstar Payments Ltd",
@@ -2858,18 +2918,47 @@
             ],
             "relationships": [
               {
-                "relationshipId": "graph-rel-daf2b115d58e2d0770ad8765",
+                "relationshipId": "graph-rel-00173e8294f9f65d723d99ed",
+                "sourceEntityId": "carol",
+                "targetEntityId": "customer",
+                "relationshipType": "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+                "dimension": null,
+                "temporalState": "UNKNOWN",
+                "qualifiers": {
+                  "ambiguity": "CURRENTNESS_NOT_ESTABLISHED",
+                  "currentState": "UNKNOWN"
+                },
+                "support": {
+                  "claimCount": 1,
+                  "claimIds": [
+                    "ui07:claim:ui07:operation:partial-carol-control"
+                  ],
+                  "evidenceReferenceCount": 1,
+                  "evidenceReferences": [
+                    {
+                      "referenceId": "evidence:partial-carol-control",
+                      "referenceType": "DOCUMENT",
+                      "system": "deterministic-ui-fixture"
+                    }
+                  ]
+                },
+                "indicators": [
+                  "UNRESOLVED"
+                ]
+              },
+              {
+                "relationshipId": "graph-rel-8e01481991de60336792ae5e",
                 "sourceEntityId": "foreign-holdco",
                 "targetEntityId": "customer",
                 "relationshipType": "ECONOMIC_OWNERSHIP",
                 "dimension": "ECONOMIC",
-                "temporalState": "CURRENT",
+                "temporalState": "UNKNOWN",
                 "measurement": {
                   "reason": "CURRENT_PERCENTAGE_NOT_ESTABLISHED",
                   "type": "UNKNOWN"
                 },
                 "qualifiers": {
-                  "currentState": "CURRENT",
+                  "currentState": "UNKNOWN",
                   "economicInterestConcept": "SHARE_OWNERSHIP"
                 },
                 "support": {
@@ -2889,13 +2978,125 @@
                 "indicators": [
                   "UNRESOLVED"
                 ]
+              },
+              {
+                "relationshipId": "graph-rel-b48cb2b194885927993960bc",
+                "sourceEntityId": "alice",
+                "targetEntityId": "customer",
+                "relationshipType": "ECONOMIC_OWNERSHIP",
+                "dimension": "ECONOMIC",
+                "temporalState": "UNKNOWN",
+                "measurement": {
+                  "type": "EXACT",
+                  "value": 12
+                },
+                "qualifiers": {
+                  "currentState": "UNKNOWN",
+                  "economicInterestConcept": "SHARE_OWNERSHIP"
+                },
+                "support": {
+                  "claimCount": 1,
+                  "claimIds": [
+                    "ui07:claim:ui07:operation:partial-alice-economic"
+                  ],
+                  "evidenceReferenceCount": 1,
+                  "evidenceReferences": [
+                    {
+                      "referenceId": "evidence:partial-alice-economic",
+                      "referenceType": "DOCUMENT",
+                      "system": "deterministic-ui-fixture"
+                    }
+                  ]
+                },
+                "indicators": [
+                  "UNRESOLVED"
+                ]
+              },
+              {
+                "relationshipId": "graph-rel-e6af7ffe0c8244576677d3fb",
+                "sourceEntityId": "bob",
+                "targetEntityId": "customer",
+                "relationshipType": "VOTING_RIGHTS",
+                "dimension": "VOTING",
+                "temporalState": "UNKNOWN",
+                "measurement": {
+                  "type": "EXACT",
+                  "value": 18
+                },
+                "qualifiers": {
+                  "currentState": "UNKNOWN",
+                  "votingInterestConcept": "VOTING_RIGHTS"
+                },
+                "support": {
+                  "claimCount": 1,
+                  "claimIds": [
+                    "ui07:claim:ui07:operation:partial-bob-voting"
+                  ],
+                  "evidenceReferenceCount": 1,
+                  "evidenceReferences": [
+                    {
+                      "referenceId": "evidence:partial-bob-voting",
+                      "referenceType": "DOCUMENT",
+                      "system": "deterministic-ui-fixture"
+                    }
+                  ]
+                },
+                "indicators": [
+                  "UNRESOLVED"
+                ]
               }
             ],
             "calculations": [
               {
-                "calculationId": "calculation:be75b3eab4aaff73b681fe2d",
+                "calculationId": "calculation:383095018b0f091f228ab77f",
                 "calculationAlgorithm": "ubo-percentage-lookthrough-v1",
-                "graphVersion": "ubo-graph-v1:07c4bc4bfe6a2c5ec24155109ab10892c0cd01b488d3e9e3c001cf3a2a0019ea",
+                "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
+                "subjectEntityId": "alice",
+                "targetEntityId": "customer",
+                "dimension": "ECONOMIC",
+                "status": "UNRESOLVED",
+                "paths": [],
+                "unresolvedPaths": [
+                  {
+                    "pathId": "calc-path-7863f541adbfcc01dbf6e05d",
+                    "relationshipIds": [
+                      "graph-rel-b48cb2b194885927993960bc"
+                    ],
+                    "reasons": [
+                      "UNKNOWN_TEMPORAL_STATE"
+                    ],
+                    "state": "UNRESOLVED"
+                  }
+                ],
+                "cycles": []
+              },
+              {
+                "calculationId": "calculation:585c9733a9c66658f0b886b7",
+                "calculationAlgorithm": "ubo-percentage-lookthrough-v1",
+                "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
+                "subjectEntityId": "bob",
+                "targetEntityId": "customer",
+                "dimension": "VOTING",
+                "status": "UNRESOLVED",
+                "paths": [],
+                "unresolvedPaths": [
+                  {
+                    "pathId": "calc-path-4c1cc59b2bfbd57c306da2cd",
+                    "relationshipIds": [
+                      "graph-rel-e6af7ffe0c8244576677d3fb"
+                    ],
+                    "reasons": [
+                      "UNKNOWN_TEMPORAL_STATE"
+                    ],
+                    "state": "UNRESOLVED"
+                  }
+                ],
+                "cycles": []
+              },
+              {
+                "calculationId": "calculation:f0e52c0abaedb3dff49bb953",
+                "calculationAlgorithm": "ubo-percentage-lookthrough-v1",
+                "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
                 "subjectEntityId": "foreign-holdco",
                 "targetEntityId": "customer",
                 "dimension": "ECONOMIC",
@@ -2903,12 +3104,13 @@
                 "paths": [],
                 "unresolvedPaths": [
                   {
-                    "pathId": "calc-path-4b1bb9f9ed30e696a916a99f",
+                    "pathId": "calc-path-1b075b16fc53545d57d0380c",
                     "relationshipIds": [
-                      "graph-rel-daf2b115d58e2d0770ad8765"
+                      "graph-rel-8e01481991de60336792ae5e"
                     ],
                     "reasons": [
-                      "UNKNOWN_PERCENTAGE"
+                      "UNKNOWN_PERCENTAGE",
+                      "UNKNOWN_TEMPORAL_STATE"
                     ],
                     "state": "UNRESOLVED"
                   }
@@ -2918,25 +3120,6 @@
             ],
             "qualifications": [],
             "unresolved": [
-              {
-                "unresolvedId": "information-need:263bccfba6a8f5b54e80939b7b356003ad1c9115356ad6142020efd911ef8bf4",
-                "kind": "INFORMATION_NEED",
-                "informationNeedId": "information-need:263bccfba6a8f5b54e80939b7b356003ad1c9115356ad6142020efd911ef8bf4",
-                "entityId": "customer",
-                "concept": "OTHER_SIGNIFICANT_CONTROL",
-                "state": "OPEN",
-                "requirementIds": [
-                  "UBO-R06"
-                ],
-                "reasonCodes": [
-                  "CONTROL_FACT_OR_PERMITTED_NEGATIVE_EVIDENCE_MISSING"
-                ],
-                "relatedRelationshipIds": [],
-                "claimIds": [],
-                "conflictReferences": [],
-                "calculationReferences": [],
-                "existingEvidenceReferences": []
-              },
               {
                 "unresolvedId": "information-need:267d11834ac8de4486b83d893ace9c3d006e8d64ca299e33a588fc4010d82e71",
                 "kind": "INFORMATION_NEED",
@@ -2952,6 +3135,52 @@
                 ],
                 "relatedRelationshipIds": [],
                 "claimIds": [],
+                "conflictReferences": [],
+                "calculationReferences": [],
+                "existingEvidenceReferences": []
+              },
+              {
+                "unresolvedId": "information-need:2cdaf556a8ada4e9dea6e3bd1426bffc1bcf6211cc1a65da7ca92b3230502ee5",
+                "kind": "INFORMATION_NEED",
+                "informationNeedId": "information-need:2cdaf556a8ada4e9dea6e3bd1426bffc1bcf6211cc1a65da7ca92b3230502ee5",
+                "entityId": "bob",
+                "concept": "VOTING_RIGHTS",
+                "state": "OPEN",
+                "requirementIds": [
+                  "UBO-R04"
+                ],
+                "reasonCodes": [
+                  "CONTROL_BASIS_NOT_DETERMINATELY_ESTABLISHED"
+                ],
+                "relatedRelationshipIds": [
+                  "graph-rel-e6af7ffe0c8244576677d3fb"
+                ],
+                "claimIds": [
+                  "ui07:claim:ui07:operation:partial-bob-voting"
+                ],
+                "conflictReferences": [],
+                "calculationReferences": [],
+                "existingEvidenceReferences": []
+              },
+              {
+                "unresolvedId": "information-need:30426c34ebdaabcb0152527584ccade379107438f083f3b4a3653a48706145e6",
+                "kind": "INFORMATION_NEED",
+                "informationNeedId": "information-need:30426c34ebdaabcb0152527584ccade379107438f083f3b4a3653a48706145e6",
+                "entityId": "carol",
+                "concept": "OTHER_SIGNIFICANT_CONTROL",
+                "state": "OPEN",
+                "requirementIds": [
+                  "UBO-R06"
+                ],
+                "reasonCodes": [
+                  "CONTROL_BASIS_NOT_DETERMINATELY_ESTABLISHED"
+                ],
+                "relatedRelationshipIds": [
+                  "graph-rel-00173e8294f9f65d723d99ed"
+                ],
+                "claimIds": [
+                  "ui07:claim:ui07:operation:partial-carol-control"
+                ],
                 "conflictReferences": [],
                 "calculationReferences": [],
                 "existingEvidenceReferences": []
@@ -2976,6 +3205,38 @@
                 "existingEvidenceReferences": []
               },
               {
+                "unresolvedId": "information-need:6018b5e8eaee377e9f44566c21f6c41365d0809525453c4f54d452bdd02efd9d",
+                "kind": "INFORMATION_NEED",
+                "informationNeedId": "information-need:6018b5e8eaee377e9f44566c21f6c41365d0809525453c4f54d452bdd02efd9d",
+                "entityId": "alice",
+                "concept": "PERCENTAGE_OR_RANGE",
+                "state": "OPEN",
+                "requirementIds": [
+                  "UBO-R01"
+                ],
+                "reasonCodes": [
+                  "ECONOMIC_QUALIFICATION_INDETERMINATE"
+                ],
+                "relatedRelationshipIds": [
+                  "graph-rel-b48cb2b194885927993960bc"
+                ],
+                "claimIds": [
+                  "ui07:claim:ui07:operation:partial-alice-economic"
+                ],
+                "conflictReferences": [],
+                "calculationReferences": [
+                  {
+                    "calculationAlgorithm": "ubo-percentage-lookthrough-v1",
+                    "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
+                    "subjectEntityId": "alice",
+                    "targetEntityId": "customer",
+                    "dimension": "ECONOMIC",
+                    "status": "UNRESOLVED"
+                  }
+                ],
+                "existingEvidenceReferences": []
+              },
+              {
                 "unresolvedId": "information-need:9b8287a432f99af5aa7531c8943e7436583ed5d2b14d5000e3789976bbb7bff3",
                 "kind": "INFORMATION_NEED",
                 "informationNeedId": "information-need:9b8287a432f99af5aa7531c8943e7436583ed5d2b14d5000e3789976bbb7bff3",
@@ -2987,25 +3248,6 @@
                 ],
                 "reasonCodes": [
                   "DISTINCT_INDEPENDENT_SOURCE_COUNT_BELOW_POLICY_MINIMUM"
-                ],
-                "relatedRelationshipIds": [],
-                "claimIds": [],
-                "conflictReferences": [],
-                "calculationReferences": [],
-                "existingEvidenceReferences": []
-              },
-              {
-                "unresolvedId": "information-need:d47b6b149191c8a7b1395f6501bc0e7eced71d2b998c8f044a7158f9094c7e04",
-                "kind": "INFORMATION_NEED",
-                "informationNeedId": "information-need:d47b6b149191c8a7b1395f6501bc0e7eced71d2b998c8f044a7158f9094c7e04",
-                "entityId": "customer",
-                "concept": "VOTING_RIGHTS",
-                "state": "OPEN",
-                "requirementIds": [
-                  "UBO-R04"
-                ],
-                "reasonCodes": [
-                  "CONTROL_FACT_OR_PERMITTED_NEGATIVE_EVIDENCE_MISSING"
                 ],
                 "relatedRelationshipIds": [],
                 "claimIds": [],
@@ -3027,7 +3269,7 @@
                   "POTENTIALLY_QUALIFYING_LEGAL_ENTITY_NOT_RESOLVED_TO_NATURAL_PERSONS"
                 ],
                 "relatedRelationshipIds": [
-                  "graph-rel-daf2b115d58e2d0770ad8765"
+                  "graph-rel-8e01481991de60336792ae5e"
                 ],
                 "claimIds": [
                   "ui07:claim:ui07:operation:foreign"
@@ -3036,7 +3278,7 @@
                 "calculationReferences": [
                   {
                     "calculationAlgorithm": "ubo-percentage-lookthrough-v1",
-                    "graphVersion": "ubo-graph-v1:07c4bc4bfe6a2c5ec24155109ab10892c0cd01b488d3e9e3c001cf3a2a0019ea",
+                    "graphVersion": "ubo-graph-v1:19e92228985863af2e9aecb5103704f1233a64215c674d7fa2a10788b62c1ff7",
                     "subjectEntityId": "foreign-holdco",
                     "targetEntityId": "customer",
                     "dimension": "ECONOMIC",
@@ -3065,7 +3307,41 @@
                 "existingEvidenceReferences": []
               },
               {
-                "unresolvedId": "unresolved-path:calculation:be75b3eab4aaff73b681fe2d:calc-path-4b1bb9f9ed30e696a916a99f",
+                "unresolvedId": "unresolved-path:calculation:383095018b0f091f228ab77f:calc-path-7863f541adbfcc01dbf6e05d",
+                "kind": "CALCULATION_PATH",
+                "entityId": "alice",
+                "targetEntityId": "customer",
+                "concept": "ECONOMIC_EFFECTIVE_INTEREST",
+                "state": "OPEN",
+                "requirementIds": [],
+                "reasonCodes": [
+                  "UNKNOWN_TEMPORAL_STATE"
+                ],
+                "relatedRelationshipIds": [
+                  "graph-rel-b48cb2b194885927993960bc"
+                ],
+                "calculationId": "calculation:383095018b0f091f228ab77f",
+                "pathId": "calc-path-7863f541adbfcc01dbf6e05d"
+              },
+              {
+                "unresolvedId": "unresolved-path:calculation:585c9733a9c66658f0b886b7:calc-path-4c1cc59b2bfbd57c306da2cd",
+                "kind": "CALCULATION_PATH",
+                "entityId": "bob",
+                "targetEntityId": "customer",
+                "concept": "VOTING_EFFECTIVE_INTEREST",
+                "state": "OPEN",
+                "requirementIds": [],
+                "reasonCodes": [
+                  "UNKNOWN_TEMPORAL_STATE"
+                ],
+                "relatedRelationshipIds": [
+                  "graph-rel-e6af7ffe0c8244576677d3fb"
+                ],
+                "calculationId": "calculation:585c9733a9c66658f0b886b7",
+                "pathId": "calc-path-4c1cc59b2bfbd57c306da2cd"
+              },
+              {
+                "unresolvedId": "unresolved-path:calculation:f0e52c0abaedb3dff49bb953:calc-path-1b075b16fc53545d57d0380c",
                 "kind": "CALCULATION_PATH",
                 "entityId": "foreign-holdco",
                 "targetEntityId": "customer",
@@ -3073,27 +3349,28 @@
                 "state": "OPEN",
                 "requirementIds": [],
                 "reasonCodes": [
-                  "UNKNOWN_PERCENTAGE"
+                  "UNKNOWN_PERCENTAGE",
+                  "UNKNOWN_TEMPORAL_STATE"
                 ],
                 "relatedRelationshipIds": [
-                  "graph-rel-daf2b115d58e2d0770ad8765"
+                  "graph-rel-8e01481991de60336792ae5e"
                 ],
-                "calculationId": "calculation:be75b3eab4aaff73b681fe2d",
-                "pathId": "calc-path-4b1bb9f9ed30e696a916a99f"
+                "calculationId": "calculation:f0e52c0abaedb3dff49bb953",
+                "pathId": "calc-path-1b075b16fc53545d57d0380c"
               }
             ],
             "conflicts": [],
             "reviews": [],
             "limitations": [],
             "summary": {
-              "totalEntities": 2,
-              "totalRelationships": 1,
+              "totalEntities": 5,
+              "totalRelationships": 4,
               "qualifyingPeople": 0,
-              "unresolvedBranches": 8,
+              "unresolvedBranches": 11,
               "conflicts": 0,
               "reviewRequirements": 0,
-              "economicPaths": 1,
-              "votingPaths": 0
+              "economicPaths": 2,
+              "votingPaths": 1
             }
           }
         }
