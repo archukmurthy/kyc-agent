@@ -6,7 +6,7 @@ This register records product research hypotheses for later Control Room gates. 
 
 **Statement:** A customer question should normally be suppressed when the relevant policy requirement has already been resolved to the required evidential standard.
 
-**Status:** `HYPOTHESIS`
+**Status:** `SUPPORTED BY G5.2A PROJECTION — FINAL HOST UX NOT YET VALIDATED`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -42,7 +42,7 @@ This register records product research hypotheses for later Control Room gates. 
 
 **Statement:** The engine should support the complete ownership/control model while customer-facing voting, appointment-right, share-class and significant-control questions should appear only when case state and policy make them necessary.
 
-**Status:** `HYPOTHESIS`
+**Status:** `SUPPORTED BY G5.2A PROJECTION`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -66,7 +66,7 @@ Policy requires Fact X
 → analyst/specialist?
 ```
 
-**Status:** `HYPOTHESIS`
+**Status:** `SUPPORTED BY G5.2A PROJECTION`
 
 **Source evidence:** `PRACTITIONER-001`
 

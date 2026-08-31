@@ -26,6 +26,22 @@ Projection is not another reasoning stage. It never adjudicates claims, rebuilds
 
 The projection has no dependency on the legacy Discovery graph, legacy calculations, provider responses, a document graph, Evidence Platform, onboarding state or renderer implementation. Historical snapshots are projected using their recorded reasoning and algorithm identities; G5.1A does not implement historical comparison. G5.1B owns the interactive renderer and its presentation choices.
 
+## Adaptive journey projection boundary
+
+G5.2A adds a sibling public projection over the same verified decision record:
+
+```text
+                         ┌→ projectOwnershipGraph → renderer / host / API
+verified DecisionSnapshot┤
+                         └→ projectUboJourney ─────→ host journey / API
+```
+
+`projectUboJourney({ decisionSnapshot })` returns the immutable, deterministic and data-only `ubo-journey-projection-v1` contract. It consumes only recorded DecisionSnapshot outputs: InformationNeeds, unranked ResolutionOptions, ActionIntents, operational blockers, internal reviews, terminal state, canonical entities and qualifying-person determinations. It is not part of `createUboDecisionApplication` and does not call a capability or rerun any reasoning stage.
+
+Customer work is projected only from open customer-resolvable ActionIntents. Shared semantic work is coalesced, established identity fields are separated from missing R07 fields, and operational failure never becomes a customer request. System work, blockers, analyst review, fallback review and specialist review remain explicit separate surfaces. `SPECIALIST_REVIEW_REQUIRED` halts ordinary customer work; a completed case emits no synthetic continuation item.
+
+The contract carries stable semantic identifiers and canonical entity, relationship, InformationNeed and requirement references. It contains no screen, page, route, button, form, DOM, React or provider identifiers. Policy-approved action-template references may be carried; source wording marked unresolved is never invented by the projection. Resolution options are deliberately labelled unranked: G5.2A does not implement JH-006 priority or the future G5.2B resolution-selection policy.
+
 ## External capability ports
 
 UBO Control has exactly two candidate-fact acquisition ports:
