@@ -67,10 +67,10 @@ class PostgresA3Repository {
       ac.acquisition_method, ac.tenant_id AS acquisition_tenant_id, ac.context_id,
       a.subject_reference_id, s.display_name AS subject_display_name, s.identifier_value AS subject_identifier,
       co.producer AS collection_producer, co.collection_coordinates,
-      (a.access_class = 'public' OR ac.tenant_id = $2 OR EXISTS (
+      (a.access_class = 'public' OR ($3::uuid IS NOT NULL AND ac.tenant_id = $2 AND ac.context_id = $3 AND EXISTS (
         SELECT 1 FROM evidence_asset_access_scopes scope
-        WHERE scope.asset_id = a.id AND scope.tenant_id = $2 AND ($3::uuid IS NULL OR scope.context_id = $3::uuid)
-      )) AS authorized
+        WHERE scope.asset_id = a.id AND scope.tenant_id = $2 AND scope.context_id = $3
+      ))) AS authorized
       FROM evidence_artifacts ar
       JOIN evidence_assets a ON a.id = ar.asset_id
       JOIN evidence_acquisitions ac ON ac.id = a.acquisition_id

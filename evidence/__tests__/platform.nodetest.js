@@ -22,9 +22,16 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A4a",
+    stage: "R1",
     status: "available",
   });
+});
+
+test("the Evidence Lab exposes generic R1 private Artifact ingestion", () => {
+  const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
+  assert.match(lab,/R1 — PRIVATE ARTIFACT INGESTION/); assert.match(lab,/ARTIFACT PRESERVED/); assert.match(lab,/INTERPRETATION NOT PERFORMED/); assert.match(js,/\/api\/evidence\/r1-contexts/); assert.match(js,/\/api\/evidence\/r1-ingest/); assert.match(js,/\/api\/evidence\/r1-reopen/);
+  assert.match(js,/Stored artifact successfully retrieved.*bytes matched the preserved SHA-256/);
+  assert.doesNotMatch(js,/Authorized reopen succeeded/);
 });
 
 test("GET /api/evidence/status returns the boundary status", () => {

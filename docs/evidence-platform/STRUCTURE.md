@@ -64,3 +64,12 @@ Stage A3 does not implement matching, satisfaction, source winner selection, tru
 Evidence Lab defaults to an automatic routing preview over the existing exact-typed, conservative-normalization, and semantic methods. It truthfully reports that standalone Information Needs currently carry a schema concept but no expected comparison value, keeps manual comparison input under advanced testing controls, and never invokes a provider merely because a reviewer selects a Need or Fact.
 
 A4a records only whether a Fact addresses an Information Need, with reasoning, qualifications, comparison inputs, evaluator lineage, and timestamps. It does not select a winner or operative value, decide final KYC satisfaction, aggregate conflicts, infer collection completeness, create Facts or derivations, or implement A4b.
+
+## Consumer Readiness R1 additions
+
+- `evidence/r1/` implements generic private Artifact validation, idempotent ingestion, exact tenant-plus-context authorization, stored-byte SHA-256 readback verification, immutable Evidence persistence and authorized reopen.
+- `api/evidence/r1-*.js` exposes a local-only Lab adapter using server-resolved tenant authority. Production consumers call the server-side R1 service only after their host authorization boundary; the browser is never accepted as proof of tenant/context authority.
+- Existing A1/A2 persistence and Artifact storage are reused without a migration. PDF, PNG and JPEG acquisition support remains independent from interpretation support.
+- Evidence Lab distinguishes successful preservation from interpretation and verifies authorized reopen without exposing storage references or credentials.
+
+R1 does not extract facts, interpret documents, assess trust or sufficiency, decide KYC outcomes, implement UBO behavior, or start A4b/R2/R3/R4.

@@ -35,6 +35,14 @@
     <p><button id="runA3">Run synthetic A3 fixture scenarios</button></p><div id="fixtureActivity" class="activity hidden"><span class="spinner"></span><span></span></div><div id="a3Error" class="error hidden"></div>
   </section>
   <section id="a3Result" class="card hidden"></section>
+  <section class="card" id="r1Lab">
+    <div class="a3head"><span class="badge live">R1 — PRIVATE ARTIFACT INGESTION</span><h2>Preserve an authorized private document</h2><p class="meta">Generic Evidence infrastructure. Select an existing authorized Evidence context, then preserve a PDF, PNG or JPEG exactly as supplied. No interpretation, KYC decision, or AI call occurs.</p></div>
+    <div id="r1Config" class="status-grid"></div><p><label>Evidence context and subject</label><select id="r1Context"><option value="">Loading authorized contexts…</option></select></p><div id="r1ContextMeta" class="artifact hidden"></div>
+    <div class="row"><div class="field"><label>Private artifact</label><input id="r1File" type="file" accept="application/pdf,image/png,image/jpeg"></div><div class="field"><label>Source channel</label><select id="r1Channel"><option value="customer_upload">Customer upload</option><option value="analyst_upload">Analyst upload</option><option value="host_system_upload">Authorized host system</option></select></div><div class="field"><label>Document effective/source date (optional)</label><input id="r1EffectiveDate" type="date"></div></div>
+    <p><button id="r1Ingest" disabled>Preserve private Artifact</button> <button id="r1NewEvent" type="button">Start a new upload event</button></p><p class="meta">Retries reuse one operation. A new upload event gets a new key, so identical bytes may represent a genuinely new evidentiary event.</p>
+    <div id="r1Activity" class="activity hidden"><span class="spinner"></span><span></span></div><div id="r1Message" class="notice hidden"></div><div id="r1Error" class="error hidden"></div><div id="r1Result"></div>
+    <div class="notice"><b>ARTIFACT PRESERVED</b> appears only after stored-byte SHA-256 verification and persistence.<br><b>INTERPRETATION NOT PERFORMED</b> — R1 determines no facts, trust, sufficiency or KYC result.</div>
+  </section>
   <section class="card">
     <div class="a3head"><span class="badge live">A4a — FACT → INFORMATION NEED</span><h2>Evaluate existing evidence against an explicit need</h2><p class="meta">Load an existing Evidence collection above, then choose human-readable persisted Needs and Facts. Internal IDs are resolved by the Lab. A4a does not select a winner, decide final KYC satisfaction, or change A3 support.</p></div>
     <div id="a4aConfig" class="status-grid"></div>

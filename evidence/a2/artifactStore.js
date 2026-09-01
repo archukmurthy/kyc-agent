@@ -16,6 +16,7 @@ class MemoryArtifactStore {
     if (!item) throw new Error("Artifact storage object was not found");
     return { bytes: Buffer.from(item.bytes), contentType: item.contentType || null };
   }
+  async delete(key) { this.items.delete(key); }
 }
 
 class FileArtifactStore {
@@ -44,6 +45,7 @@ class FileArtifactStore {
     return { provider: "filesystem", key: path.relative(this.root, target), reference: target };
   }
   async read(key) { return { bytes: await fs.readFile(this.resolveKey(key)), contentType: null }; }
+  async delete(key) { await fs.unlink(this.resolveKey(key)).catch((error) => { if (error.code !== "ENOENT") throw error; }); }
 }
 
 class VercelBlobArtifactStore {
@@ -60,6 +62,7 @@ class VercelBlobArtifactStore {
     for await (const chunk of result.stream) chunks.push(Buffer.from(chunk));
     return { bytes: Buffer.concat(chunks), contentType: result.blob.contentType || null };
   }
+  async delete(key) { const { del } = await import("@vercel/blob"); await del(key); }
 }
 
 module.exports = { MemoryArtifactStore, FileArtifactStore, VercelBlobArtifactStore };
