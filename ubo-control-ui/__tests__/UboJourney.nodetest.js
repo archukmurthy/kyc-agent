@@ -150,9 +150,13 @@ test("submission validates required fields and emits stable serializable referen
     rendered.click(rendered.container.querySelector(".uj-primary"));
     assert.equal(events.length, 1);
     assert.equal(events[0].contractVersion, "ubo-customer-action-v1");
+    assert.equal(events[0].snapshotId, state.plan.snapshotId);
+    assert.equal(events[0].snapshotHash, state.plan.snapshotHash);
     assert.equal(events[0].bundleId, "customer-resolution-bundle:cui04");
     assert.equal(events[0].workItemIds.length, 2);
     assert.equal(events[0].actionIntentIds.length, 2);
+    assert.deepEqual(events[0].informationNeedIds, state.plan.recommendedWave.customerBundles[0].informationNeedIds);
+    assert.deepEqual(events[0].requirementIds, state.plan.recommendedWave.customerBundles[0].requirementIds);
     assert.deepEqual(events[0].values, { country_of_residence: "United Kingdom", date_of_birth: "1984-03-12" });
     assert.doesNotThrow(() => JSON.stringify(events[0]));
     assert.equal(JSON.stringify(state.journey), beforeJourney);

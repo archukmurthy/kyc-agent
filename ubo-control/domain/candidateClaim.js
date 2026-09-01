@@ -32,10 +32,11 @@ function validateEndpoint(endpoint, path) {
 
 function validateOrigin(origin, path) {
   assertPlainObject(origin, path);
-  assertAllowedKeys(origin, ["operationId", "capabilityRequestId", "candidateFactId", "candidateFactIndex"], path);
+  assertAllowedKeys(origin, ["operationId", "capabilityRequestId", "candidateFactId", "candidateFactIndex", "sourceType"], path);
   assertNonEmptyString(origin.operationId, `${path}.operationId`);
   assertNonEmptyString(origin.capabilityRequestId, `${path}.capabilityRequestId`);
   assertOptionalNonEmptyString(origin.candidateFactId, `${path}.candidateFactId`);
+  assertOptionalNonEmptyString(origin.sourceType, `${path}.sourceType`);
   if (!Number.isSafeInteger(origin.candidateFactIndex) || origin.candidateFactIndex < 0) {
     fail(`${path}.candidateFactIndex must be a non-negative safe integer`);
   }
@@ -107,6 +108,7 @@ function createCandidateClaim(fact, {
   candidateFactIndex,
   createdAt,
   createdInRevision,
+  sourceType,
 }) {
   validateCandidateFact(fact);
   const origin = {
@@ -115,6 +117,7 @@ function createCandidateClaim(fact, {
     candidateFactIndex,
   };
   if (fact.factId !== undefined) origin.candidateFactId = fact.factId;
+  if (sourceType !== undefined) origin.sourceType = sourceType;
   const claim = {
     claimId,
     claimType: fact.type,

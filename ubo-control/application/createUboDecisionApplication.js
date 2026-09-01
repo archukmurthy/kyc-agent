@@ -29,8 +29,13 @@ const {
   validateOwnershipCase,
 } = require("../domain/ownershipCase");
 const { reResolveDecision } = require("./reResolveDecision");
+const {
+  applyCustomerInput: applyCustomerInputTransition,
+  customerResolutionInputs,
+} = require("./applyCustomerInput");
 
 const DECISION_APPLICATION_CONTRACT_VERSION = "ubo-decision-application-v1";
+const DECISION_APPLICATION_CONTRACT_VERSION_V2 = "ubo-decision-application-v2";
 const CASE_STATE_TYPE = "DECISION_APPLICATION_CASE_STATE";
 const CASE_STATE_ENCODING = "base64url-canonical-json-v1";
 const TERMINAL_CLAIM_STATES = new Set([CLAIM_STATE.REJECTED, CLAIM_STATE.SUPERSEDED]);
@@ -39,11 +44,11 @@ function applicationError(code, message, cause) {
   return new DecisionApplicationError(message, { code, cause });
 }
 
-function requireContractVersion(value) {
-  if (value !== DECISION_APPLICATION_CONTRACT_VERSION) {
+function requireContractVersion(value, expectedVersion) {
+  if (value !== expectedVersion) {
     throw applicationError(
       DECISION_APPLICATION_ERROR_CODE.UNSUPPORTED_CONTRACT_VERSION,
-      `contractVersion must be ${DECISION_APPLICATION_CONTRACT_VERSION}`,
+      `contractVersion must be ${expectedVersion}`,
     );
   }
 }
@@ -61,12 +66,12 @@ function digestText(value) {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
 
-function encodeCaseState(ownershipCase) {
+function encodeCaseState(ownershipCase, contractVersion) {
   validateOwnershipCase(ownershipCase);
   const canonical = canonicalizeJson(ownershipCase);
   const statePayload = Buffer.from(canonical, "utf8").toString("base64url");
   return deepFreeze({
-    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION,
+    contractVersion,
     stateType: CASE_STATE_TYPE,
     stateEncoding: CASE_STATE_ENCODING,
     caseReference: {
@@ -79,7 +84,7 @@ function encodeCaseState(ownershipCase) {
   });
 }
 
-function decodeCaseState(caseState) {
+function decodeCaseState(caseState, contractVersion) {
   return runWithErrorCode(DECISION_APPLICATION_ERROR_CODE.INVALID_CASE_STATE, () => {
     assertPlainObject(caseState, "caseState");
     assertAllowedKeys(caseState, [
@@ -90,7 +95,7 @@ function decodeCaseState(caseState) {
       "stateHash",
       "statePayload",
     ], "caseState");
-    requireContractVersion(caseState.contractVersion);
+    requireContractVersion(caseState.contractVersion, contractVersion);
     if (caseState.stateType !== CASE_STATE_TYPE || caseState.stateEncoding !== CASE_STATE_ENCODING) {
       throw applicationError(
         DECISION_APPLICATION_ERROR_CODE.INVALID_CASE_STATE,
@@ -181,11 +186,12 @@ function decisionTargetsFor(caseState) {
   return deepFreeze({ candidateParties, candidateClaims });
 }
 
-function applicationResult(caseState) {
+function applicationResult(caseState, contractVersion, customerInputResult) {
   return deepFreeze({
-    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION,
-    caseState: encodeCaseState(caseState),
+    contractVersion,
+    caseState: encodeCaseState(caseState, contractVersion),
     decisionTargets: decisionTargetsFor(caseState),
+    ...(customerInputResult === undefined ? {} : { customerInputResult }),
   });
 }
 
@@ -257,7 +263,13 @@ function normalizeResolutionInputs(value) {
   return cloneData(input);
 }
 
-function createUboDecisionApplication({ policyPack } = {}) {
+function createUboDecisionApplication({ policyPack, contractVersion = DECISION_APPLICATION_CONTRACT_VERSION } = {}) {
+  if (![DECISION_APPLICATION_CONTRACT_VERSION, DECISION_APPLICATION_CONTRACT_VERSION_V2].includes(contractVersion)) {
+    throw applicationError(
+      DECISION_APPLICATION_ERROR_CODE.UNSUPPORTED_CONTRACT_VERSION,
+      `contractVersion must be ${DECISION_APPLICATION_CONTRACT_VERSION} or ${DECISION_APPLICATION_CONTRACT_VERSION_V2}`,
+    );
+  }
   const loadedPolicyPack = runWithErrorCode(
     DECISION_APPLICATION_ERROR_CODE.POLICY_CONFIGURATION_ERROR,
     () => loadPolicyPack(policyPack),
@@ -274,7 +286,7 @@ function createUboDecisionApplication({ policyPack } = {}) {
         "operationId",
         "recordedAt",
       ], "intakeRequest");
-      requireContractVersion(request.contractVersion);
+      requireContractVersion(request.contractVersion, contractVersion);
       const hasInput = request.caseInput !== undefined;
       const hasState = request.caseState !== undefined;
       if (hasInput === hasState) {
@@ -285,11 +297,11 @@ function createUboDecisionApplication({ policyPack } = {}) {
       }
       const current = hasInput
         ? runWithErrorCode(DECISION_APPLICATION_ERROR_CODE.INVALID_CASE_INPUT, () => createOwnershipCase(request.caseInput))
-        : decodeCaseState(request.caseState);
+        : decodeCaseState(request.caseState, contractVersion);
       return applicationResult(intakeCapabilityResult(current, request.capabilityResult, {
         operationId: request.operationId,
         recordedAt: request.recordedAt,
-      }));
+      }), contractVersion);
     });
   }
 
@@ -303,11 +315,11 @@ function createUboDecisionApplication({ policyPack } = {}) {
         "identityDecisions",
         "claimAdjudications",
       ], "applyDecisionsRequest");
-      requireContractVersion(request.contractVersion);
+      requireContractVersion(request.contractVersion, contractVersion);
       assertArray(request.entityRegistrations, "applyDecisionsRequest.entityRegistrations");
       assertArray(request.identityDecisions, "applyDecisionsRequest.identityDecisions");
       assertArray(request.claimAdjudications, "applyDecisionsRequest.claimAdjudications");
-      let current = decodeCaseState(request.caseState);
+      let current = decodeCaseState(request.caseState, contractVersion);
       request.entityRegistrations.forEach((registration) => {
         const { recordedAt, entityInput } = stripRecordedAt(registration);
         current = addCanonicalEntity(current, entityInput, { recordedAt });
@@ -340,7 +352,32 @@ function createUboDecisionApplication({ policyPack } = {}) {
         }
         current = adjudicateClaim(current, decision);
       });
-      return applicationResult(current);
+      return applicationResult(current, contractVersion);
+    });
+  }
+
+  function applyCustomerInput(request) {
+    return runWithErrorCode(DECISION_APPLICATION_ERROR_CODE.INVALID_CUSTOMER_ACTION, () => {
+      if (contractVersion !== DECISION_APPLICATION_CONTRACT_VERSION_V2) {
+        throw applicationError(DECISION_APPLICATION_ERROR_CODE.UNSUPPORTED_CONTRACT_VERSION, "applyCustomerInput requires ubo-decision-application-v2");
+      }
+      assertPlainObject(request, "applyCustomerInputRequest");
+      assertAllowedKeys(request, [
+        "contractVersion", "caseState", "sourceDecisionSnapshot", "sourceResolutionPlan", "customerAction",
+        "operationId", "recordedAt", "actorReference",
+      ], "applyCustomerInputRequest");
+      requireContractVersion(request.contractVersion, contractVersion);
+      const current = decodeCaseState(request.caseState, contractVersion);
+      const result = applyCustomerInputTransition({
+        caseState: current,
+        sourceDecisionSnapshot: request.sourceDecisionSnapshot,
+        sourceResolutionPlan: request.sourceResolutionPlan,
+        customerAction: request.customerAction,
+        operationId: request.operationId,
+        recordedAt: request.recordedAt,
+        actorReference: request.actorReference,
+      });
+      return applicationResult(result.caseState, contractVersion, result.outcome);
     });
   }
 
@@ -356,8 +393,8 @@ function createUboDecisionApplication({ policyPack } = {}) {
         "checkpointReference",
         "resolutionInputs",
       ], "evaluateRequest");
-      requireContractVersion(request.contractVersion);
-      const current = decodeCaseState(request.caseState);
+      requireContractVersion(request.contractVersion, contractVersion);
+      const current = decodeCaseState(request.caseState, contractVersion);
       const unresolved = decisionTargetsFor(current);
       if (unresolved.candidateParties.length > 0 || unresolved.candidateClaims.length > 0) {
         throw applicationError(
@@ -366,7 +403,10 @@ function createUboDecisionApplication({ policyPack } = {}) {
         );
       }
       assertPlainObject(request.caseContext, "evaluateRequest.caseContext");
-      const resolutionInputs = normalizeResolutionInputs(request.resolutionInputs);
+      const normalizedInputs = normalizeResolutionInputs(request.resolutionInputs);
+      const resolutionInputs = contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V2
+        ? customerResolutionInputs(current, normalizedInputs)
+        : normalizedInputs;
       const calculationRequests = planCalculations(loadedPolicyPack, current, request.caseContext);
       let result;
       try {
@@ -387,16 +427,19 @@ function createUboDecisionApplication({ policyPack } = {}) {
         throw error;
       }
       return deepFreeze({
-        contractVersion: DECISION_APPLICATION_CONTRACT_VERSION,
+        contractVersion,
         decisionSnapshot: result.snapshot,
       });
     });
   }
 
-  return deepFreeze({ intake, applyDecisions, evaluate });
+  return contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V2
+    ? deepFreeze({ intake, applyDecisions, applyCustomerInput, evaluate })
+    : deepFreeze({ intake, applyDecisions, evaluate });
 }
 
 module.exports = {
   DECISION_APPLICATION_CONTRACT_VERSION,
+  DECISION_APPLICATION_CONTRACT_VERSION_V2,
   createUboDecisionApplication,
 };
