@@ -299,7 +299,7 @@
     return h("aside", { className: "ug-detail-panel", ref: panelRef, tabIndex: -1, "aria-label": "Selected graph item details" }, content || h(EmptyDetails, { projection, onSelect }));
   }
 
-  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height }) {
+  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, highlightEntityIds = [], highlightRelationshipIds = [] }) {
     const projection = assertProjection(supplied);
     if (!Object.values(DETAIL_LEVEL).includes(detailLevel)) throw new TypeError("detailLevel must be CUSTOMER or EXPLAIN");
     const layout = React.useMemo(() => computeLayout(projection), [projection]);
@@ -309,6 +309,8 @@
     const drag = React.useRef(null);
     const panelRef = React.useRef(null);
     const markerId = `ug-arrow-${React.useId().replaceAll(":", "")}`;
+    const journeyEntityIds = new Set(highlightEntityIds);
+    const journeyRelationshipIds = new Set(highlightRelationshipIds);
     const activeIds = activeRelationshipIds(selection, projection);
     const select = React.useCallback((next) => {
       setSelection(next);
@@ -354,7 +356,9 @@
       const edgeLabel = relationship.dimension === "VOTING" ? `Vote · ${formatMeasurement(relationship.measurement)}` : relationship.measurement ? formatMeasurement(relationship.measurement) : short(relationshipLabel(relationship.relationshipType), 22);
       const labelWidth = Math.max(58, Math.min(136, 26 + (edgeLabel.length * 7)));
       const active = activeIds.has(relationship.relationshipId);
-      const css = ["ug-edge", `type-${relationship.relationshipType.toLowerCase().replaceAll("_", "-")}`, active ? "active" : "", activeIds.size && !active ? "muted" : "", relationship.indicators?.includes("CONFLICT") ? "conflict" : "", relationship.indicators?.includes("REVIEW_REQUIRED") ? "review" : ""].filter(Boolean).join(" ");
+      const journeyLinked = journeyRelationshipIds.has(relationship.relationshipId)
+        || journeyEntityIds.has(relationship.sourceEntityId) || journeyEntityIds.has(relationship.targetEntityId);
+      const css = ["ug-edge", `type-${relationship.relationshipType.toLowerCase().replaceAll("_", "-")}`, active ? "active" : "", journeyLinked ? "journey-linked" : "", activeIds.size && !active ? "muted" : "", relationship.indicators?.includes("CONFLICT") ? "conflict" : "", relationship.indicators?.includes("REVIEW_REQUIRED") ? "review" : ""].filter(Boolean).join(" ");
       const activate = () => select({ kind: "relationship", id: relationship.relationshipId });
       return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-label": `${relationshipLabel(relationship.relationshipType)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${formatMeasurement(relationship.measurement)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
         h("path", { d: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`, markerEnd: `url(#${markerId})` }),
@@ -369,7 +373,7 @@
       const selected = selection?.kind === "entity" && selection.id === node.entityId;
       const connected = activeIds.size === 0 || layout.relationships.some((relationship) => activeIds.has(relationship.relationshipId) && (relationship.sourceEntityId === node.entityId || relationship.targetEntityId === node.entityId));
       const activate = () => select({ kind: "entity", id: node.entityId });
-      return h("g", { key: node.entityId, className: ["ug-node", category.css, selected ? "selected" : "", connected ? "" : "muted"].filter(Boolean).join(" "), transform: `translate(${position.x} ${position.y})`, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-pressed": selected, "aria-label": `${node.displayName}, ${category.label}${badges.length ? `, ${badges.map((badge) => badge.label).join(", ")}` : ""}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
+      return h("g", { key: node.entityId, className: ["ug-node", category.css, selected ? "selected" : "", journeyEntityIds.has(node.entityId) ? "journey-linked" : "", connected ? "" : "muted"].filter(Boolean).join(" "), transform: `translate(${position.x} ${position.y})`, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-pressed": selected, "aria-label": `${node.displayName}, ${category.label}${badges.length ? `, ${badges.map((badge) => badge.label).join(", ")}` : ""}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
         h("rect", { className: "ug-node-shape", width: NW, height: NH, rx: node.category === "NATURAL_PERSON" ? 44 : 18 }),
         unresolvedEntities.has(node.entityId) && h("rect", { className: "ug-unresolved-outline", x: -7, y: -7, width: NW + 14, height: NH + 14, rx: node.category === "NATURAL_PERSON" ? 51 : 24 }),
         h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, category.label),

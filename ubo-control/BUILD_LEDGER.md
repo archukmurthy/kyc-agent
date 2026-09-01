@@ -2,21 +2,21 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | Gate 5.2 / **G5.2B — Low-Friction Resolution Planning** |
-| Parallel-gate state | **Gate 4: PAUSED — Evidence Platform prerequisite programme in progress. Gate 5.1: APPROVED FOR PARALLEL EXECUTION.** The renderer consumes only the accepted G5.1A projection and is independent of live Extraction. |
-| Branch | `codex/ubo-control-g5-2b-low-friction-resolution-planner` |
-| Base commit | `5105da3a28d6c47bf41e64db3a52f054960d6407` (normal merge of accepted PR #41 into latest `origin/main`) |
-| Latest accepted PR | [#41 — G5.2A adaptive UBO journey projection](https://github.com/archukmurthy/kyc-agent/pull/41), merged normally as `5105da3a28d6c47bf41e64db3a52f054960d6407`; source branch deleted. |
-| Current PR | [#42 — G5.2B low-friction UBO resolution planner](https://github.com/archukmurthy/kyc-agent/pull/42) — open and unmerged; do not merge without Control Room acceptance. |
-| Completed implementation | Separate public `planUboResolution`; verified-snapshot-only `ubo-resolution-plan-v1`; pinned `ubo-low-friction-planner-v1`; semantic system/customer/internal/complete/blocked waves; attempt-aware system planning; CustomerResolutionBundles; targeted evidence and lightweight-response selection; deferred alternatives; specialist/terminal guards. |
-| Scenario coverage | P01 complete, P02 Discovery, P03 held artifact, P04 joint system wave, P05 NO_DATA progression, P06 operational failure, P07 lightweight response, P08 targeted document, P09 information+document bundle, P10 shared need, P11 known/missing identity, P12 senior-management prep, P13 internal review, P14 specialist stop, P15 before/after and P16 no speculative controls; additional hold, analyst-option, terminal and PARTIAL coverage. |
-| Public/product boundary | `DecisionSnapshot → JourneyProjection → planUboResolution → ResolutionPlan → host`. Planner selection is advisory product logic over permitted recorded options; it cannot execute capabilities, alter policy sufficiency, resolve requirements, mutate snapshots or prescribe UI. |
-| Outstanding implementation | Runtime execution/wiring, final host journey UX, host-screen integration, configurable future planning profiles and historical comparison/diff remain future work. Gate 4 remains paused on Evidence Platform prerequisites. |
-| Tests / status | G5.2B 27/27 passed with `uboResolutionPlanner.js` at 97.34% line / 81.96% branch / 92.41% function coverage; planner/journey/graph suites 57/57; standalone core 235/235; adapter/Discovery composition 43/43; renderer regression 22/22; architecture 13/13; host 25 suites / 482 tests; production build and `git diff --check` passed. |
-| Active escalations | None. G5.2A is accepted; the Control Room approved G5.2B product planning and JH-006 v1 tier/wave doctrine only. |
-| Product requirement | [PR-PLN-001](docs/product/product-requirements.md) — `IN_IMPLEMENTATION — G5.2B IN REVIEW`; PR-JRN-001 is implemented after G5.2A acceptance. |
-| Next approved step | Control Room review of PR #42 only. Do not merge and do not begin runtime/onboarding integration. |
+| Gate / sub-gate | Gate 5.3 / **G5.3A — Adaptive Customer Journey UI** |
+| Parallel-gate state | **Gate 4: PAUSED** on the independent Evidence Platform prerequisite programme. G5.3A evidence interactions are presentation-only host intents. |
+| Branch | `codex/ubo-control-g5-3a-adaptive-customer-journey-ui` |
+| Base commit | `8346355157a751449530765f4aac37eecd136e62` (normal merge of accepted PR #42 into latest `origin/main`) |
+| Latest accepted PR | [#42 — G5.2B low-friction UBO resolution planner](https://github.com/archukmurthy/kyc-agent/pull/42), merged normally as `8346355157a751449530765f4aac37eecd136e62`; source branch deleted. |
+| Current PR | Pending — G5.3A adaptive customer journey UI; open after the complete acceptance net passes. Do not merge without Control Room acceptance. |
+| Completed implementation | Reusable `UboJourney`; `ubo-customer-action-v1`; public JourneyProjection/ResolutionPlan-only boundary; optional reused `OwnershipGraph`; known/missing separation; confirmation; semantic field generation; coalesced information/evidence tasks; evidence handoff intent; system/blocker/review/specialist states; COMPANY/LLP language; validation/accessibility; CUI01–CUI17 standalone harness. |
+| Product architecture | `DecisionSnapshot → JourneyProjection + ResolutionPlan → UboJourney → host-neutral customer action → future host processing/re-resolution`. UI local state is ephemeral and never authoritative UBO state. |
+| Scenario coverage | CUI01 resolved, CUI02 confirmation, CUI03 foreign HoldCo, CUI04 missing identity, CUI05 voting, CUI06 appointment, CUI07 coalescence, CUI08 information+evidence, CUI09 targeted evidence, CUI10 system wave, CUI11 operational blocker, CUI12 internal review, CUI13 specialist/trust, CUI14 senior-management prep, CUI15 LLP, CUI16 unavailable wording, CUI17 before/after. |
+| Public/product boundary | UI accepts only `ubo-journey-projection-v1`, `ubo-resolution-plan-v1`, and optional `ubo-ownership-graph-projection-v1`; emits only serializable `ubo-customer-action-v1`. No core-to-UI dependency. |
+| Outstanding implementation | Host event processing, authoritative customer-response ingestion, upload/Evidence Platform handoff, host onboarding integration and production configuration error handling remain future gates. |
+| Tests / status | Adaptive UI 46/46; Journey/Planner/Graph projections 57/57; standalone UBO 292/292; Discovery integration 43/43; architecture 17/17; host 25 suites / 482 tests; `UboJourney.js` 99.63% line / 81.63% branch / 89.47% function coverage; production build passed; manual desktop/mobile/CUI17 acceptance passed; final diff check passed. |
+| Active escalations | None. G5.2B and JH-006 are accepted. No Decision Application expansion was required. |
+| Next approved step | Complete G5.3A PR and return it for Control Room review. Do not merge and do not begin host onboarding integration. |
 
 ## Scope guard
 
-G5.2B selects only already-permitted recorded ResolutionOptions from a verified DecisionSnapshot. It does not execute them, change policy sufficiency, resolve requirements, recompute ownership, choose conflicting claims, retrieve evidence, add a document graph, mutate/reconstruct history, or integrate an onboarding or analyst screen. Evidence Platform worktrees and branches remain untouched.
+G5.3A is reusable standalone UI product work only. It does not modify `src/App.js`, an existing onboarding screen, a host API route, a dossier flow, case management, `createUboDecisionApplication`, UBO policy/determination logic, provider execution or Evidence Platform ingestion. Files and raw document bytes never enter the component event.
