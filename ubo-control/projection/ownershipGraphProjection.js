@@ -211,9 +211,38 @@ function projectQualifications(content, calculations, relationshipsById, claimsB
   return qualifications.sort((left, right) => left.entityId.localeCompare(right.entityId));
 }
 
+function resolutionActor(option) {
+  if (option.applicabilityState === "REQUIRES_POLICY_CONTENT") return "POLICY_CONTENT";
+  if (["DISCOVERY", "EXISTING_EVIDENCE", "DETERMINISTIC_CALCULATION"].includes(option.strategy)) return "SYSTEM";
+  if (["CUSTOMER_DOCUMENT", "CUSTOMER_QUESTION", "CUSTOMER_ATTESTATION"].includes(option.strategy)) return "CUSTOMER";
+  if (option.strategy === "ANALYST_REVIEW") return "INTERNAL_REVIEW";
+  return "UNASSIGNED";
+}
+
+function calculationReferenceMatches(reference, calculation) {
+  return reference.calculationAlgorithm === calculation.calculationAlgorithm
+    && reference.graphVersion === calculation.graphVersion
+    && reference.subjectEntityId === calculation.subjectEntityId
+    && reference.targetEntityId === calculation.targetEntityId
+    && reference.dimension === calculation.dimension;
+}
+
 function projectUnresolved(content, calculations, relationshipIds) {
-  const needs = (content.decision.informationNeeds || [])
-    .filter(({ state }) => state === undefined || state === "OPEN")
+  const openNeeds = (content.decision.informationNeeds || [])
+    .filter(({ state }) => state === undefined || state === "OPEN");
+  const optionsByNeed = new Map();
+  (content.decision.resolutionOptions || []).forEach((option) => {
+    if (!optionsByNeed.has(option.informationNeedId)) optionsByNeed.set(option.informationNeedId, []);
+    optionsByNeed.get(option.informationNeedId).push(option);
+  });
+  const routesFor = (needIds) => canonicalSort(needIds.flatMap((needId) =>
+    (optionsByNeed.get(needId) || []).map((option) => ({
+      resolutionOptionId: option.optionId,
+      actor: resolutionActor(option),
+      strategy: option.strategy,
+      applicabilityState: option.applicabilityState,
+    }))));
+  const needs = openNeeds
     .map((need) => {
       const relatedRelationshipIds = uniqueStrings([
         need.relationshipId,
@@ -241,21 +270,35 @@ function projectUnresolved(content, calculations, relationshipIds) {
         conflictReferences: uniqueStrings(need.conflictReferences),
         calculationReferences: canonicalSort(need.calculationReferences || []),
         existingEvidenceReferences: uniqueCanonical(need.existingEvidenceReferences || []),
+        resolutionRoutes: routesFor([need.needId]),
       };
     });
-  const paths = calculations.flatMap((calculation) => calculation.unresolvedPaths.map((path) => ({
-    unresolvedId: `unresolved-path:${calculation.calculationId}:${path.pathId}`,
-    kind: "CALCULATION_PATH",
-    entityId: calculation.subjectEntityId,
-    targetEntityId: calculation.targetEntityId,
-    concept: `${calculation.dimension}_EFFECTIVE_INTEREST`,
-    state: "OPEN",
-    requirementIds: [],
-    reasonCodes: uniqueStrings(path.reasons),
-    relatedRelationshipIds: cloneData(path.relationshipIds),
-    calculationId: calculation.calculationId,
-    pathId: path.pathId,
-  })));
+  const paths = calculations.flatMap((calculation) => calculation.unresolvedPaths.map((path) => {
+    const relatedResolutions = (content.decision.requirementResolutions || []).filter((resolution) =>
+      (resolution.calculationReferences || []).some((reference) => calculationReferenceMatches(reference, calculation)));
+    const relatedResolutionNeedIds = new Set(relatedResolutions.flatMap(({ informationNeedIds }) => informationNeedIds || []));
+    const relatedNeeds = openNeeds.filter((need) => relatedResolutionNeedIds.has(need.needId)
+      || (need.calculationReferences || []).some((reference) => calculationReferenceMatches(reference, calculation)));
+    const informationNeedIds = uniqueStrings(relatedNeeds.map(({ needId }) => needId));
+    return {
+      unresolvedId: `unresolved-path:${calculation.calculationId}:${path.pathId}`,
+      kind: "CALCULATION_PATH",
+      entityId: calculation.subjectEntityId,
+      targetEntityId: calculation.targetEntityId,
+      concept: `${calculation.dimension}_EFFECTIVE_INTEREST`,
+      state: "OPEN",
+      requirementIds: uniqueStrings([
+        ...relatedResolutions.map(({ requirementId }) => requirementId),
+        ...relatedNeeds.flatMap(({ requiredBy }) => requiredBy || []),
+      ]),
+      reasonCodes: uniqueStrings(path.reasons),
+      relatedRelationshipIds: cloneData(path.relationshipIds),
+      informationNeedIds,
+      resolutionRoutes: routesFor(informationNeedIds),
+      calculationId: calculation.calculationId,
+      pathId: path.pathId,
+    };
+  }));
   return [...needs, ...paths].sort((left, right) => left.unresolvedId.localeCompare(right.unresolvedId));
 }
 

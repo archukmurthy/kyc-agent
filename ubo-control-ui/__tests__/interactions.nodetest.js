@@ -95,3 +95,60 @@ test("a new projection cleanly rerenders unresolved-before to resolved-after evi
     assert.ok(after.container.querySelector(".ug-node[aria-label*='Alice Morgan'][aria-label*='Qualifying']"));
   } finally { after.cleanup(); }
 });
+
+test("Unresolved summary opens a deterministic inspectable list and focuses the selected exact branch", () => {
+  const supplied = structuredClone(projection("UI07"));
+  supplied.unresolved.forEach((item) => { item.resolutionRoutes = [{ actor: "CUSTOMER", strategy: "CUSTOMER_QUESTION", applicabilityState: "APPLICABLE" }]; });
+  const rendered = renderGraph(supplied, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    rendered.click(rendered.container.querySelector("[aria-label^='Inspect'][aria-label$='unresolved items']"));
+    const items = [...rendered.container.querySelectorAll(".ug-unresolved-item")];
+    assert.equal(items.length, supplied.unresolved.length);
+    assert.match(items[0].textContent, /Requirement:/);
+    assert.match(items[0].textContent, /State:/);
+    assert.match(items[0].textContent, /Resolver:/);
+    assert.match(items[0].textContent, /Graph:/);
+    rendered.click(items[0]);
+    assert.match(rendered.container.querySelector(".ug-detail-panel").textContent, /Can be resolved by/);
+    assert.ok(rendered.container.querySelectorAll(".ug-edge.active").length > 0, "a branch-linked unresolved item must focus its exact recorded relationships");
+    rendered.click(rendered.container.querySelector(".ug-clear-selection"));
+    assert.equal(rendered.container.querySelector(".ug-unresolved-list"), null);
+  } finally { rendered.cleanup(); }
+});
+
+test("selection clears from node toggle, Escape, empty canvas and the visible clear control", () => {
+  const selections = [];
+  const rendered = renderGraph(projection("UI01"), { onSelectionChange: (value) => selections.push(value) });
+  try {
+    const node = byLabel(rendered.container, ".ug-node", "Alice Morgan");
+    rendered.click(node);
+    assert.ok(rendered.container.querySelector(".ug-clear-selection"));
+    rendered.click(node);
+    assert.equal(selections.at(-1), null);
+    rendered.click(node);
+    rendered.key(rendered.dom.window.document, "Escape");
+    assert.equal(selections.at(-1), null);
+    rendered.click(node);
+    rendered.click(rendered.container.querySelector("svg.ug-canvas"));
+    assert.equal(selections.at(-1), null);
+    rendered.click(node);
+    rendered.click(rendered.container.querySelector(".ug-clear-selection"));
+    assert.equal(selections.at(-1), null);
+  } finally { rendered.cleanup(); }
+});
+
+test("Fit remains subject-centred after selection and recomputes after resize", () => {
+  const rendered = renderGraph(projection("UI02"));
+  try {
+    rendered.resize(720, 430);
+    rendered.click(byLabel(rendered.container, ".ug-node", "Alice Morgan"));
+    rendered.click(rendered.container.querySelector("button[aria-label='Reset and fit graph to view']"));
+    const selected = rendered.container.querySelector(".ug-node.selected");
+    assert.ok(selected, "Fit must preserve the selected branch");
+    const before = rendered.container.querySelector(".ug-toolbar span").textContent;
+    rendered.resize(1000, 650);
+    const after = rendered.container.querySelector(".ug-toolbar span").textContent;
+    assert.notEqual(after, before);
+    assert.ok(Number.parseInt(after, 10) >= Number.parseInt(before, 10));
+  } finally { rendered.cleanup(); }
+});

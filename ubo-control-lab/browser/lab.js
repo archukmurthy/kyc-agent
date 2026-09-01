@@ -43,6 +43,46 @@
     return h("div", { className: "empty" }, children);
   }
 
+  function ResolutionExplanation({ view }) {
+    const item = view.resolutionExplanation;
+    const headline = item.noCustomerAction
+      ? item.currentWave.actor === "SYSTEM" ? "Customer action is deferred while recorded system work runs"
+        : item.currentWave.actor === "INTERNAL_REVIEW" ? "Customer action is deferred for internal review"
+          : "No customer action is currently executable"
+      : `${item.customerResolvableNeeds} customer-resolvable needs are now in the active wave`;
+    return h("section", { className: "resolution-explanation", "aria-label": "Resolution state explanation" },
+      h("div", null, h("p", { className: "source-label" }, "RESOLUTION STATE"), h("h3", null, headline), h("p", null, `Wave: ${human(item.currentWave.state)} · ${human(item.currentWave.actor)} · ${item.currentWave.actionCount} action(s).`)),
+      h("div", { className: "grid-3" },
+        h(Metric, { label: "Open InformationNeeds", value: item.openInformationNeeds }),
+        h(Metric, { label: "ResolutionOptions", value: item.currentResolutionOptions }),
+        h(Metric, { label: "System actions remaining", value: item.systemActionsRemaining }),
+        h(Metric, { label: "Customer-resolvable", value: item.customerResolvableNeeds }),
+        h(Metric, { label: "Internal-review needs", value: item.internalReviewNeeds }),
+        h(Metric, { label: "Policy-content blocked", value: item.policyContentBlockedNeeds })),
+      h("details", null, h("summary", null, "Resolution route breakdown"), h("pre", { className: "json" }, pretty(item.optionSummary))));
+  }
+
+  function NaturalPersonAssessments({ view }) {
+    const nodes = new Map(view.graph.nodes.map((node) => [node.entityId, node]));
+    const people = view.graph.nodes.filter(({ category }) => category === "NATURAL_PERSON");
+    return h("div", { className: "person-assessments" }, people.map((person) => {
+      const relationships = view.graph.relationships.filter(({ sourceEntityId }) => sourceEntityId === person.entityId);
+      const calculations = view.compliance.calculations.filter(({ subjectEntityId }) => subjectEntityId === person.entityId);
+      const bases = view.compliance.basisAssessments.filter(({ holderEntityId }) => holderEntityId === person.entityId);
+      const qualification = view.graph.qualifications.find(({ entityId }) => entityId === person.entityId);
+      const support = relationships.flatMap(({ support: relationshipSupport }) => relationshipSupport?.evidenceReferences || []);
+      return h("article", { className: "person-assessment", key: person.entityId },
+        h("div", null, h("strong", null, person.displayName), h("span", { className: qualification ? "state RESOLVED" : "state UNRESOLVED" }, qualification ? "Confirmed qualifying person" : "Not a confirmed UBO")),
+        h("dl", null,
+          h("dt", null, "Candidate / source fact"), h("dd", null, support.length ? support.map(({ system, referenceId }) => `${system} · ${referenceId}`).join("; ") : "No displayable source reference"),
+          h("dt", null, "Operative relationship(s)"), h("dd", null, relationships.length ? relationships.map((relationship) => `${human(relationship.relationshipType)} ${human(relationship.measurement?.type)} ${relationship.measurement?.type === "RANGE" ? `${relationship.measurement.lowerBound}–${relationship.measurement.upperBound}%` : relationship.measurement?.value ?? ""} → ${nodes.get(relationship.targetEntityId)?.displayName}`).join("; ") : "None"),
+          h("dt", null, "Economic calculation"), h("dd", null, calculations.filter(({ dimension }) => dimension === "ECONOMIC").length ? pretty(calculations.filter(({ dimension }) => dimension === "ECONOMIC")) : "None recorded"),
+          h("dt", null, "Voting / control basis"), h("dd", null, relationships.filter(({ dimension }) => dimension !== "ECONOMIC").length ? relationships.filter(({ dimension }) => dimension !== "ECONOMIC").map((relationship) => `${human(relationship.relationshipType)} · ${relationship.measurement?.type === "RANGE" ? `(${relationship.measurement.lowerBound}%, ${relationship.measurement.upperBound}%]` : human(relationship.measurement?.type)}`).join("; ") : "None recorded"),
+          h("dt", null, "G2.3 assessment"), h("dd", null, bases.length ? bases.map(({ requirementId, basisType, state, rationaleCode }) => `${requirementId} · ${human(basisType)} · ${human(state)} · ${human(rationaleCode)}`).join("; ") : "No determinative qualifying basis recorded"),
+          h("dt", null, "Qualification result"), h("dd", null, qualification ? "Qualifies from an actual recorded G2.3 basis." : "Does not currently qualify: the source person is not itself a UBO conclusion, and no determinative threshold/control basis reaches the customer subject.")));
+    }));
+  }
+
   function Setup({ catalogue, mode, setMode, busy, error, startFixture, startLive, startReplay, savedResults, deleteReplay, clearReplays, storageError }) {
     const [fixtureId, setFixtureId] = React.useState("LAB18");
     const [company, setCompany] = React.useState({ legalEntityName: "", registrationNumber: "", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" });
@@ -89,8 +129,8 @@
     return h("section", { className: "panel" },
       error && h("div", { className: "error", role: "alert" }, error),
       busy && h("div", { className: "notice", role: "status" }, "Applying the customer response through Decision Application v2…"),
-      h(UboJourney, { journey: view.journey, plan: view.plan, graph: view.graph, onAction }),
-      h("div", { className: "section" }, h("h3", null, "Full ownership graph"), h(OwnershipGraph, { projection: view.graph, detailLevel: DETAIL_LEVEL.CUSTOMER })));
+      h(ResolutionExplanation, { view }),
+      h(UboJourney, { journey: view.journey, plan: view.plan, graph: view.graph, onAction }));
   }
 
   function Requirements({ requirements }) {
@@ -118,6 +158,8 @@
       h("div", { className: "section grid-2" },
         h("div", null, h("h3", null, "Qualifying people and why"), compliance.qualifyingPersons.length ? compliance.qualifyingPersons.map((person) => h("details", { key: person.entityId }, h("summary", null, person.entityId), h("div", null, h("p", null, `Roles: ${(person.roles || []).map(human).join(", ")}`), h("pre", { className: "json" }, pretty(person.bases || []))))) : h(Empty, null, "No qualifying natural person is currently established.")),
         h("div", null, h("h3", null, "Recorded calculations"), compliance.calculations.length ? compliance.calculations.map((calculation) => h("details", { key: calculation.calculationId }, h("summary", null, `${human(calculation.dimension)} · ${calculation.aggregateKnownValue?.value ?? calculation.result?.value ?? "incomplete"}%`), h("pre", { className: "json" }, pretty(calculation)))) : h(Empty, null, "No effective-interest calculation is currently recorded."))),
+      h("div", { className: "section" }, h("h3", null, "Natural-person qualification assessment"), compliance.qualifyingPersons.length || view.graph.nodes.some(({ category }) => category === "NATURAL_PERSON") ? h(NaturalPersonAssessments, { view }) : h(Empty, null, "No natural-person source facts are recorded.")),
+      h("div", { className: "section" }, h(ResolutionExplanation, { view })),
       h("div", { className: "section" }, h("h3", null, "R01–R14 requirement matrix"), h(Requirements, { requirements: view.requirements })),
       h("div", { className: "section grid-2" },
         [["InformationNeeds", compliance.informationNeeds], ["PolicyGaps", compliance.policyGaps], ["OperationalBlockers", compliance.operationalBlockers], ["Conflicts", compliance.conflicts], ["ReviewRequirements", compliance.reviewRequirements], ["Risk signals", compliance.riskSignals]].map(([title, items]) => h("details", { key: title }, h("summary", null, `${title} · ${items.length}`), h("pre", { className: "json" }, pretty(items))))),
@@ -163,7 +205,7 @@
   }
 
   function PlannerPanel({ view }) {
-    return h("section", { className: "panel" }, h("h2", null, "Resolution Planner"), h("div", { className: "grid-3" }, h(Metric, { label: "Wave", value: human(view.plan.state) }), h(Metric, { label: "Actor", value: human(view.plan.recommendedWave.actor) }), h(Metric, { label: "Prior attempts", value: view.plan.summary.priorResolutionAttempts })), h("div", { className: "section grid-2" }, h("details", { open: true }, h("summary", null, `Recommended actions · ${view.plan.recommendedWave.actions.length}`), h("pre", { className: "json" }, pretty(view.plan.recommendedWave.actions))), h("details", null, h("summary", null, `Customer bundles · ${view.plan.recommendedWave.customerBundles.length}`), h("pre", { className: "json" }, pretty(view.plan.recommendedWave.customerBundles))), h("details", null, h("summary", null, `Deferred alternatives · ${view.plan.deferredAlternatives.length}`), h("pre", { className: "json" }, pretty(view.plan.deferredAlternatives))), h("details", null, h("summary", null, "Rationale"), h("pre", { className: "json" }, pretty(view.plan.rationale)))));
+    return h("section", { className: "panel" }, h("h2", null, "Resolution Planner"), h(ResolutionExplanation, { view }), h("div", { className: "grid-3" }, h(Metric, { label: "Wave", value: human(view.plan.state) }), h(Metric, { label: "Actor", value: human(view.plan.recommendedWave.actor) }), h(Metric, { label: "Prior attempts", value: view.plan.summary.priorResolutionAttempts })), h("div", { className: "section grid-2" }, h("details", { open: true }, h("summary", null, `Recommended actions · ${view.plan.recommendedWave.actions.length}`), h("pre", { className: "json" }, pretty(view.plan.recommendedWave.actions))), h("details", null, h("summary", null, `Customer bundles · ${view.plan.recommendedWave.customerBundles.length}`), h("pre", { className: "json" }, pretty(view.plan.recommendedWave.customerBundles))), h("details", null, h("summary", null, `Deferred alternatives · ${view.plan.deferredAlternatives.length}`), h("pre", { className: "json" }, pretty(view.plan.deferredAlternatives))), h("details", null, h("summary", null, "Rationale"), h("pre", { className: "json" }, pretty(view.plan.rationale)))));
   }
 
   function HistoryPanel({ session }) {

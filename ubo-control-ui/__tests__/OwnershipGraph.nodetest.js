@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DETAIL_LEVEL, computeLayout, formatMeasurement } = require("../OwnershipGraph");
+const { DETAIL_LEVEL, computeLayout, fitScale, formatMeasurement } = require("../OwnershipGraph");
 const { fixtures, projection, renderGraph } = require("./testHarness");
 
 function graphProjection(entityIds, relationshipDefinitions) {
@@ -198,5 +198,47 @@ test("large graphs retain readable-size nodes in an overflow viewport instead of
     assert.equal(svg.getAttribute("viewBox"), `0 0 ${layout.width} ${layout.height}`);
     assert.equal(rendered.container.querySelector(".ug-node-name").getAttribute("font-size"), null);
     assert.equal(rendered.container.querySelector("[aria-label='Reset and fit graph to view']").nextSibling.textContent, "100%");
+  } finally { rendered.cleanup(); }
+});
+
+test("Fit derives readable bounded scales for ASDA-depth, long-chain and sibling layouts", () => {
+  const asdaLike = graphProjection(
+    ["customer", "n1", "n2", "n3", "n4", "n5", "branch-a", "branch-b", "branch-c", "person-a", "person-b", "person-c"],
+    [
+      { source: "n1", target: "customer" }, { source: "n2", target: "n1" }, { source: "n3", target: "n2" },
+      { source: "n4", target: "n3" }, { source: "n5", target: "n4" },
+      { source: "branch-a", target: "n5" }, { source: "branch-b", target: "n5" }, { source: "branch-c", target: "n5" },
+      { source: "person-a", target: "branch-a", type: "VOTING_RIGHTS" },
+      { source: "person-b", target: "branch-b", type: "VOTING_RIGHTS" },
+      { source: "person-c", target: "branch-c", type: "VOTING_RIGHTS" },
+    ],
+  );
+  const longChain = graphProjection(["customer", "n1", "n2", "n3", "n4", "n5", "n6"], [
+    { source: "n1", target: "customer" }, { source: "n2", target: "n1" }, { source: "n3", target: "n2" },
+    { source: "n4", target: "n3" }, { source: "n5", target: "n4" }, { source: "n6", target: "n5" },
+  ]);
+  const siblings = graphProjection(["customer", ...Array.from({ length: 10 }, (_value, index) => `owner-${index}`)],
+    Array.from({ length: 10 }, (_value, index) => ({ source: `owner-${index}`, target: "customer" })));
+  [asdaLike, longChain, siblings].forEach((value) => {
+    const layout = computeLayout(value);
+    const scale = fitScale(layout, 920, 680);
+    assert.ok(scale >= 0.35 && scale <= 1);
+    assert.ok(layout.width * scale <= 920 || scale === 0.35);
+    assert.ok(layout.height * scale <= 680 || scale === 0.35);
+  });
+  assert.ok(fitScale(computeLayout(asdaLike), 920, 680) >= 0.45, "ASDA-sized graph must not be microscopic");
+});
+
+test("natural-person presence never creates a qualifying badge without a qualification", () => {
+  const supplied = structuredClone(projection("UI02"));
+  supplied.qualifications = [];
+  supplied.summary.qualifyingPeople = 0;
+  supplied.nodes.forEach((node) => { node.semantics = node.semantics.filter((value) => value !== "QUALIFYING_PERSON"); });
+  const rendered = renderGraph(supplied, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    assert.equal(rendered.container.querySelectorAll(".ug-svg-badge.qualifying").length, 0);
+    assert.match(rendered.container.querySelector(".ug-node.person").getAttribute("aria-label"), /Not confirmed UBO/);
+    rendered.click(rendered.container.querySelector(".ug-node.person"));
+    assert.match(rendered.container.querySelector(".ug-detail-panel").textContent, /no G2\.3 qualification basis/i);
   } finally { rendered.cleanup(); }
 });

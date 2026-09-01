@@ -163,7 +163,7 @@ function explicitRange(value) {
 }
 
 function rangeFromNature(nature) {
-  const match = String(nature).toLowerCase().match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?$/);
+  const match = String(nature).toLowerCase().match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
   return {
     type: PERCENTAGE_VALUE_TYPE.RANGE,

@@ -22,6 +22,9 @@ const CUSTOMER_ONLY_AVAILABILITY = Object.freeze([
   { strategy: "EXISTING_EVIDENCE", state: "INAPPLICABLE", reasonCode: "NO_MATCHING_HELD_EVIDENCE" },
   { strategy: "DETERMINISTIC_CALCULATION", state: "INAPPLICABLE", reasonCode: "INPUT_FACT_MISSING" },
 ]);
+const COMPLETED_DISCOVERY_AVAILABILITY = Object.freeze([
+  { strategy: "DISCOVERY", state: "INAPPLICABLE", reasonCode: "SYSTEM_ROUTE_EXHAUSTED" },
+]);
 const REQUIREMENT_DEFINITIONS = Object.freeze(POLICY.requirements.map(({ requirementId, title, description, classification }) => ({
   requirementId, title, description, classification,
 })));
@@ -315,17 +318,59 @@ function buildSnapshotView(snapshot) {
   const journey = projectUboJourney({ decisionSnapshot: snapshot });
   const plan = planUboResolution({ decisionSnapshot: snapshot });
   const content = snapshot.decisionContent;
+  const openNeeds = (content.decision.informationNeeds || []).filter(({ state }) => state === "OPEN");
+  const openNeedIds = new Set(openNeeds.map(({ needId }) => needId));
+  const options = (content.decision.resolutionOptions || []).filter(({ informationNeedId }) => openNeedIds.has(informationNeedId));
+  const policyContentBlockedNeedIds = new Set((journey.internalReview.policyContentGaps || []).map(({ informationNeedId }) => informationNeedId));
+  const customerResolvableNeedIds = new Set(options.filter(({ strategy, applicabilityState }) =>
+    ["CUSTOMER_DOCUMENT", "CUSTOMER_QUESTION", "CUSTOMER_ATTESTATION"].includes(strategy)
+      && applicabilityState === "APPLICABLE").map(({ informationNeedId }) => informationNeedId));
+  const internalReviewNeedIds = new Set([
+    ...options.filter(({ strategy, applicabilityState }) => strategy === "ANALYST_REVIEW" && applicabilityState === "APPLICABLE")
+      .map(({ informationNeedId }) => informationNeedId),
+    ...(journey.internalReview.actionItems || []).flatMap(({ informationNeedIds }) => informationNeedIds || []),
+  ]);
+  const systemActionNeedIds = new Set((plan.recommendedWave.actor === "SYSTEM" ? plan.recommendedWave.actions : [])
+    .flatMap(({ informationNeedIds }) => informationNeedIds || []));
+  const optionSummary = [...new Map(options.map((option) => {
+    const key = `${option.strategy}:${option.applicabilityState}`;
+    return [key, { strategy: option.strategy, applicabilityState: option.applicabilityState }];
+  })).values()].map((item) => ({
+    ...item,
+    count: options.filter((option) => option.strategy === item.strategy && option.applicabilityState === item.applicabilityState).length,
+  })).sort((left, right) => `${left.strategy}:${left.applicabilityState}`.localeCompare(`${right.strategy}:${right.applicabilityState}`));
   return {
     snapshot,
     graph,
     journey,
     plan,
+    resolutionExplanation: {
+      openInformationNeeds: openNeeds.length,
+      currentResolutionOptions: options.length,
+      optionSummary,
+      currentWave: { state: plan.state, actor: plan.recommendedWave.actor, actionCount: plan.recommendedWave.actions.length },
+      systemActionsRemaining: systemActionNeedIds.size,
+      systemActionNeedIds: [...systemActionNeedIds].sort(),
+      customerResolvableNeeds: customerResolvableNeedIds.size,
+      customerResolvableNeedIds: [...customerResolvableNeedIds].sort(),
+      internalReviewNeeds: internalReviewNeedIds.size,
+      internalReviewNeedIds: [...internalReviewNeedIds].sort(),
+      internalReviewActions: (journey.internalReview.actionItems || []).length,
+      policyContentBlockedNeeds: policyContentBlockedNeedIds.size,
+      policyContentBlockedNeedIds: [...policyContentBlockedNeedIds].sort(),
+      noCustomerAction: plan.recommendedWave.customerBundles.length === 0,
+      explanationCode: plan.state === "SYSTEM_RESOLUTION" ? "SYSTEM_WORK_PRECEDES_CUSTOMER_ACTION"
+        : plan.state === "CUSTOMER_RESOLUTION" ? "CUSTOMER_RESOLUTION_NOW_AVAILABLE"
+          : plan.state === "INTERNAL_REVIEW" ? "INTERNAL_REVIEW_PRECEDES_CUSTOMER_ACTION"
+            : "NO_CURRENT_CUSTOMER_WAVE",
+    },
     requirements: requirementView(snapshot),
     compliance: {
       policyIdentity: clone(content.policy.identity),
       caseReference: clone(content.caseReference),
       terminal: clone(content.decision.terminal),
       qualifyingPersons: clone(content.decision.qualifyingPersons || []),
+      basisAssessments: clone(content.decision.basisAssessments || []),
       calculations: clone(content.reasoning.calculations || []),
       informationNeeds: clone(content.decision.informationNeeds || []),
       policyGaps: clone(content.decision.policyGaps || []),
@@ -550,6 +595,7 @@ async function startLive({ companyContext, transport } = {}) {
     adapterIssues: clone(result.issues),
     operationEvidenceReferences: clone(result.operationEvidenceReferences),
   };
+  session.resolutionInputs = { strategyAvailability: clone(COMPLETED_DISCOVERY_AVAILABILITY) };
   session.replayCapture = createDiscoveryReplayRecord({ companyContext: session.companyContext, subject, result, savedAt: createdAt });
   evaluateSession(session, "LIVE_DISCOVERY_INITIAL_EVALUATION", new Date().toISOString());
   return clone(session);
@@ -581,6 +627,7 @@ function startReplay({ replayRecord, expectedCompanyContext } = {}) {
       storage: "BROWSER_LOCAL_LAB_TESTING",
     },
   };
+  session.resolutionInputs = { strategyAvailability: clone(COMPLETED_DISCOVERY_AVAILABILITY) };
   evaluateSession(session, "REPLAY_DISCOVERY_INITIAL_EVALUATION", replayedAt);
   return clone(session);
 }

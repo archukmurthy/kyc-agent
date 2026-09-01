@@ -1551,7 +1551,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:068d0274ac2737d97607a2fa5bd14f325d53c1e03b2f962aec69c1533cbefe04",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:04bba6cf9a46f28e82c1acdb8e792a890df2deddaf5a06692bb9044b59aa2aef",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:2cdaf556a8ada4e9dea6e3bd1426bffc1bcf6211cc1a65da7ca92b3230502ee5",
@@ -1574,7 +1588,27 @@
                 ],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:273af592d99ce0e9fa19986f6fb2f2ff78cdb311b4e22cbefc41b05230c98fd5",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:cd8c488b7212984ed319d453ae8fd7328477df0798c688d9d6539734704db005",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:6c6485a9fefa515e432eedafcff8027104bc4d42f3c5ec45cb534c61f556aeb1",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:30426c34ebdaabcb0152527584ccade379107438f083f3b4a3653a48706145e6",
@@ -1597,7 +1631,27 @@
                 ],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:95c2617203a92e37c38d7a1f45158dffc7ae2a031758f1442d2c9416379e119a",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:0c1bdef3064e9bc15b6d715a7e23bc9096d39d4a2be0614a77f00c594119e065",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:b741797e40d0c949b5d79af3cfb6815ecc64633c0fdbd24bc1b62c28e257a956",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:4b82b318750e3dcbfdd6b686d1eb028fdcd91b15e2d1f96714a11fcce064be6c",
@@ -1616,7 +1670,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:cfde12f7bd0c9e55cde8da401355f9c66b331c6a425b157e1007c22e65a8b327",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:4e701fb0af8a5fe401de25156f0721a8b2581e8e89da018f214b5ed8b4f1f94f",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:cc26be40c81dc661c50433d07a7ba6c88665b5725f8de256f7404765fa74036c",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:6018b5e8eaee377e9f44566c21f6c41365d0809525453c4f54d452bdd02efd9d",
@@ -1648,7 +1722,27 @@
                     "status": "UNRESOLVED"
                   }
                 ],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:187dfce4b93bdafe6c6831d5c2598de380b47472efccc0eca61bfd00f335287f",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:3daf677affc730454fb5422a7b9825ad563818a6e80025b48b61919da1ba21ba",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:e96e18cb63820a5034a24da47736ffc7ae57eb36b8c2e97a3e3e2e6842c583c2",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:9b8287a432f99af5aa7531c8943e7436583ed5d2b14d5000e3789976bbb7bff3",
@@ -1667,7 +1761,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:cb2774985cb831f7916bf76708397e2759779ea0876f9f6bfd7ab5498e76901a",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_DOCUMENT",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:d1269600f3c0c79c14a1516ec5594a5da245bdb811a3efd36bd48f1b5dcd79b8",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:da05c132cd36be8565fe385da516828f6053a3118c936c12dd12286ea6464c23",
@@ -1699,7 +1807,27 @@
                     "status": "UNRESOLVED"
                   }
                 ],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:711aa52b38967d310d0907b92a21c859cd778f2a4c3f79f60e93c6cf36535cb9",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:21f9fc444a078e9e97da2f9c8cdb42a104129cbc63cd51b06977f9413512fd34",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:b415305440729e0f56d90a587321c162b06d3ccc2237464da24a25d534528f11",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:fef59580b8543d77c598f930c8b09923ac444a55a7677caa6c9ced17dda4fd3f",
@@ -1718,7 +1846,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:91c29d15fead7f04a1fceef34ed0883d2693a593fff27ae29b5a8be75e20e991",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:09fcc5661e0dabc25265b3fa0977bcbe3a54d4d0ed00d2a64957aaac6fbb0f61",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "unresolved-path:calculation:383095018b0f091f228ab77f:calc-path-7863f541adbfcc01dbf6e05d",
@@ -1727,12 +1869,56 @@
                 "targetEntityId": "customer",
                 "concept": "ECONOMIC_EFFECTIVE_INTEREST",
                 "state": "OPEN",
-                "requirementIds": [],
+                "requirementIds": [
+                  "UBO-R01"
+                ],
                 "reasonCodes": [
                   "UNKNOWN_TEMPORAL_STATE"
                 ],
                 "relatedRelationshipIds": [
                   "graph-rel-b48cb2b194885927993960bc"
+                ],
+                "informationNeedIds": [
+                  "information-need:6018b5e8eaee377e9f44566c21f6c41365d0809525453c4f54d452bdd02efd9d",
+                  "information-need:da05c132cd36be8565fe385da516828f6053a3118c936c12dd12286ea6464c23"
+                ],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:187dfce4b93bdafe6c6831d5c2598de380b47472efccc0eca61bfd00f335287f",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:711aa52b38967d310d0907b92a21c859cd778f2a4c3f79f60e93c6cf36535cb9",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:21f9fc444a078e9e97da2f9c8cdb42a104129cbc63cd51b06977f9413512fd34",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:3daf677affc730454fb5422a7b9825ad563818a6e80025b48b61919da1ba21ba",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:b415305440729e0f56d90a587321c162b06d3ccc2237464da24a25d534528f11",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:e96e18cb63820a5034a24da47736ffc7ae57eb36b8c2e97a3e3e2e6842c583c2",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
                 ],
                 "calculationId": "calculation:383095018b0f091f228ab77f",
                 "pathId": "calc-path-7863f541adbfcc01dbf6e05d"
@@ -1744,12 +1930,37 @@
                 "targetEntityId": "customer",
                 "concept": "VOTING_EFFECTIVE_INTEREST",
                 "state": "OPEN",
-                "requirementIds": [],
+                "requirementIds": [
+                  "UBO-R04"
+                ],
                 "reasonCodes": [
                   "UNKNOWN_TEMPORAL_STATE"
                 ],
                 "relatedRelationshipIds": [
                   "graph-rel-e6af7ffe0c8244576677d3fb"
+                ],
+                "informationNeedIds": [
+                  "information-need:2cdaf556a8ada4e9dea6e3bd1426bffc1bcf6211cc1a65da7ca92b3230502ee5"
+                ],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:273af592d99ce0e9fa19986f6fb2f2ff78cdb311b4e22cbefc41b05230c98fd5",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:cd8c488b7212984ed319d453ae8fd7328477df0798c688d9d6539734704db005",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:6c6485a9fefa515e432eedafcff8027104bc4d42f3c5ec45cb534c61f556aeb1",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
                 ],
                 "calculationId": "calculation:585c9733a9c66658f0b886b7",
                 "pathId": "calc-path-4c1cc59b2bfbd57c306da2cd"
@@ -1761,13 +1972,57 @@
                 "targetEntityId": "customer",
                 "concept": "ECONOMIC_EFFECTIVE_INTEREST",
                 "state": "OPEN",
-                "requirementIds": [],
+                "requirementIds": [
+                  "UBO-R01"
+                ],
                 "reasonCodes": [
                   "UNKNOWN_PERCENTAGE",
                   "UNKNOWN_TEMPORAL_STATE"
                 ],
                 "relatedRelationshipIds": [
                   "graph-rel-8e01481991de60336792ae5e"
+                ],
+                "informationNeedIds": [
+                  "information-need:6018b5e8eaee377e9f44566c21f6c41365d0809525453c4f54d452bdd02efd9d",
+                  "information-need:da05c132cd36be8565fe385da516828f6053a3118c936c12dd12286ea6464c23"
+                ],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:187dfce4b93bdafe6c6831d5c2598de380b47472efccc0eca61bfd00f335287f",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:711aa52b38967d310d0907b92a21c859cd778f2a4c3f79f60e93c6cf36535cb9",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:21f9fc444a078e9e97da2f9c8cdb42a104129cbc63cd51b06977f9413512fd34",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:3daf677affc730454fb5422a7b9825ad563818a6e80025b48b61919da1ba21ba",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:b415305440729e0f56d90a587321c162b06d3ccc2237464da24a25d534528f11",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:e96e18cb63820a5034a24da47736ffc7ae57eb36b8c2e97a3e3e2e6842c583c2",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
                 ],
                 "calculationId": "calculation:f0e52c0abaedb3dff49bb953",
                 "pathId": "calc-path-1b075b16fc53545d57d0380c"
@@ -2499,7 +2754,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:63851739bc387bac5399767ad99d8fd20151f84539652bf40a5281097b458211",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:0ad19b40be1ddb98518366cb93a960cd817d1bf50fd22f6d1f4da50f73ecfb6d",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:8883fb064c0fb771dada54f11fd69bd498188645553ad3efafd2b9d21d6c1071",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:530b03f1c6eefde4b887aadf55b64e1684c9ac71c5c4bdfcddea8f0fb404b7b9",
@@ -2518,7 +2793,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:bb2fd91f816d51d3c69509c78c99bfec27838e7d41080088e7bfdc29e662ef66",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:27cf3a22ef762e3b544ae874247a538532c646b8fd8d9d0040bc800ee84704ae",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:cde60308a4d417e345c75157f943c5eb109c1bcbe48ceb03bb2666688720fd9d",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:54f6dff814eab4f16935e319406347024cdfc8e009e5371e78587cf71bc0ed32",
@@ -2537,7 +2832,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:b65a58016f36621e2badbdef10dece0c25f9410cdd95a01e6af42df3a01a40d0",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:4be64b239c752ad1152fc9a0c0131ef05ba550a7662820b3557e67218ad18a5a",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:58d1cc7aacd6db97839b100708af9a6213f7385173ec8d8a29f36c359a723cf2",
@@ -2556,7 +2865,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:c1a342ad653d35ce513745c66987008c7636201564e849ab354cbc711ce00128",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:b43bd73ff39d3c04ae6f4ec7f52baee5f8bc4048695c50cd0ac2b12ee204c763",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:66b6366c780c47091cbaff3a92d6c9da7c6fd05fe2b3f31680e87b9cb0aa187d",
@@ -2575,7 +2898,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:354506c45fbb0872387b60f350644fd3b3c98f435e5257ed79022bfae25b38db",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:3dc8df5d624fe21bed667cbe601275c333a5607fb6f3455f580c040bbed2371d",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:1ec405c6f0c52b6359650242bf3630de490c565fe53421e358a4fccc327a3241",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:701a61ceb395e83c44e5fd97798f448042d8f9584dc304bed0f164b208a592df",
@@ -2598,7 +2941,27 @@
                 ],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:55db23abd665d8ddb19b147880a2e38a98578097417089179710537538b07b38",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:0e8d7ddb809d11322afd24e4d7bcbae314680e0d54e4318bb800d4d3228c94eb",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:948e27ec7674aa60ce25cdf9815faa568024b333077964473ba63e2260a77df7",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:d8f296b510a73e20a8ccd52f67af3d6e9649c922a09d89f391e9f4862868ff70",
@@ -2617,7 +2980,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:0f284158d1415b35ce259b98230adb557eb6ff91b975117f4d0e0219b5ab8344",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_DOCUMENT",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:2fe686e30b42ddbc2066cfb440aef737eba6a9bfe63fa839005579e199f28c13",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               }
             ],
             "conflicts": [],
@@ -6152,7 +6529,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:93c76c3cf8042c10305f85bb9eac820285dfbf31f9ef2801c450632e42afe425",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:75ad77dace117590c07c24459f19977b518141efaf1b8ca0aee85c08c1f07178",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:34937a48ae3b975d40afd3d201c9d9073a789637163e2ea40f6ed3ec9ad8ff5b",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:34bf72abb24d58672454ee6f116ba4fec78010ed4af4fdfec76f416109a36472",
@@ -6171,7 +6568,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:a663003285eae5f17596bec99eff54d44d8ccde2a99927ab66aa44f733538f17",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_DOCUMENT",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:5f594b5691cad52699e8f9a7699c102c30cb8274933c3319f9f9927b85617439",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:559eb524eae78c17e561339d06dc9c8e7cc27e32377dcd12b9a72ce500c222e7",
@@ -6190,7 +6601,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:7a6e7706d951391ae3fb8dde5c9e348714ea8bfbf194d6c81fb73a956d3ad39c",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:e3fd53931442d637a33ae13255ebfe05d8292d480419cccaedd888c8c036ef0f",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:fa6f77e2c101e203a46d02f6d9c5cb1a1d8af5400eb0aadd505f49dcb1c9de58",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:86fc50bec2b8197d1deca3064cb61695dcf6ccabaeb02fad6699f4dcde8c2706",
@@ -6209,7 +6640,27 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:36c56fef85b58c202e096964b3f982e0fc41708062774897a5f8e57bd8da4910",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:1dec886c34f1e12a401b4201f08ce4838d63530be476f3c8180a6ffda9864abf",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:29abbd6f463b23784990d500dcc958bdecc10b48ed23c6072235209f9c36ef21",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:bcbc57240b83df45285cbde3b2fd8a4010b7750c1020db962ab229fdb8fe6d75",
@@ -6241,7 +6692,27 @@
                     "status": "COMPLETE"
                   }
                 ],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:3a4bef9dcd0cce72650b65542b0bf06672d2f5cee6b367a911b64bdeba60a233",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:ca47929a1b459a84c8f61d540554a7a9e74a23fd5f82b8edc4284f3f41652e3b",
+                    "actor": "SYSTEM",
+                    "strategy": "DISCOVERY",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:5f17375ebe677cc55247a03a7c1f126c639b13dff73978efd9c11a4fc220d939",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:c75c2671c295c85aa8a61006d31ca1fff00745f477afc2de372aa76f5385c42f",
@@ -6260,7 +6731,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:0666b8d288f86074dfb80f95a88cf3423249269304e17cf17b28a8aa45189793",
+                    "actor": "POLICY_CONTENT",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "REQUIRES_POLICY_CONTENT"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:c42dddd1628d6a65414ddd7f6d31ca6d3cda6c05bb0fa2c944b74a80cc4de8d0",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               },
               {
                 "unresolvedId": "information-need:d1364e7af40927dcd86fc838b1c8e32fddf0eb436c1b265a105986f81ee146d6",
@@ -6279,7 +6764,21 @@
                 "claimIds": [],
                 "conflictReferences": [],
                 "calculationReferences": [],
-                "existingEvidenceReferences": []
+                "existingEvidenceReferences": [],
+                "resolutionRoutes": [
+                  {
+                    "resolutionOptionId": "resolution-option:77e3bd95561e53be2b7dd3f9cf1f150ad7742b1e774c0f32421b329132b0b67d",
+                    "actor": "CUSTOMER",
+                    "strategy": "CUSTOMER_QUESTION",
+                    "applicabilityState": "APPLICABLE"
+                  },
+                  {
+                    "resolutionOptionId": "resolution-option:4d5cae5eeb01098417a87679b783c61ecf45c583c5cbd26a1c785a4e73c03544",
+                    "actor": "SYSTEM",
+                    "strategy": "EXISTING_EVIDENCE",
+                    "applicabilityState": "INAPPLICABLE"
+                  }
+                ]
               }
             ],
             "conflicts": [],

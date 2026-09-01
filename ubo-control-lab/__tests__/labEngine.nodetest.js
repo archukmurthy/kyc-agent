@@ -221,6 +221,50 @@ test("sanitized ASDA regression reuses exact registry identities and produces on
   assert.equal(view.graph.summary.investigationEntities, 12);
 });
 
+test("ASDA product snapshot keeps qualification, dimensions, unresolved inspection and planner state consistent", async () => {
+  const body = structuredClone(ASDA_REGRESSION);
+  body.ownershipGraph.edges.forEach((edge) => { if (edge.metadata) delete edge.metadata.currentState; });
+  let session = await startLive({
+    companyContext: { legalEntityName: "Example Delivery Customer Ltd", registrationNumber: "99000001", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => ({ status: 200, body }) },
+  });
+  session = reviewAll(session);
+  const view = session.snapshots.at(-1).view;
+  const people = view.graph.nodes.filter(({ category }) => category === "NATURAL_PERSON");
+  assert.equal(people.length, 3);
+  assert.equal(view.graph.qualifications.length, 0, "natural-person nodes must not become qualifying people without G2.3 output");
+  people.forEach((person) => {
+    const relationships = view.graph.relationships.filter(({ sourceEntityId }) => sourceEntityId === person.entityId);
+    assert.deepEqual(relationships.map(({ relationshipType }) => relationshipType), ["VOTING_RIGHTS"]);
+    assert.deepEqual(relationships[0].measurement, { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true });
+    assert.equal(view.graph.relationships.some(({ sourceEntityId, relationshipType }) => sourceEntityId === person.entityId && relationshipType === "ECONOMIC_OWNERSHIP"), false);
+  });
+  assert.equal(view.graph.unresolved.length, 35);
+  assert.equal(view.graph.unresolved.every(({ requirementIds }) => requirementIds.length > 0), true);
+  const unresolvedByRequirement = Object.fromEntries(["UBO-R01", "UBO-R02", "UBO-R03", "UBO-R04", "UBO-R05", "UBO-R06", "UBO-R07", "UBO-R08", "UBO-R09", "UBO-R10", "UBO-R11", "UBO-R12", "UBO-R13", "UBO-R14"]
+    .map((requirementId) => [requirementId, view.graph.unresolved.filter(({ requirementIds }) => requirementIds.includes(requirementId)).length]));
+  assert.deepEqual(unresolvedByRequirement, {
+    "UBO-R01": 16, "UBO-R02": 0, "UBO-R03": 0, "UBO-R04": 14, "UBO-R05": 1, "UBO-R06": 1, "UBO-R07": 0,
+    "UBO-R08": 1, "UBO-R09": 0, "UBO-R10": 0, "UBO-R11": 1, "UBO-R12": 1, "UBO-R13": 0, "UBO-R14": 0,
+  });
+  assert.equal(view.graph.unresolved.reduce((sum, item) => sum + item.requirementIds.length, 0), 35);
+  assert.equal(view.plan.state, "CUSTOMER_RESOLUTION", "completed Discovery must not be recommended again as an untried system wave");
+  assert.deepEqual(view.resolutionExplanation, {
+    ...view.resolutionExplanation,
+    openInformationNeeds: 20,
+    currentResolutionOptions: 57,
+    currentWave: { state: "CUSTOMER_RESOLUTION", actor: "CUSTOMER", actionCount: 18 },
+    systemActionsRemaining: 0,
+    customerResolvableNeeds: 18,
+    internalReviewNeeds: 0,
+    internalReviewActions: 1,
+    policyContentBlockedNeeds: 2,
+    noCustomerAction: false,
+    explanationCode: "CUSTOMER_RESOLUTION_NOW_AVAILABLE",
+  });
+  assert.equal(view.plan.recommendedWave.customerBundles.length, 9);
+});
+
 test("corroborating legacy assertions coalesce after exact-ID reuse without doubling ownership", async () => {
   const body = structuredClone(ASDA_REGRESSION);
   body.ownershipGraph.nodes = body.ownershipGraph.nodes.slice(0, 2);
@@ -310,6 +354,9 @@ test("browser product exposes disabled Evidence, feedback export and Lab-only lo
   assert.match(source, /Run fresh live Discovery/);
   assert.match(source, /Saved locally in this browser — Lab testing only/);
   assert.match(source, /START_REPLAY/);
+  const customerPanelSource = source.slice(source.indexOf("function CustomerPanel"), source.indexOf("function Requirements"));
+  assert.equal((customerPanelSource.match(/h\(UboJourney/g) || []).length, 1);
+  assert.equal((customerPanelSource.match(/h\(OwnershipGraph/g) || []).length, 0, "Customer workspace must not render a duplicate graph below UboJourney");
   assert.match(source + html + replayStore, /localStorage|discovery-replays\.v1/);
   assert.doesNotMatch(source + html + replayStore, /api\/research|type=["']file|indexedDB|entity_dossiers|journey_state/i);
 });

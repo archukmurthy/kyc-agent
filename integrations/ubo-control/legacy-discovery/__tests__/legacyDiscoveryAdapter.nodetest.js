@@ -87,6 +87,26 @@ test("L03 voting source becomes VOTING_RIGHTS and never economic ownership", asy
   });
 });
 
+test("Companies House LLP voting bands retain their range instead of degrading to Unknown", async () => {
+  const body = response({ edges: [edge("llp-vote", "legacy-owner-node", "legacy-root-node", {
+    ownershipPercentage: 25,
+    ownershipIsMinimum: true,
+    metadata: { naturesOfControl: ["voting-rights-25-to-50-percent-limited-liability-partnership"] },
+  })] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.deepEqual(result.candidateFacts.map(({ relationship, measurement }) => ({ relationship, measurement })), [{
+    relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
+    measurement: {
+      type: PERCENTAGE_VALUE_TYPE.RANGE,
+      lowerBound: 25,
+      upperBound: 50,
+      lowerInclusive: false,
+      upperInclusive: true,
+    },
+  }]);
+  assert.equal(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS), false);
+});
+
 test("L04 ambiguous voting/economic source is omitted and remains INCONCLUSIVE with a stable issue", async () => {
   const { result } = await discoverFixture("L04");
   assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.INCONCLUSIVE);
