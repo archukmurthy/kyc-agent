@@ -1,6 +1,7 @@
 "use strict";
 
 const { validateEvidenceGraph } = require("../a1/domain");
+const { validateTypedRelationshipLineage } = require("../r4/domain");
 
 const SUPPORT_STATES = Object.freeze(["supported", "supported_with_qualification", "needs_verification", "not_supported"]);
 const REQUEST_STATUSES = Object.freeze(["requested", "discovered"]);
@@ -32,6 +33,8 @@ function validateA3Bundle(bundle) {
   if (!Array.isArray(factArtifactSupports)) throw new Error("bundle.factArtifactSupports must be an array");
   const factArtifactLocators = bundle.factArtifactLocators === undefined ? [] : bundle.factArtifactLocators;
   if (!Array.isArray(factArtifactLocators)) throw new Error("bundle.factArtifactLocators must be an array");
+  const typedRelationships = bundle.typedRelationships === undefined ? [] : bundle.typedRelationships;
+  if (!Array.isArray(typedRelationships)) throw new Error("bundle.typedRelationships must be an array");
   const runs = byId(bundle.baseGraph.extractionRuns, "extractionRuns");
   const artifacts = byId(bundle.baseGraph.artifacts, "artifacts");
   const facts = byId(bundle.facts, "facts");
@@ -100,6 +103,7 @@ function validateA3Bundle(bundle) {
     if (attempt.targetFactId) required(facts, attempt.targetFactId, "verification.targetFactId");
     if (!VERIFICATION_OUTCOMES.includes(attempt.outcome)) throw new Error(`verification ${attempt.id} has invalid outcome`);
   }
+  validateTypedRelationshipLineage({ facts: [...facts.values()], typedRelationships, factArtifactSupports, factArtifactLocators });
   return bundle;
 }
 

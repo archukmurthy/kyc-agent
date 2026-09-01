@@ -97,3 +97,14 @@ R2 creates or reopens A3 interpretation history only. It does not recollect Evid
 - Evidence Lab extends the existing targeted-interpretation experience with explicit no-AI readiness checks, PDF page/image dimension reporting, provider-use preview, and human-readable persisted locator history.
 
 R3 never rewrites canonical Artifacts, changes their SHA-256, persists raw provider exchanges, fabricates locations, infers UBO/currentness/operative claims, crosses Evidence Assets or contexts, or implements R4 or A4b.
+
+## Consumer Readiness R4 additions
+
+- `evidence/r4/domain.js` owns the versioned provider-neutral subject–relationship–object grammar and deterministic party, vocabulary, value, temporal, direction, and lineage validation.
+- `evidence/r4/pscMapper.js` is an explicit bounded deterministic Companies House PSC nature-of-control adapter. It appends derived Facts and existing derivation lineage only for unambiguous mappings; it never rewrites A2/A3 source Facts or automatically backfills history.
+- `db/migrations/017_evidence_typed_relationships.sql` adds one optional typed relationship extension keyed one-to-one by an ordinary `evidence_facts` ID. Core grammar remains queryable while bounded source snapshots and metadata remain validated JSONB.
+- The existing A3/R2/R3 interpretation path may accept an optional provider candidate, validates it inside Evidence, persists only valid extensions, and retains a safe ordinary Fact plus an immutable limitation when typing fails.
+- Existing R2 result/history and Evidence Lab cards show human-readable source assertions, values, temporal state, support locators, and provider/mapper lineage while retaining the ordinary Fact for reconstruction.
+- `scripts/evidence-r4-db-smoke.js` verifies migration 017, typed range semantics, one-Fact/one-extension persistence, Fact-to-Artifact/locator reconstruction, and immutable prior evidence against only the guarded disposable Evidence database.
+
+R4 represents individual source assertions only. It does not create canonical parties, compute direct or indirect UBO status, select winners or operative values, infer currentness, determine KYC satisfaction, run A4a automatically, or implement A4b.

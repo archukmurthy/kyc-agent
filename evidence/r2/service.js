@@ -7,10 +7,21 @@ function safeMessage(error) {
   const allowed = new Set(["unsupported_media_type","media_too_large","media_limit_exceeded","invalid_media","encrypted_media","unsupported_model_media","provider_media_rejected","provider_not_configured","provider_authentication_failed","provider_timeout","provider_unavailable","provider_failed","provider_malformed_output","provider_output_truncated","artifact_integrity_mismatch","artifact_storage_unavailable","no_supported_facts","database_persistence_failed"]);
   return allowed.has(error?.code) ? String(error.message || error.code).slice(0, 500) : "Targeted interpretation failed";
 }
+function publicTypedRelationship(relationship) {
+  if (!relationship) return null;
+  if (relationship.subject && relationship.object && relationship.value && relationship.mapping) return relationship;
+  return {
+    factId:relationship.factId,schemaVersion:relationship.relationshipSchemaVersion,relationshipType:relationship.relationshipType,
+    subject:{partyType:relationship.subjectPartyType,...(relationship.subjectSnapshot||{})},object:{partyType:relationship.objectPartyType,...(relationship.objectSnapshot||{})},
+    value:{kind:relationship.valueKind,measurementType:relationship.measurementType,exact:relationship.exactValue,lower:relationship.rangeLower,upper:relationship.rangeUpper,lowerInclusive:relationship.lowerInclusive,upperInclusive:relationship.upperInclusive,numerator:relationship.numerator,denominator:relationship.denominator,qualitative:relationship.qualitativeValue,unit:relationship.unit},
+    temporal:{state:relationship.temporalState,effectiveFrom:relationship.effectiveFrom,effectiveTo:relationship.effectiveTo,sourceEffectiveDate:relationship.sourceEffectiveDate,precision:relationship.temporalPrecision||{}},
+    sourceSpecificMetadata:relationship.sourceSpecificMetadata||{},qualifications:relationship.qualifications||[],mapping:{method:relationship.mappingMethod,id:relationship.mapperId,version:relationship.mapperVersion,reference:relationship.mapperReference},createdAt:relationship.createdAt,
+  };
+}
 function publicFact(fact, requestedConcepts) {
   const responsive = requestedConcepts.some((item) => item.concept === fact.semanticConceptId);
   const persistedRequestStatus=fact.requestStatus==="requested"&&!fact.informationNeedId&&!fact.schemaFieldId?"discovered":fact.requestStatus;
-  return { id:fact.id,semanticConceptId:fact.semanticConceptId,value:fact.factValue,requestRelation:responsive?"requested_concept_response":"open_discovery",persistedRequestStatus,groundingType:fact.groundingType,supportState:fact.supportState,supportingArtifactIds:fact.supportingArtifactIds||[fact.artifactId],supportLocators:fact.supportLocators||[],createdAt:fact.createdAt };
+  return { id:fact.id,semanticConceptId:fact.semanticConceptId,value:fact.factValue,requestRelation:responsive?"requested_concept_response":"open_discovery",persistedRequestStatus,groundingType:fact.groundingType,supportState:fact.supportState,supportingArtifactIds:fact.supportingArtifactIds||[fact.artifactId],supportLocators:fact.supportLocators||[],typedRelationship:publicTypedRelationship(fact.typedRelationship),createdAt:fact.createdAt };
 }
 function buildResult(operation, interpreted, request, completedAt) {
   const facts = [...(interpreted.requestedFacts||[]),...(interpreted.discoveredFacts||[])];
@@ -28,6 +39,7 @@ function buildResult(operation, interpreted, request, completedAt) {
     discoveredFacts:discovered,
     completeness,
     limitations:[...new Set([...(completeness.input?.limitations||[]),...(completeness.extraction?.limitations||[])])],
+    typedRelationshipCount:uniqueFacts.filter((fact)=>fact.typedRelationship).length,
     correlation:request.correlation,
     downstreamEvaluation:"not_performed",
   };
@@ -84,4 +96,4 @@ class TargetedInterpretationService {
   async preflight({artifactIds=[]},trustedAuthorization){const authorization=validateAuthorization(trustedAuthorization);if(!this.interpreter.preflight)throw r2Error("preflight_unavailable","Media preflight is unavailable",503);return this.interpreter.preflight({artifactIds,tenantId:authorization.tenantId,contextId:authorization.contextId});}
 }
 
-module.exports={TargetedInterpretationService,buildResult,publicFact,safeMessage};
+module.exports={TargetedInterpretationService,buildResult,publicFact,publicTypedRelationship,safeMessage};

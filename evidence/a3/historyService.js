@@ -6,7 +6,20 @@ function mapLocator(row) {
   return { id: row.id, artifactId: value(row, "artifactId", "artifact_id"), ordinal: value(row, "locatorOrdinal", "locator_ordinal"), kind: value(row, "locatorKind", "locator_kind"), jsonPath: value(row, "jsonPath", "json_path"), domReference: value(row, "domReference", "dom_reference"), pageStart: value(row, "pageStart", "page_start"), pageEnd: value(row, "pageEnd", "page_end"), excerpt: value(row, "supportExcerpt", "support_excerpt"), description: value(row, "supportDescription", "support_description"), region: row.region || null, metadata: value(row, "locatorMetadata", "locator_metadata") || {} };
 }
 
-function mapFact(row, supports = [], locators = []) {
+function mapRelationship(row) {
+  if (!row) return null;
+  return {
+    factId: value(row, "factId", "fact_id"), schemaVersion: value(row, "relationshipSchemaVersion", "relationship_schema_version"), relationshipType: value(row, "relationshipType", "relationship_type"),
+    subject: { partyType: value(row, "subjectPartyType", "subject_party_type"), ...(value(row, "subjectSnapshot", "subject_snapshot") || {}) },
+    object: { partyType: value(row, "objectPartyType", "object_party_type"), ...(value(row, "objectSnapshot", "object_snapshot") || {}) },
+    value: { kind: value(row, "valueKind", "value_kind"), measurementType: value(row, "measurementType", "measurement_type"), exact: value(row, "exactValue", "exact_value"), lower: value(row, "rangeLower", "range_lower"), upper: value(row, "rangeUpper", "range_upper"), lowerInclusive: value(row, "lowerInclusive", "lower_inclusive"), upperInclusive: value(row, "upperInclusive", "upper_inclusive"), numerator: row.numerator, denominator: row.denominator, qualitative: value(row, "qualitativeValue", "qualitative_value"), unit: row.unit },
+    temporal: { state: value(row, "temporalState", "temporal_state"), effectiveFrom: value(row, "effectiveFrom", "effective_from"), effectiveTo: value(row, "effectiveTo", "effective_to"), sourceEffectiveDate: value(row, "sourceEffectiveDate", "source_effective_date"), precision: value(row, "temporalPrecision", "temporal_precision") || {} },
+    sourceSpecificMetadata: value(row, "sourceSpecificMetadata", "source_specific_metadata") || {}, qualifications: row.qualifications || [],
+    mapping: { method: value(row, "mappingMethod", "mapping_method"), id: value(row, "mapperId", "mapper_id"), version: value(row, "mapperVersion", "mapper_version"), reference: value(row, "mapperReference", "mapper_reference") }, createdAt: value(row, "createdAt", "created_at"),
+  };
+}
+
+function mapFact(row, supports = [], locators = [], relationships = []) {
   return {
     id: row.id,
     extractionRunId: value(row, "extractionRunId", "extraction_run_id"),
@@ -23,6 +36,7 @@ function mapFact(row, supports = [], locators = []) {
     createdAt: value(row, "createdAt", "created_at"),
     supportingArtifactIds: supports.filter((support) => value(support, "factId", "fact_id") === row.id).map((support) => value(support, "artifactId", "artifact_id")),
     supportLocators: locators.filter((locator) => value(locator, "factId", "fact_id") === row.id).map(mapLocator),
+    typedRelationship: mapRelationship(relationships.find((relationship) => value(relationship, "factId", "fact_id") === row.id)),
   };
 }
 
@@ -73,7 +87,7 @@ class EvidenceInterpretationHistoryService {
     if (!artifact) return { found: false, artifactId, runs: [], externalSourceCall: false, aiCall: false };
     if (!artifact.authorized) { const error = new Error("The Artifact is not accessible to the supplied Evidence context"); error.statusCode = 403; throw error; }
     const history = await this.repository.listInterpretations(artifactId);
-    const facts = (history.facts || []).map((fact) => mapFact(fact, history.factArtifactSupports || [], history.factArtifactLocators || []));
+    const facts = (history.facts || []).map((fact) => mapFact(fact, history.factArtifactSupports || [], history.factArtifactLocators || [], history.typedRelationships || []));
     return {
       found: true,
       artifact: {
@@ -91,4 +105,4 @@ class EvidenceInterpretationHistoryService {
   }
 }
 
-module.exports = { EvidenceInterpretationHistoryService, mapFact, mapLocator, mapRun };
+module.exports = { EvidenceInterpretationHistoryService, mapFact, mapLocator, mapRelationship, mapRun };

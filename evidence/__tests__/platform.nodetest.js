@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "R3",
+    stage: "R4",
     status: "available",
   });
 });
@@ -34,11 +34,12 @@ test("the Evidence Lab exposes generic R1 private Artifact ingestion", () => {
   assert.doesNotMatch(js,/Authorized reopen succeeded/);
 });
 
-test("the Evidence Lab extends the stable targeted-interpretation boundary for R3",()=>{
+test("the Evidence Lab extends the stable targeted-interpretation boundary through R4",()=>{
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/R3 — MULTIMODAL TARGETED INTERPRETATION/);assert.match(lab,/one Evidence Asset/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/Check media readiness/);
+  assert.match(lab,/R4 — TYPED RELATIONAL INTERPRETATION/);assert.match(lab,/one Evidence Asset/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/Check media readiness/);
   assert.match(js,/\/api\/evidence\/r2-options/);assert.match(js,/\/api\/evidence\/r2-interpret/);assert.match(js,/\/api\/evidence\/r2-history/);assert.match(js,/Selection makes no AI call/);assert.match(js,/Provider call expected for a new operation/);assert.match(js,/A4a evaluation: <b>NO/);assert.match(lab,/Prepare deliberate new interpretation/);assert.match(js,/Existing operation returned\. Provider call: NO/);
   assert.match(js,/\$\("r2Run"\)\.disabled=!ready\|\|!supported/);assert.match(js,/\/api\/evidence\/r2-preflight/);assert.match(js,/Media readiness passed\. AI call: NO/);
+  assert.match(js,/SOURCE ASSERTION — TYPED R4/);assert.match(js,/subject → relationship → object/);assert.match(js,/UBO\/KYC CONCLUSION — NOT PERFORMED/);
 });
 
 test("GET /api/evidence/status returns the boundary status", () => {
@@ -54,6 +55,12 @@ test("the status route rejects methods outside its GET contract", () => {
   assert.equal(res.statusCode, 405);
   assert.equal(res.headers.Allow, "GET");
   assert.deepEqual(res.body, { error: "Method not allowed" });
+});
+
+test("the migration applier lets asynchronous database handles drain before exit", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "..", "db", "apply.js"), "utf8");
+  assert.doesNotMatch(source, /process\.exit\s*\(/);
+  assert.match(source, /process\.exitCode\s*=\s*1/);
 });
 
 test("the Evidence Lab exposes the isolated A2 live and fixture route", () => {

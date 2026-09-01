@@ -8,6 +8,7 @@ const A3_TABLES = Object.freeze([
   ["facts", "evidence_facts", [["id", "id"], ["extraction_run_id", "extractionRunId"], ["artifact_id", "artifactId"], ["information_need_id", "informationNeedId"], ["schema_field_id", "schemaFieldId"], ["semantic_concept_id", "semanticConceptId"], ["request_status", "requestStatus"], ["grounding_type", "groundingType"], ["fact_value", "factValue", "jsonb"], ["raw_representation", "rawRepresentation"], ["support_state", "supportState"], ["support_signals", "supportSignals", "jsonb"], ["source_policy_context", "sourcePolicyContext", "jsonb"], ["created_at", "createdAt"]]],
   ["factArtifactSupports", "evidence_fact_artifact_support", [["fact_id", "factId"], ["artifact_id", "artifactId"], ["created_at", "createdAt"]]],
   ["factArtifactLocators", "evidence_fact_artifact_locators", [["id", "id"], ["fact_id", "factId"], ["artifact_id", "artifactId"], ["locator_ordinal", "locatorOrdinal"], ["locator_kind", "locatorKind"], ["json_path", "jsonPath"], ["dom_reference", "domReference"], ["page_start", "pageStart"], ["page_end", "pageEnd"], ["support_excerpt", "supportExcerpt"], ["support_description", "supportDescription"], ["region", "region", "jsonb"], ["locator_metadata", "locatorMetadata", "jsonb"], ["created_at", "createdAt"]]],
+  ["typedRelationships", "evidence_fact_typed_relationships", [["fact_id", "factId"], ["relationship_schema_version", "relationshipSchemaVersion"], ["relationship_type", "relationshipType"], ["subject_party_type", "subjectPartyType"], ["subject_snapshot", "subjectSnapshot", "jsonb"], ["object_party_type", "objectPartyType"], ["object_snapshot", "objectSnapshot", "jsonb"], ["value_kind", "valueKind"], ["measurement_type", "measurementType"], ["exact_value", "exactValue"], ["range_lower", "rangeLower"], ["range_upper", "rangeUpper"], ["lower_inclusive", "lowerInclusive"], ["upper_inclusive", "upperInclusive"], ["numerator", "numerator"], ["denominator", "denominator"], ["qualitative_value", "qualitativeValue"], ["unit", "unit"], ["temporal_state", "temporalState"], ["effective_from", "effectiveFrom"], ["effective_to", "effectiveTo"], ["source_effective_date", "sourceEffectiveDate"], ["temporal_precision", "temporalPrecision", "jsonb"], ["source_specific_metadata", "sourceSpecificMetadata", "jsonb"], ["qualifications", "qualifications", "jsonb"], ["mapping_method", "mappingMethod"], ["mapper_id", "mapperId"], ["mapper_version", "mapperVersion"], ["mapper_reference", "mapperReference"], ["created_at", "createdAt"]]],
   ["derivations", "evidence_fact_derivations", [["derived_fact_id", "derivedFactId"], ["input_fact_id", "inputFactId"], ["transformation_id", "transformationId"], ["transformation_version", "transformationVersion"], ["transformation_reference", "transformationReference"], ["derived_at", "derivedAt"], ["created_at", "createdAt"]]],
   ["verifications", "evidence_verification_attempts", [["id", "id"], ["target_extraction_run_id", "targetExtractionRunId"], ["target_fact_id", "targetFactId"], ["verification_extraction_run_id", "verificationExtractionRunId"], ["outcome", "outcome"], ["performed_at", "performedAt"], ["verification_metadata", "verificationMetadata", "jsonb"], ["created_at", "createdAt"]]],
 ]);
@@ -86,7 +87,7 @@ class PostgresA3Repository {
       WHERE er.artifact_id = $1 AND er.extractor_type = 'deterministic'`, [artifactId]);
     return rows(result).map((row) => ({ schemaFieldId: row.schema_field_id, extractedValue: row.extracted_value }));
   }
-  async appendInterpretation({ run, runArtifacts = [], facts = [], factArtifactSupports = [], factArtifactLocators = [], derivations = [], verifications = [] }) {
+  async appendInterpretation({ run, runArtifacts = [], facts = [], factArtifactSupports = [], factArtifactLocators = [], typedRelationships = [], derivations = [], verifications = [] }) {
     if (typeof this.db.transaction !== "function") throw new Error("Append interpretation requires transaction-capable db");
     return this.db.transaction(async (tx) => {
       let persistenceStage = "extraction_run";
@@ -101,9 +102,9 @@ class PostgresA3Repository {
         ["support_assessment", "supportAssessment", "jsonb"], ["error_code", "errorCode"], ["error_message", "errorMessage"],
       ];
       const runQuery = buildInsert("evidence_extraction_runs", baseColumns, run); await tx.query(runQuery.text, runQuery.params);
-      const collections = { runArtifacts, facts, factArtifactSupports, factArtifactLocators, derivations, verifications };
+      const collections = { runArtifacts, facts, factArtifactSupports, factArtifactLocators, typedRelationships, derivations, verifications };
       for (const [name, table, columns] of A3_TABLES) for (const row of collections[name]) { persistenceStage = name; const query = buildInsert(table, columns, row); await tx.query(query.text, query.params); }
-      return { runId: run.id, persisted: { runArtifacts: runArtifacts.length, facts: facts.length, factArtifactSupports: factArtifactSupports.length, factArtifactLocators: factArtifactLocators.length, derivations: derivations.length, verifications: verifications.length } };
+      return { runId: run.id, persisted: { runArtifacts: runArtifacts.length, facts: facts.length, factArtifactSupports: factArtifactSupports.length, factArtifactLocators: factArtifactLocators.length, typedRelationships: typedRelationships.length, derivations: derivations.length, verifications: verifications.length } };
       } catch (error) {
         error.persistenceStage = error.persistenceStage || persistenceStage;
         throw error;
@@ -130,13 +131,17 @@ class PostgresA3Repository {
       JOIN evidence_facts f ON f.id=locator.fact_id JOIN evidence_extraction_runs r ON r.id=f.extraction_run_id
       LEFT JOIN evidence_extraction_run_artifacts selected ON selected.extraction_run_id=r.id
       WHERE r.artifact_id=$1 OR selected.artifact_id=$1 ORDER BY locator.created_at, locator.fact_id, locator.artifact_id, locator.locator_ordinal`, [artifactId]);
+    const relationshipResult = await this.db.query(`SELECT DISTINCT relationship.* FROM evidence_fact_typed_relationships relationship
+      JOIN evidence_facts f ON f.id=relationship.fact_id JOIN evidence_extraction_runs r ON r.id=f.extraction_run_id
+      LEFT JOIN evidence_extraction_run_artifacts selected ON selected.extraction_run_id=r.id
+      WHERE r.artifact_id=$1 OR selected.artifact_id=$1 ORDER BY relationship.created_at, relationship.fact_id`, [artifactId]);
     const inputArtifactResult = await this.db.query(`SELECT DISTINCT ar.id, ar.asset_id, ar.representation_type, ar.media_type, ar.size_bytes,
       ar.fingerprint_algorithm, ar.fingerprint_value, ar.captured_at, ar.artifact_metadata
       FROM evidence_artifacts ar JOIN evidence_extraction_run_artifacts input ON input.artifact_id=ar.id
       JOIN evidence_extraction_runs r ON r.id=input.extraction_run_id
       LEFT JOIN evidence_extraction_run_artifacts selected ON selected.extraction_run_id=r.id
       WHERE r.artifact_id=$1 OR selected.artifact_id=$1`, [artifactId]);
-    return { runs: rows(runResult), facts: rows(factResult), runArtifacts: rows(runArtifactResult), factArtifactSupports: rows(supportResult), factArtifactLocators: rows(locatorResult), inputArtifacts: rows(inputArtifactResult) };
+    return { runs: rows(runResult), facts: rows(factResult), runArtifacts: rows(runArtifactResult), factArtifactSupports: rows(supportResult), factArtifactLocators: rows(locatorResult), typedRelationships: rows(relationshipResult), inputArtifacts: rows(inputArtifactResult) };
   }
 }
 

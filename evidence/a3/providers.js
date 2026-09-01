@@ -22,6 +22,14 @@ const SEMANTIC_DISCOVERY_OBJECTIVE = Object.freeze([
 const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
+function mapTypedRelationshipCandidate(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input || null;
+  const party = (value) => value && typeof value === "object" ? { partyType: value.party_type, name: value.name, description: value.description, jurisdiction: value.jurisdiction, identifiers: value.identifiers, qualifiers: value.qualifiers } : value;
+  const value = input.value && typeof input.value === "object" ? { kind: input.value.kind, measurementType: input.value.measurement_type, value: input.value.value, lower: input.value.lower, upper: input.value.upper, lowerInclusive: input.value.lower_inclusive, upperInclusive: input.value.upper_inclusive, numerator: input.value.numerator, denominator: input.value.denominator, unit: input.value.unit } : input.value;
+  const temporal = input.temporal && typeof input.temporal === "object" ? { state: input.temporal.state, effectiveFrom: input.temporal.effective_from, effectiveTo: input.temporal.effective_to, sourceEffectiveDate: input.temporal.source_effective_date, precision: input.temporal.precision } : input.temporal;
+  return { directionEstablished: input.direction_established, relationshipType: input.relationship_type, subject: party(input.subject), object: party(input.object), value, temporal, sourceSpecificMetadata: input.source_specific_metadata, qualifications: input.qualifications };
+}
+
 class FixtureSemanticProvider extends SemanticExtractionProvider {
   constructor(options = {}) { super(); this.variant = options.variant || "primary"; }
   capabilities() { return { contentKinds: ["text", "image", "document"], maxRequestBytes: 32 * 1024 * 1024 }; }
@@ -58,7 +66,7 @@ function parseProviderJson(text) {
 }
 
 class AnthropicSemanticProvider extends SemanticExtractionProvider {
-  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = "evidence-r3-live-v1-multimodal-locators" } = {}) {
+  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = "evidence-r4-live-v1-typed-relations" } = {}) {
     super(); this.apiKey = apiKey; this.model = model; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference;
   }
   configuration() { return { provider: "anthropic", model: this.model || null, instructionReference: this.instructionReference, ready: !!(this.apiKey && this.model) }; }
@@ -73,7 +81,14 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const instruction = [
       "Interpret only the verified preserved evidence supplied below.",
       "Return one JSON object with facts, requested_concept_outcomes, completeness, and support.",
-      "Each facts item must contain concept, value, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids, support_locators, semanticAmbiguity, and ambiguous. semantic_role must be business_fact for a persistable semantic fact.",
+      "Each facts item must contain concept, value, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids, support_locators, semanticAmbiguity, and ambiguous. semantic_role must be business_fact for a persistable semantic fact. It may additionally contain one typed_relationship candidate.",
+      "A typed_relationship is optional and must describe exactly the same single source assertion as its ordinary Fact. Never put several independent relationships in one typed relationship or relationship array; emit one Fact per directed relationship.",
+      "Only return typed_relationship when the evidence explicitly supports both parties, the relationship meaning, and subject→relationship→object direction. If meaning or direction is ambiguous, omit typed_relationship while retaining the safe ordinary Fact.",
+      "typed_relationship must contain direction_established=true, relationship_type, subject, object, value, temporal, source_specific_metadata, and qualifications. Party objects use party_type plus a source name or description. They are source snapshots, never canonical identities.",
+      "Allowed relationship_type values are ECONOMIC_OWNERSHIP, VOTING_RIGHTS, APPOINTMENT_RIGHTS, REMOVAL_RIGHTS, FORMAL_DECISION_RIGHTS, SIGNIFICANT_INFLUENCE_OR_CONTROL, DIRECTOR_OF, OFFICER_OF, AUTHORIZED_SIGNATORY_FOR, CONTROL_OVER, SETTLOR_OF, TRUSTEE_OF, PROTECTOR_OF, BENEFICIARY_OF, NOMINEE_FOR, ACTS_ON_BEHALF_OF, and OTHER. OTHER is only for an understood out-of-vocabulary relationship and must retain source_specific_metadata.originalRelationshipLabel. There is no unknown relationship code.",
+      "typed_relationship.value uses kind EXACT, RANGE, QUALITATIVE, or UNKNOWN and measurement_type percentage, count_of_total, absolute_quantity, qualitative, or none. Preserve exact bounds and inclusivity. Never convert a range to an exact value, qualitative wording to a number, or UNKNOWN to zero.",
+      "typed_relationship.temporal.state must be current, ceased, historical, or unknown. Do not infer current solely because no cease date appears.",
+      "Do not return UBO/controller status, threshold decisions, indirect ownership calculations, winner selection, KYC satisfaction, or other downstream conclusions as typed relationships.",
       "The verified inputs are separate preserved Artifacts belonging to one Evidence Asset. Interpret them together where appropriate while preserving every Artifact boundary.",
       "supporting_artifact_ids must contain only the input Artifact IDs that directly support that fact. Use more than one ID only when the fact is jointly supported. Do not claim every run input supports every fact.",
       "support_locators must contain one or more entries for every supporting_artifact_id. Each entry must include artifact_id and a bounded excerpt or truthful visual description.",
@@ -120,7 +135,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const requestByConcept = new Map(requestedConcepts.map((item) => [item.concept, item]));
     const facts = parsed.facts.filter((item) => item && item.concept && item.value !== undefined).map((item) => {
       const request = requestByConcept.get(item.concept); const isRequested = item.requested === true && !!request;
-      return { concept: String(item.concept), value: item.value, raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: Array.isArray(item.support_locators) ? item.support_locators : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous };
+      return { concept: String(item.concept), value: item.value, raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: Array.isArray(item.support_locators) ? item.support_locators : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate: mapTypedRelationshipCandidate(item.typed_relationship) };
     });
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
     const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
@@ -129,4 +144,4 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
   }
 }
 
-module.exports = { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, parseProviderJson };
+module.exports = { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, parseProviderJson };
