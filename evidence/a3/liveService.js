@@ -3,8 +3,9 @@
 const { randomUUID } = require("node:crypto");
 const { sha256 } = require("../a1/domain");
 const { runSemanticExtraction } = require("./extractor");
+const { interpretationMediaSupported, preflightVerifiedInputs } = require("./media");
 
-const LIVE_MEDIA_TYPES = Object.freeze(["application/json", "text/html"]);
+const LIVE_MEDIA_TYPES = Object.freeze(["application/json", "text/html", "application/pdf", "image/png", "image/jpeg"]);
 const LAB_CONTEXT = Object.freeze({ schemaReference: "evidence-lab:a3-standalone-current", schemaVersionReference: null, tenantConfigVersion: null, contextSource: "standalone_evidence_lab_default" });
 const LAB_REQUESTED_CONCEPTS = Object.freeze([
   Object.freeze({ concept: "business_name", description: "The registered or legal business name stated by the evidence", schemaFieldId: "business_name", informationNeedId: null }),
@@ -13,7 +14,7 @@ const LAB_REQUESTED_CONCEPTS = Object.freeze([
 
 function liveError(code, message, statusCode = 400, details = {}) { return Object.assign(new Error(message), { code, statusCode, details }); }
 function sameValue(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
-function mediaSupported(mediaType) { const type = String(mediaType || "").split(";")[0].trim().toLowerCase(); return LIVE_MEDIA_TYPES.includes(type) || type.endsWith("+json"); }
+function mediaSupported(mediaType) { return interpretationMediaSupported(mediaType); }
 function transientPersistenceFailure(error) {
   const code = String(error?.code || "");
   if (["40001", "40P01", "08000", "08003", "08006", "57P01", "57P02", "57P03", "53300"].includes(code)) return true;
@@ -48,7 +49,7 @@ class LiveArtifactInterpretationService {
 
   buildRun(artifacts, context, startedAt, inputCompleteness) {
     const primary = artifacts[0];
-    return { id: this.id(), assetId: primary.assetId, artifactId: primary.id, extractorType: "ai", extractorName: "generic-semantic-artifact-interpreter", extractorVersion: "a3-live-v4-multi-artifact", schemaReference: context.schemaReference, schemaVersionReference: context.schemaVersionReference || null, tenantConfigVersion: context.tenantConfigVersion || null, status: "failed", startedAt, completedAt: null, runMetadata: { inputMode: artifacts.length > 1 ? "live_preserved_artifact_set" : "live_preserved_artifact", artifactIds: artifacts.map((item) => item.id), artifactCount: artifacts.length, collectionId: primary.collectionId, inputCompleteness }, createdAt: startedAt, executionMode: "ai", provider: this.providerLineage.provider || null, modelIdentifier: this.providerLineage.model || null, instructionReference: this.providerLineage.instructionReference || null, extractionContext: context, supportAssessment: {}, errorCode: null, errorMessage: null };
+    return { id: this.id(), assetId: primary.assetId, artifactId: primary.id, extractorType: "ai", extractorName: "generic-semantic-artifact-interpreter", extractorVersion: "r3-live-v1-multimodal-locators", schemaReference: context.schemaReference, schemaVersionReference: context.schemaVersionReference || null, tenantConfigVersion: context.tenantConfigVersion || null, status: "failed", startedAt, completedAt: null, runMetadata: { inputMode: artifacts.length > 1 ? "live_preserved_artifact_set" : "live_preserved_artifact", artifactIds: artifacts.map((item) => item.id), artifactCount: artifacts.length, collectionId: primary.collectionId, inputCompleteness }, createdAt: startedAt, executionMode: "ai", provider: this.providerLineage.provider || null, modelIdentifier: this.providerLineage.model || null, instructionReference: this.providerLineage.instructionReference || null, extractionContext: context, supportAssessment: {}, errorCode: null, errorMessage: null };
   }
 
   runArtifactRows(run, artifacts) {
@@ -57,8 +58,33 @@ class LiveArtifactInterpretationService {
 
   async persistFailure(run, artifacts, code, message) {
     const failed = { ...run, status: "failed", completedAt: this.now(), errorCode: code, errorMessage: message, supportAssessment: { state: "not_supported", signals: { failure: code } } };
-    await this.repository.appendInterpretation({ run: failed, runArtifacts: this.runArtifactRows(run, artifacts), facts: [], factArtifactSupports: [], derivations: [], verifications: [] });
+    await this.repository.appendInterpretation({ run: failed, runArtifacts: this.runArtifactRows(run, artifacts), facts: [], factArtifactSupports: [], factArtifactLocators: [], derivations: [], verifications: [] });
     return failed;
+  }
+
+  async preflight({ artifactIds = [], tenantId, contextId = null }) {
+    const selectedIds = [...new Set((artifactIds || []).map(String).filter(Boolean))];
+    if (!selectedIds.length) throw liveError("artifact_id_required", "At least one Artifact ID is required");
+    if (!tenantId) throw liveError("tenant_context_required", "Tenant context is required");
+    const resolved = [];
+    for (const artifactId of selectedIds) {
+      const artifact = await this.repository.findArtifactForInterpretation({ artifactId, tenantId, contextId });
+      if (!artifact) throw liveError("artifact_not_found", `The persisted Artifact ${artifactId} was not found`, 404);
+      if (!artifact.authorized) throw liveError("artifact_access_denied", `Artifact ${artifactId} is not accessible to the supplied Evidence context`, 403);
+      resolved.push(artifact);
+    }
+    if (new Set(resolved.map((item) => item.assetId)).size !== 1) throw liveError("cross_asset_interpretation_not_allowed", "All selected Artifacts must belong to the same Evidence Asset", 409);
+    const artifacts = orderAndAssessInputs(resolved).artifacts; const verifiedInputs = [];
+    for (const artifact of artifacts) {
+      let loaded;
+      try { loaded = await this.artifactReader.read(artifact); }
+      catch (error) { throw liveError(error.code || "artifact_storage_unavailable", `Preserved Artifact ${artifact.id} could not be read from Evidence storage`, 503, { artifactId: artifact.id }); }
+      const bytes = Buffer.from(loaded.bytes); const actualFingerprint = sha256(bytes);
+      if (artifact.fingerprintAlgorithm !== "sha256" || actualFingerprint !== artifact.fingerprintValue) throw liveError("artifact_integrity_mismatch", `Preserved Artifact ${artifact.id} did not match its persisted SHA-256 fingerprint`, 409, { artifactId: artifact.id });
+      verifiedInputs.push({ artifact, verifiedContent: bytes, decodedText: bytes.toString("utf8"), order: artifactOrder(artifact), sourceMetadata: {} });
+    }
+    const checked = preflightVerifiedInputs(verifiedInputs, { provider: this.provider, requireProvider: false });
+    return { providerCalled: false, storageReadOnly: true, providerConfigured: !!this.provider, artifacts: checked.artifacts, aggregateBinaryBytes: checked.aggregateBinaryBytes, estimatedProviderRequestBytes: checked.estimatedProviderRequestBytes, providerCapabilities: checked.providerCapabilities, limits: checked.limits };
   }
 
   async interpret({ artifactId, artifactIds = null, tenantId, contextId = null, extractionContext = null, requestedConcepts = null }) {
@@ -78,11 +104,6 @@ class LiveArtifactInterpretationService {
     const context = { ...LAB_CONTEXT, ...(extractionContext || {}), contextSource: extractionContext ? "supplied" : LAB_CONTEXT.contextSource };
     const concepts = Array.isArray(requestedConcepts) && requestedConcepts.length ? requestedConcepts : LAB_REQUESTED_CONCEPTS;
     const startedAt = this.now(); const run = this.buildRun(artifacts, context, startedAt, inputCompleteness);
-    const unsupported = artifacts.find((item) => !mediaSupported(item.mediaType));
-    if (unsupported) {
-      await this.persistFailure(run, artifacts, "unsupported_media_type", `A3 live interpretation does not yet support ${unsupported.mediaType || unsupported.representationType}`);
-      throw liveError("unsupported_media_type", `A3 live interpretation supports JSON and HTML; ${unsupported.mediaType || unsupported.representationType} was not interpreted`, 415, { runId: run.id, artifactId: unsupported.id });
-    }
     const verifiedInputs = [];
     for (const artifact of artifacts) {
       let loaded;
@@ -99,13 +120,16 @@ class LiveArtifactInterpretationService {
       }
       verifiedInputs.push({ artifact, verifiedContent: bytes, decodedText: bytes.toString("utf8"), order: artifactOrder(artifact), sourceMetadata: { producer: artifact.collectionProducer, sourceProvider: artifact.sourceProvider, sourceType: artifact.sourceType, sourceLocator: artifact.sourceLocator } });
     }
-    if (!this.provider) {
-      await this.persistFailure(run, artifacts, "provider_not_configured", "Live semantic interpretation is not configured");
-      throw liveError("provider_not_configured", "Live semantic interpretation is unavailable until its environment configuration is supplied", 503, { runId: run.id });
+    let mediaPreflight;
+    try { mediaPreflight = preflightVerifiedInputs(verifiedInputs, { provider: this.provider, requireProvider: true }); }
+    catch (error) {
+      await this.persistFailure(run, artifacts, error.code || "invalid_media", error.message);
+      throw liveError(error.code || "invalid_media", error.message, error.statusCode || 422, { ...error.details, runId: run.id });
     }
     let semantic;
     try {
-      semantic = await runSemanticExtraction(this.provider, { artifact: artifacts[0], artifactInputs: verifiedInputs, verifiedContent: verifiedInputs[0].verifiedContent, decodedText: verifiedInputs[0].decodedText, requestedConcepts: concepts, extractionContext: context, inputCompleteness, sourceMetadata: verifiedInputs[0].sourceMetadata, runId: run.id, artifactId: artifacts[0].id, createdAt: startedAt, sourcePolicyContext: {}, idFor: () => this.id() });
+      const providerInputs=verifiedInputs.map((input)=>({...input,artifact:{id:input.artifact.id,mediaType:input.artifact.mediaType,representationType:input.artifact.representationType,capturedAt:input.artifact.capturedAt,sourceLocator:input.artifact.sourceLocator}}));
+      semantic = await runSemanticExtraction(this.provider, { artifact: providerInputs[0].artifact, artifactInputs: providerInputs, contentItems: mediaPreflight.contentItems, verifiedContent: verifiedInputs[0].verifiedContent, decodedText: verifiedInputs[0].decodedText, requestedConcepts: concepts, extractionContext: context, inputCompleteness, sourceMetadata: verifiedInputs[0].sourceMetadata, runId: run.id, artifactId: artifacts[0].id, createdAt: startedAt, sourcePolicyContext: {}, idFor: () => this.id() });
     } catch (error) {
       const code = error.code || "provider_failed"; const message = error.message || "Semantic provider failed";
       await this.persistFailure(run, artifacts, code, message); throw liveError(code, message, code === "provider_authentication_failed" ? 401 : 502, { runId: run.id });
@@ -129,9 +153,10 @@ class LiveArtifactInterpretationService {
     const providerFactCount = semantic.providerReturnedFactCount ?? semantic.facts.length; const discardedNoValueFactCount = semantic.discardedNoValueFactCount || 0; const discardedProvenanceFactCount = semantic.discardedProvenanceFactCount || 0; const discardedSampledFactCount = semantic.discardedSampledFactCount || 0; const discardedInvalidSupportFactCount = semantic.discardedInvalidSupportFactCount || 0; const extractionCompleteness = semantic.completeness || { state: "incomplete", limitations: ["Completeness was not reported"] };
     const providerOutputEvaluation = { providerFactCount, discardedNoValueFactCount, discardedProvenanceFactCount, discardedSampledFactCount, discardedInvalidSupportFactCount, persistedA3FactCount: facts.length, alreadyRepresentedByA2Count: duplicateSuppressions.length, duplicateSuppressions, requestedConceptOutcomes, inputCompleteness, extractionCompleteness };
     const supportState = extractionCompleteness.state !== "complete" || supportedFacts.some((fact) => fact.supportState === "needs_verification") ? "needs_verification" : supportedFacts.length ? "supported" : "not_supported";
-    const completedRun = { ...run, status: "completed", completedAt, runMetadata: { ...run.runMetadata, providerOutputEvaluation }, supportAssessment: { state: supportState, signals: { integrityVerified: true, verifiedArtifactCount: artifacts.length, factCount: facts.length, filteredA2Duplicates: duplicateSuppressions.length, providerFactCount, discardedNoValueFactCount, discardedProvenanceFactCount, discardedSampledFactCount, discardedInvalidSupportFactCount, persistedA3FactCount: facts.length, alreadyRepresentedByA2Count: duplicateSuppressions.length, duplicateSuppressions, requestedConceptOutcomes, inputCompleteness, extractionCompleteness } } };
+    const completedRun = { ...run, status: "completed", completedAt, runMetadata: { ...run.runMetadata, mediaPreflight: { artifacts: mediaPreflight.artifacts, aggregateBinaryBytes: mediaPreflight.aggregateBinaryBytes, estimatedProviderRequestBytes: mediaPreflight.estimatedProviderRequestBytes }, providerOutputEvaluation }, supportAssessment: { state: supportState, signals: { integrityVerified: true, verifiedArtifactCount: artifacts.length, factCount: facts.length, filteredA2Duplicates: duplicateSuppressions.length, providerFactCount, discardedNoValueFactCount, discardedProvenanceFactCount, discardedSampledFactCount, discardedInvalidSupportFactCount, persistedA3FactCount: facts.length, alreadyRepresentedByA2Count: duplicateSuppressions.length, duplicateSuppressions, requestedConceptOutcomes, inputCompleteness, extractionCompleteness } } };
     const factArtifactSupports = facts.flatMap((fact) => fact.supportingArtifactIds.map((supportingArtifactId) => ({ factId: fact.id, artifactId: supportingArtifactId, createdAt: startedAt })));
-    const interpretation = { run: completedRun, runArtifacts: this.runArtifactRows(run, artifacts), facts, factArtifactSupports, derivations: [], verifications: [] };
+    const factArtifactLocators = facts.flatMap((fact) => (fact.supportLocators || []).map((locator, index) => ({ id: this.id(), factId: fact.id, artifactId: locator.artifactId, locatorOrdinal: index + 1, locatorKind: locator.locatorKind, jsonPath: locator.jsonPath, domReference: locator.domReference, pageStart: locator.pageStart, pageEnd: locator.pageEnd, supportExcerpt: locator.supportExcerpt, supportDescription: locator.supportDescription, region: locator.region, locatorMetadata: locator.locatorMetadata, createdAt: startedAt })));
+    const interpretation = { run: completedRun, runArtifacts: this.runArtifactRows(run, artifacts), facts, factArtifactSupports, factArtifactLocators, derivations: [], verifications: [] };
     try { await this.repository.appendInterpretation(interpretation); }
     catch (firstError) {
       if (transientPersistenceFailure(firstError)) {
@@ -147,7 +172,7 @@ class LiveArtifactInterpretationService {
     }
     const history = this.repository.listInterpretations ? await this.repository.listInterpretations(artifacts[0].id) : { runs: [completedRun], facts };
     const publicArtifacts = artifacts.map((artifact, index) => ({ id: artifact.id, assetId: artifact.assetId, acquisitionId: artifact.acquisitionId, collectionId: artifact.collectionId, representationType: artifact.representationType, mediaType: artifact.mediaType, sizeBytes: artifact.sizeBytes, fingerprintAlgorithm: artifact.fingerprintAlgorithm, fingerprintValue: artifact.fingerprintValue, capturedAt: artifact.capturedAt, source: artifact.sourceLocator, order: artifactOrder(artifact), inputRole: index === 0 ? "primary" : "supplementary" }));
-    return { stage: "A3", inputMode: artifacts.length > 1 ? "LIVE PRESERVED ARTIFACT SET" : "LIVE PRESERVED ARTIFACT", artifact: publicArtifacts[0], artifacts: publicArtifacts, subject: { id: artifacts[0].subjectReferenceId, displayName: artifacts[0].subjectDisplayName, sourceIdentifier: artifacts[0].subjectIdentifier }, provenance: { producer: artifacts[0].collectionProducer, sourceProvider: artifacts[0].sourceProvider, sourceType: artifacts[0].sourceType, acquisitionMethod: artifacts[0].acquisitionMethod, evidenceAssetId: artifacts[0].assetId }, integrity: { verified: true, artifacts: publicArtifacts.map((item) => ({ artifactId: item.id, verified: true, calculatedSha256: item.fingerprintValue })) }, extractionRun: completedRun, requestedFacts: facts.filter((fact) => fact.requestStatus === "requested"), discoveredFacts: facts.filter((fact) => fact.requestStatus === "discovered"), derivedFacts: facts.filter((fact) => fact.groundingType === "derived"), factArtifactSupports, support: completedRun.supportAssessment, providerOutputEvaluation, lineage: { inputArtifactIds: artifacts.map((item) => item.id), factSupport: facts.map((fact) => ({ factId: fact.id, artifactIds: fact.supportingArtifactIds })), previousRunCount: Math.max(0, (history.runs || []).length - 1) }, a2DeterministicValuesDuplicated: false, screenshotInterpretation: "not_implemented" };
+    return { stage: "R3", inputMode: artifacts.length > 1 ? "LIVE PRESERVED ARTIFACT SET" : "LIVE PRESERVED ARTIFACT", artifact: publicArtifacts[0], artifacts: publicArtifacts, mediaPreflight: { artifacts: mediaPreflight.artifacts, aggregateBinaryBytes: mediaPreflight.aggregateBinaryBytes, estimatedProviderRequestBytes: mediaPreflight.estimatedProviderRequestBytes }, subject: { id: artifacts[0].subjectReferenceId, displayName: artifacts[0].subjectDisplayName, sourceIdentifier: artifacts[0].subjectIdentifier }, provenance: { producer: artifacts[0].collectionProducer, sourceProvider: artifacts[0].sourceProvider, sourceType: artifacts[0].sourceType, acquisitionMethod: artifacts[0].acquisitionMethod, evidenceAssetId: artifacts[0].assetId }, integrity: { verified: true, artifacts: publicArtifacts.map((item) => ({ artifactId: item.id, verified: true, calculatedSha256: item.fingerprintValue })) }, extractionRun: completedRun, requestedFacts: facts.filter((fact) => fact.requestStatus === "requested"), discoveredFacts: facts.filter((fact) => fact.requestStatus === "discovered"), derivedFacts: facts.filter((fact) => fact.groundingType === "derived"), factArtifactSupports, factArtifactLocators, support: completedRun.supportAssessment, providerOutputEvaluation, lineage: { inputArtifactIds: artifacts.map((item) => item.id), factSupport: facts.map((fact) => ({ factId: fact.id, artifactIds: fact.supportingArtifactIds, locators: fact.supportLocators || [] })), previousRunCount: Math.max(0, (history.runs || []).length - 1) }, a2DeterministicValuesDuplicated: false };
   }
 }
 

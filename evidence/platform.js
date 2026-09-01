@@ -2,7 +2,7 @@
 
 const PLATFORM_STATUS = Object.freeze({
   platform: "evidence",
-  stage: "R2",
+  stage: "R3",
   status: "available",
 });
 

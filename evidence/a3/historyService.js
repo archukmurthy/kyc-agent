@@ -2,7 +2,11 @@
 
 function value(row, camel, snake) { return row?.[camel] === undefined ? row?.[snake] : row[camel]; }
 
-function mapFact(row, supports = []) {
+function mapLocator(row) {
+  return { id: row.id, artifactId: value(row, "artifactId", "artifact_id"), ordinal: value(row, "locatorOrdinal", "locator_ordinal"), kind: value(row, "locatorKind", "locator_kind"), jsonPath: value(row, "jsonPath", "json_path"), domReference: value(row, "domReference", "dom_reference"), pageStart: value(row, "pageStart", "page_start"), pageEnd: value(row, "pageEnd", "page_end"), excerpt: value(row, "supportExcerpt", "support_excerpt"), description: value(row, "supportDescription", "support_description"), region: row.region || null, metadata: value(row, "locatorMetadata", "locator_metadata") || {} };
+}
+
+function mapFact(row, supports = [], locators = []) {
   return {
     id: row.id,
     extractionRunId: value(row, "extractionRunId", "extraction_run_id"),
@@ -18,6 +22,7 @@ function mapFact(row, supports = []) {
     supportSignals: value(row, "supportSignals", "support_signals") || {},
     createdAt: value(row, "createdAt", "created_at"),
     supportingArtifactIds: supports.filter((support) => value(support, "factId", "fact_id") === row.id).map((support) => value(support, "artifactId", "artifact_id")),
+    supportLocators: locators.filter((locator) => value(locator, "factId", "fact_id") === row.id).map(mapLocator),
   };
 }
 
@@ -68,7 +73,7 @@ class EvidenceInterpretationHistoryService {
     if (!artifact) return { found: false, artifactId, runs: [], externalSourceCall: false, aiCall: false };
     if (!artifact.authorized) { const error = new Error("The Artifact is not accessible to the supplied Evidence context"); error.statusCode = 403; throw error; }
     const history = await this.repository.listInterpretations(artifactId);
-    const facts = (history.facts || []).map((fact) => mapFact(fact, history.factArtifactSupports || []));
+    const facts = (history.facts || []).map((fact) => mapFact(fact, history.factArtifactSupports || [], history.factArtifactLocators || []));
     return {
       found: true,
       artifact: {
@@ -86,4 +91,4 @@ class EvidenceInterpretationHistoryService {
   }
 }
 
-module.exports = { EvidenceInterpretationHistoryService, mapFact, mapRun };
+module.exports = { EvidenceInterpretationHistoryService, mapFact, mapLocator, mapRun };

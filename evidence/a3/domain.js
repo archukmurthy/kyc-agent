@@ -30,6 +30,8 @@ function validateA3Bundle(bundle) {
   }
   const factArtifactSupports = bundle.factArtifactSupports === undefined ? [] : bundle.factArtifactSupports;
   if (!Array.isArray(factArtifactSupports)) throw new Error("bundle.factArtifactSupports must be an array");
+  const factArtifactLocators = bundle.factArtifactLocators === undefined ? [] : bundle.factArtifactLocators;
+  if (!Array.isArray(factArtifactLocators)) throw new Error("bundle.factArtifactLocators must be an array");
   const runs = byId(bundle.baseGraph.extractionRuns, "extractionRuns");
   const artifacts = byId(bundle.baseGraph.artifacts, "artifacts");
   const facts = byId(bundle.facts, "facts");
@@ -66,6 +68,19 @@ function validateA3Bundle(bundle) {
     const key = `${support.factId}:${support.artifactId}`;
     if (supportKeys.has(key)) throw new Error(`duplicate fact Artifact support ${key}`);
     supportKeys.add(key);
+  }
+  const locatorKeys = new Set();
+  for (const locator of factArtifactLocators) {
+    required(facts, locator.factId, "factArtifactLocator.factId");
+    required(artifacts, locator.artifactId, "factArtifactLocator.artifactId");
+    if (!supportKeys.has(`${locator.factId}:${locator.artifactId}`)) throw new Error(`locator ${locator.id} requires an existing Fact-to-Artifact support pair`);
+    if (!locator.id || !["json", "html", "pdf", "image"].includes(locator.locatorKind)) throw new Error("locator requires id and supported kind");
+    if (!Number.isInteger(locator.locatorOrdinal) || locator.locatorOrdinal < 1) throw new Error(`locator ${locator.id} requires a positive ordinal`);
+    if (!locator.supportExcerpt && !locator.supportDescription) throw new Error(`locator ${locator.id} requires source support`);
+    if (locator.locatorKind === "pdf" && (!Number.isInteger(locator.pageStart) || !Number.isInteger(locator.pageEnd) || locator.pageStart < 1 || locator.pageEnd < locator.pageStart)) throw new Error(`PDF locator ${locator.id} requires a valid page range`);
+    const key = `${locator.factId}:${locator.artifactId}:${locator.locatorOrdinal}`;
+    if (locatorKeys.has(key)) throw new Error(`duplicate Fact locator ${key}`);
+    locatorKeys.add(key);
   }
   const derivedIds = new Set(bundle.derivations.map((item) => item.derivedFactId));
   for (const link of bundle.derivations) {

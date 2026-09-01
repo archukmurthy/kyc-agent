@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "R2",
+    stage: "R3",
     status: "available",
   });
 });
@@ -34,11 +34,11 @@ test("the Evidence Lab exposes generic R1 private Artifact ingestion", () => {
   assert.doesNotMatch(js,/Authorized reopen succeeded/);
 });
 
-test("the Evidence Lab exposes the stable R2 targeted-interpretation boundary",()=>{
+test("the Evidence Lab extends the stable targeted-interpretation boundary for R3",()=>{
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/R2 — TARGETED INTERPRETATION/);assert.match(lab,/one Evidence Asset and one or more of its Artifacts/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/PDF\/PNG\/JPEG remain preserved Evidence/);
+  assert.match(lab,/R3 — MULTIMODAL TARGETED INTERPRETATION/);assert.match(lab,/one Evidence Asset/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/Check media readiness/);
   assert.match(js,/\/api\/evidence\/r2-options/);assert.match(js,/\/api\/evidence\/r2-interpret/);assert.match(js,/\/api\/evidence\/r2-history/);assert.match(js,/Selection makes no AI call/);assert.match(js,/Provider call expected for a new operation/);assert.match(js,/A4a evaluation: <b>NO/);assert.match(lab,/Prepare deliberate new interpretation/);assert.match(js,/Existing operation returned\. Provider call: NO/);
-  assert.match(js,/\$\("r2Run"\)\.disabled=!ready\|\|unsupported/);assert.match(js,/Run is disabled:/);
+  assert.match(js,/\$\("r2Run"\)\.disabled=!ready\|\|!supported/);assert.match(js,/\/api\/evidence\/r2-preflight/);assert.match(js,/Media readiness passed\. AI call: NO/);
 });
 
 test("GET /api/evidence/status returns the boundary status", () => {

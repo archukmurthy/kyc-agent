@@ -85,3 +85,15 @@ R1 does not extract facts, interpret documents, assess trust or sufficiency, dec
 - Evidence Lab exposes authorized context/Asset/Artifact selection, neutral concepts, a paid-call preview, explicit fresh interpretation, deliberate new operation keys, and no-provider history reopening. Unsupported PDF/image interpretation is distinguished from valid R1 preservation.
 
 R2 creates or reopens A3 interpretation history only. It does not recollect Evidence, invoke A4a, import consumer-domain identifiers, determine UBO/controllers or KYC satisfaction, interpret PDF/images, implement R3/R4, or start A4b.
+
+## Consumer Readiness R3 additions
+
+- `evidence/a3/media.js` applies bounded, deterministic PDF/PNG/JPEG signature, readability, page, dimension, byte, aggregate-request, Artifact-count, and provider/model-capability preflight to server-reopened, SHA-256-verified bytes.
+- `evidence/a3/locators.js` validates media-specific source locations and retains only truthful bounded excerpts/descriptions, valid PDF page ranges, and optional original-image coordinates that can be mapped reliably.
+- `evidence/a3/providers.js` retains a provider-neutral `text`/`image`/`document` input boundary. Only the Anthropic adapter translates those inputs to provider-native content blocks.
+- `db/migrations/016_evidence_fact_artifact_locators.sql` adds immutable zero/one/many source locators beneath the existing Fact-to-Artifact support pair; migrations 010-015 remain unchanged.
+- `api/evidence/r2-preflight.js` performs authorized, read-only media readiness checks without provider calls or Evidence writes. The existing R2 interpretation and history routes now support governed PDF, PNG, JPEG, JSON, HTML, and coherent same-Asset mixed-media selections.
+- `scripts/evidence-r3-db-smoke.js` verifies migration 016 and persisted locator reopening only against the guarded disposable Evidence database.
+- Evidence Lab extends the existing targeted-interpretation experience with explicit no-AI readiness checks, PDF page/image dimension reporting, provider-use preview, and human-readable persisted locator history.
+
+R3 never rewrites canonical Artifacts, changes their SHA-256, persists raw provider exchanges, fabricates locations, infers UBO/currentness/operative claims, crosses Evidence Assets or contexts, or implements R4 or A4b.
