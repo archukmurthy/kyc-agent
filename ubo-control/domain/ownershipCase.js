@@ -36,6 +36,7 @@ const CASE_EVENT_TYPE = Object.freeze({
   CAPABILITY_RESULT_INTAKEN: "CAPABILITY_RESULT_INTAKEN",
   IDENTITY_DECISION_RECORDED: "IDENTITY_DECISION_RECORDED",
   CLAIM_ADJUDICATED: "CLAIM_ADJUDICATED",
+  CUSTOMER_INPUT_APPLIED: "CUSTOMER_INPUT_APPLIED",
 });
 
 const GRAPH_ELIGIBILITY_STATUS = Object.freeze({
@@ -161,6 +162,57 @@ function validateAdjudicationRecord(record, path) {
   }
 }
 
+function validateCustomerInputRecord(record, path) {
+  assertPlainObject(record, path);
+  assertAllowedKeys(record, [
+    "customerInputId", "operationId", "customerActionContractVersion", "eventType", "snapshotId", "snapshotHash",
+    "bundleId", "workItemIds", "actionIntentIds", "actionIds", "informationNeedIds", "requirementIds",
+    "subject", "origin", "actorReference", "recordedAt", "recordedInRevision", "claimIds", "evaluationInputs",
+    "confirmationResult", "selectedCustomerResolutionOptionId", "externalHandoffIds", "correctionRequested",
+  ], path);
+  ["customerInputId", "operationId", "customerActionContractVersion", "eventType", "snapshotId", "snapshotHash", "bundleId", "origin", "recordedAt"]
+    .forEach((field) => assertNonEmptyString(record[field], `${path}.${field}`));
+  ["workItemIds", "actionIntentIds", "actionIds", "informationNeedIds", "requirementIds", "claimIds", "externalHandoffIds"]
+    .forEach((field) => {
+      assertArray(record[field], `${path}.${field}`);
+      record[field].forEach((value, index) => assertNonEmptyString(value, `${path}.${field}[${index}]`));
+    });
+  assertPlainObject(record.subject, `${path}.subject`);
+  assertPlainObject(record.actorReference, `${path}.actorReference`);
+  assertPlainObject(record.evaluationInputs, `${path}.evaluationInputs`);
+  assertOptionalNonEmptyString(record.confirmationResult, `${path}.confirmationResult`);
+  assertOptionalNonEmptyString(record.selectedCustomerResolutionOptionId, `${path}.selectedCustomerResolutionOptionId`);
+  if (record.correctionRequested !== undefined && typeof record.correctionRequested !== "boolean") {
+    fail(`${path}.correctionRequested must be boolean`);
+  }
+  validateTimestamp(record.recordedAt, `${path}.recordedAt`);
+  if (!Number.isSafeInteger(record.recordedInRevision) || record.recordedInRevision < 1) {
+    fail(`${path}.recordedInRevision must be a positive safe integer`);
+  }
+  assertDataOnly(record, path);
+}
+
+function validateExternalHandoff(handoff, path) {
+  assertPlainObject(handoff, path);
+  assertAllowedKeys(handoff, [
+    "handoffId", "handoffType", "status", "customerInputId", "operationId", "snapshotId", "snapshotHash",
+    "bundleId", "actionIds", "informationNeedIds", "requirementIds", "evidenceTypes", "subject",
+    "recordedAt", "recordedInRevision",
+  ], path);
+  ["handoffId", "handoffType", "status", "customerInputId", "operationId", "snapshotId", "snapshotHash", "bundleId", "recordedAt"]
+    .forEach((field) => assertNonEmptyString(handoff[field], `${path}.${field}`));
+  ["actionIds", "informationNeedIds", "requirementIds", "evidenceTypes"].forEach((field) => {
+    assertArray(handoff[field], `${path}.${field}`);
+    handoff[field].forEach((value, index) => assertNonEmptyString(value, `${path}.${field}[${index}]`));
+  });
+  assertPlainObject(handoff.subject, `${path}.subject`);
+  validateTimestamp(handoff.recordedAt, `${path}.recordedAt`);
+  if (!Number.isSafeInteger(handoff.recordedInRevision) || handoff.recordedInRevision < 1) {
+    fail(`${path}.recordedInRevision must be a positive safe integer`);
+  }
+  assertDataOnly(handoff, path);
+}
+
 function validateOwnershipCase(caseState) {
   assertPlainObject(caseState, "ownershipCase");
   assertNonEmptyString(caseState.caseId, "ownershipCase.caseId");
@@ -197,6 +249,14 @@ function validateOwnershipCase(caseState) {
   assertArray(caseState.capabilityOperations, "ownershipCase.capabilityOperations");
   caseState.capabilityOperations.forEach((operation, index) => validateCapabilityOperation(operation, `ownershipCase.capabilityOperations[${index}]`));
   assertUniqueStrings(caseState.capabilityOperations.map(({ operationId }) => operationId), "ownershipCase capability operation IDs");
+  const customerInputRecords = caseState.customerInputRecords || [];
+  assertArray(customerInputRecords, "ownershipCase.customerInputRecords");
+  customerInputRecords.forEach((record, index) => validateCustomerInputRecord(record, `ownershipCase.customerInputRecords[${index}]`));
+  assertUniqueStrings(customerInputRecords.map(({ operationId }) => operationId), "ownershipCase customer input operation IDs");
+  const externalHandoffs = caseState.externalHandoffs || [];
+  assertArray(externalHandoffs, "ownershipCase.externalHandoffs");
+  externalHandoffs.forEach((handoff, index) => validateExternalHandoff(handoff, `ownershipCase.externalHandoffs[${index}]`));
+  assertUniqueStrings(externalHandoffs.map(({ handoffId }) => handoffId), "ownershipCase external handoff IDs");
   assertArray(caseState.events, "ownershipCase.events");
   if (caseState.events.length !== caseState.revision) fail("ownershipCase events must cover every revision");
   caseState.events.forEach((event, index) => {
@@ -352,6 +412,52 @@ function intakeCapabilityResult(caseState, capabilityResult, { operationId, reco
       });
     },
   );
+}
+
+function applyCustomerInputRecord(caseState, record, candidateFacts, canonicalEntityInputs, identityDecisionInputs, externalHandoffs, { recordedAt }) {
+  validateOwnershipCase(caseState);
+  assertArray(candidateFacts, "customerInputCandidateFacts");
+  assertArray(canonicalEntityInputs, "customerInputCanonicalEntities");
+  assertArray(identityDecisionInputs, "customerInputIdentityDecisions");
+  assertArray(externalHandoffs, "customerInputExternalHandoffs");
+  if ((caseState.customerInputRecords || []).some(({ operationId }) => operationId === record.operationId)) {
+    fail(`customer input operation ${record.operationId} already exists in case`);
+  }
+  const revision = caseState.revision + 1;
+  const claimIds = candidateFacts.map((fact, index) => `${caseState.caseId}:claim:${record.operationId}:${fact.factId || `fact-${index + 1}`}`);
+  if (new Set(claimIds).size !== claimIds.length) fail("customer input produced duplicate stable claim identifiers");
+  const entities = canonicalEntityInputs.map((input) => createCanonicalEntityRecord(input, { createdAt: recordedAt, createdInRevision: revision }));
+  const entityIds = new Set(caseState.canonicalEntities.map(({ entityId }) => entityId));
+  entities.forEach(({ entityId }) => {
+    if (entityIds.has(entityId)) fail(`canonical entity ${entityId} already exists in case`);
+    entityIds.add(entityId);
+  });
+  const claims = candidateFacts.map((fact, index) => createCandidateClaim(fact, {
+    claimId: claimIds[index], operationId: record.operationId, capabilityRequestId: record.customerInputId,
+    candidateFactIndex: index, createdAt: recordedAt, createdInRevision: revision, sourceType: "CUSTOMER_INPUT",
+  }));
+  const decisions = identityDecisionInputs.map((input) => ({ ...cloneData(input), recordedInRevision: revision }));
+  decisions.forEach((decision) => validateIdentityResolutionDecision(decision));
+  const handoffs = externalHandoffs.map((handoff) => ({ ...cloneData(handoff), recordedAt, recordedInRevision: revision }));
+  handoffs.forEach((handoff, index) => validateExternalHandoff(handoff, `customerInputExternalHandoffs[${index}]`));
+  const finalizedRecord = {
+    ...cloneData(record), recordedAt, recordedInRevision: revision, claimIds,
+    externalHandoffIds: handoffs.map(({ handoffId }) => handoffId),
+  };
+  validateCustomerInputRecord(finalizedRecord, "customerInputRecord");
+  return nextRevision(caseState, CASE_EVENT_TYPE.CUSTOMER_INPUT_APPLIED, recordedAt, {
+    customerInputId: record.customerInputId, operationId: record.operationId, snapshotId: record.snapshotId,
+    bundleId: record.bundleId, informationNeedIds: cloneData(record.informationNeedIds),
+    requirementIds: cloneData(record.requirementIds), claimIds, externalHandoffIds: finalizedRecord.externalHandoffIds,
+  }, (draft) => {
+    if (!draft.customerInputRecords) draft.customerInputRecords = [];
+    if (!draft.externalHandoffs) draft.externalHandoffs = [];
+    draft.canonicalEntities.push(...entities);
+    draft.candidateClaims.push(...claims);
+    draft.identityDecisions.push(...decisions);
+    draft.customerInputRecords.push(finalizedRecord);
+    draft.externalHandoffs.push(...handoffs);
+  });
 }
 
 function endpointForKey(caseState, candidatePartyKey) {
@@ -522,6 +628,7 @@ module.exports = {
   CASE_EVENT_TYPE,
   GRAPH_ELIGIBILITY_STATUS,
   addCanonicalEntity,
+  applyCustomerInputRecord,
   adjudicateClaim,
   createOwnershipCase,
   graphEligibilityForClaim,

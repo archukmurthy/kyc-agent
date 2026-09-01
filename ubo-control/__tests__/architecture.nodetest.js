@@ -87,6 +87,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "CLAIM_STATE_MODEL_VERSION",
     "CONDITION_LANGUAGE_VERSION",
     "DECISION_APPLICATION_CONTRACT_VERSION",
+    "DECISION_APPLICATION_CONTRACT_VERSION_V2",
     "DECISION_APPLICATION_ERROR_CODE",
     "OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION",
     "OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE",
@@ -150,4 +151,12 @@ test("the journey projection is host/UI neutral and contains no resolution ranki
   assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);
   assert.doesNotMatch(source, /priorityScore|recommendedOption|rankResolution|JH-006/);
   assert.doesNotMatch(source, /createUboDecisionApplication|orchestrateResolution|buildCanonicalOwnershipGraph|calculateEffectivePercentage/);
+});
+
+test("customer-input application remains standalone, data-only, and cannot execute host, UI, or Evidence concerns", () => {
+  const source = fs.readFileSync(path.join(PRODUCT_ROOT, "application", "applyCustomerInput.js"), "utf8");
+  assert.doesNotMatch(source, /React|ubo-control[-]ui|src\/App|pipeline|stakeholder|dossier|host DB/i);
+  assert.doesNotMatch(source, /fetch\s*\(|\/api\/research|Blob|base64|fileBytes|rawFile/);
+  assert.doesNotMatch(source, /senior_managing_official_fallback/);
+  assert.doesNotMatch(source, /fuzzy|similar name|normalized name|confidence/i);
 });

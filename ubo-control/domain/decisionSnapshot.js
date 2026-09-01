@@ -411,6 +411,9 @@ function createDecisionSnapshot({
     capabilityOperations: sortedData(caseState.capabilityOperations),
     reviewDecisions,
   };
+  if ((caseState.customerInputRecords || []).length > 0) {
+    reasoningSeed.customerInputRecords = sortedData(caseState.customerInputRecords);
+  }
   const links = sortedData(evidenceLinks(reasoningSeed));
   reasoningSeed.evidenceManifest = {
     evidenceReferences: sortedData(links.map(({ evidenceReference }) => evidenceReference)),

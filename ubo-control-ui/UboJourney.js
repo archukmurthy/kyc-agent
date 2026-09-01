@@ -134,17 +134,21 @@
       && item.applicabilityState === "APPLICABLE" && item.deferredReasonCode === "CUSTOMER_CHOICE_AVAILABLE");
   }
 
-  function makeEvent({ eventType, bundle, journey, values, confirmationResult, selectedResolutionOptionId, evidenceTypes }) {
+  function makeEvent({ eventType, bundle, journey, plan, values, confirmationResult, selectedResolutionOptionId, evidenceTypes }) {
     const items = matchingWorkItems(bundle, journey);
     const actions = bundle.recommendedCustomerActions || [];
     return {
       contractVersion: CUSTOMER_ACTION_EVENT_VERSION,
       eventType,
+      snapshotId: plan.snapshotId,
+      snapshotHash: plan.snapshotHash,
       bundleId: bundle.bundleId,
       workItemIds: unique(items.map(({ workItemId }) => workItemId)),
       actionIntentIds: unique(items.flatMap(({ actionIntentIds }) => actionIntentIds || [])),
       actionIds: unique(actions.map(({ actionId }) => actionId)),
       semanticActionTypes: unique(actions.map(({ actionType }) => actionType)),
+      informationNeedIds: unique(bundle.informationNeedIds),
+      requirementIds: unique(bundle.requirementIds),
       subject: {
         entityId: bundle.subject?.entityId || null,
         family: bundle.subject?.family || null,
@@ -160,7 +164,7 @@
     };
   }
 
-  function BundleCard({ bundle, journey, graph, selected, onSelect, onAction }) {
+  function BundleCard({ bundle, journey, plan, graph, selected, onSelect, onAction }) {
     const actions = bundle.recommendedCustomerActions || [];
     const missing = bundle.missingFacts || [];
     const known = bundle.knownFacts || [];
@@ -187,12 +191,12 @@
       if (choices.length > 1 && !selectedOption) nextErrors.option = "Choose one of the available ways to respond.";
       setErrors(nextErrors);
       if (Object.keys(nextErrors).length) return;
-      onAction?.(makeEvent({ eventType: "CUSTOMER_ACTION_SUBMITTED", bundle, journey, values, confirmationResult: confirmationResult || null, selectedResolutionOptionId: selectedOption || null }));
+      onAction?.(makeEvent({ eventType: "CUSTOMER_ACTION_SUBMITTED", bundle, journey, plan, values, confirmationResult: confirmationResult || null, selectedResolutionOptionId: selectedOption || null }));
       setSubmitted(true);
     };
 
     const requestEvidence = () => {
-      onAction?.(makeEvent({ eventType: "EVIDENCE_ACTION_REQUESTED", bundle, journey, values: {}, evidenceTypes: evidence }));
+      onAction?.(makeEvent({ eventType: "EVIDENCE_ACTION_REQUESTED", bundle, journey, plan, values: {}, evidenceTypes: evidence }));
       setSubmitted(true);
     };
 
@@ -252,7 +256,7 @@
       h("div", { className: `uj-layout ${graph ? "with-graph" : "without-graph"}` },
         graph && h("div", { className: "uj-graph", "aria-label": "Ownership context" }, h(graphModule.OwnershipGraph, { projection: graph, detailLevel: graphModule.DETAIL_LEVEL.CUSTOMER, height: 450, onSelectionChange: graphSelection, highlightEntityIds, highlightRelationshipIds })),
         h("div", { className: "uj-tasks" }, bundles.length
-          ? bundles.map((bundle) => h(BundleCard, { key: bundle.bundleId, bundle, journey, graph, selected: bundle.bundleId === selectedBundle?.bundleId, onSelect: setSelectedBundleId, onAction }))
+          ? bundles.map((bundle) => h(BundleCard, { key: bundle.bundleId, bundle, journey, plan, graph, selected: bundle.bundleId === selectedBundle?.bundleId, onSelect: setSelectedBundleId, onAction }))
           : h(ResolutionState, { journey, plan }))),
       h("p", { className: "uj-snapshot-note" }, "Customer responses are sent to the host for processing. This component does not change UBO case state."));
   }

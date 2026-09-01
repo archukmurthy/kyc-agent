@@ -2,21 +2,24 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | Gate 5.3 / **G5.3A — Adaptive Customer Journey UI** |
-| Parallel-gate state | **Gate 4: PAUSED** on the independent Evidence Platform prerequisite programme. G5.3A evidence interactions are presentation-only host intents. |
-| Branch | `codex/ubo-control-g5-3a-adaptive-customer-journey-ui` |
-| Base commit | `8346355157a751449530765f4aac37eecd136e62` (normal merge of accepted PR #42 into latest `origin/main`) |
-| Latest accepted PR | [#42 — G5.2B low-friction UBO resolution planner](https://github.com/archukmurthy/kyc-agent/pull/42), merged normally as `8346355157a751449530765f4aac37eecd136e62`; source branch deleted. |
-| Current PR | [#43 — G5.3A adaptive customer journey UI](https://github.com/archukmurthy/kyc-agent/pull/43) — open and unmerged; do not merge without Control Room acceptance. |
-| Completed implementation | Reusable `UboJourney`; `ubo-customer-action-v1`; public JourneyProjection/ResolutionPlan-only boundary; optional reused `OwnershipGraph`; known/missing separation; confirmation; semantic field generation; coalesced information/evidence tasks; evidence handoff intent; system/blocker/review/specialist states; COMPANY/LLP language; validation/accessibility; CUI01–CUI17 standalone harness. |
-| Product architecture | `DecisionSnapshot → JourneyProjection + ResolutionPlan → UboJourney → host-neutral customer action → future host processing/re-resolution`. UI local state is ephemeral and never authoritative UBO state. |
-| Scenario coverage | CUI01 resolved, CUI02 confirmation, CUI03 foreign HoldCo, CUI04 missing identity, CUI05 voting, CUI06 appointment, CUI07 coalescence, CUI08 information+evidence, CUI09 targeted evidence, CUI10 system wave, CUI11 operational blocker, CUI12 internal review, CUI13 specialist/trust, CUI14 senior-management prep, CUI15 LLP, CUI16 unavailable wording, CUI17 before/after. |
-| Public/product boundary | UI accepts only `ubo-journey-projection-v1`, `ubo-resolution-plan-v1`, and optional `ubo-ownership-graph-projection-v1`; emits only serializable `ubo-customer-action-v1`. No core-to-UI dependency. |
-| Outstanding implementation | Host event processing, authoritative customer-response ingestion, upload/Evidence Platform handoff, host onboarding integration and production configuration error handling remain future gates. |
-| Tests / status | Adaptive UI 46/46; Journey/Planner/Graph projections 57/57; standalone UBO 292/292; Discovery integration 43/43; architecture 17/17; host 25 suites / 482 tests; `UboJourney.js` 99.63% line / 81.22% branch / 89.47% function coverage; production build passed; manual desktop/mobile/CUI17 acceptance passed; final diff check passed. |
-| Active escalations | None. G5.2B and JH-006 are accepted. No Decision Application expansion was required. |
-| Next approved step | Complete G5.3A PR and return it for Control Room review. Do not merge and do not begin host onboarding integration. |
+| Gate / sub-gate | Gate 5.3 / **G5.3C — Customer Input Application Boundary: ACTIVE** |
+| G5.3B | **KYB Onboarding Integration Diagnosis — ACCEPTED**; preserved at `docs/integration/kyb-onboarding-integration-diagnosis.md`. |
+| KYB onboarding integration | **DEFERRED** until after UBO Control Lab validation. |
+| Parallel-gate state | **Gate 4: PAUSED** pending Evidence prerequisites. When ready, Evidence integrates into the Lab before KYB onboarding. |
+| Branch | `codex/ubo-control-g5-3c-customer-input-application` |
+| Base commit | `2f4e967251d3d1ae433f0175d1ea0186a7fac54c` (accepted PR #43 merge on `origin/main`). |
+| Latest accepted PR | [#43 — G5.3A adaptive customer journey UI](https://github.com/archukmurthy/kyc-agent/pull/43), merged normally as `2f4e967251d3d1ae433f0175d1ea0186a7fac54c`. |
+| Current PR | [#44 — G5.3C customer input application boundary](https://github.com/archukmurthy/kyc-agent/pull/44) — open and unmerged; do not merge without Control Room acceptance. |
+| Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
+| Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
+| Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
+| Public/product boundary | No host, React, provider, persistence or Evidence dependency in the application operation. No graph/qualification/requirement/snapshot result is produced by customer input alone. |
+| Scenario coverage | Foreign HoldCo before/after; multiple and same-name new owners; unique external ID; identity attribute; negative answer; confirmation; correction; selected alternative; senior-management candidate; evidence handoff; stale/unauthorized action; immutability, serialization and determinism. |
+| Outstanding implementation | G5.3D UBO Control Lab; Gate 4 Artifact/Extraction integration when prerequisites are ready; later feature-flagged KYB onboarding integration. |
+| Tests / status | G5.3C 14/14; standalone core 250/250; Journey/Planner/Graph 57/57; adaptive UI/renderer 46/46; Discovery integration 43/43; host 25 suites / 482 tests; production build and final diff check passed. |
+| Active escalations | None. V2 versioning and deterministic identity rules are explicitly approved by the G5.3C Control Room instruction. |
+| Next after G5.3C | **G5.3D UBO Control Lab**. Do not begin automatically. |
 
 ## Scope guard
 
-G5.3A is reusable standalone UI product work only. It does not modify `src/App.js`, an existing onboarding screen, a host API route, a dossier flow, case management, `createUboDecisionApplication`, UBO policy/determination logic, provider execution or Evidence Platform ingestion. Files and raw document bytes never enter the component event.
+G5.3C changes only the standalone UBO product contract, its data-only customer event correlation fields, tests and documentation. It does not modify `src/App.js`, current onboarding screens, host API routes, dossiers, host persistence, Evidence Platform, uploads or the future Lab.
