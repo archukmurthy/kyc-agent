@@ -1,12 +1,370 @@
 # Evidence Platform — Current Build Brief
 
-# Evidence Consumer Readiness R3 — PDF/Image Interpretation + Durable Evidence Locators
+# Evidence Consumer Readiness R4 — Typed Relational Facts
 
 ## Governance Status
 
-This is the approved R3 implementation brief after accepted R2 at commit `0e31ba490452b50e1cf618a23231d980d9ca4977`.
+R3 PDF/Image Interpretation + Durable Evidence Locators was accepted and implemented at `ec96fe358ef09bdec15dd14f23a7ade1b36aba06`.
 
-Architecture Authority has approved ADR-016 and authorized only the bounded R3 implementation described here. R4, A4b, UBO integration, downstream KYC decisions, and existing KYC behavior remain deferred.
+ADR-017 and this R4 brief were approved by Architecture Authority on 2026-09-01. The bounded R4 implementation is authorized. A4b, UBO integration, downstream KYC decisions, and changes to existing KYC behavior remain deferred.
+
+---
+
+## 1. Objective
+
+Define the smallest provider-neutral Evidence model through which an individual source-supported relationship can become machine-readable without becoming a downstream compliance conclusion.
+
+```text
+source Artifact
+        ↓
+R3 interpretation
+        ↓
+ordinary immutable Evidence Fact
+        ↓
+validated typed relationship semantics
+        ↓
+downstream candidate
+```
+
+Evidence stops at the relationship asserted by the source. R4 does not determine UBO/controller status, calculate effective or indirect ownership, apply thresholds, choose an operative claim, assess requirement coverage, decide KYC satisfaction, or perform A4b aggregation.
+
+---
+
+## 2. Observed existing capability and limitation
+
+The accepted A3/R3 platform already provides:
+
+* immutable `evidence_facts` linked to one Extraction Run and a primary Artifact;
+* requested or discovered status without fabricated schema linkage;
+* direct or derived grounding;
+* JSONB `fact_value`, which safely persists strings, numbers, booleans, arrays, and objects;
+* source wording in `raw_representation`;
+* explainable A3 support state and support signals;
+* explicit derivation input/transformation/version/time lineage;
+* precise Fact-to-Artifact support pairs;
+* one or more durable R3 locators beneath each support pair;
+* capture, extraction, provider, model, instruction, and verification history; and
+* append-only reinterpretation.
+
+Persisted Lab Facts already contain object and array values for officers, PSCs, ownership structures, registered addresses, and other concepts. Those values are preserved correctly as JSONB.
+
+The limitation is that arbitrary JSONB is not typed relational semantics. Neither migration 012 nor the A3 domain validator establishes:
+
+* which party is subject and which is object;
+* a versioned relationship vocabulary;
+* grammatical direction;
+* exact versus range versus unknown quantity;
+* numeric units or count-of-total meaning;
+* relationship-specific temporal state; or
+* deterministic party and value validation.
+
+An opaque object can be reconstructed as provider output, but a downstream consumer must still guess what it means. That is insufficient for stable typed relationships.
+
+---
+
+## 3. Recommended Evidence-native model
+
+Retain one ordinary Evidence Fact identity and add a typed one-to-zero/one relationship extension:
+
+```text
+evidence_facts
+      1
+      ↓ 0..1
+typed relationship extension
+```
+
+The Fact remains authoritative for:
+
+* immutable identity;
+* Extraction Run and provider/model/instruction lineage;
+* requested/discovered state;
+* direct/derived grounding;
+* raw source wording;
+* support state;
+* Fact-to-Artifact support;
+* R3 locators; and
+* historical interpretation.
+
+The extension supplies only validated relationship semantics. It is not a parallel Fact, graph truth, canonical entity record, or downstream claim.
+
+One typed relational Fact represents exactly one directed source assertion. A document containing multiple independent relationships normally creates one ordinary Fact and extension per relationship. It must not hide those assertions in one opaque typed relationship array. Existing historical array/object Facts remain valid; an explicit later mapping creates separate derived Facts with transformation lineage.
+
+For an explicit source statement, one direct Fact may carry the raw wording and typed extension. When an already-persisted untyped Fact or source-specific code is mapped later, append a new derived Fact with `evidence_fact_derivations` lineage and attach the extension to the new Fact. Never rewrite the input Fact.
+
+---
+
+## 4. Source-party snapshots
+
+Both subject and object use bounded source-party snapshots. At minimum they can represent:
+
+* `natural_person`;
+* `legal_entity`;
+* `trust_or_legal_arrangement`; and
+* `unknown_or_other` when the source is unclear.
+
+A party snapshot preserves only source-supported attributes:
+
+* source-recorded name or description;
+* explicitly stated jurisdiction;
+* explicitly stated registry identifiers with scheme/value/jurisdiction; and
+* bounded source-specific party metadata needed for reconstruction.
+
+These snapshots are not canonical people, companies, UBOs, or Evidence subjects. Equal names or identifiers do not merge them. Global identity resolution remains downstream and separately governed.
+
+---
+
+## 5. Direction and relationship vocabulary
+
+R4 uses one versioned grammar:
+
+```text
+subject relationship object
+```
+
+The subject holds, exercises, performs, or is assigned the relationship toward the object.
+
+```text
+Alice ECONOMIC_OWNERSHIP HoldCo Ltd
+```
+
+means Alice owns HoldCo Ltd. Passive wording such as `HoldCo is 70% owned by Alice` must normalize to the same direction. Provider-native field order or diagram-arrow orientation must never define stored direction. Ambiguous direction produces no typed relationship.
+
+The initial versioned neutral vocabulary should cover:
+
+* economic/share ownership;
+* voting rights;
+* appointment rights;
+* removal rights;
+* formal decision/control rights;
+* significant influence or control;
+* director and officer relationships;
+* authorized signatory relationships;
+* settlor, trustee, protector, and beneficiary roles;
+* control over an intermediary or trust;
+* nominee/on-behalf-of relationships; and
+* `OTHER` only for an understood source relationship outside the initial vocabulary, retaining its source label and meaning.
+
+The persisted codes and grammar are versioned. Provider labels and UK PSC condition codes remain source-specific metadata. Mapping to a neutral code occurs only through an explicit deterministic, versioned mapping. There is no generic unknown relationship code: ambiguous meaning or direction remains an ordinary Fact with a typed-mapping limitation.
+
+---
+
+## 6. Value model
+
+Relationship value must distinguish at least:
+
+```text
+EXACT
+RANGE
+QUALITATIVE
+UNKNOWN
+```
+
+It must also identify the measure shape, such as:
+
+* percentage;
+* count-of-total;
+* absolute numeric amount;
+* qualitative classification; or
+* no stated quantity.
+
+Examples:
+
+```text
+exactly 70%
+  kind: EXACT
+  measure: PERCENTAGE
+  value: 70
+
+more than 25% but not more than 50%
+  kind: RANGE
+  measure: PERCENTAGE
+  lower: 25
+  lowerInclusive: false
+  upper: 50
+  upperInclusive: true
+
+may appoint 3 of 5 directors
+  kind: EXACT
+  measure: COUNT_OF_TOTAL
+  numerator: 3
+  denominator: 5
+
+majority voting rights
+  kind: QUALITATIVE
+  source value: majority
+
+percentage not stated
+  kind: UNKNOWN
+```
+
+R4 never converts a range to a midpoint, a qualitative statement to a number, or unknown to zero. Deterministic validation rejects malformed bounds, invalid inclusivity, lower greater than upper, invalid percentages, and invalid count denominators.
+
+---
+
+## 7. Temporal relationship assertions
+
+R4 may preserve explicitly source-supported:
+
+* `current`;
+* `ceased`;
+* `historical`;
+* `unknown_currentness`;
+* effective-from;
+* effective-to; and
+* source-effective date with source precision.
+
+Capture time, Extraction Run time, filing/notification time, and relationship-effective time remain distinct. No current state is inferred solely from the absence of a cease date. Historical and contradictory relationship Facts coexist. R4 does not implement latest-wins or temporal applicability policy.
+
+---
+
+## 8. Raw Fact, typed form, and lineage
+
+The source wording remains reconstructable. A relationship card must be able to show both:
+
+```text
+source wording:
+  ownership of shares — more than 25% but not more than 50%
+
+typed form:
+  ECONOMIC_OWNERSHIP
+  RANGE (>25, <=50)
+```
+
+Every typed relationship reconstructs through:
+
+```text
+typed extension
+    ↓
+Fact
+    ↓
+Extraction Run / mapper / model / instruction / version
+    ↓
+supporting Artifact(s)
+    ↓
+R3 locator(s)
+```
+
+For deterministic mapping of a source-specific Fact, the derived Fact additionally reconstructs through `evidence_fact_derivations` to its input Fact and versioned transformation.
+
+---
+
+## 9. Deterministic structured-output validation
+
+Provider/model-produced typed output must pass a versioned Evidence-owned schema validator before persistence. Validate at minimum:
+
+* allowed party types and required bounded party structure;
+* supported relationship code or qualified other/unknown handling;
+* subject–relationship–object direction;
+* exact/range/qualitative/unknown value shape;
+* numeric bounds, inclusivity, unit, and count-of-total consistency;
+* temporal fields and source precision;
+* selected input Artifact and Fact support linkage; and
+* mapper/extractor/schema version lineage.
+
+Malformed output does not silently become a typed relationship. A safe underlying untyped Fact may remain with its source wording and support. Typed mapping failure remains visible through immutable Extraction Run failure/completeness/limitation metadata. A post-hoc mapping failure leaves its input Fact unchanged.
+
+Provider confidence is extraction metadata only. It is not evidence strength, UBO confidence, KYC confidence, source trust, or a selection threshold.
+
+---
+
+## 10. Companies House PSC compatibility
+
+Existing Companies House PSC API evidence preserves names, PSC kinds, nature-of-control codes, notification dates, cease dates, statements, exemptions, and raw pagination. The current A2 deterministic extractor also emits schema-specific PSC objects and bounded ownership/voting bands. Those are not yet provider-neutral relational Facts, and R4 does not modify A2.
+
+A future R4 mapping can, where deterministic:
+
+* map explicit PSC person/entity kind to a source-party type;
+* map ownership-of-shares codes to economic-ownership ranges;
+* map voting-rights codes to voting-rights ranges;
+* map explicit appointment/removal codes to neutral rights; and
+* map significant-influence/control codes to a qualified neutral relationship.
+
+The original Companies House code remains source-specific metadata. A mapping from code to neutral relationship retains mapper/version lineage and, where it transforms an input Fact, explicit derivation lineage.
+
+PSC statements, exemptions, unavailable information, and no-registrable-PSC states are valid source evidence but are not party-to-party relationships. They must not be converted into fake zero ownership or an empty relationship edge.
+
+---
+
+## 11. A4a and A4b boundary
+
+A typed relational Fact remains an immutable Fact that A4a may evaluate against an explicitly supplied Information Need. R4 does not change A4a architecture and does not run A4a automatically.
+
+No A4a migration is required for R4. Existing semantic A4a evaluation can receive a structured Fact. A future deterministic relational comparator may consume the typed extension under A4a's existing structured/component-comparison authority, but that implementation requires separate scope.
+
+A4b remains responsible for later reasoning across candidate Facts, including completeness, cardinality, conflicts, legitimate empty sets, temporal applicability, and provisional requirement coverage. R4 does none of that work.
+
+---
+
+## 12. Persistence recommendation
+
+Opaque `evidence_facts.fact_value` JSONB alone is not sufficient typed integrity. A standalone relationship model disconnected from Facts would duplicate identity and provenance.
+
+The authorized minimum is one forward-only additive relationship extension after migration 016, keyed one-to-one by `fact_id`. Critical relationship, direction, value-kind, measure, and temporal invariants use typed columns and database checks where practical. Bounded party snapshots, source-specific metadata, qualifiers, and source precision may use deterministically validated JSONB.
+
+Migration 017 is authorized as the next migration. Do not modify migrations 010–016. Exact table/property names and the final typed-column/validated-JSON split remain reversible implementation details within the approved architecture.
+
+---
+
+## 13. Required future characterization
+
+R4 implementation must characterize at minimum:
+
+1. natural person → legal entity exact 70% ownership;
+2. legal entity → legal entity ownership;
+3. percentage range with correct inclusivity;
+4. unknown percentage that is not zero;
+5. voting rights distinct from economic ownership;
+6. appointment right expressed as 3 of 5 directors;
+7. removal right;
+8. significant influence/control assertion;
+9. nominee/on-behalf-of relationship;
+10. trust → company ownership;
+11. settlor, trustee, protector, and beneficiary roles;
+12. explicit current relationship;
+13. ceased relationship;
+14. unknown currentness;
+15. one Artifact producing several relationship Facts;
+16. contradictory relationship Facts coexisting without a winner;
+17. malformed provider output preserving no fabricated typed relationship;
+18. deterministic PSC range mapping with the original code preserved;
+19. PSC statement/no-registrable-PSC state remaining non-relational;
+20. complete Fact → support pair → R3 locator reconstruction; and
+21. append-only reinterpretation preserving prior typed history.
+
+Product presentation should separate source assertion from downstream conclusion and show internal IDs only as secondary technical detail.
+
+---
+
+## 14. Explicit exclusions and stop conditions
+
+R4 does not authorize:
+
+* canonical person/company/trust identity or entity resolution;
+* UBO/controller IDs, qualification, thresholds, or conclusions;
+* ownership-chain traversal or percentage multiplication;
+* source winner, operative value, or latest-wins selection;
+* KYC satisfaction, customer action, analyst decision, or onboarding progression;
+* A4b coverage, set/cardinality, conflict, or requirement assessment;
+* new Information Needs or schema mutation;
+* A2 Companies House producer changes;
+* automatic A4a evaluation;
+* raw provider exchange persistence;
+* changes to migrations 010–016; or
+* changes to existing KYC, Pre-boarding, or UBO behavior.
+
+Stop for Architecture Authority before implementation if R4 requires a parallel Fact identity, ambiguous provider-directed edges, implicit entity merging, uncertain source-code mapping, inferred currentness, numeric invention, weakening Fact support/locator lineage, A4a/A4b redesign, or downstream policy conclusions.
+
+Architecture Authority approved ADR-017, the one-to-one extension model, the initial versioned vocabulary, party/value/temporal grammar, direct-versus-derived mapping rule, and migration 017 direction on 2026-09-01.
+
+---
+
+# Prior Accepted Build Brief — R3 PDF/Image Interpretation + Durable Evidence Locators
+
+## Governance Status
+
+R3 was accepted and implemented at `ec96fe358ef09bdec15dd14f23a7ade1b36aba06` under approved ADR-016.
+
+The remainder of this file preserves the accepted R3 brief for governance history. R4 does not reopen or alter R3 behavior.
 
 ---
 

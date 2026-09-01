@@ -164,6 +164,8 @@ Every stable fresh R2 request carries a caller-supplied operation key. Atomic sc
 
 #### Evidence Consumer Readiness R3 — PDF/Image Interpretation and Locators
 
+**Accepted and implemented at `ec96fe358ef09bdec15dd14f23a7ade1b36aba06`.**
+
 Extend the existing A3/R2 interpretation path to the PDF, PNG, and JPEG media already preserved by R1. R3 retains the same trusted server-side resolution, exact private tenant/context authorization, SHA-256 verification, neutral requested-concept model, open discovery, append-only Extraction Runs/Facts, and no-provider history reopening.
 
 R3 introduces a provider-neutral multimodal content boundary for verified text, image, and PDF/document inputs. Provider-native content blocks remain inside each provider adapter. The first Anthropic adapter may use base64 PDF/image blocks only within bounded request, byte, page, pixel, and model-capability limits; it must not expose storage references, trust filename extensions, silently convert preserved media, persist raw provider exchanges, or treat provider/model support as Evidence authority.
@@ -180,7 +182,27 @@ R3 preserves explicit current/ceased/historical/effective statements and uncerta
 
 #### Evidence Consumer Readiness R4 — Typed Relational Facts
 
-Separately govern typed relational Facts required by consumers such as ownership, voting, and appointment relationships without importing downstream policy decisions. R4 is not authorized by R2.
+**Authorized under approved ADR-017. Implementation is the current bounded build.**
+
+Add a provider-neutral typed extension to an ordinary immutable Evidence Fact for an individual source-supported relationship:
+
+```text
+source party
+    relationship
+target party or arrangement
+```
+
+The documented direction is always subject–relationship–object: the subject holds, exercises, performs, or is assigned the relationship toward the object. Provider-native direction and passive source wording must not leak into persisted semantics.
+
+R4 should support source-party snapshots for natural persons, legal entities, trusts/legal arrangements, and unknown/other parties without creating canonical global entities. It should introduce a versioned neutral vocabulary covering economic ownership, voting rights, appointment/removal rights, formal decision/control rights, significant influence/control, director/officer/signatory roles, trust roles, nominee/on-behalf-of relationships, and `OTHER` only for an understood out-of-vocabulary relationship. Ambiguous relationship meaning or direction remains untyped. Source-specific codes remain preserved metadata and map only through deterministic versioned rules.
+
+Relationship quantities must distinguish exact, range, qualitative, and unknown values; support percentages, count-of-total, absolute values, and source-recorded qualitative statements; preserve range inclusivity; and never turn unknown into zero or a range into a midpoint. Explicit current, ceased, historical, unknown-currentness, and effective-date assertions remain source state rather than latest-wins policy.
+
+The persistence is one additive one-to-zero/one typed relationship extension keyed by an existing `evidence_facts` ID. Each extension represents exactly one directed source assertion; independent relationships do not become one opaque typed array. The ordinary Fact retains raw representation, Extraction Run lineage, support state, Fact-to-Artifact support, and R3 locators. Direct source statements may be direct typed Facts. A later mapping of an existing untyped/source-code Fact appends separate derived Facts with existing transformation lineage instead of rewriting the original.
+
+R4 requires deterministic structured-output validation. Invalid typed output leaves any safe underlying ordinary Fact intact and never fabricates a relationship. Companies House PSC bands may later map to the same neutral model only where the code mapping is deterministic; PSC statements, exemptions, unavailable information, and no-registrable-PSC states are not fake relationships.
+
+R4 does not determine UBO/controller status, indirect/effective ownership, thresholds, operative values, winners, requirement coverage, KYC satisfaction, or A4b conclusions. A4a remains the Fact-to-Information-Need evaluation boundary and requires no architecture change merely to receive a typed relational Fact.
 
 #### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
 
