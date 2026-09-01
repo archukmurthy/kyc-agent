@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-g5-3c-customer-input-application` |
 | Base commit | `2f4e967251d3d1ae433f0175d1ea0186a7fac54c` (accepted PR #43 merge on `origin/main`). |
 | Latest accepted PR | [#43 — G5.3A adaptive customer journey UI](https://github.com/archukmurthy/kyc-agent/pull/43), merged normally as `2f4e967251d3d1ae433f0175d1ea0186a7fac54c`. |
-| Current PR | Pending creation for G5.3C; do not merge without Control Room acceptance. |
+| Current PR | [#44 — G5.3C customer input application boundary](https://github.com/archukmurthy/kyc-agent/pull/44) — open and unmerged; do not merge without Control Room acceptance. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
