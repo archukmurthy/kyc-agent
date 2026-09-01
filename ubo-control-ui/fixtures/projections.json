@@ -354,6 +354,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -838,6 +841,9 @@
             "summary": {
               "totalEntities": 3,
               "totalRelationships": 2,
+              "investigationEntities": 3,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 2,
               "qualifyingPeople": 1,
               "unresolvedBranches": 8,
               "conflicts": 0,
@@ -1497,6 +1503,9 @@
             "summary": {
               "totalEntities": 4,
               "totalRelationships": 4,
+              "investigationEntities": 4,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 4,
               "qualifyingPeople": 1,
               "unresolvedBranches": 9,
               "conflicts": 0,
@@ -1868,6 +1877,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -2414,6 +2426,9 @@
             "summary": {
               "totalEntities": 3,
               "totalRelationships": 3,
+              "investigationEntities": 3,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 3,
               "qualifyingPeople": 2,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -2744,6 +2759,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -3365,6 +3383,9 @@
             "summary": {
               "totalEntities": 5,
               "totalRelationships": 4,
+              "investigationEntities": 5,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 4,
               "qualifyingPeople": 0,
               "unresolvedBranches": 11,
               "conflicts": 0,
@@ -3678,6 +3699,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 0,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 0,
               "qualifyingPeople": 0,
               "unresolvedBranches": 7,
               "conflicts": 2,
@@ -4096,6 +4120,9 @@
             "summary": {
               "totalEntities": 4,
               "totalRelationships": 3,
+              "investigationEntities": 4,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 3,
               "qualifyingPeople": 0,
               "unresolvedBranches": 6,
               "conflicts": 0,
@@ -4446,6 +4473,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -4682,6 +4712,9 @@
             "summary": {
               "totalEntities": 1,
               "totalRelationships": 0,
+              "investigationEntities": 1,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 0,
               "qualifyingPeople": 0,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -5014,6 +5047,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 0,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -5491,6 +5527,9 @@
             "summary": {
               "totalEntities": 3,
               "totalRelationships": 2,
+              "investigationEntities": 3,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 2,
               "qualifyingPeople": 1,
               "unresolvedBranches": 8,
               "conflicts": 0,

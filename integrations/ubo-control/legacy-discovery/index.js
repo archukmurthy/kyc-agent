@@ -339,7 +339,6 @@ function translateLegacyResponse(request, body) {
         evidenceReferences,
         qualifiers: {
           adapter: "legacy-discovery-anti-corruption-v1",
-          sourceAssertionIndex: sourceIndex,
           ...(descriptor.qualifiers || {}),
         },
       };

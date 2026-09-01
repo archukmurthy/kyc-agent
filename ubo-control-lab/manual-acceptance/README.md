@@ -30,6 +30,20 @@ Additional browser checks:
 - `lab18-evidence-disabled.png` confirms Live Evidence is disabled and no fake upload/extraction path is offered.
 - Refresh/new-case behavior reset the session as labelled; no resumability was claimed.
 
+## Ownership-graph blocker remediation
+
+The sanitized `asda-regression.json` fixture reproduces the provider-result shape that exposed the product-test blocker without retaining provider payloads or real upstream company data. It passes through the real legacy adapter, explicit Lab identity/claim decisions, canonical graph, public projection and production renderer.
+
+| Acceptance view | Browser evidence | Result |
+|---|---|---|
+| Corrected initial view | `asda-corrected-initial-fit.png` | The map reports 12 map entities and 32 map relationships, keeps labels readable at 100%, and anchors the customer at the bottom of the owner-to-customer hierarchy. |
+| Intermediate holding chain | `asda-corrected-intermediate-chain.png` | Selecting Example Finance Plc focuses its subject-reaching route while preserving readable intermediate nodes and relationship values. |
+| Upstream highlighted path | `asda-corrected-highlighted-path.png` | Selecting Alex Example highlights one clean owner-to-customer route. The visible 25% and 100% relationships remain readable and the unresolved state remains explicit. |
+
+The useful presentation principles carried forward from the previous Discovery Lab are the obvious upstream-to-customer story, vertically legible intermediate holdings, direct percentage labels, horizontal sibling branches, and an obvious customer anchor. The legacy graph model, identity logic, UBO determination, percentage calculation and thresholds were not reused.
+
+The initial view deliberately uses a readable 100% layout inside a local scroll/zoom canvas instead of shrinking the complete hierarchy into a microscopic strip. The `Fit` control restores that readable subject-anchored view. Investigation-only entities are excluded from the ownership map but remain in case state; the counters above the map are therefore labelled `Map entities` and `Map relationships`.
+
 ## Deployed preview verification
 
 Preview: `https://kyc-agent-zayzo-git-codex-ub-6d54dd-archukmurthy-3271s-projects.vercel.app/ubo-control-lab/`

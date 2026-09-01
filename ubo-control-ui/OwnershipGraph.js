@@ -105,20 +105,25 @@
     const nodes = [...projection.nodes].sort((a, b) => a.entityId.localeCompare(b.entityId));
     const relationships = [...projection.relationships].sort((a, b) => a.relationshipId.localeCompare(b.relationshipId));
     const depth = new Map([[projection.subject.entityId, 0]]);
-    let changed = true;
-    let pass = 0;
-    while (changed && pass <= nodes.length) {
-      changed = false;
-      pass += 1;
-      relationships.forEach((relationship) => {
-        if (!depth.has(relationship.targetEntityId)) return;
-        const next = depth.get(relationship.targetEntityId) + 1;
-        if (!depth.has(relationship.sourceEntityId) || next > depth.get(relationship.sourceEntityId)) {
-          depth.set(relationship.sourceEntityId, next);
-          changed = true;
-        }
-      });
-    }
+    const visiting = new Set();
+    const outgoing = new Map();
+    relationships.forEach((relationship) => {
+      if (!outgoing.has(relationship.sourceEntityId)) outgoing.set(relationship.sourceEntityId, []);
+      outgoing.get(relationship.sourceEntityId).push(relationship);
+    });
+    const depthFor = (entityId) => {
+      if (depth.has(entityId)) return depth.get(entityId);
+      if (visiting.has(entityId)) return undefined;
+      visiting.add(entityId);
+      const targetDepths = (outgoing.get(entityId) || []).map(({ targetEntityId }) => depthFor(targetEntityId))
+        .filter((value) => value !== undefined);
+      visiting.delete(entityId);
+      if (!targetDepths.length) return undefined;
+      const value = 1 + Math.max(...targetDepths);
+      depth.set(entityId, value);
+      return value;
+    };
+    nodes.forEach(({ entityId }) => depthFor(entityId));
     const connectedMax = Math.max(0, ...depth.values());
     nodes.forEach((node) => { if (!depth.has(node.entityId)) depth.set(node.entityId, connectedMax + 1); });
     const maxDepth = Math.max(0, ...depth.values());
@@ -128,12 +133,24 @@
       if (!layers.has(value)) layers.set(value, []);
       layers.get(value).push(node);
     });
+    const order = new Map([[projection.subject.entityId, 0]]);
+    [...layers.keys()].sort((a, b) => a - b).forEach((layer) => {
+      const layerNodes = layers.get(layer);
+      layerNodes.sort((left, right) => {
+        const targetOrder = (node) => {
+          const values = (outgoing.get(node.entityId) || []).map(({ targetEntityId }) => order.get(targetEntityId))
+            .filter((value) => value !== undefined);
+          return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : Number.MAX_SAFE_INTEGER;
+        };
+        return targetOrder(left) - targetOrder(right) || left.entityId.localeCompare(right.entityId);
+      });
+      layerNodes.forEach((node, index) => order.set(node.entityId, index));
+    });
     const widest = Math.max(1, ...[...layers.values()].map((items) => items.length));
     const width = Math.max(920, (PAD * 2) + (widest * NW) + ((widest - 1) * HG));
     const height = (PAD * 2) + NH + (maxDepth * VG);
     const positions = new Map();
     [...layers.entries()].forEach(([layer, layerNodes]) => {
-      layerNodes.sort((a, b) => a.entityId.localeCompare(b.entityId));
       const layerWidth = (layerNodes.length * NW) + ((layerNodes.length - 1) * HG);
       const startX = (width - layerWidth) / 2;
       layerNodes.forEach((node, index) => positions.set(node.entityId, {
@@ -141,7 +158,7 @@
         y: PAD + ((maxDepth - layer) * VG),
       }));
     });
-    return { width, height, positions, relationships, nodes };
+    return { width, height, positions, relationships, nodes, depths: depth };
   }
 
   function relationshipsForPath(path, projection) {
@@ -173,6 +190,40 @@
       const pathIds = projection.calculations.filter((item) => calculations.has(item.calculationId))
         .flatMap((item) => item.paths || []).flatMap((path) => path.relationshipIds || []);
       if (pathIds.length) return new Set(pathIds);
+      const reachesSubject = new Set([projection.subject.entityId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        projection.relationships.forEach((relationship) => {
+          if (reachesSubject.has(relationship.targetEntityId) && !reachesSubject.has(relationship.sourceEntityId)) {
+            reachesSubject.add(relationship.sourceEntityId);
+            changed = true;
+          }
+        });
+      }
+      const routeIds = new Set();
+      const queue = [selection.id];
+      const visited = new Set();
+      while (queue.length) {
+        const entityId = queue.shift();
+        if (visited.has(entityId)) continue;
+        visited.add(entityId);
+        const byTarget = new Map();
+        projection.relationships.filter((relationship) => relationship.sourceEntityId === entityId
+          && reachesSubject.has(relationship.targetEntityId)).forEach((relationship) => {
+          if (!byTarget.has(relationship.targetEntityId)) byTarget.set(relationship.targetEntityId, []);
+          byTarget.get(relationship.targetEntityId).push(relationship);
+        });
+        byTarget.forEach((candidates) => {
+          const priority = (relationship) => relationship.relationshipType === "ECONOMIC_OWNERSHIP" ? 0
+            : relationship.relationshipType === "VOTING_RIGHTS" ? 1 : 2;
+          const relationship = [...candidates].sort((left, right) => priority(left) - priority(right)
+            || left.relationshipId.localeCompare(right.relationshipId))[0];
+          routeIds.add(relationship.relationshipId);
+          if (relationship.targetEntityId !== projection.subject.entityId) queue.push(relationship.targetEntityId);
+        });
+      }
+      if (routeIds.size) return routeIds;
       return new Set(projection.relationships.filter((item) => item.sourceEntityId === selection.id || item.targetEntityId === selection.id)
         .map((item) => item.relationshipId));
     }
@@ -194,8 +245,10 @@
   function Summary({ projection }) {
     const summary = projection.summary || {};
     const items = [
-      ["Entities", summary.totalEntities ?? projection.nodes.length],
-      ["Relationships", summary.totalRelationships ?? projection.relationships.length],
+      ["Map entities", summary.totalEntities ?? projection.nodes.length],
+      ["Map relationships", summary.totalRelationships ?? projection.relationships.length],
+      ...(summary.investigationEntities > (summary.totalEntities ?? projection.nodes.length)
+        ? [["Investigation entities", summary.investigationEntities]] : []),
       ["Qualifying people", summary.qualifyingPeople ?? projection.qualifications.length],
       ["Unresolved", summary.unresolvedBranches ?? projection.unresolved.length],
       ["Conflicts", summary.conflicts ?? projection.conflicts.length],
@@ -308,6 +361,7 @@
     const [pan, setPan] = React.useState({ x: 0, y: 0 });
     const drag = React.useRef(null);
     const panelRef = React.useRef(null);
+    const canvasScrollRef = React.useRef(null);
     const markerId = `ug-arrow-${React.useId().replaceAll(":", "")}`;
     const journeyEntityIds = new Set(highlightEntityIds);
     const journeyRelationshipIds = new Set(highlightRelationshipIds);
@@ -317,10 +371,16 @@
       if (typeof onSelectionChange === "function") onSelectionChange(next);
     }, [onSelectionChange]);
     React.useEffect(() => { if (selection && panelRef.current) panelRef.current.focus({ preventScroll: true }); }, [selection]);
-    React.useEffect(() => { setSelection(null); setZoom(1); setPan({ x: 0, y: 0 }); }, [projection]);
+    const scrollToSubject = React.useCallback(() => {
+      const viewport = canvasScrollRef.current;
+      if (!viewport) return;
+      viewport.scrollLeft = Math.max(0, (viewport.scrollWidth - viewport.clientWidth) / 2);
+      viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    }, []);
+    React.useEffect(() => { setSelection(null); setZoom(1); setPan({ x: 0, y: 0 }); setTimeout(scrollToSubject, 0); }, [projection, scrollToSubject]);
 
     const zoomBy = (delta) => setZoom((current) => Math.min(1.8, Math.max(0.55, Number((current + delta).toFixed(2)))));
-    const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+    const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); setTimeout(scrollToSubject, 0); };
     const onWheel = (event) => {
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
@@ -392,9 +452,9 @@
       h("div", { className: "ug-workspace" },
         h("div", { className: "ug-canvas-card" },
           h("div", { className: "ug-toolbar", role: "toolbar", "aria-label": "Graph navigation controls" }, h("button", { type: "button", onClick: () => zoomBy(0.1), "aria-label": "Zoom in" }, "+"), h("button", { type: "button", onClick: () => zoomBy(-0.1), "aria-label": "Zoom out" }, "−"), h("button", { type: "button", onClick: reset, "aria-label": "Reset and fit graph to view" }, "Fit"), h("span", { "aria-live": "polite" }, `${Math.round(zoom * 100)}%`)),
-          h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { height: `${height || Math.min(680, Math.max(400, layout.height))}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag },
+          h("div", { className: "ug-canvas-scroll", ref: canvasScrollRef, style: { maxHeight: `${height || 680}px` } }, h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { width: `${layout.width * zoom}px`, height: `${layout.height * zoom}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag },
             h("title", null, graphName), h("desc", null, `${projection.nodes.length} entities, ${projection.relationships.length} relationships, ${projection.qualifications.length} qualifying people, ${projection.unresolved.length} unresolved items.`),
-            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: `translate(${pan.x} ${pan.y}) scale(${zoom})` }, edges, nodes)),
+            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: `translate(${pan.x} ${pan.y})` }, edges, nodes))),
           projection.relationships.length === 0 && h("div", { className: "ug-empty-overlay", role: "status" }, h("strong", null, "Ownership/control unresolved"), h("span", null, "No safe relationship is established yet; the customer subject remains visible.")),
           stateButtons.length > 0 && h("div", { className: "ug-state-strip", "aria-label": "Conflict and review states" }, stateButtons.map((item) => h("button", { type: "button", key: `${item.kind}:${item.id}`, className: item.css, onClick: () => select({ kind: item.kind, id: item.id }) }, item.label)))),
         h(DetailPanel, { selection, projection, detailLevel, onSelect: select, panelRef })),

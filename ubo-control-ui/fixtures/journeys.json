@@ -306,6 +306,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 0,
               "conflicts": 0,
@@ -879,6 +882,9 @@
             "summary": {
               "totalEntities": 3,
               "totalRelationships": 2,
+              "investigationEntities": 3,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 2,
               "qualifyingPeople": 1,
               "unresolvedBranches": 0,
               "conflicts": 0,
@@ -1773,6 +1779,9 @@
             "summary": {
               "totalEntities": 5,
               "totalRelationships": 4,
+              "investigationEntities": 5,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 4,
               "qualifyingPeople": 0,
               "unresolvedBranches": 11,
               "conflicts": 0,
@@ -2617,6 +2626,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 1,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -6276,6 +6288,9 @@
             "summary": {
               "totalEntities": 2,
               "totalRelationships": 1,
+              "investigationEntities": 2,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 1,
               "qualifyingPeople": 0,
               "unresolvedBranches": 7,
               "conflicts": 0,
@@ -6667,6 +6682,9 @@
             "summary": {
               "totalEntities": 3,
               "totalRelationships": 2,
+              "investigationEntities": 3,
+              "excludedInvestigationEntities": 0,
+              "investigationRelationships": 2,
               "qualifyingPeople": 1,
               "unresolvedBranches": 0,
               "conflicts": 0,

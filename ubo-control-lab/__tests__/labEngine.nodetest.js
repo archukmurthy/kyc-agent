@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { makeEvent } = require("../../ubo-control-ui/UboJourney");
+const ASDA_REGRESSION = require("../fixtures/asda-regression.json");
 const {
   applyCustomerAction,
   applyReviewerDecisions,
@@ -14,6 +15,17 @@ const {
   startLive,
   validateCompanyContext,
 } = require("../server/labEngine");
+
+function reviewAll(session) {
+  return applyReviewerDecisions({
+    session,
+    identityDecisions: session.decisionTargets.candidateParties
+      .map(({ candidatePartyKey }) => ({ candidatePartyKey, action: "REGISTER_NEW" })),
+    claimDecisions: session.decisionTargets.candidateClaims
+      .map(({ claimId }) => ({ claimId, resultingState: "OPERATIVE" })),
+    recordedAt: "2026-09-01T12:00:00.000Z",
+  });
+}
 
 function ownershipBundle(session) {
   return session.snapshots.at(-1).view.plan.recommendedWave.customerBundles.find(({ recommendedCustomerActions }) =>
@@ -93,6 +105,57 @@ test("Live Discovery composition uses the accepted adapter and never trusts lega
   assert.equal(session.discovery.candidateFactCount, 1);
   assert.equal(JSON.stringify(session).includes("Ignored legacy conclusion"), false);
   assert.equal(session.candidateSources[0].simulated, false);
+});
+
+test("sanitized ASDA regression reuses exact registry identities and produces one node per canonical entity", async () => {
+  const session = await startLive({
+    companyContext: { legalEntityName: "Example Delivery Customer Ltd", registrationNumber: "99000001", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => ({ status: 200, body: structuredClone(ASDA_REGRESSION) }) },
+  });
+  assert.deepEqual({
+    legacyNodes: ASDA_REGRESSION.ownershipGraph.nodes.length,
+    legacyEdges: ASDA_REGRESSION.ownershipGraph.edges.length,
+    candidateFacts: session.discovery.candidateFactCount,
+    candidateParties: session.decisionTargets.candidateParties.length,
+    candidateClaims: session.decisionTargets.candidateClaims.length,
+  }, { legacyNodes: 12, legacyEdges: 11, candidateFacts: 32, candidateParties: 60, candidateClaims: 32 });
+
+  const reviewed = reviewAll(session);
+  const view = reviewed.snapshots.at(-1).view;
+  const reasoning = view.snapshot.decisionContent.reasoning;
+  const identifiers = new Map();
+  reasoning.canonicalEntities.forEach((entity) => (entity.externalIdentifiers || []).forEach((identifier) => {
+    const key = `${identifier.namespace || identifier.system || identifier.identifierType}:${identifier.value}`.toUpperCase();
+    if (!identifiers.has(key)) identifiers.set(key, new Set());
+    identifiers.get(key).add(entity.entityId);
+  }));
+  assert.equal([...identifiers.values()].every((entityIds) => entityIds.size === 1), true);
+  assert.equal(reasoning.canonicalEntities.length, 12);
+  assert.equal(reasoning.identityResolutionDecisions.length, 64);
+  assert.equal(reasoning.operativeClaims.length, 32);
+  assert.equal(reasoning.graph.nodes.length, 12);
+  assert.equal(reasoning.graph.relationships.length, 32);
+  assert.equal(view.graph.nodes.length, 12);
+  assert.equal(new Set(view.graph.nodes.map(({ entityId }) => entityId)).size, 12);
+  assert.equal(view.graph.summary.investigationEntities, 12);
+});
+
+test("corroborating legacy assertions coalesce after exact-ID reuse without doubling ownership", async () => {
+  const body = structuredClone(ASDA_REGRESSION);
+  body.ownershipGraph.nodes = body.ownershipGraph.nodes.slice(0, 2);
+  body.ownershipGraph.edges = [
+    { ...body.ownershipGraph.edges[0], metadata: { currentState: "CURRENT", naturesOfControl: ["ownership-of-shares-75-to-100-percent"] }, evidenceIds: ["source-01"] },
+    { ...body.ownershipGraph.edges[0], metadata: { currentState: "CURRENT", naturesOfControl: ["ownership-of-shares-75-to-100-percent"] }, evidenceIds: ["source-02"] },
+  ];
+  const session = await startLive({
+    companyContext: { legalEntityName: "Example Delivery Customer Ltd", registrationNumber: "99000001", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => ({ status: 200, body }) },
+  });
+  const graph = reviewAll(session).snapshots.at(-1).view.graph;
+  assert.equal(graph.nodes.length, 2);
+  assert.equal(graph.relationships.length, 1);
+  assert.equal(graph.relationships[0].support.claimCount, 2);
+  assert.equal(graph.relationships[0].measurement.lowerBound, 75);
 });
 
 test("foreign HoldCo runs through real customer input, explicit adjudication and immutable Snapshot B", () => {

@@ -215,6 +215,15 @@ function identityGroupingKey(target) {
   return `candidate:${target.candidatePartyKey}`;
 }
 
+function externalIdentifierKeys(party) {
+  return (party.externalIdentifiers || []).flatMap((identifier) => {
+    const namespace = identifier.namespace || identifier.system || identifier.identifierType;
+    const value = identifier.value;
+    if (!namespace || value === undefined || value === null || String(value).trim() === "") return [];
+    return [`${String(namespace).trim().toUpperCase()}:${String(value).trim().toUpperCase()}`];
+  });
+}
+
 function preReviewFixture(session, sourceScenarioId, recordedAt) {
   const registrations = [];
   const identities = [];
@@ -485,6 +494,11 @@ function applyReviewerDecisions({ session: supplied, identityDecisions = [], cla
   const partyTargets = new Map(session.decisionTargets.candidateParties.map((target) => [target.candidatePartyKey, target]));
   const claimTargets = new Map(session.decisionTargets.candidateClaims.map((target) => [target.claimId, target]));
   const directory = new Map(session.entityDirectory.map((entry) => [entry.entityId, entry]));
+  const entitiesByExactIdentifier = new Map();
+  session.entityDirectory.forEach((entry) => externalIdentifierKeys(entry.party).forEach((key) => {
+    if (!entitiesByExactIdentifier.has(key)) entitiesByExactIdentifier.set(key, new Set());
+    entitiesByExactIdentifier.get(key).add(entry.entityId);
+  }));
   const registrations = [];
   const identities = identityDecisions.map((input, index) => {
     const target = partyTargets.get(input.candidatePartyKey);
@@ -492,21 +506,33 @@ function applyReviewerDecisions({ session: supplied, identityDecisions = [], cla
     const action = String(input.action || "").toUpperCase();
     let status;
     let entityId;
+    let basisReasonCode;
     if (action === "REGISTER_NEW") {
-      entityId = stableId(`${session.caseId}:review-entity`, target.candidatePartyKey);
+      const identifierKeys = externalIdentifierKeys(target.party);
+      const exactMatches = new Set(identifierKeys.flatMap((key) => [...(entitiesByExactIdentifier.get(key) || [])]));
+      if (exactMatches.size > 1) throw new TypeError("Exact external identifiers resolve to conflicting canonical entities");
+      entityId = exactMatches.size === 1
+        ? [...exactMatches][0]
+        : stableId(`${session.caseId}:review-entity`, identifierKeys.length ? identifierKeys.sort() : target.candidatePartyKey);
       if (!directory.has(entityId)) {
         const party = { ...target.party, ...clone(input.partyOverrides || {}) };
         registrations.push(canonicalRegistration(entityId, party, at));
         const directoryEntry = { entityId, party: { ...party, entityId }, source: "EXPLICIT_LAB_REVIEW" };
         session.entityDirectory.push(directoryEntry);
         directory.set(entityId, directoryEntry);
+        externalIdentifierKeys(party).forEach((key) => {
+          if (!entitiesByExactIdentifier.has(key)) entitiesByExactIdentifier.set(key, new Set());
+          entitiesByExactIdentifier.get(key).add(entityId);
+        });
       }
       status = "RESOLVED";
+      basisReasonCode = exactMatches.size === 1 ? "EXACT_EXTERNAL_IDENTIFIER_MATCH" : "EXPLICIT_COMPLIANCE_REVIEW";
     } else if (action === "RESOLVE_EXISTING") {
       assertString(input.entityId, "Existing canonical entity ID");
       if (!directory.has(input.entityId)) throw new TypeError("Existing canonical entity is not in the Lab case directory");
       entityId = input.entityId;
       status = "RESOLVED";
+      basisReasonCode = "EXPLICIT_COMPLIANCE_REVIEW";
     } else if (action === "LEAVE_UNRESOLVED") status = "UNRESOLVED";
     else if (action === "REJECT_MATCH") status = "REJECTED";
     else throw new TypeError("Unsupported identity decision action");
@@ -515,7 +541,7 @@ function applyReviewerDecisions({ session: supplied, identityDecisions = [], cla
       candidatePartyKey: target.candidatePartyKey,
       status,
       ...(entityId ? { entityId } : {}),
-      basisReasonCodes: [action === "REJECT_MATCH" ? "EXPLICIT_MATCH_REJECTION" : action === "LEAVE_UNRESOLVED" ? "INSUFFICIENT_IDENTITY_EVIDENCE" : "EXPLICIT_COMPLIANCE_REVIEW"],
+      basisReasonCodes: [basisReasonCode || (action === "REJECT_MATCH" ? "EXPLICIT_MATCH_REJECTION" : "INSUFFICIENT_IDENTITY_EVIDENCE")],
       evidenceReferences: clone(input.evidenceReferences || []),
       decidedAt: at,
       decisionOrigin: "UBO_CONTROL_LAB_REVIEW",

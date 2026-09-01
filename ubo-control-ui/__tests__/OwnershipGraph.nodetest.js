@@ -2,8 +2,40 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DETAIL_LEVEL, formatMeasurement } = require("../OwnershipGraph");
+const { DETAIL_LEVEL, computeLayout, formatMeasurement } = require("../OwnershipGraph");
 const { fixtures, projection, renderGraph } = require("./testHarness");
+
+function graphProjection(entityIds, relationshipDefinitions) {
+  const base = structuredClone(projection("UI02"));
+  base.subject = { ...base.subject, entityId: "customer", displayName: "Layout Customer" };
+  base.nodes = entityIds.map((entityId) => ({
+    entityId,
+    displayName: entityId,
+    category: entityId.startsWith("owner") ? "NATURAL_PERSON" : "LEGAL_ENTITY",
+    externalIdentifiers: [],
+    entityTypeMetadata: {},
+    qualifyingRoles: [],
+    semantics: entityId === "customer" ? ["SUBJECT"] : [],
+  }));
+  base.relationships = relationshipDefinitions.map((definition, index) => ({
+    relationshipId: definition.id || `layout-relationship-${index}`,
+    sourceEntityId: definition.source,
+    targetEntityId: definition.target,
+    relationshipType: definition.type || "ECONOMIC_OWNERSHIP",
+    dimension: definition.type === "VOTING_RIGHTS" ? "VOTING" : "ECONOMIC",
+    temporalState: "CURRENT",
+    measurement: definition.measurement || { type: "EXACT", value: 50 },
+    support: { claimCount: 1, claimIds: [`claim-${index}`], evidenceReferenceCount: 0, evidenceReferences: [] },
+    indicators: [],
+  }));
+  base.calculations = [];
+  base.qualifications = [];
+  base.unresolved = [];
+  base.conflicts = [];
+  base.reviews = [];
+  base.summary = { totalEntities: base.nodes.length, totalRelationships: base.relationships.length };
+  return base;
+}
 
 test("UI01–UI12 committed projection fixtures render without error", () => {
   fixtures.fixtures.forEach((fixture) => fixture.states.forEach((state) => {
@@ -90,5 +122,81 @@ test("accessible summary names the graph and describes its semantic state", () =
     assert.equal(rendered.container.querySelector("svg").getAttribute("aria-label"), "Ownership and control graph for Northstar Payments Ltd");
     assert.match(rendered.container.querySelector(".ug-sr-only").textContent, /customer subject/);
     assert.ok(rendered.container.querySelector("[role='toolbar'][aria-label='Graph navigation controls']"));
+  } finally { rendered.cleanup(); }
+});
+
+test("deterministic hierarchy anchors the customer below immediate owners, long chains and sibling branches", () => {
+  const supplied = graphProjection(
+    ["customer", "midco", "holdco-a", "holdco-b", "owner-a", "owner-b"],
+    [
+      { source: "midco", target: "customer" },
+      { source: "holdco-a", target: "midco" },
+      { source: "holdco-b", target: "midco" },
+      { source: "owner-a", target: "holdco-a" },
+      { source: "owner-b", target: "holdco-b" },
+    ],
+  );
+  const first = computeLayout(supplied);
+  const second = computeLayout(structuredClone(supplied));
+  assert.deepEqual([...first.positions], [...second.positions]);
+  assert.equal(first.depths.get("customer"), 0);
+  assert.equal(first.depths.get("midco"), 1);
+  assert.equal(first.depths.get("holdco-a"), 2);
+  assert.equal(first.depths.get("owner-a"), 3);
+  assert.ok(first.positions.get("owner-a").y < first.positions.get("holdco-a").y);
+  assert.ok(first.positions.get("holdco-a").y < first.positions.get("midco").y);
+  assert.ok(first.positions.get("midco").y < first.positions.get("customer").y);
+  assert.equal(first.positions.get("holdco-a").y, first.positions.get("holdco-b").y);
+  assert.notEqual(first.positions.get("holdco-a").x, first.positions.get("holdco-b").x);
+});
+
+test("parallel economic and voting edges reuse nodes while remaining separately traceable", () => {
+  const supplied = graphProjection(["customer", "owner-a"], [
+    { id: "economic", source: "owner-a", target: "customer", type: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value: 35 } },
+    { id: "voting", source: "owner-a", target: "customer", type: "VOTING_RIGHTS", measurement: { type: "EXACT", value: 40 } },
+  ]);
+  const rendered = renderGraph(supplied);
+  try {
+    assert.equal(rendered.container.querySelectorAll(".ug-node").length, 2);
+    assert.equal(rendered.container.querySelectorAll(".ug-edge").length, 2);
+    assert.equal(rendered.container.querySelectorAll(".ug-edge-label")[0].textContent.includes("%"), true);
+    assert.notEqual(rendered.container.querySelector(".ug-edge.type-economic-ownership path").getAttribute("d"), rendered.container.querySelector(".ug-edge.type-voting-rights path").getAttribute("d"));
+  } finally { rendered.cleanup(); }
+});
+
+test("selecting an upstream entity highlights its complete route to the customer", () => {
+  const supplied = graphProjection(["customer", "midco", "holdco", "owner-a", "owner-b"], [
+    { id: "owner-holdco", source: "owner-a", target: "holdco" },
+    { id: "holdco-midco", source: "holdco", target: "midco" },
+    { id: "midco-customer", source: "midco", target: "customer" },
+    { id: "other-owner-customer", source: "owner-b", target: "customer" },
+  ]);
+  const rendered = renderGraph(supplied);
+  try {
+    rendered.click(rendered.container.querySelector(".ug-node[aria-label^='owner-a']"));
+    assert.deepEqual([...rendered.container.querySelectorAll(".ug-edge.active")].map((edge) => edge.getAttribute("aria-label")).sort(), [
+      "Economic ownership from holdco to midco, 50%",
+      "Economic ownership from midco to customer, 50%",
+      "Economic ownership from owner-a to holdco, 50%",
+    ]);
+    assert.equal(rendered.container.querySelector(".ug-edge[aria-label^='Economic ownership from owner-b']").classList.contains("muted"), true);
+  } finally { rendered.cleanup(); }
+});
+
+test("large graphs retain readable-size nodes in an overflow viewport instead of shrinking the whole map", () => {
+  const owners = Array.from({ length: 24 }, (_value, index) => `owner-${String(index + 1).padStart(2, "0")}`);
+  const supplied = graphProjection(["customer", ...owners], owners.map((owner) => ({ source: owner, target: "customer" })));
+  const layout = computeLayout(supplied);
+  assert.ok(layout.width > 6000);
+  assert.equal(new Set(layout.positions.values()).size, 25);
+  const rendered = renderGraph(supplied);
+  try {
+    const viewport = rendered.container.querySelector(".ug-canvas-scroll");
+    const svg = rendered.container.querySelector(".ug-canvas");
+    assert.ok(viewport);
+    assert.equal(svg.style.width, `${layout.width}px`);
+    assert.equal(svg.getAttribute("viewBox"), `0 0 ${layout.width} ${layout.height}`);
+    assert.equal(rendered.container.querySelector(".ug-node-name").getAttribute("font-size"), null);
+    assert.equal(rendered.container.querySelector("[aria-label='Reset and fit graph to view']").nextSibling.textContent, "100%");
   } finally { rendered.cleanup(); }
 });
