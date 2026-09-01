@@ -182,7 +182,7 @@ R3 preserves explicit current/ceased/historical/effective statements and uncerta
 
 #### Evidence Consumer Readiness R4 — Typed Relational Facts
 
-**Authorized under approved ADR-017. Implementation is the current bounded build.**
+**Accepted and implemented at `450ae41e2871a5145667b8fec906a84d5b5bbc93` under approved ADR-017.**
 
 Add a provider-neutral typed extension to an ordinary immutable Evidence Fact for an individual source-supported relationship:
 
@@ -206,11 +206,13 @@ R4 does not determine UBO/controller status, indirect/effective ownership, thres
 
 #### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
 
-A4b may later reason across candidate evaluations to assess evidence coverage, collections/cardinality, comparable conflicts, legitimate empty sets, temporal applicability, and other requirement-level evidence conditions.
+A4b may later reason across an explicitly selected immutable set of A4a evaluations and source-backed Evidence signals to assess evidence coverage, collection/cardinality completeness, legitimate empty sets, comparable disagreement, temporal applicability, and unresolved input limitations.
 
-A4b is deferred until separately governed semantics and upstream policy inputs exist for scalar-versus-collection shape, cardinality, complete sets and `all current X`, minimum/maximum counts, legitimate empty sets, required/optional status, temporal scope, freshness, source suitability, comparable-conflict rules, and aggregation to requirement-level coverage.
+The diagnostic and proposed architecture are recorded in ADR-018. The existing Information Need remains the stable Evidence target but does not contain sufficient assessment semantics. The recommended boundary is a versioned assessment specification supplied by the consuming domain and immutably snapshotted by Evidence for each assessment. That specification must state the applicable structural and policy inputs, including scalar/collection shape, cardinality, complete-set and legitimate-empty semantics, temporal checkpoint, comparison references, and any freshness/source-suitability context.
 
-A4b remains provisional evidence assessment. It does not select the operative evidence/value or determine final KYC satisfaction.
+A4b outcomes remain multidimensional and provisional: coverage, completeness, comparable disagreement, temporal applicability, and missing-policy/input limitations must not be collapsed into one satisfaction status. A4b does not select an operative value or source winner, calculate indirect ownership, determine UBO/controller status, or determine final KYC satisfaction.
+
+**ADR-018 and A4b implementation are approved. One additive migration after 017 is authorized; migrations 010–017 remain immutable and no historical backfill is permitted.**
 
 #### Downstream KYC/Onboarding
 

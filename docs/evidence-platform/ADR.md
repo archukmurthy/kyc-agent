@@ -1391,11 +1391,13 @@ R3 does not authorize a second extraction engine, new Evidence identity, provide
 
 ## ADR-017 — Typed Source-Relationship Facts
 
-**Status:** APPROVED — IMPLEMENTATION AUTHORIZED
+**Status:** APPROVED — IMPLEMENTED
 
 **Date:** 2026-09-01
 
 **Raised by:** Architecture Authority
+
+**Implemented at:** `450ae41e2871a5145667b8fec906a84d5b5bbc93`
 
 ### Context
 
@@ -1571,3 +1573,124 @@ R4 can make individual source relationships machine-readable while retaining the
 The decision introduces no master entity system, UBO domain, ownership-chain calculation, source winner, KYC decision, A4b aggregation, or change to existing KYC behavior.
 
 Architecture Authority approved the one-to-one extension model, initial versioned relationship vocabulary, party snapshot grammar, value/temporal grammar, direct-versus-derived mapping rule, and migration 017 direction on 2026-09-01.
+
+---
+
+## ADR-018 — Provisional Evidence Coverage, Completeness, and Comparable-Disagreement Assessment
+
+**Status:** APPROVED — IMPLEMENTATION AUTHORIZED
+
+**Date:** 2026-09-01
+
+**Raised by:** Architecture Authority
+
+### Context
+
+ADR-013 split A4 into immutable Fact-to-Information-Need evaluation (A4a) and later provisional coverage/conflict assessment (A4b). A4a is implemented and preserves whether each immutable Fact addresses a supplied Information Need without changing A3 support or determining KYC satisfaction. ADR-017 and R4 add typed source-relationship Facts without coverage, aggregation, winner selection, indirect ownership, UBO qualification, or downstream decisioning.
+
+Repository diagnosis confirms that the current Information Need stores only its Requirement, schema reference/version/configuration lineage, and schema field identifier. It has no scalar/collection shape, cardinality, one-of/all-of rule, legitimate-empty rule, temporal checkpoint, expected type/value, completeness proof rule, freshness, or source-suitability semantics. `evidence_requirements.status` remains only `open` or `closed` lifecycle state.
+
+The platform already preserves several distinct completeness signals: A2 collection/acquisition/capture outcomes; A3 selected-input and extraction completeness; A3 Fact support; A4a Fact-to-Need evaluation; and R4 typed value/relationship/temporal shape. None is equivalent to Information Need completeness or final KYC satisfaction.
+
+### Decision
+
+#### A4b is an immutable provisional Evidence assessment
+
+A4b may assess an explicitly supplied Information Need using an explicitly selected immutable set of A4a evaluations and related source-backed Evidence signals.
+
+It may report coverage, completeness, legitimate-empty evidence, comparable disagreement, temporal applicability, and missing-input/policy limitations. It must not select an operative value or source winner, determine customer correctness, calculate indirect ownership, identify a UBO/controller, mutate a canonical graph, or determine final KYC satisfaction or a compliance decision.
+
+#### Assessment semantics use a hybrid ownership model
+
+The existing Information Need remains the stable Evidence target and is not mutated into a consumer policy object.
+
+The consuming domain supplies a bounded, versioned Assessment Specification for the assessment purpose. Evidence validates and deterministically canonicalizes its neutral contract, persists the exact immutable specification snapshot/reference with the assessment run, applies only those supplied semantics to Evidence-owned provenance/facts, and returns explicit limitations where inputs are absent. The specification accepts data and opaque references only; it must not accept arbitrary executable policy or prompt text.
+
+Evidence owns Fact/Evaluation identity, provenance, capture/source-effective/effective timestamps, immutable assessment lineage, neutral comparator execution, and qualified output. Whether a downstream process requires the Need to be satisfied is not an A4b assessment input. The consuming domain owns requiredness, acceptable freshness, source suitability/corroboration, temporal checkpoint policy, and final satisfaction/decision meaning. Consumer policy objects are not imported directly; neutral versioned inputs and opaque external policy references cross the boundary.
+
+Where a required specification or policy input is absent, A4b returns `indeterminate` or `policy/context required`. It does not invent defaults.
+
+The bounded specification contains semantic equivalents of: specification version; scalar/collection Need shape; optional expected Evidence-native value shape; named/versioned comparator profile; optional complete-set and cardinality semantics; temporal scope (`any`, `current`, `as_of`, or `historical`) and an `as_of` checkpoint where required; bounded caller-supplied party associations; bounded candidate eligibility/suitability context; and opaque external policy references. Required/optional business-process status, downstream thresholds, UBO rules, and final-satisfaction semantics are excluded.
+
+#### Assessment dimensions remain separate
+
+Coverage, completeness, comparable disagreement, temporal applicability, and assessment-input/policy sufficiency are separate result dimensions with reasons, qualifications, limitations, and contribution lineage. They must not be collapsed into one overloaded status.
+
+The neutral conceptual vocabulary includes:
+
+* coverage: covered, partially covered, uncovered, or indeterminate;
+* completeness: complete, incomplete, indeterminate, or not applicable;
+* comparable disagreement: none, present, indeterminate, or not applicable;
+* temporal applicability: applicable, partially applicable, not applicable, or indeterminate;
+* empty-set state: established empty, not established, indeterminate, or not applicable; and
+* input sufficiency: sufficient or insufficient.
+
+These dimensions remain independently visible and must never be collapsed into `KYC satisfied = true`.
+
+#### A4a evaluations are explicit immutable inputs
+
+An A4b assessment records the exact A4a evaluation IDs and corresponding Fact IDs it consumed, plus relevant typed set-assertion Facts where applicable. It does not silently select the latest evaluation, search for newer Facts, or rerun semantic A4a matching. Later Facts, A4a reevaluation, specification changes, or policy changes create a new A4b assessment; earlier assessments remain reconstructable.
+
+#### Scalar comparison is bounded and non-operative
+
+For a scalar Need, A4b may determine whether candidate evaluations provide coverage and whether genuinely comparable values agree, are compatible, disagree, or cannot safely be compared under a named/versioned comparator.
+
+Scalar typed comparison requires compatible types and identifier schemes. Normalized text requires the same concept and an explicit conservative normalizer/version. Structured addresses require an approved component and address-role mapping. A disagreement never selects a winner.
+
+#### Collection completeness requires explicit closing evidence
+
+Collection membership remains represented by individual Facts or typed relationship Facts. Observed members do not establish a complete set.
+
+A complete collection assessment requires a supplied specification defining the set/cardinality semantics plus Evidence capable of closing the set: for example an explicit source-supported total or completeness statement, or a governed authoritative complete-set contract combined with successful source collection and complete extraction. Pagination completion may be necessary but is not sufficient by itself.
+
+A4b distinguishes observed-member count, source-declared total, supplied cardinality, source collection completeness, extraction completeness, and Information Need completeness.
+
+#### Legitimate empty is explicit source evidence
+
+An explicit source assertion such as `no registrable PSC` is materially different from failed collection, partial collection, incomplete extraction, no extracted Fact, or a requested concept that was not evaluated.
+
+Legitimate empty must be represented without a fake party, fake relationship, or zero ownership. The approved model is a generic typed set-assertion extension keyed one-to-zero/one by an ordinary Evidence Fact, analogous to R4 typed relationships. The ordinary Fact retains Extraction Run, source wording, Artifact support, R3 locator, support state, and immutable history.
+
+The extension records a versioned set concept; empty state (`established_empty`, `non_empty`, or `unknown`); completeness state (`complete`, `incomplete`, or `unknown`); optional explicit member count only where the source supplies it; current/historical/unknown temporal state and explicit effective dates; and bounded source-specific metadata. Direct source statements may carry direct extensions. Deterministic source mapping creates a new derived Fact with explicit mapper/version lineage rather than rewriting an input Fact. Failed or incomplete acquisition and zero extracted Facts never create an established-empty assertion. No historical rows are automatically backfilled.
+
+Until explicit source evidence and the supplied empty-set semantics are available, A4b returns indeterminate rather than inferring empty or complete.
+
+#### Comparable disagreement respects concept, identity, measure, and time
+
+Numeric exact/range values are comparable only when concept, relationship, measure, unit, party association, and temporal basis are compatible. An exact value outside a range or non-overlapping ranges may disagree; overlapping ranges are compatible but not proof of equality.
+
+Different relationship types such as economic ownership and voting rights do not conflict automatically. Non-overlapping historical periods do not conflict automatically. Unknown currentness remains unresolved. R4 source-party snapshots are not canonical identities; cross-source relationship comparison requires exact stable source identifiers or an explicit upstream party association, not name similarity.
+
+Every disagreement finding retains candidate/evaluation IDs, compared values, source/capture/effective dates, comparator/version, comparability reason, disagreement nature, and limitations. It never records a winner.
+
+#### Temporal, source-suitability, and freshness policy remain supplied inputs
+
+Evidence owns source/capture/effective factual timestamps. The consumer-owned Assessment Specification supplies any checkpoint/as-of date and policy rule defining currentness, freshness, source suitability, or corroboration. A4b may apply those supplied rules but may not create universal trust tiers, Companies-House-always-wins, fixed-age validity, latest-wins, or customer-evidence policy.
+
+Missing necessary policy produces an explicit indeterminate/policy-input-required result.
+
+#### Additive immutable persistence is expected
+
+Future A4b implementation should use additive structures conceptually equivalent to:
+
+* an immutable coverage assessment run linked to the Information Need and containing the specification reference/version/snapshot, evaluator/comparator lineage, assessment time, multidimensional results, and limitations;
+* candidate/contribution rows linked to exact A4a evaluations and Facts; and
+* comparable-disagreement finding/link rows retaining comparator and temporal basis.
+
+The same additive migration may include the approved typed set-assertion extension for legitimate-empty and complete-set source assertions. No existing status or mutable Fact JSON may be overloaded. Existing data requires no automatic backfill.
+
+Migration 018 is authorized as one additive forward-only migration after 017. Migrations 010–017 remain immutable.
+
+#### Requirement lifecycle and downstream decision ownership are unchanged
+
+`evidence_requirements.status` remains requirement lifecycle only. It does not become Evidence coverage, KYC satisfaction, operative-value selection, or a decision state.
+
+KYC/Onboarding/UBO or another authorized consumer retains source/value winner selection, operative values, final satisfaction, customer correctness/dispute handling, indirect-ownership calculation, UBO/controller qualification, approve/reject/refer/escalate decisions, and workflow progression.
+
+### Consequences
+
+A4b can produce reconstructable provisional Evidence assessments without pretending that Evidence owns consumer policy. Scalar and collection coverage remain truthful, legitimate empty states remain distinguishable from failure, comparable disagreements remain qualified and non-operative, and historical assessments remain immutable.
+
+Architecture Authority approved the hybrid Assessment Specification boundary, bounded schema, separate outcome dimensions, typed set-assertion extension, explicit party-association boundary, deterministic comparator direction, immutable run/candidate/finding persistence, and migration 018 on 2026-09-01.
+
+This decision authorizes only bounded A4b implementation and Lab characterization. It does not authorize KYC/UBO integration, indirect ownership, operative-value selection, winner selection, final satisfaction, provider calls, recollection, reinterpretation, schema mutation, or changes to existing KYC behavior.
