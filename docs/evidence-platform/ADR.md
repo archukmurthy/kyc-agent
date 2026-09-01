@@ -1055,3 +1055,152 @@ ADR-014 applies ADR-005 collection/interpretation separation and ADR-010 Asset/A
 R1 can make PDF and image Evidence durable and reopenable before interpretation support exists. Future consumers receive stable generic Evidence identities rather than owning storage and provenance internals. Retried operations do not create duplicate logical evidence, while deliberate repeated uploads retain independent evidentiary history even when byte-identical.
 
 R1 requires careful server-side authorization, media validation, integrity read-back, and non-secret responses. It explicitly excludes direct browser authority, private-evidence discovery, cross-context reuse, extraction, trust assessment, satisfaction, operative-value selection, UBO semantics, external-custody identity evidence, R2/R3/R4, A4b, and existing KYC behavior changes.
+
+---
+
+## ADR-015 — Targeted Interpretation Boundary for Authorized Evidence Consumers
+
+**Status:** APPROVED
+
+**Date:** 2026-09-01
+
+**Raised by:** Architecture Authority
+
+### Context
+
+R1 is implemented at commit `0bd62ee351b6a1ac0ca2f882ac338d790657f313` and can preserve and reopen an authorized private Artifact without interpreting it. A3 already contains the provider-neutral machinery needed to interpret one persisted Artifact or a coherent set of Artifacts from one Evidence Asset, verify persisted SHA-256 values, request several semantic concepts, preserve requested and discovered Facts, and append provider/model/instruction lineage.
+
+The existing A3 service is not yet a stable downstream integration boundary. Its public handler is an Evidence Lab adapter: it supplies only Artifact IDs, resolves tenant from environment, ignores caller `requestedConcepts` and `extractionContext`, and supplies no trusted private context. After the approved R1 authorization correction, the handler therefore cannot interpret or reopen history for a private Artifact because exact context is not passed. It also defaults missing concepts/context to standalone Lab fixtures, exposes a Lab-shaped response, has no opaque consumer-correlation contract, and cannot distinguish an unsupported requested concept from a supported concept that is legitimately absent.
+
+### Decision
+
+#### Insert R2 before R3, R4, and A4b
+
+Add **Evidence Consumer Readiness R2 — Targeted Interpretation Boundary** after R1 and before R3, R4, and deferred A4b.
+
+R2 is a stable, provider-neutral service/API boundary around the existing A3 interpretation engine. It is not a new extraction engine and must preserve A3's immutable Extraction Run, Fact, support, and Artifact-lineage model.
+
+Conceptually:
+
+```text
+authorized Evidence consumer
+        ↓
+persisted Artifact IDs
++ neutral requested concepts
++ bounded extraction context
++ opaque caller correlation
+        ↓
+server resolve → authorize → read → SHA-256 verify
+        ↓
+existing A3 interpretation machinery
+        ↓
+immutable Extraction Run + Facts + support lineage
+```
+
+#### Trusted authorization and persisted Artifact identities are mandatory
+
+The R2 service receives tenant, context, actor, and authorization from trusted server-side host state. A browser or downstream payload may identify the target context but is not proof of authority.
+
+Consumers provide only persisted Evidence Artifact IDs. They must not provide authoritative bytes, Blob URLs, filesystem paths, storage keys, credentials, fingerprints, source metadata, or other storage/provenance claims. Evidence resolves each Artifact server-side, applies existing public/private access rules, reads the persisted storage location, and verifies its persisted SHA-256 before provider execution.
+
+Public Artifact interpretation remains permitted under the existing public access rule. A `context_restricted` Artifact requires the exact authorized tenant and exact Evidence context plus matching explicit access scope. Same-tenant membership alone remains insufficient.
+
+#### One coherent Evidence Asset per interpretation operation
+
+One R2 operation may select one Artifact or an explicit ordered set of Artifacts belonging to one Evidence Asset. Cross-Evidence-Asset interpretation is rejected. Persisted page order and completeness metadata remain authoritative where available.
+
+Every input Artifact is recorded in Extraction Run input lineage. Fact-to-Artifact support remains explicit: selection as a run input does not imply that every Fact is supported by every input Artifact.
+
+#### Requested concepts are neutral Evidence semantics
+
+R2 accepts one or more bounded neutral semantic concepts, each with an Evidence-facing concept name and optional neutral description. One provider call should answer several concepts where one coherent Artifact set can safely be interpreted together. One run may produce several Facts.
+
+Requested concepts do not carry KYC satisfaction instructions. Evidence may be asked to find economic ownership relationships, voting rights, appointment/removal rights, registered identifiers, former names, or similar source facts. It must not be asked to determine whether a foreign policy requirement is satisfied, identify a UBO/controller, calculate ownership, select an operative value, or decide a case.
+
+R2 must not convert external Information Need IDs, policy IDs, UBO IDs, or other consumer-domain identifiers into Evidence schema fields, Evidence Information Needs, foreign keys, or domain semantics. Schema field and Information Need linkage may be used only when the caller supplies an already-authorized Evidence-native extraction context governed by the existing model.
+
+Open discovery remains permitted: provider output may contain additional clearly relevant Facts beyond the requested concepts. Those Facts remain `discovered`; they do not mutate the request, schema, or caller domain.
+
+#### Extraction context is bounded and correlation is separate
+
+R2 accepts a bounded provider-neutral extraction context sufficient to interpret the evidence, such as jurisdiction, language, schema reference/version when genuinely supplied, temporal purpose, or other neutral interpretation constraints. It must be validated and persisted with the Extraction Run. Arbitrary caller objects must not be blindly treated as authoritative Evidence context or forwarded to a provider.
+
+Caller correlation is a separate opaque envelope, conceptually:
+
+```text
+correlation: {
+  requestId?,
+  externalReferences?: [{ system, type, id }]
+}
+```
+
+Evidence may validate size/shape, persist it in non-semantic run metadata, and return it for reconstruction. It does not interpret, dereference, authorize from, or create foreign keys around correlation. Correlation is not Evidence identity, Fact identity, Information Need identity, policy input, or provider prompt content.
+
+The existing Extraction Run JSONB metadata can carry bounded correlation without a migration. If atomic lookup or uniqueness semantics are later required, implementation must stop for an additive schema decision.
+
+#### Requested-concept outcomes require distinct Evidence-native states
+
+R2 must preserve a per-requested-concept outcome that distinguishes at least:
+
+* `found` — one or more supported Facts answer the concept;
+* `not_found` — the input was interpretable and complete enough to conclude the requested fact was not represented;
+* `not_evaluated` — incomplete/unreadable input or another limitation prevented evaluation; and
+* `unsupported` — the current interpretation capability does not understand or support the requested concept.
+
+Exact internal enum names remain implementation details, but `unsupported`, `not_found`, `not_evaluated`, provider unavailability/failure, and overall inconclusive interpretation must not be conflated.
+
+A completed run may legitimately contain no persisted Fact when all requested concepts truthfully resolve to `not_found`. An incomplete run with some supported Facts remains a completed but qualified interpretation. Provider, integrity, media, access, and persistence failures are not “no data.”
+
+#### Fresh execution and historical retrieval are separate contracts
+
+R2 exposes two explicit operations:
+
+```text
+open existing interpretation history
+  → no provider call
+  → no new Extraction Run
+
+run fresh interpretation
+  → provider call may occur
+  → new immutable Extraction Run
+```
+
+History retrieval must use the same server-side Artifact authorization boundary and return persisted runs, Facts, requested-concept outcomes, completeness/support, input Artifact lineage, Fact-to-Artifact support, provider/model/instruction lineage, timestamps, and opaque correlation without reading source bytes or invoking a provider unless source-byte verification is explicitly required by a separately governed operation.
+
+#### Every stable fresh execution has a durable operation key
+
+Every fresh request through the stable R2 production boundary contains a caller-supplied `operationKey`. The key identifies one interpretation execution attempt within the trusted authorized caller scope. It is separate from opaque correlation, Evidence/Artifact/Extraction Run identity, and downstream Information Need or policy identity.
+
+For the same authorized scope, the same key plus the same canonical request means the same operation. A completed operation returns its existing operation, Extraction Run, and bounded result without a provider call or new run. An in-progress operation returns current status without a second provider call or new run. A failed operation returns its persisted failure without automatic provider retry or new run. A deliberate retry after failure or deliberate reinterpretation uses a new key and creates a new immutable run.
+
+Reusing a scoped key with a materially different canonical request returns `idempotency_conflict` and does not reinterpret or mutate history.
+
+The canonical request fingerprint includes trusted tenant/context scope, authoritative server-resolved Artifact set and order, requested concepts and their neutral descriptions/bounded Evidence linkage, validated extraction context, bounded opaque correlation, and trusted caller/provenance metadata that is persisted. Caller-supplied hashes/storage data are not authority. Current provider, model, or instruction configuration is excluded from the fingerprint; the configuration actually used remains immutable execution lineage. Reusing an old key after execution configuration changes reopens the original operation.
+
+Correlation remains opaque and separate but participates in request consistency after operation creation. Reusing a key with different correlation is a conflict; correlation history is never silently rewritten.
+
+Production idempotency requires durable atomic uniqueness. R2 is authorized to add one bounded, forward-only migration after 014 for an interpretation-operation record retaining operation identity, trusted tenant/context scope, operation key, canonical request fingerprint, bounded correlation, status, optional Extraction Run reference, bounded failure details, and timestamps. A scoped unique constraint/index must prevent concurrent duplicate execution. R2 must not overload Facts, Artifact metadata, or introduce broader workflow infrastructure.
+
+#### Media support does not expand in R2
+
+R2 supports only the media types currently interpreted by A3: JSON-compatible structured content and HTML. An R1-preserved PDF, PNG, or JPEG remains valid stored Evidence but receives an explicit `unsupported_media_type` interpretation outcome until R3 is separately governed and implemented.
+
+#### Interpretation remains separate from A4a evaluation
+
+R2 creates or retrieves A3 Extraction Runs and Evidence Facts. It does not automatically invoke A4a, decide Fact-to-Need evaluation, merge interpretation and evaluation into one opaque call, assess requirement coverage, select winners, or determine downstream KYC satisfaction.
+
+#### Stable boundary and response
+
+The stable R2 response should expose Evidence-native identities and reconstructable lineage intentionally rather than returning the entire internal Lab object. It should include operation/run status, non-secret Artifact/Asset identities, requested-concept outcomes, requested and discovered Facts, explicit Fact support Artifact IDs, completeness/limitations, provider/model/instruction references, capture and extraction timestamps, integrity result, and opaque correlation.
+
+Internal storage references, provider prompts/raw responses, credentials, repository row shapes, Lab defaults, and implementation-only diagnostic structures are excluded. Failures return bounded Evidence-native codes with non-secret diagnostic references where appropriate.
+
+### Consequences
+
+Most R2 behavior can reuse A3 unchanged: multi-concept provider requests, multi-Fact output, requested/discovered status, coherent multi-Artifact enforcement, SHA-256 verification, append-only persistence, provider lineage, Fact-to-Artifact support, and no-cost history reopening already exist.
+
+R2 still requires a production service/API adapter, strict request validation, trusted private context propagation, separation of extraction context from opaque correlation, a stable response contract, and a distinct `unsupported` requested-concept outcome. Current Lab APIs remain internal and are not the stable R2 contract.
+
+One additive migration after 014 is authorized solely for durable interpretation-operation idempotency. Correlation and requested-concept outcome details may continue to use bounded JSONB lineage; no broader workflow schema is authorized.
+
+R2 remains generic Evidence infrastructure. It imports no UBO/KYC/EDD/source-of-funds contracts, creates no foreign policy relationships, performs no ownership calculation, adds no PDF/image interpretation, and does not authorize R3, R4, A4b, or existing KYC behavior changes.

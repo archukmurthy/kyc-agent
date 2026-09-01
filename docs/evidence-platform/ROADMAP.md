@@ -152,6 +152,24 @@ R1 reuses the approved A1/A2 Evidence and storage primitives. It distinguishes i
 
 R1 is generic Evidence infrastructure, not a UBO or KYC upload feature. It performs no extraction, interpretation, Fact creation, Evidence-to-Need evaluation, trust assessment, satisfaction, operative-value selection, or external-custody identity/biometric storage. R2, R3, R4, consumer integration, and A4b remain separately governed and deferred.
 
+#### Evidence Consumer Readiness R2 — Targeted Interpretation Boundary
+
+Expose a stable provider-neutral consumer boundary around the existing A3 interpretation machinery. An authorized server-side consumer supplies persisted Artifact IDs, one or more neutral requested concepts, a bounded extraction context, and optional opaque correlation. Evidence resolves and authorizes persisted Artifacts, reads and verifies SHA-256, interprets one Artifact or a coherent same-Evidence-Asset set, and appends immutable Extraction Run, Fact, completeness, support, and Fact-to-Artifact lineage.
+
+R2 preserves open discovery and keeps requested Facts distinct from discovered Facts. It distinguishes found, legitimate not-found, not-evaluated/incomplete, unsupported concepts, unsupported media, provider failure, integrity failure, access denial, inconclusive interpretation, and persistence failure. Historical retrieval remains a separate no-provider-call operation from deliberate fresh interpretation.
+
+R2 uses only current JSON/HTML interpretation capability. PDF/image interpretation and locators belong to R3; typed relational Facts belong to R4. R2 does not import consumer-domain identifiers or policy semantics, perform A4a automatically, calculate ownership, determine UBO/controllers, assess requirement satisfaction, or implement A4b.
+
+Every stable fresh R2 request carries a caller-supplied operation key. Atomic scoped uniqueness returns completed, in-progress, or failed operations without another provider call or Extraction Run; changed canonical input under the same key conflicts; deliberate retry or reinterpretation uses a new key. One bounded additive interpretation-operation migration after 014 is authorized. Opaque correlation remains separate from operation identity even though it participates in canonical request consistency.
+
+#### Evidence Consumer Readiness R3 — PDF/Image Interpretation and Locators
+
+Separately govern interpretation of preserved PDF/image media and durable page/region/text locators. R3 is not authorized by R2.
+
+#### Evidence Consumer Readiness R4 — Typed Relational Facts
+
+Separately govern typed relational Facts required by consumers such as ownership, voting, and appointment relationships without importing downstream policy decisions. R4 is not authorized by R2.
+
 #### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
 
 A4b may later reason across candidate evaluations to assess evidence coverage, collections/cardinality, comparable conflicts, legitimate empty sets, temporal applicability, and other requirement-level evidence conditions.

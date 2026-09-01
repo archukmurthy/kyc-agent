@@ -1,14 +1,363 @@
 # Evidence Platform — Current Build Brief
 
-# Evidence Consumer Readiness R1 — Private Artifact Ingestion
+# Evidence Consumer Readiness R2 — Targeted Interpretation Boundary
 
 ## Governance Status
 
-This brief defines the approved R1 architecture and implementation boundary after completed Stage A4a and before deferred Stage A4b.
+This is the approved R2 implementation brief after completed R1 at commit `0bd62ee351b6a1ac0ca2f882ac338d790657f313`.
 
-Architecture Authority has approved ADR-014 and authorized R1 implementation within this brief. Do not broaden that authorization beyond R1.
+Architecture Authority has approved ADR-015, resolved fresh-execution idempotency, and authorized only the bounded R2 implementation described here.
 
-Stage A4b and Evidence Consumer Readiness R2, R3, and R4 remain deferred. UBO and existing KYC behavior are outside this build.
+R3, R4, A4b, UBO integration, and existing KYC behavior remain deferred and outside this build.
+
+---
+
+## 1. Objective
+
+Define the smallest stable, provider-neutral Evidence boundary through which an already-authorized consumer may request targeted interpretation of already-preserved Evidence Artifacts.
+
+```text
+authorized consumer
+      ↓
+persisted Artifact IDs
++ neutral requested concepts
++ bounded extraction context
++ opaque correlation
+      ↓
+Evidence resolve → authorize → read → verify SHA-256
+      ↓
+existing A3 interpretation machinery
+      ↓
+immutable Extraction Run + reusable Facts + lineage
+```
+
+R2 wraps and hardens A3 for downstream integration. It does not create a second interpretation engine.
+
+---
+
+## 2. Existing A3 capability to reuse
+
+`LiveArtifactInterpretationService.interpret` already accepts internally:
+
+```text
+artifactId or artifactIds[]
+tenantId
+contextId?
+requestedConcepts[]?
+extractionContext?
+```
+
+It already:
+
+1. resolves each persisted Artifact through the repository;
+2. authorizes public or exact private tenant/context access;
+3. rejects cross-Evidence-Asset input sets;
+4. orders persisted multi-page Artifacts and assesses input completeness;
+5. rejects unsupported media before provider execution;
+6. reads bytes from authoritative server-side storage;
+7. verifies persisted SHA-256 for every Artifact;
+8. sends several requested concepts in one provider request;
+9. accepts several provider Facts in one run;
+10. distinguishes requested and discovered Facts;
+11. preserves explicit Fact-to-Artifact support;
+12. records provider, model, instruction, extraction context, timestamps, and support;
+13. appends immutable Extraction Run history; and
+14. reopens history separately without a provider call.
+
+The minimum R2 implementation should delegate to these capabilities rather than duplicate them.
+
+---
+
+## 3. Current integration gaps
+
+The current `/api/evidence/a3-interpret` and `/api/evidence/a3-history` handlers are Lab/internal adapters, not stable production consumer contracts.
+
+They currently:
+
+* resolve tenant from server environment but do not propagate an authorized `contextId`;
+* therefore cannot use the corrected exact-context path for private R1 Artifacts;
+* ignore caller `requestedConcepts` and `extractionContext` even though the internal service supports them;
+* default missing values to standalone Evidence Lab concepts/context;
+* have no opaque correlation envelope;
+* return a large Lab-shaped object containing internal structures;
+* do not validate concept count, description size, context shape, or Artifact-set bounds;
+* do not expose a distinct unsupported-concept state; and
+* have no operation-level idempotency contract for a lost-response retry.
+
+R2 must add a new stable adapter. It must not silently redefine the existing Lab endpoints as production contracts.
+
+---
+
+## 4. Proposed R2 request boundary
+
+Conceptually:
+
+```text
+interpretArtifacts({
+  artifactIds: [...],
+  requestedConcepts: [
+    { concept, description? }
+  ],
+  extractionContext: {
+    jurisdiction?,
+    language?,
+    schemaReference?,
+    schemaVersionReference?,
+    purpose?,
+    otherApprovedNeutralConstraints?
+  },
+  correlation: {
+    requestId?,
+    externalReferences?: [{ system, type, id }]
+  }
+})
+```
+
+Exact API/service names and bounded size/count limits remain implementation details.
+
+Trusted host state supplies authorized tenant, Evidence context, actor, and authorization. The request payload is not proof of authority.
+
+Consumers supply persisted Artifact IDs only. They do not supply authoritative bytes, fingerprints, media/source metadata, Blob URLs, filesystem paths, storage keys, or credentials.
+
+---
+
+## 5. Neutral requested concepts
+
+R2 supports one or several neutral Evidence semantic concepts in one interpretation operation. Examples include:
+
+* economic ownership relationship;
+* voting rights;
+* appointment or removal rights;
+* registered entity identifiers;
+* former legal names; and
+* registered address.
+
+The request must not instruct Evidence to determine UBO/controller status, calculate policy ownership thresholds, satisfy a KYC requirement, select a winner, or make an operative business decision.
+
+Consumer-domain Information Need IDs, policy IDs, UBO IDs, or similar references belong only in opaque correlation. They do not become Evidence Information Needs, schema fields, foreign keys, or provider instructions.
+
+A3 open discovery remains enabled. Additional clearly relevant facts remain `discovered`; Evidence does not mutate the request or schema.
+
+---
+
+## 6. Extraction context and opaque correlation
+
+Extraction context is Evidence-facing interpretation input. R2 validates a bounded neutral shape, persists it with the run, and forwards only approved interpretation fields to the provider.
+
+Opaque correlation is reconstructive caller metadata. Evidence validates only its bounded shape/size, persists and returns it, but does not interpret, dereference, authorize from, or forward it to the semantic provider.
+
+Correlation must remain separate from:
+
+* Evidence identity;
+* Extraction Run identity;
+* idempotency;
+* requested concepts;
+* extraction context;
+* Evidence Information Needs; and
+* policy/domain semantics.
+
+Existing Extraction Run JSONB metadata is sufficient for bounded correlation. No migration is expected unless Architecture Authority later requires searchable/unique correlation semantics.
+
+---
+
+## 7. Artifact selection and authorization
+
+R2 may interpret:
+
+* one persisted Artifact; or
+* an explicit coherent set of persisted Artifacts belonging to one Evidence Asset.
+
+Cross-Evidence-Asset selection remains prohibited. Run-input lineage records every selected Artifact, while Fact-to-Artifact support records only the Artifact or Artifacts that actually support each Fact.
+
+Public access remains governed by the existing public rule. Private access requires:
+
+```text
+context_restricted Asset
++ exact authorized tenant
++ exact authorized Evidence context
++ matching explicit Asset access scope
+```
+
+Authorization occurs before storage access or provider execution. Same-tenant membership alone is insufficient.
+
+---
+
+## 8. Media boundary
+
+R2 does not add interpretation media.
+
+Current supported media remain:
+
+* `application/json` and compatible `+json`; and
+* `text/html`.
+
+An R1-preserved PDF, PNG, or JPEG remains valid stored Evidence but must receive explicit `unsupported_media_type` from R2 until R3 is separately authorized.
+
+Artifact preservation success must never imply current interpretability.
+
+---
+
+## 9. Outcome model
+
+Per requested concept, R2 must distinguish:
+
+| Outcome | Meaning |
+|---|---|
+| `found` | supported Fact(s) answer the requested concept |
+| `not_found` | interpretable, sufficiently complete input does not represent the requested fact |
+| `not_evaluated` | incomplete/unreadable input or another limitation prevented evaluation |
+| `unsupported` | current interpretation capability does not support the requested concept |
+
+Operation/run outcomes must additionally distinguish:
+
+* completed interpretation;
+* completed but partial/incomplete interpretation;
+* legitimate completion with no relevant Facts found;
+* inconclusive interpretation;
+* unsupported media;
+* provider unavailable/not configured;
+* malformed/truncated/timed-out provider result;
+* storage read failure;
+* Artifact integrity failure;
+* access denial;
+* cross-Asset input rejection; and
+* persistence failure.
+
+`unsupported` is not `not_found`; `not_found` is not provider failure; incomplete is not unavailable; and access/integrity/persistence failures are not “no data.”
+
+No unsupported/failed result may fabricate a Fact.
+
+---
+
+## 10. Historical versus fresh execution
+
+R2 exposes separate contracts:
+
+```text
+openInterpretationHistory(...)
+  external source call: NO
+  provider call: NO
+  new run: NO
+
+interpretArtifacts(...)
+  external source call: NO
+  provider call: MAYBE/YES
+  new immutable run: YES
+```
+
+Selecting or resolving an Artifact, inspecting history, or round-tripping correlation must never trigger a provider call.
+
+Historical output includes persisted requested-concept outcomes, Facts, support/completeness, input and Fact-support lineage, provider/model/instruction references, timestamps, failures, and opaque correlation.
+
+---
+
+## 11. Durable operation-key idempotency
+
+Every stable fresh R2 request requires a caller-supplied `operationKey`. Historical reopening remains separate and requires no operation key. Correlation is not idempotency or run identity.
+
+Within the trusted tenant/context/caller scope:
+
+```text
+same operationKey + same canonical request
+  completed   → return existing result; provider NO; new run NO
+  in_progress → return current status; provider NO; new run NO
+  failed      → return persisted failure; automatic retry NO; new run NO
+
+same operationKey + changed canonical request
+  → idempotency_conflict
+
+new operationKey
+  → explicit new operation and immutable Extraction Run
+```
+
+The canonical fingerprint includes trusted tenant/context scope, authoritative resolved Artifact order, neutral requested concepts/descriptions/bounded Evidence linkage, validated extraction context, opaque correlation, and persisted trusted caller metadata. Provider/model/instruction configuration is excluded. The actual execution configuration remains persisted lineage.
+
+R2 is authorized to add migration 015 as one forward-only interpretation-operation table with atomic scoped uniqueness, request fingerprint, bounded correlation, status, optional run reference, bounded failure, and timestamps. Migrations 010–014 remain immutable. No general workflow engine is authorized.
+
+---
+
+## 12. Stable response boundary
+
+The R2 response should intentionally expose:
+
+* run identity and status;
+* safe Evidence Artifact/Asset identities;
+* integrity result;
+* requested-concept outcomes;
+* requested and discovered Facts;
+* explicit supporting Artifact IDs per Fact;
+* input and extraction completeness/limitations;
+* provider/model/instruction lineage;
+* evidence-capture and extraction timestamps;
+* bounded non-secret failure details; and
+* opaque caller correlation.
+
+It must not expose storage keys/references, credentials, provider prompts/raw responses, repository row shapes, Lab fixture defaults, or unbounded internal error objects.
+
+---
+
+## 13. Separation from A4a and consumer policy
+
+R2 produces and retrieves A3 Evidence Facts. It does not automatically call A4a.
+
+```text
+R2 interpretation → Evidence Facts
+
+separately:
+
+A4a Fact-to-Information-Need evaluation
+```
+
+R2 does not select operative values, aggregate conflicts, assess coverage, determine satisfaction, calculate ownership, identify UBOs/controllers, mutate schemas, or import UBO/KYC/EDD/source-of-funds contracts.
+
+---
+
+## 14. Required future characterization
+
+Before R2 can be accepted, separately authorized implementation must prove:
+
+1. one persisted Artifact plus one requested concept;
+2. one Artifact plus several requested concepts in one provider operation;
+3. one operation producing several Facts;
+4. requested and discovered Facts coexisting;
+5. opaque correlation round-trip without provider exposure or domain adoption;
+6. exact tenant/context authorization for private Evidence;
+7. existing public Artifact interpretation remains permitted;
+8. coherent same-Asset multi-Artifact interpretation;
+9. cross-Asset selection rejected;
+10. every Artifact SHA-256 verified before provider execution;
+11. unsupported concept differentiated from legitimate not-found;
+12. PDF/image reported unsupported before R3;
+13. provider failure differentiated from no data;
+14. history reopened without provider call;
+15. deliberate fresh interpretation creates new immutable history;
+16. Fact-to-Artifact support remains precise; and
+17. no downstream policy/domain imports or automatic A4a action.
+
+---
+
+## 15. Stop conditions
+
+Stop for Architecture Authority if R2 requires:
+
+* idempotency semantics beyond the approved scoped operation-key contract;
+* arbitrary cross-Evidence-Asset interpretation;
+* weakening private tenant/context access;
+* authoritative browser-supplied bytes or storage metadata;
+* adopting foreign domain IDs as Evidence identities;
+* a new general interpretation engine;
+* PDF/image interpretation or locators;
+* typed relational ownership Facts;
+* automatic A4a evaluation;
+* UBO/controller or KYC satisfaction logic;
+* A4b; or
+* rewriting migrations 010–014.
+
+---
+
+# Prior Accepted Build Brief — R1 Private Artifact Ingestion
+
+The remainder of this file preserves the previously approved R1 brief for governance history. R1 was implemented at `0bd62ee351b6a1ac0ca2f882ac338d790657f313` and is not reopened by the proposed R2 governance.
 
 ---
 
