@@ -1,12 +1,12 @@
 # UBO journey hypothesis register
 
-This register records product research hypotheses for later Control Room gates. Entries are not regulatory authority, approved architecture, Policy Pack content or executable resolution logic. Source evidence `PRACTITIONER-001` is explicitly classified `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority.
+This register records product research hypotheses and their Control Room product decisions. Entries are not regulatory authority or Policy Pack content. Source evidence `PRACTITIONER-001` remains explicitly classified `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; approved statuses below authorize only the stated product behavior.
 
 ## JH-001 — Suppress unnecessary customer questions
 
 **Statement:** A customer question should normally be suppressed when the relevant policy requirement has already been resolved to the required evidential standard.
 
-**Status:** `SUPPORTED BY G5.2A PROJECTION — FINAL HOST UX NOT YET VALIDATED`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -18,7 +18,7 @@ This register records product research hypotheses for later Control Room gates. 
 
 **Statement:** Articles, shareholder agreements, LLP agreements and similar governance documents should generally be requested to resolve specific outstanding InformationNeeds rather than universally requested from all applicants.
 
-**Status:** `HYPOTHESIS`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -30,7 +30,7 @@ This register records product research hypotheses for later Control Room gates. 
 
 **Statement:** A customer ownership chart should normally be treated as a candidate description/navigation aid unless applicable policy determines that it provides sufficient proof for the relevant requirement.
 
-**Status:** `HYPOTHESIS`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR — POLICY-OPTION-GATED`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -42,7 +42,7 @@ This register records product research hypotheses for later Control Room gates. 
 
 **Statement:** The engine should support the complete ownership/control model while customer-facing voting, appointment-right, share-class and significant-control questions should appear only when case state and policy make them necessary.
 
-**Status:** `SUPPORTED BY G5.2A PROJECTION`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -66,7 +66,7 @@ Policy requires Fact X
 → analyst/specialist?
 ```
 
-**Status:** `SUPPORTED BY G5.2A PROJECTION`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR`
 
 **Source evidence:** `PRACTITIONER-001`
 
@@ -76,23 +76,23 @@ Policy requires Fact X
 
 ## JH-006 — Candidate resolution priority
 
-**Proposed ordering:**
+**Approved v1 tier/wave doctrine:**
 
-1. existing facts/evidence;
-2. Discovery;
-3. extraction from already-held artifacts;
-4. permitted lightweight customer response;
-5. targeted customer evidence/document request;
-6. analyst/specialist review;
-7. applicable terminal policy outcome.
+0. already-resolved or already-established information creates no work;
+1. currently actionable zero-customer-friction routes form a system wave;
+2. currently known necessary customer work is minimized and coalesced;
+3. internal or specialist review follows where policy/current state requires it;
+4. terminal outcome remains owned by the DecisionSnapshot.
 
-**Status:** `HYPOTHESIS — NOT APPROVED EXECUTION LOGIC`
+Discovery and interpretation of already-held artifacts share the zero-customer-friction tier. Neither has a universal precedence; independently actionable routes may appear in the same wave. Operational planning never changes policy permission or evidence sufficiency.
+
+**Status:** `APPROVED V1 PRODUCT PLANNING PRINCIPLE`
 
 **Source evidence:** `PRACTITIONER-001`
 
 **Target gate:** `Gate 5 — Resolution/Journey Design`
 
-**Caution:** Do NOT implement this ordering as generic resolution logic until explicitly approved by the Control Room.
+**Caution:** This is the pinned `ubo-low-friction-planner-v1` operational planning profile, not regulatory authority, a numeric friction score, provider ranking or a rigid capability sequence.
 
 ## JH-007 — Registry availability is dynamic
 

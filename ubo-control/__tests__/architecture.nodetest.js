@@ -92,9 +92,13 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE",
     "UBO_JOURNEY_PROJECTION_CONTRACT_VERSION",
     "UBO_JOURNEY_PROJECTION_ERROR_CODE",
+    "UBO_RESOLUTION_PLAN_CONTRACT_VERSION",
+    "UBO_RESOLUTION_PLANNER_ERROR_CODE",
+    "UBO_RESOLUTION_PLANNER_VERSION",
     "DecisionApplicationError",
     "OwnershipGraphProjectionError",
     "UboJourneyProjectionError",
+    "UboResolutionPlannerError",
     "IDENTITY_RESOLUTION_STATUS",
     "PERCENTAGE_VALUE_TYPE",
     "POLICY_PACK_SCHEMA_ID",
@@ -119,6 +123,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "loadPolicyPack",
     "projectOwnershipGraph",
     "projectUboJourney",
+    "planUboResolution",
     "validateCandidateFact",
     "validateCandidatePartyReference",
     "validateCapabilityOutcome",
@@ -131,6 +136,13 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "validatePercentageValue",
     "validatePolicyPack",
   ].sort());
+});
+
+test("the resolution planner is advisory, host neutral, and contains no opaque score or capability execution", () => {
+  const source = fs.readFileSync(path.join(PRODUCT_ROOT, "planning", "uboResolutionPlanner.js"), "utf8");
+  assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);
+  assert.doesNotMatch(source, /frictionScore|costScore|priorityScore|providerRank|vendorRank/);
+  assert.doesNotMatch(source, /\.discover\s*\(|\.extract\s*\(|fetch\s*\(|createUboDecisionApplication|orchestrateResolution/);
 });
 
 test("the journey projection is host/UI neutral and contains no resolution ranking logic", () => {

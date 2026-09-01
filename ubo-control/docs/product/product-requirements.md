@@ -25,7 +25,7 @@ G5.1A implements the accepted public, provider-neutral projection contract. G5.1
 
 ## PR-JRN-001 — Adaptive UBO Journey Projection
 
-**Status:** IN_IMPLEMENTATION — G5.2A IN REVIEW
+**Status:** IMPLEMENTED — G5.2A ACCEPTED
 
 **Target:** Gate 5.2A
 
@@ -36,9 +36,30 @@ Acceptance principles:
 - Customer work is emitted only from open customer-resolvable ActionIntents.
 - Known information is not requested again; partial identity work contains only missing R07 attributes.
 - Shared facts, needs and acceptable artifacts coalesce into stable semantic work items.
-- Resolution options remain unranked; JH-006 is not execution logic.
+- Resolution options remain unranked in the projection; any later operational selection is a separate versioned planner concern.
 - System work, operational blockers and internal/specialist review remain separate from customer work.
 - Policy wording is referenced, never invented; unresolved source wording remains explicitly unresolved.
 - Customer work is entity-profile aware and contains no host route, screen, form or component identifiers.
 - Qualifying-person handoff stops at canonical identity, roles, basis and R07 completeness; downstream IDV, screening, POI and POA remain outside UBO Control.
 - Re-projecting a later verified DecisionSnapshot naturally removes satisfied work.
+
+## PR-PLN-001 — Low-Friction UBO Resolution Planning
+
+**Status:** IN_IMPLEMENTATION — G5.2B IN REVIEW
+
+**Target:** Gate 5.2B
+
+UBO Control must expose a provider-neutral advisory ResolutionPlan derived from a verified DecisionSnapshot. The planner selects only currently applicable, Policy Pack-permitted ResolutionOptions and recorded ActionIntents. It prioritizes zero-customer-friction resolution, minimizes and coalesces necessary customer work, then routes internal/specialist review without changing policy sufficiency or executing capabilities.
+
+Acceptance principles:
+
+- Contract `ubo-resolution-plan-v1` and planner strategy `ubo-low-friction-planner-v1` are explicit and independently versioned from Policy Packs.
+- Resolved information produces no work.
+- Discovery, existing-artifact interpretation and deterministic re-evaluation can share one system wave; no provider or capability precedence is invented.
+- ResolutionAttempt history suppresses unchanged substantive repeats after NO_DATA, UNSUPPORTED, final INCONCLUSIVE or PARTIAL outcomes.
+- Operational failure preserves retry/hold or blocked state and never independently creates customer remediation.
+- Customer actions begin only after no actionable system route remains for the relevant need and are coalesced into stable CustomerResolutionBundles.
+- Lightweight sufficient response/confirmation is preferred to re-entry or unnecessary evidence; known required information and evidence are bundled rather than serialized.
+- Evidence types and ownership-chart relevance come only from recorded ResolutionOptions.
+- Internal/fallback review follows currently known customer work; specialist stops override ordinary flow.
+- Plans are advisory, immutable, deterministic and contain no execution, host UI, provider ranking or numeric friction score.

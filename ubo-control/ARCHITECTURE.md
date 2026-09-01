@@ -42,6 +42,32 @@ Customer work is projected only from open customer-resolvable ActionIntents. Sha
 
 The contract carries stable semantic identifiers and canonical entity, relationship, InformationNeed and requirement references. It contains no screen, page, route, button, form, DOM, React or provider identifiers. Policy-approved action-template references may be carried; source wording marked unresolved is never invented by the projection. Resolution options are deliberately labelled unranked: G5.2A does not implement JH-006 priority or the future G5.2B resolution-selection policy.
 
+## Low-friction resolution-planning boundary
+
+G5.2B adds a distinct advisory product layer after policy/orchestration and journey projection:
+
+```text
+DecisionSnapshot
+      ↓
+JourneyProjection
+      ↓
+planUboResolution
+      ↓
+ResolutionPlan
+      ↓
+host / automation / onboarding consumer
+```
+
+`planUboResolution({ decisionSnapshot })` verifies the snapshot, reuses `projectUboJourney` semantics internally, and returns immutable `ubo-resolution-plan-v1` data pinned to `ubo-low-friction-planner-v1`. A host never needs private G2.4 modules. The planner reads only recorded open InformationNeeds, ResolutionOptions, ActionIntents, ResolutionAttempts, blockers, review state and terminal outcomes.
+
+Planning is operational advice, not compliance reasoning. Policy decides which strategies are permitted and sufficient; the planner can select only currently `APPLICABLE` recorded options. It cannot create a requirement, make an option applicable, weaken evidence sufficiency, resolve a requirement, mutate a DecisionSnapshot or execute Discovery/Extraction.
+
+The v1 planner uses semantic tiers rather than scores: resolved work disappears; actionable zero-customer routes form a system wave; necessary customer work forms coalesced CustomerResolutionBundles; internal/specialist review follows; and non-success terminal policy outcomes remain DecisionSnapshot-owned blocked states. Discovery and interpretation of already-held artifacts have no universal precedence and may share a system wave. The host must re-evaluate after materially different waves before requesting avoidable later work.
+
+ResolutionAttempt history prevents unchanged substantive repeats after `NO_DATA`, `UNSUPPORTED`, final `INCONCLUSIVE` or `PARTIAL`. `FAILED` and `UNAVAILABLE` remain operational retry/hold or blocked states and never, by themselves, unlock customer remediation. Deferred alternatives remain visible without being labelled invalid.
+
+ResolutionPlan data carries canonical entity, relationship, InformationNeed and requirement references. It contains no provider selection, execution callback, cost/latency ranking, numeric friction score, form/screen/route instruction or Evidence Platform dependency. Future operational profiles require separate explicit product versions and cannot alter UBO compliance reasoning.
+
 ## External capability ports
 
 UBO Control has exactly two candidate-fact acquisition ports:
