@@ -13,6 +13,7 @@ const {
   fixtureCatalogue,
   startFixture,
   startLive,
+  startReplay,
   validateCompanyContext,
 } = require("../server/labEngine");
 
@@ -72,6 +73,8 @@ test("fixture mode produces real snapshots, public projections, planner data and
   assert.deepEqual(view.requirements.map(({ requirementId }) => requirementId), Array.from({ length: 14 }, (_value, index) => `UBO-R${String(index + 1).padStart(2, "0")}`));
   assert.equal(view.compliance.policyIdentity.policyVersion, "1.5-RC");
   assert.equal(JSON.stringify(view.plan).includes("{param:"), false);
+  assert.equal(session.sourceState, "FIXTURE");
+  assert.equal(session.discovery.sourceState, "FIXTURE");
 });
 
 test("Compliance view carries public graph conflicts without recomputing them", () => {
@@ -102,9 +105,87 @@ test("Live Discovery composition uses the accepted adapter and never trusts lega
   assert.equal(calls.length, 1);
   assert.equal(calls[0].path, "/api/ubo-discovery");
   assert.equal(session.discovery.mode, "LIVE_DISCOVERY");
+  assert.equal(session.sourceState, "LIVE");
   assert.equal(session.discovery.candidateFactCount, 1);
   assert.equal(JSON.stringify(session).includes("Ignored legacy conclusion"), false);
   assert.equal(session.candidateSources[0].simulated, false);
+  assert.equal(session.replayCapture.contractVersion, "ubo-control-lab-discovery-replay-v1");
+  assert.deepEqual(session.replayCapture.discoveryResult.candidateFacts, session.candidateSources[0].candidateFacts);
+  assert.deepEqual(Object.keys(session.replayCapture.discoveryResult).sort(), ["candidateFacts", "contractVersion", "issues", "operationEvidenceReferences", "outcome", "requestId"]);
+});
+
+test("saved normalized Discovery result replays as a fresh UBO case without invoking transport", async () => {
+  let liveCalls = 0;
+  const live = await startLive({
+    companyContext: { legalEntityName: "Replay Example Ltd", registrationNumber: "07654321", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    transport: { invoke: async () => {
+      liveCalls += 1;
+      return { status: 200, body: {
+        run: { id: "captured-live-run", completedAt: "2026-08-31T10:00:00.000Z" },
+        ownershipGraph: {
+          rootEntityId: "captured-root",
+          nodes: [
+            { id: "captured-root", name: "Replay Example Ltd", type: "company", jurisdiction: "GB" },
+            { id: "captured-owner", name: "Captured Owner", type: "individual", jurisdiction: "GB" },
+          ],
+          edges: [{ from: "captured-owner", to: "captured-root", type: "ownership", ownershipPercentage: 55, evidenceIds: ["captured-evidence"] }],
+        },
+        evidence: [{ id: "captured-evidence", source: "Captured Register", sourceUrl: "https://example.test/captured" }],
+        ubos: [{ name: "Forbidden legacy UBO conclusion" }],
+      } };
+    } },
+  });
+  assert.equal(liveCalls, 1);
+  const replayRecord = structuredClone(live.replayCapture);
+  let replayTransportCalls = 0;
+  const replay = startReplay({
+    replayRecord,
+    transport: { invoke: () => { replayTransportCalls += 1; throw new Error("Replay must never invoke transport"); } },
+  });
+  assert.equal(replayTransportCalls, 0);
+  assert.equal(replay.sourceState, "REPLAY");
+  assert.equal(replay.discovery.mode, "REPLAY_DISCOVERY");
+  assert.notEqual(replay.caseId, live.caseId);
+  assert.deepEqual(replay.candidateSources[0].candidateFacts, replayRecord.discoveryResult.candidateFacts);
+  assert.deepEqual(replay.candidateSources[0].operationEvidenceReferences, replayRecord.discoveryResult.operationEvidenceReferences);
+  assert.deepEqual(replay.candidateSources[0].issues, replayRecord.discoveryResult.issues);
+  assert.equal(replay.discovery.replay.originalSavedAt, replayRecord.savedAt);
+  assert.equal(replay.discovery.replay.originalRequestId, replayRecord.discoveryResult.requestId);
+  assert.equal(replay.snapshots.length, 0);
+  assert.equal(JSON.stringify(replayRecord).includes("Forbidden legacy UBO conclusion"), false);
+
+  const liveReviewed = reviewAll(live);
+  const reviewed = reviewAll(replay);
+  assert.equal(reviewed.snapshots.length, 1);
+  assert.notEqual(reviewed.snapshots[0].view.snapshot.snapshotId, liveReviewed.snapshots[0].view.snapshot.snapshotId);
+  assert.equal(reviewed.snapshots.at(-1).view.snapshot.snapshotSchemaVersion, "ubo-decision-snapshot-v1");
+  assert.equal(reviewed.snapshots.at(-1).view.graph.relationships.length, 1);
+});
+
+test("replay rejects a mismatched company and corrupted local record safely", async () => {
+  const live = await startLive({
+    companyContext: { legalEntityName: "Replay Guard Ltd", registrationNumber: "01112222", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => ({ status: 200, body: { run: { id: "guard-run" }, ownershipGraph: { rootEntityId: "guard-root", nodes: [{ id: "guard-root", name: "Replay Guard Ltd", type: "company", jurisdiction: "GB" }], edges: [] }, evidence: [] } }) },
+  });
+  assert.throws(() => startReplay({
+    replayRecord: live.replayCapture,
+    expectedCompanyContext: { ...live.companyContext, legalEntityName: "Other Company Ltd", registrationNumber: "09998888" },
+  }), /different company/);
+  const corrupted = structuredClone(live.replayCapture);
+  corrupted.discoveryResult.candidateFacts = "not-an-array";
+  assert.throws(() => startReplay({ replayRecord: corrupted }), /candidateFacts|CapabilityResult|array/i);
+  const tampered = structuredClone(live.replayCapture);
+  tampered.companyContext.legalEntityName = "Silently Rebound Company Ltd";
+  assert.throws(() => startReplay({ replayRecord: tampered }), /integrity check/);
+});
+
+test("failed or unavailable transport outcomes are not presented as reusable Discovery input", async () => {
+  const session = await startLive({
+    companyContext: { legalEntityName: "Unavailable Replay Ltd", registrationNumber: "02334455", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => { const error = new Error("provider unavailable"); error.code = "ETIMEDOUT"; throw error; } },
+  });
+  assert.equal(session.discovery.outcomeStates[0], "UNAVAILABLE");
+  assert.equal(session.replayCapture, null);
 });
 
 test("sanitized ASDA regression reuses exact registry identities and produces one node per canonical entity", async () => {
@@ -217,14 +298,20 @@ test("Customer, Compliance, History and Planner consume the same snapshot while 
   assert.equal(Object.prototype.hasOwnProperty.call(session, "persistence"), false);
 });
 
-test("browser product exposes disabled Evidence, feedback export and no fake extraction or persistence", () => {
+test("browser product exposes disabled Evidence, feedback export and Lab-only local Discovery replay", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "browser", "lab.js"), "utf8");
   const html = fs.readFileSync(path.join(__dirname, "..", "browser", "index.html"), "utf8");
+  const replayStore = fs.readFileSync(path.join(__dirname, "..", "browser", "replayStore.js"), "utf8");
   assert.match(source, /NOT YET AVAILABLE — EVIDENCE PLATFORM INTEGRATION IN PROGRESS/);
   assert.match(source, /navigator\.clipboard\.writeText/);
   assert.match(source, /ubo-control-lab-feedback-v1/);
   assert.match(source, /snapshotHash/);
-  assert.doesNotMatch(source + html, /api\/research|type=["']file|localStorage|indexedDB/i);
+  assert.match(source, /Replay saved result/);
+  assert.match(source, /Run fresh live Discovery/);
+  assert.match(source, /Saved locally in this browser — Lab testing only/);
+  assert.match(source, /START_REPLAY/);
+  assert.match(source + html + replayStore, /localStorage|discovery-replays\.v1/);
+  assert.doesNotMatch(source + html + replayStore, /api\/research|type=["']file|indexedDB|entity_dossiers|journey_state/i);
 });
 
 test("Lab production imports stay on public UBO and accepted integration boundaries", () => {

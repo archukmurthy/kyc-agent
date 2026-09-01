@@ -5,8 +5,17 @@ The UBO Control Lab is a standalone, internal compliance-testing application. It
 ## Modes
 
 - **Fixture Mode** loads one of 18 deterministic scenarios, runs Decision Application v2 and produces real immutable DecisionSnapshots and public projections.
-- **Live Discovery Mode** requires a UK company name and registration number. The server invokes `/api/ubo-discovery`, translates the result through the accepted anti-corruption adapter, ignores legacy UBO conclusions and intakes only safe candidate facts.
+- **Live Discovery Mode — LIVE** requires a UK company name and registration number. `Run fresh live Discovery` invokes `/api/ubo-discovery`, translates the result through the accepted anti-corruption adapter, ignores legacy UBO conclusions and intakes only safe candidate facts. This external operation may incur provider cost.
+- **Discovery Replay — REPLAY** starts a new Lab case from a saved provider-neutral `DiscoveryService` result. It never invokes the live transport and does not replay a UBO conclusion, graph, qualification or DecisionSnapshot.
 - **Live Evidence Mode** is visible but disabled: `NOT YET AVAILABLE — EVIDENCE PLATFORM INTEGRATION IN PROGRESS`.
+
+## Lab test cost control / replay
+
+After a successful replayable Live Discovery outcome, the Lab automatically stores a bounded library of up to six normalized results in browser `localStorage`. Each entry shows the captured company and registration number, jurisdiction, save time, outcome, candidate-fact count and adapter-issue count. The library supports `Replay as new UBO Lab case` and `Delete`, survives a page refresh in the same browser, and is labelled `Saved locally in this browser — Lab testing only`.
+
+Only the post-adapter `ubo-control-lab-discovery-replay-v1.discoveryResult` is replayed: contract/request identity, outcome, candidate facts, operation evidence references and adapter issues. Original fact/evidence metadata is preserved. Replay time and the local replay identifier are recorded separately in Lab diagnostics. Active decisions, history, calculations, graph, planner output and snapshots are never stored as replay authority.
+
+> For repeated testing of the same company, use Replay. Run fresh Discovery only when testing source freshness or a different company.
 
 ## Explicit decisions and customer input
 
@@ -16,7 +25,7 @@ Candidate parties and claims remain pending until a practitioner uses the identi
 
 Run `npm start`, then open `http://localhost:3000/ubo-control-lab/`. Live Discovery uses the same server-side environment and route configuration as `/api/ubo-discovery`; fixture mode needs no provider configuration.
 
-Production builds stage the standalone assets at `/ubo-control-lab/`. The Lab is session-only and non-resumable: refreshing resets the active case. The sealed Decision Application envelope and immutable DecisionSnapshot history remain authoritative during the session.
+Production builds stage the standalone assets at `/ubo-control-lab/`. The active Lab case remains session-only and non-resumable: refreshing resets decisions and history. Only saved Discovery replay inputs persist locally in the same browser; there is no database or server-side replay persistence. The sealed Decision Application envelope and immutable DecisionSnapshot history remain authoritative during an active session.
 
 ## Evidence and feedback
 

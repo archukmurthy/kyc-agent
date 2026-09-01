@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const handler = require("../../api/ubo-control-lab");
+const { createDiscoveryReplayRecord } = require("../server/labEngine");
 
 function invoke(method, body) {
   return new Promise((resolve, reject) => {
@@ -32,6 +33,21 @@ test("Lab API starts a deterministic fixture through the real engine", async () 
   assert.equal(result.statusCode, 200);
   assert.equal(result.payload.mode, "FIXTURE");
   assert.equal(result.payload.snapshots[0].view.snapshot.snapshotSchemaVersion, "ubo-decision-snapshot-v1");
+});
+
+test("Lab API starts Replay without composing the live Discovery transport", async () => {
+  const companyContext = { legalEntityName: "API Replay Ltd", registrationNumber: "05556666", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" };
+  const subject = { entityId: "captured-api-subject", name: companyContext.legalEntityName, entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: companyContext.registrationNumber }] };
+  const replayRecord = createDiscoveryReplayRecord({
+    companyContext,
+    subject,
+    result: { contractVersion: "1.0.0", requestId: "captured-api-request", outcome: { state: "NO_DATA" }, candidateFacts: [], operationEvidenceReferences: [], issues: [] },
+    savedAt: "2026-09-01T10:00:00.000Z",
+  });
+  const result = await invoke("POST", { operation: "START_REPLAY", payload: { replayRecord } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.sourceState, "REPLAY");
+  assert.equal(result.payload.discovery.replay.replayId, replayRecord.replayId);
 });
 
 test("Lab API rejects unsupported operations without leaking implementation details", async () => {

@@ -4,6 +4,18 @@ Status: local production-build browser acceptance and protected deployed-preview
 
 Date: 2026-09-01
 
+## Paid Discovery replay test mode
+
+This Lab build records successful normalized Live Discovery results in a bounded browser-local library. To test cost control:
+
+1. Run `Run fresh live Discovery` once for a company whose source freshness must be tested.
+2. Select `New case`, return to Live Discovery, and confirm the captured result appears under `Replay saved result` with its company number, save time, outcome, candidate-fact count and issue count.
+3. Select `Replay as new UBO Lab case`. Confirm the workspace source badge and Diagnostics show `REPLAY` and a new case/snapshot is created.
+4. Repeat identity decisions, claim adjudication and evaluation as required. The replay must not execute `/api/ubo-discovery`.
+5. Use `Delete` to remove the saved local input.
+
+For repeated testing of the same company, use Replay. Run fresh Discovery only when testing source freshness or a different company. Saved inputs are local testing data only; active UBO decisions and history remain non-resumable.
+
 The checks below were performed through the staged `/ubo-control-lab/` browser application and its real Lab API. Fixture transitions were initiated through visible controls. LAB18 used the reusable customer form, `applyCustomerInput`, the explicit claim console and `evaluate`; no fixture swap or snapshot mutation was used.
 
 | Required acceptance case | Browser evidence | Result |

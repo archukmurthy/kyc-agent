@@ -8,12 +8,15 @@ const {
   planUboResolution,
   projectOwnershipGraph,
   projectUboJourney,
+  validateCapabilityResult,
 } = require("../../ubo-control");
 const { createLegacyDiscoveryAdapter } = require("../../integrations/ubo-control/legacy-discovery");
 const POLICY = require("../../ubo-control/policies/uk-corporate/1.5-rc/policy.json");
 const FIXTURE_SET = require("../fixtures/scenarios.json");
 
 const LAB_CONTRACT_VERSION = "ubo-control-lab-session-v1";
+const DISCOVERY_REPLAY_CONTRACT_VERSION = "ubo-control-lab-discovery-replay-v1";
+const REPLAYABLE_DISCOVERY_OUTCOMES = new Set(["COMPLETE", "PARTIAL", "NO_DATA", "INCONCLUSIVE"]);
 const CUSTOMER_ONLY_AVAILABILITY = Object.freeze([
   { strategy: "DISCOVERY", state: "INAPPLICABLE", reasonCode: "SYSTEM_ROUTE_EXHAUSTED" },
   { strategy: "EXISTING_EVIDENCE", state: "INAPPLICABLE", reasonCode: "NO_MATCHING_HELD_EVIDENCE" },
@@ -106,11 +109,12 @@ function subjectForFixture(fixture) {
   };
 }
 
-function sessionSkeleton({ mode, caseId, subject, profile, riskLevel, sourceLabel, sequence = 0 }) {
+function sessionSkeleton({ mode, sourceState, caseId, subject, profile, riskLevel, sourceLabel, sequence = 0 }) {
   return {
     contractVersion: LAB_CONTRACT_VERSION,
     applicationContractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V2,
     mode,
+    sourceState: sourceState || (mode === "FIXTURE" ? "FIXTURE" : "LIVE"),
     sessionOnly: true,
     caseId,
     sourceLabel,
@@ -171,6 +175,7 @@ function intakeResults(session, results, createdAt) {
       issues: clone(result.issues),
       sourceRequest: clone(sourceRequest || null),
       simulated: session.mode === "FIXTURE",
+      sourceState: session.sourceState,
     });
   });
   session.caseState = response.caseState;
@@ -395,7 +400,7 @@ function startFixture({ fixtureId, riskLevel = "LOW" } = {}) {
   const subject = subjectForFixture(fixture);
   const caseId = `ubo-lab:${fixture.id.toLowerCase()}`;
   const session = sessionSkeleton({
-    mode: "FIXTURE", caseId, subject,
+    mode: "FIXTURE", sourceState: "FIXTURE", caseId, subject,
     profile: fixture.scenario.context.entityProfile || subject.entityType,
     riskLevel, sourceLabel: `${fixture.id} · ${fixture.label}`,
   });
@@ -418,6 +423,7 @@ function startFixture({ fixtureId, riskLevel = "LOW" } = {}) {
   }
   session.discovery = {
     mode: "SIMULATED_FIXTURE",
+    sourceState: "FIXTURE",
     sourceScenarioId: fixture.sourceScenarioId,
     outcomeStates: results.map(({ result }) => result.outcome.state),
     candidateFactCount: results.reduce((sum, { result }) => sum + result.candidateFacts.length, 0),
@@ -438,6 +444,74 @@ function validateCompanyContext(companyContext) {
   if (!["LOW", "MEDIUM", "HIGH"].includes(String(companyContext.riskLevel || "").toUpperCase())) throw new TypeError("Risk level must be LOW, MEDIUM or HIGH");
 }
 
+function replayableDiscoveryResult(result) {
+  assertObject(result, "DiscoveryService result");
+  const replay = {
+    contractVersion: result.contractVersion,
+    requestId: result.requestId,
+    outcome: clone(result.outcome),
+    candidateFacts: clone(result.candidateFacts),
+    operationEvidenceReferences: clone(result.operationEvidenceReferences),
+    issues: clone(result.issues),
+  };
+  validateCapabilityResult(replay, { expectedRequestId: replay.requestId });
+  return replay;
+}
+
+function discoveryReplayContentHash({ savedAt, companyContext, subject, discoveryResult }) {
+  return `sha256:${createHash("sha256").update(JSON.stringify({ savedAt, companyContext, subject, discoveryResult })).digest("hex")}`;
+}
+
+function createDiscoveryReplayRecord({ companyContext, subject, result, savedAt = new Date().toISOString() }) {
+  validateCompanyContext(companyContext);
+  assertObject(subject, "Captured subject");
+  assertString(subject.entityId, "Captured subject entity ID");
+  const normalizedResult = replayableDiscoveryResult(result);
+  if (!REPLAYABLE_DISCOVERY_OUTCOMES.has(normalizedResult.outcome.state)) return null;
+  const registrationNumber = companyContext.registrationNumber.trim().toUpperCase();
+  const replayContent = {
+    savedAt,
+    companyContext: clone(companyContext),
+    subject: clone(subject),
+    discoveryResult: normalizedResult,
+  };
+  return {
+    contractVersion: DISCOVERY_REPLAY_CONTRACT_VERSION,
+    replayId: stableId("ubo-lab:discovery-replay", { registrationNumber, requestId: normalizedResult.requestId, savedAt }),
+    contentHash: discoveryReplayContentHash(replayContent),
+    ...replayContent,
+  };
+}
+
+function validateDiscoveryReplayRecord(value, expectedCompanyContext) {
+  assertObject(value, "Discovery replay record");
+  if (value.contractVersion !== DISCOVERY_REPLAY_CONTRACT_VERSION) throw new TypeError("Unsupported or corrupted Discovery replay record");
+  assertString(value.replayId, "Discovery replay ID");
+  assertString(value.contentHash, "Discovery replay content hash");
+  assertString(value.savedAt, "Discovery replay save time");
+  if (Number.isNaN(Date.parse(value.savedAt))) throw new TypeError("Discovery replay save time is invalid");
+  validateCompanyContext(value.companyContext);
+  assertObject(value.subject, "Captured subject");
+  assertString(value.subject.entityId, "Captured subject entity ID");
+  const registrationNumber = value.companyContext.registrationNumber.trim().toUpperCase();
+  const subjectRegistration = (value.subject.externalIdentifiers || []).some((identifier) =>
+    String(identifier.namespace || "").toUpperCase() === "COMPANIES_HOUSE_COMPANY_NUMBER"
+      && String(identifier.value || "").trim().toUpperCase() === registrationNumber);
+  if (!subjectRegistration) throw new TypeError("Discovery replay subject does not match its captured registration identifier");
+  if (expectedCompanyContext) {
+    validateCompanyContext(expectedCompanyContext);
+    if (expectedCompanyContext.registrationNumber.trim().toUpperCase() !== registrationNumber
+      || expectedCompanyContext.jurisdiction.trim().toUpperCase() !== value.companyContext.jurisdiction.trim().toUpperCase()) {
+      throw new TypeError("Discovery replay cannot be used for a different company");
+    }
+  }
+  const result = replayableDiscoveryResult(value.discoveryResult);
+  if (!REPLAYABLE_DISCOVERY_OUTCOMES.has(result.outcome.state)) throw new TypeError("Discovery replay outcome is not reusable");
+  const replayContent = { savedAt: value.savedAt, companyContext: clone(value.companyContext), subject: clone(value.subject), discoveryResult: result };
+  if (value.contentHash !== discoveryReplayContentHash(replayContent)) throw new TypeError("Discovery replay record failed its integrity check");
+  return { ...clone(value), discoveryResult: result };
+}
+
 async function startLive({ companyContext, transport } = {}) {
   validateCompanyContext(companyContext);
   if (!transport || typeof transport.invoke !== "function") throw new TypeError("Live Discovery requires the approved server-side transport");
@@ -450,7 +524,7 @@ async function startLive({ companyContext, transport } = {}) {
     externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: companyContext.registrationNumber.trim().toUpperCase() }],
   };
   const session = sessionSkeleton({
-    mode: "LIVE_DISCOVERY", caseId, subject, profile: companyContext.entityProfile,
+    mode: "LIVE_DISCOVERY", sourceState: "LIVE", caseId, subject, profile: companyContext.entityProfile,
     riskLevel: companyContext.riskLevel, sourceLabel: `Live Discovery · ${subject.name}`,
   });
   const request = {
@@ -470,12 +544,44 @@ async function startLive({ companyContext, transport } = {}) {
   registerCaseSubject(session, new Date().toISOString());
   session.discovery = {
     mode: "LIVE_DISCOVERY",
+    sourceState: "LIVE",
     outcomeStates: [result.outcome.state],
     candidateFactCount: result.candidateFacts.length,
     adapterIssues: clone(result.issues),
     operationEvidenceReferences: clone(result.operationEvidenceReferences),
   };
+  session.replayCapture = createDiscoveryReplayRecord({ companyContext: session.companyContext, subject, result, savedAt: createdAt });
   evaluateSession(session, "LIVE_DISCOVERY_INITIAL_EVALUATION", new Date().toISOString());
+  return clone(session);
+}
+
+function startReplay({ replayRecord, expectedCompanyContext } = {}) {
+  const record = validateDiscoveryReplayRecord(replayRecord, expectedCompanyContext);
+  const replayedAt = new Date().toISOString();
+  const caseId = `ubo-lab:replay:${randomUUID()}`;
+  const session = sessionSkeleton({
+    mode: "REPLAY_DISCOVERY", sourceState: "REPLAY", caseId, subject: record.subject,
+    profile: record.companyContext.entityProfile, riskLevel: record.companyContext.riskLevel,
+    sourceLabel: `Replayed Discovery · ${record.companyContext.legalEntityName}`,
+  });
+  intakeResults(session, [{ capability: "DISCOVERY", result: record.discoveryResult, sourceRequest: null }], replayedAt);
+  registerCaseSubject(session, replayedAt);
+  session.discovery = {
+    mode: "REPLAY_DISCOVERY",
+    sourceState: "REPLAY",
+    outcomeStates: [record.discoveryResult.outcome.state],
+    candidateFactCount: record.discoveryResult.candidateFacts.length,
+    adapterIssues: clone(record.discoveryResult.issues),
+    operationEvidenceReferences: clone(record.discoveryResult.operationEvidenceReferences),
+    replay: {
+      replayId: record.replayId,
+      originalSavedAt: record.savedAt,
+      replayedAt,
+      originalRequestId: record.discoveryResult.requestId,
+      storage: "BROWSER_LOCAL_LAB_TESTING",
+    },
+  };
+  evaluateSession(session, "REPLAY_DISCOVERY_INITIAL_EVALUATION", replayedAt);
   return clone(session);
 }
 
@@ -663,8 +769,11 @@ module.exports = Object.freeze({
   applyReviewerDecisions,
   buildSnapshotView,
   compareSnapshotEntries,
+  createDiscoveryReplayRecord,
   fixtureCatalogue,
   startFixture,
   startLive,
+  startReplay,
+  validateDiscoveryReplayRecord,
   validateCompanyContext,
 });

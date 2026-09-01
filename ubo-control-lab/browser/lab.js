@@ -5,6 +5,8 @@
   const { OwnershipGraph, UboJourney, DETAIL_LEVEL } = UboControlUI;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
+  let replayLibrary = null;
+  try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
 
   async function request(operation, payload) {
     const response = await fetch(API, {
@@ -41,7 +43,7 @@
     return h("div", { className: "empty" }, children);
   }
 
-  function Setup({ catalogue, mode, setMode, busy, error, startFixture, startLive }) {
+  function Setup({ catalogue, mode, setMode, busy, error, startFixture, startLive, startReplay, savedResults, deleteReplay, clearReplays, storageError }) {
     const [fixtureId, setFixtureId] = React.useState("LAB18");
     const [company, setCompany] = React.useState({ legalEntityName: "", registrationNumber: "", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" });
     const update = (field, value) => setCompany((current) => ({ ...current, [field]: value }));
@@ -51,22 +53,35 @@
         h("button", { className: `mode-button ${mode === "LIVE_DISCOVERY" ? "active" : ""}`, onClick: () => setMode("LIVE_DISCOVERY") }, h("strong", null, "Live Discovery"), h("span", null, "Real UK discovery through the accepted server-side adapter.")),
         h("button", { className: "mode-button", disabled: true, title: "Evidence Platform integration is pending" }, h("strong", null, "Live Evidence"), h("span", null, "Unavailable until Gate 4 — Evidence Platform integration is pending."))),
       h("section", { className: "card" },
-        h("p", { className: "source-label" }, mode === "FIXTURE" ? "SIMULATED FIXTURE" : "LIVE PROVIDER"),
-        h("h2", null, mode === "FIXTURE" ? "Choose a compliance scenario" : "Start a real UK company case"),
-        h("p", null, mode === "FIXTURE" ? "Every scenario runs through Decision Application v2 and creates a real immutable snapshot." : "The company number is required to bind the subject safely. Legacy UBO conclusions are ignored."),
+        h("p", { className: "source-label" }, mode === "FIXTURE" ? "SIMULATED FIXTURE" : "LAB TEST COST CONTROL / REPLAY"),
+        h("h2", null, mode === "FIXTURE" ? "Choose a compliance scenario" : "Reuse Discovery input or run a fresh search"),
+        h("p", null, mode === "FIXTURE" ? "Every scenario runs through Decision Application v2 and creates a real immutable snapshot." : "Replay reuses only the saved normalized DiscoveryService result and starts a new downstream UBO exercise."),
         mode === "FIXTURE"
           ? h("div", { className: "form-grid" },
             h("div", { className: "field full" }, h("label", { htmlFor: "fixture" }, "Scenario"), h("select", { id: "fixture", value: fixtureId, onChange: (event) => setFixtureId(event.target.value) }, (catalogue?.fixtures || []).map((fixture) => h("option", { key: fixture.id, value: fixture.id }, `${fixture.id} · ${fixture.label}`)))),
             h("div", { className: "field full" }, h("p", null, catalogue?.fixtures.find(({ id }) => id === fixtureId)?.description || "")),
             h("div", { className: "field" }, h("label", { htmlFor: "fixture-risk" }, "Risk context"), h("select", { id: "fixture-risk", value: company.riskLevel, onChange: (event) => update("riskLevel", event.target.value) }, ["LOW", "MEDIUM", "HIGH"].map((value) => h("option", { key: value }, value)))),
             h("div", { className: "field", style: { alignSelf: "end" } }, h("button", { className: "primary", disabled: busy, onClick: () => startFixture(fixtureId, company.riskLevel) }, busy ? "Running…" : "Run UBO")))
-          : h("form", { className: "form-grid", onSubmit: (event) => { event.preventDefault(); startLive(company); } },
-            h("div", { className: "field" }, h("label", { htmlFor: "name" }, "Legal entity name"), h("input", { id: "name", required: true, value: company.legalEntityName, onInput: (event) => update("legalEntityName", event.target.value), placeholder: "Example Holdings Ltd" })),
-            h("div", { className: "field" }, h("label", { htmlFor: "number" }, "Registration/company number"), h("input", { id: "number", required: true, value: company.registrationNumber, onInput: (event) => update("registrationNumber", event.target.value), placeholder: "01234567" })),
-            h("div", { className: "field" }, h("label", { htmlFor: "jurisdiction" }, "Jurisdiction"), h("input", { id: "jurisdiction", value: "GB", readOnly: true })),
-            h("div", { className: "field" }, h("label", { htmlFor: "profile" }, "Entity profile"), h("select", { id: "profile", value: company.entityProfile, onChange: (event) => update("entityProfile", event.target.value) }, h("option", null, "COMPANY"), h("option", null, "LLP"))),
-            h("div", { className: "field" }, h("label", { htmlFor: "risk" }, "Risk context"), h("select", { id: "risk", value: company.riskLevel, onChange: (event) => update("riskLevel", event.target.value) }, ["LOW", "MEDIUM", "HIGH"].map((value) => h("option", { key: value }, value)))),
-            h("div", { className: "field", style: { alignSelf: "end" } }, h("button", { type: "submit", className: "primary", disabled: busy }, busy ? "Running live Discovery…" : "Run UBO"))),
+          : h("div", null,
+            h("section", { className: "replay-library", "aria-label": "Saved Discovery results" },
+              h("div", { className: "replay-heading" }, h("div", null, h("h3", null, "Replay saved result"), h("p", null, "No external Discovery request. No paid search.")), h("span", { className: "source-label" }, "SAVED LOCALLY")),
+              h("p", { className: "local-storage-note" }, "Saved locally in this browser — Lab testing only"),
+              storageError && h("div", { className: "error", role: "alert" }, storageError, h("button", { type: "button", className: "danger", onClick: clearReplays }, "Clear invalid local data")),
+              savedResults.length
+                ? h("div", { className: "replay-list" }, savedResults.map((record) => h("article", { className: "replay-item", key: record.replayId },
+                  h("div", null, h("span", { className: "source-label" }, "CAPTURED LIVE RESULT"), h("strong", null, record.companyContext.legalEntityName), h("p", null, `${record.companyContext.registrationNumber} · ${record.companyContext.jurisdiction} · Saved ${new Date(record.savedAt).toLocaleString()}`), h("p", null, `${human(record.discoveryResult.outcome.state)} · ${record.discoveryResult.candidateFacts.length} candidate fact(s) · ${record.discoveryResult.issues.length} adapter issue(s)`)),
+                  h("div", { className: "actions" }, h("button", { type: "button", className: "primary", disabled: busy, onClick: () => startReplay(record) }, busy ? "Starting replay…" : "Replay as new UBO Lab case"), h("button", { type: "button", className: "danger", disabled: busy, onClick: () => deleteReplay(record.replayId) }, "Delete")))))
+                : h(Empty, null, "No captured Live Discovery result is saved in this browser yet.")),
+            h("section", { className: "fresh-discovery" },
+              h("h3", null, "Run fresh live Discovery"),
+              h("div", { className: "notice" }, "Runs the external Discovery service and may incur provider cost. Use Replay for repeated testing."),
+              h("form", { className: "form-grid", onSubmit: (event) => { event.preventDefault(); startLive(company); } },
+                h("div", { className: "field" }, h("label", { htmlFor: "name" }, "Legal entity name"), h("input", { id: "name", required: true, value: company.legalEntityName, onInput: (event) => update("legalEntityName", event.target.value), placeholder: "Example Holdings Ltd" })),
+                h("div", { className: "field" }, h("label", { htmlFor: "number" }, "Registration/company number"), h("input", { id: "number", required: true, value: company.registrationNumber, onInput: (event) => update("registrationNumber", event.target.value), placeholder: "01234567" })),
+                h("div", { className: "field" }, h("label", { htmlFor: "jurisdiction" }, "Jurisdiction"), h("input", { id: "jurisdiction", value: "GB", readOnly: true })),
+                h("div", { className: "field" }, h("label", { htmlFor: "profile" }, "Entity profile"), h("select", { id: "profile", value: company.entityProfile, onChange: (event) => update("entityProfile", event.target.value) }, h("option", null, "COMPANY"), h("option", null, "LLP"))),
+                h("div", { className: "field" }, h("label", { htmlFor: "risk" }, "Risk context"), h("select", { id: "risk", value: company.riskLevel, onChange: (event) => update("riskLevel", event.target.value) }, ["LOW", "MEDIUM", "HIGH"].map((value) => h("option", { key: value }, value)))),
+                h("div", { className: "field", style: { alignSelf: "end" } }, h("button", { type: "submit", className: "secondary", disabled: busy }, busy ? "Running fresh live Discovery…" : "Run fresh live Discovery"))))),
         error && h("div", { className: "error", role: "alert" }, error)));
   }
 
@@ -144,7 +159,7 @@
   }
 
   function SourcesPanel({ session }) {
-    return h("section", { className: "panel" }, h("h2", null, "Candidate facts and provenance"), session.candidateSources.length ? session.candidateSources.map((source) => h("details", { key: source.sourceRecordId }, h("summary", null, `${source.capability} · ${source.outcomeState} · ${source.candidateFacts.length} candidate fact(s)`), h("div", null, h("span", { className: "source-label" }, source.simulated ? "SIMULATED" : source.capability === "CUSTOMER_INPUT" ? "CUSTOMER" : "LIVE"), h("p", null, `Request: ${source.requestId}`), h("pre", { className: "json" }, pretty({ facts: source.candidateFacts, evidence: source.operationEvidenceReferences, issues: source.issues }))))) : h(Empty, null, "No candidate sources have been intaken."));
+    return h("section", { className: "panel" }, h("h2", null, "Candidate facts and provenance"), session.candidateSources.length ? session.candidateSources.map((source) => h("details", { key: source.sourceRecordId }, h("summary", null, `${source.capability} · ${source.outcomeState} · ${source.candidateFacts.length} candidate fact(s)`), h("div", null, h("span", { className: "source-label" }, source.capability === "CUSTOMER_INPUT" ? "CUSTOMER" : source.sourceState || (source.simulated ? "FIXTURE" : "LIVE")), h("p", null, `Request: ${source.requestId}`), h("pre", { className: "json" }, pretty({ facts: source.candidateFacts, evidence: source.operationEvidenceReferences, issues: source.issues }))))) : h(Empty, null, "No candidate sources have been intaken."));
   }
 
   function PlannerPanel({ view }) {
@@ -215,7 +230,7 @@
   }
 
   function DiagnosticsPanel({ view, session }) {
-    return h("section", { className: "panel" }, h("h2", null, "Diagnostics"), h("div", { className: "grid-3" }, Object.entries(view.diagnostics).map(([key, value]) => h(Metric, { key, label: human(key), value: typeof value === "object" ? shortHash(value.hash || value.policyHash) : Array.isArray(value) ? value.join(", ") : String(value) }))), h("details", { className: "section" }, h("summary", null, "Current public projections and sealed session envelope"), h("pre", { className: "json" }, pretty({ snapshot: view.snapshot, graph: view.graph, journey: view.journey, plan: view.plan, caseState: session.caseState }))));
+    return h("section", { className: "panel" }, h("h2", null, "Diagnostics"), h("div", { className: "grid-3" }, h(Metric, { label: "Lab source state", value: session.sourceState }), session.discovery?.replay && h(Metric, { label: "Replay saved", value: new Date(session.discovery.replay.originalSavedAt).toLocaleString() }), Object.entries(view.diagnostics).map(([key, value]) => h(Metric, { key, label: human(key), value: typeof value === "object" ? shortHash(value.hash || value.policyHash) : Array.isArray(value) ? value.join(", ") : String(value) }))), h("details", { className: "section" }, h("summary", null, "Current public projections and sealed session envelope"), h("pre", { className: "json" }, pretty({ sourceState: session.sourceState, replay: session.discovery?.replay || null, snapshot: view.snapshot, graph: view.graph, journey: view.journey, plan: view.plan, caseState: session.caseState }))));
   }
 
   function Workspace({ session, setSession, busy, setBusy, error, setError, reset }) {
@@ -233,7 +248,7 @@
     const onDecisions = ({ identityDecisions, claimDecisions }) => run("APPLY_REVIEWER_DECISIONS", { session, identityDecisions, claimDecisions }, "CUSTOMER");
     const state = view ? (view.plan.state || view.compliance.terminal?.terminalOutcome || view.compliance.terminal?.orchestrationState) : "EXPLICIT_DECISIONS_REQUIRED";
     return h("main", { className: "shell" },
-      h("header", { className: "workspace-header" }, h("div", null, h("h2", null, session.companyContext.legalEntityName), h("p", null, `${session.sourceLabel} · ${session.caseContext.entityProfile} · ${session.caseContext.riskLevel} risk`)), h("div", { className: "actions", style: { marginTop: 0 } }, h("span", { className: "status" }, human(state)), h("button", { className: "secondary", onClick: reset }, "New case"))),
+      h("header", { className: "workspace-header" }, h("div", null, h("h2", null, session.companyContext.legalEntityName), h("p", null, `${session.sourceLabel} · ${session.caseContext.entityProfile} · ${session.caseContext.riskLevel} risk`)), h("div", { className: "actions", style: { marginTop: 0 } }, h("span", { className: `source-state ${String(session.sourceState || "").toLowerCase()}` }, session.sourceState), h("span", { className: "status" }, human(state)), h("button", { className: "secondary", onClick: reset }, "New case"))),
       error && h("div", { className: "error", role: "alert" }, error),
       h("div", { className: "tabs", role: "tablist", "aria-label": "Lab workspace views" }, TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name), disabled: !view && !["DECISIONS", "SOURCES", "EVIDENCE"].includes(name) }, human(name)))),
       tab === "CUSTOMER" && view && h(CustomerPanel, { view, onAction: onCustomerAction, busy, error }),
@@ -253,18 +268,43 @@
     const [session, setSession] = React.useState(null);
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState("");
+    const [savedResults, setSavedResults] = React.useState([]);
+    const [storageError, setStorageError] = React.useState(replayLibrary ? "" : "Browser-local replay storage is unavailable.");
     React.useEffect(() => { fetch(API).then((response) => response.json()).then(setCatalogue).catch(() => setError("Fixture catalogue could not be loaded.")); }, []);
+    React.useEffect(() => {
+      if (!replayLibrary) return;
+      const saved = replayLibrary.read();
+      setSavedResults(saved.records);
+      setStorageError(saved.error || "");
+    }, []);
     const start = async (operation, payload) => {
       setBusy(true); setError("");
-      try { setSession(await request(operation, payload)); }
+      try {
+        const next = await request(operation, payload);
+        if (operation === "START_LIVE" && next.replayCapture && replayLibrary) {
+          setSavedResults(replayLibrary.save(next.replayCapture));
+          setStorageError("");
+        }
+        const nextSession = { ...next };
+        delete nextSession.replayCapture;
+        setSession(nextSession);
+      }
       catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
       finally { setBusy(false); }
     };
+    const deleteReplay = (replayId) => {
+      try { setSavedResults(replayLibrary.remove(replayId)); setStorageError(""); }
+      catch (_cause) { setStorageError("The saved result could not be deleted from browser-local storage."); }
+    };
+    const clearReplays = () => {
+      try { setSavedResults(replayLibrary ? replayLibrary.clear() : []); setStorageError(""); }
+      catch (_cause) { setStorageError("Browser-local replay storage could not be cleared."); }
+    };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "SESSION-ONLY / NON-RESUMABLE"), h("span", { className: "badge" }, "Policy 1.5-RC"), h("span", { className: "badge" }, "Decision App v2"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "CASE NON-RESUMABLE / REPLAY LOCAL"), h("span", { className: "badge" }, "Policy 1.5-RC"), h("span", { className: "badge" }, "Decision App v2"))),
       session
         ? h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
-        : h(Setup, { catalogue, mode, setMode, busy, error, startFixture: (fixtureId, riskLevel) => start("START_FIXTURE", { fixtureId, riskLevel }), startLive: (companyContext) => start("START_LIVE", { companyContext }) }));
+        : h(Setup, { catalogue, mode, setMode, busy, error, savedResults, storageError, deleteReplay, clearReplays, startFixture: (fixtureId, riskLevel) => start("START_FIXTURE", { fixtureId, riskLevel }), startLive: (companyContext) => start("START_LIVE", { companyContext }), startReplay: (replayRecord) => start("START_REPLAY", { replayRecord }) }));
   }
 
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));

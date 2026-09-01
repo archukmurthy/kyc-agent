@@ -8,12 +8,14 @@ const {
   fixtureCatalogue,
   startFixture,
   startLive,
+  startReplay,
 } = require("../ubo-control-lab/server/labEngine");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
   START_FIXTURE: "START_FIXTURE",
   START_LIVE: "START_LIVE",
+  START_REPLAY: "START_REPLAY",
   APPLY_REVIEWER_DECISIONS: "APPLY_REVIEWER_DECISIONS",
   APPLY_CUSTOMER_ACTION: "APPLY_CUSTOMER_ACTION",
   COMPARE_SNAPSHOTS: "COMPARE_SNAPSHOTS",
@@ -62,6 +64,8 @@ module.exports = async function handler(req, res) {
           ...input.payload,
           transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
         }));
+      case OPERATIONS.START_REPLAY:
+        return send(res, 200, startReplay(input.payload));
       case OPERATIONS.APPLY_REVIEWER_DECISIONS:
         return send(res, 200, applyReviewerDecisions(input.payload));
       case OPERATIONS.APPLY_CUSTOMER_ACTION:
