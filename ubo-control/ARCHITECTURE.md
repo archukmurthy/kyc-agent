@@ -256,6 +256,14 @@ The renderer shows the projection's recorded nodes, relationship dimensions/type
 
 The standalone demo is deterministic and offline. UI01–UI12 fixtures are built through the public Decision Application and public projection operation; the demo imports neither legacy Discovery nor Evidence Platform and performs no API call. Host onboarding, analyst workflow, persistence and historical comparison remain later integration concerns.
 
+## G5.3A adaptive-customer-journey boundary
+
+`UboJourney` lives beside `OwnershipGraph` in `ubo-control-ui/` and consumes only a complete `ubo-journey-projection-v1`, matching `ubo-resolution-plan-v1`, and optional `ubo-ownership-graph-projection-v1`. The headless `ubo-control/` product never imports the UI package. The UI never accepts raw DecisionSnapshot, InformationNeed, Policy Pack, threshold, claim/graph-domain, provider or evidence-platform input.
+
+The component displays the current selected plan: established facts, only missing fields, deliberately coalesced customer bundles, approved confirmation, targeted evidence handoff, and neutral system/blocker/review/complete states. It uses only entity-profile and semantic identifiers already present in the public contracts. It neither ranks alternatives beyond the plan nor fabricates customer wording. The existing OwnershipGraph is optional visual context and canonical graph links connect tasks to nodes/relationships without creating another graph implementation.
+
+Customer input leaves through a data-only `ubo-customer-action-v1` interaction event containing bundle/work-item/action-intent/action references, canonical subject semantics, entered values, confirmation/selected-option results and (when needed) an `EVIDENCE_ACTION_REQUESTED` intent. Files and raw bytes are excluded. Local React state is ephemeral; submission does not mutate a projection or plan and cannot resolve a UBO requirement. Authoritative change requires future host processing and a fresh DecisionSnapshot, projection and plan. `createUboDecisionApplication`, host onboarding and Evidence Platform are unchanged.
+
 ## Percentage values
 
 Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar. G2.2 consumes the unchanged validated input shape through exact internal rational and interval arithmetic. G2.3 interprets only the resulting exact/range aggregate against a Policy Pack threshold; it does not alter the calculation.

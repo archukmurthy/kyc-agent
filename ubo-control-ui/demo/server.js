@@ -14,8 +14,11 @@ const routes = new Map([
   ["/demo.js", { file: path.join(__dirname, "demo.js"), type: "text/javascript; charset=utf-8" }],
   ["/demo.css", { file: path.join(__dirname, "demo.css"), type: "text/css; charset=utf-8" }],
   ["/OwnershipGraph.js", { file: path.join(moduleRoot, "OwnershipGraph.js"), type: "text/javascript; charset=utf-8" }],
+  ["/UboJourney.js", { file: path.join(moduleRoot, "UboJourney.js"), type: "text/javascript; charset=utf-8" }],
   ["/ownership-graph.css", { file: path.join(moduleRoot, "ownership-graph.css"), type: "text/css; charset=utf-8" }],
+  ["/ubo-journey.css", { file: path.join(moduleRoot, "ubo-journey.css"), type: "text/css; charset=utf-8" }],
   ["/fixtures.json", { file: path.join(moduleRoot, "fixtures", "projections.json"), type: "application/json; charset=utf-8" }],
+  ["/journey-fixtures.json", { file: path.join(moduleRoot, "fixtures", "journeys.json"), type: "application/json; charset=utf-8" }],
   ["/react.js", { file: path.join(reactRoot, "umd", "react.development.js"), type: "text/javascript; charset=utf-8" }],
   ["/react-dom.js", { file: path.join(reactDomRoot, "umd", "react-dom.development.js"), type: "text/javascript; charset=utf-8" }],
 ]);

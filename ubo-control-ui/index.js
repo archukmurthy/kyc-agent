@@ -1,3 +1,6 @@
 "use strict";
 
-module.exports = require("./OwnershipGraph");
+module.exports = Object.freeze({
+  ...require("./OwnershipGraph"),
+  ...require("./UboJourney"),
+});

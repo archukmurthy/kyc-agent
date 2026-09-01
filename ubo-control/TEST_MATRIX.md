@@ -32,6 +32,19 @@
 | Customer/explain detail boundary | renderer component tests — customer mode hides audit-only snapshot metadata; explain mode shows snapshot/support references without changing the decision |
 | Renderer accessibility and navigation | renderer component/interaction tests — named SVG/description, screen-reader graph narrative, keyboard selection/focus, zoom and fit controls |
 | Explicit before/after projection replacement | renderer interaction test — UI12 swaps unresolved and resolved projections cleanly without deriving or merging history in the UI |
+| Adaptive journey public-contract boundary | `../ubo-control-ui/__tests__/architecture.nodetest.js` — production imports only React plus sibling `OwnershipGraph`; accepts only journey/plan/optional graph; no core/private/host/provider/Evidence/Decision Application dependency |
+| CUI01–CUI17 adaptive journey coverage | `../ubo-control-ui/__tests__/UboJourney.nodetest.js` and `journeyFixtures.nodetest.js` — exact deterministic catalogue, all states render, CUI17 before/after replacement |
+| Resolved and confirmation behavior | journey tests — resolved graph and qualifying summary produce no form; confirmation retains established structure without re-entry |
+| Known/missing and progressive disclosure | journey tests — only missing R07 attributes, voting, appointment/control and senior-management semantics render when present in the plan |
+| Customer bundle integrity | journey tests — coalesced identity needs stay one task and structured information plus evidence remain one logical bundle |
+| Evidence presentation boundary | journey tests and architecture scan — targeted evidence emits `EVIDENCE_ACTION_REQUESTED`; no file input, bytes, base64, uploader, API or Evidence implementation |
+| System/blocker/review separation | journey tests — system resolution, operational blocker, internal review and specialist review contain no customer RFI/form |
+| LLP terminology | journey test — member/surplus-asset language is used without company share/director/board language |
+| Unapproved wording | journey test — unresolved policy content renders `Customer wording not configured` and no active question |
+| Host-neutral action event | journey submission tests — `ubo-customer-action-v1` carries stable bundle/work-item/action-intent/action/canonical subject references, entered primitives and optional confirmation/selection/evidence semantics |
+| No local authoritative mutation | journey submission test — supplied plan/journey are byte-identical after submit; task remains until a fresh fixture replaces the public projections |
+| Graph/task canonical linkage | journey interaction test — bundle highlights canonical entity/branch and graph entity selection selects the linked bundle; graph remains optional |
+| Journey accessibility and responsive semantics | journey component tests/CSS/manual review — associated labels, required/error semantics, keyboard-native controls, focus status, colour-independent text/states and narrow stacked layout |
 | Versioned stateless Decision Application façade | `__tests__/decisionApplication.nodetest.js` — exact three-operation surface, explicit version validation, immutable opaque state and no hidden application memory |
 | Serializable application state | decision-application round trip — intake → JSON → apply decisions → JSON → evaluate works in a new façade instance |
 | Explicit decision targets and operations | decision-application target/decision tests — stable party/claim IDs, entity registration, identity resolution, claim adjudication, undecided-target rejection and explicit uncertainty |
