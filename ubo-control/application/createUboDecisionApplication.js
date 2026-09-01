@@ -370,6 +370,7 @@ function createUboDecisionApplication({ policyPack, contractVersion = DECISION_A
       const current = decodeCaseState(request.caseState, contractVersion);
       const result = applyCustomerInputTransition({
         caseState: current,
+        loadedPolicyPack,
         sourceDecisionSnapshot: request.sourceDecisionSnapshot,
         sourceResolutionPlan: request.sourceResolutionPlan,
         customerAction: request.customerAction,
@@ -392,6 +393,8 @@ function createUboDecisionApplication({ policyPack, contractVersion = DECISION_A
         "checkpoint",
         "checkpointReference",
         "resolutionInputs",
+        ...(contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V2
+          ? ["decisionHistory", "expectedHeadSnapshotId", "supersessionReason"] : []),
       ], "evaluateRequest");
       requireContractVersion(request.contractVersion, contractVersion);
       const current = decodeCaseState(request.caseState, contractVersion);
@@ -418,6 +421,11 @@ function createUboDecisionApplication({ policyPack, contractVersion = DECISION_A
           evaluationTime: request.evaluationTime,
           checkpoint: request.checkpoint,
           checkpointReference: request.checkpointReference,
+          ...(contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V2 ? {
+            decisionHistory: request.decisionHistory,
+            expectedHeadSnapshotId: request.expectedHeadSnapshotId,
+            supersessionReason: request.supersessionReason,
+          } : {}),
           ...resolutionInputs,
         });
       } catch (error) {
@@ -429,6 +437,8 @@ function createUboDecisionApplication({ policyPack, contractVersion = DECISION_A
       return deepFreeze({
         contractVersion,
         decisionSnapshot: result.snapshot,
+        ...(contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V2
+          ? { decisionHistory: result.decisionHistory } : {}),
       });
     });
   }

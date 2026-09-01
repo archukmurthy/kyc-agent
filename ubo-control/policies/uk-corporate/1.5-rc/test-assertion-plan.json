@@ -1,0 +1,178 @@
+[
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "COMPANY: direct qualifying share owner is identified from supported evidence.",
+    "status": "G2_3_EXECUTABLE",
+    "scenarioIds": ["S01"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.3 protects COMPANY economic qualification and beneficial_owner projection; G2.4A separately protects evidence sufficiency and requirement resolution."
+  },
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "LLP: qualifying rights to surplus assets are evaluated using LLP semantics.",
+    "status": "G2_3_EXECUTABLE",
+    "scenarioIds": ["S02"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.3 protects LLP surplus-asset qualification and beneficial_owner projection; G2.4A separately applies the same evidence-sufficiency boundary."
+  },
+  {
+    "requirementId": "UBO-R01",
+    "assertion": "Corporate holder creates an InformationNeed until ultimate natural persons are resolved.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["S05", "S11"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A protects one semantic CURRENT_OWNERSHIP_AND_CONTROL InformationNeed for a potentially qualifying legal-entity holder without selecting a question or document action."
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Percentage chains multiply deterministically.",
+    "status": "G2_2_EXECUTABLE",
+    "scenarioIds": ["S03"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.2 protects exact percentage-chain multiplication; G2.3 consumes the pinned result without recomputing it."
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Independent qualifying paths aggregate.",
+    "status": "G2_2_EXECUTABLE",
+    "scenarioIds": ["S04"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.2 protects independent-path aggregation; G2.3 separately interprets the pinned aggregate under policy."
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Ranges remain ranges/min-max rather than being silently converted to exact percentages.",
+    "status": "G2_2_EXECUTABLE",
+    "scenarioIds": ["S10"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.2 protects range arithmetic; G2.3 protects exclusive-threshold interpretation with exact endpoint semantics."
+  },
+  {
+    "requirementId": "UBO-R02",
+    "assertion": "Cycles cannot silently produce a numeric answer.",
+    "status": "G2_2_EXECUTABLE",
+    "scenarioIds": ["S18"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.2 protects relevant-cycle detection; G2.3 preserves incomplete cycle-bearing results as indeterminate."
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "COMPANY: qualifying board-majority appointment right produces controller_appointment.",
+    "status": "G2_3_EXECUTABLE",
+    "scenarioIds": ["S15"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.3 protects explicit COMPANY board-majority qualification and controller_appointment projection; G2.4A separately protects evidence-based resolution and legal-entity needs."
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "LLP: qualifying majority-management appointment right produces controller_appointment.",
+    "status": "G2_3_EXECUTABLE",
+    "scenarioIds": ["S15"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.3 protects explicit LLP majority-management qualification and controller_appointment projection; G2.4A separately protects evidence-based resolution and legal-entity needs."
+  },
+  {
+    "requirementId": "UBO-R05",
+    "assertion": "Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["P08"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A protects policy-driven strength/risk sufficiency: HIGH risk prevents attestation-only closure and produces a semantic PolicyGap/InformationNeed without generating a document request."
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Positive registry control fact may create a candidate claim.",
+    "status": "G2_1_EXECUTABLE",
+    "scenarioIds": ["P02"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.1 protects candidate-claim creation; G2.3 protects explicit qualification; G2.4A separately protects policy evidence sufficiency."
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Absence of PSC condition-4 data does not negatively resolve the requirement.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["P02", "S06"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A protects POSITIVE_ONLY/PSC-silence semantics and NO_DATA: neither may negatively resolve R06."
+  },
+  {
+    "requirementId": "UBO-R06",
+    "assertion": "Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination.",
+    "status": "G2_3_EXECUTABLE",
+    "scenarioIds": ["S16"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.3 protects REVIEW_REQUIRED assessment and prevents automatic qualification; G2.4A preserves that precedence while analyst action generation remains G2.4B."
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Customer declaration alone cannot resolve R08.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["P01"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A protects that applicant-originated declaration evidence does not satisfy R08's configured independent-source requirement."
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Numeric evidence strength alone cannot bypass independent-source requirement.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["P01"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A protects explicit source-origin classification, distinct durable-source counting and the configured independent-source minimum independently of numeric strength."
+  },
+  {
+    "requirementId": "UBO-R08",
+    "assertion": "Companies House PSC information may corroborate but must not automatically become final UBO conclusion.",
+    "status": "G2_4A_EXECUTABLE",
+    "scenarioIds": ["P01", "P02"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4A permits explicitly independent PSC evidence to resolve R08 corroboration while proving it creates no qualifying-person or R01 UBO conclusion."
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Material missing PSC may create reportable discrepancy workflow.",
+    "status": "G2_4B_EXECUTABLE",
+    "scenarioIds": ["P07"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4B deterministically emits POTENTIAL_DISCREPANCY and a host-neutral analyst-review intent for an explicit unmatched PSC/MLR fact; legal report submission remains outside UBO Control."
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable.",
+    "status": "G2_4B_EXECUTABLE",
+    "scenarioIds": ["P07"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4B preserves an explicit PSC_MLR_DEFINITION_DIFFERENCE as NON_REPORTABLE_DEFINITION_DIFFERENCE and never fabricates statutory reportability."
+  },
+  {
+    "requirementId": "UBO-R09",
+    "assertion": "Non-material discrepancy records rationale without automatically invoking report workflow.",
+    "status": "G2_4B_EXECUTABLE",
+    "scenarioIds": ["P07"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4B records an explicit NON_MATERIAL assessment and rationale without creating a regulatory-report action."
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Fallback cannot activate merely because DiscoveryService returned NO_DATA.",
+    "status": "G2_4B_EXECUTABLE",
+    "scenarioIds": ["S06", "P03"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4B preserves NO_DATA in ResolutionAttempt history and requires a current authoritative asynchronous exhaustion decision before fallback eligibility."
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Fallback cannot activate when required measures were not actually completed.",
+    "status": "G2_4B_EXECUTABLE",
+    "scenarioIds": ["P03"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4B blocks FALLBACK_REVIEW_CANDIDATE while pre-fallback requirements, customer-resolvable needs, specialist routes or relevant operational blockers remain incomplete."
+  },
+  {
+    "requirementId": "UBO-R10",
+    "assertion": "Review package and positive exhaustion decision record measures taken and reason fallback was permitted.",
+    "status": "G2_4C_EXECUTABLE",
+    "scenarioIds": ["P03"],
+    "g1_2bProtection": "REPRESENTABILITY_INPUT_ONLY",
+    "deferredBehavior": "G2.4C protects the actual immutable DecisionSnapshot measures-taken manifest, pinned review requirement and authoritative exhaustion decision, and reconstructs why fallback was permitted."
+  }
+]

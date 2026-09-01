@@ -21,6 +21,8 @@ const {
   CONDITION_LANGUAGE_VERSION,
   POLICY_PACK_SCHEMA_ID,
   POLICY_PACK_SCHEMA_VERSION,
+  PERCENTAGE_VALUE_TYPE,
+  RELATIONSHIP_TYPE,
   REQUIREMENT_STATE,
   REQUIREMENT_STATE_MODEL_VERSION,
   RESOLUTION_EFFECT,
@@ -83,10 +85,14 @@ const PARAMETER_REFERENCE_FIELDS = new Set([
 
 const ACTION_CONTENT_STATUS = Object.freeze({
   SUPPLIED: "SUPPLIED",
+  CONTROL_ROOM_APPROVED: "CONTROL_ROOM_APPROVED",
   UNRESOLVED_SOURCE_REFERENCE: "UNRESOLVED_SOURCE_REFERENCE",
 });
 
-const SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS = new Set([POLICY_PACK_SCHEMA_VERSION, "1.1"]);
+const SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS = new Set([POLICY_PACK_SCHEMA_VERSION, "1.1", "1.2"]);
+const ACTION_SUBMISSION_FACT_TYPE = Object.freeze({ RELATIONSHIP: "RELATIONSHIP" });
+const ACTION_SUBMISSION_DIRECTION = Object.freeze({ OWNER_TO_TARGET: "OWNER_TO_TARGET" });
+const ACTION_SUBMISSION_TARGET = Object.freeze({ INFORMATION_NEED_SUBJECT: "INFORMATION_NEED_SUBJECT" });
 const FALLBACK_REVIEW_STATE = Object.freeze({
   PENDING: "PENDING",
   RESOLVED: "RESOLVED",
@@ -113,7 +119,7 @@ function validateUniqueEnumArray(values, allowed, path) {
 }
 
 function validateSchema11Orchestration(policyPack, context) {
-  if (policyPack.schemaVersion === POLICY_PACK_SCHEMA_VERSION) {
+  if (policyPack.schemaVersion === "1.0") {
     if (policyPack.fallbackReviewPolicy !== undefined || policyPack.resolutionOrchestrationPolicy !== undefined) {
       policyError("Policy Pack schema 1.0 cannot contain schema 1.1 orchestration policy");
     }
@@ -210,6 +216,23 @@ function validateSchema11Orchestration(policyPack, context) {
   });
 }
 
+function validateSubmissionContract(contract, path) {
+  assertPlainObject(contract, path);
+  assertAllowedKeys(contract, [
+    "factType", "concept", "relationshipType", "direction", "target",
+    "allowedMeasurementTypes", "temporalMeaning",
+  ], path);
+  assertEnum(contract.factType, ACTION_SUBMISSION_FACT_TYPE, `${path}.factType`);
+  assertNonEmptyString(contract.concept, `${path}.concept`);
+  assertEnum(contract.relationshipType, RELATIONSHIP_TYPE, `${path}.relationshipType`);
+  assertEnum(contract.direction, ACTION_SUBMISSION_DIRECTION, `${path}.direction`);
+  assertEnum(contract.target, ACTION_SUBMISSION_TARGET, `${path}.target`);
+  validateUniqueEnumArray(contract.allowedMeasurementTypes, PERCENTAGE_VALUE_TYPE, `${path}.allowedMeasurementTypes`);
+  if (contract.temporalMeaning !== "CURRENT") {
+    policyError(`${path}.temporalMeaning must equal CURRENT`);
+  }
+}
+
 function policyError(message, code = "INVALID_POLICY_PACK") {
   throw new PolicyPackValidationError(message, { code });
 }
@@ -283,7 +306,7 @@ function collectUnresolvedReferences(sourceTraceability, field) {
   return new Set(identifiers);
 }
 
-function validateActionTemplates(actionTemplates, sourceTraceability) {
+function validateActionTemplates(actionTemplates, sourceTraceability, schemaVersion) {
   const actionIds = objectKeys(actionTemplates, "policyPack.actionTemplates");
   const unresolvedReferences = sourceTraceability?.unresolvedActionTemplateSourceReferences || [];
   assertArray(
@@ -302,6 +325,20 @@ function validateActionTemplates(actionTemplates, sourceTraceability) {
   });
   assertUniqueStrings(unresolvedIds, "policyPack unresolved action-template identifiers");
   const unresolvedSemanticIds = new Set(unresolvedIds);
+  const successorDecisions = sourceTraceability?.successorPolicyDecisions || [];
+  assertArray(successorDecisions, "policyPack.sourceTraceability.successorPolicyDecisions");
+  const successorBySemanticId = new Map(successorDecisions.map((decision, index) => {
+    const path = `policyPack.sourceTraceability.successorPolicyDecisions[${index}]`;
+    assertPlainObject(decision, path);
+    assertAllowedKeys(decision, [
+      "semanticId", "source", "decisionDate", "supersedesUnresolvedReference",
+    ], path);
+    ["semanticId", "source", "decisionDate", "supersedesUnresolvedReference"].forEach((field) => {
+      assertNonEmptyString(decision[field], `${path}.${field}`);
+    });
+    return [decision.semanticId, decision];
+  }));
+  assertUniqueStrings([...successorBySemanticId.keys()], "policyPack successor-policy semantic identifiers");
 
   actionIds.forEach((actionId) => {
     if (!/^[A-Z][A-Z0-9_]*$/.test(actionId) || /^B\d+$/.test(actionId)) {
@@ -315,7 +352,7 @@ function validateActionTemplates(actionTemplates, sourceTraceability) {
       `policyPack.actionTemplates.${actionId}.contentStatus`,
     );
 
-    if (template.contentStatus === ACTION_CONTENT_STATUS.SUPPLIED) {
+    if (template.contentStatus !== ACTION_CONTENT_STATUS.UNRESOLVED_SOURCE_REFERENCE) {
       if (template.text !== undefined) {
         assertNonEmptyString(template.text, `policyPack.actionTemplates.${actionId}.text`);
       }
@@ -342,6 +379,30 @@ function validateActionTemplates(actionTemplates, sourceTraceability) {
       if (unresolvedSemanticIds.has(actionId)) {
         policyError(`Action template ${actionId} cannot be both supplied and unresolved`);
       }
+      if (template.contentStatus === ACTION_CONTENT_STATUS.CONTROL_ROOM_APPROVED) {
+        if (schemaVersion !== "1.2") {
+          policyError(`Control Room-approved action template ${actionId} requires Policy Pack schema 1.2`);
+        }
+        validateSubmissionContract(
+          template.submissionContract,
+          `policyPack.actionTemplates.${actionId}.submissionContract`,
+        );
+        assertPlainObject(template.sourceDecision, `policyPack.actionTemplates.${actionId}.sourceDecision`);
+        assertAllowedKeys(template.sourceDecision, [
+          "source", "decisionDate", "supersedesUnresolvedReference",
+        ], `policyPack.actionTemplates.${actionId}.sourceDecision`);
+        if (template.sourceDecision.source !== "CONTROL_ROOM_SUCCESSOR_POLICY") {
+          policyError(`policyPack.actionTemplates.${actionId}.sourceDecision.source must equal CONTROL_ROOM_SUCCESSOR_POLICY`);
+        }
+        assertNonEmptyString(template.sourceDecision.decisionDate, `policyPack.actionTemplates.${actionId}.sourceDecision.decisionDate`);
+        assertNonEmptyString(template.sourceDecision.supersedesUnresolvedReference,
+          `policyPack.actionTemplates.${actionId}.sourceDecision.supersedesUnresolvedReference`);
+        if (!sameSuccessorDecision(successorBySemanticId.get(actionId), template.sourceDecision)) {
+          policyError(`Control Room-approved action template ${actionId} has inconsistent successor-policy provenance`);
+        }
+      } else if (template.submissionContract !== undefined || template.sourceDecision !== undefined) {
+        policyError(`Only Control Room-approved action template ${actionId} may carry schema 1.2 submission governance`);
+      }
     } else {
       assertNonEmptyString(template.sourceReference, `policyPack.actionTemplates.${actionId}.sourceReference`);
       if (template.text !== undefined || template.textByEntityProfile !== undefined) {
@@ -361,8 +422,20 @@ function validateActionTemplates(actionTemplates, sourceTraceability) {
       policyError(`Source integrity references unknown action template ${actionId}`);
     }
   });
+  successorBySemanticId.forEach((_decision, actionId) => {
+    if (actionTemplates[actionId]?.contentStatus !== ACTION_CONTENT_STATUS.CONTROL_ROOM_APPROVED) {
+      policyError(`Successor-policy decision ${actionId} does not reference a Control Room-approved action template`);
+    }
+  });
 
   return new Set(actionIds);
+}
+
+function sameSuccessorDecision(traceabilityDecision, templateDecision) {
+  if (!traceabilityDecision) return false;
+  return traceabilityDecision.source === templateDecision.source
+    && traceabilityDecision.decisionDate === templateDecision.decisionDate
+    && traceabilityDecision.supersedesUnresolvedReference === templateDecision.supersedesUnresolvedReference;
 }
 
 function validateEvidenceCatalogue(evidenceCatalogue, parameters) {
@@ -589,7 +662,11 @@ function validatePolicyPack(input) {
         ? objectKeys(policyPack.lifecyclePolicy.eventCatalogue, "policyPack.lifecyclePolicy.eventCatalogue")
         : [],
     );
-    const actionTemplates = validateActionTemplates(policyPack.actionTemplates, policyPack.sourceTraceability);
+    const actionTemplates = validateActionTemplates(
+      policyPack.actionTemplates,
+      policyPack.sourceTraceability,
+      policyPack.schemaVersion,
+    );
     const evidenceItems = validateEvidenceCatalogue(policyPack.evidenceCatalogue, parameters);
     const conceptsByProfile = entityConceptsByProfile(policyPack.entityProfiles, evidenceItems);
 

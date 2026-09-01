@@ -16,7 +16,7 @@ const {
 const { canonicalizeJson } = require("../policy/canonicalJson");
 const { coreScenarios } = require("../test-support/scenarioCorpus");
 
-const POLICY = require("../policies/uk-corporate/1.4-rc/policy.json");
+const POLICY = require("../policies/uk-corporate/1.5-rc/policy.json");
 const T0 = "2026-09-01T09:00:00.000Z";
 const T1 = "2026-09-01T09:01:00.000Z";
 const T2 = "2026-09-01T09:02:00.000Z";
@@ -160,7 +160,10 @@ function customCustomerSetup(base, {
 }
 
 function eventFor(setup, changes = {}, selectedBundle) {
-  const bundle = selectedBundle || setup.plan.recommendedWave.customerBundles[0];
+  const submittedFields = Object.keys(changes.values || {});
+  const bundle = selectedBundle || setup.plan.recommendedWave.customerBundles
+    .find(({ missingFacts }) => submittedFields.some((field) => missingFacts.includes(field)))
+    || setup.plan.recommendedWave.customerBundles[0];
   const needIds = new Set(bundle.informationNeedIds);
   const items = setup.journey.customerWorkItems.filter((item) => item.informationNeedIds.some((id) => needIds.has(id)));
   const actions = bundle.recommendedCustomerActions;
@@ -192,6 +195,8 @@ function eventFor(setup, changes = {}, selectedBundle) {
 function relationship(owner, percentage, localPartyKey = owner.toLowerCase()) {
   return {
     type: "RELATIONSHIP",
+    concept: "SHARE_OWNERSHIP",
+    direction: "OWNER_TO_TARGET",
     subject: { name: owner, entityType: "NATURAL_PERSON", localPartyKey, registerAsNew: true, externalIdentifiers: [] },
     object: { entityId: "entity-foreign-holdco", externalIdentifiers: [] },
     relationship: "ECONOMIC_OWNERSHIP",
@@ -201,8 +206,10 @@ function relationship(owner, percentage, localPartyKey = owner.toLowerCase()) {
 }
 
 function relationshipField(setup) {
-  const missing = setup.plan.recommendedWave.customerBundles[0].missingFacts;
-  return missing.find((field) => ["CURRENT_OWNERSHIP_AND_CONTROL", "VOTING_RIGHTS", "APPOINTMENT_CONTROL", "SIGNIFICANT_INFLUENCE_OR_CONTROL"].includes(field));
+  const action = setup.plan.recommendedWave.customerBundles
+    .flatMap(({ recommendedCustomerActions }) => recommendedCustomerActions)
+    .find(({ actionTemplate }) => actionTemplate?.actionTemplateId === "DISCLOSE_SHARE_OWNERSHIP");
+  return action?.subject.concept;
 }
 
 function applyInput(setup, customerAction, operationId = "customer-input-1") {
@@ -261,6 +268,75 @@ test("foreign HoldCo customer statement remains candidate until explicit decisio
   assert.equal(graphB.nodes.some(({ category }) => category === "NATURAL_PERSON"), true);
   assert.notDeepEqual(journeyB, setup.journey);
   assert.notDeepEqual(planB, setup.plan);
+});
+
+function assertActionError(setup, field, statement, code, operationId) {
+  assert.throws(
+    () => applyInput(setup, eventFor(setup, { values: { [field]: statement } }), operationId),
+    (error) => error instanceof DecisionApplicationError && error.code === code,
+  );
+}
+
+test("share-ownership action rejects the wrong target, relationship, concept and direction with stable public codes", () => {
+  const targetSetup = initialForeignCase("g53d-wrong-target");
+  const targetField = relationshipField(targetSetup);
+  const wrongTarget = relationship("Alice", 80, "alice-target");
+  wrongTarget.object = { entityId: "entity-customer", externalIdentifiers: [] };
+  assertActionError(targetSetup, targetField, wrongTarget,
+    DECISION_APPLICATION_ERROR_CODE.ACTION_TARGET_MISMATCH, "wrong-target");
+
+  const relationshipSetup = initialForeignCase("g53d-wrong-relationship");
+  const wrongRelationship = relationship("Alice", 80, "alice-relationship");
+  wrongRelationship.relationship = "VOTING_RIGHTS";
+  assertActionError(relationshipSetup, relationshipField(relationshipSetup), wrongRelationship,
+    DECISION_APPLICATION_ERROR_CODE.ACTION_RELATIONSHIP_TYPE_MISMATCH, "wrong-relationship");
+
+  const conceptSetup = initialForeignCase("g53d-wrong-concept");
+  const wrongConcept = relationship("Alice", 80, "alice-concept");
+  wrongConcept.concept = "SIGNIFICANT_INFLUENCE_OR_CONTROL";
+  assertActionError(conceptSetup, relationshipField(conceptSetup), wrongConcept,
+    DECISION_APPLICATION_ERROR_CODE.ACTION_CONCEPT_MISMATCH, "wrong-concept");
+
+  const directionSetup = initialForeignCase("g53d-wrong-direction");
+  const wrongDirection = relationship("Alice", 80, "alice-direction");
+  wrongDirection.direction = "TARGET_TO_OWNER";
+  assertActionError(directionSetup, relationshipField(directionSetup), wrongDirection,
+    DECISION_APPLICATION_ERROR_CODE.ACTION_DIRECTION_MISMATCH, "wrong-direction");
+});
+
+test("share-ownership action accepts EXACT, RANGE and UNKNOWN percentage representations", () => {
+  const measurements = [
+    { type: "EXACT", value: 80 },
+    { type: "RANGE", lowerBound: 75, upperBound: 85, lowerInclusive: true, upperInclusive: true },
+    { type: "UNKNOWN", reason: "Customer does not know the exact percentage" },
+  ];
+  measurements.forEach((measurement, index) => {
+    const setup = initialForeignCase(`g53d-measurement-${measurement.type.toLowerCase()}`);
+    const statement = relationship(`Owner ${index + 1}`, 80, `owner-${index + 1}`);
+    statement.measurement = measurement;
+    const result = applyInput(setup, eventFor(setup, {
+      values: { [relationshipField(setup)]: statement },
+    }), `measurement-${measurement.type.toLowerCase()}`);
+    assert.equal(result.decisionTargets.candidateClaims.length, 1);
+    const state = JSON.parse(Buffer.from(result.caseState.statePayload, "base64url").toString("utf8"));
+    const claim = state.candidateClaims.find(({ claimId }) => claimId === result.decisionTargets.candidateClaims[0].claimId);
+    assert.deepEqual(claim.measurement, measurement);
+  });
+});
+
+test("an alternate planned relationship field cannot inject a share-ownership relationship", () => {
+  const setup = initialForeignCase("g53d-alternate-field-exploit");
+  const votingBundle = setup.plan.recommendedWave.customerBundles.find(({ recommendedCustomerActions }) =>
+    recommendedCustomerActions.some(({ actionTemplate }) => actionTemplate?.actionTemplateId === "DISCLOSE_VOTING_CONTROL"));
+  assert.ok(votingBundle);
+  const votingField = votingBundle.recommendedCustomerActions
+    .find(({ actionTemplate }) => actionTemplate?.actionTemplateId === "DISCLOSE_VOTING_CONTROL").subject.concept;
+  const exploit = relationship("Alice", 80, "alice-exploit");
+  assert.throws(
+    () => applyInput(setup, eventFor(setup, { values: { [votingField]: exploit } }, votingBundle), "alternate-field"),
+    (error) => error instanceof DecisionApplicationError
+      && error.code === DECISION_APPLICATION_ERROR_CODE.ACTION_CONCEPT_MISMATCH,
+  );
 });
 
 test("two new same-name people stay distinct and every relationship requires adjudication", () => {

@@ -103,6 +103,83 @@
       error && h("p", { id: `${id}-error`, className: "uj-field-error", role: "alert" }, error));
   }
 
+  function actionForField(actions, field) {
+    return actions.find(({ subject }) => (subject?.attribute || subject?.concept) === field);
+  }
+
+  function ownershipStatement(row, contract, targetEntityId, localPartyKey) {
+    const naturalPerson = row.entityType === "NATURAL_PERSON";
+    const identifiers = row.registrationNumber
+      ? [{ namespace: "CUSTOMER_PROVIDED_REGISTRATION", value: row.registrationNumber.trim() }]
+      : [];
+    let measurement;
+    if (row.measurementType === "RANGE") {
+      measurement = {
+        type: "RANGE",
+        lowerBound: row.lowerBound === "" ? null : Number(row.lowerBound),
+        upperBound: row.upperBound === "" ? null : Number(row.upperBound),
+        lowerInclusive: true,
+        upperInclusive: true,
+      };
+    } else if (row.measurementType === "UNKNOWN") {
+      measurement = { type: "UNKNOWN", ...(row.unknownReason ? { reason: row.unknownReason.trim() } : {}) };
+    } else measurement = { type: "EXACT", value: row.exactValue === "" ? null : Number(row.exactValue) };
+    return {
+      type: contract.factType,
+      concept: contract.concept,
+      direction: contract.direction,
+      subject: {
+        name: row.name.trim(),
+        entityType: row.entityType,
+        ...(row.jurisdiction ? { jurisdiction: row.jurisdiction.trim().toUpperCase() } : {}),
+        externalIdentifiers: identifiers,
+        ...(naturalPerson ? { localPartyKey, registerAsNew: true } : {}),
+      },
+      object: { entityId: targetEntityId, externalIdentifiers: [] },
+      relationship: contract.relationshipType,
+      measurement,
+      qualifiers: { currentState: contract.temporalMeaning, economicInterestConcept: contract.concept },
+    };
+  }
+
+  function StructuredOwnershipField({ field, action, bundle, value, update, error }) {
+    const contract = action.actionTemplate.submissionContract;
+    const emptyRow = () => ({
+      name: "", entityType: "NATURAL_PERSON", registrationNumber: "", jurisdiction: "",
+      measurementType: "EXACT", exactValue: "", lowerBound: "", upperBound: "", unknownReason: "",
+    });
+    const [rows, setRows] = React.useState([emptyRow()]);
+    const emit = (next) => {
+      setRows(next);
+      update(field, next.map((row, index) => ownershipStatement(
+        row, contract, bundle.subject.entityId, `${bundle.bundleId}:owner:${index + 1}`,
+      )));
+    };
+    const change = (index, key, nextValue) => emit(rows.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [key]: nextValue } : row));
+    const add = () => emit([...rows, emptyRow()]);
+    const remove = (index) => emit(rows.filter((_row, rowIndex) => rowIndex !== index));
+    return h("fieldset", { className: "uj-ownership-group", "aria-describedby": error ? `${bundle.bundleId}-ownership-error` : undefined },
+      h("legend", null, "Current direct shareholders"),
+      rows.map((row, index) => h("div", { className: "uj-ownership-row", key: `${bundle.bundleId}:owner:${index + 1}` },
+        h("div", { className: "uj-ownership-row-header" }, h("strong", null, `Owner ${index + 1}`), rows.length > 1 && h("button", { type: "button", className: "uj-link-button", onClick: () => remove(index) }, "Remove")),
+        h("label", null, "Name", h("input", { value: row.name, required: true, onInput: (event) => change(index, "name", event.target.value) })),
+        h("label", null, "Owner type", h("select", { value: row.entityType, onChange: (event) => change(index, "entityType", event.target.value) },
+          h("option", { value: "NATURAL_PERSON" }, "Person"), h("option", { value: "LEGAL_ENTITY" }, "Legal entity"))),
+        row.entityType === "LEGAL_ENTITY" && h(React.Fragment, null,
+          h("label", null, "Registration number (if known)", h("input", { value: row.registrationNumber, onInput: (event) => change(index, "registrationNumber", event.target.value) })),
+          h("label", null, "Jurisdiction (if known)", h("input", { value: row.jurisdiction, onInput: (event) => change(index, "jurisdiction", event.target.value), maxLength: 2, placeholder: "GB" }))),
+        h("label", null, "Ownership information", h("select", { value: row.measurementType, onChange: (event) => change(index, "measurementType", event.target.value) },
+          contract.allowedMeasurementTypes.map((type) => h("option", { value: type, key: type }, type === "EXACT" ? "Exact percentage" : type === "RANGE" ? "Percentage range" : "Percentage unknown")))),
+        row.measurementType === "EXACT" && h("label", null, "Percentage", h("input", { type: "number", min: 0, max: 100, step: "any", value: row.exactValue, required: true, onInput: (event) => change(index, "exactValue", event.target.value) })),
+        row.measurementType === "RANGE" && h("div", { className: "uj-range" },
+          h("label", null, "From %", h("input", { type: "number", min: 0, max: 100, step: "any", value: row.lowerBound, required: true, onInput: (event) => change(index, "lowerBound", event.target.value) })),
+          h("label", null, "To %", h("input", { type: "number", min: 0, max: 100, step: "any", value: row.upperBound, required: true, onInput: (event) => change(index, "upperBound", event.target.value) }))),
+        row.measurementType === "UNKNOWN" && h("label", null, "What ownership information do you know?", h("textarea", { rows: 2, value: row.unknownReason, onInput: (event) => change(index, "unknownReason", event.target.value) })))),
+      h("button", { type: "button", className: "uj-secondary", onClick: add }, "Add another shareholder"),
+      error && h("p", { id: `${bundle.bundleId}-ownership-error`, className: "uj-field-error", role: "alert" }, error));
+  }
+
   function StateCard({ tone = "neutral", eyebrow, title, children }) {
     return h("section", { className: `uj-state-card ${tone}`, role: "status" },
       h("span", { className: "uj-state-icon", "aria-hidden": "true" }, tone === "complete" ? "✓" : tone === "progress" ? "↻" : "·"),
@@ -126,7 +203,8 @@
   }
 
   function templateConfigured(actions) {
-    return actions.every((action) => !action.actionTemplate || action.actionTemplate.contentStatus === "SUPPLIED");
+    return actions.every((action) => !action.actionTemplate
+      || ["SUPPLIED", "CONTROL_ROOM_APPROVED"].includes(action.actionTemplate.contentStatus));
   }
 
   function customerChoices(bundle) {
@@ -186,7 +264,16 @@
     const submit = (event) => {
       event.preventDefault();
       const nextErrors = {};
-      missing.forEach((field) => { if (!String(values[field] || "").trim()) nextErrors[field] = `${fieldLabel(field, profile)} is required.`; });
+      missing.forEach((field) => {
+        const action = actionForField(actions, field);
+        if (action?.actionTemplate?.submissionContract) {
+          const rows = Array.isArray(values[field]) ? values[field] : [];
+          const invalid = rows.length === 0 || rows.some((row) => !row.subject?.name
+            || (row.measurement?.type === "EXACT" && !Number.isFinite(row.measurement.value))
+            || (row.measurement?.type === "RANGE" && (!Number.isFinite(row.measurement.lowerBound) || !Number.isFinite(row.measurement.upperBound))));
+          if (invalid) nextErrors[field] = "Provide a name and valid ownership percentage information for each shareholder.";
+        } else if (!String(values[field] || "").trim()) nextErrors[field] = `${fieldLabel(field, profile)} is required.`;
+      });
       if (confirmation && !confirmationResult) nextErrors.confirmation = "Choose whether the established information is still correct.";
       if (choices.length > 1 && !selectedOption) nextErrors.option = "Choose one of the available ways to respond.";
       setErrors(nextErrors);
@@ -199,6 +286,7 @@
       onAction?.(makeEvent({ eventType: "EVIDENCE_ACTION_REQUESTED", bundle, journey, plan, values: {}, evidenceTypes: evidence }));
       setSubmitted(true);
     };
+    const approvedWording = actions.map(({ actionTemplate }) => actionTemplate?.wording).find(Boolean);
 
     return h("article", {
       className: `uj-bundle ${selected ? "selected" : ""}`,
@@ -212,11 +300,17 @@
     !configured ? h("div", { className: "uj-unavailable", role: "alert" }, h("strong", null, "Customer wording not configured"), h("p", null, "This request cannot be shown as an approved customer question yet."))
       : h("form", { className: "uj-form", onSubmit: submit, noValidate: true },
         h("section", { className: "uj-needed", "aria-label": "Still needed" }, h("h4", null, confirmation ? "Please confirm" : "Still needed"),
+          approvedWording && h("p", { className: "uj-policy-wording" }, approvedWording.replace("{subject.display_name}", entityName(bundle.subject?.entityId, journey, graph))),
           confirmation && h("fieldset", { className: "uj-confirm" }, h("legend", null, "Is the established information still correct?"),
             h("label", null, h("input", { type: "radio", name: `${bundle.bundleId}-confirmation`, value: "CONFIRMED", checked: confirmationResult === "CONFIRMED", onChange: () => { setConfirmationResult("CONFIRMED"); setErrors((current) => ({ ...current, confirmation: undefined })); } }), " Yes, it is still correct"),
             h("label", null, h("input", { type: "radio", name: `${bundle.bundleId}-confirmation`, value: "CORRECTION_REQUIRED", checked: confirmationResult === "CORRECTION_REQUIRED", onChange: () => { setConfirmationResult("CORRECTION_REQUIRED"); setErrors((current) => ({ ...current, confirmation: undefined })); } }), " No, it needs updating"),
             errors.confirmation && h("p", { className: "uj-field-error", role: "alert" }, errors.confirmation)),
-          missing.map((field) => fieldControl(field, profile, values[field], update, errors[field], bundle.bundleId)),
+          missing.map((field) => {
+            const action = actionForField(actions, field);
+            return action?.actionTemplate?.submissionContract
+              ? h(StructuredOwnershipField, { key: field, field, action, bundle, value: values[field], update, error: errors[field] })
+              : fieldControl(field, profile, values[field], update, errors[field], bundle.bundleId);
+          }),
           choices.length > 1 && h("div", { className: "uj-field" }, h("label", { htmlFor: `${bundle.bundleId}-option` }, "How would you like to respond?", h("span", { className: "uj-required" }, "Required")), h("select", { id: `${bundle.bundleId}-option`, value: selectedOption, onChange: (event) => setSelectedOption(event.target.value) }, h("option", { value: "" }, "Choose an approved option"), choices.map((choice) => h("option", { key: choice.resolutionOptionId, value: choice.resolutionOptionId }, choice.strategy === "CUSTOMER_DOCUMENT" ? "Provide an approved document" : "Provide details directly"))), errors.option && h("p", { className: "uj-field-error", role: "alert" }, errors.option))),
         evidence.length > 0 && h("section", { className: "uj-evidence" }, h("p", { className: "uj-eyebrow" }, "Supporting evidence"), h("h4", null, evidence.map(humanize).join(", ")), h("p", null, "A secure upload will be provided by the application hosting this journey."), h("button", { type: "button", className: "uj-secondary", onClick: requestEvidence }, "Continue to secure document handoff")),
         (missing.length > 0 || confirmation) && h("button", { type: "submit", className: "uj-primary" }, confirmation ? "Send confirmation" : "Send information"),

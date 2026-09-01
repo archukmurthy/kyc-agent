@@ -63,3 +63,22 @@ Acceptance principles:
 - Evidence types and ownership-chart relevance come only from recorded ResolutionOptions.
 - Internal/fallback review follows currently known customer work; specialist stops override ordinary flow.
 - Plans are advisory, immutable, deterministic and contain no execution, host UI, provider ranking or numeric friction score.
+
+## PR-LAB-001 — Standalone UBO Control Lab
+
+**Status:** READY FOR CONTROL ROOM PRODUCT TESTING — G5.3D
+
+**Target:** Gate 5.3D
+
+UBO Control must provide a standalone, deployed compliance-testing Lab that exercises the real public Decision Application, projections, planner, reusable customer journey and ownership renderer without integrating into KYB onboarding.
+
+Acceptance principles:
+
+- Fixture mode exposes LAB01–LAB18 and runs the real deterministic product pipeline.
+- Live Discovery mode uses the accepted legacy Discovery composition while treating provider conclusions as non-authoritative candidate material.
+- Live Evidence is visibly unavailable until Gate 4 prerequisites are accepted; the Lab does not simulate extraction.
+- Customer and Compliance views share one sealed session state and current DecisionSnapshot.
+- LAB18 applies the approved structured current-share-ownership question through `ubo-customer-action-v1`, explicit claim adjudication and a fresh linked DecisionSnapshot.
+- Compliance users can inspect candidate provenance, decide identity and claim targets, review R01–R14, view history, compare snapshots, inspect the low-friction plan and export local feedback.
+- Lab session state is ephemeral and never writes dossiers, onboarding state or a new database model.
+- The Lab remains separate from `src/App.js`; KYB onboarding integration is deferred until Control Room product validation.

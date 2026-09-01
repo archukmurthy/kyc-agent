@@ -1,0 +1,2747 @@
+{
+  "fixtureSetVersion": "ubo-control-lab-fixtures-v1",
+  "generatedFrom": "ubo-control/test-support/scenarioCorpus",
+  "fixtures": [
+    {
+      "id": "LAB01",
+      "sourceScenarioId": "S01",
+      "label": "Direct qualifying owner",
+      "description": "One direct natural-person economic owner.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S01",
+        "kind": "CORE",
+        "title": "Direct company economic ownership",
+        "purpose": "Represent a natural person's exact direct share interest without qualification.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_SHARE_OWNERSHIP"
+          ],
+          "evidenceCatalogueKeys": [
+            "register_of_members"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s01-discovery-1",
+              "caseId": "s01-case",
+              "informationNeeds": [
+                {
+                  "needId": "ownership",
+                  "concepts": [
+                    "SHARE_OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s01-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s01-direct-share",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Direct",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "GB"
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s01-register",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 40
+                  },
+                  "qualifiers": {
+                    "entityProfile": "COMPANY",
+                    "economicInterestConcept": "SHARE_OWNERSHIP"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTER",
+                  "referenceId": "s01-register",
+                  "locator": {
+                    "catalogueKey": "register_of_members"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "The candidate is a direct ECONOMIC_OWNERSHIP fact with an EXACT value.",
+          "No UBO or threshold result is present."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 determines whether the exact interest qualifies under the active policy."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB02",
+      "sourceScenarioId": "S03",
+      "label": "Multilayer ownership",
+      "description": "A deterministic corporate chain and look-through calculation.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S03",
+        "kind": "CORE",
+        "title": "Multilayer company ownership",
+        "purpose": "Represent two economic relationships across a natural person, HoldCo, and customer.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01",
+            "UBO-R02"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_SHARE_OWNERSHIP"
+          ],
+          "evidenceCatalogueKeys": [
+            "register_of_members"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s03-discovery-1",
+              "caseId": "s03-case",
+              "informationNeeds": [
+                {
+                  "needId": "ownership-chain",
+                  "concepts": [
+                    "SHARE_OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R02"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s03-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s03-alice-holdco",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Layered",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "HoldCo Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-holdco",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s03-holdco-register",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 60
+                  },
+                  "qualifiers": {
+                    "economicInterestConcept": "SHARE_OWNERSHIP"
+                  }
+                },
+                {
+                  "factId": "s03-holdco-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "HoldCo Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-holdco",
+                    "jurisdiction": "GB"
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s03-customer-register",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 70
+                  },
+                  "qualifiers": {
+                    "economicInterestConcept": "SHARE_OWNERSHIP"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTER",
+                  "referenceId": "s03-holdco-register",
+                  "locator": {
+                    "catalogueKey": "register_of_members"
+                  }
+                },
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTER",
+                  "referenceId": "s03-customer-register",
+                  "locator": {
+                    "catalogueKey": "register_of_members"
+                  }
+                },
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "OPERATION_LOG",
+                  "referenceId": "s03-search-log"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "Both directed relationships remain separate and ordered.",
+          "Fact evidence subsets remain distinct from three operation-level references."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 may multiply the two percentages; G1.2B records no indirect result."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB03",
+      "sourceScenarioId": "S04",
+      "label": "Multiple ownership paths",
+      "description": "Independent ownership paths aggregate without collapsing.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S04",
+        "kind": "CORE",
+        "title": "Multiple independent paths to one person",
+        "purpose": "Preserve two independent candidate paths without collapsing or aggregating them.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R02"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "register_of_members"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s04-discovery-1",
+              "caseId": "s04-case",
+              "informationNeeds": [
+                {
+                  "needId": "independent-paths",
+                  "concepts": [
+                    "SHARE_OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R02"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s04-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s04-alice-a",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Multipath",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Path A Holdings",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s04-path-a",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 50
+                  }
+                },
+                {
+                  "factId": "s04-a-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Path A Holdings",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s04-path-a",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 30
+                  }
+                },
+                {
+                  "factId": "s04-alice-b",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Multipath",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Path B Holdings",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s04-path-b",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 40
+                  }
+                },
+                {
+                  "factId": "s04-b-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Path B Holdings",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTER",
+                      "referenceId": "s04-path-b",
+                      "locator": {
+                        "catalogueKey": "register_of_members"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 20
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTER",
+                  "referenceId": "s04-path-a",
+                  "locator": {
+                    "catalogueKey": "register_of_members"
+                  }
+                },
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTER",
+                  "referenceId": "s04-path-b",
+                  "locator": {
+                    "catalogueKey": "register_of_members"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "Four source-directed facts remain present in original order.",
+          "No aggregate percentage field exists."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies independent-path aggregation and duplicate-interest doctrine."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB04",
+      "sourceScenarioId": "S10",
+      "label": "Threshold-crossing range",
+      "description": "A range crosses the policy threshold and remains unresolved honestly.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S10",
+        "kind": "CORE",
+        "title": "Percentage range crossing policy threshold",
+        "purpose": "Preserve a range and endpoint inclusivity where its bounds straddle the policy threshold.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01",
+            "UBO-R02"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "director_certified_structure_chart"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s10-discovery-1",
+              "caseId": "s10-case",
+              "informationNeeds": [
+                {
+                  "needId": "ranged-owner",
+                  "concepts": [
+                    "OWNERSHIP_PERCENTAGE"
+                  ],
+                  "policyRequirementId": "UBO-R02"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s10-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s10-range",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Ranged",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s10-structure-chart",
+                      "locator": {
+                        "catalogueKey": "director_certified_structure_chart"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "RANGE",
+                    "lowerBound": 20,
+                    "upperBound": 30,
+                    "lowerInclusive": false,
+                    "upperInclusive": true
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s10-structure-chart",
+                  "locator": {
+                    "catalogueKey": "director_certified_structure_chart"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "RANGE bounds and inclusive/exclusive flags survive unchanged.",
+          "No scalar lower-bound field is produced."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies three-valued threshold reasoning to the range."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB05",
+      "sourceScenarioId": "S05",
+      "label": "Unresolved foreign HoldCo",
+      "description": "A foreign corporate branch produces real customer-resolution work.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S05",
+        "kind": "CORE",
+        "title": "Cross-border unresolved corporate layer",
+        "purpose": "Preserve a foreign corporate holder while upstream natural persons remain unknown.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "crossBorder": true,
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01",
+            "UBO-R02",
+            "UBO-R13"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_SHARE_OWNERSHIP"
+          ],
+          "evidenceCatalogueKeys": [
+            "foreign_registry_extract"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s05-discovery-1",
+              "caseId": "s05-case",
+              "informationNeeds": [
+                {
+                  "needId": "ultimate-owners",
+                  "concepts": [
+                    "ULTIMATE_NATURAL_PERSONS"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s05-discovery-1",
+              "outcome": {
+                "state": "PARTIAL"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s05-foreign-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Overseas Holdings SA",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "LU"
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTRY_EXTRACT",
+                      "referenceId": "s05-foreign-registry",
+                      "locator": {
+                        "catalogueKey": "foreign_registry_extract"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 80
+                  },
+                  "qualifiers": {
+                    "crossBorder": true,
+                    "ownerResolution": "UNRESOLVED"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTRY_EXTRACT",
+                  "referenceId": "s05-foreign-registry",
+                  "locator": {
+                    "catalogueKey": "foreign_registry_extract"
+                  }
+                }
+              ],
+              "issues": [
+                {
+                  "code": "UPSTREAM_OWNERS_UNRESOLVED"
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "The legal-entity holder remains explicit.",
+          "No invented natural-person candidate is returned."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 may create an InformationNeed or route specialist review under policy."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB06",
+      "sourceScenarioId": "S06",
+      "label": "Discovery NO_DATA",
+      "description": "No data is distinct from a negative ownership conclusion.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S06",
+        "kind": "CORE",
+        "title": "Discovery NO_DATA",
+        "purpose": "Represent a successful discovery operation that found no usable ownership or control facts.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R10"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "companies_house_record"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s06-discovery-1",
+              "caseId": "s06-case",
+              "informationNeeds": [
+                {
+                  "needId": "owners",
+                  "concepts": [
+                    "OWNERSHIP",
+                    "CONTROL"
+                  ],
+                  "policyRequirementId": "UBO-R10"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s06-discovery-1",
+              "outcome": {
+                "state": "NO_DATA"
+              },
+              "candidateFacts": [],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "OPERATION_LOG",
+                  "referenceId": "s06-search-log"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "NO_DATA contains zero candidate facts.",
+          "No negative ownership or control assertion is fabricated."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 must not infer fallback eligibility from NO_DATA alone."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB07",
+      "sourceScenarioId": "S14",
+      "label": "Voting control",
+      "description": "Voting rights remain separate from economic ownership.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S14",
+        "kind": "CORE",
+        "title": "Voting control without equivalent economic ownership",
+        "purpose": "Represent materially different economic and voting candidates for the same person.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R03"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_VOTING_CONTROL"
+          ],
+          "evidenceCatalogueKeys": [
+            "articles_of_association"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s14-discovery-1",
+              "caseId": "s14-case",
+              "informationNeeds": [
+                {
+                  "needId": "voting",
+                  "concepts": [
+                    "VOTING_RIGHTS",
+                    "SHARE_OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R03"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s14-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s14-economic",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Voting",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s14-articles",
+                      "locator": {
+                        "catalogueKey": "articles_of_association"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 5
+                  }
+                },
+                {
+                  "factId": "s14-voting",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Voting",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "VOTING_RIGHTS",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s14-articles",
+                      "locator": {
+                        "catalogueKey": "articles_of_association"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 40
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s14-articles",
+                  "locator": {
+                    "catalogueKey": "articles_of_association"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "VOTING_RIGHTS is not retyped as ECONOMIC_OWNERSHIP.",
+          "Both bases coexist with their exact measurements."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 separately evaluates voting and economic qualification."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB08",
+      "sourceScenarioId": "S15",
+      "label": "Appointment and removal control",
+      "description": "Management-body appointment/removal rights are assessed independently.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S15",
+        "kind": "CORE",
+        "title": "Appointment and removal control",
+        "purpose": "Represent company board and LLP management appointment semantics as distinct candidate facts.",
+        "context": {
+          "jurisdiction": "GB",
+          "variants": [
+            "COMPANY",
+            "LLP"
+          ],
+          "customers": [
+            {
+              "name": "Example Customer Ltd",
+              "entityType": "COMPANY",
+              "externalIdentifiers": [],
+              "entityId": "entity-customer",
+              "jurisdiction": "GB"
+            },
+            {
+              "name": "Example Members LLP",
+              "entityType": "LLP",
+              "externalIdentifiers": [],
+              "entityId": "entity-llp-customer",
+              "jurisdiction": "GB"
+            }
+          ]
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R05"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_APPOINTMENT_REMOVAL_CONTROL"
+          ],
+          "evidenceCatalogueKeys": [
+            "articles_of_association",
+            "llp_agreement"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s15-discovery-1",
+              "caseId": "s15-case",
+              "informationNeeds": [
+                {
+                  "needId": "company-appointment",
+                  "concepts": [
+                    "BOARD_APPOINTMENT_RIGHTS"
+                  ],
+                  "policyRequirementId": "UBO-R05"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s15-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s15-company-appointment",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Appointer",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "BOARD_APPOINTMENT_RIGHT",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s15-articles",
+                      "locator": {
+                        "catalogueKey": "articles_of_association"
+                      }
+                    }
+                  ],
+                  "qualifiers": {
+                    "entityProfile": "COMPANY",
+                    "controlConcept": "BOARD_APPOINTMENT_RIGHTS",
+                    "scope": "MAJORITY"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s15-articles",
+                  "locator": {
+                    "catalogueKey": "articles_of_association"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s15-discovery-2",
+              "caseId": "s15-case",
+              "informationNeeds": [
+                {
+                  "needId": "llp-appointment",
+                  "concepts": [
+                    "MANAGEMENT_APPOINTMENT_RIGHTS"
+                  ],
+                  "policyRequirementId": "UBO-R05"
+                }
+              ],
+              "subject": {
+                "name": "Example Members LLP",
+                "entityType": "LLP",
+                "externalIdentifiers": [],
+                "entityId": "entity-llp-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s15-discovery-2",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s15-llp-appointment",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "LLP Management Co",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "GB"
+                  },
+                  "relationship": "FORMAL_CONTROL_RIGHT",
+                  "object": {
+                    "name": "Example Members LLP",
+                    "entityType": "LLP",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-llp-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s15-llp-agreement",
+                      "locator": {
+                        "catalogueKey": "llp_agreement"
+                      }
+                    }
+                  ],
+                  "qualifiers": {
+                    "entityProfile": "LLP",
+                    "controlConcept": "MANAGEMENT_APPOINTMENT_RIGHTS",
+                    "managementBody": "persons_entitled_to_participate_in_management",
+                    "scope": "MAJORITY"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s15-llp-agreement",
+                  "locator": {
+                    "catalogueKey": "llp_agreement"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "COMPANY and LLP control concepts remain distinct in qualifiers.",
+          "The LLP legal-entity holder remains available for later look-through."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 determines qualification and projects any controller role."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB09",
+      "sourceScenarioId": "S16",
+      "label": "Other significant control",
+      "description": "Other means of influence/control remain an explicit basis.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S16",
+        "kind": "CORE",
+        "title": "Other significant influence or control",
+        "purpose": "Preserve a deliberately ambiguous significant-control candidate beside low economic ownership.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R06"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_OTHER_SIGNIFICANT_CONTROL"
+          ],
+          "evidenceCatalogueKeys": [
+            "investment_or_governance_agreement"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s16-discovery-1",
+              "caseId": "s16-case",
+              "informationNeeds": [
+                {
+                  "needId": "other-control",
+                  "concepts": [
+                    "SIGNIFICANT_INFLUENCE_OR_CONTROL"
+                  ],
+                  "policyRequirementId": "UBO-R06"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s16-discovery-1",
+              "outcome": {
+                "state": "INCONCLUSIVE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s16-economic",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Influence",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s16-governance",
+                      "locator": {
+                        "catalogueKey": "investment_or_governance_agreement"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 2
+                  }
+                },
+                {
+                  "factId": "s16-influence",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Influence",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s16-governance",
+                      "locator": {
+                        "catalogueKey": "investment_or_governance_agreement"
+                      }
+                    }
+                  ],
+                  "qualifiers": {
+                    "ambiguity": "DELIBERATELY_AMBIGUOUS",
+                    "assertedRight": "veto over strategic decisions"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s16-governance",
+                  "locator": {
+                    "catalogueKey": "investment_or_governance_agreement"
+                  }
+                }
+              ],
+              "issues": [
+                {
+                  "code": "CONTROL_CLAUSE_AMBIGUOUS"
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "Significant control remains a first-class relationship.",
+          "Ambiguity is retained without a controller or review decision."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 interprets control and decides whether analyst review is required."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB10",
+      "sourceScenarioId": "S09",
+      "label": "Conflicting ownership evidence",
+      "description": "Competing assertions remain disputed rather than silently ranked.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S09",
+        "kind": "CORE",
+        "title": "Conflicting ownership candidates",
+        "purpose": "Preserve conflicting percentages and similarly named candidate parties from independent sources.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R08",
+            "UBO-R09"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "companies_house_record",
+            "commercial_registry_data"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s09-discovery-1",
+              "caseId": "s09-case",
+              "informationNeeds": [
+                {
+                  "needId": "source-a-owner",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R08"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s09-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s09-owner-a",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alex Morgan",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": [
+                      {
+                        "namespace": "source-a-person",
+                        "value": "A-17"
+                      }
+                    ]
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTRY_RECORD",
+                      "referenceId": "s09-source-a",
+                      "locator": {
+                        "catalogueKey": "companies_house_record"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 35
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTRY_RECORD",
+                  "referenceId": "s09-source-a",
+                  "locator": {
+                    "catalogueKey": "companies_house_record"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s09-discovery-2",
+              "caseId": "s09-case",
+              "informationNeeds": [
+                {
+                  "needId": "source-b-owner",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R08"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s09-discovery-2",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s09-owner-b",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alex Morgan",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": [
+                      {
+                        "namespace": "source-b-person",
+                        "value": "B-91"
+                      }
+                    ]
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "COMMERCIAL_RECORD",
+                      "referenceId": "s09-source-b",
+                      "locator": {
+                        "catalogueKey": "commercial_registry_data"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 55
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "COMMERCIAL_RECORD",
+                  "referenceId": "s09-source-b",
+                  "locator": {
+                    "catalogueKey": "commercial_registry_data"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "Both candidates and their independent evidence remain separate.",
+          "Equal names do not create a canonical identity or a winning fact."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 adjudicates claim conflict and discrepancy materiality."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB11",
+      "sourceScenarioId": "S19",
+      "label": "Duplicate corroborating evidence",
+      "description": "Corroborating claims remain auditable without double-counting.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S19",
+        "kind": "CORE",
+        "title": "Duplicate candidate relationship evidence",
+        "purpose": "Preserve two evidence-backed candidates that may describe the same underlying relationship.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R08"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "companies_house_record",
+            "share_certificates"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s19-discovery-1",
+              "caseId": "s19-case",
+              "informationNeeds": [
+                {
+                  "needId": "registry-owner",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R08"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s19-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s19-owner-registry",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Duplicate Evidence",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTRY_RECORD",
+                      "referenceId": "s19-registry",
+                      "locator": {
+                        "catalogueKey": "companies_house_record"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 45
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTRY_RECORD",
+                  "referenceId": "s19-registry",
+                  "locator": {
+                    "catalogueKey": "companies_house_record"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "capability": "EXTRACTION",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s19-extraction-1",
+              "caseId": "s19-case",
+              "informationNeeds": [
+                {
+                  "needId": "document-owner",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R08"
+                }
+              ],
+              "artifactEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s19-document",
+                  "locator": {
+                    "catalogueKey": "share_certificates"
+                  }
+                }
+              ]
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s19-extraction-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s19-owner-document",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Alice Duplicate Evidence",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s19-document",
+                      "locator": {
+                        "catalogueKey": "share_certificates"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 45
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s19-document",
+                  "locator": {
+                    "catalogueKey": "share_certificates"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "Both candidate facts remain present with independent evidence.",
+          "No deduplication or double-counting decision occurs."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies duplicate-interest and corroboration doctrine."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB12",
+      "sourceScenarioId": "S17",
+      "label": "Trust / specialist route",
+      "description": "Trust roles route through the specialist-review semantics.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S17",
+        "kind": "CORE",
+        "title": "Trust or special structure in chain",
+        "purpose": "Represent a trust, settlor, and corporate trustee without pretending the trust is a company.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "specialStructure": "TRUST",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R11"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_TRUST_IN_CHAIN"
+          ],
+          "evidenceCatalogueKeys": [
+            "director_certified_structure_chart"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s17-discovery-1",
+              "caseId": "s17-case",
+              "informationNeeds": [
+                {
+                  "needId": "trust-chain",
+                  "concepts": [
+                    "TRUST_ROLES",
+                    "TRUST_CONTROL"
+                  ],
+                  "policyRequirementId": "UBO-R11"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s17-discovery-1",
+              "outcome": {
+                "state": "PARTIAL"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s17-trust-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Example Family Trust",
+                    "entityType": "TRUST",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "JE"
+                  },
+                  "relationship": "TRUST_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s17-trust-chart",
+                      "locator": {
+                        "catalogueKey": "director_certified_structure_chart"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 55
+                  }
+                },
+                {
+                  "factId": "s17-settlor",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Sara Settlor",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "SETTLOR",
+                  "object": {
+                    "name": "Example Family Trust",
+                    "entityType": "TRUST",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "JE"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s17-trust-chart",
+                      "locator": {
+                        "catalogueKey": "director_certified_structure_chart"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "factId": "s17-trustee",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Trustee Services Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "JE"
+                  },
+                  "relationship": "TRUSTEE",
+                  "object": {
+                    "name": "Example Family Trust",
+                    "entityType": "TRUST",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "JE"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s17-trust-chart",
+                      "locator": {
+                        "catalogueKey": "director_certified_structure_chart"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s17-trust-chart",
+                  "locator": {
+                    "catalogueKey": "director_certified_structure_chart"
+                  }
+                }
+              ],
+              "issues": [
+                {
+                  "code": "TRUST_BENEFICIARIES_UNRESOLVED"
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "TRUST entity and trust-specific relationships remain explicit.",
+          "No specialist route or ultimate-owner conclusion is emitted."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies special-structure reasoning and any specialist route."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB13",
+      "sourceScenarioId": "S02",
+      "label": "LLP economic interest",
+      "description": "LLP member and surplus-asset semantics remain distinct.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S02",
+        "kind": "CORE",
+        "title": "Direct LLP economic interest",
+        "purpose": "Represent an exact LLP surplus-asset right without modelling it as company shares.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "LLP",
+          "customer": {
+            "name": "Example Members LLP",
+            "entityType": "LLP",
+            "externalIdentifiers": [],
+            "entityId": "entity-llp-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_LLP_SURPLUS_ASSET_RIGHTS"
+          ],
+          "evidenceCatalogueKeys": [
+            "llp_agreement"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s02-discovery-1",
+              "caseId": "s02-case",
+              "informationNeeds": [
+                {
+                  "needId": "economic-interest",
+                  "concepts": [
+                    "SURPLUS_ASSET_RIGHTS"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Members LLP",
+                "entityType": "LLP",
+                "externalIdentifiers": [],
+                "entityId": "entity-llp-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s02-discovery-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s02-surplus-right",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Bob Member",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "GB"
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Members LLP",
+                    "entityType": "LLP",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-llp-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "s02-llp-agreement",
+                      "locator": {
+                        "catalogueKey": "llp_agreement"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 30
+                  },
+                  "qualifiers": {
+                    "entityProfile": "LLP",
+                    "economicInterestConcept": "SURPLUS_ASSET_RIGHTS"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "s02-llp-agreement",
+                  "locator": {
+                    "catalogueKey": "llp_agreement"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "LLP SURPLUS_ASSET_RIGHTS semantics are retained in qualifiers.",
+          "No share-ownership qualifier is introduced."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies the LLP-specific qualifying test."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB14",
+      "sourceScenarioId": "P04",
+      "label": "Nominee arrangement",
+      "description": "Nominee inputs expose the underlying-principal requirement.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "P04",
+        "kind": "POLICY_FOCUSED",
+        "title": "Nominee arrangement inputs",
+        "purpose": "Represent nominee and underlying-control candidates without determining the ultimate qualifying person.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R12"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_NOMINEE_OR_BEARER_ARRANGEMENT"
+          ],
+          "evidenceCatalogueKeys": [
+            "shareholders_agreement"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "EXTRACTION",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "p04-extraction-1",
+              "caseId": "p04-case",
+              "informationNeeds": [
+                {
+                  "needId": "nominee",
+                  "concepts": [
+                    "NOMINEE_RELATIONSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R12"
+                }
+              ],
+              "artifactEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "p04-nominee-agreement",
+                  "locator": {
+                    "catalogueKey": "shareholders_agreement"
+                  }
+                }
+              ]
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "p04-extraction-1",
+              "outcome": {
+                "state": "COMPLETE"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "p04-nominee-owner",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Nominee Holdings Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "p04-nominee-agreement",
+                      "locator": {
+                        "catalogueKey": "shareholders_agreement"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 30
+                  },
+                  "qualifiers": {
+                    "nomineeArrangement": true
+                  }
+                },
+                {
+                  "factId": "p04-nominator-control",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Nina Nominator",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "relationship": "CONTROL_OVER_TRUST_OR_INTERMEDIARY",
+                  "object": {
+                    "name": "Nominee Holdings Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": []
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "DOCUMENT",
+                      "referenceId": "p04-nominee-agreement",
+                      "locator": {
+                        "catalogueKey": "shareholders_agreement"
+                      }
+                    }
+                  ],
+                  "qualifiers": {
+                    "arrangement": "NOMINEE"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "DOCUMENT",
+                  "referenceId": "p04-nominee-agreement",
+                  "locator": {
+                    "catalogueKey": "shareholders_agreement"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "Nominee and underlying-control relationships remain separate.",
+          "No role or UBO status is projected."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 applies nominee and underlying-interest reasoning."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB15",
+      "sourceScenarioId": "P03",
+      "label": "SMO fallback review",
+      "description": "Fallback remains asynchronous and human-authoritative.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "P03",
+        "kind": "POLICY_FOCUSED",
+        "title": "Senior-managing-official fallback precondition inputs",
+        "purpose": "Represent exhausted-measures inputs separately from a no-data capability result without activating fallback.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "requiredMeasuresCompleted": false,
+          "measuresTaken": [
+            "registry-search"
+          ],
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R10"
+          ],
+          "actionTemplateIds": [
+            "IDENTIFY_SENIOR_MANAGING_OFFICIAL"
+          ],
+          "evidenceCatalogueKeys": [
+            "companies_house_record"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "p03-discovery-1",
+              "caseId": "p03-case",
+              "informationNeeds": [
+                {
+                  "needId": "fallback-input",
+                  "concepts": [
+                    "ULTIMATE_NATURAL_PERSONS"
+                  ],
+                  "policyRequirementId": "UBO-R10"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "p03-discovery-1",
+              "outcome": {
+                "state": "NO_DATA"
+              },
+              "candidateFacts": [],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "OPERATION_LOG",
+                  "referenceId": "p03-search"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ],
+        "invariants": [
+          "NO_DATA and measures-completed metadata remain separate inputs.",
+          "No fallback or senior-manager result is produced."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 determines whether every statutory fallback precondition is satisfied."
+          }
+        ]
+      }
+    },
+    {
+      "id": "LAB16",
+      "sourceScenarioId": "S07",
+      "label": "Operational failure",
+      "description": "Provider failures remain operational blockers, not customer facts.",
+      "preReviewed": true,
+      "exercise": "SNAPSHOT_INSPECTION",
+      "scenario": {
+        "id": "S07",
+        "kind": "CORE",
+        "title": "Discovery operational failures",
+        "purpose": "Represent UNAVAILABLE and FAILED as separate operational outcomes.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "variants": [
+            "UNAVAILABLE",
+            "FAILED"
+          ],
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": []
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s07-discovery-1",
+              "caseId": "s07-case",
+              "informationNeeds": [
+                {
+                  "needId": "owners-unavailable",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s07-discovery-1",
+              "outcome": {
+                "state": "UNAVAILABLE"
+              },
+              "candidateFacts": [],
+              "operationEvidenceReferences": [],
+              "issues": [
+                {
+                  "code": "SOURCE_TEMPORARILY_UNAVAILABLE",
+                  "retryable": true
+                }
+              ]
+            }
+          },
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s07-discovery-2",
+              "caseId": "s07-case",
+              "informationNeeds": [
+                {
+                  "needId": "owners-failed",
+                  "concepts": [
+                    "OWNERSHIP"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s07-discovery-2",
+              "outcome": {
+                "state": "FAILED"
+              },
+              "candidateFacts": [],
+              "operationEvidenceReferences": [],
+              "issues": [
+                {
+                  "code": "SOURCE_OPERATION_FAILED",
+                  "retryable": false
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "UNAVAILABLE and FAILED remain exact and distinct.",
+          "Neither variant emits candidate facts."
+        ],
+        "futureExpectations": []
+      }
+    },
+    {
+      "id": "LAB17",
+      "sourceScenarioId": "S08",
+      "label": "Explicit identity and claim decisions",
+      "description": "An intentionally unreviewed case exercises both decision consoles.",
+      "preReviewed": false,
+      "exercise": "EXPLICIT_DECISIONS",
+      "scenario": {
+        "id": "S08",
+        "kind": "CORE",
+        "title": "Partial discovery",
+        "purpose": "Return a useful company relationship while ownership information needs remain unresolved.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01",
+            "UBO-R07"
+          ],
+          "actionTemplateIds": [],
+          "evidenceCatalogueKeys": [
+            "companies_house_record"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s08-discovery-1",
+              "caseId": "s08-case",
+              "informationNeeds": [
+                {
+                  "needId": "people",
+                  "concepts": [
+                    "DIRECTORS",
+                    "OWNERS"
+                  ],
+                  "policyRequirementId": "UBO-R07"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s08-discovery-1",
+              "outcome": {
+                "state": "PARTIAL"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s08-director",
+                  "type": "ENTITY_ATTRIBUTE",
+                  "subject": {
+                    "name": "Dora Director",
+                    "entityType": "NATURAL_PERSON",
+                    "externalIdentifiers": []
+                  },
+                  "attribute": "DIRECTOR_OF",
+                  "value": {
+                    "entityReference": {
+                      "name": "Example Customer Ltd",
+                      "entityType": "COMPANY",
+                      "externalIdentifiers": [],
+                      "entityId": "entity-customer",
+                      "jurisdiction": "GB"
+                    }
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTRY_RECORD",
+                      "referenceId": "s08-company-record",
+                      "locator": {
+                        "catalogueKey": "companies_house_record"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTRY_RECORD",
+                  "referenceId": "s08-company-record",
+                  "locator": {
+                    "catalogueKey": "companies_house_record"
+                  }
+                }
+              ],
+              "issues": [
+                {
+                  "code": "OWNERSHIP_UNRESOLVED"
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "A useful candidate fact coexists with an unresolved requested concept.",
+          "The result remains PARTIAL."
+        ],
+        "futureExpectations": []
+      }
+    },
+    {
+      "id": "LAB18",
+      "sourceScenarioId": "S05",
+      "label": "Customer correction and before/after resolution",
+      "description": "The primary G5.3C customer-action cycle retains Snapshot A and creates Snapshot B.",
+      "preReviewed": true,
+      "exercise": "CUSTOMER_ACTION_CYCLE",
+      "scenario": {
+        "id": "S05",
+        "kind": "CORE",
+        "title": "Cross-border unresolved corporate layer",
+        "purpose": "Preserve a foreign corporate holder while upstream natural persons remain unknown.",
+        "context": {
+          "jurisdiction": "GB",
+          "entityProfile": "COMPANY",
+          "crossBorder": true,
+          "customer": {
+            "name": "Example Customer Ltd",
+            "entityType": "COMPANY",
+            "externalIdentifiers": [],
+            "entityId": "entity-customer",
+            "jurisdiction": "GB"
+          }
+        },
+        "policyLinks": {
+          "requirementIds": [
+            "UBO-R01",
+            "UBO-R02",
+            "UBO-R13"
+          ],
+          "actionTemplateIds": [
+            "DISCLOSE_SHARE_OWNERSHIP"
+          ],
+          "evidenceCatalogueKeys": [
+            "foreign_registry_extract"
+          ]
+        },
+        "steps": [
+          {
+            "capability": "DISCOVERY",
+            "request": {
+              "contractVersion": "1.0.0",
+              "requestId": "s05-discovery-1",
+              "caseId": "s05-case",
+              "informationNeeds": [
+                {
+                  "needId": "ultimate-owners",
+                  "concepts": [
+                    "ULTIMATE_NATURAL_PERSONS"
+                  ],
+                  "policyRequirementId": "UBO-R01"
+                }
+              ],
+              "subject": {
+                "name": "Example Customer Ltd",
+                "entityType": "COMPANY",
+                "externalIdentifiers": [],
+                "entityId": "entity-customer",
+                "jurisdiction": "GB"
+              }
+            },
+            "response": {
+              "contractVersion": "1.0.0",
+              "requestId": "s05-discovery-1",
+              "outcome": {
+                "state": "PARTIAL"
+              },
+              "candidateFacts": [
+                {
+                  "factId": "s05-foreign-customer",
+                  "type": "RELATIONSHIP",
+                  "subject": {
+                    "name": "Overseas Holdings SA",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "jurisdiction": "LU"
+                  },
+                  "relationship": "ECONOMIC_OWNERSHIP",
+                  "object": {
+                    "name": "Example Customer Ltd",
+                    "entityType": "COMPANY",
+                    "externalIdentifiers": [],
+                    "entityId": "entity-customer",
+                    "jurisdiction": "GB"
+                  },
+                  "evidenceReferences": [
+                    {
+                      "system": "scenario-evidence",
+                      "referenceType": "REGISTRY_EXTRACT",
+                      "referenceId": "s05-foreign-registry",
+                      "locator": {
+                        "catalogueKey": "foreign_registry_extract"
+                      }
+                    }
+                  ],
+                  "measurement": {
+                    "type": "EXACT",
+                    "value": 80
+                  },
+                  "qualifiers": {
+                    "crossBorder": true,
+                    "ownerResolution": "UNRESOLVED"
+                  }
+                }
+              ],
+              "operationEvidenceReferences": [
+                {
+                  "system": "scenario-evidence",
+                  "referenceType": "REGISTRY_EXTRACT",
+                  "referenceId": "s05-foreign-registry",
+                  "locator": {
+                    "catalogueKey": "foreign_registry_extract"
+                  }
+                }
+              ],
+              "issues": [
+                {
+                  "code": "UPSTREAM_OWNERS_UNRESOLVED"
+                }
+              ]
+            }
+          }
+        ],
+        "invariants": [
+          "The legal-entity holder remains explicit.",
+          "No invented natural-person candidate is returned."
+        ],
+        "futureExpectations": [
+          {
+            "status": "NON_EXECUTED_FUTURE_ACCEPTANCE",
+            "expectation": "Gate 2 may create an InformationNeed or route specialist review under policy."
+          }
+        ]
+      }
+    }
+  ]
+}

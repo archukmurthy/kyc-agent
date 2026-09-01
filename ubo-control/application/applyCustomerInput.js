@@ -77,8 +77,18 @@ function expectedSubject(bundle, items) {
   };
 }
 
-function validateSource(caseState, sourceDecisionSnapshot, sourceResolutionPlan, customerAction) {
+function validateSource(caseState, loadedPolicyPack, sourceDecisionSnapshot, sourceResolutionPlan, customerAction) {
   verifyDecisionSnapshot(sourceDecisionSnapshot);
+  const expectedPolicyIdentity = {
+    policyPackId: loadedPolicyPack.identity.policyPackId,
+    policyVersion: loadedPolicyPack.identity.version,
+    policyHash: loadedPolicyPack.identity.hash,
+    policySchemaVersion: loadedPolicyPack.identity.schemaVersion,
+  };
+  if (!same(sourceDecisionSnapshot.decisionContent.policy.identity, expectedPolicyIdentity)) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.STALE_CUSTOMER_ACTION,
+      "source DecisionSnapshot does not match the application Policy Pack");
+  }
   const reference = sourceDecisionSnapshot.decisionContent.caseReference;
   if (reference.caseId !== caseState.caseId || reference.revision !== caseState.revision
     || reference.revisionId !== caseState.revisionId) {
@@ -219,18 +229,56 @@ function partyResolver(caseState, operationId, actorReference) {
   return { resolve, newEntities };
 }
 
+function relationshipSubmissionContract(context, statement, path) {
+  const action = context.actions.find(({ subject }) => (subject.attribute || subject.concept) === context.field);
+  const templateId = action?.actionTemplate?.actionTemplateId;
+  const template = templateId ? context.policyPack.actionTemplates[templateId] : null;
+  const contract = template?.submissionContract;
+  const expectedConcept = contract?.concept || action?.subject?.concept || context.field;
+  if (statement.concept !== expectedConcept) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.ACTION_CONCEPT_MISMATCH,
+      `${path}.concept does not match the planned action`);
+  }
+  if (!contract) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.INVALID_CUSTOMER_ACTION,
+      `${path} has no Policy Pack submission contract`);
+  }
+  if (statement.relationship !== contract.relationshipType) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.ACTION_RELATIONSHIP_TYPE_MISMATCH,
+      `${path}.relationship does not match the planned action`);
+  }
+  if (statement.direction !== contract.direction) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.ACTION_DIRECTION_MISMATCH,
+      `${path}.direction does not match the planned action`);
+  }
+  if (contract.target !== "INFORMATION_NEED_SUBJECT"
+    || statement.object?.entityId !== action.subject.entityId) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.ACTION_TARGET_MISMATCH,
+      `${path}.object does not match the InformationNeed subject`);
+  }
+  if (!statement.measurement || !contract.allowedMeasurementTypes.includes(statement.measurement.type)) {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.ACTION_MEASUREMENT_NOT_ALLOWED,
+      `${path}.measurement.type is not allowed by the planned action`);
+  }
+  if (contract.temporalMeaning !== "CURRENT" || statement.qualifiers?.currentState !== "CURRENT") {
+    throw customerError(DECISION_APPLICATION_ERROR_CODE.INVALID_CUSTOMER_ACTION,
+      `${path} must assert current ownership`);
+  }
+  return contract;
+}
+
 function normalizeRelationshipStatements(value, context) {
   const statements = Array.isArray(value) ? value : [value];
   return statements.map((statement, index) => {
     const path = `customerAction.values.${context.field}[${index}]`;
     assertPlainObject(statement, path);
-    assertAllowedKeys(statement, ["type", "factId", "subject", "object", "relationship", "measurement", "qualifiers"], path);
+    assertAllowedKeys(statement, [
+      "type", "factId", "concept", "direction", "subject", "object", "relationship", "measurement", "qualifiers",
+    ], path);
     if (statement.type !== CANDIDATE_FACT_TYPE.RELATIONSHIP) throw new TypeError(`${path}.type must be RELATIONSHIP`);
+    relationshipSubmissionContract(context, statement, path);
     const subject = context.parties.resolve(statement.subject, `${path}.subject`);
     const object = context.parties.resolve(statement.object, `${path}.object`);
-    if (!context.allowedObjectEntityIds.has(object.party.entityId)) {
-      throw new TypeError(`${path}.object must be the requested canonical subject or one of its established upstream entities`);
-    }
     if (!statement.qualifiers || !["CURRENT", "CEASED", "UNKNOWN"].includes(statement.qualifiers.currentState)) {
       throw new TypeError(`${path}.qualifiers.currentState must explicitly state CURRENT, CEASED, or UNKNOWN`);
     }
@@ -280,25 +328,7 @@ function answerKey(actions, field) {
   return actions.find(({ subject }) => (subject.attribute || subject.concept) === field)?.actionTemplate?.actionTemplateId || field;
 }
 
-function upstreamEntityIds(sourceDecisionSnapshot, targetEntityId) {
-  const incoming = new Map();
-  sourceDecisionSnapshot.decisionContent.reasoning.graph.relationships.forEach(({ subjectEntityId, objectEntityId }) => {
-    if (!incoming.has(objectEntityId)) incoming.set(objectEntityId, new Set());
-    incoming.get(objectEntityId).add(subjectEntityId);
-  });
-  const result = new Set([targetEntityId]);
-  const pending = [targetEntityId];
-  while (pending.length > 0) {
-    for (const entityId of incoming.get(pending.shift()) || []) {
-      if (result.has(entityId)) continue;
-      result.add(entityId);
-      pending.push(entityId);
-    }
-  }
-  return result;
-}
-
-function applyCustomerInput({ caseState, sourceDecisionSnapshot, sourceResolutionPlan, customerAction, operationId, recordedAt, actorReference }) {
+function applyCustomerInput({ caseState, loadedPolicyPack, sourceDecisionSnapshot, sourceResolutionPlan, customerAction, operationId, recordedAt, actorReference }) {
   try {
     validateActionShape(customerAction);
     assertNonEmptyString(operationId, "applyCustomerInput.operationId");
@@ -307,7 +337,13 @@ function applyCustomerInput({ caseState, sourceDecisionSnapshot, sourceResolutio
     assertPlainObject(actorReference, "applyCustomerInput.actorReference");
     assertDataOnly(actorReference, "applyCustomerInput.actorReference");
     if (Object.keys(actorReference).length === 0) throw new TypeError("applyCustomerInput.actorReference must identify the customer actor");
-    const { plan, journey } = validateSource(caseState, sourceDecisionSnapshot, sourceResolutionPlan, customerAction);
+    const { plan, journey } = validateSource(
+      caseState,
+      loadedPolicyPack,
+      sourceDecisionSnapshot,
+      sourceResolutionPlan,
+      customerAction,
+    );
     const { bundle, actions } = validatePlannedAction(customerAction, plan, journey);
     const customerInputId = stableId("customer-input", { caseId: caseState.caseId, operationId, customerAction, recordedAt, actorReference });
     const provenance = {
@@ -327,8 +363,7 @@ function applyCustomerInput({ caseState, sourceDecisionSnapshot, sourceResolutio
       if (!allowedFields.has(field)) throw customerError(DECISION_APPLICATION_ERROR_CODE.UNAUTHORIZED_CUSTOMER_ACTION, `customer action field ${field} was not requested`);
       if (RELATIONSHIP_CONCEPTS.has(field)) {
         entries.push(...normalizeRelationshipStatements(value, {
-          field, bundle, parties, operationId, provenance,
-          allowedObjectEntityIds: upstreamEntityIds(sourceDecisionSnapshot, bundle.subject.entityId),
+          field, bundle, actions, parties, operationId, policyPack: loadedPolicyPack.policyPack, provenance,
         }));
       } else if (IDENTITY_ATTRIBUTES.has(field)) {
         if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${field} must be a non-empty string`);
