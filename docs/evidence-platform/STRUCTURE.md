@@ -73,3 +73,15 @@ A4a records only whether a Fact addresses an Information Need, with reasoning, q
 - Evidence Lab distinguishes successful preservation from interpretation and verifies authorized reopen without exposing storage references or credentials.
 
 R1 does not extract facts, interpret documents, assess trust or sufficiency, decide KYC outcomes, implement UBO behavior, or start A4b/R2/R3/R4.
+
+## Consumer Readiness R2 additions
+
+- `evidence/r2/domain.js` validates bounded neutral concepts, provider-neutral extraction context, opaque correlation, trusted authorization metadata, operation keys, and canonical request fingerprints.
+- `evidence/r2/repository.js` provides durable atomic operation-key claims, immutable completed/failed history, authorized human-readable Artifact selection, and the narrow adapter that prevents a neutral R2 concept from fabricating schema-field or Information-Need linkage in A3 Facts.
+- `evidence/r2/service.js` resolves and authorizes persisted Artifact inputs, enforces coherent same-Asset ordering, delegates JSON/HTML interpretation to A3, returns a bounded stable result, and separates fresh execution from no-provider history.
+- `api/evidence/r2-*.js` exposes the stable server boundary. Production requests require trusted host authorization; the local Evidence Lab adapter is explicitly non-production.
+- `db/migrations/015_evidence_interpretation_operations.sql` adds one durable interpretation-operation record with scoped operation-key uniqueness, request fingerprint, bounded correlation, status, optional Extraction Run linkage, bounded failure, and timestamps. Migrations 010-014 remain unchanged.
+- `scripts/evidence-r2-db-smoke.js` verifies migration 015 and atomic operation replay only against the guarded disposable Evidence database.
+- Evidence Lab exposes authorized context/Asset/Artifact selection, neutral concepts, a paid-call preview, explicit fresh interpretation, deliberate new operation keys, and no-provider history reopening. Unsupported PDF/image interpretation is distinguished from valid R1 preservation.
+
+R2 creates or reopens A3 interpretation history only. It does not recollect Evidence, invoke A4a, import consumer-domain identifiers, determine UBO/controllers or KYC satisfaction, interpret PDF/images, implement R3/R4, or start A4b.

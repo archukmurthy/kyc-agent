@@ -55,6 +55,10 @@ const evidenceR1ConfigHandler = require(path.join(__dirname, "..", "api", "evide
 const evidenceR1ContextsHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-contexts.js"));
 const evidenceR1IngestHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-ingest.js"));
 const evidenceR1ReopenHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-reopen.js"));
+const evidenceR2ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-config.js"));
+const evidenceR2OptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-options.js"));
+const evidenceR2InterpretHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-interpret.js"));
+const evidenceR2HistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-history.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
@@ -530,4 +534,6 @@ module.exports = function (app) {
   app.get("/api/evidence/r1-config", adapt(evidenceR1ConfigHandler));
   app.get("/api/evidence/r1-contexts", adapt(evidenceR1ContextsHandler));
   for (const [route, handler] of [["/api/evidence/r1-ingest", evidenceR1IngestHandler], ["/api/evidence/r1-reopen", evidenceR1ReopenHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });
+  app.get("/api/evidence/r2-config", adapt(evidenceR2ConfigHandler));
+  for (const [route, handler] of [["/api/evidence/r2-options", evidenceR2OptionsHandler], ["/api/evidence/r2-interpret", evidenceR2InterpretHandler], ["/api/evidence/r2-history", evidenceR2HistoryHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });
 };

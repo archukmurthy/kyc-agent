@@ -7,36 +7,7 @@ const path = require("node:path");
 const { neon } = require("@neondatabase/serverless");
 const { buildA1FixtureGraph, ids } = require("../evidence/a1/fixtures");
 const { PostgresEvidenceRepository } = require("../evidence/a1/repository");
-
-const CONFIRMATION = "I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN";
-
-function loadTestEnv() {
-  const envPath = path.resolve(process.cwd(), ".env.test.local");
-  if (!fs.existsSync(envPath)) return;
-  for (const rawLine of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const match = rawLine.trim().match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (!match || process.env[match[1]] !== undefined) continue;
-    let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    process.env[match[1]] = value;
-  }
-}
-
-function normalizeConnectionString(value) {
-  return String(value || "").trim().replace(/[?&](?:sslmode|channel_binding)=[^&]*/g, "");
-}
-
-function safeTestUrl() {
-  const testUrl = process.env.TEST_DATABASE_URL;
-  if (!testUrl) throw new Error("TEST_DATABASE_URL is required");
-  if (process.env.REAL_DB_SMOKE_CONFIRM !== CONFIRMATION) throw new Error(`Set REAL_DB_SMOKE_CONFIRM=${CONFIRMATION}`);
-  if (process.env.DATABASE_URL && normalizeConnectionString(testUrl) === normalizeConnectionString(process.env.DATABASE_URL)) {
-    throw new Error("Refusing to run against the configured application database");
-  }
-  return testUrl;
-}
+const { loadEvidenceTestEnv, requireDisposableEvidenceDatabase } = require("./evidence-test-db-guard");
 
 function migrationStatements() {
   const file = path.resolve(process.cwd(), "db", "migrations", "010_evidence_platform_a1.sql");
@@ -53,8 +24,8 @@ function migrationStatements() {
 }
 
 async function main() {
-  loadTestEnv();
-  const sql = neon(safeTestUrl());
+  loadEvidenceTestEnv();
+  const sql = neon(requireDisposableEvidenceDatabase());
   for (const statement of migrationStatements()) await sql.query(`${statement};`);
 
   for (const tenant of ["nium", "acme"]) {

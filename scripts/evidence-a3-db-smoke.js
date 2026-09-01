@@ -13,33 +13,14 @@ const { EvidenceCollectionHistoryService } = require("../evidence/a2/historyServ
 const { CompaniesHouseEvidenceService } = require("../evidence/a2/service");
 const { MemoryArtifactStore } = require("../evidence/a2/artifactStore");
 const { buildCompaniesHouseFixtureClient, fixtureWebsiteCapture } = require("../evidence/a2/fixtures");
-
-const CONFIRMATION = "I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN";
-
-function loadTestEnv() {
-  const envPath = path.resolve(process.cwd(), ".env.test.local");
-  if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const match = line.trim().match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/); if (!match || process.env[match[1]] !== undefined) continue;
-    let value = match[2].trim(); if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-    process.env[match[1]] = value;
-  }
-}
-
-function normalize(value) { return String(value || "").trim().replace(/[?&](?:sslmode|channel_binding)=[^&]*/g, ""); }
-function safeUrl() {
-  const testUrl = process.env.TEST_DATABASE_URL; if (!testUrl) throw new Error("TEST_DATABASE_URL is required");
-  if (process.env.REAL_DB_SMOKE_CONFIRM !== CONFIRMATION) throw new Error(`Set REAL_DB_SMOKE_CONFIRM=${CONFIRMATION}`);
-  if (process.env.DATABASE_URL && normalize(testUrl) === normalize(process.env.DATABASE_URL)) throw new Error("Refusing to run against the configured application database");
-  return testUrl;
-}
+const { loadEvidenceTestEnv, requireDisposableEvidenceDatabase } = require("./evidence-test-db-guard");
 
 function statements(file) {
   return fs.readFileSync(path.resolve(process.cwd(), "db", "migrations", file), "utf8").split("\n").map((line) => { const i = line.indexOf("--"); return i < 0 ? line : line.slice(0, i); }).join("\n").split(";").map((s) => s.trim()).filter(Boolean);
 }
 
 async function main() {
-  loadTestEnv(); const db = createPostgresDb(safeUrl()); const rows = (result) => result.rows || result;
+  loadEvidenceTestEnv(); const db = createPostgresDb(requireDisposableEvidenceDatabase()); const rows = (result) => result.rows || result;
   try {
     for (const file of ["010_evidence_platform_a1.sql", "011_evidence_platform_a2.sql", "012_evidence_platform_a3.sql", "013_evidence_fact_artifact_support.sql"]) for (const statement of statements(file)) await db.query(`${statement};`);
     for (const tenant of ["nium", "acme"]) await db.query("INSERT INTO tenants (id, name, slug) VALUES ($1, $1, $1) ON CONFLICT (id) DO NOTHING", [tenant]);

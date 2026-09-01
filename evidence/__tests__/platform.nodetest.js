@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "R1",
+    stage: "R2",
     status: "available",
   });
 });
@@ -32,6 +32,13 @@ test("the Evidence Lab exposes generic R1 private Artifact ingestion", () => {
   assert.match(lab,/R1 — PRIVATE ARTIFACT INGESTION/); assert.match(lab,/ARTIFACT PRESERVED/); assert.match(lab,/INTERPRETATION NOT PERFORMED/); assert.match(js,/\/api\/evidence\/r1-contexts/); assert.match(js,/\/api\/evidence\/r1-ingest/); assert.match(js,/\/api\/evidence\/r1-reopen/);
   assert.match(js,/Stored artifact successfully retrieved.*bytes matched the preserved SHA-256/);
   assert.doesNotMatch(js,/Authorized reopen succeeded/);
+});
+
+test("the Evidence Lab exposes the stable R2 targeted-interpretation boundary",()=>{
+  const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
+  assert.match(lab,/R2 — TARGETED INTERPRETATION/);assert.match(lab,/one Evidence Asset and one or more of its Artifacts/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/PDF\/PNG\/JPEG remain preserved Evidence/);
+  assert.match(js,/\/api\/evidence\/r2-options/);assert.match(js,/\/api\/evidence\/r2-interpret/);assert.match(js,/\/api\/evidence\/r2-history/);assert.match(js,/Selection makes no AI call/);assert.match(js,/Provider call expected for a new operation/);assert.match(js,/A4a evaluation: <b>NO/);assert.match(lab,/Prepare deliberate new interpretation/);assert.match(js,/Existing operation returned\. Provider call: NO/);
+  assert.match(js,/\$\("r2Run"\)\.disabled=!ready\|\|unsupported/);assert.match(js,/Run is disabled:/);
 });
 
 test("GET /api/evidence/status returns the boundary status", () => {
