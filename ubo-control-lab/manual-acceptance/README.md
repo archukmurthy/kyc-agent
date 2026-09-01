@@ -1,6 +1,6 @@
 # G5.3D manual compliance acceptance evidence
 
-Status: local production-build acceptance complete; deployed-preview acceptance is recorded after the branch preview is available.
+Status: local production-build browser acceptance and protected deployed-preview smoke verification complete.
 
 Date: 2026-09-01
 
@@ -29,3 +29,16 @@ Additional browser checks:
 - Diagnostics displayed Decision Application v2, graph/journey/plan versions, policy identity, graph version, calculation algorithms and snapshot contract.
 - `lab18-evidence-disabled.png` confirms Live Evidence is disabled and no fake upload/extraction path is offered.
 - Refresh/new-case behavior reset the session as labelled; no resumability was claimed.
+
+## Deployed preview verification
+
+Preview: `https://kyc-agent-zayzo-git-codex-ub-6d54dd-archukmurthy-3271s-projects.vercel.app/ubo-control-lab/`
+
+The Vercel preview is protected by the project's existing team-login policy. The page and API were verified through Vercel's authenticated preview request path without weakening deployment protection:
+
+- `/ubo-control-lab/` returned the staged production HTML and all Lab assets.
+- `START_FIXTURE` for LAB02 returned a real 1.5-RC `DecisionSnapshot`, graph/journey projections and `ubo-resolution-plan-v1`.
+- `START_LIVE` for Revolut Ltd / 08804411 executed the deployed `/api/ubo-discovery` route and returned `PARTIAL`, five candidate facts, source references and the explicit `LEGACY_KNOWN_COVERAGE_LIMITATION` issue.
+- The deployed live response exposed identity and claim decision targets and did not fabricate a snapshot before those explicit decisions.
+
+The full visual/manual checks and screenshots above were captured from the same staged production build through a local browser. Anonymous browser inspection of the branch URL redirects to Vercel login; Control Room testers require access to the Vercel team/project.
