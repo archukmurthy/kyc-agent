@@ -154,7 +154,7 @@ R1 is generic Evidence infrastructure, not a UBO or KYC upload feature. It perfo
 
 #### Evidence Consumer Readiness R2 — Targeted Interpretation Boundary
 
-Expose a stable provider-neutral consumer boundary around the existing A3 interpretation machinery. An authorized server-side consumer supplies persisted Artifact IDs, one or more neutral requested concepts, a bounded extraction context, and optional opaque correlation. Evidence resolves and authorizes persisted Artifacts, reads and verifies SHA-256, interprets one Artifact or a coherent same-Evidence-Asset set, and appends immutable Extraction Run, Fact, completeness, support, and Fact-to-Artifact lineage.
+**Accepted and implemented at `0e31ba490452b50e1cf618a23231d980d9ca4977`.** R2 exposes a stable provider-neutral consumer boundary around the existing A3 interpretation machinery. An authorized server-side consumer supplies persisted Artifact IDs, one or more neutral requested concepts, a bounded extraction context, and optional opaque correlation. Evidence resolves and authorizes persisted Artifacts, reads and verifies SHA-256, interprets one Artifact or a coherent same-Evidence-Asset set, and appends immutable Extraction Run, Fact, completeness, support, and Fact-to-Artifact lineage.
 
 R2 preserves open discovery and keeps requested Facts distinct from discovered Facts. It distinguishes found, legitimate not-found, not-evaluated/incomplete, unsupported concepts, unsupported media, provider failure, integrity failure, access denial, inconclusive interpretation, and persistence failure. Historical retrieval remains a separate no-provider-call operation from deliberate fresh interpretation.
 
@@ -164,7 +164,19 @@ Every stable fresh R2 request carries a caller-supplied operation key. Atomic sc
 
 #### Evidence Consumer Readiness R3 — PDF/Image Interpretation and Locators
 
-Separately govern interpretation of preserved PDF/image media and durable page/region/text locators. R3 is not authorized by R2.
+Extend the existing A3/R2 interpretation path to the PDF, PNG, and JPEG media already preserved by R1. R3 retains the same trusted server-side resolution, exact private tenant/context authorization, SHA-256 verification, neutral requested-concept model, open discovery, append-only Extraction Runs/Facts, and no-provider history reopening.
+
+R3 introduces a provider-neutral multimodal content boundary for verified text, image, and PDF/document inputs. Provider-native content blocks remain inside each provider adapter. The first Anthropic adapter may use base64 PDF/image blocks only within bounded request, byte, page, pixel, and model-capability limits; it must not expose storage references, trust filename extensions, silently convert preserved media, persist raw provider exchanges, or treat provider/model support as Evidence authority.
+
+Initial direct-base64 execution is bounded to 10 MiB and 100 pages per PDF, 7.5 MB and 8,000 × 8,000 per PNG/JPEG, at most 20 explicitly selected same-Asset Artifacts, and at most 20 MiB aggregate original binary content. Provider/model preflight applies any stricter active limit. Limit rejection never changes or discards the preserved Artifact.
+
+R3 adds durable Evidence-owned source locators beneath the existing Fact-to-Artifact support relationship. JSON should retain a path/key and bounded source support; HTML should retain a reliable section/DOM reference where available and an excerpt; PDF must retain a page/page range and supporting text or truthful visual support description; image Facts must retain the supporting Artifact and a support description/excerpt. Bounding boxes are optional and must not be fabricated or stored without an explicit mappable coordinate space.
+
+Migration 013 remains the authoritative support pair but cannot represent per-Fact/per-Artifact locations. R3 therefore proposes one additive locator relation after migration 015, without rewriting migrations 010–015 or hiding locator identity in run/Fact JSON metadata.
+
+One operation may interpret an explicit coherent ordered set of Artifacts only when they belong to the same Evidence Asset, including HTML plus a screenshot. Fact support and locators attach only to the Artifact(s) that actually support each Fact. Cross-Asset bundles remain prohibited.
+
+R3 preserves explicit current/ceased/historical/effective statements and uncertainty as source-supported Facts with locators. It does not infer currentness, calculate ownership, create UBO/controller conclusions, define typed relationship edges, determine satisfaction, select winners, or implement A4b. Typed relational Facts remain R4.
 
 #### Evidence Consumer Readiness R4 — Typed Relational Facts
 

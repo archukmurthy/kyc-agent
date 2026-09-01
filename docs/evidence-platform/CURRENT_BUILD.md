@@ -1,6 +1,455 @@
 # Evidence Platform — Current Build Brief
 
-# Evidence Consumer Readiness R2 — Targeted Interpretation Boundary
+# Evidence Consumer Readiness R3 — PDF/Image Interpretation + Durable Evidence Locators
+
+## Governance Status
+
+This is the approved R3 implementation brief after accepted R2 at commit `0e31ba490452b50e1cf618a23231d980d9ca4977`.
+
+Architecture Authority has approved ADR-016 and authorized only the bounded R3 implementation described here. R4, A4b, UBO integration, downstream KYC decisions, and existing KYC behavior remain deferred.
+
+---
+
+## 1. Objective
+
+Extend the existing A3 interpretation engine and stable R2 consumer boundary so that an authorized consumer can explicitly interpret an already-preserved PDF, PNG, or JPEG and receive immutable source-supported Facts with useful durable locations inside the supporting Artifact.
+
+```text
+preserved R1 PDF / PNG / JPEG
+        ↓
+R2 operation + trusted tenant/context
+        ↓
+server-side resolve and authorize
+        ↓
+read exact bytes + verify persisted SHA-256
+        ↓
+provider-neutral multimodal input
+        ↓
+configured multimodal provider adapter
+        ↓
+immutable A3 Extraction Run + Facts
+        ↓
+Fact-to-Artifact support + durable locator
+```
+
+R3 must not create a second extraction engine. It adds interpretation media and locator lineage to the existing A3/R2 path.
+
+---
+
+## 2. Existing capability to reuse unchanged
+
+The current platform already provides:
+
+1. R1 preservation and authorized reopen of exact PDF, PNG, and JPEG bytes;
+2. production Vercel Blob and local Evidence-only filesystem storage adapters;
+3. server-side Artifact resolution without browser storage references;
+4. exact public or private tenant/context authorization;
+5. SHA-256 verification before semantic provider execution;
+6. R2 operation-key idempotency and explicit fresh execution;
+7. neutral requested concepts plus A3 open discovery;
+8. explicit same-Evidence-Asset multi-Artifact selection and ordering;
+9. append-only Extraction Run and Fact persistence;
+10. explicit Extraction Run input Artifacts;
+11. immutable Fact-to-Artifact support pairs;
+12. provider/model/instruction and extraction timestamps;
+13. requested/discovered and support/completeness states; and
+14. historical reopening without storage/source/provider calls.
+
+R3 must reuse these boundaries. It must not create parallel Artifact retrieval, authorization, fingerprint, operation, Fact, support, or history concepts.
+
+---
+
+## 3. Current blocking enforcement and adapter gap
+
+The current JSON/HTML-only restriction exists in two layers:
+
+* `evidence/a3/liveService.js` defines only `application/json`, compatible `+json`, and `text/html` as live-supported media. It rejects another MIME before reading bytes or invoking the provider.
+* `evidence/r2/service.js` performs the same capability check before delegating to A3 and persists an `unsupported_media_type` R2 operation outcome.
+
+For accepted text media, A3:
+
+1. reads bytes with `EvidenceArtifactReader`;
+2. recalculates SHA-256;
+3. converts the bytes with UTF-8 decoding; and
+4. supplies `decodedText` and Artifact metadata to `SemanticExtractionProvider.extract`.
+
+The current Anthropic adapter then concatenates all decoded Artifact text and instructions into one string `messages[0].content`. It does not construct Anthropic `image` or `document` content blocks and cannot safely interpret binary bytes by removing only the media allowlist.
+
+R3 therefore needs bounded media routing and a multimodal adapter, not a storage redesign.
+
+---
+
+## 4. Provider-neutral multimodal content boundary
+
+The Evidence provider interface should receive an ordered list of verified content items conceptually equivalent to:
+
+```text
+{
+  artifactId,
+  order,
+  mediaType,
+  representationType,
+  kind: text | image | document,
+  text? | verifiedBytes?,
+  safeSourceMetadata
+}
+```
+
+Exact property names are implementation details. The invariants are:
+
+* every item maps to one already-authorized persisted Artifact;
+* text is decoded only for text media;
+* image/PDF bytes remain bytes until the provider adapter encodes them;
+* Artifact boundaries and authoritative ordering remain explicit;
+* SHA-256 is verified before an item reaches the provider;
+* storage keys, Blob URLs, filesystem paths, and credentials are absent;
+* one provider call may contain several coherent items from the same Asset; and
+* provider-specific block types do not enter Evidence domain models.
+
+The Anthropic adapter may translate these items into text, base64 `image`, and base64 `document` blocks. It must select only a configured model known to support all requested media. Model/media capability rejection is distinct from a source fact being absent.
+
+R3 does not authorize provider Files API retention. If later adopted for payload/latency reasons, provider-file lifecycle, privacy, retry, and deletion semantics require separate operational approval.
+
+---
+
+## 5. Bounded media support and validation
+
+R3 interpretation support is limited to:
+
+| Media | R3 route |
+|---|---|
+| `application/json`, compatible `+json` | verified text |
+| `text/html` | verified text |
+| `application/pdf` | verified PDF/document bytes |
+| `image/png` | verified image bytes |
+| `image/jpeg` | verified image bytes |
+
+No other R1 or provider media capability is implied.
+
+### PDF limits
+
+The first R3 implementation must enforce:
+
+* valid standard PDF signature and structural readability;
+* no password protection or encryption;
+* maximum 10 MiB original bytes, consistent with R1's preservation ceiling;
+* maximum 100 pages per request; and
+* combined provider request/context limits after all selected Artifacts and instructions are included.
+
+### Image limits
+
+The first R3 implementation must enforce:
+
+* canonical PNG/JPEG signature and parseable dimensions;
+* maximum 8,000 pixels on either dimension;
+* maximum encoded provider image block of 10 MB for direct Anthropic API use;
+* therefore approximately 7.5 MB maximum raw bytes for a directly base64-embedded image unless a separately approved transport avoids that overhead; and
+* maximum 20 explicitly selected Artifact blocks in one R2 request.
+
+Independently of the Artifact-count limit, aggregate original binary content passed through one direct-base64 interpretation request must not exceed 20 MiB. Preflight must also enforce any stricter active provider/model request limit before a paid call.
+
+Configured limits may be lower. An R1 Artifact larger than an R3 interpretation limit remains valid preserved Evidence and receives `media_too_large`; it is not lost or malformed.
+
+Validation uses authoritative preserved bytes and canonical persisted MIME. Filename extension is never sufficient. Checks that can be made deterministically must occur before a paid provider call.
+
+Evidence Platform must not rasterize, resize, crop, transcode, recompress, rewrite, replace, or discard the preserved canonical Artifact merely to perform interpretation. Its SHA-256 remains tied to the original bytes. Provider-side PDF page rendering or image downscaling is execution behavior, not a new Evidence Artifact, and must be reflected as a limitation/context where material. It must never be presented as original-source geometry or used to silently manufacture coordinate transforms. A future Evidence-generated rendition requires its own Artifact and transformation provenance.
+
+---
+
+## 6. Durable Evidence locator model
+
+A locator is immutable support lineage beneath an existing Fact-to-Artifact support pair.
+
+```text
+Fact
+  ↓
+Fact-to-Artifact support
+  ↓
+one or more durable locations inside that Artifact
+```
+
+It answers where the support appears; it does not decide whether the Fact satisfies a Need, is operative, is trustworthy, or proves UBO status.
+
+### JSON
+
+Prefer:
+
+* JSON Pointer or an equivalently deterministic path/key; and
+* a bounded raw support excerpt/value.
+
+### HTML
+
+Prefer:
+
+* a stable section/DOM-style locator when reliably available; and
+* a bounded supporting excerpt.
+
+If no stable DOM path can be derived without fabricating stability, preserve the excerpt and explicitly qualify the locator.
+
+### PDF
+
+Require at minimum:
+
+* one-indexed page or page range within the verified document page count; and
+* bounded cited/supporting text or a truthful visual support description.
+
+Anthropic structured PDF citations may be normalized into this model. A citation's provider document index must map back to the corresponding selected Artifact. Text citations do not cover an image-only PDF region; a visually extracted Fact must retain an explicit page/support description and qualification instead of pretending it has a textual citation.
+
+### PNG/JPEG
+
+Require at minimum:
+
+* the supporting Artifact; and
+* a bounded support description/excerpt identifying what in the image supports the Fact.
+
+Bounding boxes/regions are optional. No box may be fabricated. A box is persistable only when its coordinate system, source dimensions, provider-visible dimensions/transformation, and mapping/qualification are recorded. Provider coordinates that refer only to an automatically resized image are not silently treated as original-Artifact pixels.
+
+---
+
+## 7. Additive locator persistence
+
+Migration 013 represents only:
+
+```text
+(fact_id, artifact_id, created_at)
+```
+
+It cannot represent multiple locations, page ranges, paths, excerpts, descriptions, or coordinate spaces. Fact `support_signals`, `source_policy_context`, Artifact metadata, and Extraction Run metadata are not clean identities for a per-Fact/per-Artifact locator.
+
+R3 therefore proposes one new additive, forward-only migration after 015 for an immutable child relation such as `evidence_fact_artifact_locators`.
+
+Each row should contain only the applicable bounded fields from:
+
+* locator ID and ordinal;
+* Fact ID and supporting Artifact ID;
+* locator kind/media;
+* JSON path;
+* HTML section/DOM reference;
+* PDF page start/end;
+* bounded support excerpt or description;
+* optional bounded region metadata and coordinate space;
+* locator method/qualification metadata; and
+* created time.
+
+The row must reference an existing Fact-to-Artifact support pair. Several locators may support the same Fact from the same Artifact. Existing migrations 010–015 must not be modified.
+
+---
+
+## 8. Mixed coherent Artifact sets
+
+R3 may interpret one Artifact or an explicit coherent ordered set belonging to one Evidence Asset.
+
+Allowed examples include:
+
+```text
+rendered HTML + screenshot image
+```
+
+and, when both representations already exist with transformation provenance:
+
+```text
+PDF + rendered page images
+```
+
+Every selected Artifact is independently resolved, authorized, read, fingerprint-verified, and recorded as a run input. Each Fact identifies only the Artifact(s) that actually support it, and locators attach separately beneath those support pairs.
+
+Cross-Asset, cross-acquisition, cross-recollection, cross-context, or arbitrary media bundles remain prohibited. R3 does not create a new combined Evidence Asset merely for interpretation.
+
+---
+
+## 9. Provider result and locator normalization
+
+The provider response must continue to report:
+
+* Facts and requested/discovered relation;
+* supporting Artifact IDs;
+* requested-concept outcomes;
+* extraction completeness and limitations; and
+* support/ambiguity signals.
+
+R3 adds bounded provider-neutral locator output for every persisted Fact/support pair. The adapter validates:
+
+* referenced Artifact IDs are selected run inputs;
+* page numbers are within the verified PDF page count;
+* JSON/HTML locators have bounded valid forms;
+* excerpts/descriptions are bounded and safe for PostgreSQL;
+* regions have a declared coordinate space/dimensions; and
+* unsupported precision is discarded and recorded as a limitation rather than repaired by invention.
+
+A valid source-derived Fact lacking the minimum locator required for its media must not be discarded or presented as fully located. Preserve it with `needs_verification`, record an explicit locator limitation, and mark the relevant interpretation/completeness result partial. Do not persist an invalid locator. A weaker but truthful locator is retained and qualified; stronger precision is never fabricated.
+
+Raw Anthropic requests/responses remain unpersisted.
+
+---
+
+## 10. Temporal and currentness semantics
+
+R3 may preserve explicit source statements such as:
+
+* current;
+* ceased;
+* historical;
+* effective from;
+* effective to;
+* source effective date; and
+* unknown or ambiguous currentness.
+
+Such statements remain ordinary requested/discovered A3 Facts with raw representation, support state, and locator. The R1 `artifact_metadata.sourceEffectiveDate` remains host-supplied Artifact provenance and is not automatically converted into a source Fact.
+
+Do not infer `current` merely because a cease date is absent unless the authoritative source contract explicitly establishes that rule. Do not solve temporal applicability, ownership-at-time, or effective indirect ownership. Typed relational/temporal semantics remain R4 or later policy work.
+
+---
+
+## 11. Failure model
+
+R3 must keep these outcomes distinct:
+
+| Outcome | Meaning |
+|---|---|
+| `unsupported_media_type` | media is outside governed R3 interpretation types |
+| `unsupported_model_media` | configured provider/model cannot accept the selected item set |
+| `invalid_media` | bytes fail signature/structural/dimension parsing |
+| `encrypted_media` | PDF is protected and cannot be interpreted |
+| `media_too_large` | byte/page/pixel/count/request limit is exceeded |
+| `artifact_storage_unavailable` | authorized persisted bytes cannot be reopened |
+| `artifact_integrity_mismatch` | reopened bytes do not match persisted SHA-256 |
+| `provider_unavailable` / provider failure | provider could not perform interpretation |
+| `provider_media_rejected` | provider rejected an otherwise governed media request |
+| `provider_malformed_output` | normalized Facts/locators cannot be parsed safely |
+| `provider_output_truncated` | result is incomplete because output was cut off |
+| `locator_invalid_or_missing` | a persisted Fact cannot be truthfully located to the governed minimum |
+| `not_found` | interpretable, complete input legitimately lacks a requested fact |
+| `not_evaluated` / incomplete | limitations prevented a complete answer |
+| `database_persistence_failed` | append-only run/fact/support/locator transaction failed |
+
+Failures do not mean `no facts`. No provider failure, invalid locator, unavailable bytes, corrupt media, or oversized input may fabricate a Fact. Failed R2 operations and A3 runs remain immutable where safely persisted.
+
+---
+
+## 12. Append-only history and deliberate reinterpretation
+
+R3 retains the R2 distinction:
+
+```text
+select/open existing Artifact and history
+  external source call: NO
+  provider call: NO
+  new run: NO
+
+run fresh multimodal interpretation
+  external source call: NO
+  provider call: YES/MAYBE
+  new immutable R2 operation and A3 run: YES
+```
+
+Historical reopening returns the persisted Extraction Run, ordered input Artifacts, Facts, support pairs, locators, provider/model/instruction lineage, timestamps, requested-concept outcomes, completeness, limitations, and failure state without another provider call.
+
+A deliberate reinterpretation uses a new R2 operation key and appends new operation/run/fact/support/locator history. It never changes the preserved Artifact or prior interpretation.
+
+---
+
+## 13. Lab acceptance
+
+The Evidence Lab should eventually allow the reviewer to:
+
+1. choose the previously preserved Tesco annual-report PDF or ownership-chart PNG;
+2. select the authorized context and human-readable Evidence Asset/Artifacts;
+3. enter neutral requested concepts;
+4. see media/model readiness and bounded-limit validation;
+5. see that a fresh run may make a paid provider call;
+6. explicitly run one fresh interpretation;
+7. inspect requested and discovered Facts;
+8. inspect precise Fact-to-Artifact support;
+9. inspect PDF page/excerpt or image support description/region where reliable;
+10. reopen prior R3 history without a provider call; and
+11. deliberately reinterpret using a new operation key.
+
+Selection must not make an AI call. No Companies House recollection is needed. Internal UUIDs remain secondary technical metadata.
+
+---
+
+## 14. Required future characterization
+
+When separately authorized, implementation must prove at minimum:
+
+1. persisted PDF interpretation;
+2. persisted PNG interpretation;
+3. persisted JPEG interpretation;
+4. SHA-256 verification before provider invocation;
+5. one PDF producing several Facts;
+6. one image producing several Facts;
+7. PDF page/page-range locator plus supporting excerpt/description;
+8. image Artifact locator plus support description;
+9. no fabricated bounding box;
+10. coherent HTML plus screenshot interpretation;
+11. authoritative same-Asset ordering;
+12. precise Fact-to-Artifact support and locator separation;
+13. corrupt, encrypted, and oversized PDF handling;
+14. corrupt and oversized image handling;
+15. provider/model media rejection without a Fact;
+16. provider failure and malformed/truncated result;
+17. explicit current, ceased, and unknown-currentness handling;
+18. append-only reinterpretation;
+19. historical reopening without provider execution;
+20. no storage reference/credential exposure;
+21. no raw provider exchange persistence; and
+22. no R4/UBO/A4b conclusion.
+
+All automated tests use fixture providers and disposable infrastructure. No paid provider or external evidence-source request is required.
+
+---
+
+## 15. Explicit exclusions and stop conditions
+
+R3 does not authorize:
+
+* a second extraction engine;
+* new Evidence, Artifact, subject, access, or operation identity;
+* browser-supplied storage locations or bytes as authority;
+* provider Files API lifecycle/retention;
+* raw provider request/response persistence;
+* silent rasterization, conversion, resizing, or derived Artifacts;
+* cross-Evidence-Asset interpretation;
+* fabricated page/path/region precision;
+* graph edges or typed relational Facts;
+* ownership/control calculations;
+* PSC/UBO/controller classification or thresholds;
+* `isUbo`, `qualifies`, or effective indirect ownership;
+* A4a auto-execution, A4b, satisfaction, winner, or operative-value selection;
+* KYC/Onboarding/UBO contract changes; or
+* changes to migrations 010–015.
+
+Stop for Architecture Authority if implementation requires weakening access isolation, bypassing SHA verification, sending storage references to a provider, creating cross-Asset bundles, silently transforming preserved media, inventing locators, persisting raw provider exchanges, or solving R4 to represent a result.
+
+---
+
+## 16. Future completion criteria
+
+R3 is complete only after separate implementation authorization and proof of:
+
+```text
+authorized preserved PDF/image
+        ↓
+validated and bounded media
+        ↓
+SHA-256 verified bytes
+        ↓
+provider-neutral multimodal interpretation
+        ↓
+immutable A3 Facts
+        ↓
+precise supporting Artifact(s)
+        ↓
+durable strongest-non-fabricated locator(s)
+        ↓
+historical no-provider reopening
+        ↓
+R4/A4b/downstream decision: NOT PERFORMED
+```
+
+---
+
+# Prior Accepted Build Brief — R2 Targeted Interpretation Boundary
 
 ## Governance Status
 
