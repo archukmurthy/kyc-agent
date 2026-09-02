@@ -21,13 +21,13 @@ store). The active tenant is resolved per request, with this priority:
 1. `?tenant=` URL query parameter (browser) / `req.query.tenant` (server)
 2. `x-tenant-id` request header
 3. `TENANT_ID` environment variable
-4. fallback `"nium"`
+4. fallback `"demo"`
 
 ### URLs
 
 | Tenant            | Customer flow                | Admin                            |
 | ----------------- | ---------------------------- | -------------------------------- |
-| Primary (Nium)    | `/`                          | `/admin`                         |
+| Primary (Demo)    | `/`                          | `/admin`                         |
 | Any other tenant  | `/?tenant={tenantId}`        | `/admin?tenant={tenantId}`       |
 
 Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
@@ -35,33 +35,33 @@ Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
 
 ### Creating a new tenant
 
-1. Sign in to `/admin` (Nium admin)
+1. Sign in to `/admin` (Demo admin)
 2. Click "+ Create New Tenant" on the dashboard banner
 3. Enter a tenant ID (lowercase letters, numbers, hyphens; max 32 chars)
-4. Pick start-from: blank (empty config) or copy-from-Nium-defaults
+4. Pick start-from: blank (empty config) or copy-from-Demo-defaults
 5. The success screen links straight into the new tenant's admin and customer
    flow
 
-### Nium protection
+### Demo protection
 
-- The Nium config is the only one that auto-seeds from
+- The Demo config is the only one that auto-seeds from
   `lib/seedConfig.js#buildDefaultConfig` on first read. Every other tenant
   seeds blank via `buildBlankConfig`.
-- `POST /api/config?tenant=nium` refuses publishes that have zero licences or
+- `POST /api/config?tenant=demo` refuses publishes that have zero licences or
   zero active entity types — guards against an accidental wipe.
-- Reads of the Nium config self-heal: if the stored config has no licences
+- Reads of the Demo config self-heal: if the stored config has no licences
   (corrupted / accidentally cleared) it's re-seeded from defaults and the
   customer flow is never left broken.
 
 ### Env vars
 
-- `TENANT_ID=nium` — the default tenant served when no `?tenant=` is present
+- `TENANT_ID=demo` — the default tenant served when no `?tenant=` is present
 - `ADMIN_PASSWORD=...` — shared across all tenants for now (per-tenant
   passwords are a future change)
 
 ## Architecture
 
-This is a single-page React app (Create React App) with one Vercel serverless function. The app is a 5-step KYC onboarding wizard for Nium: **Input → Research → Confirm → Fill Gaps → Declare**.
+This is a single-page React app (Create React App) with one Vercel serverless function. The app is a 5-step KYC onboarding wizard for Demo: **Input → Research → Confirm → Fill Gaps → Declare**.
 
 ### Two-piece structure
 
@@ -72,7 +72,7 @@ The frontend calls `POST /api/research` with `{ prompt }`, then parses the model
 
 ### Jurisdiction schemas drive everything
 
-The core domain concept: Nium holds licences in some markets but not others. `LICENSED_MARKETS` in `App.js` lists country codes Nium is licensed in (currently just `"GB"`). Country selection determines:
+The core domain concept: Demo holds licences in some markets but not others. `LICENSED_MARKETS` in `App.js` lists country codes Demo is licensed in (currently just `"GB"`). Country selection determines:
 
 1. **Which schema is used** — `UK_SCHEMA` for licensed UK customers, `SG_SCHEMA` (Singapore) as the default for everywhere else. `getSchema(code)` and `getApplicableLicence(code)` encode this rule.
 2. **The research prompt** — `buildPrompt(name, country, schema)` injects the schema's `researchFields` (what Claude should search for) and `gapFields` (what the user must fill in) directly into the prompt as a JSON template. Claude is instructed to return ONLY a JSON object matching that template.

@@ -1,9 +1,9 @@
 // Shared inline-style tokens for the admin UI. Matches the customer app's
-// visual language (the same teal/navy palette) but adds a niumBlue sidebar
+// visual language (the same teal/navy palette) but adds a brandBlue sidebar
 // for admin chrome.
 
 export const tokens = {
-  niumBlue: "#0B3D91",
+  brandBlue: "#0B3D91",
   navy: "#1a3a4a",
   teal: "#4a9e8e",
   amber: "#e0a040",

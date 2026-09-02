@@ -5,9 +5,8 @@ Read this before starting any work. Do not skip it.
 WHAT WE ARE BUILDING
 ═══════════════════════════════════════
 
-An AI-powered KYC/KYB onboarding platform
-for Nium (operating under Instarem). It
-researches companies automatically, pre-fills
+An AI-powered KYC/KYB onboarding platform.
+It researches companies automatically, pre-fills
 compliance forms from official sources, and
 collects remaining information from the
 customer.

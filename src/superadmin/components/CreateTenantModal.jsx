@@ -15,7 +15,7 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
   const [error, setError] = useState(null);
 
   const sanitised = sanitiseTenantId(tenantId);
-  const isReserved = ["super-admin", "admin", "api", "nium"].includes(sanitised);
+  const isReserved = ["super-admin", "admin", "api", "demo"].includes(sanitised);
   const idValid =
     !!tenantId.trim() &&
     sanitised === tenantId.toLowerCase() &&
@@ -118,10 +118,10 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
           body="Client starts with empty schemas. Best for custom requirements."
         />
         <RadioCard
-          checked={startFrom === "nium-defaults"}
-          onChange={() => setStartFrom("nium-defaults")}
-          title="Copy Nium defaults as template"
-          body="Starts with Nium's UK/SG schemas as a template. Client can modify."
+          checked={startFrom === "demo-defaults"}
+          onChange={() => setStartFrom("demo-defaults")}
+          title="Copy Demo defaults as template"
+          body="Starts with Demo's UK/SG schemas as a template. Client can modify."
         />
       </Field>
 
@@ -156,7 +156,7 @@ function RadioCard({ checked, onChange, title, body }) {
         gap: 10,
         alignItems: "flex-start",
         padding: 12,
-        border: `1.5px solid ${checked ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${checked ? adminColors.brandBlue : adminColors.border}`,
         background: checked ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 10,
         cursor: "pointer",

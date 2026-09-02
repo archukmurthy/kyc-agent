@@ -2,7 +2,7 @@
 // routes — keep the two in sync. Deliberately simple; if you outgrow this
 // (real bcrypt, scrypt, argon2 etc.) replace BOTH files together.
 
-const SALT = "nium-kyc-2026";
+const SALT = "kyb-platform-2026";
 
 /**
  * Deterministic string hash with a fixed salt. Not cryptographically secure

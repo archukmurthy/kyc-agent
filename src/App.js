@@ -103,9 +103,6 @@ import {
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
 import { C } from "./constants/theme";
 import {
-  SHOW_NIUM_REG_PANEL,
-  NIUM_DEMO_REG_NUMBER,
-  NIUM_DEMO_COUNTRY,
   OWNERSHIP_ID_TO_DRS,
   // TEST_FLAG went with the journey picker — it gated that screen's DemoToggle.
   SHOW_TEST_TOOLS,
@@ -165,7 +162,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // current unsaved config under the "preview_config" key).
   //
   // Tenant resolution comes from the URL (?tenant=X) so this component can
-  // serve any tenant; "nium" is the default for plain /. Preview mode is
+  // serve any tenant; "demo" is the default for plain /. Preview mode is
   // either triggered by the /preview route (index.js sets previewMode prop)
   // or by ?preview=true in the URL.
   const [tenantId] = useState(() => getTenantId());
@@ -366,8 +363,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // into the web-research prompt. Blank or unresolved silently falls back to the
   // existing name-based search (the company name is always in the prompt+body,
   // so there's no dead end). Provenance is "customer" here (customer-typed);
-  // slice 2's confirmation gate verifies it. Distinct from `niumRegNumber`,
-  // which is the test-gated Nium-journey field.
+  // slice 2's confirmation gate verifies it.
   const [regNumber, setRegNumber] = useState("");
   // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
   // the string is non-empty. Set to "customer" ONLY by the lookup-page input
@@ -377,15 +373,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // the "✓ You provided this" row only for the genuine lookup journey and keeps
   // it verifiable/uncheckable everywhere else.
   const [regNumberSource, setRegNumberSource] = useState(null);
-  // Registration number for the Nium API Lookup journey (test mode only). The
-  // Nium eKYB publicDetails endpoint searches registries by registration number
-  // — a name-only search returns HTTP 400 — so this is required for that one
-  // journey. Not used by the AI/manual journeys.
-  const [niumRegNumber, setNiumRegNumber] = useState("");
-  // Companies House name → reg-number resolver state (test mode only).
-  const [niumSearchLoading, setNiumSearchLoading] = useState(false);
-  const [niumSearchResults, setNiumSearchResults] = useState(null);
-  const [niumSearchError, setNiumSearchError] = useState("");
   // Ownership type (Step 1) — drives the Phase 0 research strategy. Reset to ""
   // whenever the entity type changes, since each entity type exposes a
   // different set of allowed ownership types.
@@ -601,28 +588,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
     ? ["Company", "Documents", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
     : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
 
-  // Loader messages — four modes: Nium API lookup, no docs (existing),
-  // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
-  // copy so the spinner reflects what's actually happening (a direct API call,
-  // not AI web research). Memoised because the Nium branch builds a fresh array
-  // (interpolating companyName) and loaderMsgs is a dependency of the loader
+  // Loader messages — three modes: no docs (existing), doc-extraction phase,
+  // web phase. Memoised because loaderMsgs is a dependency of the loader
   // interval effect below — a new reference every render would re-arm it.
   const loaderMsgs = useMemo(() => {
-    if (journeyType === "nium_api") {
-      return [
-        "Connecting to Nium KYB registry…",
-        `Looking up ${companyName || "the company"}…`,
-        "Retrieving company details…",
-        "Loading stakeholder data…",
-        "Almost done…",
-      ];
-    }
     return loaderPhase === 1
       ? phase1Msgs
       : loaderPhase === 2
         ? LOADER_MSGS_WOLFSBERG_PHASE2
         : LOADER_MSGS;
-  }, [journeyType, companyName, loaderPhase, phase1Msgs]);
+  }, [loaderPhase, phase1Msgs]);
 
   useEffect(() => {
     if (!loading) return;
@@ -734,10 +709,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Wrong-company dispute → redirected to the lookup page: this is now a
     // genuine KYC/lookup journey, so restore the full 7-step bar.
     setLandedViaLink(false);
-    setNiumRegNumber("");
-    setNiumSearchResults(null);
-    setNiumSearchError("");
-    setNiumSearchLoading(false);
   };
 
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
@@ -790,7 +761,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Wolfsberg before running extraction). Without the step gate that partial
   // seed would immediately auto-save and jump to the Dossier, skipping doc
   // selection and the real extraction + AI research pass. doResearch /
-  // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
+  // doDummyResearch all advance to stepsFor(journey).confirm
   // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
     // The dossier auto-saves for the analyst pre-boarding flow AND for a customer
@@ -831,7 +802,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     inviteHydratedRef.current = true;
     let snap = null;
     try {
-      const raw = localStorage.getItem("nium_invite_" + ref);
+      const raw = localStorage.getItem("demo_invite_" + ref);
       if (raw) snap = JSON.parse(raw);
     } catch (_) { /* ignore malformed/unavailable storage */ }
     if (!snap || !snap.research) return;
@@ -877,7 +848,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
-      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
+      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "demo")}`);
       const data = await res.json();
       if (data.success && data.dossier) {
         const d = data.dossier;
@@ -1947,174 +1918,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setStep(agentType === "preboarding" ? S.confirm : S.applicant);
   };
 
-  // Resolve company name → registration number via Companies House (UK), so the
-  // analyst doesn't have to know the number. Auto-fills niumRegNumber with the
-  // top match and lists the rest to pick from. Test-mode tooling only.
-  const findNiumRegNumber = async () => {
-    if (!companyName.trim()) { setNiumSearchError("Enter a company name first."); return; }
-    setNiumSearchError("");
-    setNiumSearchResults(null);
-    setNiumSearchLoading(true);
-    try {
-      const r = await fetch(
-        `/api/company-search?q=${encodeURIComponent(companyName.trim())}&country=${encodeURIComponent(countryCode || "GB")}`
-      );
-      const data = await r.json();
-      if (data.error) {
-        setNiumSearchError(data.error);
-      } else if (!data.results || data.results.length === 0) {
-        setNiumSearchError(data.message || `No UK company found matching "${companyName}".`);
-      } else {
-        setNiumSearchResults(data.results);
-        // Convenience: auto-fill the top match; the user can pick another below.
-        setNiumRegNumber(data.results[0].registrationNumber);
-      }
-    } catch (err) {
-      setNiumSearchError("Lookup failed: " + err.message);
-    }
-    setNiumSearchLoading(false);
-  };
-
-  // KYC Lookup Agent journey (TEST MODE ONLY) — pulls verified registry data
-  // from the Nium eKYB API (POST /api/kyc-lookup → agents/kycLookupAgent.js)
-  // instead of AI research. The agent returns the SAME found-item shape as AI
-  // research (tier1 / verified, stakeholders with nationality + DOB
-  // pre-populated), so the result flows into the exact same Confirm step and
-  // the rest of the wizard is identical. Mirrors the doDummyResearch tail so
-  // Confirm/Fill-Gaps render identically regardless of data source.
-  const startNiumApiLookup = async () => {
-    if (!companyName.trim()) { setError("Please enter a company name."); return; }
-    if (!entityType) { setError("Please select an entity type."); return; }
-    if (!countryCode) { setError("Please select a country."); return; }
-    // The Nium eKYB registry searches by registration number (a name-only
-    // search returns HTTP 400). While the Companies House resolver is parked,
-    // use a fixed preprod placeholder — the sandbox returns dummy data for any
-    // registration number, so the journey always returns a result.
-    const lookupRegNumber = SHOW_NIUM_REG_PANEL ? niumRegNumber.trim() : NIUM_DEMO_REG_NUMBER;
-    // Demo mode: force the country the fixture lives under (SG) so the lookup
-    // always resolves, even when the analyst picked GB/US on the previous screen.
-    const lookupCountryCode = SHOW_NIUM_REG_PANEL ? countryCode : NIUM_DEMO_COUNTRY;
-    setError("");
-    setJourneyOpen(false);
-    setManualOpened(false);
-
-    const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
-    setActiveSchema(schema);
-    const S = stepsFor("ai_only");
-    setLoading(true); setStep(S.research); setLoaderIdx(0); setLoaderPhase(0);
-    setResearchStatus("Calling Nium KYB API…");
-
-    const startedAt = Date.now();
-    trackEvent("nium_api_lookup_started", {
-      companyName, countryCode, entityType, ownershipType,
-      agentType: agentType || "onboarding", startedAt: new Date().toISOString(),
-    });
-
-    // Cap the lookup so a hung Nium API call can't leave the Research step
-    // spinning forever (niumClient's fetches have no timeout of their own).
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120000);
-    try {
-      const response = await fetch("/api/kyc-lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({ companyName, countryCode: lookupCountryCode, registrationNumber: lookupRegNumber }),
-      });
-      const data = await response.json();
-
-      if (data.success && data.fields?.length) {
-        const ts = data.searchedAt || new Date().toISOString();
-        // Same dropdown-value coercion + stakeholder enrichment the AI paths
-        // use, so Nium results render identically on Confirm and Fill Gaps.
-        const normalizedLookupFields = normalizeResearchFieldIds(data.fields, schema);
-        const found = enrichStakeholders(mapAIValuesToOptions(normalizedLookupFields, schema));
-        // Show the company name the registry actually returned (e.g. the demo
-        // fixture "STAR FINANCE PRIVATE LIMITED") rather than what was typed, so
-        // testers don't mistake the sample data for their searched company. Strip
-        // a trailing registration number the sandbox appends to the legal name.
-        const niumLegalName = (found.find(f => f.originalField === "legal_name" || f.field === "tradeName" || f.field === "business_name") || {}).value;
-        const displayName = niumLegalName
-          ? String(niumLegalName).replace(/\s+\d{4,}$/, "").trim()
-          : companyName;
-        const tagged = {
-          companyName: displayName,
-          jurisdiction: schema.region,
-          countryOfRegistration: countryCode,
-          found,
-          gaps: schema.gapFields.map(f => ({ ...f, reason: "Not in Nium registry response" })),
-        };
-        setResearch(tagged);
-        setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
-        setResearchTimestamp(ts);
-
-        const cov = computeCoverage(found, schema);
-        setCoverage(cov);
-        setGapRecoveryRan(false);
-
-        setFieldMetadata(found.map(item => ({
-          fieldId: item.field, value: item.value,
-          source: item.source, sourceUrl: item.sourceUrl || null,
-          sourceTier: item.sourceTier, verificationStatus: item.verificationStatus,
-          documentType: null,
-          fetchedAt: item.fetchedAt || ts, method: "nium_api", confidence: "high",
-          customerAction: null, customerActionAt: null,
-        })));
-
-        const c = {};
-        found.forEach((_, i) => { c[i] = true; });
-        setChecks(c);
-        setRejectedStakeholders({});
-        setStakeholderFieldChecks({});
-        setExpandedStakeholders({});
-        setIsPubliclyListedOverride(false);
-        stakeholdersRef.current = {};
-        setStakeholderVersion(v => v + 1);
-        setStakeholderErrors([]);
-        setRevealedTs({});
-        gapRef.current = {};
-        setFormVersion(v => v + 1);
-
-        trackEvent("nium_api_lookup_complete", {
-          companyName,
-          fieldsFound: data.fields.length,
-          stakeholders: data.stakeholders?.all?.length || 0,
-          durationMs: data.durationMs ?? (Date.now() - startedAt),
-          publicDetailsId: data.publicDetailsId,
-        });
-
-        setLoading(false); setLoaderPhase(0); setResearchStatus("");
-        setStep(agentType === "preboarding" ? S.confirm : S.applicant);
-      } else {
-        // No data — surface a clear error and return to the journey screen.
-        // The analyst chose the Nium API journey deliberately; do NOT silently
-        // switch to AI research. They decide whether to retry or pick another
-        // journey type.
-        const base = `Nium API returned no results for ${companyName}. Check the API connection or try a different journey type.`;
-        const msg = data.error ? `${base} (${data.error})` : base;
-        trackEvent("nium_api_lookup_failed", { companyName, error: data.error || "no_results" });
-        setLoading(false); setLoaderPhase(0); setResearchStatus("");
-        setStep(S.input);
-        setJourneyOpen(true);
-        setError(msg);
-      }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("[startNiumApiLookup] Error:", err);
-      // Network / unexpected failure — same rule: clear error, no AI fallback.
-      const reason = err.name === "AbortError"
-        ? "the request timed out after 120s"
-        : err.message;
-      trackEvent("nium_api_lookup_failed", { companyName, error: reason });
-      setLoading(false); setLoaderPhase(0); setResearchStatus("");
-      setStep(stepsFor("ai_only").input);
-      setJourneyOpen(true);
-      setError(`Nium API lookup failed for ${companyName}: ${reason}. Check the API connection or try a different journey type.`);
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
   // Continue handler from Documents step → triggers research with whatever
   // was uploaded (zero docs is fine; web search runs alone). In demo mode
   // we skip the API entirely and synthesise sample data.
@@ -2176,8 +1979,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
         incorporationCountry: countryObj ? countryObj.name : countryCode,
         entityType,
         ownershipType,
-        niumEntityType: (entityType || "").toLowerCase(),
-        companyRegistrationNumber: niumRegNumber || null,
+        entityCategory: (entityType || "").toLowerCase(),
+        companyRegistrationNumber: null,
         tenantId,
       }),
     })
@@ -2262,7 +2065,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         companyName,
         country: countryObj ? countryObj.name : countryCode,
         ownershipType: docOwnershipType,
-        niumEntityType: (entityType || "").toLowerCase(),
+        entityCategory: (entityType || "").toLowerCase(),
         tenantId,
       }),
     })
@@ -2556,8 +2359,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setManualOpened(true);
     } else if (selectedJourneyCard === "E") {
       // Max Prefill. TODO: implement the dedicated max-prefill pipeline that
-      // pulls from every source at once (documents + registries + web + Nium
-      // KYB). For now route through standard AI research so both the onboarding
+      // pulls from every source at once (documents + registries + web). For
+      // now route through standard AI research so both the onboarding
       // and pre-boarding demos flow end to end and land on Confirm / Dossier.
       setJourneyType("max_prefill");
       setJourneyOpen(false);
@@ -3985,7 +3788,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
-  const companyName_ = tenantConfig?.company?.name || "Nium";
+  const companyName_ = tenantConfig?.company?.name || "Demo";
   const companyLogo_ = tenantConfig?.company?.logo || null;
   const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
   const activeEntityTypes = (tenantConfig?.entityTypes || [])
@@ -4059,7 +3862,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               />
             ) : (
               <div style={{
-                width: 48, height: 48, borderRadius: 12, background: C.niumBlue,
+                width: 48, height: 48, borderRadius: 12, background: C.brandBlue,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 22, fontWeight: 800, color: "#fff",
               }}>
@@ -4068,7 +3871,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
           </div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px 0", letterSpacing: "-0.5px" }}>
-            {tenantConfig?.company?.name || "Nium"} Intelligence Platform
+            {tenantConfig?.company?.name || "Demo"} Intelligence Platform
           </h1>
           <p style={{ fontSize: 16, color: C.textSec, margin: 0, maxWidth: 480, lineHeight: 1.5 }}>
             Select the agent you would like to work with today.
@@ -4092,7 +3895,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               cursor: "pointer", transition: "all 0.15s", textAlign: "left",
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.borderColor = C.niumBlue;
+              e.currentTarget.style.borderColor = C.brandBlue;
               e.currentTarget.style.transform = "translateY(-2px)";
               e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
             }}
@@ -4109,7 +3912,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             <div style={{ fontSize: 14, color: C.textSec, lineHeight: 1.6, marginBottom: 20 }}>
               AI-powered KYC/KYB onboarding. Research, confirm, fill gaps and submit a complete application.
             </div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.niumBlue }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.brandBlue }}>
               Start onboarding →
             </div>
           </div>
@@ -4162,7 +3965,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {/* Footer note */}
         <p style={{ marginTop: 40, fontSize: 12, color: C.textMuted, textAlign: "center" }}>
-          Powered by Nium Intelligence Platform
+          Powered by Demo Intelligence Platform
         </p>
       </div>
     );
@@ -4171,7 +3974,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
   // Reuse the onboarding research / schema / stakeholder / coverage logic; only
-  // the presentation differs. Purple accent (#7C3AED) replaces niumBlue. These
+  // the presentation differs. Purple accent (#7C3AED) replaces brandBlue. These
   // close over the confirm/fill-gaps render vars and are reached from the
   // pre-boarding early returns above the main return (the dossier and invite
   // screens), NOT from the step switch.
@@ -4605,20 +4408,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
             searchAttempts={searchAttempts}
             selectedJourneyCard={selectedJourneyCard}
             setSelectedJourneyCard={setSelectedJourneyCard}
-            setJourneyType={setJourneyType}
             setJourneyOpen={setJourneyOpen}
             manualOpened={manualOpened}
             setManualOpened={setManualOpened}
             proceedFromJourney={proceedFromJourney}
-            companyName={companyName}
-            countryCode={countryCode}
-            niumRegNumber={niumRegNumber}
-            setNiumRegNumber={setNiumRegNumber}
-            findNiumRegNumber={findNiumRegNumber}
-            niumSearchLoading={niumSearchLoading}
-            niumSearchResults={niumSearchResults}
-            niumSearchError={niumSearchError}
-            startNiumApiLookup={startNiumApiLookup}
             error={error}
             setError={setError}
           />

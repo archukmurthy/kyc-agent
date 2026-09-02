@@ -12,7 +12,7 @@ function LicenceCard({ lic, onChange, onDelete, onSetPrimary, deletable }) {
             type="radio"
             checked={!!lic.isPrimary}
             onChange={onSetPrimary}
-            style={{ accentColor: tokens.niumBlue }}
+            style={{ accentColor: tokens.brandBlue }}
             title="Make this the primary licence"
           />
           <span style={{ fontSize: 12, fontWeight: 600 }}>
@@ -123,13 +123,13 @@ export default function LicencesModule({ config, patchConfig, markSaved }) {
             <label key={o.v} style={{
               flex: 1, display: "flex", gap: 10, padding: 14, borderRadius: 10, cursor: "pointer",
               background: routingPolicy === o.v ? "#f0f3f8" : "transparent",
-              border: `2px solid ${routingPolicy === o.v ? tokens.niumBlue : tokens.border}`,
+              border: `2px solid ${routingPolicy === o.v ? tokens.brandBlue : tokens.border}`,
             }}>
               <input
                 type="radio" name="routing"
                 checked={routingPolicy === o.v}
                 onChange={() => { setRoutingPolicy(o.v); setSaved(false); }}
-                style={{ marginTop: 3, accentColor: tokens.niumBlue }}
+                style={{ marginTop: 3, accentColor: tokens.brandBlue }}
               />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{o.title}</div>

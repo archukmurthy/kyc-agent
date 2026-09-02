@@ -38,9 +38,9 @@ function Gate({ tenantId, onSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "nium")}`, {
+      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "demo")}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "nium" },
+        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "demo" },
         body: JSON.stringify({ password }),
       });
       if (!r.ok) { setError("Incorrect password. Please try again."); setSubmitting(false); return; }

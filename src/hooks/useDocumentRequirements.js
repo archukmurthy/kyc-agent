@@ -51,7 +51,7 @@ const DRS_ENDPOINT = '/api/document-requirements';
  * @property {string}          onboardingCountry
  * @property {ChecklistItem[]} checklist
  * @property {ChecklistItem[]} rfiItems           — items the customer must provide
- * @property {ChecklistItem[]} selfSourceItems     — items Nium will pull
+ * @property {ChecklistItem[]} selfSourceItems     — items Demo will pull
  * @property {ChecklistItem[]} mandatoryGaps       — mandatory items not yet submitted
  * @property {number}          mandatoryCount
  * @property {object}          flags               — feature flags for Step 2 renderer

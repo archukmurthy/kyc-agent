@@ -63,8 +63,8 @@ async function ensureRegistry() {
   if (!reg) {
     reg = [
       {
-        tenantId: "nium",
-        companyName: "Nium",
+        tenantId: "demo",
+        companyName: "Demo",
         createdAt: new Date().toISOString(),
         createdBy: "system",
         lastPublishedAt: null,
@@ -167,7 +167,7 @@ module.exports = async function handler(req, res) {
 
       // Persist config
       let config;
-      if (startFrom === "nium-defaults") {
+      if (startFrom === "demo-defaults") {
         config = buildDefaultConfig(tenantId);
         config._tenantId = tenantId;
         config._isDefault = false;
@@ -188,7 +188,7 @@ module.exports = async function handler(req, res) {
         lastPublishedAt: null,
         isActive: true,
         isInternal: false,
-        isBlank: startFrom !== "nium-defaults",
+        isBlank: startFrom !== "demo-defaults",
       });
       await storage.set(REGISTRY_KEY, reg);
 
@@ -228,8 +228,8 @@ module.exports = async function handler(req, res) {
       }
 
       if (action === "toggle-status") {
-        if (tenantId === "nium") {
-          return res.status(400).json({ error: "Nium tenant cannot be deactivated." });
+        if (tenantId === "demo") {
+          return res.status(400).json({ error: "Demo tenant cannot be deactivated." });
         }
         const body = await readBody(req);
         const isActive = body && typeof body.isActive === "boolean" ? body.isActive : true;

@@ -191,7 +191,7 @@ export default function StepLicences({
             fontFamily: "inherit",
             fontSize: 13,
             fontWeight: 700,
-            color: adminColors.niumBlue,
+            color: adminColors.brandBlue,
           }}
         >
           + Add Licence
@@ -237,7 +237,7 @@ export default function StepLicences({
                   alignItems: "center",
                   gap: 10,
                   padding: 10,
-                  border: `1px solid ${pendingDefaultId === l.id ? adminColors.niumBlue : adminColors.border}`,
+                  border: `1px solid ${pendingDefaultId === l.id ? adminColors.brandBlue : adminColors.border}`,
                   borderRadius: 8,
                   cursor: "pointer",
                   background: pendingDefaultId === l.id ? "rgba(11,61,145,0.04)" : "#fff",
@@ -296,7 +296,7 @@ function RoutingCard({ selected, icon, title, body, recommended, onClick }) {
         textAlign: "left",
         padding: 14,
         borderRadius: 10,
-        border: `2px solid ${selected ? adminColors.niumBlue : adminColors.border}`,
+        border: `2px solid ${selected ? adminColors.brandBlue : adminColors.border}`,
         background: selected ? "rgba(11,61,145,0.04)" : "#fff",
         cursor: "pointer",
         fontFamily: "inherit",
@@ -305,7 +305,7 @@ function RoutingCard({ selected, icon, title, body, recommended, onClick }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <div style={{ fontSize: 18 }}>{icon}</div>
         {recommended && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.niumBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.brandBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
             RECOMMENDED
           </span>
         )}
@@ -322,7 +322,7 @@ function LicenceCard({ licence, expanded, onToggle, onPatch, onDelete }) {
     <div
       style={{
         border: `1px solid ${adminColors.border}`,
-        borderLeft: isDefault ? `3px solid ${adminColors.niumBlue}` : `1px solid ${adminColors.border}`,
+        borderLeft: isDefault ? `3px solid ${adminColors.brandBlue}` : `1px solid ${adminColors.border}`,
         borderRadius: 10,
         background: "#fff",
         overflow: "hidden",
@@ -352,7 +352,7 @@ function LicenceCard({ licence, expanded, onToggle, onPatch, onDelete }) {
         <button
           type="button"
           onClick={onToggle}
-          style={{ ...adminStyles.btnGhost, color: adminColors.niumBlue, fontWeight: 700 }}
+          style={{ ...adminStyles.btnGhost, color: adminColors.brandBlue, fontWeight: 700 }}
         >
           {expanded ? "Close ▴" : "Edit ▾"}
         </button>
@@ -476,8 +476,8 @@ function LicenceFields({ licence, onPatch }) {
                   borderRadius: 99,
                   fontSize: 11,
                   fontWeight: 600,
-                  border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                  background: on ? adminColors.niumBlue : "#fff",
+                  border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                  background: on ? adminColors.brandBlue : "#fff",
                   color: on ? "#fff" : adminColors.text,
                   cursor: "pointer",
                   fontFamily: "inherit",

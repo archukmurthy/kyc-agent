@@ -1,17 +1,3 @@
-// ── Nium API Lookup (test journey) — temporary demo wiring ──
-// The Companies House name→registration-number resolver is parked while its API
-// key is sorted out (returns 401 — see project memory). The Nium eKYB preprod
-// sandbox returns dummy data for ANY registration number, so to keep the test
-// journey working end-to-end we hide the reg-number panel and send a fixed
-// placeholder. To restore the resolver: set SHOW_NIUM_REG_PANEL = true and have
-// startNiumApiLookup use niumRegNumber again.
-export const SHOW_NIUM_REG_PANEL = false;
-export const NIUM_DEMO_REG_NUMBER = "00445790";
-// The preprod sandbox fixture for that reg number only exists under SG, so the
-// demo lookup must query SG regardless of the country the analyst selected —
-// otherwise a GB/US selection returns "Company not found".
-export const NIUM_DEMO_COUNTRY = "SG";
-
 // Maps this app's ownership-type IDs to the key strings the DRS engine's
 // normaliseEntityType() recognises (it keys off labels like "Public Listed
 // Company" / "LLP", not our IDs). Unmapped IDs fall through to the engine's
@@ -56,7 +42,7 @@ export const TEST_FLAG =
   new URLSearchParams(window.location.search).get("test") === "1";
 export const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
-export const MANUAL_FORM_URL = "https://app.nium.com";
+export const MANUAL_FORM_URL = "https://example.com/apply";
 // TODO: replace with actual product form URL
 
 export const CACHE_STALE_DAYS = 90;

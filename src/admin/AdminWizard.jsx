@@ -98,7 +98,7 @@ export default function AdminWizard({
       />
 
       {resumed && currentStep === startAtStep && (
-        <div style={{ textAlign: "center", padding: "6px 16px 0", fontSize: 12, color: adminColors.niumBlue, fontWeight: 600 }}>
+        <div style={{ textAlign: "center", padding: "6px 16px 0", fontSize: 12, color: adminColors.brandBlue, fontWeight: 600 }}>
           Resuming from where you left off — Step {currentStep} of {STEPS.length}
         </div>
       )}

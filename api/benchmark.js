@@ -78,7 +78,7 @@ function configKey(tenant) {
 }
 
 async function seedTenant(tenant) {
-  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
+  const seeded = tenant === "demo" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
   seeded._tenantId = tenant;
   await storage.set(configKey(tenant), seeded);
   return seeded;
@@ -87,7 +87,7 @@ async function seedTenant(tenant) {
 async function readConfig(tenant) {
   let stored = await storage.get(configKey(tenant));
   if (!stored) return seedTenant(tenant);
-  if (tenant === "nium") {
+  if (tenant === "demo") {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       const fresh = buildDefaultConfig(tenant);

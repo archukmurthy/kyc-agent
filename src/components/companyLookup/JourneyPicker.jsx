@@ -26,15 +26,11 @@
  *     resetAll drive them, and ConfirmStep resets them on a re-search.
  *   - searchAttempts stays (read-only here); the server counter is authoritative
  *     and buildDossierPayload carries it.
- *   - companyName / countryCode are READ-ONLY here — three references, all in
- *     the Nium fixture check and the resolver button. They belong to the Company
- *     Lookup screen, which is still inline in App.js (its own later slice).
  *
- * The research kickoffs (proceedFromJourney, startNiumApiLookup,
- * findNiumRegNumber) stay in App.js and are drilled. Their call sites moved; the
- * functions did not — proceedFromJourney in particular writes searchAttempts,
- * posts to /api/search-attempt and routes into the AI-Documents step, none of
- * which is this component's business.
+ * The research kickoff (proceedFromJourney) stays in App.js and is drilled. Its
+ * call site moved; the function did not — proceedFromJourney in particular
+ * writes searchAttempts, posts to /api/search-attempt and routes into the
+ * AI-Documents step, none of which is this component's business.
  *
  * The oracle is JourneyPicker.render.test.jsx (37 tests), written against the
  * INLINE picker before this move and which must stay green UNCHANGED.
@@ -50,10 +46,8 @@
  */
 
 import React from "react";
-import { C } from "../../constants/theme";
 import {
   SHOW_TEST_TOOLS,
-  SHOW_NIUM_REG_PANEL,
   TEST_FLAG,
 } from "../../constants/appConstants";
 import {
@@ -76,22 +70,10 @@ export function JourneyPicker({
   // ── journey selection ──
   selectedJourneyCard,
   setSelectedJourneyCard,
-  setJourneyType,
   setJourneyOpen,
   manualOpened,
   setManualOpened,
   proceedFromJourney,
-  // ── read-only lookup facts, owned by the Company Lookup screen ──
-  companyName,
-  countryCode,
-  // ── Nium reg-number resolver (behind SHOW_NIUM_REG_PANEL, currently false) ──
-  niumRegNumber,
-  setNiumRegNumber,
-  findNiumRegNumber,
-  niumSearchLoading,
-  niumSearchResults,
-  niumSearchError,
-  startNiumApiLookup,
   // ── shared error channel ──
   error,
   setError,
@@ -201,62 +183,6 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card D — Nium API Lookup. TEST MODE ONLY: visible when demoMode
-            is on OR ?test=1 is in the URL. Pulls verified registry data
-            straight from the Nium eKYB API (the KYC Lookup Agent) instead
-            of AI research, then flows into the same Confirm step. Clicking
-            starts the lookup immediately (no Continue needed). */}
-        {(demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (() => {
-          const sel = selectedJourneyCard === "nium_api";
-          return (
-            <div
-              onClick={() => {
-                // Two-retry cap: the Nium API lookup is a search option, so
-                // it's blocked once the customer has used their searches.
-                if (evaluateSearchCap(searchAttempts).locked) { setError(CONTACT_ADMIN_MSG); return; }
-                // The Nium KYB sandbox only holds one fixture (the STAR
-                // FINANCE PRIVATE LIMITED / SG record), so the lookup ALWAYS
-                // returns that sample data regardless of what was entered.
-                // When the tester actually picked that fixture the result
-                // matches their selection, so stay silent; for any other
-                // selection, show a one-time informational notice that the
-                // next page is sample (not real) data — then continue either
-                // way (no need to go back/edit).
-                const isFixtureSelection =
-                  companyName.trim().toLowerCase().includes("star finance") &&
-                  countryCode === "SG";
-                if (!isFixtureSelection) {
-                  window.alert(
-                    "🔗 Nium API Lookup — Test Environment\n\n" +
-                    "This sandbox has limited data. The next screen will show " +
-                    "sample data for \"STAR FINANCE PRIVATE LIMITED\" — not live " +
-                    "data for the company you entered.\n\n" +
-                    "Click OK to continue with the demo."
-                  );
-                }
-                setSelectedJourneyCard("nium_api");
-                setJourneyType("nium_api");
-                startNiumApiLookup();
-              }}
-              style={{
-                position: "relative", padding: "18px 16px", borderRadius: 12, cursor: "pointer",
-                background: sel ? "#ECFEFF" : "#fafdfe",
-                border: `2px solid ${sel ? "#0891B2" : C.border}`,
-                boxShadow: sel ? "0 6px 18px rgba(8,145,178,0.12)" : "none",
-              }}
-            >
-              <div style={{ fontSize: 24, marginBottom: 6 }}>🔗</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nium API Lookup</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>
-                Pull verified registry data directly from Nium's KYB infrastructure. Fastest and most accurate for supported markets.
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#0891B2", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 99, padding: "2px 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Test Mode Only
-              </span>
-            </div>
-          );
-        })()}
-
         {/* Card E — Max Prefill. Runs every available source at once for
             the highest possible pre-fill. The dedicated pipeline is TBD
             (wired next); for now selecting it routes through standard AI
@@ -277,77 +203,12 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Nium's KYB data — to pre-fill as much of your application as possible.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Demo's KYB data — to pre-fill as much of your application as possible.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
             </div>
           );
         })()}
       </div>
-
-      {/* Registration number + Companies House "Find from name" resolver.
-          Hidden for now (SHOW_NIUM_REG_PANEL=false) while the CH API key is
-          sorted out; the Nium journey uses a fixed preprod reg number
-          meanwhile. Code kept wired so flipping the flag restores it. */}
-      {SHOW_NIUM_REG_PANEL && (demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
-        <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
-          <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
-            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
-          </label>
-          <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
-            The Nium KYB registry searches by registration number (a name-only search isn't supported). Type it, or look it up from the company name (UK only). <em>Preprod test value: 00445790 (GB).</em>
-          </p>
-          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-            <input
-              id="niumRegNumber"
-              type="text"
-              value={niumRegNumber}
-              onChange={(e) => setNiumRegNumber(e.target.value)}
-              placeholder="e.g. 00445790"
-              style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1.5px solid #A5F3FC", fontSize: 14, fontFamily: "inherit", color: "#0E7490", background: "#fff" }}
-            />
-            <button
-              type="button"
-              onClick={findNiumRegNumber}
-              disabled={niumSearchLoading || !companyName.trim()}
-              style={{ flexShrink: 0, padding: "0 14px", borderRadius: 8, border: "none", background: niumSearchLoading || !companyName.trim() ? "#A5F3FC" : "#0891B2", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: niumSearchLoading || !companyName.trim() ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
-            >
-              {niumSearchLoading ? "Searching…" : "🔍 Find from name"}
-            </button>
-          </div>
-
-          {niumSearchError && (
-            <div style={{ marginTop: 8, fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 6, padding: "6px 10px" }}>
-              {niumSearchError}
-            </div>
-          )}
-
-          {niumSearchResults && niumSearchResults.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
-                {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} — top one filled in, pick another if needed:
-              </div>
-              {niumSearchResults.map((m) => {
-                const picked = m.registrationNumber === niumRegNumber;
-                return (
-                  <div
-                    key={m.registrationNumber}
-                    onClick={() => setNiumRegNumber(m.registrationNumber)}
-                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 4, borderRadius: 6, cursor: "pointer", background: picked ? "#CFFAFE" : "#fff", border: `1px solid ${picked ? "#0891B2" : "#A5F3FC"}` }}
-                  >
-                    <span style={{ fontSize: 12, flexShrink: 0 }}>{picked ? "✓" : "○"}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#0E7490" }}>{m.name}</div>
-                      <div style={{ fontSize: 10, color: "#0891B2" }}>
-                        {m.registrationNumber}{m.status ? ` · ${m.status}` : ""}{m.address ? ` · ${m.address}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {manualOpened && (
         <div style={{ marginTop: 4, marginBottom: 12, padding: "10px 14px", background: "#f0f3f8", borderRadius: 8, fontSize: 12, color: "#1a3a4a", borderLeft: "3px solid #1a3a4a" }}>

@@ -92,7 +92,7 @@ function PasswordGate({ onSuccess }) {
               width: 56,
               height: 56,
               borderRadius: 14,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",

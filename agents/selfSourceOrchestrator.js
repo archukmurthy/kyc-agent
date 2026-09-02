@@ -19,7 +19,7 @@
  *     companyName:              "HSBC Holdings plc",
  *     incorporationCountry:     "United Kingdom",
  *     ownershipType:            "public_fi",
- *     niumEntityType:           "fi",
+ *     entityCategory:           "fi",
  *     drsChecklist:             checklist,
  *     companyRegistrationNumber: "00014259",   // optional — improves second-pass
  *     outputDir:                "./downloads/case-001",
@@ -41,7 +41,7 @@ const { mapSelfSourcedFields, getManualReviewItems } = require("./selfSourceFiel
  * @param {string}  params.companyName
  * @param {string}  params.incorporationCountry
  * @param {string}  params.ownershipType
- * @param {string}  params.niumEntityType
+ * @param {string}  params.entityCategory
  * @param {Array}   params.drsChecklist
  * @param {string}  [params.companyRegistrationNumber]  - PR-025 second-pass
  * @param {string}  [params.outputDir]
@@ -53,7 +53,7 @@ async function orchestrateDocuments(params) {
     companyName,
     incorporationCountry,
     ownershipType,
-    niumEntityType,
+    entityCategory,
     drsChecklist              = [],
     companyRegistrationNumber = null,
     outputDir                 = "./downloads",
@@ -64,7 +64,7 @@ async function orchestrateDocuments(params) {
   console.log(`[Orchestrator] Company:  ${companyName}`);
   console.log(`[Orchestrator] Country:  ${incorporationCountry}`);
   console.log(`[Orchestrator] RegNum:   ${companyRegistrationNumber || "not provided"}`);
-  console.log(`[Orchestrator] Entity:   ${niumEntityType} | Ownership: ${ownershipType}`);
+  console.log(`[Orchestrator] Entity:   ${entityCategory} | Ownership: ${ownershipType}`);
   console.log("[Orchestrator] Launching both agents in parallel...");
   console.log("[Orchestrator] ══════════════════════════════════════════════\n");
 
@@ -86,7 +86,7 @@ async function orchestrateDocuments(params) {
       companyName,
       country:        incorporationCountry,
       ownershipType,
-      niumEntityType,
+      entityCategory,
       outputDir:      `${outputDir}/web-docs`,
     }),
 
@@ -102,7 +102,7 @@ async function orchestrateDocuments(params) {
     : { error: docSearchResult.reason?.message, documents: [], summary: { found: 0, notFound: 0, total: 0 }, cost: null };
 
   // ── PR-026: map extracted fields → dossier schema ─────────────────────────
-  const flow            = niumEntityType === "fi" ? "fi" : "corporate";
+  const flow            = entityCategory === "fi" ? "fi" : "corporate";
   const selfSourcedFields  = mapSelfSourcedFields(registry.results || [], flow);
   const manualReviewItems  = getManualReviewItems(registry.results || []);
 
@@ -139,7 +139,7 @@ async function orchestrateDocuments(params) {
     companyName,
     incorporationCountry,
     ownershipType,
-    niumEntityType,
+    entityCategory,
 
     // Agent outputs — kept separate for independent ownership
     registry,

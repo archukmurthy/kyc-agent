@@ -281,7 +281,7 @@ export function DossierView({
                 {doc.year && <span style={{ fontSize: 12, color: C.textSec, marginLeft: 8 }}>{doc.year}</span>}
               </div>
               {doc.sourceUrl && (
-                <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none" }}>View →</a>
+                <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.brandBlue, fontWeight: 600, textDecoration: "none" }}>View →</a>
               )}
             </div>
           ))}
@@ -303,7 +303,7 @@ export function DossierView({
                   </div>
                 </div>
                 {url && (
-                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.niumBlue, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View →</a>
+                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: C.brandBlue, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View →</a>
                 )}
               </div>
             );

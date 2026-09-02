@@ -11,7 +11,7 @@
 //
 // Env vars:
 //   RESEND_API_KEY    — Resend API key. Without it, email is simulated.
-//   INVITE_FROM_EMAIL — From header, e.g. "Nium Onboarding <onboarding@nium.com>".
+//   INVITE_FROM_EMAIL — From header, e.g. "Demo Onboarding <onboarding@demo.com>".
 //                       Defaults to Resend's shared test sender.
 
 const crypto = require("crypto");
@@ -60,10 +60,10 @@ module.exports = async function handler(req, res) {
     console.warn("invite persist failed:", e && e.message);
   }
 
-  const subject = `Your Nium onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
+  const subject = `Your Demo onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
   const text = `Dear ${contactName},
 
-Thank you for your interest in Nium. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
+Thank you for your interest in Demo. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
 
 Please complete your onboarding by clicking the link below:
 
@@ -71,13 +71,13 @@ ${link}
 
 This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
 
-If you have any questions, please do not hesitate to reach out to your Nium contact.
+If you have any questions, please do not hesitate to reach out to your Demo contact.
 
 Best regards,
-Nium Onboarding Team`;
+Demo Onboarding Team`;
 
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.INVITE_FROM_EMAIL || "Nium Onboarding <onboarding@resend.dev>";
+  const from = process.env.INVITE_FROM_EMAIL || "Demo Onboarding <onboarding@resend.dev>";
 
   // No provider configured → simulate. The demo still shows the success screen
   // and a real, persisted link, but no mail actually leaves the building.

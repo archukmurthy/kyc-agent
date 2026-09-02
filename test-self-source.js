@@ -172,7 +172,7 @@ async function testFullOrchestrator() {
     companyName,
     incorporationCountry,
     ownershipType:            "public_fi",
-    niumEntityType:           "fi",
+    entityCategory:           "fi",
     drsChecklist:             checklist,
     companyRegistrationNumber,
     outputDir:                `${OUT_DIR}/barclays-fi`,

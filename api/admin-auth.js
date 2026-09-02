@@ -2,7 +2,7 @@
 //
 // Lookup order:
 //   1. tenant-auth:{tenantId} in storage — hashed password set by super-admin
-//   2. Nium-only fallback: ADMIN_PASSWORD env var. On a successful env
+//   2. Demo-only fallback: ADMIN_PASSWORD env var. On a successful env
 //      fallback, the KV entry + tenant-registry are seeded so subsequent
 //      logins use the KV path.
 //
@@ -33,24 +33,24 @@ function readBody(req) {
   });
 }
 
-async function seedNiumAuth(envPassword) {
+async function seedDefaultAuth(envPassword) {
   // Idempotent: only writes if entry is missing.
   try {
-    const existing = await storage.get(authKey("nium"));
+    const existing = await storage.get(authKey("demo"));
     if (!existing) {
-      await storage.set(authKey("nium"), {
+      await storage.set(authKey("demo"), {
         passwordHash: hashPassword(envPassword),
         createdAt: new Date().toISOString(),
         createdBy: "system-seed",
-        tenantId: "nium",
-        companyName: "Nium",
+        tenantId: "demo",
+        companyName: "Demo",
       });
     }
     const registry = (await storage.get(REGISTRY_KEY)) || [];
-    if (!registry.find((t) => t.tenantId === "nium")) {
+    if (!registry.find((t) => t.tenantId === "demo")) {
       registry.unshift({
-        tenantId: "nium",
-        companyName: "Nium",
+        tenantId: "demo",
+        companyName: "Demo",
         createdAt: new Date().toISOString(),
         createdBy: "system",
         lastPublishedAt: null,
@@ -62,7 +62,7 @@ async function seedNiumAuth(envPassword) {
     }
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.warn("Could not seed Nium auth/registry:", e.message);
+    console.warn("Could not seed Demo auth/registry:", e.message);
   }
 }
 
@@ -87,10 +87,10 @@ module.exports = async function handler(req, res) {
 
     const tenantAuth = await storage.get(authKey(tenantId));
 
-    // No KV record? Nium falls back to the env password (and self-seeds on
+    // No KV record? Demo falls back to the env password (and self-seeds on
     // success). Every other tenant must be created via /super-admin first.
     if (!tenantAuth) {
-      if (tenantId !== "nium") {
+      if (tenantId !== "demo") {
         return res.status(401).json({
           success: false,
           error: "Tenant not found or not configured",
@@ -107,12 +107,12 @@ module.exports = async function handler(req, res) {
         return res.status(401).json({ success: false, error: "Incorrect password" });
       }
       // Seed for next time.
-      await seedNiumAuth(envPassword);
+      await seedDefaultAuth(envPassword);
       return res.status(200).json({
         success: true,
         token: password,
         tenantId,
-        companyName: "Nium",
+        companyName: "Demo",
       });
     }
 

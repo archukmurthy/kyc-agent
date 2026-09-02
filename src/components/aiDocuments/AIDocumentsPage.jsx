@@ -374,7 +374,7 @@ export function AIDocumentsPage({
                       style={{
                         fontSize: 11,
                         padding: "3px 10px",
-                        background: C.niumBlue,
+                        background: C.brandBlue,
                         border: "none",
                         borderRadius: 6,
                         cursor: "pointer",
@@ -490,7 +490,7 @@ export function AIDocumentsPage({
                       const accepted = e.kind === "research" && acceptedDocTypes.has(e.docObj.type);
                       const positive = e.uploaded || e.retrieved || e.kind === "research";
                       const labelStyle = e.origin === "research"
-                        ? { bg: C.surfaceAlt, fg: C.niumBlue }
+                        ? { bg: C.surfaceAlt, fg: C.brandBlue }
                         : { bg: C.successBg, fg: C.success };
                       const icon = e.kind === "research"
                         ? (e.docObj.type === "wolfsberg_questionnaire" ? "📋" : "📊")
@@ -556,7 +556,7 @@ export function AIDocumentsPage({
                             {e.viewUrl && (
                               <a href={e.viewUrl} target="_blank" rel="noopener noreferrer" style={{
                                 display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
-                                color: C.niumBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
+                                color: C.brandBlue, fontWeight: 600, textDecoration: "none", marginTop: 6, padding: "4px 0",
                               }}>
                                 <span style={{ fontSize: 14 }}>{e.origin === "manual" ? "📄" : "🔗"}</span>
                                 View →
@@ -592,7 +592,7 @@ export function AIDocumentsPage({
                                     <a href={e.openUrl} target="_blank" rel="noopener noreferrer" style={{
                                       display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
                                       padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`,
-                                      background: C.surface, color: C.niumBlue, fontWeight: 600, textDecoration: "none",
+                                      background: C.surface, color: C.brandBlue, fontWeight: 600, textDecoration: "none",
                                     }}>
                                       <span style={{ fontSize: 14 }}>🔗</span>
                                       Open registry →
@@ -629,8 +629,8 @@ export function AIDocumentsPage({
                                 }}>✓ Using this</button>
                               ) : (
                                 <button onClick={() => setAcceptedDocTypes(prev => new Set([...prev, e.docObj.type]))} style={{
-                                  padding: "7px 14px", background: "transparent", color: C.niumBlue,
-                                  border: `1.5px solid ${C.niumBlue}`, borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                  padding: "7px 14px", background: "transparent", color: C.brandBlue,
+                                  border: `1.5px solid ${C.brandBlue}`, borderRadius: 8, fontSize: 12, fontWeight: 600,
                                   fontFamily: "inherit", cursor: "pointer",
                                 }}>Use this document</button>
                               )}

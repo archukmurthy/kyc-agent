@@ -7,7 +7,7 @@
 // (src/App.js) carries its own hardcoded schemas as fallback, and the admin
 // Step 4 (schemas) is a Session-B placeholder in this build.
 
-export function buildDefaultConfig(tenantId = "nium") {
+export function buildDefaultConfig(tenantId = "demo") {
   const now = new Date().toISOString();
   const blankSchema = () => ({ researchFields: [], gapFields: [] });
 
@@ -18,9 +18,9 @@ export function buildDefaultConfig(tenantId = "nium") {
     _isDefault: true,
 
     company: {
-      name: "Nium",
+      name: "Demo",
       logo: null,
-      manualFormUrl: "https://nium.com/apply",
+      manualFormUrl: "https://demo.com/apply",
       privacyPolicyUrl: "",
       submissionWebhookUrl: "",
       submissionEmail: "",
@@ -115,7 +115,7 @@ export function buildDefaultConfig(tenantId = "nium") {
   };
 }
 
-// Empty config for a brand-new non-Nium tenant. Same shape as
+// Empty config for a brand-new non-Demo tenant. Same shape as
 // buildDefaultConfig but with no licences/entityTypes/schemas/documents.
 // Client mirror of lib/seedConfig.js#buildBlankConfig.
 export function buildBlankConfig(tenantId = "") {

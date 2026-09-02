@@ -6,7 +6,7 @@
 -- migrations stay forward-only.
 --
 -- RECONCILED against the existing 10-table, session-centric schema:
---   * tenant_id is TEXT (the app's tenants are slugs like 'nium'), NOT uuid as
+--   * tenant_id is TEXT (the app's tenants are slugs like 'demo'), NOT uuid as
 --     the spec literally wrote — uuid would break every insert. FK -> tenants(id).
 --   * `documents` ALREADY EXISTS (session-based). Per the spec's explicit
 --     "reconcile, don't greenfield" instruction it is ALTERed to add the

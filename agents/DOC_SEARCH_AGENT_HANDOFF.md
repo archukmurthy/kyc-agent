@@ -32,7 +32,7 @@ fields from your KYC/KYB data collection:
 - Company name (full legal name)
 - Country of registration
 - Ownership type (see classification rules below)
-- Nium entity type
+- Entity category
 
 Do not wait until the full dossier is complete. Document retrieval can run in
 parallel with other enrichment steps.
@@ -108,7 +108,7 @@ docResult = {
   companyName: "HSBC Holdings plc",
   country: "United Kingdom",
   ownershipType: "public_fi",
-  niumEntityType: "fi",
+  entityCategory: "fi",
 
   documents: [
     {
@@ -216,7 +216,7 @@ If `document.status === "not_found"` for a required document type:
 The file you own is: `./agents/docSearchAgent.js`
 
 Your interface contract with the main agent is:
-- **Input**: `{ companyName, country, ownershipType, niumEntityType, outputDir? }`
+- **Input**: `{ companyName, country, ownershipType, entityCategory, outputDir? }`
 - **Output**: the `docResult` shape shown above — do not change field names or
   remove fields without coordinating with the main agent developer.
 

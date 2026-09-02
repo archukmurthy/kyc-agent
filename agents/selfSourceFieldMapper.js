@@ -22,7 +22,7 @@
  *
  *   const selfSourcedFields = mapSelfSourcedFields(
  *     orchestratorResult.registry.results,
- *     flow   // "fi" | "corporate"  — read from tenantConfig or niumEntityType
+ *     flow   // "fi" | "corporate"  — read from tenantConfig or entityCategory
  *   );
  *   const mergedResearch = mergeResearchResults(researchResults, selfSourcedFields);
  *   setResearchResults(mergedResearch);
@@ -226,7 +226,7 @@ function parseAddress(addressString) {
  * mapSelfSourcedFields
  *
  * @param {Array}  registryResults  - selfSourceAgent.results[]
- * @param {string} flow             - "fi" | "corporate"  (from tenantConfig or niumEntityType)
+ * @param {string} flow             - "fi" | "corporate"  (from tenantConfig or entityCategory)
  * @returns {Object}                - { [fieldId]: { value, tier, source, ... } }
  */
 function mapSelfSourcedFields(registryResults = [], flow = "fi") {

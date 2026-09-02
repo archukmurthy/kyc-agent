@@ -8,7 +8,7 @@ const ValidityValidator = require("../validators/ValidityValidator");
 function buildInput(overrides = {}) {
   const fields = {
     applicantName: { value: "Example Ltd", evidenceRefs: ["ev_applicantName"] },
-    recipientName: { value: "Nium", evidenceRefs: ["ev_recipientName"] },
+    recipientName: { value: "the Platform", evidenceRefs: ["ev_recipientName"] },
     issueDate: { value: new Date().toISOString().slice(0, 10), evidenceRefs: ["ev_issueDate"] },
     signaturePresent: { value: true, evidenceRefs: ["ev_signaturePresent"] },
     printedSignerName: { value: "Jane Smith", evidenceRefs: ["ev_printedSignerName"] },

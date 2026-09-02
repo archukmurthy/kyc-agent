@@ -54,7 +54,7 @@ export default function AdminDashboard({
   tenantConfig,
   firstLogin,
   token,
-  tenantId = "nium",
+  tenantId = "demo",
   onSignOut,
   onReloadConfig,
 }) {
@@ -173,13 +173,13 @@ export default function AdminDashboard({
       // from the same origin (modern Chrome/Firefox/Safari). Each tab gets its
       // own session, so this does not leak between unrelated tabs.
       sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
-      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId || "nium");
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId || "demo");
       sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("Could not write preview config:", e);
     }
-    const tenantParam = tenantId && tenantId !== "nium"
+    const tenantParam = tenantId && tenantId !== "demo"
       ? `&tenant=${encodeURIComponent(tenantId)}`
       : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");
@@ -364,8 +364,8 @@ export default function AdminDashboard({
             padding: "14px 18px",
             borderRadius: 10,
             background: "#fff",
-            border: `1.5px solid ${adminColors.niumBlue}`,
-            color: adminColors.niumBlue,
+            border: `1.5px solid ${adminColors.brandBlue}`,
+            color: adminColors.brandBlue,
             fontWeight: 700,
             fontSize: 14,
             cursor: "pointer",
@@ -544,7 +544,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-          Your current configuration is pre-loaded with Nium defaults — nothing is blank.
+          Your current configuration is pre-loaded with Demo defaults — nothing is blank.
         </div>
       </div>
     </div>
@@ -555,7 +555,7 @@ function WelcomeOption({ recommended, icon, title, body, cta, ctaStyle, onClick 
   return (
     <div
       style={{
-        border: `1.5px solid ${recommended ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${recommended ? adminColors.brandBlue : adminColors.border}`,
         background: recommended ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 12,
         padding: 14,

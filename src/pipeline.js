@@ -10,7 +10,7 @@
  */
 const {
   OWNERSHIP_TYPE_LIBRARY,
-  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  DEFAULT_OWNERSHIP_TYPES,
   getResearchStrategy,
   ownershipTypeLabel,
 } = require("./utils/ownershipTypes");
@@ -95,7 +95,7 @@ const classifySource = (source, countryCode) => {
   return "secondary";
 };
 
-// Markets where Nium holds a licence. Country of registration matching one of these
+// Markets where Demo holds a licence. Country of registration matching one of these
 // uses that market's schema. Otherwise the Singapore licence applies as default.
 const LICENSED_MARKETS = ["GB"];
 
@@ -360,7 +360,7 @@ const fiBusinessGapFields = [
 const fiSpecificFields = [
   { field: "no_licence_reason", label: "If no licence, please explain why one is not required", inputType: "textarea", required: true, section: "fi", dependsOn: { has_licence: "No" } },
   { field: "accepts_cash", label: "Do you accept cash?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
-  { field: "funds_from_outside", label: "Will you fund your Nium account from outside your incorporated country?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
+  { field: "funds_from_outside", label: "Will you fund your Demo account from outside your incorporated country?", inputType: "select", required: true, section: "fi", options: ["Yes", "No"] },
   { field: "products_offered_other", label: "Please describe your other products / services", inputType: "textarea", required: true, section: "fi", dependsOn: { products_offered: "Other" } },
   { field: "customer_individual_pct", label: "Individual Customers %", inputType: "text", required: true, section: "fi" },
   { field: "customer_corporate_pct", label: "Corporate Customers %", inputType: "text", required: true, section: "fi" },
@@ -400,7 +400,7 @@ const fiUsageFields = (fmt) => {
   return [
     { field: "intended_use", label: "Intended Use of Account", inputType: "select", required: true, section: "usage",
       options: ["Payroll", "Supplier Payments", "Cross-Border Trade", "FX Conversion", "Expense Management", "Collections", "Treasury", "Other"] },
-    { field: "intended_use_description", label: "Please describe how Nium's products will be used", inputType: "textarea", required: true, section: "usage" },
+    { field: "intended_use_description", label: "Please describe how Demo's products will be used", inputType: "textarea", required: true, section: "usage" },
     { field: "monthly_credit_volume", label: "Expected Monthly Credit Volume", inputType: "select", required: true, section: "usage", options: volumeOpts },
     { field: "monthly_tx_count_credit", label: "Expected Number of Monthly Credit Transactions", inputType: "text", required: true, section: "usage" },
     { field: "avg_tx_value_credit", label: "Expected Average Credit Transaction Value", inputType: "select", required: true, section: "usage", options: avgTxOpts },
@@ -461,13 +461,13 @@ const SG_FI_SCHEMA = {
    ═══════════════════════════════════════════ */
 
 // Options for the Step 1 ownership-type dropdown, scoped to the entity type's
-// configured list (falls back to the Nium defaults when the live config has no
+// configured list (falls back to the Demo defaults when the live config has no
 // explicit ownershipTypes for that entity type).
 function getOwnershipTypeOptions(entityTypeId, tenantConfig) {
   const entityTypeDef = (tenantConfig?.entityTypes || []).find((e) => e.id === entityTypeId);
   const enabledIds = (entityTypeDef?.ownershipTypes && entityTypeDef.ownershipTypes.length)
     ? entityTypeDef.ownershipTypes
-    : NIUM_DEFAULT_OWNERSHIP_TYPES;
+    : DEFAULT_OWNERSHIP_TYPES;
   return enabledIds
     .map((id) => OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === id))
     .filter(Boolean)
@@ -1972,16 +1972,6 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   // non-registry pages, (2) resigned directors being returned, (3) attributes from
   // one person merged onto another. See validateAllDirectors() for the
   // deterministic code-level backstop that enforces the same three rules.
-  const niumKnownIssueGuard = /nium\s*fintech/i.test(String(name || ""))
-    ? `\nKNOWN ISSUE GUARD:
-For Nium FinTech Limited (UK company number 09337457):
-  The active director is Anupam Pahuja.
-  Prajit Nanu resigned as director and must NOT be returned.
-  If you find yourself about to return Prajit Nanu as a director of
-  Nium FinTech Limited, stop. He is not an active director.
-  Return Anupam Pahuja only.
-`
-    : "";
   const directorThreeRules = `
 DIRECTOR AND UBO DATA — THREE MANDATORY RULES:
 
@@ -2014,17 +2004,17 @@ active unresigned appointment right now".
 RULE 3 — NO CROSS-PERSON ATTRIBUTE MERGING.
 Every detail you return for a person must come from a source that explicitly
 names that specific individual alongside those details in the same record.
-  Acceptable: Companies House lists "Anupam Pahuja, born March 1975,
+  Acceptable: Companies House lists "Jane Smith, born March 1975,
     nationality British" — all three attributes from the same record for the
     same named person.
-  NOT acceptable: Name "Anupam Pahuja" from Companies House, DOB from a
+  NOT acceptable: Name "Jane Smith" from Companies House, DOB from a
     LinkedIn profile, nationality inferred from a different source.
   NOT acceptable: Attributes from one person's record assigned to a different
     person's name.
 If you can find the name but cannot confirm details from the same source for
 that specific individual, return:
   {
-    "full_name": "Anupam Pahuja",
+    "full_name": "Jane Smith",
     "role": "Director",
     "verificationStatus": "probable",
     "notes": "Name confirmed in registry. DOB and nationality not confirmed from same source — details require verification."
@@ -2036,13 +2026,13 @@ DIRECTOR DATA EXAMPLE — correct output for a UK company with one active direct
 and one resigned director:
 
 Companies House shows:
-  Prajit Nanu — appointed 2015, resigned 2019
-  Anupam Pahuja — appointed 2019, no resignation date
+  John Doe — appointed 2015, resigned 2019
+  Jane Smith — appointed 2019, no resignation date
 
 CORRECT output:
   "directors": [
     {
-      "full_name": "Anupam Pahuja",
+      "full_name": "Jane Smith",
       "role": "Director",
       "appointment_date": "2019-xx-xx",
       "source": "Companies House",
@@ -2053,11 +2043,10 @@ CORRECT output:
   ]
 
 WRONG output (do not do this):
-  - Including Prajit Nanu (resigned)
-  - Returning Prajit Nanu's name with Anupam Pahuja's details
-  - Using Prajit Nanu's name because he appears prominently on the company
-    website or in news articles
-${niumKnownIssueGuard}`;
+  - Including John Doe (resigned)
+  - Returning John Doe's name with Jane Smith's details
+  - Using John Doe's name because he appears prominently on the company
+    website or in news articles`;
   const stakeholderRulesBlock = stakeholderRules
     ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n${directorThreeRules}`
     : "";
@@ -2142,11 +2131,11 @@ ${strategy.strategyNotes}
 \n`
     : "";
 
-  return `You are a KYC research agent for Nium.
+  return `You are a KYC research agent for Demo.
 ${strategyBlock}${wolfsbergBlock}
 JURISDICTION CONTEXT (read carefully, this is two separate things):
 1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
-2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Nium has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
+2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Demo has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
 
 WHERE TO SEARCH:
 - Search ${country}'s public records, registries, and regulators for "${name}".

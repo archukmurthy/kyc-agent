@@ -13,7 +13,7 @@
  *     companyName: "HSBC Holdings plc",
  *     country: "United Kingdom",
  *     ownershipType: "public_fi",
- *     niumEntityType: "fi"
+ *     entityCategory: "fi"
  *   });
  */
 
@@ -151,9 +151,9 @@ const DOC_TYPES = {
 
 // ─── Resolve which documents to fetch ────────────────────────────────────────
 
-function resolveDocTypes(ownershipType, niumEntityType) {
+function resolveDocTypes(ownershipType, entityCategory) {
   const isFI =
-    niumEntityType === "fi" ||
+    entityCategory === "fi" ||
     ownershipType === "fi_only" ||
     ownershipType === "public_fi";
 
@@ -414,7 +414,7 @@ function buildSummaryTable(companyName, results) {
  * @param {string} params.companyName    - Full legal name
  * @param {string} params.country        - Country of registration
  * @param {string} params.ownershipType  - "public_fi"|"fi_only"|"public_only"|"corporate"
- * @param {string} params.niumEntityType - "fi"|"corporate"|"platform"|"direct"
+ * @param {string} params.entityCategory - "fi"|"corporate"|"platform"|"direct"
  * @param {string} [params.outputDir]    - Download directory (default: "./downloads")
  * @returns {Promise<Object>}
  */
@@ -423,7 +423,7 @@ async function docSearchAgent(params) {
     companyName,
     country,
     ownershipType,
-    niumEntityType,
+    entityCategory,
     outputDir = "./downloads",
   } = params;
 
@@ -432,14 +432,14 @@ async function docSearchAgent(params) {
   }
 
   const slug = slugify(companyName);
-  const docTypes = resolveDocTypes(ownershipType, niumEntityType);
+  const docTypes = resolveDocTypes(ownershipType, entityCategory);
   const costTracker = new CostTracker();
 
   console.log(
     `[DocSearchAgent] Starting for: ${companyName} (${country})`
   );
   console.log(
-    `[DocSearchAgent] Entity: ${niumEntityType} | ` +
+    `[DocSearchAgent] Entity: ${entityCategory} | ` +
     `Ownership: ${ownershipType}`
   );
   console.log(`[DocSearchAgent] Documents: ${docTypes.join(", ")}`);
@@ -470,7 +470,7 @@ async function docSearchAgent(params) {
     companyName,
     country,
     ownershipType,
-    niumEntityType,
+    entityCategory,
     documents: results,
     summaryTable: rows,
     summary,

@@ -35,7 +35,7 @@ const { OWNERSHIP_TYPE_LIBRARY } = require(
 //                  = isPubliclyListed || isPubliclyListedOverride
 //
 // Doc search agent expects:
-//   niumEntityType: "fi" | "corporate" | "platform" | "direct"
+//   entityCategory: "fi" | "corporate" | "platform" | "direct"
 //   ownershipType:  "public_fi" | "fi_only" | "public_only" | "corporate"
 
 // HARDCODED — see PRODUCTION_READINESS.md PR-001
@@ -127,7 +127,7 @@ async function callDocSearchAgent({
     companyName:    company.name,
     country:        company.countryName,
     ownershipType:  docAgentOwnershipType,
-    niumEntityType: entityType.toLowerCase(),
+    entityCategory: entityType.toLowerCase(),
     outputDir:      `./downloads/${caseId}`,
   });
 

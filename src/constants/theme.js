@@ -6,7 +6,7 @@
    consistently with the rest of the flow.
    ═══════════════════════════════════════════ */
 export const C = {
-  niumBlue: "#1a3a4a",
+  brandBlue: "#1a3a4a",
   text: "#1a3a4a",
   textMuted: "#1a3a4a90",
   textSec: "#1a3a4aaa",

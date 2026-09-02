@@ -5,13 +5,13 @@
 // var, in that order). Each tenant has fully isolated config in KV.
 //
 // GET    — returns the current config for the resolved tenant. Seeds on
-//          first read: Nium tenant gets the default config; any other tenant
+//          first read: Demo tenant gets the default config; any other tenant
 //          gets a blank template.
 // POST   — replaces the current config (admin-authed). Archives previous
-//          version. Refuses to publish an empty config for the Nium tenant
+//          version. Refuses to publish an empty config for the Demo tenant
 //          to protect the seed.
 // PUT    — admin-only versions list (last 5).
-// DELETE — admin-only reset to defaults (Nium re-seeds; others get a fresh
+// DELETE — admin-only reset to defaults (Demo re-seeds; others get a fresh
 //          blank).
 //
 // NOTE: ADMIN_PASSWORD is currently shared across all tenants. When
@@ -37,32 +37,32 @@ function authKey(tid) {
 
 // Authorize an admin write for a specific tenant. Two paths:
 //   1. tenant-auth:{tenant} hash matches the bearer token (the per-tenant
-//      password set by /super-admin or the auto-seeded Nium entry)
-//   2. Nium-only fallback: bearer token equals ADMIN_PASSWORD env var.
-//      Lets the first-ever Nium publish succeed before the auto-seed runs.
+//      password set by /super-admin or the auto-seeded Demo entry)
+//   2. Demo-only fallback: bearer token equals ADMIN_PASSWORD env var.
+//      Lets the first-ever Demo publish succeed before the auto-seed runs.
 async function authorizeAdmin(tenant, token) {
   if (!token) return false;
   try {
     const stored = await storage.get(authKey(tenant));
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  if (tenant === "nium") {
+  if (tenant === "demo") {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }
   return false;
 }
 
-// Seed a tenant that doesn't yet have a config. Nium gets the canonical
+// Seed a tenant that doesn't yet have a config. Demo gets the canonical
 // defaults; everyone else gets a blank template.
 async function seedTenant(tenant) {
-  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
+  const seeded = tenant === "demo" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
   seeded._tenantId = tenant;
   await storage.set(configKey(tenant), seeded);
   return seeded;
 }
 
-// Read the live config for a tenant, seeding on miss. For the Nium tenant we
+// Read the live config for a tenant, seeding on miss. For the Demo tenant we
 // also self-heal: if the stored config is corrupted or accidentally emptied
 // (no licences), we re-seed it from defaults so the live customer flow is
 // never left in a broken state.
@@ -70,11 +70,11 @@ async function readConfig(tenant) {
   let stored = await storage.get(configKey(tenant));
   if (!stored) return seedTenant(tenant);
 
-  if (tenant === "nium") {
+  if (tenant === "demo") {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       // eslint-disable-next-line no-console
-      console.warn("Nium config missing licences — self-healing from defaults");
+      console.warn("Demo config missing licences — self-healing from defaults");
       const fresh = buildDefaultConfig(tenant);
       fresh._tenantId = tenant;
       fresh._selfHealedAt = new Date().toISOString();
@@ -127,14 +127,14 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Invalid request body" });
       }
 
-      // Nium protection — refuse empty publishes that would wipe the live
+      // Demo protection — refuse empty publishes that would wipe the live
       // schemas. Self-healing only catches reads; this catches writes.
-      if (tenant === "nium") {
+      if (tenant === "demo") {
         const lic = Array.isArray(body.licences) ? body.licences.length : 0;
         const ent = Array.isArray(body.entityTypes) ? body.entityTypes.filter((e) => e && e.active !== false).length : 0;
         if (lic === 0 || ent === 0) {
           return res.status(400).json({
-            error: "Cannot publish an empty configuration for the Nium tenant. Please ensure at least one licence and one entity type are configured.",
+            error: "Cannot publish an empty configuration for the Demo tenant. Please ensure at least one licence and one entity type are configured.",
           });
         }
       }
@@ -167,7 +167,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "DELETE") {
       // Reset-to-defaults. Wipes the live config AND every archived version
-      // for this tenant. The next GET re-seeds (Nium → defaults; others → blank).
+      // for this tenant. The next GET re-seeds (Demo → defaults; others → blank).
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
       if (!(await authorizeAdmin(tenant, token))) {

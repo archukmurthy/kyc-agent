@@ -66,7 +66,7 @@ function StepBubble({ n, label, isCurrent, isComplete, onClick }) {
   const bubbleBg = isComplete
     ? adminColors.statusComplete
     : isCurrent
-    ? adminColors.niumBlue
+    ? adminColors.brandBlue
     : "#fff";
 
   const hoverBg = isComplete

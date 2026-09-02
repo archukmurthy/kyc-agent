@@ -137,7 +137,7 @@ export default function MiniWizardAddLicence({ config, onComplete, onCancel }) {
         <Card title="Which entity types does this licence support?">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {entityTypes.map((e) => (
-              <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${selectedEntityIds.includes(e.id) ? adminColors.niumBlue : adminColors.border}`, borderRadius: 8, cursor: "pointer", background: selectedEntityIds.includes(e.id) ? "rgba(11,61,145,0.04)" : "#fff" }}>
+              <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${selectedEntityIds.includes(e.id) ? adminColors.brandBlue : adminColors.border}`, borderRadius: 8, cursor: "pointer", background: selectedEntityIds.includes(e.id) ? "rgba(11,61,145,0.04)" : "#fff" }}>
                 <input type="checkbox" checked={selectedEntityIds.includes(e.id)} onChange={() => toggleEntity(e.id)} />
                 <span style={{ fontSize: 14 }}>{e.icon} {e.label}</span>
                 <span style={{ fontSize: 12, color: adminColors.textMuted, marginLeft: "auto" }}>{e.description}</span>
@@ -227,8 +227,8 @@ function CountryChips({ selected, onToggle }) {
               borderRadius: 99,
               fontSize: 11,
               fontWeight: 600,
-              border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-              background: on ? adminColors.niumBlue : "#fff",
+              border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+              background: on ? adminColors.brandBlue : "#fff",
               color: on ? "#fff" : adminColors.text,
               cursor: "pointer",
               fontFamily: "inherit",

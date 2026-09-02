@@ -349,7 +349,7 @@ function Banner({ open, setOpen, children }) {
           background: "rgba(11,61,145,0.06)",
           border: `1px solid rgba(11,61,145,0.16)`,
           borderRadius: 8,
-          color: adminColors.niumBlue,
+          color: adminColors.brandBlue,
           fontWeight: 600,
           fontSize: 12,
           cursor: "pointer",
@@ -522,7 +522,7 @@ function PrimaryByCountry({ primaryByCountry, onUpdate, onDelete, onAdd }) {
             <button
               type="button"
               onClick={() => setAdding(k)}
-              style={{ ...adminStyles.btnGhost, color: adminColors.niumBlue, fontSize: 12, marginTop: 6, padding: 0 }}
+              style={{ ...adminStyles.btnGhost, color: adminColors.brandBlue, fontSize: 12, marginTop: 6, padding: 0 }}
             >
               + Add source for {k === "__global__" ? "global" : countryName(k)}
             </button>

@@ -5,7 +5,7 @@ const { ValidationEngine } = require("../engine/validationEngine");
 function validFields() {
   return {
     applicantName: { value: "Example Ltd" },
-    recipientName: { value: "Nium" },
+    recipientName: { value: "the Platform" },
     issueDate: { value: new Date().toISOString().slice(0, 10) },
     signaturePresent: { value: true },
     printedSignerName: { value: "Jane Smith" },
@@ -37,7 +37,7 @@ test("validation engine passes a complete valid LOA", async () => {
   const result = await new ValidationEngine().validate({
     market: "UK",
     documentType: "LOA",
-    applicationContext: { recipientName: "Nium" },
+    applicationContext: { recipientName: "the Platform" },
     requirementContext: { entityType: "Private Limited" },
     extraction: { fields: validFields(), evidence: [] },
   });
@@ -65,7 +65,7 @@ test("validation engine preserves evidence supplied by extraction", async () => 
   const result = await new ValidationEngine().validate({
     market: "UK",
     documentType: "LOA",
-    applicationContext: { recipientName: "Nium" },
+    applicationContext: { recipientName: "the Platform" },
     requirementContext: { entityType: "Private Limited" },
     extraction: { fields: validFields(), evidence: extractionEvidence },
   });

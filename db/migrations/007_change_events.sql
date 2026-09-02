@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS change_events (
 
   -- provenance of the original (presented) value
   source_type     TEXT,                    -- registry|website|document|web
-  source_provider TEXT,                    -- 'Companies House' | 'ACRA' | 'Nium' | 'Document Extraction' | ...
+  source_provider TEXT,                    -- 'Companies House' | 'ACRA' | 'Demo' | 'Document Extraction' | ...
   source_tier     SMALLINT,                -- 1|2|3
   verifiability   TEXT,                    -- structured_registry|document|unverified (frozen engine enum)
 
