@@ -14,6 +14,8 @@ const {
   LEGACY_DISCOVERY_ENDPOINT,
   createLegacyDiscoveryAdapter,
 } = require("..");
+const { companiesHouseOwnershipAdapter } = require("../../../../agents/ubo/companiesHouseOwnershipAdapter");
+const { EDGE_TYPES } = require("../../../../agents/ubo/constants");
 const { cloneFixture, response, edge } = require("../test-support/legacyResponseFixtures");
 
 function discoveryRequest(overrides = {}) {
@@ -105,6 +107,53 @@ test("Companies House LLP voting bands retain their range instead of degrading t
     },
   }]);
   assert.equal(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS), false);
+});
+
+test("ASDA source PSC voting bands remain current control facts before G3 translation", async (t) => {
+  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
+  const previousFetch = global.fetch;
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
+    global.fetch = previousFetch;
+  });
+  process.env.COMPANIES_HOUSE_API_KEY = "test-only";
+  const activeNature = "voting-rights-25-to-50-percent-limited-liability-partnership";
+  global.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { items: [
+        { name: "Mr Gary Lindsay", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
+        { name: "Mr Thomas Andrew Mitchell", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
+        { name: "Mr Stephen James Robertson", kind: "individual-person-with-significant-control", ceased_on: "2022-12-22", natures_of_control: [activeNature] },
+        { name: "Manjit Dale", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
+      ] };
+    },
+  });
+
+  const source = await companiesHouseOwnershipAdapter({ entity: {
+    name: "TDR Capital LLP", type: "company", jurisdiction: "GB", registrationNumber: "OC302604",
+  } });
+  assert.deepEqual(source.statements.map((statement) => ({
+    name: statement.owner.name,
+    type: statement.type,
+    percentage: statement.ownershipPercentage,
+    evidenceId: statement.evidenceIds[0],
+    currentState: statement.metadata.currentState,
+    concept: statement.metadata.relationshipConcept,
+    range: statement.metadata.percentageRange,
+    naturesOfControl: statement.metadata.naturesOfControl,
+  })), ["Mr Gary Lindsay", "Mr Thomas Andrew Mitchell", "Manjit Dale"].map((name, index) => ({
+    name,
+    type: EDGE_TYPES.CONTROL,
+    percentage: null,
+    evidenceId: `companies-house:OC302604:psc:${index === 2 ? 3 : index}`,
+    currentState: "CURRENT",
+    concept: "VOTING_RIGHTS",
+    range: { lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true },
+    naturesOfControl: [activeNature],
+  })));
+  assert.equal(source.statements.some(({ type }) => type === EDGE_TYPES.OWNERSHIP), false);
 });
 
 test("L04 ambiguous voting/economic source is omitted and remains INCONCLUSIVE with a stable issue", async () => {

@@ -5,6 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { makeEvent } = require("../../ubo-control-ui/UboJourney");
+const { calculateEffectivePercentage, CALCULATION_STATUS } = require("../../ubo-control/domain/percentageCalculation");
+const { GRAPH_DIMENSION } = require("../../ubo-control/domain/ownershipGraph");
 const ASDA_REGRESSION = require("../fixtures/asda-regression.json");
 const {
   applyCustomerAction,
@@ -219,6 +221,60 @@ test("sanitized ASDA regression reuses exact registry identities and produces on
   assert.equal(view.graph.nodes.length, 12);
   assert.equal(new Set(view.graph.nodes.map(({ entityId }) => entityId)).size, 12);
   assert.equal(view.graph.summary.investigationEntities, 12);
+});
+
+test("ASDA voting-only PSC facts preserve their range and cannot become economic ownership", async () => {
+  let session = await startLive({
+    companyContext: { legalEntityName: "Example Delivery Customer Ltd", registrationNumber: "99000001", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" },
+    transport: { invoke: async () => ({ status: 200, body: structuredClone(ASDA_REGRESSION) }) },
+  });
+  const sourceNames = ["Alex Example", "Blair Example", "Casey Example"];
+  const facts = session.candidateSources[0].candidateFacts.filter(({ subject }) => sourceNames.includes(subject.name));
+  assert.equal(facts.length, 3);
+  facts.forEach((fact) => {
+    assert.equal(fact.relationship, "VOTING_RIGHTS");
+    assert.deepEqual(fact.measurement, { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true });
+    assert.equal(fact.qualifiers.currentState, "CURRENT");
+    assert.equal(fact.evidenceReferences.length, 1);
+    const target = session.decisionTargets.candidateClaims.find(({ originatingCandidateFact }) => originatingCandidateFact.candidateFactId === fact.factId);
+    assert.equal(target.relationship, "VOTING_RIGHTS");
+    assert.equal(target.currentState, "CANDIDATE");
+  });
+
+  session = reviewAll(session);
+  const view = session.snapshots.at(-1).view;
+  const content = view.snapshot.decisionContent;
+  const people = content.reasoning.canonicalEntities.filter(({ category }) => category === "NATURAL_PERSON");
+  assert.equal(people.length, 3);
+  people.forEach((person) => {
+    const operative = content.reasoning.operativeClaims.find(({ subject }) => subject.party.name === person.primaryName);
+    assert.equal(operative.relationship, "VOTING_RIGHTS");
+    assert.equal(operative.status, "OPERATIVE");
+    assert.deepEqual(operative.measurement, { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true });
+    const canonical = content.reasoning.graph.relationships.filter(({ subjectEntityId }) => subjectEntityId === person.entityId);
+    assert.deepEqual(canonical.map(({ relationshipType, dimension, measurement }) => ({ relationshipType, dimension, measurement })), [{
+      relationshipType: "VOTING_RIGHTS",
+      dimension: GRAPH_DIMENSION.VOTING,
+      measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true },
+    }]);
+    const projected = view.graph.relationships.filter(({ sourceEntityId }) => sourceEntityId === person.entityId);
+    assert.deepEqual(projected.map(({ relationshipType, dimension, measurement }) => ({ relationshipType, dimension, measurement })), [{
+      relationshipType: "VOTING_RIGHTS",
+      dimension: GRAPH_DIMENSION.VOTING,
+      measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true },
+    }]);
+
+    const economic = calculateEffectivePercentage(content.reasoning.graph, {
+      subjectEntityId: person.entityId,
+      targetEntityId: session.caseContext.subjectEntityId,
+      dimension: GRAPH_DIMENSION.ECONOMIC,
+    });
+    assert.equal(economic.calculationAlgorithm, "ubo-percentage-lookthrough-v1");
+    assert.equal(economic.status, CALCULATION_STATUS.NO_PATH);
+    assert.deepEqual(economic.knownPaths, []);
+    assert.equal(Object.hasOwn(economic, "aggregateKnownValue"), false);
+    assert.equal(view.graph.qualifications.some(({ entityId }) => entityId === person.entityId), false);
+  });
 });
 
 test("ASDA product snapshot keeps qualification, dimensions, unresolved inspection and planner state consistent", async () => {
