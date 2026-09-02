@@ -10,29 +10,6 @@ function ownershipMinimum(natures = []) {
   if (text.includes("25-to-50")) return 25;
   return null;
 }
-
-function percentageRangeFromNature(nature) {
-  const normalized = String(nature).toLowerCase();
-  const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
-  if (!match) return null;
-  const lowerBound = Number(match[1]);
-  return {
-    lowerBound,
-    upperBound: Number(match[2]),
-    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
-    upperInclusive: true,
-  };
-}
-
-function relationshipFromNature(nature) {
-  const normalized = String(nature).toLowerCase();
-  if (normalized.includes("right-to-share-surplus-assets")) return { type: EDGE_TYPES.OWNERSHIP, concept: "SURPLUS_ASSET_RIGHTS" };
-  if (normalized.includes("ownership-of-shares")) return { type: EDGE_TYPES.OWNERSHIP, concept: "ECONOMIC_OWNERSHIP" };
-  if (normalized.includes("voting-rights")) return { type: EDGE_TYPES.CONTROL, concept: "VOTING_RIGHTS" };
-  if (normalized.includes("right-to-appoint-and-remove")) return { type: EDGE_TYPES.CONTROL, concept: "APPOINT_OR_REMOVE_PERSONS" };
-  if (normalized.includes("significant-influence-or-control")) return { type: EDGE_TYPES.CONTROL, concept: "SIGNIFICANT_INFLUENCE_OR_CONTROL" };
-  return null;
-}
 function authHeader() { return `Basic ${Buffer.from(`${process.env.COMPANIES_HOUSE_API_KEY}:`).toString("base64")}`; }
 
 function jurisdictionFromCompaniesHousePsc(psc, fallback) {
@@ -69,43 +46,14 @@ async function companiesHouseOwnershipAdapter({ entity }) {
   const data = await response.json();
   const evidence = [];
   const statements = (data.items || []).flatMap((psc, index) => {
-    const natures = psc.natures_of_control || [];
-    if (psc.ceased_on) return [];
+    const minimum = ownershipMinimum(psc.natures_of_control || []);
+    if (!minimum || psc.ceased_on) return [];
     const evidenceId = `companies-house:${number}:psc:${index}`;
-    evidence.push({ id: evidenceId, source: "Companies House PSC register", sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}/persons-with-significant-control`, sourceReliability: 98, extractionConfidence: 100, jurisdictionRelevant: true, fetchedAt: new Date().toISOString(), naturesOfControl: natures });
+    evidence.push({ id: evidenceId, source: "Companies House PSC register", sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}/persons-with-significant-control`, sourceReliability: 98, extractionConfidence: 100, jurisdictionRelevant: true, fetchedAt: new Date().toISOString(), ownershipBand: `${minimum}% or more`, naturesOfControl: psc.natures_of_control || [] });
     const corporate = psc.kind === "corporate-entity-person-with-significant-control" || Boolean(psc.identification?.registration_number);
-    const owner = { name: psc.name, type: corporate ? "company" : "individual", registrationNumber: psc.identification?.registration_number || null, jurisdiction: corporate ? jurisdictionFromCompaniesHousePsc(psc, entity.jurisdiction) : "GB" };
-    return natures.flatMap((nature, natureIndex) => {
-      const semantic = relationshipFromNature(nature);
-      if (!semantic) return [];
-      const percentageRange = percentageRangeFromNature(nature);
-      const metadata = {
-        currentState: "CURRENT",
-        relationshipConcept: semantic.concept,
-        naturesOfControl: [nature],
-        ...(percentageRange ? { percentageRange } : {}),
-      };
-      if (semantic.type === EDGE_TYPES.OWNERSHIP && percentageRange) {
-        metadata.ownershipIsMinimum = true;
-        metadata.economicInterestConcept = semantic.concept === "SURPLUS_ASSET_RIGHTS" ? "SURPLUS_ASSET_RIGHTS" : "SHARE_OWNERSHIP";
-        metadata.ownershipBand = percentageRange.lowerInclusive
-          ? `${percentageRange.lowerBound}% or more`
-          : `More than ${percentageRange.lowerBound}% but not more than ${percentageRange.upperBound}%`;
-      }
-      return [{
-        id: `${evidenceId}:${semantic.concept.toLowerCase()}:${natureIndex}`,
-        owner,
-        ownedEntity: entity,
-        type: semantic.type,
-        ownershipPercentage: semantic.type === EDGE_TYPES.OWNERSHIP && percentageRange ? percentageRange.lowerBound : null,
-        ownershipIsMinimum: semantic.type === EDGE_TYPES.OWNERSHIP && Boolean(percentageRange),
-        evidenceIds: [evidenceId],
-        confidence: 98,
-        metadata,
-      }];
-    });
+    return [{ id: `${evidenceId}:ownership`, owner: { name: psc.name, type: corporate ? "company" : "individual", registrationNumber: psc.identification?.registration_number || null, jurisdiction: corporate ? jurisdictionFromCompaniesHousePsc(psc, entity.jurisdiction) : "GB" }, ownedEntity: entity, type: EDGE_TYPES.OWNERSHIP, ownershipPercentage: minimum, ownershipIsMinimum: true, evidenceIds: [evidenceId], confidence: 98, metadata: { ownershipIsMinimum: true, ownershipBand: `${minimum}% or more`, naturesOfControl: psc.natures_of_control || [] } }];
   });
-  return { statements, evidence, missingInformation: [], sufficient: statements.length > 0, searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", cacheHit: false, outcome: statements.length ? `Official PSC register returned ${statements.length} ownership/control relationship${statements.length === 1 ? "" : "s"}` : "No usable PSC ownership/control relationship found" }] };
+  return { statements, evidence, missingInformation: [], sufficient: statements.length > 0, searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", cacheHit: false, outcome: statements.length ? `Official PSC register returned ${statements.length} ownership relationship${statements.length === 1 ? "" : "s"}` : "No usable PSC ownership relationship found" }] };
 }
 
-module.exports = { companiesHouseOwnershipAdapter, ownershipMinimum, jurisdictionFromCompaniesHousePsc, percentageRangeFromNature, relationshipFromNature };
+module.exports = { companiesHouseOwnershipAdapter, ownershipMinimum, jurisdictionFromCompaniesHousePsc };

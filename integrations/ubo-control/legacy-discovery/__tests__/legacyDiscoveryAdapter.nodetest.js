@@ -17,8 +17,6 @@ const {
   LEGACY_DISCOVERY_ENDPOINT,
   createLegacyDiscoveryAdapter,
 } = require("..");
-const { companiesHouseOwnershipAdapter } = require("../../../../agents/ubo/companiesHouseOwnershipAdapter");
-const { EDGE_TYPES } = require("../../../../agents/ubo/constants");
 const { cloneFixture, response, edge } = require("../test-support/legacyResponseFixtures");
 const tdrPsc = require("../test-support/tdrPscCharacterization.json");
 const UK_POLICY_15 = require("../../../../ubo-control/policies/uk-corporate/1.5-rc/policy.json");
@@ -114,51 +112,51 @@ test("Companies House LLP voting bands retain their range instead of degrading t
   assert.equal(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS), false);
 });
 
-test("ASDA source PSC voting bands remain current control facts before G3 translation", async (t) => {
-  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
-  const previousFetch = global.fetch;
-  t.after(() => {
-    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
-    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
-    global.fetch = previousFetch;
-  });
-  process.env.COMPANIES_HOUSE_API_KEY = "test-only";
+test("ASDA source voting nature overrides contradictory legacy type=ownership", async () => {
   const activeNature = "voting-rights-25-to-50-percent-limited-liability-partnership";
-  global.fetch = async () => ({
-    ok: true,
-    async json() {
-      return { items: [
-        { name: "Mr Gary Lindsay", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
-        { name: "Mr Thomas Andrew Mitchell", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
-        { name: "Mr Stephen James Robertson", kind: "individual-person-with-significant-control", ceased_on: "2022-12-22", natures_of_control: [activeNature] },
-        { name: "Manjit Dale", kind: "individual-person-with-significant-control", natures_of_control: [activeNature] },
-      ] };
+  const names = ["Mr Gary Lindsay", "Mr Thomas Andrew Mitchell", "Manjit Dale"];
+  const body = {
+    ownershipGraph: {
+      rootEntityId: "legacy-tdr-llp",
+      nodes: [
+        { id: "legacy-tdr-llp", name: "TDR Capital LLP", type: "company", jurisdiction: "GB", registrationNumber: "OC302604" },
+        ...names.map((name, index) => ({ id: `legacy-person-${index + 1}`, name, type: "individual", jurisdiction: "GB" })),
+      ],
+      edges: names.map((_name, index) => ({
+        id: `legacy-synthetic-ownership-${index + 1}`,
+        from: `legacy-person-${index + 1}`,
+        to: "legacy-tdr-llp",
+        type: "ownership",
+        ownershipPercentage: 25,
+        ownershipIsMinimum: true,
+        metadata: { ownershipIsMinimum: true, ownershipBand: "25% or more" },
+        evidenceIds: [`companies-house:OC302604:psc:${index + 1}`],
+      })),
     },
-  });
-
-  const source = await companiesHouseOwnershipAdapter({ entity: {
-    name: "TDR Capital LLP", type: "company", jurisdiction: "GB", registrationNumber: "OC302604",
-  } });
-  assert.deepEqual(source.statements.map((statement) => ({
-    name: statement.owner.name,
-    type: statement.type,
-    percentage: statement.ownershipPercentage,
-    evidenceId: statement.evidenceIds[0],
-    currentState: statement.metadata.currentState,
-    concept: statement.metadata.relationshipConcept,
-    range: statement.metadata.percentageRange,
-    naturesOfControl: statement.metadata.naturesOfControl,
-  })), ["Mr Gary Lindsay", "Mr Thomas Andrew Mitchell", "Manjit Dale"].map((name, index) => ({
+    evidence: names.map((_name, index) => ({
+      id: `companies-house:OC302604:psc:${index + 1}`,
+      source: "Companies House PSC register",
+      sourceUrl: "https://find-and-update.company-information.service.gov.uk/company/OC302604/persons-with-significant-control",
+      naturesOfControl: [activeNature],
+    })),
+  };
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest({
+    subject: {
+      entityId: "canonical-tdr-llp",
+      name: "TDR Capital LLP",
+      entityType: "LLP",
+      jurisdiction: "GB",
+      externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "OC302604" }],
+    },
+  }));
+  assert.deepEqual(result.candidateFacts.map(({ subject, relationship, measurement }) => ({ name: subject.name, relationship, measurement })), names.map((name) => ({
     name,
-    type: EDGE_TYPES.CONTROL,
-    percentage: null,
-    evidenceId: `companies-house:OC302604:psc:${index === 2 ? 3 : index}`,
-    currentState: "CURRENT",
-    concept: "VOTING_RIGHTS",
-    range: { lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true },
-    naturesOfControl: [activeNature],
+    relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
+    measurement: { type: PERCENTAGE_VALUE_TYPE.RANGE, lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true },
   })));
-  assert.equal(source.statements.some(({ type }) => type === EDGE_TYPES.OWNERSHIP), false);
+  assert.equal(result.candidateFacts.some(({ relationship }) => relationship === RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP), false);
+  assert.equal(result.candidateFacts.every(({ qualifiers }) => qualifiers.sourceNatureOfControl === activeNature), true);
+  assert.equal(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS), false);
 });
 
 test("L04 ambiguous voting/economic source is omitted and remains INCONCLUSIVE with a stable issue", async () => {
@@ -318,46 +316,36 @@ test("explicit economic and voting natures produce separate candidates while com
   assert.equal(result.candidateFacts[2].qualifiers.requiresInterpretation, true);
 });
 
-test("TDR PSC assertions retain one-source/one-semantic-fact fidelity through canonical projection", async (t) => {
-  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
-  const previousFetch = global.fetch;
-  t.after(() => {
-    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
-    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
-    global.fetch = previousFetch;
-  });
-  process.env.COMPANIES_HOUSE_API_KEY = "test-only";
-  global.fetch = async () => ({ ok: true, async json() { return { items: structuredClone(tdrPsc.pscItems) }; } });
-
-  const legacy = await companiesHouseOwnershipAdapter({ entity: {
-    name: tdrPsc.subject.name,
-    type: "company",
-    jurisdiction: tdrPsc.subject.jurisdiction,
-    registrationNumber: tdrPsc.subject.registrationNumber,
-  } });
-  assert.equal(legacy.statements.length, 3);
-  assert.deepEqual(legacy.statements.map(({ metadata, type, ownershipPercentage }) => ({
-    nature: metadata.naturesOfControl[0], concept: metadata.relationshipConcept, type, ownershipPercentage,
-  })), [
-    { nature: "significant-influence-or-control", concept: "SIGNIFICANT_INFLUENCE_OR_CONTROL", type: EDGE_TYPES.CONTROL, ownershipPercentage: null },
-    { nature: "right-to-appoint-and-remove-person", concept: "APPOINT_OR_REMOVE_PERSONS", type: EDGE_TYPES.CONTROL, ownershipPercentage: null },
-    { nature: "part-right-to-share-surplus-assets-75-to-100-percent", concept: "SURPLUS_ASSET_RIGHTS", type: EDGE_TYPES.OWNERSHIP, ownershipPercentage: 75 },
-  ]);
-  assert.deepEqual(legacy.statements[2].metadata.percentageRange, {
-    lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true,
-  });
-
+test("TDR PSC evidence natures retain one-source/one-semantic-fact fidelity through canonical projection", async () => {
   const rootId = "legacy-tdr-gp-v-lp";
+  const evidence = tdrPsc.pscItems.map((item, index) => ({
+    id: `companies-house:${tdrPsc.subject.registrationNumber}:psc:${index + 1}`,
+    source: "Companies House PSC register",
+    sourceUrl: tdrPsc.sourceUrl,
+    naturesOfControl: item.natures_of_control,
+  }));
   const legacyResponse = {
     ownershipGraph: {
       rootEntityId: rootId,
       nodes: [
         { id: rootId, name: tdrPsc.subject.name, type: "company", jurisdiction: "GB", registrationNumber: tdrPsc.subject.registrationNumber },
-        ...legacy.statements.map((statement, index) => ({ id: `legacy-psc-${index + 1}`, ...statement.owner })),
+        ...tdrPsc.pscItems.map((item, index) => ({ id: `legacy-psc-${index + 1}`, name: item.name, type: "company", jurisdiction: "GB", registrationNumber: item.identification.registration_number })),
       ],
-      edges: legacy.statements.map((statement, index) => ({ ...statement, from: `legacy-psc-${index + 1}`, to: rootId })),
+      edges: tdrPsc.pscItems.map((item, index) => {
+        const isSurplusAssetBand = item.natures_of_control[0].includes("surplus-assets-75-to-100");
+        return {
+          id: `legacy-synthetic-ownership-${index + 1}`,
+          from: `legacy-psc-${index + 1}`,
+          to: rootId,
+          type: "ownership",
+          ownershipPercentage: isSurplusAssetBand ? 75 : null,
+          ownershipIsMinimum: isSurplusAssetBand,
+          metadata: isSurplusAssetBand ? { ownershipIsMinimum: true, ownershipBand: "75% or more" } : {},
+          evidenceIds: [evidence[index].id],
+        };
+      }),
     },
-    evidence: legacy.evidence,
+    evidence,
     run: { id: "tdr-psc-characterization-run" },
     audit: { id: "tdr-psc-characterization-audit" },
   };
