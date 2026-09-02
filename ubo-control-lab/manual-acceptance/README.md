@@ -54,7 +54,24 @@ The sanitized `asda-regression.json` fixture reproduces the provider-result shap
 
 The useful presentation principles carried forward from the previous Discovery Lab are the obvious upstream-to-customer story, vertically legible intermediate holdings, direct percentage labels, horizontal sibling branches, and an obvious customer anchor. The legacy graph model, identity logic, UBO determination, percentage calculation and thresholds were not reused.
 
-The initial view deliberately uses a readable 100% layout inside a local scroll/zoom canvas instead of shrinking the complete hierarchy into a microscopic strip. The `Fit` control restores that readable subject-anchored view. Investigation-only entities are excluded from the ownership map but remain in case state; the counters above the map are therefore labelled `Map entities` and `Map relationships`.
+The initial view deliberately uses a readable-width layout inside a local scroll/zoom canvas instead of shrinking the complete hierarchy into a microscopic strip. `Fit width` restores that readable subject-anchored view; `Overview` exposes the whole graph when required. Investigation-only entities are excluded from the ownership map but remain in case state; the counters above the map are therefore labelled `Map entities` and `Map relationships`.
+
+## Graph viewport and selection usability remediation
+
+Date: 2026-09-02
+
+The evidence below was captured from deployed PR #45 commit `39f1aa7` using a fresh Live Discovery result for ASDA Delivery Limited. The run used the same 12-node, 25-relationship public projection and did not alter policy, calculation, or graph semantics.
+
+Preview: `https://kyc-agent-zayzo-40fkpnrhr-archukmurthy-3271s-projects.vercel.app/ubo-control-lab/`
+
+| Required acceptance view | Browser evidence | Result |
+|---|---|---|
+| Initial Fit width | `asda-usability-fit-width.png` | The Lab gives the explainer approximately two-thirds of the desktop journey workspace and opens the long graph at a readable 65%, with vertical inspection retained. |
+| ASDA Group selected | `asda-usability-group-selected.png` | All three direct incoming Bellis relationships, all three direct outgoing ASDA Stores relationships, and the complete downstream route to ASDA Delivery are highlighted and listed. |
+| ASDA Stores selected | `asda-usability-stores-selected.png` | All three incoming ASDA Group relationships and all three outgoing relationships to ASDA Delivery remain distinct and highlighted. |
+| ASDA Delivery selected | `asda-usability-customer-selected.png` | The panel says `Customer under review — showing relationships that reach this entity` and all 25 subject-reaching relationships are highlighted. |
+| Individual relationship selected | `asda-usability-relationship-selected.png` | One economic relationship is brought to the front and isolated; its endpoints, RANGE value, currentness, source assertion, dimension and support are shown. |
+| Overview | `asda-usability-overview.png` | Explicit Overview mode exposes the complete graph at 29% without replacing the default readable Fit-width inspection mode. |
 
 ## Deployed preview verification
 
