@@ -59,10 +59,31 @@ function customerOwnershipAction(session) {
 
 test("Lab shell exposes all deterministic fixtures and validates company context", () => {
   const catalogue = fixtureCatalogue();
-  assert.equal(catalogue.fixtures.length, 18);
-  assert.deepEqual(catalogue.fixtures.map(({ id }) => id), Array.from({ length: 18 }, (_value, index) => `LAB${String(index + 1).padStart(2, "0")}`));
+  assert.equal(catalogue.fixtures.length, 19);
+  assert.deepEqual(catalogue.fixtures.map(({ id }) => id), Array.from({ length: 19 }, (_value, index) => `LAB${String(index + 1).padStart(2, "0")}`));
   assert.doesNotThrow(() => validateCompanyContext({ legalEntityName: "Example Ltd", registrationNumber: "01234567", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" }));
   assert.throws(() => validateCompanyContext({ legalEntityName: "Example Ltd", registrationNumber: "", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" }), /Registration/);
+});
+
+test("LAB19 preserves each TDR PSC source assertion as one supported projected relationship", () => {
+  const session = startFixture({ fixtureId: "LAB19" });
+  const graph = session.snapshots[0].view.graph;
+  assert.equal(graph.nodes.length, 4);
+  assert.equal(new Set(graph.nodes.map(({ entityId }) => entityId)).size, 4);
+  assert.deepEqual(graph.relationships.map(({ relationshipType }) => relationshipType).sort(), [
+    "ECONOMIC_OWNERSHIP",
+    "FORMAL_CONTROL_RIGHT",
+    "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+  ]);
+  assert.equal(graph.relationships.some(({ relationshipType }) => relationshipType === "VOTING_RIGHTS"), false);
+  assert.equal(graph.relationships.some(({ relationshipType }) => relationshipType === "BOARD_APPOINTMENT_RIGHT"), false);
+  assert.equal(graph.relationships.some(({ relationshipType }) => relationshipType === "BOARD_REMOVAL_RIGHT"), false);
+  const surplus = graph.relationships.find(({ qualifiers }) => qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS");
+  assert.deepEqual(surplus.measurement, { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true });
+  const combined = graph.relationships.find(({ relationshipType }) => relationshipType === "FORMAL_CONTROL_RIGHT");
+  assert.equal(combined.qualifiers.sourceStatementMode, "COMBINED_ALTERNATIVE");
+  assert.equal(combined.qualifiers.requiresInterpretation, true);
+  assert.equal(graph.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferenceCount === 1), true);
 });
 
 test("fixture mode produces real snapshots, public projections, planner data and R01–R14", () => {
@@ -201,7 +222,7 @@ test("sanitized ASDA regression reuses exact registry identities and produces on
     candidateFacts: session.discovery.candidateFactCount,
     candidateParties: session.decisionTargets.candidateParties.length,
     candidateClaims: session.decisionTargets.candidateClaims.length,
-  }, { legacyNodes: 12, legacyEdges: 11, candidateFacts: 32, candidateParties: 60, candidateClaims: 32 });
+  }, { legacyNodes: 12, legacyEdges: 11, candidateFacts: 25, candidateParties: 47, candidateClaims: 25 });
 
   const reviewed = reviewAll(session);
   const view = reviewed.snapshots.at(-1).view;
@@ -214,10 +235,10 @@ test("sanitized ASDA regression reuses exact registry identities and produces on
   }));
   assert.equal([...identifiers.values()].every((entityIds) => entityIds.size === 1), true);
   assert.equal(reasoning.canonicalEntities.length, 12);
-  assert.equal(reasoning.identityResolutionDecisions.length, 64);
-  assert.equal(reasoning.operativeClaims.length, 32);
+  assert.equal(reasoning.identityResolutionDecisions.length, 50);
+  assert.equal(reasoning.operativeClaims.length, 25);
   assert.equal(reasoning.graph.nodes.length, 12);
-  assert.equal(reasoning.graph.relationships.length, 32);
+  assert.equal(reasoning.graph.relationships.length, 25);
   assert.equal(view.graph.nodes.length, 12);
   assert.equal(new Set(view.graph.nodes.map(({ entityId }) => entityId)).size, 12);
   assert.equal(view.graph.summary.investigationEntities, 12);

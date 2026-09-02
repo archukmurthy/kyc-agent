@@ -22,10 +22,11 @@ function graphProjection(entityIds, relationshipDefinitions) {
     sourceEntityId: definition.source,
     targetEntityId: definition.target,
     relationshipType: definition.type || "ECONOMIC_OWNERSHIP",
-    dimension: definition.type === "VOTING_RIGHTS" ? "VOTING" : "ECONOMIC",
+    dimension: definition.type === "VOTING_RIGHTS" ? "VOTING" : definition.type === undefined || definition.type === "ECONOMIC_OWNERSHIP" ? "ECONOMIC" : "CONTROL",
     temporalState: "CURRENT",
-    measurement: definition.measurement || { type: "EXACT", value: 50 },
-    support: { claimCount: 1, claimIds: [`claim-${index}`], evidenceReferenceCount: 0, evidenceReferences: [] },
+    ...(definition.omitMeasurement ? {} : { measurement: definition.measurement || { type: "EXACT", value: 50 } }),
+    qualifiers: definition.qualifiers || {},
+    support: definition.support || { claimCount: 1, claimIds: [`claim-${index}`], evidenceReferenceCount: 0, evidenceReferences: [] },
     indicators: [],
   }));
   base.calculations = [];
@@ -161,6 +162,48 @@ test("parallel economic and voting edges reuse nodes while remaining separately 
     assert.equal(rendered.container.querySelectorAll(".ug-edge").length, 2);
     assert.equal(rendered.container.querySelectorAll(".ug-edge-label")[0].textContent.includes("%"), true);
     assert.notEqual(rendered.container.querySelector(".ug-edge.type-economic-ownership path").getAttribute("d"), rendered.container.querySelector(".ug-edge.type-voting-rights path").getAttribute("d"));
+  } finally { rendered.cleanup(); }
+});
+
+test("dense genuine rights use separate lanes, semantic labels, front-most selection and complete details", () => {
+  const evidence = { system: "companies-house", referenceType: "PSC_REGISTER", referenceId: "sanitized-psc-source" };
+  const supplied = graphProjection(["customer", "owner-a"], [
+    {
+      id: "surplus", source: "owner-a", target: "customer", type: "ECONOMIC_OWNERSHIP",
+      measurement: { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true },
+      qualifiers: { economicInterestConcept: "SURPLUS_ASSET_RIGHTS", sourceNatureOfControl: "part-right-to-share-surplus-assets-75-to-100-percent" },
+      support: { claimCount: 1, claimIds: ["claim-surplus"], evidenceReferenceCount: 1, evidenceReferences: [evidence] },
+    },
+    {
+      id: "appoint-or-remove", source: "owner-a", target: "customer", type: "FORMAL_CONTROL_RIGHT", omitMeasurement: true,
+      qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-person", requiresInterpretation: true },
+      support: { claimCount: 1, claimIds: ["claim-control"], evidenceReferenceCount: 1, evidenceReferences: [evidence] },
+    },
+    {
+      id: "significant-control", source: "owner-a", target: "customer", type: "SIGNIFICANT_INFLUENCE_OR_CONTROL", omitMeasurement: true,
+      qualifiers: { sourceNatureOfControl: "significant-influence-or-control" },
+      support: { claimCount: 1, claimIds: ["claim-significant"], evidenceReferenceCount: 1, evidenceReferences: [evidence] },
+    },
+  ]);
+  const rendered = renderGraph(supplied, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    assert.equal(rendered.container.querySelectorAll(".ug-node").length, 2, "parallel rights must not duplicate nodes");
+    const edges = [...rendered.container.querySelectorAll(".ug-edge")];
+    assert.equal(edges.length, 3);
+    assert.equal(new Set(edges.map((edge) => edge.querySelector("path").getAttribute("d"))).size, 3, "each right requires a visible lane");
+    assert.equal(new Set(edges.map((edge) => edge.querySelector(".ug-edge-label-bg").getAttribute("x"))).size, 3, "each label requires an independent lane");
+    assert.equal(new Set(edges.map((edge) => edge.getAttribute("data-relationship-id"))).size, 3, "each label remains independently addressable");
+    assert.match(rendered.container.textContent, /Surplus asset rights ≥75%/);
+    rendered.click(rendered.container.querySelector("[data-relationship-id='appoint-or-remove']"));
+    const orderedAfterSelection = [...rendered.container.querySelectorAll(".ug-edge")];
+    assert.equal(orderedAfterSelection.at(-1).getAttribute("data-relationship-id"), "appoint-or-remove", "selected relationship renders visually last/front-most");
+    const details = rendered.container.querySelector(".ug-detail-panel").textContent;
+    assert.match(details, /From entityowner-a/);
+    assert.match(details, /To entitycustomer/);
+    assert.match(details, /Relationship basisCombined appoint-or-remove right/);
+    assert.match(details, /Source assertionright-to-appoint-and-remove-person/);
+    assert.match(details, /No separate appointment or removal right is inferred/);
+    assert.match(details, /companies-housePSC_REGISTER · sanitized-psc-source/);
   } finally { rendered.cleanup(); }
 });
 

@@ -22,7 +22,7 @@ test("Lab API exposes the fixture catalogue without cacheable state", async () =
   const result = await invoke("GET");
   assert.equal(result.statusCode, 200);
   assert.equal(result.headers["cache-control"], "no-store");
-  assert.equal(result.payload.fixtures.length, 18);
+  assert.equal(result.payload.fixtures.length, 19);
 });
 
 test("Lab API starts a deterministic fixture through the real engine", async () => {

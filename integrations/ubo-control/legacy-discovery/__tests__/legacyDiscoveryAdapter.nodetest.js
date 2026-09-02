@@ -5,8 +5,11 @@ const test = require("node:test");
 const {
   CAPABILITY_CONTRACT_VERSION,
   CAPABILITY_OUTCOME_STATE,
+  DECISION_APPLICATION_CONTRACT_VERSION_V2,
   PERCENTAGE_VALUE_TYPE,
   RELATIONSHIP_TYPE,
+  createUboDecisionApplication,
+  projectOwnershipGraph,
   validateCapabilityResult,
 } = require("../../../../ubo-control");
 const {
@@ -17,6 +20,8 @@ const {
 const { companiesHouseOwnershipAdapter } = require("../../../../agents/ubo/companiesHouseOwnershipAdapter");
 const { EDGE_TYPES } = require("../../../../agents/ubo/constants");
 const { cloneFixture, response, edge } = require("../test-support/legacyResponseFixtures");
+const tdrPsc = require("../test-support/tdrPscCharacterization.json");
+const UK_POLICY_15 = require("../../../../ubo-control/policies/uk-corporate/1.5-rc/policy.json");
 
 function discoveryRequest(overrides = {}) {
   return {
@@ -288,7 +293,7 @@ test("lower-bound scalar without reconstructable range becomes UNKNOWN with prec
   assert.ok(result.issues.some(({ code }) => code === ADAPTER_ISSUE_CODE.PERCENTAGE_PRECISION_LOSS));
 });
 
-test("explicit economic and voting natures produce separate candidates while explicit control stays non-percentage", async () => {
+test("explicit economic and voting natures produce separate candidates while combined appointment/removal stays one non-percentage fact", async () => {
   const body = response({ edges: [
     edge("dual", "legacy-owner-node", "legacy-root-node", {
       ownershipPercentage: 25,
@@ -306,11 +311,159 @@ test("explicit economic and voting natures produce separate candidates while exp
   assert.deepEqual(result.candidateFacts.map(({ relationship }) => relationship), [
     RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
     RELATIONSHIP_TYPE.VOTING_RIGHTS,
-    RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT,
-    RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT,
+    RELATIONSHIP_TYPE.FORMAL_CONTROL_RIGHT,
   ]);
   assert.equal(Object.hasOwn(result.candidateFacts[2], "measurement"), false);
-  assert.equal(Object.hasOwn(result.candidateFacts[3], "measurement"), false);
+  assert.equal(result.candidateFacts[2].qualifiers.sourceStatementMode, "COMBINED_ALTERNATIVE");
+  assert.equal(result.candidateFacts[2].qualifiers.requiresInterpretation, true);
+});
+
+test("TDR PSC assertions retain one-source/one-semantic-fact fidelity through canonical projection", async (t) => {
+  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
+  const previousFetch = global.fetch;
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
+    global.fetch = previousFetch;
+  });
+  process.env.COMPANIES_HOUSE_API_KEY = "test-only";
+  global.fetch = async () => ({ ok: true, async json() { return { items: structuredClone(tdrPsc.pscItems) }; } });
+
+  const legacy = await companiesHouseOwnershipAdapter({ entity: {
+    name: tdrPsc.subject.name,
+    type: "company",
+    jurisdiction: tdrPsc.subject.jurisdiction,
+    registrationNumber: tdrPsc.subject.registrationNumber,
+  } });
+  assert.equal(legacy.statements.length, 3);
+  assert.deepEqual(legacy.statements.map(({ metadata, type, ownershipPercentage }) => ({
+    nature: metadata.naturesOfControl[0], concept: metadata.relationshipConcept, type, ownershipPercentage,
+  })), [
+    { nature: "significant-influence-or-control", concept: "SIGNIFICANT_INFLUENCE_OR_CONTROL", type: EDGE_TYPES.CONTROL, ownershipPercentage: null },
+    { nature: "right-to-appoint-and-remove-person", concept: "APPOINT_OR_REMOVE_PERSONS", type: EDGE_TYPES.CONTROL, ownershipPercentage: null },
+    { nature: "part-right-to-share-surplus-assets-75-to-100-percent", concept: "SURPLUS_ASSET_RIGHTS", type: EDGE_TYPES.OWNERSHIP, ownershipPercentage: 75 },
+  ]);
+  assert.deepEqual(legacy.statements[2].metadata.percentageRange, {
+    lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true,
+  });
+
+  const rootId = "legacy-tdr-gp-v-lp";
+  const legacyResponse = {
+    ownershipGraph: {
+      rootEntityId: rootId,
+      nodes: [
+        { id: rootId, name: tdrPsc.subject.name, type: "company", jurisdiction: "GB", registrationNumber: tdrPsc.subject.registrationNumber },
+        ...legacy.statements.map((statement, index) => ({ id: `legacy-psc-${index + 1}`, ...statement.owner })),
+      ],
+      edges: legacy.statements.map((statement, index) => ({ ...statement, from: `legacy-psc-${index + 1}`, to: rootId })),
+    },
+    evidence: legacy.evidence,
+    run: { id: "tdr-psc-characterization-run" },
+    audit: { id: "tdr-psc-characterization-audit" },
+  };
+  const request = discoveryRequest({
+    requestId: "tdr-psc-characterization-request",
+    caseId: "tdr-psc-characterization-case",
+    subject: {
+      entityId: "entity-tdr-gp-v-lp",
+      name: tdrPsc.subject.name,
+      entityType: "LLP",
+      jurisdiction: "GB",
+      externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: tdrPsc.subject.registrationNumber }],
+    },
+  });
+  const capability = await createLegacyDiscoveryAdapter({ transport: transportReturning(legacyResponse) }).discover(request);
+  assert.deepEqual(capability.candidateFacts.map(({ relationship }) => relationship), [
+    RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL,
+    RELATIONSHIP_TYPE.FORMAL_CONTROL_RIGHT,
+    RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+  ]);
+  assert.equal(capability.candidateFacts.some(({ relationship }) => relationship === RELATIONSHIP_TYPE.VOTING_RIGHTS), false);
+  assert.equal(capability.candidateFacts.some(({ relationship }) => relationship === RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT), false);
+  assert.equal(capability.candidateFacts.some(({ relationship }) => relationship === RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT), false);
+  assert.equal(Object.hasOwn(capability.candidateFacts[0], "measurement"), false);
+  assert.equal(Object.hasOwn(capability.candidateFacts[1], "measurement"), false);
+  assert.deepEqual(capability.candidateFacts[2].measurement, {
+    type: PERCENTAGE_VALUE_TYPE.RANGE,
+    lowerBound: 75,
+    upperBound: 100,
+    lowerInclusive: true,
+    upperInclusive: true,
+  });
+  assert.equal(capability.candidateFacts[2].qualifiers.economicInterestConcept, "SURPLUS_ASSET_RIGHTS");
+
+  const application = createUboDecisionApplication({ policyPack: UK_POLICY_15, contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V2 });
+  const intake = application.intake({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V2,
+    caseInput: {
+      caseId: request.caseId,
+      subjectReference: request.subject,
+      externalReferences: [{ system: "tdr-psc-characterization", referenceId: request.caseId }],
+      createdAt: "2026-09-02T09:00:00.000Z",
+    },
+    capabilityResult: capability,
+    operationId: "tdr-psc-characterization-intake",
+    recordedAt: "2026-09-02T09:01:00.000Z",
+  });
+  const entityIds = new Map([[tdrPsc.subject.name, request.subject.entityId]]);
+  tdrPsc.pscItems.forEach((item, index) => entityIds.set(item.name, `entity-tdr-psc-${index + 1}`));
+  const registrations = [...entityIds].map(([name, entityId]) => ({
+    entityId,
+    category: "LEGAL_ENTITY",
+    primaryName: name,
+    aliases: [],
+    externalIdentifiers: [],
+    jurisdiction: "GB",
+    entityTypeMetadata: {},
+    recordedAt: "2026-09-02T09:02:00.000Z",
+  }));
+  const identities = intake.decisionTargets.candidateParties.map((target, index) => ({
+    decisionId: `tdr-identity-${index + 1}`,
+    candidatePartyKey: target.candidatePartyKey,
+    status: "RESOLVED",
+    entityId: entityIds.get(target.party.name),
+    basisReasonCodes: ["EXPLICIT_CHARACTERIZATION_REVIEW"],
+    evidenceReferences: [],
+    decidedAt: "2026-09-02T09:02:00.000Z",
+    decisionOrigin: "TDR_PSC_CHARACTERIZATION",
+    decisionActor: "TEST_REVIEWER",
+  }));
+  const adjudications = intake.decisionTargets.candidateClaims.map((target, index) => ({
+    decisionId: `tdr-claim-${index + 1}`,
+    claimId: target.claimId,
+    previousState: target.currentState,
+    resultingState: "OPERATIVE",
+    reasonBasisCode: "EXPLICIT_CHARACTERIZATION_REVIEW",
+    supportingEvidenceReferences: [],
+    decisionOrigin: "TDR_PSC_CHARACTERIZATION",
+    decisionActor: "TEST_REVIEWER",
+    decidedAt: "2026-09-02T09:02:00.000Z",
+    supersededByClaimIds: [],
+    adversarialClaimIds: [],
+  }));
+  const reviewed = application.applyDecisions({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V2,
+    caseState: intake.caseState,
+    entityRegistrations: registrations,
+    identityDecisions: identities,
+    claimAdjudications: adjudications,
+  });
+  const evaluation = application.evaluate({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V2,
+    caseState: reviewed.caseState,
+    caseContext: { entityType: "limited_liability_partnership", subjectEntityId: request.subject.entityId, jurisdiction: "GB", riskLevel: "LOW" },
+    evaluationTime: "2026-09-02T09:03:00.000Z",
+    checkpoint: "CASE_OPEN",
+    checkpointReference: { referenceId: "tdr-psc-characterization-evaluation" },
+    resolutionInputs: {},
+  });
+  const claims = evaluation.decisionSnapshot.decisionContent.reasoning.operativeClaims;
+  assert.deepEqual(claims.map(({ relationship }) => relationship).sort(), capability.candidateFacts.map(({ relationship }) => relationship).sort());
+  const projection = projectOwnershipGraph({ decisionSnapshot: evaluation.decisionSnapshot });
+  assert.equal(projection.nodes.length, 4, "one canonical entity node per PSC and subject");
+  assert.equal(new Set(projection.nodes.map(({ entityId }) => entityId)).size, 4);
+  assert.deepEqual(projection.relationships.map(({ relationshipType }) => relationshipType).sort(), capability.candidateFacts.map(({ relationship }) => relationship).sort());
+  assert.equal(projection.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferenceCount === 1), true);
 });
 
 test("unknown legacy relationship type is quarantined with the stable unsupported-field issue", async () => {

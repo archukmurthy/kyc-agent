@@ -17,6 +17,8 @@
     ECONOMIC_OWNERSHIP: "Economic ownership",
     VOTING_RIGHTS: "Voting rights",
     BOARD_APPOINTMENT_RIGHT: "Board appointment control",
+    BOARD_REMOVAL_RIGHT: "Board removal control",
+    FORMAL_CONTROL_RIGHT: "Formal appointment/removal control",
     MANAGEMENT_APPOINTMENT_RIGHT: "Management appointment control",
     REMOVAL_RIGHT: "Removal control",
     SIGNIFICANT_INFLUENCE_OR_CONTROL: "Significant influence or control",
@@ -94,6 +96,27 @@
       return `${measurement.lowerInclusive ? "[" : "("}${measurement.lowerBound}%, ${measurement.upperBound}%${measurement.upperInclusive ? "]" : ")"}`;
     }
     return "Unknown";
+  }
+
+  function relationshipBasis(relationship) {
+    if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return "LLP surplus asset rights";
+    if (relationship.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE") return "Combined appoint-or-remove right";
+    return relationshipLabel(relationship.relationshipType);
+  }
+
+  function relationshipValue(relationship, detailed = false) {
+    const measurement = relationship.measurement;
+    if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
+      && measurement?.type === "RANGE" && measurement.lowerInclusive && measurement.upperBound === 100) {
+      return detailed ? `≥${measurement.lowerBound}% · ${formatMeasurement(measurement, true)}` : `≥${measurement.lowerBound}%`;
+    }
+    return formatMeasurement(measurement, detailed);
+  }
+
+  function relationshipEdgeLabel(relationship) {
+    if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return `Surplus asset rights ${relationshipValue(relationship)}`;
+    if (relationship.dimension === "VOTING") return `Vote · ${relationshipValue(relationship)}`;
+    return relationship.measurement ? relationshipValue(relationship) : short(relationshipBasis(relationship), 32);
   }
 
   function short(value, length) {
@@ -327,10 +350,24 @@
     const entities = new Map(projection.nodes.map((node) => [node.entityId, node]));
     const source = entities.get(relationship.sourceEntityId);
     const target = entities.get(relationship.targetEntityId);
+    const sourceNature = relationship.qualifiers?.sourceNatureOfControl;
+    const interpretation = relationship.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE"
+      ? "The source records one appoint-or-remove right. No separate appointment or removal right is inferred."
+      : relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
+        ? "LLP economic-interest fact; it is not share ownership or voting rights."
+        : relationship.qualifiers?.controlConcept || relationship.qualifiers?.economicInterestConcept || relationship.qualifiers?.votingConcept;
     return h(React.Fragment, null,
-      h("p", { className: "ug-eyebrow" }, relationshipLabel(relationship.relationshipType)), h("h3", null, `${source?.displayName || relationship.sourceEntityId} → ${target?.displayName || relationship.targetEntityId}`),
-      h("div", { className: "ug-direct-value" }, h("span", null, "Direct relationship value"), h("strong", null, formatMeasurement(relationship.measurement, true))),
-      h("dl", { className: "ug-definition-list" }, h("dt", null, "Dimension"), h("dd", null, relationship.dimension || "Non-percentage control"), h("dt", null, "Currentness"), h("dd", null, relationship.temporalState || "Unknown"), h("dt", null, "Supporting claims"), h("dd", null, String(relationship.support?.claimCount || 0))),
+      h("p", { className: "ug-eyebrow" }, relationshipBasis(relationship)), h("h3", null, `${source?.displayName || relationship.sourceEntityId} → ${target?.displayName || relationship.targetEntityId}`),
+      h("div", { className: "ug-direct-value" }, h("span", null, "Direct relationship value"), h("strong", null, relationshipValue(relationship, true))),
+      h("dl", { className: "ug-definition-list" },
+        h("dt", null, "From entity"), h("dd", null, source?.displayName || relationship.sourceEntityId),
+        h("dt", null, "To entity"), h("dd", null, target?.displayName || relationship.targetEntityId),
+        h("dt", null, "Relationship basis"), h("dd", null, relationshipBasis(relationship)),
+        h("dt", null, "Dimension"), h("dd", null, relationship.dimension || "Non-percentage control"),
+        h("dt", null, "Currentness"), h("dd", null, relationship.temporalState || "Unknown"),
+        sourceNature && h(React.Fragment, null, h("dt", null, "Source assertion"), h("dd", null, sourceNature)),
+        interpretation && h(React.Fragment, null, h("dt", null, "Control / policy interpretation"), h("dd", null, interpretation)),
+        h("dt", null, "Supporting claims"), h("dd", null, String(relationship.support?.claimCount || 0))),
       relationship.indicators?.length > 0 && h("div", { className: "ug-role-list" }, relationship.indicators.map((indicator) => h("span", { key: indicator, className: `ug-role-badge ${indicator.toLowerCase()}` }, humanize(indicator)))),
       detailLevel === DETAIL_LEVEL.EXPLAIN && h("section", { className: "ug-detail-section" }, h("h4", null, "Support references"),
         relationship.support?.evidenceReferences?.length
@@ -523,7 +560,11 @@
     const graphName = `Ownership and control graph for ${projection.subject.displayName}`;
     const snapshot = String(projection.decision.snapshotHash || projection.decision.snapshotId || "").replace("sha256:", "").slice(0, 10);
 
-    const edges = layout.relationships.map((relationship) => {
+    const renderRelationships = [...layout.relationships].sort((left, right) => {
+      const activeOrder = Number(activeIds.has(left.relationshipId)) - Number(activeIds.has(right.relationshipId));
+      return activeOrder || left.relationshipId.localeCompare(right.relationshipId);
+    });
+    const edges = renderRelationships.map((relationship) => {
       const source = layout.positions.get(relationship.sourceEntityId);
       const target = layout.positions.get(relationship.targetEntityId);
       if (!source || !target) return null;
@@ -534,15 +575,15 @@
       const y2 = target.y;
       const midY = y1 + ((y2 - y1) / 2);
       const labelX = ((x1 + x2) / 2) + (parallelOffset * 2);
-      const labelY = midY - (parallelOffset === 0 ? 0 : 34);
-      const edgeLabel = relationship.dimension === "VOTING" ? `Vote · ${formatMeasurement(relationship.measurement)}` : relationship.measurement ? formatMeasurement(relationship.measurement) : short(relationshipLabel(relationship.relationshipType), 22);
-      const labelWidth = Math.max(58, Math.min(136, 26 + (edgeLabel.length * 7)));
+      const labelY = midY;
+      const edgeLabel = relationshipEdgeLabel(relationship);
+      const labelWidth = Math.max(58, Math.min(220, 26 + (edgeLabel.length * 7)));
       const active = activeIds.has(relationship.relationshipId);
       const journeyLinked = journeyRelationshipIds.has(relationship.relationshipId)
         || journeyEntityIds.has(relationship.sourceEntityId) || journeyEntityIds.has(relationship.targetEntityId);
       const css = ["ug-edge", `type-${relationship.relationshipType.toLowerCase().replaceAll("_", "-")}`, active ? "active" : "", journeyLinked ? "journey-linked" : "", activeIds.size && !active ? "muted" : "", relationship.indicators?.includes("CONFLICT") ? "conflict" : "", relationship.indicators?.includes("REVIEW_REQUIRED") ? "review" : ""].filter(Boolean).join(" ");
       const activate = () => select({ kind: "relationship", id: relationship.relationshipId });
-      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-label": `${relationshipLabel(relationship.relationshipType)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${formatMeasurement(relationship.measurement)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
+      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "data-relationship-id": relationship.relationshipId, "aria-label": `${relationshipBasis(relationship)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${relationshipValue(relationship)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
         h("path", { d: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`, markerEnd: `url(#${markerId})` }),
         h("rect", { className: "ug-edge-label-bg", x: labelX - (labelWidth / 2), y: labelY - 14, width: labelWidth, height: 28, rx: 14 }),
         h("text", { className: "ug-edge-label", x: labelX, y: labelY + 4, textAnchor: "middle" }, edgeLabel));
@@ -583,5 +624,5 @@
       h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipLabel(relationship.relationshipType)}, ${formatMeasurement(relationship.measurement, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 
-  return Object.freeze({ CONTRACT_VERSION, DETAIL_LEVEL, OwnershipGraph, assertProjection, basisLabel, computeLayout, fitScale, formatMeasurement, parallelRelationshipOffset, pathExpression, relationshipLabel, roleLabel });
+  return Object.freeze({ CONTRACT_VERSION, DETAIL_LEVEL, OwnershipGraph, assertProjection, basisLabel, computeLayout, fitScale, formatMeasurement, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });
 }));

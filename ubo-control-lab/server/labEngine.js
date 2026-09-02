@@ -12,7 +12,13 @@ const {
 } = require("../../ubo-control");
 const { createLegacyDiscoveryAdapter } = require("../../integrations/ubo-control/legacy-discovery");
 const POLICY = require("../../ubo-control/policies/uk-corporate/1.5-rc/policy.json");
-const FIXTURE_SET = require("../fixtures/scenarios.json");
+const BASE_FIXTURE_SET = require("../fixtures/scenarios.json");
+const TDR_PSC_FIXTURE = require("../fixtures/tdr-psc.json");
+const FIXTURE_SET = Object.freeze({
+  ...BASE_FIXTURE_SET,
+  fixtureSetVersion: "ubo-control-lab-fixtures-v2",
+  fixtures: Object.freeze([...BASE_FIXTURE_SET.fixtures, TDR_PSC_FIXTURE]),
+});
 
 const LAB_CONTRACT_VERSION = "ubo-control-lab-session-v1";
 const DISCOVERY_REPLAY_CONTRACT_VERSION = "ubo-control-lab-discovery-replay-v1";

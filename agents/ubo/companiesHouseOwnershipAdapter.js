@@ -12,21 +12,24 @@ function ownershipMinimum(natures = []) {
 }
 
 function percentageRangeFromNature(nature) {
-  const match = String(nature).toLowerCase().match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
+  const normalized = String(nature).toLowerCase();
+  const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
+  const lowerBound = Number(match[1]);
   return {
-    lowerBound: Number(match[1]),
+    lowerBound,
     upperBound: Number(match[2]),
-    lowerInclusive: false,
+    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
     upperInclusive: true,
   };
 }
 
 function relationshipFromNature(nature) {
   const normalized = String(nature).toLowerCase();
+  if (normalized.includes("right-to-share-surplus-assets")) return { type: EDGE_TYPES.OWNERSHIP, concept: "SURPLUS_ASSET_RIGHTS" };
   if (normalized.includes("ownership-of-shares")) return { type: EDGE_TYPES.OWNERSHIP, concept: "ECONOMIC_OWNERSHIP" };
   if (normalized.includes("voting-rights")) return { type: EDGE_TYPES.CONTROL, concept: "VOTING_RIGHTS" };
-  if (normalized.includes("right-to-appoint-and-remove")) return { type: EDGE_TYPES.CONTROL, concept: "APPOINTMENT_REMOVAL_CONTROL" };
+  if (normalized.includes("right-to-appoint-and-remove")) return { type: EDGE_TYPES.CONTROL, concept: "APPOINT_OR_REMOVE_PERSONS" };
   if (normalized.includes("significant-influence-or-control")) return { type: EDGE_TYPES.CONTROL, concept: "SIGNIFICANT_INFLUENCE_OR_CONTROL" };
   return null;
 }
@@ -84,7 +87,10 @@ async function companiesHouseOwnershipAdapter({ entity }) {
       };
       if (semantic.type === EDGE_TYPES.OWNERSHIP && percentageRange) {
         metadata.ownershipIsMinimum = true;
-        metadata.ownershipBand = `More than ${percentageRange.lowerBound}% but not more than ${percentageRange.upperBound}%`;
+        metadata.economicInterestConcept = semantic.concept === "SURPLUS_ASSET_RIGHTS" ? "SURPLUS_ASSET_RIGHTS" : "SHARE_OWNERSHIP";
+        metadata.ownershipBand = percentageRange.lowerInclusive
+          ? `${percentageRange.lowerBound}% or more`
+          : `More than ${percentageRange.lowerBound}% but not more than ${percentageRange.upperBound}%`;
       }
       return [{
         id: `${evidenceId}:${semantic.concept.toLowerCase()}:${natureIndex}`,
