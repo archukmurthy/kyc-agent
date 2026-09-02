@@ -18,6 +18,16 @@ test("resolved data-rich case shows the structure and no unnecessary customer fo
   } finally { rendered.cleanup(); }
 });
 
+test("host composition may expose a taller graph and its reusable selection details", () => {
+  const rendered = render("CUI03", { graphHeight: 760, showGraphDetails: true, className: "lab-customer-journey" });
+  try {
+    assert.ok(rendered.container.querySelector(".uj-shell.with-graph-details.lab-customer-journey"));
+    assert.ok(rendered.container.querySelector(".uj-graph .ug-detail-panel"));
+    assert.match(rendered.container.querySelector(".ug-shell").getAttribute("style"), /--ug-viewport-height:\s*760px/);
+    assert.equal(rendered.container.querySelector(".ug-shell").getAttribute("data-view-mode"), "FIT_WIDTH");
+  } finally { rendered.cleanup(); }
+});
+
 test("confirmation preserves established information and does not request re-entry", () => {
   const rendered = render("CUI02");
   try {

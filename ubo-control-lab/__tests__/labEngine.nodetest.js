@@ -421,6 +421,7 @@ test("Customer, Compliance, History and Planner consume the same snapshot while 
 
 test("browser product exposes disabled Evidence, feedback export and Lab-only local Discovery replay", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "browser", "lab.js"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "browser", "lab.css"), "utf8");
   const html = fs.readFileSync(path.join(__dirname, "..", "browser", "index.html"), "utf8");
   const replayStore = fs.readFileSync(path.join(__dirname, "..", "browser", "replayStore.js"), "utf8");
   assert.match(source, /NOT YET AVAILABLE — EVIDENCE PLATFORM INTEGRATION IN PROGRESS/);
@@ -434,6 +435,11 @@ test("browser product exposes disabled Evidence, feedback export and Lab-only lo
   const customerPanelSource = source.slice(source.indexOf("function CustomerPanel"), source.indexOf("function Requirements"));
   assert.equal((customerPanelSource.match(/h\(UboJourney/g) || []).length, 1);
   assert.equal((customerPanelSource.match(/h\(OwnershipGraph/g) || []).length, 0, "Customer workspace must not render a duplicate graph below UboJourney");
+  assert.match(customerPanelSource, /className: "lab-customer-journey"/);
+  assert.match(customerPanelSource, /graphHeight: 760/);
+  assert.match(customerPanelSource, /showGraphDetails: true/);
+  assert.match(styles, /lab-customer-journey \.uj-layout\.with-graph\{grid-template-columns:minmax\(0,2\.1fr\) minmax\(320px,1fr\)\}/);
+  assert.match(styles, /@media\(max-width:1100px\).*lab-customer-journey \.uj-layout\.with-graph\{grid-template-columns:1fr\}/);
   assert.match(source + html + replayStore, /localStorage|discovery-replays\.v1/);
   assert.doesNotMatch(source + html + replayStore, /api\/research|type=["']file|indexedDB|entity_dossiers|journey_state/i);
 });

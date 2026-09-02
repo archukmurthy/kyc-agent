@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DETAIL_LEVEL, computeLayout, fitScale, formatMeasurement } = require("../OwnershipGraph");
+const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement } = require("../OwnershipGraph");
 const { fixtures, projection, renderGraph } = require("./testHarness");
 
 function graphProjection(entityIds, relationshipDefinitions) {
@@ -226,7 +226,7 @@ test("selecting an upstream entity highlights its complete route to the customer
   } finally { rendered.cleanup(); }
 });
 
-test("large graphs retain readable-size nodes in an overflow viewport instead of shrinking the whole map", () => {
+test("large graphs default to readable Fit width with overflow instead of microscopic Fit all", () => {
   const owners = Array.from({ length: 24 }, (_value, index) => `owner-${String(index + 1).padStart(2, "0")}`);
   const supplied = graphProjection(["customer", ...owners], owners.map((owner) => ({ source: owner, target: "customer" })));
   const layout = computeLayout(supplied);
@@ -240,11 +240,15 @@ test("large graphs retain readable-size nodes in an overflow viewport instead of
     assert.equal(svg.style.width, `${layout.width}px`);
     assert.equal(svg.getAttribute("viewBox"), `0 0 ${layout.width} ${layout.height}`);
     assert.equal(rendered.container.querySelector(".ug-node-name").getAttribute("font-size"), null);
-    assert.equal(rendered.container.querySelector("[aria-label='Reset and fit graph to view']").nextSibling.textContent, "100%");
+    assert.equal(rendered.container.querySelector(".ug-shell").getAttribute("data-view-mode"), "FIT_WIDTH");
+    assert.equal(rendered.container.querySelector("[aria-label='Fit graph width']").getAttribute("aria-pressed"), "true");
+    assert.equal(rendered.container.querySelector(".ug-toolbar span").textContent, "100%");
+    rendered.resize(920, 680);
+    assert.ok(Number.parseInt(rendered.container.querySelector(".ug-toolbar span").textContent, 10) >= 65);
   } finally { rendered.cleanup(); }
 });
 
-test("Fit derives readable bounded scales for ASDA-depth, long-chain and sibling layouts", () => {
+test("Fit width preserves readable sizing while Overview fits ASDA-depth, long-chain and sibling layouts", () => {
   const asdaLike = graphProjection(
     ["customer", "n1", "n2", "n3", "n4", "n5", "branch-a", "branch-b", "branch-c", "person-a", "person-b", "person-c"],
     [
@@ -264,12 +268,15 @@ test("Fit derives readable bounded scales for ASDA-depth, long-chain and sibling
     Array.from({ length: 10 }, (_value, index) => ({ source: `owner-${index}`, target: "customer" })));
   [asdaLike, longChain, siblings].forEach((value) => {
     const layout = computeLayout(value);
-    const scale = fitScale(layout, 920, 680);
-    assert.ok(scale >= 0.35 && scale <= 1);
-    assert.ok(layout.width * scale <= 920 || scale === 0.35);
-    assert.ok(layout.height * scale <= 680 || scale === 0.35);
+    const widthScale = fitWidthScale(layout, 920);
+    const overviewScale = fitScale(layout, 920, 680);
+    assert.ok(widthScale >= 0.65 && widthScale <= 1);
+    assert.ok(overviewScale >= 0.05 && overviewScale <= 1);
+    assert.ok(layout.width * overviewScale <= 920);
+    assert.ok(layout.height * overviewScale <= 680);
   });
-  assert.ok(fitScale(computeLayout(asdaLike), 920, 680) >= 0.45, "ASDA-sized graph must not be microscopic");
+  assert.ok(fitWidthScale(computeLayout(asdaLike), 920) >= 0.95, "ASDA Fit width must preserve readable node sizing");
+  assert.ok(fitScale(computeLayout(asdaLike), 920, 680) < fitWidthScale(computeLayout(asdaLike), 920), "Overview may reduce a long graph to expose its full height");
 });
 
 test("natural-person presence never creates a qualifying badge without a qualification", () => {

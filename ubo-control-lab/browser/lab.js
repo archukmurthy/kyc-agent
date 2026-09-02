@@ -130,7 +130,7 @@
       error && h("div", { className: "error", role: "alert" }, error),
       busy && h("div", { className: "notice", role: "status" }, "Applying the customer response through Decision Application v2…"),
       h(ResolutionExplanation, { view }),
-      h(UboJourney, { journey: view.journey, plan: view.plan, graph: view.graph, onAction }));
+      h(UboJourney, { journey: view.journey, plan: view.plan, graph: view.graph, onAction, className: "lab-customer-journey", graphHeight: 760, showGraphDetails: true }));
   }
 
   function Requirements({ requirements }) {
@@ -163,7 +163,7 @@
       h("div", { className: "section" }, h("h3", null, "R01–R14 requirement matrix"), h(Requirements, { requirements: view.requirements })),
       h("div", { className: "section grid-2" },
         [["InformationNeeds", compliance.informationNeeds], ["PolicyGaps", compliance.policyGaps], ["OperationalBlockers", compliance.operationalBlockers], ["Conflicts", compliance.conflicts], ["ReviewRequirements", compliance.reviewRequirements], ["Risk signals", compliance.riskSignals]].map(([title, items]) => h("details", { key: title }, h("summary", null, `${title} · ${items.length}`), h("pre", { className: "json" }, pretty(items))))),
-      h("div", { className: "section" }, h("h3", null, "Ownership and control explanation"), h(OwnershipGraph, { projection: view.graph, detailLevel: DETAIL_LEVEL.EXPLAIN })));
+      h("div", { className: "section" }, h("h3", null, "Ownership and control explanation"), h(OwnershipGraph, { projection: view.graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })));
   }
 
   function DecisionsPanel({ session, busy, apply }) {

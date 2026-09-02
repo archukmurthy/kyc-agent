@@ -323,7 +323,7 @@
     return h("section", { className: "uj-people", "aria-label": "Established qualifying people" }, h("p", { className: "uj-eyebrow" }, "Established people"), h("div", null, people.map((person) => h("article", { key: person.personEntityId }, h("strong", null, entityName(person.personEntityId, journey, graph)), h("span", null, (person.roles || []).map(humanize).join(" · ") || "Recorded qualifying person")))));
   }
 
-  function UboJourney({ journey: suppliedJourney, plan: suppliedPlan, graph: suppliedGraph, onAction, className = "" }) {
+  function UboJourney({ journey: suppliedJourney, plan: suppliedPlan, graph: suppliedGraph, onAction, className = "", graphHeight = 450, showGraphDetails = false }) {
     const { journey, plan, graph } = assertJourneyInputs(suppliedJourney, suppliedPlan, suppliedGraph);
     const bundles = plan.state === "CUSTOMER_RESOLUTION" ? plan.recommendedWave.customerBundles : [];
     const [selectedBundleId, setSelectedBundleId] = React.useState(bundles[0]?.bundleId || null);
@@ -344,11 +344,11 @@
       if (linked) setSelectedBundleId(linked.bundleId);
     };
 
-    return h("section", { className: `uj-shell ${className}`.trim(), "data-plan-state": plan.state },
+    return h("section", { className: `uj-shell ${showGraphDetails ? "with-graph-details" : ""} ${className}`.trim(), "data-plan-state": plan.state },
       h("header", { className: "uj-header" }, h("div", null, h("p", { className: "uj-kicker" }, "UBO CONTROL · CUSTOMER JOURNEY"), h("h2", { ref: headingRef, tabIndex: -1 }, "Your ownership information"), h("p", null, "We use information already established and ask only for what remains.")), h("span", { className: "uj-progress-label" }, bundles.length ? `${bundles.length} customer task${bundles.length === 1 ? "" : "s"}` : "No customer tasks")),
       h(QualifyingSummary, { journey, graph }),
       h("div", { className: `uj-layout ${graph ? "with-graph" : "without-graph"}` },
-        graph && h("div", { className: "uj-graph", "aria-label": "Ownership context" }, h(graphModule.OwnershipGraph, { projection: graph, detailLevel: graphModule.DETAIL_LEVEL.CUSTOMER, height: 450, onSelectionChange: graphSelection, highlightEntityIds, highlightRelationshipIds })),
+        graph && h("div", { className: "uj-graph", "aria-label": "Ownership context" }, h(graphModule.OwnershipGraph, { projection: graph, detailLevel: graphModule.DETAIL_LEVEL.CUSTOMER, height: graphHeight, onSelectionChange: graphSelection, highlightEntityIds, highlightRelationshipIds })),
         h("div", { className: "uj-tasks" }, bundles.length
           ? bundles.map((bundle) => h(BundleCard, { key: bundle.bundleId, bundle, journey, plan, graph, selected: bundle.bundleId === selectedBundle?.bundleId, onSelect: setSelectedBundleId, onAction }))
           : h(ResolutionState, { journey, plan }))),
