@@ -4,6 +4,6 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "test": "node --test __tests__/architecture.nodetest.js __tests__/contracts.nodetest.js __tests__/conditionLanguage.nodetest.js __tests__/policyPack.nodetest.js __tests__/policyReadiness.nodetest.js __tests__/ukPolicyPack.nodetest.js __tests__/ukPolicyPack14.nodetest.js __tests__/composition.nodetest.js __tests__/scriptedStubs.nodetest.js __tests__/scenarioCorpus.nodetest.js __tests__/ownershipCase.nodetest.js __tests__/ownershipGraph.nodetest.js __tests__/policyDetermination.nodetest.js __tests__/requirementResolution.nodetest.js __tests__/resolutionOrchestration.nodetest.js __tests__/decisionSnapshot.nodetest.js __tests__/decisionApplication.nodetest.js __tests__/customerInputApplication.nodetest.js"
+    "test": "node --test __tests__/architecture.nodetest.js __tests__/contracts.nodetest.js __tests__/conditionLanguage.nodetest.js __tests__/policyPack.nodetest.js __tests__/policyReadiness.nodetest.js __tests__/ukPolicyPack.nodetest.js __tests__/ukPolicyPack14.nodetest.js __tests__/ukPolicyPack15.nodetest.js __tests__/ukPolicyPack16.nodetest.js __tests__/composition.nodetest.js __tests__/scriptedStubs.nodetest.js __tests__/scenarioCorpus.nodetest.js __tests__/ownershipCase.nodetest.js __tests__/ownershipGraph.nodetest.js __tests__/policyDetermination.nodetest.js __tests__/requirementResolution.nodetest.js __tests__/resolutionOrchestration.nodetest.js __tests__/decisionSnapshot.nodetest.js __tests__/decisionApplication.nodetest.js __tests__/customerInputApplication.nodetest.js"
   }
 }

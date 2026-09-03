@@ -20,6 +20,27 @@ Acceptance principles:
 - The current 1.5-RC Lab shows a persistent review-policy watermark without changing decisions, graph, journey, planner, or customer action semantics.
 - Legacy repository threshold shorthand is non-authoritative for fresh successor UBO Control; the future Policy Pack owns its comparator while historical behavior remains untouched.
 
+## PR-POL-002 — UK Corporate v1.6-RC Review Policy Container
+
+**Status:** IMPLEMENTED — FREEZE IMPLEMENTATION WAVE 2; EXECUTION NOT STARTED
+
+**Target:** Immutable successor-policy data and governance artifacts
+
+UK Corporate `1.6-RC` is a schema-1.3, `CONTROL_ROOM_REVIEW`, LAB-only policy artifact with null effective date and approver. It records the frozen doctrine, A-01–A-18 states, feature defaults and unsupported successor runtime dependencies without selecting or executing the pack.
+
+Acceptance principles:
+
+- The artifact lives at `policies/uk-corporate/1.6-rc/policy.json` with canonical identity pinned in its source mapping.
+- A-08, A-09, A-10 and A-11 are mandatory production sign-offs; no A-record is approved.
+- Lab readiness is `REVIEW_ONLY`, production readiness is `BLOCKED`, and unsupported successor dependencies are visible.
+- Statutory economic and voting thresholds are separate immutable `>25` declarations; disabled firm thresholds cannot suppress or project statutory status.
+- Qualification routes, layer completeness, percentage evidence, control gating, residual statements, listed cases, exhaustion categories, acquisition strategies and phase order are policy data only.
+- R01–R14 identifiers remain stable and their successor intent is source-mapped without wiring successor resolvers.
+- Only the approved `DISCLOSE_SHARE_OWNERSHIP` structured contract is carried forward as Control Room-approved content; unresolved customer content remains blocked.
+- E01/E02/E08/E10 stay unresolved and production-disabled pending A-16.
+- Current Decision Application v1/v2, DecisionSnapshot v1, Lab/ASDA, graph, journey, planner and public API behavior remain unchanged and continue using `1.5-RC`.
+- `test-assertion-plan.json` classifies every File 07 assertion honestly; a policy declaration is never represented as executable behavior.
+
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
 **Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED
