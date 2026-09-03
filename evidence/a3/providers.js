@@ -1,5 +1,7 @@
 "use strict";
 
+const { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE } = require("./anthropicOutputSchema");
+
 class SemanticExtractionProvider {
   capabilities() { return { contentKinds: ["text"], maxRequestBytes: null }; }
   async extract() { throw new Error("SemanticExtractionProvider.extract must be implemented"); }
@@ -22,12 +24,84 @@ const SEMANTIC_DISCOVERY_OBJECTIVE = Object.freeze([
 const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
+function parsedJson(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  try { return JSON.parse(value); } catch (_) { return value; }
+}
+
+function factValue(item) {
+  if (item.value_json === undefined) return item.value;
+  try { return JSON.parse(item.value_json); }
+  catch (_) { throw Object.assign(new Error("Semantic provider returned an invalid encoded Fact value"), { code: "provider_malformed_output" }); }
+}
+
 function mapTypedRelationshipCandidate(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input || null;
-  const party = (value) => value && typeof value === "object" ? { partyType: value.party_type, name: value.name, description: value.description, jurisdiction: value.jurisdiction, identifiers: value.identifiers, qualifiers: value.qualifiers } : value;
-  const value = input.value && typeof input.value === "object" ? { kind: input.value.kind, measurementType: input.value.measurement_type, value: input.value.value, lower: input.value.lower, upper: input.value.upper, lowerInclusive: input.value.lower_inclusive, upperInclusive: input.value.upper_inclusive, numerator: input.value.numerator, denominator: input.value.denominator, unit: input.value.unit } : input.value;
-  const temporal = input.temporal && typeof input.temporal === "object" ? { state: input.temporal.state, effectiveFrom: input.temporal.effective_from, effectiveTo: input.temporal.effective_to, sourceEffectiveDate: input.temporal.source_effective_date, precision: input.temporal.precision } : input.temporal;
-  return { directionEstablished: input.direction_established, relationshipType: input.relationship_type, subject: party(input.subject), object: party(input.object), value, temporal, sourceSpecificMetadata: input.source_specific_metadata, qualifications: input.qualifications };
+  if (typeof input.subject_json === "string" && typeof input.object_json === "string") {
+    const party = (prefix) => ({ partyType: input[`${prefix}_party_type`], ...parsedJson(input[`${prefix}_json`], {}) });
+    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: input.unit || undefined };
+    if (input.value_kind === "EXACT" && input.measurement_type === "count_of_total") { value.numerator = input.numerator; value.denominator = input.denominator; }
+    else if (input.value_kind === "EXACT") value.value = input.exact_value;
+    else if (input.value_kind === "RANGE") { value.lower = input.range_lower; value.upper = input.range_upper; value.lowerInclusive = input.lower_inclusive; value.upperInclusive = input.upper_inclusive; }
+    else if (input.value_kind === "QUALITATIVE") value.value = input.qualitative_value;
+    const temporalDetails = parsedJson(input.temporal_json, {});
+    return {
+      directionEstablished: input.direction_established, relationshipType: input.relationship_type,
+      subject: party("subject"), object: party("object"), value,
+      temporal: { state: input.temporal_state, effectiveFrom: temporalDetails.effective_from, effectiveTo: temporalDetails.effective_to, sourceEffectiveDate: temporalDetails.source_effective_date, precision: temporalDetails.precision || {} },
+      sourceSpecificMetadata: parsedJson(input.source_specific_metadata_json, {}), qualifications: parsedJson(input.qualifications_json, []),
+    };
+  }
+  if (input.present === false) return null;
+  if (input.present === true) {
+    const party = (prefix) => ({
+      partyType: input[`${prefix}_party_type`], name: input[`${prefix}_name`], description: input[`${prefix}_description`],
+      jurisdiction: input[`${prefix}_jurisdiction`], identifiers: parsedJson(input[`${prefix}_identifiers_json`], []),
+      qualifiers: parsedJson(input[`${prefix}_qualifiers_json`], {}),
+    });
+    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: input.unit || undefined };
+    if (input.value_kind === "EXACT" && input.measurement_type === "count_of_total") { value.numerator = input.numerator; value.denominator = input.denominator; }
+    else if (input.value_kind === "EXACT") value.value = input.exact_value;
+    else if (input.value_kind === "RANGE") { value.lower = input.range_lower; value.upper = input.range_upper; value.lowerInclusive = input.lower_inclusive; value.upperInclusive = input.upper_inclusive; }
+    else if (input.value_kind === "QUALITATIVE") value.value = input.qualitative_value;
+    return {
+      directionEstablished: input.direction_established, relationshipType: input.relationship_type,
+      subject: party("subject"), object: party("object"), value,
+      temporal: { state: input.temporal_state, effectiveFrom: input.effective_from || undefined, effectiveTo: input.effective_to || undefined, sourceEffectiveDate: input.source_effective_date || undefined, precision: parsedJson(input.temporal_precision_json, {}) },
+      sourceSpecificMetadata: parsedJson(input.source_specific_metadata_json, {}), qualifications: input.qualifications,
+    };
+  }
+  const party = (source) => source && typeof source === "object" ? { partyType: source.party_type, name: source.name, description: source.description, jurisdiction: source.jurisdiction, identifiers: source.identifiers, qualifiers: source.qualifiers ?? parsedJson(source.qualifiers_json, {}) } : source;
+  const sourceValue = input.value;
+  let value = sourceValue;
+  if (sourceValue && typeof sourceValue === "object") {
+    value = { kind: sourceValue.kind, measurementType: sourceValue.measurement_type, unit: sourceValue.unit || undefined };
+    if (sourceValue.kind === "EXACT" && sourceValue.measurement_type === "count_of_total") { value.numerator = sourceValue.numerator; value.denominator = sourceValue.denominator; }
+    else if (sourceValue.kind === "EXACT") value.value = sourceValue.exact_value ?? sourceValue.value;
+    else if (sourceValue.kind === "RANGE") { value.lower = sourceValue.range_lower ?? sourceValue.lower; value.upper = sourceValue.range_upper ?? sourceValue.upper; value.lowerInclusive = sourceValue.lower_inclusive; value.upperInclusive = sourceValue.upper_inclusive; }
+    else if (sourceValue.kind === "QUALITATIVE") value.value = sourceValue.qualitative_value ?? sourceValue.value;
+  }
+  const temporalSource = input.temporal;
+  const temporal = temporalSource && typeof temporalSource === "object" ? { state: temporalSource.state, effectiveFrom: temporalSource.effective_from || undefined, effectiveTo: temporalSource.effective_to || undefined, sourceEffectiveDate: temporalSource.source_effective_date || undefined, precision: temporalSource.precision ?? parsedJson(temporalSource.precision_json, {}) } : temporalSource;
+  return { directionEstablished: input.direction_established, relationshipType: input.relationship_type, subject: party(input.subject), object: party(input.object), value, temporal, sourceSpecificMetadata: input.source_specific_metadata ?? parsedJson(input.source_specific_metadata_json, {}), qualifications: input.qualifications };
+}
+
+function mapSupportLocator(locator) {
+  if (locator && typeof locator.locator_json === "string") {
+    const details = parsedJson(locator.locator_json, {});
+    return { artifact_id: locator.artifact_id, locator_type: locator.locator_type, ...details };
+  }
+  if (!locator || typeof locator !== "object" || !("region_present" in locator)) return locator;
+  const region = locator.region_present === true && locator.coordinate_space === "original_artifact_pixels" ? {
+    coordinate_space: locator.coordinate_space, source_width: locator.source_width, source_height: locator.source_height,
+    x: locator.x, y: locator.y, width: locator.width, height: locator.height,
+  } : null;
+  return {
+    artifact_id: locator.artifact_id, locator_type: locator.locator_type, json_path: locator.json_path,
+    dom_reference: locator.dom_reference, page_start: locator.page_start, page_end: locator.page_end,
+    excerpt: locator.excerpt, description: locator.description, region,
+    locator_method: locator.locator_method, qualified: locator.qualified,
+  };
 }
 
 class FixtureSemanticProvider extends SemanticExtractionProvider {
@@ -66,7 +140,7 @@ function parseProviderJson(text) {
 }
 
 class AnthropicSemanticProvider extends SemanticExtractionProvider {
-  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = "evidence-r4-live-v1-typed-relations" } = {}) {
+  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE } = {}) {
     super(); this.apiKey = apiKey; this.model = model; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference;
   }
   configuration() { return { provider: "anthropic", model: this.model || null, instructionReference: this.instructionReference, ready: !!(this.apiKey && this.model) }; }
@@ -81,17 +155,18 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const instruction = [
       "Interpret only the verified preserved evidence supplied below.",
       "Return one JSON object with facts, requested_concept_outcomes, completeness, and support.",
-      "Each facts item must contain concept, value, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids, support_locators, semanticAmbiguity, and ambiguous. semantic_role must be business_fact for a persistable semantic fact. It may additionally contain one typed_relationship candidate.",
+      "Return shallow indexed transport lists: facts, support_locators, and typed_relationships. value_json and supporting_artifact_ids_json are valid JSON encoded as strings. Each support or relationship row uses fact_index, the zero-based index of its Fact. Omit rows instead of inventing unsupported locators or relationships.",
+      "Each facts item must contain concept, value_json, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids_json, semanticAmbiguity, and ambiguous. value_json preserves the Fact's natural scalar, array, or object shape. semantic_role must be business_fact for a persistable semantic fact.",
       "A typed_relationship is optional and must describe exactly the same single source assertion as its ordinary Fact. Never put several independent relationships in one typed relationship or relationship array; emit one Fact per directed relationship.",
       "Only return typed_relationship when the evidence explicitly supports both parties, the relationship meaning, and subject→relationship→object direction. If meaning or direction is ambiguous, omit typed_relationship while retaining the safe ordinary Fact.",
-      "typed_relationship must contain direction_established=true, relationship_type, subject, object, value, temporal, source_specific_metadata, and qualifications. Party objects use party_type plus a source name or description. They are source snapshots, never canonical identities.",
+      "Each typed_relationships row must contain direction_established=true; source-supported subject_json and object_json party snapshots; value_kind and measurement_type; temporal_state and temporal_json; metadata; and qualifications_json. Parties require a source name or description and never become canonical identities.",
       "Allowed relationship_type values are ECONOMIC_OWNERSHIP, VOTING_RIGHTS, APPOINTMENT_RIGHTS, REMOVAL_RIGHTS, FORMAL_DECISION_RIGHTS, SIGNIFICANT_INFLUENCE_OR_CONTROL, DIRECTOR_OF, OFFICER_OF, AUTHORIZED_SIGNATORY_FOR, CONTROL_OVER, SETTLOR_OF, TRUSTEE_OF, PROTECTOR_OF, BENEFICIARY_OF, NOMINEE_FOR, ACTS_ON_BEHALF_OF, and OTHER. OTHER is only for an understood out-of-vocabulary relationship and must retain source_specific_metadata.originalRelationshipLabel. There is no unknown relationship code.",
-      "typed_relationship.value uses kind EXACT, RANGE, QUALITATIVE, or UNKNOWN and measurement_type percentage, count_of_total, absolute_quantity, qualitative, or none. Preserve exact bounds and inclusivity. Never convert a range to an exact value, qualitative wording to a number, or UNKNOWN to zero.",
+      "typed_relationship.value uses kind EXACT, RANGE, QUALITATIVE, or UNKNOWN and measurement_type percentage, count_of_total, absolute_quantity, qualitative, or none. EXACT percentage uses exact_value in percentage points: 75% is 75, 25% is 25, and 100% is 100; never return 0.75, text, basis points, or 7500. RANGE uses range_lower/range_upper and inclusivity fields. QUALITATIVE uses qualitative_value containing the source-supported meaning, including a role title for DIRECTOR_OF or OFFICER_OF. Preserve exact bounds and inclusivity. Never convert a range to an exact value, qualitative wording to a number, or UNKNOWN to zero.",
       "typed_relationship.temporal.state must be current, ceased, historical, or unknown. Do not infer current solely because no cease date appears.",
       "Do not return UBO/controller status, threshold decisions, indirect ownership calculations, winner selection, KYC satisfaction, or other downstream conclusions as typed relationships.",
       "The verified inputs are separate preserved Artifacts belonging to one Evidence Asset. Interpret them together where appropriate while preserving every Artifact boundary.",
       "supporting_artifact_ids must contain only the input Artifact IDs that directly support that fact. Use more than one ID only when the fact is jointly supported. Do not claim every run input supports every fact.",
-      "support_locators must contain one or more entries for every supporting_artifact_id. Each entry must include artifact_id and a bounded excerpt or truthful visual description.",
+      "support_locators must contain one or more rows for every supporting Artifact. locator_json holds the media-specific JSON path, DOM reference, PDF page, excerpt/description and optional original-pixel image region. Never fabricate a region or coordinate transform.",
       "For JSON include json_path when reliably known. For HTML include dom_reference when reliably known. For PDF include 1-indexed page_start and page_end plus excerpt or visual description. For an image include a support description or visible-text excerpt.",
       "Only include an image region when it is expressed in original_artifact_pixels and source_width/source_height exactly match the original dimensions in the input manifest. Never report coordinates from a resized provider view.",
       "Do not fabricate missing pages or source order. Do not represent unsupported cross-Artifact inference as a directly stated source fact.",
@@ -114,7 +189,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     }
     content.push({ type: "text", text: instruction });
     const requestContent = items.every((item) => item.kind === "text") ? content.map((item) => item.text).join("\n\n") : content;
-    const requestBody = JSON.stringify({ model: this.model, max_tokens: this.maxOutputTokens, messages: [{ role: "user", content: requestContent }] });
+    const requestBody = JSON.stringify({ model: this.model, max_tokens: this.maxOutputTokens, messages: [{ role: "user", content: requestContent }], output_config: { format: { type: "json_schema", schema: ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA } } });
     let response;
     try {
       response = await this.fetchImpl("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" }, body: requestBody, signal: controller.signal });
@@ -133,15 +208,22 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const parsed = parseProviderJson(text);
     if (!Array.isArray(parsed.facts)) throw Object.assign(new Error("Semantic provider response does not contain a facts array"), { code: "provider_malformed_output" });
     const requestByConcept = new Map(requestedConcepts.map((item) => [item.concept, item]));
-    const facts = parsed.facts.filter((item) => item && item.concept && item.value !== undefined).map((item) => {
+    const shallowTransport = Array.isArray(parsed.support_locators) && Array.isArray(parsed.typed_relationships);
+    const locatorsByFact = new Map(), relationshipsByFact = new Map();
+    if (shallowTransport) {
+      parsed.support_locators.forEach((locator) => { if (Number.isInteger(locator?.fact_index)) { const rows = locatorsByFact.get(locator.fact_index) || []; rows.push(mapSupportLocator(locator)); locatorsByFact.set(locator.fact_index, rows); } });
+      parsed.typed_relationships.forEach((relationship) => { if (Number.isInteger(relationship?.fact_index) && !relationshipsByFact.has(relationship.fact_index)) relationshipsByFact.set(relationship.fact_index, mapTypedRelationshipCandidate(relationship)); });
+    }
+    const facts = parsed.facts.map((item, sourceIndex) => ({ item, sourceIndex })).filter(({ item }) => item && item.concept && (item.value_json !== undefined || item.value !== undefined)).map(({ item, sourceIndex }) => {
       const request = requestByConcept.get(item.concept); const isRequested = item.requested === true && !!request;
-      return { concept: String(item.concept), value: item.value, raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: Array.isArray(item.support_locators) ? item.support_locators : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate: mapTypedRelationshipCandidate(item.typed_relationship) };
+      const encodedSupportIds = item.supporting_artifact_ids_json === undefined ? item.supporting_artifact_ids : parsedJson(item.supporting_artifact_ids_json, []);
+      return { concept: String(item.concept), value: factValue(item), raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(encodedSupportIds) ? encodedSupportIds.map(String) : Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: shallowTransport ? locatorsByFact.get(sourceIndex) || [] : Array.isArray(item.support_locators) ? item.support_locators.map(mapSupportLocator) : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate: shallowTransport ? relationshipsByFact.get(sourceIndex) || null : mapTypedRelationshipCandidate(item.typed_relationship) };
     });
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
-    const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
+    const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) && parsed.completeness.source_record_count >= 0 ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) && parsed.completeness.represented_record_count >= 0 ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
     const requestedConceptOutcomes = requestedConcepts.map((request) => { const reported = reportedOutcomes.get(request.concept); const found = facts.some((fact) => fact.concept === request.concept && fact.valueFound && fact.semanticRole === "business_fact"); return { concept: request.concept, status: found ? "found" : reported === "not_found" ? "not_found" : completeness.state === "complete" ? "not_found" : "not_evaluated" }; });
     return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null };
   }
 }
 
-module.exports = { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, parseProviderJson };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, parseProviderJson };
