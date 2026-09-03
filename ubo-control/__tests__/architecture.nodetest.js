@@ -96,10 +96,15 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "UBO_RESOLUTION_PLAN_CONTRACT_VERSION",
     "UBO_RESOLUTION_PLANNER_ERROR_CODE",
     "UBO_RESOLUTION_PLANNER_VERSION",
+    "UBO_POLICY_READINESS",
+    "UBO_POLICY_READINESS_CONTRACT_VERSION",
+    "UBO_POLICY_READINESS_ERROR_CODE",
+    "UBO_POLICY_RUNTIME_MODE",
     "DecisionApplicationError",
     "OwnershipGraphProjectionError",
     "UboJourneyProjectionError",
     "UboResolutionPlannerError",
+    "UboPolicyReadinessError",
     "IDENTITY_RESOLUTION_STATUS",
     "PERCENTAGE_VALUE_TYPE",
     "POLICY_PACK_SCHEMA_ID",
@@ -118,6 +123,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "UboConfigurationError",
     "UboContractError",
     "canonicalizeJson",
+    "assessUboPolicyPackReadiness",
     "createUboDecisionApplication",
     "createUboControl",
     "hashPolicyPack",
@@ -137,6 +143,14 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "validatePercentageValue",
     "validatePolicyPack",
   ].sort());
+});
+
+test("policy readiness remains stateless, provider-neutral and separate from Decision Application v1/v2", () => {
+  const source = fs.readFileSync(path.join(PRODUCT_ROOT, "policy", "policyReadiness.js"), "utf8");
+  assert.doesNotMatch(source, /Date\.now|new Date\s*\(|fetch\s*\(|React|DOM|provider|vendor/i);
+  assert.doesNotMatch(source, /createUboDecisionApplication|\.evaluate\s*\(|\.intake\s*\(|\.applyDecisions\s*\(/);
+  assert.doesNotMatch(source, /A-\d+/);
+  assert.match(source, /HISTORICAL_MODE_PROHIBITS_NEW_DETERMINATION/);
 });
 
 test("the resolution planner is advisory, host neutral, and contains no opaque score or capability execution", () => {

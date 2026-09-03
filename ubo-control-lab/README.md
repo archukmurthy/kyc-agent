@@ -2,6 +2,12 @@
 
 The UBO Control Lab is a standalone, internal compliance-testing application. It consumes the public UBO Control APIs, the accepted legacy Discovery adapter and the reusable `UboJourney` and `OwnershipGraph` components. It does not integrate with the KYB onboarding application.
 
+## Review-policy status
+
+The Lab assesses its pinned UK Corporate 1.5-RC Policy Pack through public `ubo-policy-readiness-v1` in `LAB` mode at the session's explicit evaluation time. Because the pack is `CONTROL_ROOM_REVIEW`, has a null effective date, and has no approving authority, it returns `REVIEW_ONLY` and the interface persistently displays `REVIEW POLICY — NOT APPROVED FOR PRODUCTION` with the exact policy identity and current blocker/sign-off counts.
+
+This warning is readiness metadata only. It does not alter Decision Application v2, calculations, requirements, OwnershipGraph, UboJourney, ResolutionPlan, customer actions, or Discovery replay. Lab mode never implies production approval.
+
 ## Modes
 
 - **Fixture Mode** loads one of 18 deterministic scenarios, runs Decision Application v2 and produces real immutable DecisionSnapshots and public projections.

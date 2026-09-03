@@ -53,6 +53,16 @@ const UBO_RESOLUTION_PLANNER_ERROR_CODE = Object.freeze({
   INCONSISTENT_DECISION_SNAPSHOT: "INCONSISTENT_DECISION_SNAPSHOT",
 });
 
+const UBO_POLICY_READINESS_ERROR_CODE = Object.freeze({
+  INVALID_INPUT: "INVALID_INPUT",
+  UNSUPPORTED_RUNTIME_MODE: "UNSUPPORTED_RUNTIME_MODE",
+  EVALUATION_TIME_REQUIRED: "EVALUATION_TIME_REQUIRED",
+  INVALID_EVALUATION_TIME: "INVALID_EVALUATION_TIME",
+  INVALID_POLICY_PACK: "INVALID_POLICY_PACK",
+  POLICY_IDENTITY_REQUIRED: "POLICY_IDENTITY_REQUIRED",
+  POLICY_IDENTITY_MISMATCH: "POLICY_IDENTITY_MISMATCH",
+});
+
 class UboControlError extends Error {
   constructor(message, { code, cause } = {}) {
     super(message, cause === undefined ? undefined : { cause });
@@ -73,6 +83,8 @@ class UboJourneyProjectionError extends UboControlError {}
 
 class UboResolutionPlannerError extends UboControlError {}
 
+class UboPolicyReadinessError extends UboControlError {}
+
 class PolicyPackValidationError extends UboControlError {}
 
 class PolicyPackIntegrityError extends UboControlError {}
@@ -86,11 +98,13 @@ module.exports = {
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   UBO_JOURNEY_PROJECTION_ERROR_CODE,
   UBO_RESOLUTION_PLANNER_ERROR_CODE,
+  UBO_POLICY_READINESS_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
   OwnershipGraphProjectionError,
   UboJourneyProjectionError,
   UboResolutionPlannerError,
+  UboPolicyReadinessError,
   UboConfigurationError,
   UboContractError,
   PolicyPackValidationError,

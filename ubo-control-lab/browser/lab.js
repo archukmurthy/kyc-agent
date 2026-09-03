@@ -43,6 +43,14 @@
     return h("div", { className: "empty" }, children);
   }
 
+  function PolicyReadinessWatermark({ readiness }) {
+    if (!readiness?.watermarkRequired) return null;
+    const identity = readiness.policyIdentity;
+    return h("aside", { className: "policy-watermark", role: "status", "aria-label": "Policy readiness warning" },
+      h("strong", null, "REVIEW POLICY — NOT APPROVED FOR PRODUCTION"),
+      h("span", null, `${identity.policyPackId} · ${identity.version} · ${readiness.readiness} · ${readiness.blockingReasons.length} production blocker(s) · ${readiness.unresolvedSignoffs.length} unresolved sign-off(s)`));
+  }
+
   function ResolutionExplanation({ view }) {
     const item = view.resolutionExplanation;
     const headline = item.noCustomerAction
@@ -272,7 +280,7 @@
   }
 
   function DiagnosticsPanel({ view, session }) {
-    return h("section", { className: "panel" }, h("h2", null, "Diagnostics"), h("div", { className: "grid-3" }, h(Metric, { label: "Lab source state", value: session.sourceState }), session.discovery?.replay && h(Metric, { label: "Replay saved", value: new Date(session.discovery.replay.originalSavedAt).toLocaleString() }), Object.entries(view.diagnostics).map(([key, value]) => h(Metric, { key, label: human(key), value: typeof value === "object" ? shortHash(value.hash || value.policyHash) : Array.isArray(value) ? value.join(", ") : String(value) }))), h("details", { className: "section" }, h("summary", null, "Current public projections and sealed session envelope"), h("pre", { className: "json" }, pretty({ sourceState: session.sourceState, replay: session.discovery?.replay || null, snapshot: view.snapshot, graph: view.graph, journey: view.journey, plan: view.plan, caseState: session.caseState }))));
+    return h("section", { className: "panel" }, h("h2", null, "Diagnostics"), h("div", { className: "grid-3" }, h(Metric, { label: "Lab source state", value: session.sourceState }), session.discovery?.replay && h(Metric, { label: "Replay saved", value: new Date(session.discovery.replay.originalSavedAt).toLocaleString() }), Object.entries(view.diagnostics).map(([key, value]) => h(Metric, { key, label: human(key), value: typeof value === "object" ? value.readiness || shortHash(value.hash || value.policyHash) : Array.isArray(value) ? value.join(", ") : String(value) }))), h("details", { className: "section" }, h("summary", null, "Current public projections and sealed session envelope"), h("pre", { className: "json" }, pretty({ sourceState: session.sourceState, replay: session.discovery?.replay || null, policyReadiness: session.policyReadiness, snapshot: view.snapshot, graph: view.graph, journey: view.journey, plan: view.plan, caseState: session.caseState }))));
   }
 
   function Workspace({ session, setSession, busy, setBusy, error, setError, reset }) {
@@ -342,8 +350,10 @@
       try { setSavedResults(replayLibrary ? replayLibrary.clear() : []); setStorageError(""); }
       catch (_cause) { setStorageError("Browser-local replay storage could not be cleared."); }
     };
+    const readiness = session?.policyReadiness || catalogue?.policyReadiness;
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "CASE NON-RESUMABLE / REPLAY LOCAL"), h("span", { className: "badge" }, "Policy 1.5-RC"), h("span", { className: "badge" }, "Decision App v2"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "CASE NON-RESUMABLE / REPLAY LOCAL"), h("span", { className: "badge" }, readiness ? `Policy ${readiness.policyIdentity.version}` : "Policy loading"), h("span", { className: "badge" }, "Decision App v2"))),
+      h(PolicyReadinessWatermark, { readiness }),
       session
         ? h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
         : h(Setup, { catalogue, mode, setMode, busy, error, savedResults, storageError, deleteReplay, clearReplays, startFixture: (fixtureId, riskLevel) => start("START_FIXTURE", { fixtureId, riskLevel }), startLive: (companyContext) => start("START_LIVE", { companyContext }), startReplay: (replayRecord) => start("START_REPLAY", { replayRecord }) }));

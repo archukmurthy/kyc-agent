@@ -44,11 +44,13 @@ const {
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   UBO_JOURNEY_PROJECTION_ERROR_CODE,
   UBO_RESOLUTION_PLANNER_ERROR_CODE,
+  UBO_POLICY_READINESS_ERROR_CODE,
   UBO_CONFIGURATION_ERROR_CODE,
   DecisionApplicationError,
   OwnershipGraphProjectionError,
   UboJourneyProjectionError,
   UboResolutionPlannerError,
+  UboPolicyReadinessError,
   UboConfigurationError,
   UboContractError,
   PolicyPackIntegrityError,
@@ -70,6 +72,12 @@ const {
 const { canonicalizeJson, CANONICALIZATION_ALGORITHM } = require("./policy/canonicalJson");
 const { validateConditionExpression } = require("./policy/conditionLanguage");
 const { hashPolicyPack, loadPolicyPack, validatePolicyPack } = require("./policy/policyPack");
+const {
+  UBO_POLICY_READINESS,
+  UBO_POLICY_READINESS_CONTRACT_VERSION,
+  UBO_POLICY_RUNTIME_MODE,
+  assessUboPolicyPackReadiness,
+} = require("./policy/policyReadiness");
 
 module.exports = Object.freeze({
   APPLICABILITY_MODEL_VERSION,
@@ -91,6 +99,10 @@ module.exports = Object.freeze({
   UBO_RESOLUTION_PLAN_CONTRACT_VERSION,
   UBO_RESOLUTION_PLANNER_ERROR_CODE,
   UBO_RESOLUTION_PLANNER_VERSION,
+  UBO_POLICY_READINESS,
+  UBO_POLICY_READINESS_CONTRACT_VERSION,
+  UBO_POLICY_READINESS_ERROR_CODE,
+  UBO_POLICY_RUNTIME_MODE,
   IDENTITY_RESOLUTION_STATUS,
   PERCENTAGE_VALUE_TYPE,
   POLICY_PACK_SCHEMA_ID,
@@ -108,11 +120,13 @@ module.exports = Object.freeze({
   OwnershipGraphProjectionError,
   UboJourneyProjectionError,
   UboResolutionPlannerError,
+  UboPolicyReadinessError,
   PolicyPackIntegrityError,
   PolicyPackValidationError,
   UboConfigurationError,
   UboContractError,
   canonicalizeJson,
+  assessUboPolicyPackReadiness,
   createUboDecisionApplication,
   createUboControl,
   hashPolicyPack,
