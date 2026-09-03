@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w3-qualification-basis-v2` |
 | Base commit | `bb079e00cbb55c2316c2603196ec665fcc3bde7a` (accepted PR #47 normal merge on `origin/main`). |
 | Latest accepted PR | [#47 — Freeze Wave 2: UK Corporate v1.6-RC review policy](https://github.com/archukmurthy/kyc-agent/pull/47), merged normally as `bb079e00cbb55c2316c2603196ec665fcc3bde7a`. |
-| Current PR | Wave 3 PR to be opened; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#48 — Freeze Wave 3: QualificationBasis v2 effective-interest wrapper](https://github.com/archukmurthy/kyc-agent/pull/48) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
