@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w2-policy-pack-1-6-rc` |
 | Base commit | `b0d196a0ab217a96dc63cf6ebeb238ccd3d2f733` (accepted PR #46 normal merge on `origin/main`). |
 | Latest accepted PR | [#46 — Freeze Implementation Wave 1](https://github.com/archukmurthy/kyc-agent/pull/46), merged normally as `b0d196a0ab217a96dc63cf6ebeb238ccd3d2f733`. |
-| Current PR | Wave 2 PR pending creation; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#47 — Freeze Wave 2: UK Corporate v1.6-RC review policy](https://github.com/archukmurthy/kyc-agent/pull/47) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
