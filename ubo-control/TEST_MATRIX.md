@@ -1,15 +1,15 @@
 # UBO Control test matrix
 
-## Freeze Wave 2 traceability
+## Freeze Wave 3 traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Its `executableNow` flag is true only for Wave 2 schema/readiness protection or already-existing historical runtime protection; later-wave and sign-off-gated assertions remain visibly non-executable.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 advances exactly `F07-04-001` through `F07-04-008`; later-wave and sign-off-gated assertions remain visibly non-executable. F07-04-007 is satisfied by the internal handoff-ready assessment only; host integration remains deferred.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
 | File 01 §1 Product objective | `__tests__/ukPolicyPack16.nodetest.js`; File 07 inventory | UK Corporate 1.6-RC / schema 1.3 | Policy data only | Later behavior waves |
 | File 01 §2 Legal/guidance baseline | v1.6 identity/legal-baseline assertions | `ubo-policy-readiness-v1` | Review only | A-08, A-11 |
 | File 01 §3 Architecture invariants | Existing architecture, contract, snapshot and adapter suites | Current v1 contracts | Protected unchanged | None |
-| File 01 §4 Threshold/comparator/firm overlay | v1.6 doctrine test; File 07 §4 inventory | Policy data now; QualificationBasis v2 later | Schema protected; execution pending | Firm activation approval if enabled |
+| File 01 §4 Threshold/comparator/firm overlay | `qualificationBasisV2.nodetest.js`; v1.6 doctrine test; File 07 §4 inventory | `ubo-qualification-basis-v2`; `ubo-effective-interest-qualification-v2` | Internal effective route executable; no runtime wiring | Firm activation approval if enabled |
 | File 01 §5 Layer completeness | v1.6 doctrine test; File 07 §5 inventory | `ubo-layer-closure-v1` required | Declared, unsupported | A-03/A-13 where applicable |
 | File 01 §6 Qualification/calculation | v1.6 route test; existing percentage suite; File 07 §6 inventory | percentage v1 retained; determination v2 / attribution v1 required | Effective arithmetic preserved; successor routes pending | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
 | File 01 §7 Control/action gating | v1.6 gating test; File 07 §§8,10,14 inventories | Policy data now; needs/applicant v2 later | Last-resort gated; customer features disabled | A-02, A-04, A-17 |
@@ -22,7 +22,22 @@
 | File 01 §14 ASDA characterization | Existing adapter/Lab/graph tests plus File 07 §13 inventory | v1 fixtures retained; v2 characterization later | Historical facts protected; final TDR result provisional | A-06 |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries including 8 Wave 2 container assertions | Per-entry `signoffDependencies` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; exactly eight Wave 3 qualification assertions newly executable | Per-entry `signoffDependencies` |
+
+### QualificationBasis v2 and effective-interest wrapper
+
+| Invariant | Protection |
+|---|---|
+| Model validity, deterministic identity, canonical ordering, deep immutability and JSON round trip | `__tests__/qualificationBasisV2.nodetest.js` |
+| Natural-person-only final holder and stable typed rejection | `__tests__/qualificationBasisV2.nodetest.js` |
+| Exact `>` / `>=` boundary semantics at 24.99, 25 and 25.01 | `__tests__/qualificationBasisV2.nodetest.js` |
+| Open/closed range truth tables, partial known minimum and no-path-not-zero | `__tests__/qualificationBasisV2.nodetest.js` |
+| Direct, indirect, mixed and not-established path classifications | `__tests__/qualificationBasisV2.nodetest.js` |
+| Independent economic/voting threshold selection | `__tests__/qualificationBasisV2.nodetest.js` |
+| Disabled/enabled firm overlay, dual-basis retention and weaker-population rejection | `__tests__/qualificationBasisV2.nodetest.js` |
+| Route-scoped negative result with management/PSC routes explicitly unassessed | `__tests__/qualificationBasisV2.nodetest.js` |
+| Recorded calculation/path/claim/EvidenceReference fidelity without recomputation | `__tests__/qualificationBasisV2.nodetest.js`; unchanged G2.2 suite |
+| No public export or runtime/Lab/ASDA wiring | architecture/public-surface tests and repository diff scan |
 | File 08 sign-off register | exact A-01–A-18 status/default/readiness tests | `ubo-policy-readiness-v1` | No approvals; LAB `REVIEW_ONLY`; PRODUCTION `BLOCKED` | Mandatory A-08/A-09/A-10/A-11 plus enabled-feature dependencies |
 
 | Material module / invariant | Protecting executable test |
