@@ -319,3 +319,13 @@ Scenarios preserve directed candidate facts, exact/range/unknown percentages, fa
 ## Testing boundary
 
 Every behavior and architectural invariant is protected in the same PR that introduces it. The architecture suite denies non-built-in imports outside the product root, protects the deliberate public export set, and verifies explicit provider composition. The scenario, graph/calculation, policy-determination, requirement-resolution, orchestration, and decision-snapshot/history suites run offline using only internal production modules, explicitly constructed test inputs or stubs, and production contract validators; they import no legacy, Evidence Platform, onboarding, provider, database, or deployment implementation.
+
+## Standalone UBO Control Lab boundary
+
+`ubo-control-lab/` is a sibling consumer of the headless product, not part of the product root and not part of KYB onboarding. Its server composition imports only the deliberate `ubo-control` public API, the accepted legacy Discovery adapter, immutable policy artifacts and Lab fixture data. It does not import `src/App.js`, Evidence/Extraction modules, dossier code or database modules.
+
+The Lab API exposes an ephemeral session envelope for fixture start, live Discovery start, explicit reviewer decisions, customer-action application and snapshot comparison. Session state is returned to the browser and supplied back on the next operation; the Lab creates no persistence model. Live Discovery may invoke the existing legacy Discovery route and its existing audit behavior, but the Lab itself stores no Lab state and treats legacy conclusions as non-authoritative.
+
+The browser app is staged at `/ubo-control-lab/` and reuses `UboJourney` and `OwnershipGraph`. Customer and Compliance tabs render the same current sealed state. The only state-changing paths are versioned Decision Application operations followed by explicit evaluation; the browser cannot fabricate a snapshot, qualification result or resolved requirement.
+
+Live Evidence remains a disabled, explicit capability boundary until Gate 4 prerequisites exist. No mock extraction result is presented as live evidence. `src/App.js`, onboarding routes, dossiers, host persistence and database migrations remain outside G5.3D.

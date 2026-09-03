@@ -1,0 +1,1619 @@
+{
+  "schemaId": "ubo-policy-pack",
+  "schemaVersion": "1.2",
+  "policyPackId": "UBO-UK-CORPORATE",
+  "version": "1.5-RC",
+  "status": "CONTROL_ROOM_REVIEW",
+  "jurisdiction": "GB",
+  "domain": "beneficial_ownership_and_control",
+  "supersedes": "1.4-RC",
+  "applicability": {
+    "entityScope": [
+      "private_limited_company",
+      "public_limited_company_unlisted",
+      "limited_liability_partnership"
+    ],
+    "regulatedEntityId": "DEFAULT",
+    "outOfScopeRoutes": {
+      "sole_trader": {
+        "uboApplicable": false,
+        "route": "sole_trader_kyc_policy",
+        "reason": "A sole trader is the individual carrying on the business rather than a separate ownership structure requiring UBO unwrapping."
+      },
+      "listed_company": {
+        "uboApplicable": "POLICY_DEFINED",
+        "route": "listed_entity_policy",
+        "reason": "Listed-company treatment is outside this MVP policy pack."
+      },
+      "ordinary_partnership": {
+        "uboApplicable": true,
+        "route": "uk_partnership_ubo_policy",
+        "reason": "Partnership beneficial-owner rules require a separate entity profile and are not implemented in this pack."
+      },
+      "trust_as_customer": {
+        "uboApplicable": true,
+        "route": "trust_policy_pack",
+        "reason": "Trust beneficial ownership is governed by trust-specific rules and is outside this MVP pack."
+      }
+    }
+  },
+  "effectivePeriod": {
+    "from": null
+  },
+  "engineSemantics": {
+    "capabilityContractVersion": "1.0.0",
+    "conditionLanguageVersion": "ubo-condition-v1",
+    "requirementStateModelVersion": "ubo-requirement-state-v1",
+    "claimStateModelVersion": "ubo-claim-state-v1",
+    "applicabilityModelVersion": "ubo-applicability-v1",
+    "resolutionSemanticsVersion": "ubo-resolution-v1",
+    "riskLevelModelVersion": "ubo-risk-level-v1",
+    "canonicalizationAlgorithm": "ubo-canonical-json-v1"
+  },
+  "sourceTraceability": {
+    "artifactRole": "CONTROL_ROOM_SOURCE_POLICY",
+    "sourceFileName": "UBO Control — G5.3D Control Room Policy Decision",
+    "sourceSha256": "sha256:e74d6ac2744e4bfe236c2f05fb3d540e3d711c4ad16db84a79b5acc2ecef63b7",
+    "sourceSchemaVersion": "1.2",
+    "sourcePolicyVersion": "1.5-RC",
+    "revisionNotes": [
+      "Added explicit Policy Pack schema_version distinct from policy version.",
+      "Added UNRESOLVED requirement status so an unattempted requirement is not automatically a GAP.",
+      "Normalized policy resolution methods into provider-neutral resolution strategies.",
+      "Replaced durable B-code questionnaire references with semantic action_template_id values.",
+      "Versioned the deterministic condition-language contract as ubo-condition-v1.",
+      "Marked unsupplied B1/B2/B4 content and E01/E02/E08/E10 event definitions as unresolved source references rather than inventing them.",
+      "Removed architecture-only invariants and engine boundary rules from tenant policy data; those belong in UBO Control architecture/ADR/test governance.",
+      "Clarified that Extraction is a candidate-fact source capability, while CUSTOMER_DOCUMENT is a policy resolution strategy.",
+      "Removed host presentation section labels from action templates.",
+      "Introduced asynchronous FALLBACK_EXHAUSTION review requirements and case-pinned exhaustion decisions.",
+      "Separated FALLBACK_REVIEW_CANDIDATE, senior-management candidate collection, fallback eligibility and final SMO role application.",
+      "Made fallback eligibility a derived fact that cannot be supplied authoritatively by a caller.",
+      "Replaced synchronous fallback collection with preparatory IDENTIFY_SENIOR_MANAGEMENT_CANDIDATES semantics.",
+      "Resolved DISCLOSE_SHARE_OWNERSHIP through a Control Room-authored successor-policy decision without representing the original B1 wording as recovered.",
+      "Added a machine-governed structured ownership-relationship submission contract with strict concept, relationship, direction, target, measurement and current-time binding."
+    ],
+    "derivedFrom": [
+      "KYB Onboarding Policy v1.0 (Draft) §6, §7, §10, §11",
+      "KYB SOP v1.0 (Draft) §4, §5, §6, §7, §10",
+      "Artifacts 3, 5, 6 (v1.1), 8, 12",
+      "UK PSC statutory guidance for companies",
+      "UK PSC statutory guidance for LLPs",
+      "MLR 2017 Regulations 5, 28, 30A and 31"
+    ],
+    "approvedBy": null,
+    "runtimeReadiness": "CONTROL_ROOM_REVIEW",
+    "successorPolicyDecisions": [
+      {
+        "semanticId": "DISCLOSE_SHARE_OWNERSHIP",
+        "source": "CONTROL_ROOM_SUCCESSOR_POLICY",
+        "decisionDate": "2026-09-01",
+        "supersedesUnresolvedReference": "B1"
+      }
+    ],
+    "unresolvedActionTemplateSourceReferences": [
+      {
+        "semanticId": "CAPTURE_QUALIFYING_PERSON_IDENTITY",
+        "sourceReference": "B1",
+        "reason": "R07 references B1 for missing identity attributes; exact interaction wording was not supplied."
+      },
+      {
+        "semanticId": "DISCLOSE_TRUST_IN_CHAIN",
+        "sourceReference": "B2",
+        "reason": "Referenced by supplied policy but full source template text was not supplied."
+      },
+      {
+        "semanticId": "DISCLOSE_OTHER_SIGNIFICANT_CONTROL",
+        "sourceReference": "B4",
+        "reason": "Referenced by supplied policy but full source template text was not supplied."
+      }
+    ],
+    "unresolvedLifecycleEventSourceReferences": [
+      {
+        "sourceReference": "E01",
+        "reason": "Referenced by requirement refresh metadata but no source event catalogue was supplied."
+      },
+      {
+        "sourceReference": "E02",
+        "reason": "Referenced by requirement refresh metadata but no source event catalogue was supplied."
+      },
+      {
+        "sourceReference": "E08",
+        "reason": "Referenced by requirement refresh metadata but no source event catalogue was supplied."
+      },
+      {
+        "sourceReference": "E10",
+        "reason": "Referenced by requirement refresh metadata but no source event catalogue was supplied."
+      }
+    ],
+    "integrityRule": "Unresolved source references must not be silently mapped to host application IDs or invented content. They must be resolved by Control Room-approved source material before production activation where required."
+  },
+  "lifecyclePolicy": {
+    "reResolutionCheckpoints": [
+      "CASE_OPEN",
+      "SESSION_START",
+      "SUBMIT_GATE",
+      "CASE_EVENT"
+    ],
+    "reResolutionRule": "Requirements must never silently re-resolve between explicit host-invoked checkpoints. Risk and evidence changes are applied only when the host invokes an approved UBO re-resolution checkpoint."
+  },
+  "entityProfiles": {
+    "private_limited_company": {
+      "profile": "COMPANY",
+      "economicInterestConcept": "SHARE_OWNERSHIP",
+      "economicInterestLabel": "shares",
+      "votingConcept": "VOTING_RIGHTS",
+      "managementBody": "board_of_directors",
+      "appointmentControlConcept": "BOARD_APPOINTMENT_RIGHTS",
+      "primaryGovernanceDocuments": [
+        "articles_of_association",
+        "shareholders_agreement",
+        "investment_or_governance_agreement"
+      ]
+    },
+    "public_limited_company_unlisted": {
+      "profile": "COMPANY",
+      "economicInterestConcept": "SHARE_OWNERSHIP",
+      "economicInterestLabel": "shares",
+      "votingConcept": "VOTING_RIGHTS",
+      "managementBody": "board_of_directors",
+      "appointmentControlConcept": "BOARD_APPOINTMENT_RIGHTS",
+      "primaryGovernanceDocuments": [
+        "articles_of_association",
+        "shareholders_agreement",
+        "investment_or_governance_agreement"
+      ]
+    },
+    "limited_liability_partnership": {
+      "profile": "LLP",
+      "economicInterestConcept": "SURPLUS_ASSET_RIGHTS",
+      "economicInterestLabel": "rights to surplus assets on winding up",
+      "votingConcept": "MEMBER_VOTING_RIGHTS",
+      "managementBody": "persons_entitled_to_participate_in_management",
+      "appointmentControlConcept": "MANAGEMENT_APPOINTMENT_RIGHTS",
+      "primaryGovernanceDocuments": [
+        "llp_agreement",
+        "members_agreement",
+        "investment_or_governance_agreement"
+      ]
+    }
+  },
+  "definitions": {
+    "economic_interest": "The applicable economic ownership/control interest depends on entity profile. For a COMPANY, this includes direct or indirect ownership of shares or rights to capital/economic value. For an LLP, this includes direct or indirect rights to share in more than the relevant threshold of surplus assets on winding up and any other economic/control interest required by applicable beneficial-owner rules.",
+    "beneficial_owner": "Any natural person satisfying the applicable beneficial ownership or control test for the customer under this policy, including ultimate economic ownership, voting control, management appointment/removal control or other ultimate control.",
+    "indirect_ownership_calculation": "Where an economic or voting interest is capable of percentage look-through, interests are calculated through intermediate entities using deterministic graph rules. Percentage interests through a chain are multiplied and qualifying independent paths to the same natural person are aggregated, subject to duplicate-interest, range and cycle rules.",
+    "voting_control": "Holding, directly or indirectly, more than {param:voting_threshold_pct}% of the applicable voting rights, including where voting rights diverge from economic ownership through share classes, LLP agreements or other governance arrangements.",
+    "significant_control_other_means": "The right to exercise, or actual exercise of, significant influence or control over the customer or its management by means other than the primary economic-interest, voting-right or appointment/removal tests. This may include qualifying decision rights, veto rights, dominant influence or de facto control and may require analyst interpretation.",
+    "appointment_removal_control": "For a COMPANY, the right to appoint or remove a majority of the board of directors. For an LLP, the right to appoint or remove the majority of the persons entitled to participate in the LLP's management.",
+    "qualifying_person": "Any natural person identified through an applicable ownership/control test, plus a senior managing official recorded through a permitted fallback.",
+    "senior_management_candidate": "A natural person explicitly established as part of the customer's senior management from registry facts, existing evidence, held case data or customer response. This preparatory classification is not beneficial-owner status and does not apply the senior-managing-official fallback role.",
+    "senior_managing_official": "A senior person responsible for managing the customer who may be treated as the beneficial owner only where the applicable statutory and policy conditions for fallback have been satisfied and the required measures taken have been documented.",
+    "positive_registry_evidence": "A registry record positively stating that a named person/entity has an ownership or control relationship. Positive evidence may support that fact subject to the relevant requirement's evidence rules.",
+    "negative_registry_evidence": "A registry result capable of establishing that a relevant relationship does not exist. Absence of a particular PSC nature-of-control code must not automatically be treated as negative proof that no such control exists.",
+    "unresolvable_ownership": "Two distinct states must be distinguished. FALLBACK_ELIGIBLE means the required reasonable/exhaustive measures were actually completed but no natural-person beneficial owner could be identified or the firm remains unsatisfied that the identified person is the beneficial owner, and the applicable senior-managing-official fallback may therefore be considered. CDD_UNABLE_TO_COMPLETE means required measures themselves could not be completed, including because required evidence is unobtainable, the applicant refuses or fails to respond, or the structure remains impenetrable. In that state the relationship must follow the applicable CDD-failure/decline process and SAR relevance must be considered separately. Customer communications concerning any SAR must follow the platform's separate SAR/tipping-off communication policy."
+  },
+  "parameters": {
+    "ownership_threshold_pct": {
+      "value": 25,
+      "unit": "percent_exclusive",
+      "classification": "CONSTRAINED",
+      "bound": "May be lowered for a more conservative internal policy but not raised above the applicable statutory ceiling without a different legal/policy basis.",
+      "basis": "MLR 2017 Reg 5"
+    },
+    "voting_threshold_pct": {
+      "value": 25,
+      "unit": "percent_exclusive",
+      "classification": "CONSTRAINED",
+      "bound": "May be lowered for a more conservative internal policy but not raised above the applicable statutory ceiling without a different legal/policy basis.",
+      "basis": "MLR 2017 Reg 5"
+    },
+    "chain_depth_risk_floor_layers": {
+      "value": 3,
+      "classification": "FREE",
+      "bound": "Firm appetite. Lower is more conservative.",
+      "basis": "Artifact 3 §10.2 override"
+    },
+    "cross_border_layer_risk_floor": {
+      "value": "MEDIUM",
+      "classification": "FREE",
+      "bound": "Firm appetite; may be increased.",
+      "basis": "Artifact 3 §10.2 override"
+    },
+    "attestation_max_risk_level": {
+      "value": "MEDIUM",
+      "classification": "CONSTRAINED",
+      "bound": "May be lowered or attestation disabled. Negative attestation alone must not satisfy the defined control requirements for a HIGH-risk case.",
+      "basis": "Internal policy / EDD principle"
+    },
+    "min_evidence_strength_control": {
+      "value": {
+        "LOW": 1,
+        "MEDIUM": 1,
+        "HIGH": 2
+      },
+      "classification": "CONSTRAINED",
+      "bound": "May be raised. HIGH must not be below documentary strength for control requirements.",
+      "basis": "Internal policy; Artifact 5"
+    },
+    "min_evidence_strength_ownership": {
+      "value": {
+        "LOW": 2,
+        "MEDIUM": 2,
+        "HIGH": 3
+      },
+      "classification": "CONSTRAINED",
+      "bound": "May be raised. Ownership structure must not resolve solely through uncorroborated customer attestation.",
+      "basis": "Internal policy; Policy §7"
+    },
+    "required_independent_ownership_corroboration_sources": {
+      "value": 1,
+      "classification": "FREE",
+      "bound": "Firm policy. Means at least one source independent of the applicant must corroborate the controlling ownership layer where UBO-R08 requires corroboration.",
+      "basis": "Internal corroboration policy"
+    },
+    "registry_extract_max_age_months": {
+      "value": 3,
+      "classification": "FREE",
+      "bound": "Firm standard.",
+      "basis": "SOP §4.2"
+    },
+    "rfi_expiry_days": {
+      "value": 30,
+      "classification": "FREE",
+      "bound": "Firm standard; expiry consequences are governed by the relevant requirement.",
+      "basis": "SOP §11"
+    },
+    "periodic_review_months": {
+      "value": {
+        "LOW": 36,
+        "MEDIUM": 24,
+        "HIGH": 12
+      },
+      "classification": "FREE",
+      "bound": "Firm policy. Any policy departure requiring approval is handled outside the UBO engine.",
+      "basis": "Policy §13; Artifact 9"
+    }
+  },
+  "evidenceModel": {
+    "strengthScale": {
+      "1": "Recorded customer attestation or declaration.",
+      "2": "Company-originated governance or ownership document with usable internal consistency.",
+      "3": "Strong authenticated/certified/commercial-official-derived documentary evidence.",
+      "4": "Official or equivalent high-authority source record."
+    },
+    "authorityAndStrengthAreSeparate": true,
+    "noStrengthAggregation": "Evidence strengths are not additive. Two strength-1 attestations do not become strength 2.",
+    "sufficiencyRule": "Meeting a numeric strength threshold does not by itself resolve a requirement where can_resolve_alone=false, corroboration_required=true, resolution_effect=POSITIVE_ONLY or analyst interpretation is required.",
+    "conflictRule": "Evidence Platform/capabilities preserve competing facts. UBO determines operative claims. A high-authority source does not automatically overwrite a later or semantically different source without adjudication.",
+    "temporalRule": "Captured date, source effective date and ceased/current state must remain distinguishable. Stale and superseded evidence remains part of historical decision reconstruction."
+  },
+  "evidenceCatalogue": {
+    "items": [
+      {
+        "key": "companies_house_record",
+        "authority": "OFFICIAL_DECLARED",
+        "defaultStrength": 4,
+        "for": [
+          "entity_existence",
+          "officers",
+          "psc_data",
+          "company_control_data",
+          "llp_control_data"
+        ],
+        "factRules": {
+          "entity_existence": {
+            "canResolveAlone": true,
+            "resolutionEffect": "POSITIVE_OR_NEGATIVE"
+          },
+          "psc_positive_relationship": {
+            "canResolveAlone": "REQUIREMENT_DEFINED",
+            "resolutionEffect": "POSITIVE_ONLY"
+          },
+          "absence_of_specific_control_code": {
+            "canResolveAlone": false,
+            "resolutionEffect": "CORROBORATIVE_ONLY"
+          },
+          "ownership_structure": {
+            "canResolveAlone": false,
+            "corroborationRequired": true,
+            "resolutionEffect": "CORROBORATIVE_ONLY"
+          }
+        },
+        "caveat": "PSC information is valuable official register evidence but must not be treated as exhaustive negative proof of every possible control basis."
+      },
+      {
+        "key": "foreign_registry_extract",
+        "authority": "OFFICIAL_SOURCE",
+        "defaultStrength": 4,
+        "for": [
+          "entity_existence",
+          "ownership",
+          "voting_rights",
+          "control"
+        ],
+        "maxAgeRef": "registry_extract_max_age_months",
+        "canResolveAlone": "REQUIREMENT_DEFINED"
+      },
+      {
+        "key": "commercial_registry_data",
+        "authority": "COMMERCIAL_OFFICIAL_DERIVED",
+        "defaultStrength": 3,
+        "for": [
+          "entity_existence",
+          "ownership"
+        ],
+        "canResolveAlone": "REQUIREMENT_DEFINED"
+      },
+      {
+        "key": "certified_constitutional_documents",
+        "authority": "AUTHENTICATED_CUSTOMER_DOCUMENT",
+        "defaultStrength": 3,
+        "for": [
+          "entity_existence",
+          "ownership",
+          "voting_rights",
+          "appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "register_of_members",
+        "authority": "CUSTOMER_CORPORATE_RECORD",
+        "defaultStrength": 2,
+        "for": [
+          "share_ownership"
+        ]
+      },
+      {
+        "key": "share_certificates",
+        "authority": "CUSTOMER_CORPORATE_RECORD",
+        "defaultStrength": 2,
+        "for": [
+          "share_ownership"
+        ]
+      },
+      {
+        "key": "articles_of_association",
+        "authority": "CUSTOMER_GOVERNANCE_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "voting_rights",
+          "board_appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "shareholders_agreement",
+        "authority": "CUSTOMER_GOVERNANCE_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "voting_rights",
+          "board_appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "investment_or_governance_agreement",
+        "authority": "CUSTOMER_GOVERNANCE_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "llp_agreement",
+        "authority": "CUSTOMER_GOVERNANCE_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "surplus_asset_rights",
+          "member_voting_rights",
+          "management_appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "members_agreement",
+        "authority": "CUSTOMER_GOVERNANCE_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "surplus_asset_rights",
+          "member_voting_rights",
+          "management_appointment_rights",
+          "other_control"
+        ]
+      },
+      {
+        "key": "director_certified_structure_chart",
+        "authority": "CUSTOMER_DECLARED_DOCUMENT",
+        "defaultStrength": 2,
+        "for": [
+          "ownership"
+        ],
+        "canResolveControllingLayerAlone": false,
+        "corroborationRequired": true
+      },
+      {
+        "key": "customer_attestation",
+        "authority": "CUSTOMER_ATTESTATION",
+        "defaultStrength": 1,
+        "for": [
+          "negative_control_confirmations",
+          "completeness"
+        ],
+        "canResolveAlone": "REQUIREMENT_DEFINED"
+      }
+    ]
+  },
+  "roleProjection": {
+    "Note": "UBO identifies qualifying roles. The wider KYC/onboarding policy owns IDV, POI, POA, screening and verification workflow execution.",
+    "roles": [
+      {
+        "role": "beneficial_owner",
+        "trigger": "qualifies through applicable economic-interest test"
+      },
+      {
+        "role": "controller_voting",
+        "trigger": "qualifies through applicable voting-control test"
+      },
+      {
+        "role": "controller_appointment",
+        "trigger": "qualifies through applicable management appointment/removal test"
+      },
+      {
+        "role": "controller_other_means",
+        "trigger": "qualifies through significant influence/control by other means"
+      },
+      {
+        "role": "senior_managing_official_fallback",
+        "trigger": "fallback validly applied"
+      },
+      {
+        "role": "nominator_behind_nominee",
+        "trigger": "nominee relationship establishes another natural person as underlying owner/controller"
+      }
+    ],
+    "handoffRule": "For every projected qualifying person, UBO returns canonical person reference, role(s), qualifying basis, known identity attributes and missing identity attributes. The downstream KYC policy determines identity verification, screening and document requirements."
+  },
+  "requirements": [
+    {
+      "requirementId": "UBO-R01",
+      "factKey": "ultimate_economic_interest",
+      "title": "Ultimate qualifying economic interests identified",
+      "description": "Identify every natural person satisfying the applicable economic-interest test. For a COMPANY this includes ultimate share ownership above {param:ownership_threshold_pct}%. For an LLP this includes the applicable rights to more than {param:ownership_threshold_pct}% of surplus assets on winding up. Corporate/intermediate holders must be resolved to natural persons.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5"
+          },
+          {
+            "source": "PSC regime",
+            "provision": "Applicable company/LLP conditions"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "thresholdRef": "ownership_threshold_pct",
+      "entitySemantics": {
+        "COMPANY": {
+          "concept": "SHARE_OWNERSHIP",
+          "actionTemplateId": "DISCLOSE_SHARE_OWNERSHIP"
+        },
+        "LLP": {
+          "concept": "SURPLUS_ASSET_RIGHTS",
+          "actionTemplateId": "DISCLOSE_LLP_SURPLUS_ASSET_RIGHTS"
+        }
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "minStrengthRef": "min_evidence_strength_ownership",
+      "failureOutcome": {
+        "action": "FALLBACK_ELIGIBILITY_OR_CDD_FAILURE",
+        "definitionRef": "unresolvable_ownership",
+        "sarRelevanceCheck": true
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "testAssertions": [
+        "COMPANY: direct qualifying share owner is identified from supported evidence.",
+        "LLP: qualifying rights to surplus assets are evaluated using LLP semantics.",
+        "Corporate holder creates an InformationNeed until ultimate natural persons are resolved."
+      ],
+      "resolutionStrategies": [
+        {
+          "evidence": "companies_house_record",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "note": "PSC information may positively support ownership/control but does not by itself establish exhaustive completeness.",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "actionTemplateId": "DISCLOSE_SHARE_OWNERSHIP"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "condition": "case.entity_profile == 'LLP'",
+          "actionTemplateId": "DISCLOSE_LLP_SURPLUS_ASSET_RIGHTS"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R02",
+      "factKey": "indirect_interest_calculated",
+      "title": "Indirect ownership/control interest calculated through all applicable layers",
+      "description": "Where ownership, economic-interest or voting relationships permit deterministic percentage look-through, calculate effective interests through every evidenced layer and aggregate qualifying independent paths per natural person.",
+      "classification": "DERIVED",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5 — direct or indirect ownership/control"
+          }
+        ],
+        "firmPolicy": [
+          "Deterministic ownership calculation standard"
+        ]
+      },
+      "applicability": {
+        "condition": "facts.ownership_layers >= 2"
+      },
+      "definitionRef": "indirect_ownership_calculation",
+      "attestation": {
+        "allowed": false
+      },
+      "failureOutcome": {
+        "action": "GAP",
+        "note": "Missing or non-computable layer interests create InformationNeeds and block any conclusion dependent on those paths."
+      },
+      "riskSignals": [
+        {
+          "emit": "RATING_FLOOR",
+          "levelRef": "cross_border_layer_risk_floor",
+          "condition": "facts.cross_border_layer == true"
+        },
+        {
+          "emit": "RATING_FLOOR",
+          "level": "MEDIUM",
+          "condition": "facts.ownership_layers >= params.chain_depth_risk_floor_layers"
+        }
+      ],
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "testAssertions": [
+        "Percentage chains multiply deterministically.",
+        "Independent qualifying paths aggregate.",
+        "Ranges remain ranges/min-max rather than being silently converted to exact percentages.",
+        "Cycles cannot silently produce a numeric answer."
+      ],
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "CALCULATION_ONLY",
+          "note": "Calculated from operative graph claims. No customer question may resolve this requirement directly.",
+          "strategy": "DETERMINISTIC_CALCULATION"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R03",
+      "factKey": "intermediate_entities_verified",
+      "title": "Every material intermediate entity and relevant relationship evidenced",
+      "description": "Every material intermediate entity in an ownership/control chain must have sufficient evidence of existence and of the relationship required to continue the chain. Customer-declared structure alone is insufficient where documentary/registry corroboration is required.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 28 — ownership/control structure and beneficial ownership"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §6.1, §7",
+          "SOP §4.2, §5"
+        ]
+      },
+      "applicability": {
+        "condition": "facts.ownership_layers >= 2"
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "minStrengthRef": "min_evidence_strength_ownership",
+      "failureOutcome": {
+        "action": "GAP_THEN_CDD_FAILURE_AS_APPLICABLE",
+        "definitionRef": "unresolvable_ownership",
+        "sarRelevanceCheck": true
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "evidence": "foreign_registry_extract",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "evidence": "commercial_registry_data",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "certified_constitutional_documents",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "CUSTOMER_DOCUMENT"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R04",
+      "factKey": "voting_control_assessed",
+      "title": "Voting control assessed",
+      "description": "Identify any natural person holding, directly or indirectly, more than {param:voting_threshold_pct}% of applicable voting rights, including where voting rights diverge from economic ownership.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5"
+          },
+          {
+            "source": "PSC regime",
+            "provision": "Applicable company/LLP voting-right condition"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "thresholdRef": "voting_threshold_pct",
+      "definitionRef": "voting_control",
+      "attestation": {
+        "allowed": true,
+        "maxRiskRef": "attestation_max_risk_level",
+        "conditions": "Negative attestation only. A positive answer always requires identification of the relevant person/entity and supporting evidence or review.",
+        "statement": "The applicant confirms that no person holds voting rights above the applicable threshold other than as disclosed."
+      },
+      "minStrengthRef": "min_evidence_strength_control",
+      "failureOutcome": {
+        "action": "GAP",
+        "escalateTo": "COMPLIANCE"
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "evidence": "companies_house_record",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "note": "Positive PSC voting information may establish a candidate relationship. Absence of such a code does not automatically prove there is no undisclosed voting-control arrangement.",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "evidence": "articles_of_association",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "shareholders_agreement",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "llp_agreement",
+          "condition": "case.entity_profile == 'LLP'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "DISCLOSE_VOTING_CONTROL"
+        },
+        {
+          "condition": "answers.DISCLOSE_VOTING_CONTROL == 'no'",
+          "strategy": "CUSTOMER_ATTESTATION"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R05",
+      "factKey": "management_appointment_control_assessed",
+      "title": "Management appointment/removal control assessed",
+      "description": "Identify any person with the right to appoint or remove the majority of the applicable management body. For companies this is the board of directors. For LLPs it is the majority of persons entitled to participate in management.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "PSC regime",
+            "provision": "Applicable company/LLP appointment-removal condition"
+          },
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5 control"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "definitionRef": "appointment_removal_control",
+      "attestation": {
+        "allowed": true,
+        "maxRiskRef": "attestation_max_risk_level",
+        "conditions": "Negative attestation only.",
+        "statement": "The applicant confirms that no person has undisclosed rights to appoint or remove a majority of the applicable management body."
+      },
+      "minStrengthRef": "min_evidence_strength_control",
+      "failureOutcome": {
+        "action": "GAP",
+        "escalateTo": "COMPLIANCE"
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01",
+          "E02"
+        ]
+      },
+      "testAssertions": [
+        "COMPANY: qualifying board-majority appointment right produces controller_appointment.",
+        "LLP: qualifying majority-management appointment right produces controller_appointment.",
+        "Risk checkpoint HIGH invalidates attestation-only closure and produces documentary gap without bespoke screen logic."
+      ],
+      "resolutionStrategies": [
+        {
+          "evidence": "companies_house_record",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "evidence": "articles_of_association",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "shareholders_agreement",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "llp_agreement",
+          "condition": "case.entity_profile == 'LLP'",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "investment_or_governance_agreement",
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "DISCLOSE_APPOINTMENT_REMOVAL_CONTROL"
+        },
+        {
+          "condition": "answers.DISCLOSE_APPOINTMENT_REMOVAL_CONTROL == 'no'",
+          "strategy": "CUSTOMER_ATTESTATION"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R06",
+      "factKey": "other_significant_control_assessed",
+      "title": "Other significant influence or control assessed",
+      "description": "Assess whether any additional natural person exercises or has the right to exercise significant influence or control through other means. Documentary rights may require interpretation. De facto/behavioural control may require analyst review.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5 — ultimate/control by other means"
+          },
+          {
+            "source": "PSC statutory guidance",
+            "provision": "Significant influence or control conditions"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "definitionRef": "significant_control_other_means",
+      "attestation": {
+        "allowed": true,
+        "maxRiskRef": "attestation_max_risk_level",
+        "conditions": "Negative attestation only. Positive assertions of control require supporting facts and may require analyst interpretation.",
+        "statement": "The applicant confirms that no other person exercises significant influence or control beyond the ownership, voting and management rights disclosed."
+      },
+      "minStrengthRef": "min_evidence_strength_control",
+      "failureOutcome": {
+        "action": "GAP_OR_REVIEW_REQUIRED",
+        "escalateTo": "COMPLIANCE"
+      },
+      "testAssertions": [
+        "Positive registry control fact may create a candidate claim.",
+        "Absence of PSC condition-4 data does not negatively resolve the requirement.",
+        "Ambiguous veto/decision rights route to REVIEW_REQUIRED rather than automatic UBO determination."
+      ],
+      "resolutionStrategies": [
+        {
+          "evidence": "companies_house_record",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "note": "Absence of an 'other significant control' PSC code cannot resolve this requirement negatively.",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "evidence": "articles_of_association",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "shareholders_agreement",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "llp_agreement",
+          "condition": "case.entity_profile == 'LLP'",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "DISCLOSE_OTHER_SIGNIFICANT_CONTROL"
+        },
+        {
+          "condition": "answers.DISCLOSE_OTHER_SIGNIFICANT_CONTROL == 'no'",
+          "strategy": "CUSTOMER_ATTESTATION"
+        },
+        {
+          "condition": "facts.potential_de_facto_control == true || facts.ambiguous_control_clause == true",
+          "strategy": "ANALYST_REVIEW"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R07",
+      "factKey": "qualifying_person_identity_attributes_captured",
+      "title": "Minimum identity attributes captured for qualifying persons",
+      "description": "For every person determined by UBO to be a qualifying person, capture sufficient canonical identity attributes to distinguish and hand the person downstream without creating duplicate identities. This requirement does not perform IDV, POI, POA or screening.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 28 — identification of beneficial owner"
+          }
+        ],
+        "firmPolicy": [
+          "Canonical-person identity and downstream handoff policy"
+        ]
+      },
+      "applicability": {
+        "condition": "facts.qualifying_persons_count >= 1"
+      },
+      "minimumIdentityAttributes": [
+        "full_legal_name",
+        "date_of_birth_if_available_or_required",
+        "nationality_if_available_or_required",
+        "country_of_residence_if_available_or_required",
+        "ownership_or_control_basis"
+      ],
+      "attestation": {
+        "allowed": false
+      },
+      "failureOutcome": {
+        "action": "GAP",
+        "note": "Downstream verification cannot begin until minimum required identity attributes are available."
+      },
+      "downstreamHandoff": {
+        "emitRoles": true,
+        "idvOwnedBy": "KYC_ONBOARDING_POLICY",
+        "screeningOwnedBy": "KYC_ONBOARDING_POLICY",
+        "poiPoaOwnedBy": "KYC_ONBOARDING_POLICY"
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "evidence": "companies_house_record",
+          "resolutionEffect": "POSITIVE_ONLY",
+          "note": "May provide only a subset of identity attributes.",
+          "strategy": "DISCOVERY"
+        },
+        {
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "note": "Collect only missing attributes for already-resolved qualifying persons.",
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "CAPTURE_QUALIFYING_PERSON_IDENTITY"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R08",
+      "factKey": "ownership_structure_corroborated",
+      "title": "Controlling ownership structure independently corroborated",
+      "description": "The controlling ownership/economic-interest structure must be corroborated against at least {param:required_independent_ownership_corroboration_sources} source(s) independent of the applicant where required by firm policy. Customer declaration alone does not resolve this requirement.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 28 — reasonable measures and understanding ownership/control"
+          }
+        ],
+        "firmPolicy": [
+          "Independent corroboration requirement",
+          "Policy §6.1, §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "minStrengthRef": "min_evidence_strength_ownership",
+      "failureOutcome": {
+        "action": "GAP",
+        "escalateTo": "COMPLIANCE"
+      },
+      "testAssertions": [
+        "Customer declaration alone cannot resolve R08.",
+        "Numeric evidence strength alone cannot bypass independent-source requirement.",
+        "Companies House PSC information may corroborate but must not automatically become final UBO conclusion."
+      ],
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01",
+          "E08"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "CORROBORATIVE_ONLY",
+          "note": "Compare customer-declared/current operative structure with an independent registry or equivalent source.",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "evidence": "register_of_members",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "CORROBORATIVE_ONLY",
+          "strategy": "CUSTOMER_DOCUMENT"
+        },
+        {
+          "evidence": "share_certificates",
+          "condition": "case.entity_profile == 'COMPANY'",
+          "resolutionEffect": "CORROBORATIVE_ONLY",
+          "strategy": "CUSTOMER_DOCUMENT"
+        },
+        {
+          "evidence": "llp_agreement",
+          "condition": "case.entity_profile == 'LLP'",
+          "resolutionEffect": "CORROBORATIVE_ONLY",
+          "strategy": "CUSTOMER_DOCUMENT"
+        },
+        {
+          "evidence": "director_certified_structure_chart",
+          "resolutionEffect": "CORROBORATIVE_ONLY",
+          "note": "This customer-originated document does not itself count as the required independent source.",
+          "strategy": "CUSTOMER_DOCUMENT"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R09",
+      "factKey": "psc_discrepancy_checked",
+      "title": "PSC register discrepancy assessment completed",
+      "description": "For applicable GB companies/LLPs, compare the firm's established beneficial-ownership/control facts with the PSC register. Determine whether any discrepancy is material/reportable under applicable rules. A difference arising solely because PSC and MLR beneficial-owner definitions differ must not automatically be treated as a reportable discrepancy.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 30A"
+          }
+        ],
+        "firmPolicy": [
+          "Material discrepancy workflow",
+          "RFI and compliance-routing standard"
+        ]
+      },
+      "applicability": {
+        "condition": "case.jurisdiction == 'GB'"
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "failureOutcome": {
+        "action": "INTERNAL_POLICY_HOLD_IF_MATERIAL_UNRESOLVED",
+        "escalateTo": "COMPLIANCE",
+        "note": "The HOLD is an internal operating policy for unresolved material discrepancies, not an assertion that every discrepancy legally prohibits onboarding."
+      },
+      "reportingRule": "Only discrepancies meeting the applicable materiality/reportability test are routed for Reg 30A reporting.",
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01",
+          "E08"
+        ]
+      },
+      "testAssertions": [
+        "Material missing PSC may create reportable discrepancy workflow.",
+        "Difference caused only by PSC-vs-MLR definition mismatch is not automatically reportable.",
+        "Non-material discrepancy records rationale without automatically invoking report workflow."
+      ],
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "POSITIVE_OR_NEGATIVE",
+          "note": "Compare final operative UBO/control claims with applicable Companies House PSC evidence.",
+          "strategy": "EXISTING_EVIDENCE"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R10",
+      "factKey": "smo_fallback_applied",
+      "title": "Senior managing official fallback",
+      "description": "After machine/customer ownership and control resolution is complete, require an asynchronous human exhaustion judgment pinned to the current reasoning state. Only a current ALL_POSSIBLE_MEANS_EXHAUSTED decision may derive fallback eligibility, permit final SMO designation and emit downstream risk/verification consequences.",
+      "classification": "CONSTRAINED",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 28(6)-(8)"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §7",
+          "SOP §5"
+        ]
+      },
+      "applicability": {
+        "condition": "facts.fallback_eligible_after_exhausted_measures == true"
+      },
+      "definitionRef": "senior_managing_official",
+      "attestation": {
+        "allowed": false
+      },
+      "riskSignals": [
+        {
+          "emit": "RATING_SET",
+          "level": "HIGH",
+          "condition": "always"
+        }
+      ],
+      "failureOutcome": {
+        "action": "CDD_FAILURE",
+        "sarRelevanceCheck": true,
+        "definitionRef": "unresolvable_ownership"
+      },
+      "testAssertions": [
+        "Fallback cannot activate merely because DiscoveryService returned NO_DATA.",
+        "Fallback cannot activate when required measures were not actually completed.",
+        "Review package and positive exhaustion decision record measures taken and reason fallback was permitted."
+      ],
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "condition": "facts.fallback_review_candidate == true && facts.senior_management_candidates_complete != true",
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "IDENTIFY_SENIOR_MANAGEMENT_CANDIDATES"
+        },
+        {
+          "note": "A case-pinned measures-taken manifest and authoritative asynchronous exhaustion decision must exist before fallback eligibility can be derived.",
+          "strategy": "EXISTING_EVIDENCE"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R11",
+      "factKey": "trust_in_chain_detected",
+      "title": "Trust in ownership/control chain detected and routed",
+      "description": "Detect any trust or trust-like arrangement appearing in the ownership/control chain. This corporate/LLP MVP pack does not make the full trust beneficial-owner determination.",
+      "classification": "DERIVED",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 6"
+          }
+        ],
+        "firmPolicy": [
+          "Trust specialist-routing policy"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "riskSignals": [
+        {
+          "emit": "RATING_SET",
+          "level": "HIGH",
+          "condition": "facts.trust_in_chain == true"
+        }
+      ],
+      "failureOutcome": {
+        "action": "ROUTE_SPECIALIST",
+        "route": "trust_policy_pack",
+        "approver": "MLRO",
+        "note": "MVP does not force trusts into ordinary corporate ownership recursion."
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01",
+          "E10"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "POSITIVE_ONLY",
+          "note": "May be detected from registry/entity type, extracted evidence or declared structure.",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "DISCLOSE_TRUST_IN_CHAIN"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R12",
+      "factKey": "nominee_bearer_arrangements_checked",
+      "title": "Nominee and bearer-share arrangements assessed",
+      "description": "Identify nominee ownership arrangements and resolve the natural person on whose behalf the interest is held. For company structures, assess bearer-share arrangements according to applicable internal acceptance policy. LLP-specific execution applies only to relevant nominee/control arrangements; bearer-share logic is N_A for LLPs.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "Reg 5 and Reg 28"
+          }
+        ],
+        "firmPolicy": [
+          "Policy §5.2, §7"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "entitySemantics": {
+        "COMPANY": {
+          "checkNominee": true,
+          "checkBearerShares": true
+        },
+        "LLP": {
+          "checkNominee": true,
+          "checkBearerShares": false
+        }
+      },
+      "attestation": {
+        "allowed": true,
+        "maxRiskRef": "attestation_max_risk_level",
+        "conditions": "Negative attestation only."
+      },
+      "minStrengthRef": "min_evidence_strength_control",
+      "failureOutcome": {
+        "action": "ESCALATE",
+        "escalateTo": "COMPLIANCE",
+        "note": "Any prohibited bearer-share outcome is determined by the wider customer-acceptance policy."
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "POSITIVE_ONLY",
+          "strategy": "EXISTING_EVIDENCE"
+        },
+        {
+          "strategy": "CUSTOMER_QUESTION",
+          "actionTemplateId": "DISCLOSE_NOMINEE_OR_BEARER_ARRANGEMENT"
+        },
+        {
+          "condition": "answers.DISCLOSE_NOMINEE_OR_BEARER_ARRANGEMENT == 'no'",
+          "strategy": "CUSTOMER_ATTESTATION"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R13",
+      "factKey": "chain_depth_assessed",
+      "title": "Ownership/control chain depth and cross-border character assessed",
+      "description": "Compute graph layer count and cross-border character and emit configured risk signals. This requirement does not itself set the authoritative customer risk rating.",
+      "classification": "DERIVED",
+      "basisType": {
+        "regulatory": [],
+        "firmPolicy": [
+          "Artifact 3 §10.2 risk overrides"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "attestation": {
+        "allowed": false
+      },
+      "riskSignals": [
+        {
+          "emit": "RATING_FLOOR",
+          "level": "MEDIUM",
+          "condition": "facts.ownership_layers >= params.chain_depth_risk_floor_layers"
+        },
+        {
+          "emit": "RATING_FLOOR",
+          "levelRef": "cross_border_layer_risk_floor",
+          "condition": "facts.cross_border_layer == true"
+        }
+      ],
+      "failureOutcome": {
+        "action": "GAP"
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "resolutionEffect": "CALCULATION_ONLY",
+          "strategy": "DETERMINISTIC_CALCULATION"
+        }
+      ]
+    },
+    {
+      "requirementId": "UBO-R14",
+      "factKey": "residual_completeness_attested",
+      "title": "Residual completeness attestation",
+      "description": "Closing attestation from an authorized/appropriately verified declarant that the ownership and control information provided is complete and accurate and that no additional undisclosed person meets the applicable beneficial ownership/control test.",
+      "classification": "MANDATORY",
+      "basisType": {
+        "regulatory": [
+          {
+            "source": "MLR 2017",
+            "provision": "CDD completeness / ownership-control understanding"
+          }
+        ],
+        "firmPolicy": [
+          "Residual completeness attestation"
+        ]
+      },
+      "applicability": {
+        "condition": "always"
+      },
+      "attestation": {
+        "allowed": true,
+        "maxRiskLevel": "HIGH",
+        "conditions": "This attestation is a completeness backstop rather than standalone proof of underlying ownership/control facts.",
+        "statementByEntityProfile": {
+          "COMPANY": "I confirm that the ownership and control information provided is complete and accurate and that no other person owns more than {param:ownership_threshold_pct}% of the shares or voting rights in, or otherwise exercises qualifying control over, this business.",
+          "LLP": "I confirm that the ownership and control information provided is complete and accurate and that no other person has rights above the applicable threshold in the LLP's surplus assets or voting rights, or otherwise exercises qualifying control over the LLP."
+        }
+      },
+      "minStrengthByRisk": {
+        "LOW": 1,
+        "MEDIUM": 1,
+        "HIGH": 1
+      },
+      "failureOutcome": {
+        "action": "HOLD_THEN_CDD_FAILURE_IF_UNRESOLVED",
+        "note": "Refusal to provide required completion confirmation prevents completion of the ownership/control section and follows the wider CDD failure policy."
+      },
+      "refresh": {
+        "periodicRef": "periodic_review_months",
+        "eventSourceRefs": [
+          "E01"
+        ]
+      },
+      "resolutionStrategies": [
+        {
+          "note": "Presented exactly once at the ownership/control submit gate after all other requirements are RESOLVED, N_A or in an explicitly permitted review state.",
+          "strategy": "CUSTOMER_ATTESTATION"
+        }
+      ]
+    }
+  ],
+  "rules": [],
+  "informationNeedPolicy": {
+    "createWhen": [
+      "A policy requirement needs a fact not established to required sufficiency.",
+      "A legal entity holds a potentially qualifying ownership/control right and ultimate natural-person resolution is required.",
+      "A capability returns PARTIAL, NO_DATA, INCONCLUSIVE or UNSUPPORTED and another policy-permitted resolution strategy remains.",
+      "Evidence strength is below the applicable requirement minimum.",
+      "Evidence conflicts and additional information may resolve the conflict."
+    ],
+    "doNotCreateWhen": [
+      "The only issue is a transient capability status UNAVAILABLE or FAILED; create an operational retry/hold instead.",
+      "The requirement is N_A.",
+      "The case is already routed to a terminal specialist state and no further automated resolution is permitted by policy."
+    ],
+    "candidateFactSources": [
+      "DISCOVERY",
+      "EXISTING_EVIDENCE",
+      "EXTRACTION",
+      "CUSTOMER_RESPONSE",
+      "ANALYST_REVIEW"
+    ],
+    "permittedResolutionStrategies": [
+      "DISCOVERY",
+      "EXISTING_EVIDENCE",
+      "CUSTOMER_DOCUMENT",
+      "CUSTOMER_QUESTION",
+      "CUSTOMER_ATTESTATION",
+      "DETERMINISTIC_CALCULATION",
+      "ANALYST_REVIEW"
+    ],
+    "sourceSemanticsNote": "Extraction is a candidate-fact production capability, not by itself a policy reason that a requirement is resolved. Customer documents are obtained through the CUSTOMER_DOCUMENT resolution strategy and may be interpreted through ExtractionService."
+  },
+  "fallbackReviewPolicy": {
+    "reviewType": "FALLBACK_EXHAUSTION",
+    "candidateState": "FALLBACK_REVIEW_CANDIDATE",
+    "readyRecommendation": "READY_FOR_EXHAUSTION_REVIEW",
+    "fallbackNecessityStates": [
+      "NO_QUALIFYING_PERSON_ESTABLISHED",
+      "FIRM_UNSATISFIED_WITH_IDENTIFIED_PERSON"
+    ],
+    "requiredPreFallbackRequirementIds": [
+      "UBO-R01",
+      "UBO-R04",
+      "UBO-R05",
+      "UBO-R06",
+      "UBO-R08",
+      "UBO-R12"
+    ],
+    "conditionalPreFallbackRequirementIds": [
+      "UBO-R02",
+      "UBO-R03"
+    ],
+    "satisfactoryRequirementStates": [
+      "RESOLVED",
+      "N_A"
+    ],
+    "blockingRequirementStates": [
+      "GAP",
+      "CONFLICT",
+      "REVIEW_REQUIRED"
+    ],
+    "customerResolvableStrategies": [
+      "CUSTOMER_DOCUMENT",
+      "CUSTOMER_QUESTION",
+      "CUSTOMER_ATTESTATION"
+    ],
+    "specialistRequirementIds": [
+      "UBO-R11"
+    ],
+    "operationalOutcomesThatNeverProveExhaustion": [
+      "UNAVAILABLE",
+      "FAILED"
+    ],
+    "reviewRequirementStates": [
+      "PENDING",
+      "RESOLVED",
+      "SUPERSEDED"
+    ],
+    "decisionValues": [
+      "ALL_POSSIBLE_MEANS_EXHAUSTED",
+      "FURTHER_MEASURES_AVAILABLE"
+    ],
+    "authoritativeDecisionOrigins": [
+      "ANALYST",
+      "COMPLIANCE"
+    ],
+    "positiveDecision": "ALL_POSSIBLE_MEANS_EXHAUSTED",
+    "derivedEligibilityFactKey": "fallback_eligible_after_exhausted_measures",
+    "negativeDecisionRequiresConcreteInformationNeed": true,
+    "candidateRole": "SENIOR_MANAGEMENT_CANDIDATE",
+    "fallbackRole": "senior_managing_official_fallback",
+    "candidateCollectionActionTemplateId": "IDENTIFY_SENIOR_MANAGEMENT_CANDIDATES"
+  },
+  "resolutionOrchestrationPolicy": {
+    "terminalPrecedence": [
+      "CDD_FAILURE",
+      "SPECIALIST_REVIEW_REQUIRED",
+      "RESOLVED_VIA_SMO_FALLBACK",
+      "RESOLVED_PROVISIONALLY",
+      "RESOLVED",
+      "UNRESOLVABLE"
+    ],
+    "engineNonTerminalState": "IN_PROGRESS",
+    "provisionalRequirementIds": [],
+    "specialistReviewRequirementIds": [
+      "UBO-R06",
+      "UBO-R11"
+    ],
+    "customerProjectionStates": [
+      "CUSTOMER_INPUT_REQUIRED",
+      "CUSTOMER_INPUT_COMPLETE",
+      "INTERNAL_REVIEW_REQUIRED"
+    ],
+    "pscDiscrepancyStates": [
+      "NO_DISCREPANCY",
+      "POTENTIAL_DISCREPANCY",
+      "NON_REPORTABLE_DEFINITION_DIFFERENCE",
+      "REVIEW_REQUIRED"
+    ],
+    "riskSignalTypes": [
+      "RATING_FLOOR",
+      "RATING_SET"
+    ]
+  },
+  "terminalOutcomes": {
+    "RESOLVED": {
+      "description": "All applicable mandatory requirements are resolved and all required determinations can be made."
+    },
+    "RESOLVED_PROVISIONALLY": {
+      "description": "Policy explicitly allows progression on provisional evidence/review state. Use only where a requirement expressly permits it."
+    },
+    "RESOLVED_VIA_SMO_FALLBACK": {
+      "description": "Fallback conditions were actually met after required measures were exhausted and the senior managing official fallback was applied and documented."
+    },
+    "SPECIALIST_REVIEW_REQUIRED": {
+      "description": "The case contains a structure or legal/control interpretation outside the deterministic MVP, including trust resolution or ambiguous/de facto control."
+    },
+    "UNRESOLVABLE": {
+      "description": "Required ownership/control facts could not be established."
+    },
+    "CDD_FAILURE": {
+      "description": "Applicable required CDD measures cannot be completed. The wider onboarding policy determines relationship decline/termination and SAR handling."
+    }
+  },
+  "actionTemplates": {
+    "DISCLOSE_SHARE_OWNERSHIP": {
+      "contentStatus": "CONTROL_ROOM_APPROVED",
+      "sourceReference": "CONTROL_ROOM_SUCCESSOR_POLICY",
+      "textByEntityProfile": {
+        "COMPANY": "Please identify each person or legal entity that currently owns shares in {subject.display_name}. For each shareholder, provide their name and the percentage of shares they own. If the exact percentage is not known, provide the ownership range or other ownership information you know. For a legal-entity shareholder, also provide its registration number and jurisdiction where known."
+      },
+      "answerType": "Repeating structured ownership relationship group",
+      "submissionContract": {
+        "factType": "RELATIONSHIP",
+        "concept": "SHARE_OWNERSHIP",
+        "relationshipType": "ECONOMIC_OWNERSHIP",
+        "direction": "OWNER_TO_TARGET",
+        "target": "INFORMATION_NEED_SUBJECT",
+        "allowedMeasurementTypes": [
+          "EXACT",
+          "RANGE",
+          "UNKNOWN"
+        ],
+        "temporalMeaning": "CURRENT"
+      },
+      "sourceDecision": {
+        "source": "CONTROL_ROOM_SUCCESSOR_POLICY",
+        "decisionDate": "2026-09-01",
+        "supersedesUnresolvedReference": "B1"
+      },
+      "note": "Control Room-authored successor-policy content. The original B1 wording was not recovered."
+    },
+    "DISCLOSE_TRUST_IN_CHAIN": {
+      "contentStatus": "UNRESOLVED_SOURCE_REFERENCE",
+      "sourceReference": "B2",
+      "note": "The supplied source policy referenced B2 but did not include its full template text. Do not invent wording."
+    },
+    "DISCLOSE_OTHER_SIGNIFICANT_CONTROL": {
+      "contentStatus": "UNRESOLVED_SOURCE_REFERENCE",
+      "sourceReference": "B4",
+      "note": "The supplied source policy referenced B4 but did not include its full template text. Do not invent wording."
+    },
+    "CAPTURE_QUALIFYING_PERSON_IDENTITY": {
+      "contentStatus": "UNRESOLVED_SOURCE_REFERENCE",
+      "sourceReference": "B1",
+      "note": "UBO-R07 referenced B1 for collection of missing identity attributes, but the supplied source policy did not include the full interaction template. Do not infer that ownership-disclosure wording is suitable."
+    },
+    "DISCLOSE_VOTING_CONTROL": {
+      "contentStatus": "SUPPLIED",
+      "sourceReference": "B8",
+      "textByEntityProfile": {
+        "COMPANY": "Does any person hold more than {param:voting_threshold_pct}% of the voting rights in the business other than through the share ownership already provided?",
+        "LLP": "Does any person hold more than {param:voting_threshold_pct}% of the voting rights on matters decided by the LLP's members, other than as already disclosed?"
+      },
+      "answerType": "Yes/No + detail",
+      "onYes": "Identify the person or legal entity. If a legal entity holds the right, create an InformationNeed to resolve the natural persons ultimately exercising that control. Obtain appropriate governance evidence.",
+      "onNo": "Record negative attestation where permitted by case risk and UBO-R04."
+    },
+    "DISCLOSE_APPOINTMENT_REMOVAL_CONTROL": {
+      "contentStatus": "SUPPLIED",
+      "sourceReference": "B9",
+      "textByEntityProfile": {
+        "COMPANY": "Does any individual or entity have the right to appoint or remove a majority of the company's directors?",
+        "LLP": "Does any individual or entity have the right to appoint or remove the majority of the persons entitled to participate in management of the LLP?"
+      },
+      "answerType": "Yes/No + detail",
+      "onYes": "Identify the person or entity and request applicable governance evidence. Legal-entity holders create a further InformationNeed for ultimate natural-person control.",
+      "onNo": "Record negative attestation where permitted by case risk and UBO-R05."
+    },
+    "IDENTIFY_SENIOR_MANAGEMENT_CANDIDATES": {
+      "contentStatus": "SUPPLIED",
+      "sourceReference": "B10",
+      "text": "Please identify the most senior individual or individuals responsible for managing the business.",
+      "answerType": "Repeating person group",
+      "shownWhen": "A fallback review candidate exists and sufficient senior-management candidate information is not already established. This question is preparatory and must not establish fallback eligibility, beneficial-owner status or the SMO fallback role."
+    },
+    "DISCLOSE_NOMINEE_OR_BEARER_ARRANGEMENT": {
+      "contentStatus": "SUPPLIED",
+      "sourceReference": "B11",
+      "textByEntityProfile": {
+        "COMPANY": "Are any shares or ownership interests held by a nominee on behalf of another person, or has the company issued bearer shares?",
+        "LLP": "Is any membership, economic or voting interest held by one person or entity on behalf of another person?"
+      },
+      "answerType": "Yes/No + detail",
+      "onYes": "Identify the underlying person and obtain evidence sufficient to establish the underlying relationship.",
+      "onNo": "Record negative attestation where permitted by UBO-R12."
+    },
+    "DISCLOSE_LLP_SURPLUS_ASSET_RIGHTS": {
+      "contentStatus": "SUPPLIED",
+      "sourceReference": "B12",
+      "entityProfile": "LLP",
+      "text": "Please identify each person or entity with rights to share in the LLP's surplus assets on winding up, and state the percentage or basis of that entitlement where known.",
+      "answerType": "Repeating ownership/economic-interest group",
+      "onSubmit": "Corporate/legal-entity holders create InformationNeeds for further look-through until qualifying natural persons are established or a permitted terminal outcome applies."
+    }
+  }
+}

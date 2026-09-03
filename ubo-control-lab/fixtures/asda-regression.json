@@ -1,0 +1,50 @@
+{
+  "fixtureVersion": "ubo-control-lab-asda-structure-v1",
+  "description": "Sanitized synthetic holding-chain shape based on the ASDA product-test regression; no provider payload or real party data.",
+  "status": "partial",
+  "run": { "id": "sanitized-asda-structure-run" },
+  "audit": { "id": "sanitized-asda-structure-audit" },
+  "ownershipGraph": {
+    "rootEntityId": "customer",
+    "nodes": [
+      { "id": "customer", "name": "Example Delivery Customer Ltd", "type": "company", "jurisdiction": "GB", "registrationNumber": "99000001" },
+      { "id": "retail-stores", "name": "Example Retail Stores Ltd", "type": "company", "jurisdiction": "GB", "registrationNumber": "99000002" },
+      { "id": "retail-group", "name": "Example Retail Group Ltd", "type": "company", "jurisdiction": "GB", "registrationNumber": "99000003" },
+      { "id": "acquisition", "name": "Example Acquisition Plc", "type": "company", "jurisdiction": "GB", "registrationNumber": "99000004" },
+      { "id": "finco", "name": "Example Finance Plc", "type": "company", "jurisdiction": "GB", "registrationNumber": "99000005" },
+      { "id": "gp-a", "name": "Example General Partner A LP", "type": "company", "jurisdiction": "GB", "registrationNumber": "SL990001" },
+      { "id": "gp-b", "name": "Example General Partner B Ltd", "type": "company", "jurisdiction": "GB", "registrationNumber": "SC990002" },
+      { "id": "gp-c", "name": "Example General Partner C Ltd", "type": "company", "jurisdiction": "GB", "registrationNumber": "SC990003" },
+      { "id": "capital-llp", "name": "Example Capital LLP", "type": "company", "jurisdiction": "GB", "registrationNumber": "OC990004" },
+      { "id": "owner-a", "name": "Alex Example", "type": "individual", "jurisdiction": "GB", "registrationNumber": null },
+      { "id": "owner-b", "name": "Blair Example", "type": "individual", "jurisdiction": "GB", "registrationNumber": null },
+      { "id": "owner-c", "name": "Casey Example", "type": "individual", "jurisdiction": "GB", "registrationNumber": null }
+    ],
+    "edges": [
+      { "from": "retail-stores", "to": "customer", "type": "ownership", "ownershipPercentage": 75, "metadata": { "currentState": "CURRENT", "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-01"] },
+      { "from": "retail-group", "to": "retail-stores", "type": "ownership", "ownershipPercentage": 75, "metadata": { "currentState": "CURRENT", "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-02"] },
+      { "from": "acquisition", "to": "retail-group", "type": "ownership", "ownershipPercentage": 75, "metadata": { "currentState": "CURRENT", "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-03"] },
+      { "from": "finco", "to": "acquisition", "type": "ownership", "ownershipPercentage": 75, "metadata": { "currentState": "CURRENT", "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-04"] },
+      { "from": "gp-a", "to": "finco", "type": "ownership", "ownershipPercentage": 75, "metadata": { "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-05"] },
+      { "from": "gp-b", "to": "finco", "type": "ownership", "ownershipPercentage": 75, "metadata": { "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-06"] },
+      { "from": "gp-c", "to": "finco", "type": "ownership", "ownershipPercentage": 75, "metadata": { "naturesOfControl": ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"] }, "evidenceIds": ["source-07"] },
+      { "from": "capital-llp", "to": "gp-c", "type": "ownership", "ownershipPercentage": 100, "metadata": { "currentState": "CURRENT", "naturesOfControl": [] }, "evidenceIds": ["source-08"] },
+      { "from": "owner-a", "to": "capital-llp", "type": "control", "ownershipPercentage": null, "metadata": { "currentState": "CURRENT", "relationshipConcept": "VOTING_RIGHTS", "percentageRange": { "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "naturesOfControl": ["voting-rights-25-to-50-percent-limited-liability-partnership"] }, "evidenceIds": ["source-09"] },
+      { "from": "owner-b", "to": "capital-llp", "type": "control", "ownershipPercentage": null, "metadata": { "currentState": "CURRENT", "relationshipConcept": "VOTING_RIGHTS", "percentageRange": { "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "naturesOfControl": ["voting-rights-25-to-50-percent-limited-liability-partnership"] }, "evidenceIds": ["source-10"] },
+      { "from": "owner-c", "to": "capital-llp", "type": "control", "ownershipPercentage": null, "metadata": { "currentState": "CURRENT", "relationshipConcept": "VOTING_RIGHTS", "percentageRange": { "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "naturesOfControl": ["voting-rights-25-to-50-percent-limited-liability-partnership"] }, "evidenceIds": ["source-11"] }
+    ]
+  },
+  "evidence": [
+    { "id": "source-01", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-01" },
+    { "id": "source-02", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-02" },
+    { "id": "source-03", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-03" },
+    { "id": "source-04", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-04" },
+    { "id": "source-05", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-05" },
+    { "id": "source-06", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-06" },
+    { "id": "source-07", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-07" },
+    { "id": "source-08", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-08" },
+    { "id": "source-09", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-09" },
+    { "id": "source-10", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-10" },
+    { "id": "source-11", "source": "Sanitized registry fixture", "sourceUrl": "https://example.invalid/source-11" }
+  ]
+}

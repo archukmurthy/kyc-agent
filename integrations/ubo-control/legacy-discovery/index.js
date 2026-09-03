@@ -163,13 +163,15 @@ function explicitRange(value) {
 }
 
 function rangeFromNature(nature) {
-  const match = String(nature).toLowerCase().match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?$/);
+  const normalized = String(nature).toLowerCase();
+  const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
+  const lowerBound = Number(match[1]);
   return {
     type: PERCENTAGE_VALUE_TYPE.RANGE,
-    lowerBound: Number(match[1]),
+    lowerBound,
     upperBound: Number(match[2]),
-    lowerInclusive: false,
+    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
     upperInclusive: true,
   };
 }
@@ -200,19 +202,36 @@ function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex
       descriptors.push({
         relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
         measurement,
-        qualifiers: { ...temporalQualifiers, economicInterestConcept: "SHARE_OWNERSHIP" },
+        qualifiers: { ...temporalQualifiers, economicInterestConcept: "SHARE_OWNERSHIP", sourceNatureOfControl: nature },
+      });
+    } else if (normalized.includes("right-to-share-surplus-assets")) {
+      descriptors.push({
+        relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+        measurement,
+        qualifiers: { ...temporalQualifiers, entityProfile: "LLP", economicInterestConcept: "SURPLUS_ASSET_RIGHTS", sourceNatureOfControl: nature },
       });
     } else if (normalized.includes("voting-rights")) {
       descriptors.push({
         relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
         measurement,
-        qualifiers: { ...temporalQualifiers, votingConcept: "VOTING_RIGHTS" },
+        qualifiers: { ...temporalQualifiers, votingConcept: "VOTING_RIGHTS", sourceNatureOfControl: nature },
       });
-    } else if (normalized.includes("right-to-appoint-and-remove-directors")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_APPOINTMENT_RIGHT, qualifiers: temporalQualifiers });
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.BOARD_REMOVAL_RIGHT, qualifiers: temporalQualifiers });
+    } else if (normalized.includes("right-to-appoint-and-remove")) {
+      descriptors.push({
+        relationship: RELATIONSHIP_TYPE.FORMAL_CONTROL_RIGHT,
+        qualifiers: {
+          ...temporalQualifiers,
+          controlConcept: "APPOINT_OR_REMOVE_PERSONS",
+          sourceStatementMode: "COMBINED_ALTERNATIVE",
+          sourceNatureOfControl: nature,
+          requiresInterpretation: true,
+        },
+      });
     } else if (normalized.includes("significant-influence-or-control")) {
-      descriptors.push({ relationship: RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL, qualifiers: temporalQualifiers });
+      descriptors.push({
+        relationship: RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL,
+        qualifiers: { ...temporalQualifiers, sourceNatureOfControl: nature },
+      });
     } else {
       adapterIssues.push(issue(
         ADAPTER_ISSUE_CODE.AMBIGUOUS_RELATIONSHIP_SEMANTICS,
@@ -339,7 +358,6 @@ function translateLegacyResponse(request, body) {
         evidenceReferences,
         qualifiers: {
           adapter: "legacy-discovery-anti-corruption-v1",
-          sourceAssertionIndex: sourceIndex,
           ...(descriptor.qualifiers || {}),
         },
       };

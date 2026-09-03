@@ -62,7 +62,10 @@ function actionTemplate(intent) {
     actionTemplateId: intent.actionTemplateReference.actionTemplateId,
     contentStatus: intent.actionTemplateReference.contentStatus || null,
     sourceReference: intent.actionTemplateReference.sourceReference || null,
-    wordingAvailable: intent.actionTemplateReference.contentStatus === "SUPPLIED",
+    wording: intent.actionTemplateReference.wording || null,
+    submissionContract: cloneData(intent.actionTemplateReference.submissionContract || null),
+    wordingAvailable: ["SUPPLIED", "CONTROL_ROOM_APPROVED"]
+      .includes(intent.actionTemplateReference.contentStatus),
   };
 }
 

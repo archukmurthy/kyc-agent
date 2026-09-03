@@ -471,6 +471,70 @@ test("projection is immutable, deterministic, data-only and survives JSON round 
   assert.equal(JSON.stringify(first).includes("function"), false);
 });
 
+test("subject-centred projection excludes disconnected canonical research entities without deleting investigation state", () => {
+  const unused = entity("unused-research-lead", "LEGAL_ENTITY", "Unused Research Lead Ltd", "GB", "COMPANY");
+  const result = project(snapshotFor({
+    caseId: "projection-subject-centred",
+    entities: [CUSTOMER, ALICE, unused],
+    facts: [relationshipFact({
+      factId: "alice-customer-subject-centred",
+      owner: ALICE,
+      owned: CUSTOMER,
+      measurement: exact(40),
+      qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" },
+    })],
+  }));
+  assert.deepEqual(result.nodes.map(({ entityId }) => entityId), ["alice", "customer"]);
+  assert.equal(result.nodes.some(({ entityId }) => entityId === "unused-research-lead"), false);
+  assert.equal(result.summary.totalEntities, 2);
+  assert.equal(result.summary.investigationEntities, 3);
+  assert.equal(result.summary.excludedInvestigationEntities, 1);
+});
+
+test("multiple paths converge on one projected instance per canonical entity", () => {
+  const holdcoA = entity("path-holdco-a", "LEGAL_ENTITY", "Path HoldCo A", "GB", "COMPANY");
+  const holdcoB = entity("path-holdco-b", "LEGAL_ENTITY", "Path HoldCo B", "GB", "COMPANY");
+  const midco = entity("path-midco", "LEGAL_ENTITY", "Path MidCo", "GB", "COMPANY");
+  const result = project(snapshotFor({
+    caseId: "projection-converging-paths",
+    entities: [CUSTOMER, ALICE, holdcoA, holdcoB, midco],
+    facts: [
+      relationshipFact({ factId: "alice-path-a", owner: ALICE, owned: holdcoA, measurement: exact(50), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } }),
+      relationshipFact({ factId: "alice-path-b", owner: ALICE, owned: holdcoB, measurement: exact(50), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } }),
+      relationshipFact({ factId: "path-a-mid", owner: holdcoA, owned: midco, measurement: exact(50), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } }),
+      relationshipFact({ factId: "path-b-mid", owner: holdcoB, owned: midco, measurement: exact(50), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } }),
+      relationshipFact({ factId: "mid-customer", owner: midco, owned: CUSTOMER, measurement: exact(100), qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" } }),
+    ],
+  }));
+  assert.equal(result.nodes.length, 5);
+  assert.equal(new Set(result.nodes.map(({ entityId }) => entityId)).size, 5);
+  assert.equal(result.nodes.filter(({ entityId }) => entityId === "alice").length, 1);
+  assert.equal(result.nodes.filter(({ entityId }) => entityId === "path-midco").length, 1);
+  assert.equal(result.nodes.filter(({ entityId }) => entityId === "customer").length, 1);
+});
+
+test("corroborating evidence claims project as one relationship with multiple claim IDs", () => {
+  const common = {
+    owner: ALICE,
+    owned: CUSTOMER,
+    measurement: exact(40),
+    qualifiers: { economicInterestConcept: "SHARE_OWNERSHIP" },
+  };
+  const result = project(snapshotFor({
+    caseId: "projection-corroboration",
+    entities: [CUSTOMER, ALICE],
+    facts: [
+      relationshipFact({ factId: "corroboration-a", sourceSystem: "source-a", ...common }),
+      relationshipFact({ factId: "corroboration-b", sourceSystem: "source-b", ...common }),
+    ],
+  }));
+  assert.equal(result.nodes.length, 2);
+  assert.equal(result.relationships.length, 1);
+  assert.equal(result.relationships[0].support.claimCount, 2);
+  assert.equal(result.relationships[0].support.claimIds.length, 2);
+  assert.equal(result.relationships[0].support.evidenceReferenceCount, 2);
+});
+
 test("public projection errors normalize version, malformed, unsupported schema and verification failures", () => {
   assert.throws(
     () => projectOwnershipGraph({ contractVersion: "future", decisionSnapshot: {} }),

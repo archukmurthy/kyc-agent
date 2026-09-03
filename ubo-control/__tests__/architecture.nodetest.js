@@ -160,3 +160,17 @@ test("customer-input application remains standalone, data-only, and cannot execu
   assert.doesNotMatch(source, /senior_managing_official_fallback/);
   assert.doesNotMatch(source, /fuzzy|similar name|normalized name|confidence/i);
 });
+
+test("the standalone Lab stays outside onboarding, Evidence, and persistence boundaries", () => {
+  const labRoot = path.resolve(PRODUCT_ROOT, "..", "ubo-control-lab");
+  const serverSource = fs.readFileSync(path.join(labRoot, "server", "labEngine.js"), "utf8");
+  const apiSource = fs.readFileSync(path.resolve(PRODUCT_ROOT, "..", "api", "ubo-control-lab.js"), "utf8");
+  const browserSource = fs.readFileSync(path.join(labRoot, "browser", "lab.js"), "utf8");
+
+  for (const source of [serverSource, apiSource, browserSource]) {
+    assert.doesNotMatch(source, /src[\\/]App|entity_dossiers|journey_state|db[\\/]|migrations[\\/]/i);
+  }
+  assert.doesNotMatch(serverSource, /evidencePlatform|extractFromDoc|documentWorkflow/i);
+  assert.match(browserSource, /Live Evidence/);
+  assert.match(browserSource, /Unavailable until Gate 4/i);
+});

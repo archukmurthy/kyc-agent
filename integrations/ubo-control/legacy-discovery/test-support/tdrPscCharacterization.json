@@ -1,0 +1,29 @@
+{
+  "subject": {
+    "name": "TDR CAPITAL GENERAL PARTNER V L.P.",
+    "registrationNumber": "SL035224",
+    "entityType": "LLP",
+    "jurisdiction": "GB"
+  },
+  "sourceUrl": "https://find-and-update.company-information.service.gov.uk/company/SL035224/persons-with-significant-control",
+  "pscItems": [
+    {
+      "name": "TDR Capital LLP",
+      "kind": "corporate-entity-person-with-significant-control",
+      "identification": { "registration_number": "OC302604", "country_registered": "United Kingdom" },
+      "natures_of_control": ["significant-influence-or-control"]
+    },
+    {
+      "name": "TDR Capital General Partner V Limited",
+      "kind": "corporate-entity-person-with-significant-control",
+      "identification": { "registration_number": "SC707592", "country_registered": "Scotland" },
+      "natures_of_control": ["right-to-appoint-and-remove-person"]
+    },
+    {
+      "name": "TDR Capital Nominees 2021 Limited",
+      "kind": "corporate-entity-person-with-significant-control",
+      "identification": { "registration_number": "13578722", "country_registered": "United Kingdom" },
+      "natures_of_control": ["part-right-to-share-surplus-assets-75-to-100-percent"]
+    }
+  ]
+}

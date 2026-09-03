@@ -1,0 +1,81 @@
+{
+  "id": "LAB19",
+  "sourceScenarioId": "TDR-PSC-SL035224",
+  "label": "TDR PSC source fidelity",
+  "description": "Sanitized public-registry characterization of three distinct PSC assertions at the TDR Capital General Partner V L.P. layer.",
+  "preReviewed": true,
+  "exercise": "PSC_SOURCE_FIDELITY",
+  "scenario": {
+    "id": "TDR-PSC-SL035224",
+    "kind": "CHARACTERIZATION",
+    "title": "TDR Capital PSC nature-of-control fidelity",
+    "purpose": "Keep significant control, combined appointment/removal and LLP surplus-asset assertions semantically distinct.",
+    "context": {
+      "jurisdiction": "GB",
+      "entityProfile": "LLP",
+      "customer": {
+        "name": "TDR CAPITAL GENERAL PARTNER V L.P.",
+        "entityType": "LLP",
+        "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SL035224" }],
+        "entityId": "entity-tdr-gp-v-lp",
+        "jurisdiction": "GB"
+      }
+    },
+    "policyLinks": { "requirementIds": ["UBO-R01", "UBO-R05", "UBO-R06"], "actionTemplateIds": [], "evidenceCatalogueKeys": ["companies_house_psc_register"] },
+    "steps": [{
+      "capability": "DISCOVERY",
+      "request": {
+        "contractVersion": "1.0.0",
+        "requestId": "tdr-psc-discovery-1",
+        "caseId": "tdr-psc-case",
+        "informationNeeds": [{ "needId": "tdr-current-control", "concepts": ["CURRENT_OWNERSHIP_AND_CONTROL"], "policyRequirementId": "UBO-R01" }],
+        "subject": {
+          "name": "TDR CAPITAL GENERAL PARTNER V L.P.",
+          "entityType": "LLP",
+          "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SL035224" }],
+          "entityId": "entity-tdr-gp-v-lp",
+          "jurisdiction": "GB"
+        }
+      },
+      "response": {
+        "contractVersion": "1.0.0",
+        "requestId": "tdr-psc-discovery-1",
+        "outcome": { "state": "PARTIAL", "code": "PUBLIC_REGISTRY_CHARACTERIZATION", "message": "Three current PSC assertions captured independently" },
+        "candidateFacts": [
+          {
+            "factId": "tdr-psc-significant-control",
+            "type": "RELATIONSHIP",
+            "subject": { "name": "TDR Capital LLP", "entityType": "LLP", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "OC302604" }], "jurisdiction": "GB" },
+            "relationship": "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+            "object": { "name": "TDR CAPITAL GENERAL PARTNER V L.P.", "entityType": "LLP", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SL035224" }], "entityId": "entity-tdr-gp-v-lp", "jurisdiction": "GB" },
+            "evidenceReferences": [{ "system": "companies-house", "referenceType": "PSC_REGISTER", "referenceId": "SL035224:PSC:OC302604", "locator": { "sourceUrl": "https://find-and-update.company-information.service.gov.uk/company/SL035224/persons-with-significant-control" } }],
+            "qualifiers": { "currentState": "CURRENT", "sourceNatureOfControl": "significant-influence-or-control" }
+          },
+          {
+            "factId": "tdr-psc-appoint-or-remove",
+            "type": "RELATIONSHIP",
+            "subject": { "name": "TDR Capital General Partner V Limited", "entityType": "COMPANY", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SC707592" }], "jurisdiction": "GB" },
+            "relationship": "FORMAL_CONTROL_RIGHT",
+            "object": { "name": "TDR CAPITAL GENERAL PARTNER V L.P.", "entityType": "LLP", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SL035224" }], "entityId": "entity-tdr-gp-v-lp", "jurisdiction": "GB" },
+            "evidenceReferences": [{ "system": "companies-house", "referenceType": "PSC_REGISTER", "referenceId": "SL035224:PSC:SC707592", "locator": { "sourceUrl": "https://find-and-update.company-information.service.gov.uk/company/SL035224/persons-with-significant-control" } }],
+            "qualifiers": { "currentState": "CURRENT", "controlConcept": "APPOINT_OR_REMOVE_PERSONS", "sourceStatementMode": "COMBINED_ALTERNATIVE", "sourceNatureOfControl": "right-to-appoint-and-remove-person", "requiresInterpretation": true }
+          },
+          {
+            "factId": "tdr-psc-surplus-assets",
+            "type": "RELATIONSHIP",
+            "subject": { "name": "TDR Capital Nominees 2021 Limited", "entityType": "COMPANY", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "13578722" }], "jurisdiction": "GB" },
+            "relationship": "ECONOMIC_OWNERSHIP",
+            "object": { "name": "TDR CAPITAL GENERAL PARTNER V L.P.", "entityType": "LLP", "externalIdentifiers": [{ "namespace": "COMPANIES_HOUSE_COMPANY_NUMBER", "value": "SL035224" }], "entityId": "entity-tdr-gp-v-lp", "jurisdiction": "GB" },
+            "evidenceReferences": [{ "system": "companies-house", "referenceType": "PSC_REGISTER", "referenceId": "SL035224:PSC:13578722", "locator": { "sourceUrl": "https://find-and-update.company-information.service.gov.uk/company/SL035224/persons-with-significant-control" } }],
+            "measurement": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": true, "upperInclusive": true },
+            "qualifiers": { "currentState": "CURRENT", "entityProfile": "LLP", "economicInterestConcept": "SURPLUS_ASSET_RIGHTS", "sourceNatureOfControl": "part-right-to-share-surplus-assets-75-to-100-percent" }
+          }
+        ],
+        "operationEvidenceReferences": [{ "system": "companies-house", "referenceType": "PSC_REGISTER", "referenceId": "SL035224:PSC_REGISTER" }],
+        "issues": [{ "code": "NON_EXHAUSTIVE_CHARACTERIZATION", "message": "Fixture proves assertion fidelity, not exhaustive ultimate ownership." }]
+      }
+    }],
+    "invariants": ["One source assertion creates one supported semantic relationship.", "LLP surplus-asset rights do not become shares or voting rights.", "Combined appointment/removal wording remains one formal control assertion."],
+    "futureExpectations": []
+  }
+}

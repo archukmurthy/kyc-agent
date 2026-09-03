@@ -61,6 +61,8 @@ function templateReference(option) {
     actionTemplateId: option.actionTemplateReference.actionTemplateId,
     contentStatus: option.actionTemplateReference.contentStatus || null,
     sourceReference: option.actionTemplateReference.sourceReference || null,
+    wording: option.actionTemplateReference.wording || null,
+    submissionContract: cloneData(option.actionTemplateReference.submissionContract || null),
   };
 }
 

@@ -86,8 +86,8 @@ function policyIdentity(loadedPolicyPack) {
   validatePolicyPack(loadedPolicyPack.policyPack);
   const policyPack = loadedPolicyPack.policyPack;
   const hash = hashPolicyPack(policyPack);
-  if (loadedPolicyPack.identity?.hash !== hash || policyPack.schemaVersion !== "1.1") {
-    fail("G2.4B requires an exactly loaded schema 1.1 Policy Pack", "POLICY_CONFIGURATION_ERROR");
+  if (loadedPolicyPack.identity?.hash !== hash || !["1.1", "1.2"].includes(policyPack.schemaVersion)) {
+    fail("G2.4B requires an exactly loaded schema 1.1 or 1.2 Policy Pack", "POLICY_CONFIGURATION_ERROR");
   }
   return {
     policyPackId: policyPack.policyPackId,
@@ -100,6 +100,12 @@ function policyIdentity(loadedPolicyPack) {
 
 function parameterValues(policyPack) {
   return Object.fromEntries(Object.entries(policyPack.parameters).map(([key, value]) => [key, cloneData(value.value)]));
+}
+
+function resolvePolicyParameters(text, policyPack) {
+  const values = parameterValues(policyPack);
+  return text.replace(/\{param:([a-z][a-z0-9_]*)\}/g, (token, name) =>
+    Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : token);
 }
 
 function requirementById(policyPack, requirementId) {
@@ -205,8 +211,18 @@ function planResolutionOptions(context, informationNeeds) {
       const templateIds = uniqueSorted(entries.map(({ entry }) => entry.actionTemplateId).filter(Boolean));
       const evidenceTypes = uniqueSorted(entries.map(({ entry }) => entry.evidence).filter(Boolean));
       const template = templateIds.length === 1 ? context.policyPack.actionTemplates[templateIds[0]] : undefined;
+      const entityProfile = context.policyAssessment.policyApplicability.entityProfile;
+      const schema12 = context.policyPack.schemaVersion === "1.2";
+      const wordingSource = schema12 && template && (template.textByEntityProfile?.[entityProfile] || template.text);
+      const wording = wordingSource ? resolvePolicyParameters(wordingSource, context.policyPack) : undefined;
       const actionTemplateReference = template
-        ? { actionTemplateId: templateIds[0], contentStatus: template.contentStatus, ...(template.sourceReference ? { sourceReference: template.sourceReference } : {}) }
+        ? {
+          actionTemplateId: templateIds[0],
+          contentStatus: template.contentStatus,
+          ...(template.sourceReference ? { sourceReference: template.sourceReference } : {}),
+          ...(wording ? { wording } : {}),
+          ...(schema12 && template.submissionContract ? { submissionContract: cloneData(template.submissionContract) } : {}),
+        }
         : undefined;
       options.push(createResolutionOption({
         caseState: context.caseState,

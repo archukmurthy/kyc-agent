@@ -211,9 +211,38 @@ function projectQualifications(content, calculations, relationshipsById, claimsB
   return qualifications.sort((left, right) => left.entityId.localeCompare(right.entityId));
 }
 
+function resolutionActor(option) {
+  if (option.applicabilityState === "REQUIRES_POLICY_CONTENT") return "POLICY_CONTENT";
+  if (["DISCOVERY", "EXISTING_EVIDENCE", "DETERMINISTIC_CALCULATION"].includes(option.strategy)) return "SYSTEM";
+  if (["CUSTOMER_DOCUMENT", "CUSTOMER_QUESTION", "CUSTOMER_ATTESTATION"].includes(option.strategy)) return "CUSTOMER";
+  if (option.strategy === "ANALYST_REVIEW") return "INTERNAL_REVIEW";
+  return "UNASSIGNED";
+}
+
+function calculationReferenceMatches(reference, calculation) {
+  return reference.calculationAlgorithm === calculation.calculationAlgorithm
+    && reference.graphVersion === calculation.graphVersion
+    && reference.subjectEntityId === calculation.subjectEntityId
+    && reference.targetEntityId === calculation.targetEntityId
+    && reference.dimension === calculation.dimension;
+}
+
 function projectUnresolved(content, calculations, relationshipIds) {
-  const needs = (content.decision.informationNeeds || [])
-    .filter(({ state }) => state === undefined || state === "OPEN")
+  const openNeeds = (content.decision.informationNeeds || [])
+    .filter(({ state }) => state === undefined || state === "OPEN");
+  const optionsByNeed = new Map();
+  (content.decision.resolutionOptions || []).forEach((option) => {
+    if (!optionsByNeed.has(option.informationNeedId)) optionsByNeed.set(option.informationNeedId, []);
+    optionsByNeed.get(option.informationNeedId).push(option);
+  });
+  const routesFor = (needIds) => canonicalSort(needIds.flatMap((needId) =>
+    (optionsByNeed.get(needId) || []).map((option) => ({
+      resolutionOptionId: option.optionId,
+      actor: resolutionActor(option),
+      strategy: option.strategy,
+      applicabilityState: option.applicabilityState,
+    }))));
+  const needs = openNeeds
     .map((need) => {
       const relatedRelationshipIds = uniqueStrings([
         need.relationshipId,
@@ -241,21 +270,35 @@ function projectUnresolved(content, calculations, relationshipIds) {
         conflictReferences: uniqueStrings(need.conflictReferences),
         calculationReferences: canonicalSort(need.calculationReferences || []),
         existingEvidenceReferences: uniqueCanonical(need.existingEvidenceReferences || []),
+        resolutionRoutes: routesFor([need.needId]),
       };
     });
-  const paths = calculations.flatMap((calculation) => calculation.unresolvedPaths.map((path) => ({
-    unresolvedId: `unresolved-path:${calculation.calculationId}:${path.pathId}`,
-    kind: "CALCULATION_PATH",
-    entityId: calculation.subjectEntityId,
-    targetEntityId: calculation.targetEntityId,
-    concept: `${calculation.dimension}_EFFECTIVE_INTEREST`,
-    state: "OPEN",
-    requirementIds: [],
-    reasonCodes: uniqueStrings(path.reasons),
-    relatedRelationshipIds: cloneData(path.relationshipIds),
-    calculationId: calculation.calculationId,
-    pathId: path.pathId,
-  })));
+  const paths = calculations.flatMap((calculation) => calculation.unresolvedPaths.map((path) => {
+    const relatedResolutions = (content.decision.requirementResolutions || []).filter((resolution) =>
+      (resolution.calculationReferences || []).some((reference) => calculationReferenceMatches(reference, calculation)));
+    const relatedResolutionNeedIds = new Set(relatedResolutions.flatMap(({ informationNeedIds }) => informationNeedIds || []));
+    const relatedNeeds = openNeeds.filter((need) => relatedResolutionNeedIds.has(need.needId)
+      || (need.calculationReferences || []).some((reference) => calculationReferenceMatches(reference, calculation)));
+    const informationNeedIds = uniqueStrings(relatedNeeds.map(({ needId }) => needId));
+    return {
+      unresolvedId: `unresolved-path:${calculation.calculationId}:${path.pathId}`,
+      kind: "CALCULATION_PATH",
+      entityId: calculation.subjectEntityId,
+      targetEntityId: calculation.targetEntityId,
+      concept: `${calculation.dimension}_EFFECTIVE_INTEREST`,
+      state: "OPEN",
+      requirementIds: uniqueStrings([
+        ...relatedResolutions.map(({ requirementId }) => requirementId),
+        ...relatedNeeds.flatMap(({ requiredBy }) => requiredBy || []),
+      ]),
+      reasonCodes: uniqueStrings(path.reasons),
+      relatedRelationshipIds: cloneData(path.relationshipIds),
+      informationNeedIds,
+      resolutionRoutes: routesFor(informationNeedIds),
+      calculationId: calculation.calculationId,
+      pathId: path.pathId,
+    };
+  }));
   return [...needs, ...paths].sort((left, right) => left.unresolvedId.localeCompare(right.unresolvedId));
 }
 
@@ -353,6 +396,111 @@ function projectReviews(content, calculations) {
   return uniqueCanonical(reviews).sort((left, right) => left.reviewId.localeCompare(right.reviewId));
 }
 
+function subjectCentredSelection({
+  subjectEntityId,
+  entities,
+  relationships,
+  calculations,
+  qualifications,
+  unresolved,
+  conflicts,
+  reviews,
+}) {
+  const relationshipsById = new Map(relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const calculationsById = new Map(calculations.map((calculation) => [calculation.calculationId, calculation]));
+  const entityIds = new Set([subjectEntityId]);
+  const relationshipIds = new Set();
+  const calculationIds = new Set();
+
+  const addRelationship = (relationshipId) => {
+    const relationship = relationshipsById.get(relationshipId);
+    if (!relationship) return false;
+    const before = `${entityIds.size}:${relationshipIds.size}`;
+    relationshipIds.add(relationshipId);
+    entityIds.add(relationship.sourceEntityId);
+    entityIds.add(relationship.targetEntityId);
+    return before !== `${entityIds.size}:${relationshipIds.size}`;
+  };
+  const addCalculation = (calculationId) => {
+    const calculation = calculationsById.get(calculationId);
+    if (!calculation) return false;
+    const before = `${entityIds.size}:${relationshipIds.size}:${calculationIds.size}`;
+    calculationIds.add(calculationId);
+    entityIds.add(calculation.subjectEntityId);
+    entityIds.add(calculation.targetEntityId);
+    [...calculation.paths, ...calculation.unresolvedPaths]
+      .flatMap((path) => path.relationshipIds || []).forEach(addRelationship);
+    return before !== `${entityIds.size}:${relationshipIds.size}:${calculationIds.size}`;
+  };
+  const intersects = (values, selected) => (values || []).some((value) => selected.has(value));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      if (entityIds.has(relationship.targetEntityId)) changed = addRelationship(relationship.relationshipId) || changed;
+    });
+    calculations.forEach((calculation) => {
+      const pathRelationshipIds = [...calculation.paths, ...calculation.unresolvedPaths]
+        .flatMap((path) => path.relationshipIds || []);
+      if (calculation.targetEntityId === subjectEntityId || intersects(pathRelationshipIds, relationshipIds)) {
+        changed = addCalculation(calculation.calculationId) || changed;
+      }
+    });
+    qualifications.forEach((qualification) => {
+      const basisRelationshipIds = qualification.bases.flatMap((basis) => basis.relationshipIds || []);
+      const basisCalculationIds = qualification.bases.map((basis) => basis.calculationId).filter(Boolean);
+      if (!entityIds.has(qualification.entityId)
+        && !intersects(basisRelationshipIds, relationshipIds)
+        && !intersects(basisCalculationIds, calculationIds)) return;
+      entityIds.add(qualification.entityId);
+      qualification.bases.forEach((basis) => {
+        (basis.relationshipIds || []).forEach((id) => { changed = addRelationship(id) || changed; });
+        if (basis.calculationId) changed = addCalculation(basis.calculationId) || changed;
+      });
+    });
+  }
+
+  let selectedUnresolved = [];
+  let selectedConflicts = [];
+  let selectedReviews = [];
+  let stateChanged = true;
+  while (stateChanged) {
+    const before = `${entityIds.size}:${relationshipIds.size}:${calculationIds.size}`;
+    selectedConflicts = conflicts.filter((item) => intersects(item.affectedEntityIds, entityIds)
+      || intersects(item.relatedRelationshipIds, relationshipIds));
+    selectedConflicts.forEach((item) => {
+      (item.affectedEntityIds || []).forEach((id) => entityIds.add(id));
+      (item.relatedRelationshipIds || []).forEach(addRelationship);
+    });
+    selectedReviews = reviews.filter((item) => intersects(item.entityIds, entityIds)
+      || intersects(item.relationshipIds, relationshipIds) || intersects(item.calculationIds, calculationIds));
+    selectedReviews.forEach((item) => {
+      (item.entityIds || []).forEach((id) => entityIds.add(id));
+      (item.relationshipIds || []).forEach(addRelationship);
+      (item.calculationIds || []).forEach(addCalculation);
+    });
+    selectedUnresolved = unresolved.filter((item) => entityIds.has(item.entityId)
+      || entityIds.has(item.targetEntityId) || intersects(item.relatedRelationshipIds, relationshipIds));
+    selectedUnresolved.forEach((item) => {
+      if (item.entityId) entityIds.add(item.entityId);
+      if (item.targetEntityId) entityIds.add(item.targetEntityId);
+      (item.relatedRelationshipIds || []).forEach(addRelationship);
+    });
+    stateChanged = before !== `${entityIds.size}:${relationshipIds.size}:${calculationIds.size}`;
+  }
+
+  return {
+    entities: entities.filter(({ entityId }) => entityIds.has(entityId)),
+    relationships: relationships.filter(({ relationshipId }) => relationshipIds.has(relationshipId)),
+    calculations: calculations.filter(({ calculationId: id }) => calculationIds.has(id)),
+    qualifications: qualifications.filter(({ entityId }) => entityIds.has(entityId)),
+    unresolved: selectedUnresolved,
+    conflicts: selectedConflicts,
+    reviews: selectedReviews,
+  };
+}
+
 function validateProjectionReferences({ entitiesById, relationships, calculations, qualifications, unresolved, conflicts, reviews }) {
   const relationshipIds = new Set(relationships.map(({ relationshipId }) => relationshipId));
   const calculationIds = new Set(calculations.map(({ calculationId: id }) => id));
@@ -438,7 +586,7 @@ function projectOwnershipGraph(input) {
     const unresolvedRelationshipIds = new Set(unresolved.flatMap(({ relatedRelationshipIds }) => relatedRelationshipIds || []));
     const reviewRelationshipIds = new Set(reviews.flatMap(({ relationshipIds: ids }) => ids || []));
 
-    const relationships = canonicalSort(graph.relationships || []).map((relationship) => {
+    const projectedRelationships = canonicalSort(graph.relationships || []).map((relationship) => {
       const evidenceReferences = evidenceForClaims(relationship.supportingClaimIds, claimsById);
       const indicators = uniqueStrings([
         conflictRelationshipIds.has(relationship.relationshipId) ? "CONFLICT" : undefined,
@@ -470,12 +618,29 @@ function projectOwnershipGraph(input) {
       OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE.INCONSISTENT_DECISION_SNAPSHOT,
       "DecisionSnapshot does not identify a canonical regulated subject",
     );
-    const qualificationByEntity = new Map(qualifications.map((item) => [item.entityId, item]));
-    const unresolvedEntities = new Set(unresolved.map(({ entityId }) => entityId).filter(Boolean));
-    const conflictEntities = new Set(conflicts.flatMap(({ affectedEntityIds }) => affectedEntityIds));
-    const reviewEntities = new Set(reviews.flatMap(({ entityIds }) => entityIds || []));
+    const selected = subjectCentredSelection({
+      subjectEntityId,
+      entities,
+      relationships: projectedRelationships,
+      calculations,
+      qualifications,
+      unresolved,
+      conflicts,
+      reviews,
+    });
+    const selectedEntitiesById = new Map(selected.entities.map((entity) => [entity.entityId, entity]));
+    const relationships = selected.relationships;
+    const selectedCalculations = selected.calculations;
+    const selectedQualifications = selected.qualifications;
+    const selectedUnresolved = selected.unresolved;
+    const selectedConflicts = selected.conflicts;
+    const selectedReviews = selected.reviews;
+    const qualificationByEntity = new Map(selectedQualifications.map((item) => [item.entityId, item]));
+    const unresolvedEntities = new Set(selectedUnresolved.map(({ entityId }) => entityId).filter(Boolean));
+    const conflictEntities = new Set(selectedConflicts.flatMap(({ affectedEntityIds }) => affectedEntityIds));
+    const reviewEntities = new Set(selectedReviews.flatMap(({ entityIds }) => entityIds || []));
     const incomingEntities = new Set(relationships.map(({ targetEntityId }) => targetEntityId));
-    const nodes = entities.map((entity) => {
+    const nodes = selected.entities.map((entity) => {
       const qualification = qualificationByEntity.get(entity.entityId);
       const specialStructure = entity.category === "TRUST_OR_LEGAL_ARRANGEMENT";
       const semantics = uniqueStrings([
@@ -499,7 +664,15 @@ function projectOwnershipGraph(input) {
       };
     }).sort((left, right) => left.entityId.localeCompare(right.entityId));
 
-    validateProjectionReferences({ entitiesById, relationships, calculations, qualifications, unresolved, conflicts, reviews });
+    validateProjectionReferences({
+      entitiesById: selectedEntitiesById,
+      relationships,
+      calculations: selectedCalculations,
+      qualifications: selectedQualifications,
+      unresolved: selectedUnresolved,
+      conflicts: selectedConflicts,
+      reviews: selectedReviews,
+    });
     const subject = nodes.find(({ entityId }) => entityId === subjectEntityId);
     const projection = {
       contractVersion: OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
@@ -526,22 +699,25 @@ function projectOwnershipGraph(input) {
       },
       nodes,
       relationships,
-      calculations,
-      qualifications,
-      unresolved,
-      conflicts,
-      reviews,
+      calculations: selectedCalculations,
+      qualifications: selectedQualifications,
+      unresolved: selectedUnresolved,
+      conflicts: selectedConflicts,
+      reviews: selectedReviews,
       limitations: [],
       summary: {
         totalEntities: nodes.length,
         totalRelationships: relationships.length,
-        qualifyingPeople: qualifications.length,
-        unresolvedBranches: unresolved.length,
-        conflicts: conflicts.length,
-        reviewRequirements: reviews.length,
-        economicPaths: calculations.filter(({ dimension }) => dimension === "ECONOMIC")
+        investigationEntities: entities.length,
+        excludedInvestigationEntities: entities.length - nodes.length,
+        investigationRelationships: projectedRelationships.length,
+        qualifyingPeople: selectedQualifications.length,
+        unresolvedBranches: selectedUnresolved.length,
+        conflicts: selectedConflicts.length,
+        reviewRequirements: selectedReviews.length,
+        economicPaths: selectedCalculations.filter(({ dimension }) => dimension === "ECONOMIC")
           .reduce((count, calculation) => count + calculation.paths.length + calculation.unresolvedPaths.length, 0),
-        votingPaths: calculations.filter(({ dimension }) => dimension === "VOTING")
+        votingPaths: selectedCalculations.filter(({ dimension }) => dimension === "VOTING")
           .reduce((count, calculation) => count + calculation.paths.length + calculation.unresolvedPaths.length, 0),
       },
     };

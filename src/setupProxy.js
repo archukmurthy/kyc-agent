@@ -30,6 +30,7 @@ const companySearchHandler = require(path.join(__dirname, "..", "api", "company-
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
+const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
@@ -364,6 +365,19 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(uboDiscoveryHandler)(req, res);
+    });
+  });
+
+  // Standalone, session-only UBO Control Lab. Uses public UBO APIs and keeps
+  // the sealed case envelope in the browser-owned session payload.
+  app.get("/api/ubo-control-lab", adapt(uboControlLabHandler));
+  app.post("/api/ubo-control-lab", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboControlLabHandler)(req, res);
     });
   });
 

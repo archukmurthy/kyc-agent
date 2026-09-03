@@ -35,6 +35,12 @@ function renderGraph(value, props = {}) {
     root,
     click(element) { act(() => element.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))); },
     key(element, key) { act(() => element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, bubbles: true }))); },
+    resize(width, height) {
+      const viewport = container.querySelector(".ug-canvas-scroll");
+      Object.defineProperty(viewport, "clientWidth", { configurable: true, value: width });
+      Object.defineProperty(viewport, "clientHeight", { configurable: true, value: height });
+      act(() => dom.window.dispatchEvent(new dom.window.Event("resize")));
+    },
     cleanup() {
       act(() => root.unmount());
       dom.window.close();
