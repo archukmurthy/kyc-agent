@@ -1,0 +1,1614 @@
+{
+  "schemaVersion": "1.0",
+  "policyPackId": "UBO-UK-CORPORATE",
+  "policyVersion": "1.6-RC",
+  "policySchemaVersion": "1.3",
+  "source": {
+    "file": "Freeze File 07 — UBO Characterization and Test Plan v1",
+    "path": "ubo-control/docs/freeze/uk-mvp-v1.0/07-UBO-CHARACTERIZATION-AND-TEST-PLAN-v1.md",
+    "coveredSections": "§§3–16 plus explicit effective-interest preservation statement"
+  },
+  "rule": "A data declaration is not executable behavior. executableNow is true only for a same-wave schema/readiness assertion or an already-protected historical runtime behavior.",
+  "classifications": [
+    "SCHEMA_PROTECTED_NOW",
+    "READINESS_PROTECTED_NOW",
+    "EXISTING_RUNTIME_PROTECTED",
+    "WAVE_3_QUALIFICATION_BASIS",
+    "WAVE_4_COMPANY_ATTRIBUTION",
+    "BLOCKED_A_06",
+    "BLOCKED_A_09",
+    "WAVE_6_LAYER_CLOSURE",
+    "WAVE_7_PHASED_COORDINATOR",
+    "WAVE_8_FRONTIER_NEEDS",
+    "WAVE_9_PLANNER",
+    "WAVE_10_LAB",
+    "WAVE_11_APPLICANT",
+    "DEFERRED",
+    "PRODUCTION_SIGNOFF_REQUIRED"
+  ],
+  "policyContainerAssertions": [
+    {
+      "assertionId": "W2-IDENTITY",
+      "assertion": "v1.6-RC has schema 1.3, CONTROL_ROOM_REVIEW status, null effective date and null approver.",
+      "classification": "SCHEMA_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-HASH",
+      "assertion": "The v1.6-RC canonical hash is deterministic and recorded in SOURCE_MAPPING.md.",
+      "classification": "SCHEMA_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-HISTORY",
+      "assertion": "v1.5-RC remains byte-identical with its accepted canonical hash and remains selected by the current Lab.",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-SIGNOFFS",
+      "assertion": "A-01 through A-18 exist exactly once with the Control Room statuses and no approval inferred.",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-READINESS",
+      "assertion": "v1.6-RC is REVIEW_ONLY in Lab, BLOCKED in production and cannot currently return READY.",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [
+        "A-08",
+        "A-09",
+        "A-10",
+        "A-11"
+      ],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-DOCTRINE",
+      "assertion": "Three qualification routes, separate statutory thresholds and all frozen schema-1.3 doctrine structures validate as data.",
+      "classification": "SCHEMA_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-NO-EXECUTION",
+      "assertion": "No current composition, Decision Application v1/v2, snapshot, projection, ASDA fixture or public API executes v1.6-RC.",
+      "classification": "SCHEMA_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "W2-LIFECYCLE",
+      "assertion": "E01, E02, E08 and E10 remain unresolved and production-disabled pending A-16.",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-16"
+      ],
+      "executableNow": false
+    }
+  ],
+  "assertions": [
+    {
+      "assertionId": "F07-03-001",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "no legacy imports in core;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-002",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "no Evidence implementation imports in core;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-003",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "candidate facts not conclusions;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-004",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "no direct graph mutation;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-005",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "exact/range/unknown;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-006",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "no float drift;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-007",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "path multiplication;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-008",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "independent-path aggregation;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-009",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "duplicate evidence not duplicate ownership;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-010",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "incompatible operative claims fail;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-011",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "NO_PATH not zero;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-012",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "cycles fail safe;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-013",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "voting/economic separation;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-014",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "operational failure not NO_DATA;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-015",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "explicit identity and adjudication;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-016",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "immutable snapshots;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-017",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "customer action through application boundary;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-018",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "replay performs no live paid search;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-03-019",
+      "sourceSection": "§3 Existing behaviours to preserve",
+      "sourceSubsection": null,
+      "assertion": "one canonical entity = one visual node.",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-04-001",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Threshold/comparator matrix",
+      "assertion": "statutory `>25`;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-002",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Threshold/comparator matrix",
+      "assertion": "statutory `>=25`;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-003",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Threshold/comparator matrix",
+      "assertion": "firm `>=10`;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-004",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Threshold/comparator matrix",
+      "assertion": "statutory + firm simultaneously.",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-005",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Firm overlay",
+      "assertion": "15% person is firm-policy person under >=10;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-006",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Firm overlay",
+      "assertion": "not statutory UBO under >25;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-007",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Firm overlay",
+      "assertion": "host handoff retains both classifications;",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-04-008",
+      "sourceSection": "§4 New Doctrine A tests",
+      "sourceSubsection": "Firm overlay",
+      "assertion": "firm threshold cannot suppress a statutory UBO.",
+      "classification": "WAVE_3_QUALIFICATION_BASIS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-001",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "`(75,100]` + `>25` → CLOSED;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-002",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "`[75,100]` + `>=25` → OPEN;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-003",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "`[76,100]` + `>=25` → CLOSED;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-004",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "75% + firm >=10 → OPEN;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-005",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "40% + 35% lower bounds, >25 → CLOSED;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-006",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Closure truth table",
+      "assertion": "unknown/unidentified holder → INDETERMINATE.",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-007",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "dual-class shares: economic closed, voting open;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-008",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "invalid denominator blocks closure;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-009",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "overlapping interests fail;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-010",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "contradictory sources block closure;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-011",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "stale/currentness unknown blocks closure where material;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-012",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "joint-arrangement signal blocks closure;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-013",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Qualifiers",
+      "assertion": "closure does not imply exact value verified.",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-014",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Precision",
+      "assertion": "band wholly above/below threshold → no exact request;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-015",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Precision",
+      "assertion": "interval straddles outcome → exactness needed;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-016",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Precision",
+      "assertion": "registry band + declaration → corroborated state;",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [
+        "A-03"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-05-017",
+      "sourceSection": "§5 New Doctrine B tests",
+      "sourceSubsection": "Precision",
+      "assertion": "outside-band declaration → conflict.",
+      "classification": "WAVE_6_LAYER_CLOSURE",
+      "signoffDependencies": [
+        "A-03"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-001",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "60% TopCo; TopCo 40% Customer → effective 24%, attribution positive;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-002",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "30% TopCo; TopCo 40% Customer → effective 12%, no majority attribution;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-003",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "75–100 chain through several entities → attribution chain positive;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-004",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "one 25–50 link breaks majority chain;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-005",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "voting right attributed separately;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-006",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "appointment/removal majority;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09",
+        "A-12"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-007",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "SIoC positive;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-008",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "UNKNOWN majority step → indeterminate;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-009",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "no mixed-method percentage;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-010",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "PSC attribution",
+      "assertion": "multiple qualifying routes retained for one person.",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-011",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "Joint arrangements",
+      "assertion": "two explicit joint participants are each attributed combined right;",
+      "classification": "DEFERRED",
+      "signoffDependencies": [
+        "A-13"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-012",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "Joint arrangements",
+      "assertion": "similar percentages without evidence do not infer joint arrangement;",
+      "classification": "DEFERRED",
+      "signoffDependencies": [
+        "A-13"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-013",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "Joint arrangements",
+      "assertion": "positive signal routes to review where not deterministic.",
+      "classification": "DEFERRED",
+      "signoffDependencies": [
+        "A-13"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-014",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "LLP",
+      "assertion": "surplus-asset condition;",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06",
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-015",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "LLP",
+      "assertion": "LLP voting;",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06",
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-016",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "LLP",
+      "assertion": "majority management appointment/removal;",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06",
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-017",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "LLP",
+      "assertion": "LLP majority-chain attribution;",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06",
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-018",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "LLP",
+      "assertion": "TDR characterization remains provisional until sign-off fixture enabled.",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06",
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-001",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "listed customer with valid market/evidence → listed route;",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-14"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-002",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "invalid/non-qualifying market → no shortcut;",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-14"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-003",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "majority-owned consolidated subsidiary with all proof → treatment after sign-off;",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-07"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-004",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "missing consolidation evidence → unresolved;",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-07"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-005",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "arbitrary intermediate listed parent does not terminate by default;",
+      "classification": "DEFERRED",
+      "signoffDependencies": [
+        "A-01"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-07-006",
+      "sourceSection": "§7 Listed tests",
+      "sourceSubsection": null,
+      "assertion": "enabled firm-approved branch terminus pins rule/evidence.",
+      "classification": "PRODUCTION_SIGNOFF_REQUIRED",
+      "signoffDependencies": [
+        "A-14"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-001",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "one missing frontier edge creates one causal need;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-002",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "downstream affected paths link to that need;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-003",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "no need per intermediary;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-004",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "no duplicate projection count;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-005",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "subject-level R04 remains;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [
+        "A-04"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-006",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "intermediary R04 only on attribution chain/positive signal;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [
+        "A-04"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-007",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "R02/R03 activate from graph-derived facts;",
+      "classification": "WAVE_7_PHASED_COORDINATOR",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-008",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "R07 activates from qualifying-person output;",
+      "classification": "WAVE_7_PHASED_COORDINATOR",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-009",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "R08 remains one structure-level need;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-010",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "positive trust/nominee signal remains separate;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-08-011",
+      "sourceSection": "§8 InformationNeed tests",
+      "sourceSubsection": null,
+      "assertion": "negative residual statements do not fan out.",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-001",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "Discovery-led when capability profile predicts coverage;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-002",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "predictive chart pivot on opaque frontier;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-15"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-003",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "pivot before paid attempt where configured capability proves unavailable;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-004",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "repeated NO_DATA and common structural cause collapse into one structure request;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-005",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "chart offered as candidate structure, not proof;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-006",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "accessible extracted edges independently verified;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-007",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "residual unsupported edges batched;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-008",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "no oscillation without material change;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-009",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "RegistryCapabilityProfile version/hash pinned;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-15"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-010",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "provider outage does not burden customer;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-011",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "guided builder alternative for no-chart SME;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-09-012",
+      "sourceSection": "§9 Planner/acquisition tests",
+      "sourceSubsection": null,
+      "assertion": "delegation preserves actor/capacity.",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-001",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "one interaction, multiple stored statements;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-002",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "each statement independently resolves/branches;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-003",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "one positive does not invalidate other negatives;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-004",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "blocked by contrary evidence;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-005",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "allowed only at approved risk tier;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-10-006",
+      "sourceSection": "§10 Residual confirmation tests",
+      "sourceSubsection": null,
+      "assertion": "final completeness does not cure ownership gap.",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-001",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "measure categories considered and dispositioned;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-002",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "non-executed measure requires reason;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-003",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "case-specific manifest, not universal execution checklist;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-004",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "analyst/compliance decision required;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-005",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "NO_DATA alone never triggers fallback;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-006",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "operational failure blocks/redirects appropriately;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-007",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "customer refusal → CDD failure, not fallback;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-008",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "valid fallback preserves written record and SMO downstream handoff;",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-11-009",
+      "sourceSection": "§11 SMO/exhaustion tests",
+      "sourceSubsection": null,
+      "assertion": "stale review invalidated by material case change.",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-10"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-001",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "first-RLE/register-scope difference;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-002",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "effective-interest-only person absent from register → METHOD_DIFFERENCE;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-003",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "timing/staleness;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-004",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "actual contradictory registrable fact → review;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-005",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "analyst-confirmed material discrepancy → Reg 30A report candidate;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-12-006",
+      "sourceSection": "§12 R09 tests",
+      "sourceSubsection": null,
+      "assertion": "no automatic regulatory submission.",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-001",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "12 canonical entities from the sanitized case;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-13-002",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "no duplicate exact registry IDs;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-13-003",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "three TDR persons are voting `(25,50]`, not economic owners;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-13-004",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "mixed voting/economic path is not multiplied;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-13-005",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "economic chain bands retained;",
+      "classification": "DEFERRED",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-006",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "Schedule 1A route evaluated independently;",
+      "classification": "WAVE_4_COMPANY_ATTRIBUTION",
+      "signoffDependencies": [
+        "A-09"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-007",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "TDR governance frontier, not per-intermediary fan-out;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [
+        "A-06"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-008",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "causal needs not double-counted as paths;",
+      "classification": "WAVE_8_FRONTIER_NEEDS",
+      "signoffDependencies": [
+        "A-06"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-009",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "ownership-first graph with control toggles;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-010",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "no blanket unresolved nodes;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-011",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "2–4 coherent applicant interactions as benchmark;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-13-012",
+      "sourceSection": "§13 ASDA permanent characterization",
+      "sourceSubsection": null,
+      "assertion": "final TDR natural-person result marked provisional until A06 sign-off.",
+      "classification": "BLOCKED_A_06",
+      "signoffDependencies": [
+        "A-06"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-001",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "data-rich confirmation only;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-002",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "known information not re-requested;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-003",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "exactness question only when decision-sensitive;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-004",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "chart-assisted route;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-005",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "no-chart guided builder;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-006",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "one batched residual screen;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [
+        "A-02",
+        "A-17"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-007",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "separate structured statements;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-008",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "Something Changed route preserves history/conflict;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-009",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "delegation;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-010",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "customer input complete while internal review pending;",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-14-011",
+      "sourceSection": "§14 Customer journey tests",
+      "sourceSubsection": null,
+      "assertion": "downstream IDV handoff separate.",
+      "classification": "WAVE_11_APPLICANT",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-001",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "one graph;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-002",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "ownership default;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-003",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "control toggles;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-004",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "Fit width/overview;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-005",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "deterministic unresolved list;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-006",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "edge status vocabulary;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-007",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "node not blanket unresolved;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-008",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "qualification explanation by route;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-009",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "effective-interest and attribution shown separately;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-010",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "evidence states visible;",
+      "classification": "WAVE_10_LAB",
+      "signoffDependencies": [],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-15-011",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "old snapshots reconstruct unchanged;",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-15-012",
+      "sourceSection": "§15 Lab/analyst tests",
+      "sourceSubsection": null,
+      "assertion": "review-policy watermark.",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-001",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "non-approved pack rejected outside Lab;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-002",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "null effective date rejected;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-003",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "missing approver rejected;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-004",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "unresolved blocking sign-off rejected;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [
+        "A-08",
+        "A-09",
+        "A-10",
+        "A-11"
+      ],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-005",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "unsupported policy/algorithm combination rejected;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-006",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "historical pack remains reconstructable;",
+      "classification": "READINESS_PROTECTED_NOW",
+      "signoffDependencies": [],
+      "executableNow": true
+    },
+    {
+      "assertionId": "F07-16-007",
+      "sourceSection": "§16 Runtime safety tests",
+      "sourceSubsection": null,
+      "assertion": "DecisionSnapshot pins RegistryCapabilityProfile when used.",
+      "classification": "WAVE_9_PLANNER",
+      "signoffDependencies": [
+        "A-15"
+      ],
+      "executableNow": false
+    },
+    {
+      "assertionId": "F07-06-EFFECTIVE-INTEREST-001",
+      "sourceSection": "§6 New Doctrine C tests",
+      "sourceSubsection": "Effective interest",
+      "assertion": "Retain all existing arithmetic cases.",
+      "classification": "EXISTING_RUNTIME_PROTECTED",
+      "signoffDependencies": [],
+      "executableNow": true
+    }
+  ]
+}
