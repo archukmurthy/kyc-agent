@@ -33,6 +33,7 @@ const {
 } = require("../contracts/constants");
 const { CANONICALIZATION_ALGORITHM, canonicalizeJson } = require("./canonicalJson");
 const { validateConditionExpression } = require("./conditionLanguage");
+const { validatePolicyPackSchema13 } = require("./policyPackSchema13");
 
 const TOP_LEVEL_FIELDS = Object.freeze([
   "schemaId",
@@ -63,6 +64,29 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "actionTemplates",
 ]);
 
+const SCHEMA_13_TOP_LEVEL_FIELDS = Object.freeze([
+  ...TOP_LEVEL_FIELDS,
+  "legalBaseline",
+  "productionReadiness",
+  "signoffs",
+  "qualificationDoctrine",
+  "statutoryThresholds",
+  "firmCollectionThreshold",
+  "firmLayerHolderCollection",
+  "layerCompletenessDoctrine",
+  "percentageEvidenceStates",
+  "declaredExactWithinIndependentBand",
+  "controlActionGating",
+  "residualConfirmationBundle",
+  "listedTreatment",
+  "exhaustionMeasureCategories",
+  "allowedDispositions",
+  "reasonRequiredForNonExecuted",
+  "authorisedExhaustionDecisionOrigins",
+  "structureAcquisition",
+  "phasedEvaluationOrder",
+]);
+
 const ENGINE_SEMANTIC_FIELDS = Object.freeze([
   "capabilityContractVersion",
   "conditionLanguageVersion",
@@ -89,7 +113,7 @@ const ACTION_CONTENT_STATUS = Object.freeze({
   UNRESOLVED_SOURCE_REFERENCE: "UNRESOLVED_SOURCE_REFERENCE",
 });
 
-const SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS = new Set([POLICY_PACK_SCHEMA_VERSION, "1.1", "1.2"]);
+const SUPPORTED_POLICY_PACK_SCHEMA_VERSIONS = new Set([POLICY_PACK_SCHEMA_VERSION, "1.1", "1.2", "1.3"]);
 const ACTION_SUBMISSION_FACT_TYPE = Object.freeze({ RELATIONSHIP: "RELATIONSHIP" });
 const ACTION_SUBMISSION_DIRECTION = Object.freeze({ OWNER_TO_TARGET: "OWNER_TO_TARGET" });
 const ACTION_SUBMISSION_TARGET = Object.freeze({ INFORMATION_NEED_SUBJECT: "INFORMATION_NEED_SUBJECT" });
@@ -380,8 +404,8 @@ function validateActionTemplates(actionTemplates, sourceTraceability, schemaVers
         policyError(`Action template ${actionId} cannot be both supplied and unresolved`);
       }
       if (template.contentStatus === ACTION_CONTENT_STATUS.CONTROL_ROOM_APPROVED) {
-        if (schemaVersion !== "1.2") {
-          policyError(`Control Room-approved action template ${actionId} requires Policy Pack schema 1.2`);
+        if (!["1.2", "1.3"].includes(schemaVersion)) {
+          policyError(`Control Room-approved action template ${actionId} requires Policy Pack schema 1.2 or later`);
         }
         validateSubmissionContract(
           template.submissionContract,
@@ -622,8 +646,6 @@ function validatePolicyPack(input) {
     const policyPack = asParsedData(input);
     assertPlainObject(policyPack, "policyPack");
     assertDataOnly(policyPack, "policyPack");
-    assertAllowedKeys(policyPack, TOP_LEVEL_FIELDS, "policyPack");
-
     if (policyPack.schemaId !== POLICY_PACK_SCHEMA_ID) {
       policyError(`policyPack.schemaId must equal ${POLICY_PACK_SCHEMA_ID}`, "UNSUPPORTED_POLICY_SCHEMA");
     }
@@ -633,6 +655,11 @@ function validatePolicyPack(input) {
         "UNSUPPORTED_POLICY_SCHEMA",
       );
     }
+    assertAllowedKeys(
+      policyPack,
+      policyPack.schemaVersion === "1.3" ? SCHEMA_13_TOP_LEVEL_FIELDS : TOP_LEVEL_FIELDS,
+      "policyPack",
+    );
     assertNonEmptyString(policyPack.policyPackId, "policyPack.policyPackId");
     assertNonEmptyString(policyPack.version, "policyPack.version");
     assertNonEmptyString(policyPack.status, "policyPack.status");
@@ -640,6 +667,7 @@ function validatePolicyPack(input) {
     assertPlainObject(policyPack.applicability, "policyPack.applicability");
     assertPlainObject(policyPack.effectivePeriod, "policyPack.effectivePeriod");
     assertSupportedEngineSemantics(policyPack.engineSemantics);
+    if (policyPack.schemaVersion === "1.3") validatePolicyPackSchema13(policyPack);
 
     if (policyPack.sourceTraceability !== undefined) {
       assertPlainObject(policyPack.sourceTraceability, "policyPack.sourceTraceability");

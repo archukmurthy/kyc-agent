@@ -1,5 +1,25 @@
 # UBO Control product requirements
 
+## PR-POL-001 — Policy Schema 1.3 & Runtime Readiness
+
+**Status:** IMPLEMENTED — FREEZE IMPLEMENTATION WAVE 1
+
+**Target:** UK MVP successor-policy readiness boundary
+
+UBO Control must validate future camelCase schema-1.3 Policy Packs additively and expose an explicit, provider-neutral assessment of whether a pack may be used in Lab, production, or historical-reconstruction context.
+
+Acceptance principles:
+
+- Schemas 1.0, 1.1 and 1.2 and their canonical hashes remain unchanged.
+- Schema 1.3 strictly validates the accepted Freeze Pack structures but Wave 1 does not ship UK Corporate 1.6-RC policy content or execute its doctrine.
+- Machine-readable sign-offs and production requirements are declared by the pack; the runtime never hard-codes Control Room identifiers.
+- Disabled optional-feature dependencies do not block merely by existing; enabled unsigned features do.
+- `LAB` clearly identifies review packs, `PRODUCTION` fails closed, and `HISTORICAL_RECONSTRUCTION` requires the exact pinned policy identity/hash and cannot create a new production determination.
+- Evaluation time is explicit and results are deterministic, immutable, JSON serializable, and protected by stable typed errors.
+- Existing Decision Application v1/v2 behavior and operation sets remain unchanged.
+- The current 1.5-RC Lab shows a persistent review-policy watermark without changing decisions, graph, journey, planner, or customer action semantics.
+- Legacy repository threshold shorthand is non-authoritative for fresh successor UBO Control; the future Policy Pack owns its comparator while historical behavior remains untouched.
+
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
 **Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED

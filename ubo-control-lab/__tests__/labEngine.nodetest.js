@@ -65,6 +65,25 @@ test("Lab shell exposes all deterministic fixtures and validates company context
   assert.throws(() => validateCompanyContext({ legalEntityName: "Example Ltd", registrationNumber: "", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" }), /Registration/);
 });
 
+test("Lab exposes the accurate v1.5 review-policy readiness without changing public projections", () => {
+  const catalogue = fixtureCatalogue();
+  assert.equal(catalogue.policyReadiness.contractVersion, "ubo-policy-readiness-v1");
+  assert.equal(catalogue.policyReadiness.runtimeMode, "LAB");
+  assert.equal(catalogue.policyReadiness.readiness, "REVIEW_ONLY");
+  assert.equal(catalogue.policyReadiness.watermarkRequired, true);
+  assert.equal(catalogue.policyReadiness.policyIdentity.policyPackId, "UBO-UK-CORPORATE");
+  assert.equal(catalogue.policyReadiness.policyIdentity.version, "1.5-RC");
+  assert.equal(catalogue.policyReadiness.policyIdentity.hash, "sha256:724c2fa4820e02daddc24e652b50748646d87017cbfa632c062bc9e27de4b790");
+
+  const session = startFixture({ fixtureId: "LAB02" });
+  const view = session.snapshots[0].view;
+  assert.deepEqual(session.policyReadiness, catalogue.policyReadiness);
+  assert.deepEqual(view.diagnostics.policyReadiness, session.policyReadiness);
+  assert.equal(Object.prototype.hasOwnProperty.call(view.graph, "policyReadiness"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(view.journey, "policyReadiness"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(view.plan, "policyReadiness"), false);
+});
+
 test("LAB19 preserves each TDR PSC source assertion as one supported projected relationship", () => {
   const session = startFixture({ fixtureId: "LAB19" });
   const graph = session.snapshots[0].view.graph;
@@ -432,6 +451,11 @@ test("browser product exposes disabled Evidence, feedback export and Lab-only lo
   assert.match(source, /Run fresh live Discovery/);
   assert.match(source, /Saved locally in this browser — Lab testing only/);
   assert.match(source, /START_REPLAY/);
+  assert.match(source, /REVIEW POLICY — NOT APPROVED FOR PRODUCTION/);
+  assert.match(source, /PolicyReadinessWatermark/);
+  assert.match(source, /readiness\.blockingReasons\.length/);
+  assert.match(source, /readiness\.unresolvedSignoffs\.length/);
+  assert.match(styles, /\.policy-watermark\{position:sticky/);
   const customerPanelSource = source.slice(source.indexOf("function CustomerPanel"), source.indexOf("function Requirements"));
   assert.equal((customerPanelSource.match(/h\(UboJourney/g) || []).length, 1);
   assert.equal((customerPanelSource.match(/h\(OwnershipGraph/g) || []).length, 0, "Customer workspace must not render a duplicate graph below UboJourney");

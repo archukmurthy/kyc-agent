@@ -5,6 +5,13 @@
 | Product-root dependency direction | `__tests__/architecture.nodetest.js` — production imports remain inside root or use Node built-ins |
 | No legacy UBO or Evidence Platform implementation import | `__tests__/architecture.nodetest.js` — prohibited import scan |
 | Deliberate public entry point | `__tests__/architecture.nodetest.js` — exact export set |
+| Additive Policy Pack schema 1.3 | `__tests__/policyReadiness.nodetest.js` — schemas 1.0/1.1/1.2 remain valid, complete camelCase 1.3 fixture validates, malformed doctrine/readiness/sign-offs fail, v1.5 hash unchanged |
+| Versioned public policy readiness | `__tests__/policyReadiness.nodetest.js` — `ubo-policy-readiness-v1`, deterministic immutable serialization, exact public enums/operation/error surface |
+| LAB review-pack semantics | readiness and Lab tests — current 1.5-RC returns `REVIEW_ONLY`, requires watermark, and retains exact policy identity/hash without entering graph/journey/planner output |
+| PRODUCTION fail-closed guard | readiness tests — status/release, null/future/expired effective period, missing approver, mandatory/pending sign-offs, enabled-feature dependencies and unsupported algorithms block |
+| Disabled optional-feature isolation | readiness test — deferred feature sign-off remains visible but does not block until the feature is enabled |
+| Exact historical policy reconstruction mode | readiness tests — exact pinned old review pack accepted for reconstruction, hash mismatch rejected, new production determination prohibited |
+| Readiness separation from Decision Application v1/v2 | `__tests__/architecture.nodetest.js` — stateless source scan, exact operation exports, no capability or application execution and no implicit clock |
 | Versioned public ownership-graph projection | `__tests__/ownershipGraphProjection.nodetest.js` — `ubo-ownership-graph-projection-v1`, result identity and separate stateless `projectOwnershipGraph` operation |
 | Versioned adaptive journey projection | `__tests__/uboJourneyProjection.nodetest.js` — `ubo-journey-projection-v1`, verified DecisionSnapshot input, immutable deterministic output and separate stateless `projectUboJourney` operation |
 | G5.2A journey scenarios | `__tests__/uboJourneyProjection.nodetest.js` — J01–J16 resolved/unresolved control, R07 partial identity, coalescing, blocker/review separation, specialist stop, policy wording, LLP semantics and before/after disappearance |

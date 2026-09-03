@@ -4,6 +4,8 @@ const { createHash, randomUUID } = require("node:crypto");
 const {
   CAPABILITY_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  UBO_POLICY_RUNTIME_MODE,
+  assessUboPolicyPackReadiness,
   createUboDecisionApplication,
   planUboResolution,
   projectOwnershipGraph,
@@ -95,10 +97,19 @@ function application() {
   });
 }
 
+function labPolicyReadiness(evaluationTime) {
+  return assessUboPolicyPackReadiness({
+    policyPack: POLICY,
+    runtimeMode: UBO_POLICY_RUNTIME_MODE.LAB,
+    evaluationTime,
+  });
+}
+
 function fixtureCatalogue() {
   return {
     contractVersion: LAB_CONTRACT_VERSION,
     fixtureSetVersion: FIXTURE_SET.fixtureSetVersion,
+    policyReadiness: clone(labPolicyReadiness(fixtureTimestamp(0))),
     fixtures: FIXTURE_SET.fixtures.map(({ id, sourceScenarioId, label, description, preReviewed, exercise, scenario }) => ({
       id, sourceScenarioId, label, description, preReviewed, exercise,
       entityProfile: scenario.context.entityProfile || scenario.context.customer?.entityType || "COMPANY",
@@ -319,7 +330,7 @@ function requirementView(snapshot) {
   });
 }
 
-function buildSnapshotView(snapshot) {
+function buildSnapshotView(snapshot, policyReadiness) {
   const graph = projectOwnershipGraph({ decisionSnapshot: snapshot });
   const journey = projectUboJourney({ decisionSnapshot: snapshot });
   const plan = planUboResolution({ decisionSnapshot: snapshot });
@@ -393,6 +404,7 @@ function buildSnapshotView(snapshot) {
       resolutionPlanVersion: plan.contractVersion,
       plannerVersion: plan.plannerVersion,
       policyIdentity: clone(content.policy.identity),
+      policyReadiness: clone(policyReadiness),
       graphVersion: content.reasoning.graph.graphVersion,
       calculationAlgorithms: [...new Set((content.reasoning.calculations || []).map(({ calculationAlgorithm }) => calculationAlgorithm))],
       snapshotContractVersion: snapshot.contractVersion || snapshot.snapshotVersion || "decision-snapshot-v1",
@@ -401,7 +413,7 @@ function buildSnapshotView(snapshot) {
 }
 
 function appendSnapshot(session, snapshot, reason) {
-  const view = buildSnapshotView(snapshot);
+  const view = buildSnapshotView(snapshot, session.policyReadiness);
   const predecessor = session.snapshots.at(-1);
   session.snapshots.push({
     historyEntryId: `${session.caseId}:snapshot:${session.snapshots.length + 1}`,
@@ -456,6 +468,7 @@ function startFixture({ fixtureId, riskLevel = "LOW" } = {}) {
     riskLevel, sourceLabel: `${fixture.id} · ${fixture.label}`,
   });
   const createdAt = fixtureTimestamp(0);
+  session.policyReadiness = clone(labPolicyReadiness(createdAt));
   const results = fixture.scenario.steps.map((step) => ({
     capability: step.capability,
     result: clone(step.response),
@@ -591,6 +604,7 @@ async function startLive({ companyContext, transport } = {}) {
   };
   const result = await createLegacyDiscoveryAdapter({ transport }).discover(request);
   const createdAt = new Date().toISOString();
+  session.policyReadiness = clone(labPolicyReadiness(createdAt));
   intakeResults(session, [{ capability: "DISCOVERY", result, sourceRequest: request }], createdAt);
   registerCaseSubject(session, new Date().toISOString());
   session.discovery = {
@@ -616,6 +630,7 @@ function startReplay({ replayRecord, expectedCompanyContext } = {}) {
     profile: record.companyContext.entityProfile, riskLevel: record.companyContext.riskLevel,
     sourceLabel: `Replayed Discovery · ${record.companyContext.legalEntityName}`,
   });
+  session.policyReadiness = clone(labPolicyReadiness(replayedAt));
   intakeResults(session, [{ capability: "DISCOVERY", result: record.discoveryResult, sourceRequest: null }], replayedAt);
   registerCaseSubject(session, replayedAt);
   session.discovery = {

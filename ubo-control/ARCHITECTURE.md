@@ -8,6 +8,16 @@ UBO Control is a standalone product temporarily co-located in the KYC host repos
 
 The host application will eventually depend on UBO Control through the public entry point. Dependency direction never points from UBO Control into the host.
 
+## Policy schema 1.3 and runtime-readiness boundary
+
+Freeze Implementation Wave 1 adds Policy Pack schema 1.3 and the public `ubo-policy-readiness-v1` assessment operation. Schema 1.3 follows the existing camelCase convention and has a separate strict validator for the accepted future legal-baseline, doctrine, sign-off, feature, release and algorithm-compatibility structures. This path is additive: schemas 1.0, 1.1 and 1.2, their artifacts, and their canonical hashes remain unchanged. No UK Corporate 1.6-RC policy artifact is included in Wave 1.
+
+`assessUboPolicyPackReadiness({ policyPack, runtimeMode, evaluationTime, ... })` is data-only, stateless and deterministic. `LAB` admits review packs with an explicit watermark; `PRODUCTION` fails closed against pack-declared approval, effective-period, sign-off, enabled-feature and algorithm requirements; `HISTORICAL_RECONSTRUCTION` requires the exact pinned policy identity/hash and cannot authorize a new production determination. Evaluation time is always supplied by the caller. The operation neither executes capabilities nor enters the Decision Application pipeline.
+
+The readiness guard evaluates identifiers declared by the pack and never hard-codes Control Room `A-*` sign-offs. Disabled optional-feature dependencies remain visible but do not block production merely because the feature is disabled. Existing `ubo-decision-application-v1` and `ubo-decision-application-v2` surfaces and behavior are unchanged; any future enforced composition belongs to a separately approved contract.
+
+The authoritative successor design package is preserved at `docs/freeze/uk-mvp-v1.0/`. It supersedes conflicting earlier design notes for successor UK MVP work, while existing ADRs remain historical records. InformationNeed v1 lifecycle, current planner/snapshot behavior, policy calculations, threshold comparators, graph/journey semantics, Discovery replay and host boundaries are unchanged in Wave 1.
+
 ## Ownership graph projection boundary
 
 G5.1A adds the deliberately public, stateless `ubo-ownership-graph-projection-v1` consumer contract:
