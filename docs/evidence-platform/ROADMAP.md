@@ -222,7 +222,7 @@ KYC/Onboarding retains source/value winner selection, operative customer values,
 
 ### Stage A5 — Evidence Reconstruction and Package
 
-Stage A5 is split at the persistence boundary under approved ADR-019. A5a implementation is authorized. A5b architecture is approved conceptually, but A5b implementation and persistence remain deferred.
+Stage A5 is split at the persistence boundary under approved ADR-019. A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. Detailed A5b governance and bounded implementation are authorized.
 
 #### Stage A5a — Evidence Ledger / Reconstruction
 
@@ -230,15 +230,15 @@ Provide an authorized, deterministic point-in-time reconstruction over the exist
 
 A5a should initially be a read projection, not a duplicate persisted event ledger. It distinguishes governed record availability/knowledge time from collection, capture, observation, source-effective, extraction, verification, evaluation, and assessment time. Because `created_at` is not universally a database-commit timestamp, the projection uses safe parent operation/run completion bounds and prevents later terminal results from leaking into earlier as-of views. It exposes places where the present model cannot reproduce overwritten intermediate transitions, exact commit time, prior requirement status, access-scope revocation history, or unpersisted denied/invalid requests.
 
-A5a does not choose latest Evidence, select a winner, create an operative value, determine KYC/UBO satisfaction, or fabricate downstream decision rationale. No migration is currently proposed for the minimum A5a projection.
+A5a does not choose latest Evidence, select a winner, create an operative value, determine KYC/UBO satisfaction, or fabricate downstream decision rationale. It is implemented as a read-only projection and introduced no migration.
 
 #### Stage A5b — Immutable Evidence Package
 
-Allow an authorized A5a reconstruction to be explicitly frozen as a durable immutable package. A package has its own opaque identity, subject/context/purpose and `asOf` scope, exact ordered member references, manifest/canonicalization version, assembly time and actor lineage, explicit limitations, SHA-256 manifest fingerprint, and optional immutable supersession/derivation reference to a later or earlier package.
+Allow the complete fresh server-generated, authorized A5a reconstruction to be explicitly frozen as a durable immutable package. A package has its own opaque identity, subject/context/purpose and `asOf` scope, exact ordered member references plus bounded frozen member projections, manifest/canonicalization version, assembly time and actor lineage, explicit limitations, SHA-256 manifest fingerprint, and an optional neutral `derivedFrom` predecessor. The browser does not submit arbitrary member IDs. Caller-selected subsets, exclusions, inclusion profiles, and purpose-specific filtering are deferred.
 
-Package membership references canonical Evidence records; it does not copy or re-identify Artifacts. Membership grants no access. Package authorization is evaluated member by member as the intersection of member authorization and is rechecked on reopen/export. A package-level classification is insufficient, and incomparable member scopes are not collapsed into one simplistic scope.
+Package membership references canonical Evidence records; it does not copy or re-identify Artifacts. Bounded frozen projections preserve Package meaning where source rows have mutable state, without becoming a second Evidence system. Membership grants no access. Package authorization is evaluated member by member as the intersection of member authorization and is rechecked on reopen/export. Access loss makes the canonical package non-materializable without leaking restricted member metadata; no member is silently omitted.
 
-A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. One additive forward-only package migration is likely, but no A5b migration or implementation is authorized until Architecture Authority approves a separate A5b build brief.
+A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package with a new freeze-operation key; idempotent retry returns the original Package while same-key changed input conflicts. Canonical JSON bytes and their SHA-256 are stored with relational membership in one atomic transaction. Reopen verifies manifest bytes, digest, version, canonical structure, and member order before authorization/materialization. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. One additive forward-only package migration after 018 and bounded A5b implementation are authorized; export remains deferred.
 
 ### Stage A6 — End-to-End Evidence Lab Validation
 

@@ -1,12 +1,380 @@
 # Evidence Platform — Current Build Brief
 
-# Stage A5a — Evidence Ledger / Reconstruction
+# Stage A5b — Immutable Evidence Package
+
+## Governance Status
+
+A5a Evidence Ledger / Reconstruction was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` under approved ADR-019. It is a deterministic, read-only point-in-time projection and introduced no migration.
+
+This A5b brief is **APPROVED — IMPLEMENTATION AUTHORIZED**. Architecture Authority approved the complete-reconstruction freeze boundary, immutable Package identity and manifest, bounded polymorphic membership, member-by-member authorization, operation-key idempotency, neutral predecessor lineage, and one additive migration after 018. Export, signing, KYC/UBO integration, arbitrary member selection, and changes to existing Evidence history remain unauthorized.
+
+---
+
+## 1. Objective
+
+Freeze one exact authorized A5a evidentiary picture into a durable immutable Package that can be reopened later without substituting later Evidence:
+
+```text
+trusted Package request
+        ↓
+fresh authorized A5a reconstruction
+        ↓
+server-owned canonical member set
+        ↓ explicit atomic freeze
+immutable Evidence Package P1
+        ↓ reopen under current authorization
+same exact manifest and membership
+```
+
+Later collection, interpretation, evaluation, or assessment does not change P1. A later deliberate freeze creates P2. Reopen performs no source call, AI call, reinterpretation, A4a evaluation, or A4b assessment.
+
+---
+
+## 2. Observed repository capability
+
+A5a already projects the authoritative A1–A4b/R1–R4 records from migrations 010–018 and applies current authorization before returning safe metadata. It supplies:
+
+* trusted tenant, context, and subject scope;
+* versioned record-availability rules and deterministic order;
+* stable source record type and canonical record identity/reference;
+* Collection, Acquisition, Asset, Artifact, Extraction Run, Fact, support, locator, relationship, evaluation, and assessment lineage;
+* failed, partial, incomplete, indeterminate, and limitation states; and
+* Artifact media metadata and SHA-256 without exposing storage keys, storage references, credentials, or bytes.
+
+The existing Artifact store remains the canonical byte store. Existing access rules permit public Assets where governed and require exact tenant/context plus an explicit Asset scope for context-restricted Evidence.
+
+What is missing is a durable Package identity, exact frozen membership, frozen representation of Package meaning, canonical manifest bytes/digest, freeze idempotency, and Package lineage. There is no need for a second Evidence database, duplicate event ledger, duplicate Artifact store, or A5a recomputation table.
+
+---
+
+## 3. Authoritative freeze source
+
+A5b v1 freezes only the complete fresh server-generated A5a reconstruction. The trusted request is conceptually equivalent to:
+
+```text
+freezeEvidencePackage({
+  authorizedTenantId,
+  authorizedContextId,
+  subjectReferenceId,
+  purpose,
+  asOf,
+  derivedFromPackageId?,
+  freezeOperationKey,
+  trustedActorContext
+})
+```
+
+Tenant, context, caller scope, and actor authority come from trusted server-side context. The browser must not provide arbitrary Package members or bypass A5a availability and authorization rules.
+
+A5b v1 permits no arbitrary member list, exclusion, hand-picked subset, inclusion profile, or purpose-specific filtering. This prevents curated Evidence from masquerading as the complete authorized A5a reconstruction. Future explicit/versioned inclusion profiles require separate governance.
+
+---
+
+## 4. Package identity and immutable core
+
+Each deliberate freeze receives an opaque Package UUID generated independently from its content. Package ID is not an Artifact SHA-256 or manifest digest. Two deliberate freezes of the same evidentiary picture may be separate Package events.
+
+The immutable Package core includes:
+
+* Package ID;
+* tenant, Evidence context, and subject reference;
+* generic purpose;
+* requested `asOf`;
+* server freeze time;
+* trusted actor/caller lineage;
+* A5a availability-rules version;
+* manifest schema and canonicalization versions;
+* exact ordered membership;
+* frozen A5a limitations;
+* canonical manifest bytes and SHA-256;
+* freeze operation key and request fingerprint; and
+* optional neutral predecessor `derivedFromPackageId`.
+
+No mutable display label is needed for v1. If administrative labels are added later, they must be outside the canonical manifest and must not change Package meaning.
+
+---
+
+## 5. Membership model
+
+Package membership covers the heterogeneous canonical Evidence types surfaced by A5a, including Requirements, Information Needs, Collection Operations, Acquisitions, Assets, Artifacts, Extraction/Interpretation Runs, Facts, derivations, verification attempts, Fact-to-Artifact support, R3 locators, R4 typed relationships and set assertions, A4a evaluations, A4b assessments/candidates/findings, and applicable failure or limitation projection entries.
+
+Each member stores:
+
+```text
+packageId
+ordinal
+memberType                 constrained Evidence vocabulary
+canonicalMemberReference  server-generated opaque/stable reference
+canonicalMemberKey        UUID or bounded composite key
+memberRole
+authorizationMetadata    bounded server-side resolution data where required
+```
+
+The normalized A5a reconstruction entries in the canonical manifest are the principal frozen Package content. They preserve category, `occurredAt`, `availableAt`, source record type/reference, safe summary/projection, status/outcome, applicable metadata, and limitations. Relational membership supports indexing, authorization resolution, and referential inspection; it must not duplicate the frozen projection without a concrete implementation need or become a competing representation of Package truth. If one source record legitimately produces multiple A5a entries, those entries remain distinct members.
+
+The canonical source record remains authoritative for Evidence history and current authorization. Artifact bytes are never copied merely because an Artifact becomes a Package member:
+
+```text
+one canonical Artifact
+        ↓
+many Package memberships
+```
+
+Because canonical members include UUID and composite-key records, one generic UUID foreign key cannot truthfully enforce every target. A5b uses a constrained member-type vocabulary and record-type-specific repository resolution in the same transaction as freeze. It must not accept an unvalidated polymorphic ID or introduce a duplicate Evidence-reference registry/backfill solely to simulate a foreign key.
+
+---
+
+## 6. Canonical manifest and digest
+
+The canonical Package is structured data, not a PDF. Its manifest contains only immutable Package meaning:
+
+* Package identity and scope;
+* bounded purpose metadata;
+* `asOf`, frozen-at, and actor lineage;
+* A5a availability-rules version;
+* ordered canonical member references and bounded frozen member projections;
+* relevant member versions and Artifact SHA-256 values;
+* explicit A5a limitations; and
+* optional neutral predecessor lineage.
+
+The v1 identities are `evidence-package-manifest-v1` and `evidence-package-canonical-json-v1`. Canonicalization defines UTF-8 encoding, normalized UTC timestamps, lowercase UUID strings, object-key ordering, explicit array order, finite-number serialization, null/omission rules, JSON escaping, and rejection of ambiguous/non-finite values. It preserves string content without semantic reinterpretation. Ordinary object insertion order, plain runtime `JSON.stringify`, or PostgreSQL JSONB serialization is not the canonical contract.
+
+The server generates relational membership and canonical manifest bytes from one ordered member list. Both are stored atomically. SHA-256 is calculated over the exact stored canonical bytes.
+
+Reopen and verification first hash the stored canonical bytes and compare the digest, parse and validate the manifest version/canonical structure, and verify relational member references/order against the manifest. Only then may current member authorization and materialization occur. Any mismatch is `package_integrity_failure`; A5b never silently rebuilds the Package from current Evidence rows.
+
+The manifest digest proves only that the frozen manifest has not changed. It does not prove source truth, continuing source/storage availability, KYC/UBO correctness, regulatory approval, or separate external attestation. Artifact SHA-256 remains distinct integrity metadata for exact Artifact bytes.
+
+---
+
+## 7. Authorization and mixed public/private Evidence
+
+Authorization is enforced at three boundaries:
+
+1. A5a reconstructs only currently authorized members before freeze.
+2. A5b resolves and checks every proposed member again inside the freeze transaction.
+3. Reopen/materialization/export rechecks every private member under current authorization.
+
+Package membership grants no access. A package-level flag never replaces member checks. A mixed public/private Package is valid only when the caller is authorized for every private context-restricted member. Effective access is the intersection of the member permissions; incomparable scopes are not flattened into one misleading classification.
+
+If a caller later loses access to one private member:
+
+* canonical Package membership and digest remain unchanged;
+* the member is not silently omitted;
+* canonical materialization fails closed;
+* after Package-level context authorization, the API may return only `package_exists_but_not_materializable_under_current_authorization`; and
+* it reveals no inaccessible member identity, type, title, fingerprint, value, or inferable restricted count.
+
+A caller lacking Package-level authority receives the normal non-disclosing denial. A future redacted disclosure must be a separately identified derived export under separate governance, never a mutation of the Package.
+
+A5b does not infer historical access rights because the current model does not retain full access-policy history. Current authorization governs every reopen.
+
+---
+
+## 8. Purpose
+
+Purpose is bounded generic Evidence metadata. V1 codes are:
+
+* `internal_review`;
+* `regulatory_reconstruction`;
+* `investigative_response`;
+* `case_evidence_snapshot`;
+* `decision_support_snapshot`; and
+* `other`, with a bounded descriptive label when required.
+
+Purpose does not encode regulator-specific law or downstream policy and has no membership-filtering effect in v1. Inclusion profiles are deferred.
+
+The complete authorized reconstruction preserves failed acquisitions, failed interpretations, competing or conflicting Facts, A4b disagreement, incomplete coverage, indeterminate results, and other unfavorable Evidence. Package completeness is relative to its declared context/subject/`asOf` reconstruction scope, not a claim that all real-world Evidence existed.
+
+---
+
+## 9. Idempotency and concurrency
+
+Every freeze requires a caller-supplied operation key. It is unique within trusted tenant, context, and caller scope. The server creates a request fingerprint over trusted tenant/context, subject, `asOf`, purpose metadata, optional predecessor, A5a reconstruction/availability-rules version, Package manifest version, and canonicalization version. Volatile UI/display state is excluded.
+
+* same operation key + same fingerprint → return the original Package;
+* same operation key + different fingerprint → idempotency conflict;
+* new operation key → deliberate new Package, even if membership is identical.
+
+Manifest SHA-256 is not the idempotency identity. Package row, members, canonical bytes, and digest are committed in one transaction. No partial Package may be reported as frozen.
+
+---
+
+## 10. Lineage and later Evidence
+
+A5b v1 uses one optional neutral `derivedFromPackageId` reference. It means the later Package was intentionally produced in lineage from the earlier Package; it does not mean the earlier Package was wrong, revoked, or replaced.
+
+P1 remains independently reopenable after P2. Branch-management, automatic latest aliases, mutable version numbers, and workflow-level `supersedes` semantics are deferred.
+
+Later platform functionality never enriches P1. If new reconstruction capability or Evidence should be represented, freeze a new Package with the new manifest/canonicalization/profile version and preserved limitations.
+
+---
+
+## 11. Storage, view, and export boundary
+
+The minimum A5b design uses:
+
+```text
+Package metadata/membership/canonical manifest
+        → PostgreSQL
+
+canonical Artifact bytes
+        → existing Artifact store
+```
+
+No second Blob/object store or Artifact copy is required. Retention/deletion policy and a guarantee that every referenced Artifact remains materializable are separate governance concerns; inability to read an Artifact later does not alter the Package manifest or turn its digest into an Artifact-integrity claim.
+
+Keep these products separate:
+
+| Product | Meaning |
+|---|---|
+| Package | Canonical immutable structured manifest and membership |
+| Package view | Authorized interactive representation of the Package |
+| Export | Derived JSON/PDF/ZIP or other materialization |
+
+Export, signing/PKI, regulator-specific formatting, export retention, and export-Artifact persistence are not part of A5b v1 unless separately authorized.
+
+---
+
+## 12. Failure model
+
+A5b must distinguish at least:
+
+* invalid freeze request or unsupported purpose;
+* Package/context authorization denial;
+* reconstruction failure;
+* member-resolution or member-authorization failure;
+* same-key changed-request conflict;
+* canonicalization/digest failure;
+* transactional persistence failure;
+* Package not found;
+* Package exists but cannot be materialized under current authorization; and
+* Artifact unavailable or integrity failure during separately requested materialization.
+
+No failure may fabricate a Package, omit a member while claiming the same digest, or create a KYC/UBO conclusion.
+
+---
+
+## 13. Authorized migration 019
+
+One additive forward-only migration after 018 is authorized. Migrations 010–018 remain immutable and no historical backfill is permitted.
+
+### `evidence_packages`
+
+Conceptual columns:
+
+```text
+id UUID primary key
+tenant_id / context_id / subject_reference_id
+purpose_code and bounded purpose metadata
+as_of / frozen_at
+frozen_by_actor_type / frozen_by_actor_id / caller_scope
+a5a_availability_rules_version
+manifest_schema_version / canonicalization_version
+canonical_manifest_bytes BYTEA
+manifest_fingerprint_algorithm fixed to sha256
+manifest_fingerprint_value constrained lowercase 64-hex
+limitations JSONB
+derived_from_package_id nullable self-reference
+freeze_operation_key / request_fingerprint
+created_at
+```
+
+Required constraints include exact tenant/context/subject foreign keys where the existing schema permits them; a unique freeze key within tenant/context/caller scope; same-key fingerprint conflict handling in the service; valid SHA-256 form; and immutable Package semantics.
+
+### `evidence_package_members`
+
+Conceptual columns:
+
+```text
+package_id foreign key
+ordinal positive integer
+member_type constrained vocabulary
+canonical_member_reference text
+canonical_member_key JSONB
+member_role text
+authorization_metadata JSONB where concretely required
+created_at
+```
+
+Required constraints include unique `(package_id, ordinal)` and duplicate-member protection. The implementation must use record-type-specific server-side resolvers for every member type and prove relational membership and canonical manifest agree before commit. No historical backfill is proposed.
+
+---
+
+## 14. Authorized server boundary
+
+The bounded service/API surface is equivalent to:
+
+```text
+freezePackage(trusted authorization + reconstruction parameters)
+reopenPackage(trusted authorization + packageId)
+listAuthorizedPackages(trusted authorization + context/subject)
+verifyPackageManifest(trusted authorization + packageId)
+```
+
+Freeze calls A5a server-side. Reopen reads stored Package membership/manifest; it does not rerun A5a and substitute a new result. Verification recalculates SHA-256 from stored canonical bytes and does not imply member truth or Artifact availability.
+
+The service must not couple Package assembly to the Evidence Lab's HTML or display JSON shape.
+
+---
+
+## 15. Characterization requirements
+
+A5b implementation must prove at minimum:
+
+1. freeze creates one immutable Package from a server-generated authorized A5a reconstruction;
+2. browser-supplied arbitrary members are rejected/not accepted by the contract;
+3. idempotent retry returns the original Package;
+4. same key with changed semantic input conflicts;
+5. a new key creates a deliberate new Package;
+6. later Evidence never changes P1 membership, canonical bytes, or digest;
+7. P2 can include later Evidence and neutrally derive from P1 without mutating P1;
+8. member ordering and manifest digest are stable;
+9. one Artifact can belong to multiple Packages without copied Artifact identity/bytes;
+10. private access is checked at freeze and reopen;
+11. access loss fails closed without restricted metadata leakage;
+12. public/private mixed Packages check every private member;
+13. failed/partial acquisitions, disagreements, incomplete/indeterminate assessments, and limitations remain packageable;
+14. source-effective dates do not change frozen membership;
+15. Artifact and Package fingerprints remain distinct;
+16. reopen makes no source, AI, reinterpretation, A4a, or A4b call;
+17. persistence/canonicalization failure reports no successful Package;
+18. no KYC/UBO conclusion, operative value, winner, or approval decision is fabricated; and
+19. A5b is added to the Characterization Net Coverage Map.
+
+Manual product acceptance should reconstruct TESCO PLC at T1, freeze and reopen P1, add later Evidence, prove P1 unchanged, freeze P2 at T2, show both Packages and limitations, and prove reopen makes no source or AI call. Internal member IDs remain secondary technical details.
+
+---
+
+## 16. Approved implementation boundary
+
+Architecture Authority approved:
+
+1. server-generated A5a reconstruction as the only v1 freeze source;
+2. no arbitrary selection, exclusions, inclusion profiles, or purpose filtering in v1;
+3. opaque Package UUID independent from manifest SHA-256;
+4. constrained polymorphic membership with record-type-specific transactional validation;
+5. normalized A5a entries as the principal frozen projections in the canonical manifest;
+6. storage of canonical manifest bytes plus relational membership;
+7. named/versioned canonical JSON rules;
+8. member-by-member authorization and non-disclosing fail-closed access-loss behavior;
+9. generic purpose metadata that does not itself filter membership;
+10. operation-key/request-fingerprint idempotency;
+11. one neutral `derivedFromPackageId` lineage link for v1;
+12. no new Artifact/object store and no PDF/export/signing in v1; and
+13. the authorized additive migration-019 shape.
+
+Implement only this bounded A5b Package capability and migration 019. Do not implement export, signing/PKI, regulator-specific policy, arbitrary member selection, inclusion profiles, KYC/UBO conclusions, or changes to existing Evidence history.
+
+---
+
+# Prior Accepted Build Brief — Stage A5a — Evidence Ledger / Reconstruction
 
 ## Governance Status
 
 A4b was accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16` under approved ADR-018.
 
-ADR-019 and this A5a brief are **APPROVED — A5A IMPLEMENTATION AUTHORIZED**. Architecture Authority approved the A5a/A5b split and the record-type availability rules. A5a requires no migration. A5b architecture is approved conceptually, but A5b implementation and package persistence remain deferred pending separate authorization.
+ADR-019 and this A5a brief are **APPROVED — IMPLEMENTED**. Architecture Authority approved the A5a/A5b split and the record-type availability rules. A5a was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` without a migration. A5b was subsequently authorized under the current build brief above.
 
 ---
 
@@ -173,7 +541,7 @@ PDF is not the canonical package. Exported bytes may be stored only under separa
 
 Only an authorized server-side caller may reconstruct, freeze, reopen, or export. A package grants no access to its members.
 
-Authorization is checked for every member at assembly and again on reopen/export. Effective package access is the intersection of member permissions. Public and private Evidence may coexist only when the caller is authorized for every context-restricted member, and the package inherits the most restrictive member boundary.
+Authorization is checked for every member at assembly and again on reopen/export. Effective package access is the intersection of member permissions. Public and private Evidence may coexist only when the caller is authorized for every context-restricted member; this intersection is not flattened into one package-level access classification.
 
 Package membership is itself sensitive. A package-level access classification is never sufficient: authorization is evaluated for every member, and incomparable scopes must not be collapsed into a simplistic "most restrictive" label. An inaccessible member must not be disclosed through counts, titles, fingerprints, or IDs. If any canonical member is no longer authorized, reopen fails closed rather than silently changing or partially redacting the frozen package. A separately governed redacted export may be derived later without changing the canonical package.
 
@@ -254,7 +622,7 @@ The following remain separately deferred:
 * any additive migration after 018; and
 * any event, requirement-lifecycle, access-history, integrity-check-history, or downstream decision-provenance extension.
 
-Implement only the approved read-only A5a reconstruction. Do not implement A5b, modify migrations, integrate KYC/UBO, or create package/export APIs.
+A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. A5b was subsequently authorized under the current build brief above; export and KYC/UBO integration remain separately governed.
 
 ---
 
