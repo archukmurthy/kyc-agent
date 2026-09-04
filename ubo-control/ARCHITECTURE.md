@@ -294,6 +294,16 @@ Statutory and enabled firm-policy thresholds create separate bases. Comparator a
 
 Both modules remain private to the standalone product. Decision Application v1/v2, `ubo-policy-determination-v1`, DecisionSnapshot/projection/planner v1, UI, Lab and host integration do not import or execute them. The public `index.js` surface is unchanged and UK Corporate 1.6-RC remains review-only.
 
+## Freeze Wave 4 company PSC-attribution boundary
+
+`ubo-psc-attribution-v1` is a pure internal assessment of company Schedule 1A conditions. It consumes the unchanged operative canonical ownership graph together with canonical entity profiles and provider-neutral claim/EvidenceReferences. The separate entity input is necessary because `ubo-graph-v1` deliberately stores only canonical ID/category on nodes; no graph contract, adapter or provider field is widened. The target and every traversed intermediary must be a `COMPANY`, and only a canonical `NATURAL_PERSON` may receive a basis.
+
+Direct company share rights, voting rights, explicit majority-scope appointment/removal rights and explicit unambiguous significant-influence/control facts remain separate conditions. Company shares require `ECONOMIC_OWNERSHIP` plus `economicInterestConcept: SHARE_OWNERSHIP`; voting is never inferred from shares. An indirect chain is established only by strict majority voting (`>50%`) or an explicit majority appointment/removal step. Generic economic ownership and generic SIoC are never majority-chain steps. Unsupported agreement/dominant-control vocabulary, LLP/trust/specialist intermediaries, relevant cycles, ambiguous facts and unknown currentness fail conservatively with durable diagnostics.
+
+Attribution retains the full direct target right held by the controlled company; it never multiplies that right by upstream percentages. Distinct target rights may aggregate once each, while all valid majority paths supporting the same right remain in the trace. Thus a 60%-economic/60%-voting interest in TopCo and TopCo's 40% Customer shares can coexist as a 24% `EFFECTIVE_INTEREST` basis and a separate 40% `PSC_CONDITION_ATTRIBUTION` basis. The `ubo-psc-attribution-assessment-v1` envelope is route-scoped, explicitly leaves the trust/firm condition unassessed, and never emits a final person-level UBO conclusion.
+
+Every Wave 4 result is review-only, production-unauthorized and A-09-dependent. Appointment/removal bases additionally retain A-12; explicit joint signals are not attributed and retain A-13; LLP diagnostics retain A-06. Decision Application v1/v2, Policy Determination v1, DecisionSnapshot v1, projections, planner, UI, Lab, ASDA and host composition remain unwired and unchanged. The new algorithm and QualificationBasis v2 internals are not exported from `index.js`.
+
 ## Evidence boundary
 
 UBO Control stores only provider-neutral `EvidenceReference` values containing opaque external references and optional locator/integrity metadata. It does not copy or store raw evidence and does not import Evidence Platform types.

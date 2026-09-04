@@ -118,6 +118,9 @@ function qualificationBasisIdentity(record) {
   if (record.threshold !== undefined) identity.threshold = record.threshold;
   if (record.calculationReference !== undefined) identity.calculationReference = record.calculationReference;
   if (record.recordedCalculation !== undefined) identity.recordedCalculation = record.recordedCalculation;
+  if (record.targetRightReferences !== undefined) identity.targetRightReferences = record.targetRightReferences;
+  if (record.aggregatedTargetRightValue !== undefined) identity.aggregatedTargetRightValue = record.aggregatedTargetRightValue;
+  if (record.attributionChains !== undefined) identity.attributionChains = record.attributionChains;
   return identity;
 }
 
@@ -165,6 +168,16 @@ function validateQualificationBasisV2(record, path = "qualificationBasisV2") {
       .forEach((field) => {
         if (!Array.isArray(record[field])) basisError(`${path}.${field} must be an array`);
       });
+    if (record.targetRightReferences !== undefined && !Array.isArray(record.targetRightReferences)) {
+      basisError(`${path}.targetRightReferences must be an array`);
+    }
+    if (record.attributionChains !== undefined && !Array.isArray(record.attributionChains)) {
+      basisError(`${path}.attributionChains must be an array`);
+    }
+    if (record.aggregatedTargetRightValue !== undefined) {
+      assertPlainObject(record.aggregatedTargetRightValue, `${path}.aggregatedTargetRightValue`);
+    }
+    if (record.governance !== undefined) assertPlainObject(record.governance, `${path}.governance`);
     assertPlainObject(record.policyRequirement, `${path}.policyRequirement`);
     const expectedId = `${QUALIFICATION_BASIS_VERSION}:${digest(qualificationBasisIdentity(record)).slice(0, 32)}`;
     if (record.basisId !== expectedId) basisError(`${path}.basisId does not match its semantic identity`);
