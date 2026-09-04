@@ -228,7 +228,7 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
   assert.equal(new Set(ASSERTION_PLAN.assertions.map(({ assertionId }) => assertionId)).size, ASSERTION_PLAN.assertions.length);
   assert.equal(ASSERTION_PLAN.assertions.every(({ classification }) => ASSERTION_PLAN.classifications.includes(classification)), true);
   assert.equal(ASSERTION_PLAN.assertions.filter(({ executableNow }) => executableNow)
-    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION", "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION", "WAVE_6_LAYER_CLOSURE"].includes(classification)), true);
+    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION", "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION", "WAVE_6_LAYER_CLOSURE", "WAVE_7_PHASED_COORDINATOR"].includes(classification)), true);
   assert.deepEqual(ASSERTION_PLAN.assertions
     .filter(({ classification, executableNow }) => classification === "WAVE_3_QUALIFICATION_BASIS" && executableNow)
     .map(({ assertionId }) => assertionId), Array.from({ length: 8 }, (_, index) => `F07-04-${String(index + 1).padStart(3, "0")}`));
@@ -240,6 +240,13 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
     && productionExecutable === false
     && JSON.stringify(requiredSignoffs) === JSON.stringify(signoffDependencies)
   )), true);
+  const wave7 = ASSERTION_PLAN.assertions.filter(({ classification, executableNow }) => classification === "WAVE_7_PHASED_COORDINATOR" && executableNow);
+  assert.deepEqual(wave7.map(({ assertionId }) => assertionId), ["F07-08-007", "F07-08-008"]);
+  assert.equal(wave7.every((entry) => entry.executionStatus === "REVIEW_MODE_EXECUTABLE_TRANSITIONAL"
+    && entry.productionExecutable === false
+    && entry.compatibilityRequirementStage === "ubo-requirement-resolution-v1-compat"
+    && entry.compatibilityPlannerStage === "ubo-resolution-plan-v1-compat"
+    && entry.successorInformationNeedAndPlannerImplemented === false), true);
   const wave5 = ASSERTION_PLAN.assertions
     .filter(({ classification, executableNow }) => classification === "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION" && executableNow);
   assert.deepEqual(wave5.map(({ assertionId }) => assertionId), Array.from({ length: 5 }, (_, index) => `F07-06-${String(index + 14).padStart(3, "0")}`));

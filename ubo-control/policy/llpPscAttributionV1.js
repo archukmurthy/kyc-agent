@@ -108,7 +108,7 @@ function profileFor(entity) {
   return typeof profile === "string" && profile.trim() !== "" ? profile.trim().toUpperCase() : "UNKNOWN";
 }
 
-function validateLoadedPolicy(loaded) {
+function validateLoadedPolicy(loaded, successorReviewComposition = false) {
   if (!loaded || typeof loaded !== "object" || !loaded.policyPack || !loaded.identity) {
     fail("LLP attribution requires a loaded schema-1.3 review Policy Pack", LLP_PSC_ATTRIBUTION_ERROR_CODE.POLICY_IDENTITY_REQUIRED);
   }
@@ -134,15 +134,15 @@ function validateLoadedPolicy(loaded) {
   }
   const route = policyPack.qualificationDoctrine.routes.find(({ id }) => id === QUALIFICATION_ROUTE.PSC_CONDITION_ATTRIBUTION);
   if (!route) fail("Policy Pack does not declare PSC condition attribution", LLP_PSC_ATTRIBUTION_ERROR_CODE.ROUTE_NOT_DECLARED);
-  if (route.method !== LLP_PSC_ATTRIBUTION_ALGORITHM) {
+  if (!successorReviewComposition && route.method !== LLP_PSC_ATTRIBUTION_ALGORITHM) {
     fail(`LLP attribution route method must equal ${LLP_PSC_ATTRIBUTION_ALGORITHM}`, LLP_PSC_ATTRIBUTION_ERROR_CODE.UNSUPPORTED_ROUTE_METHOD);
   }
-  if (route.methodStatus !== LLP_PSC_ATTRIBUTION_METHOD_STATUS) {
+  if (!successorReviewComposition && route.methodStatus !== LLP_PSC_ATTRIBUTION_METHOD_STATUS) {
     fail(`LLP attribution methodStatus must equal ${LLP_PSC_ATTRIBUTION_METHOD_STATUS}`, LLP_PSC_ATTRIBUTION_ERROR_CODE.UNSUPPORTED_ROUTE_METHOD_STATUS);
   }
   const declaredConditions = new Set(route.conditions || []);
   const missingConditions = Object.values(LLP_PSC_CONDITION).filter((condition) => !declaredConditions.has(condition));
-  if (missingConditions.length > 0) {
+  if (!successorReviewComposition && missingConditions.length > 0) {
     fail("Policy Pack does not declare the complete LLP condition set", LLP_PSC_ATTRIBUTION_ERROR_CODE.LLP_CONDITIONS_NOT_DECLARED, { missingConditions });
   }
   return {
@@ -601,11 +601,13 @@ function validateTargetSlots(rights) {
   });
 }
 
-function assessLlpPscAttributionV1({ policyPack: loadedPolicyPack, ownershipGraph, canonicalEntities, claimSupport = [], targetEntityId, caseRevision }) {
+function assessLlpPscAttributionV1({ policyPack: loadedPolicyPack, ownershipGraph, canonicalEntities, claimSupport = [], targetEntityId, caseRevision, compositionMode }) {
   try {
     validateGraph(ownershipGraph);
     assertNonEmptyString(targetEntityId, "targetEntityId");
-    const { policyPack, route, policyIdentity } = validateLoadedPolicy(loadedPolicyPack);
+    const successorReviewComposition = compositionMode === "SUCCESSOR_REVIEW_ONLY";
+    if (compositionMode !== undefined && !successorReviewComposition) fail("unsupported LLP attribution composition mode", LLP_PSC_ATTRIBUTION_ERROR_CODE.INVALID_INPUT);
+    const { policyPack, route, policyIdentity } = validateLoadedPolicy(loadedPolicyPack, successorReviewComposition);
     const entitiesById = validateEntities(canonicalEntities, ownershipGraph);
     const target = entitiesById.get(targetEntityId);
     const targetProfile = target ? profileFor(target) : "UNKNOWN";
@@ -663,11 +665,12 @@ function assessLlpPscAttributionV1({ policyPack: loadedPolicyPack, ownershipGrap
     }).sort((a, b) => a.basisId.localeCompare(b.basisId));
     const unsupportedDiagnostics = uniqueData(diagnostics).sort((a, b) => a.diagnosticId.localeCompare(b.diagnosticId));
     const requiredSignoffIds = uniqueStrings(["A-06", ...basisRecords.flatMap(({ governance }) => governance.requiredSignoffIds), ...unsupportedDiagnostics.flatMap(({ requiredSignoffs }) => requiredSignoffs || [])]);
-    const identity = { assessmentContractVersion: LLP_PSC_ATTRIBUTION_ASSESSMENT_VERSION, algorithmVersion: LLP_PSC_ATTRIBUTION_ALGORITHM, workingAssumptionRef: LLP_PSC_WORKING_ASSUMPTION, policyIdentity, graphReference, caseReference: caseReference || null, targetEntityId, targetProfile, basisIds: basisRecords.map(({ basisId }) => basisId), diagnosticIds: unsupportedDiagnostics.map(({ diagnosticId }) => diagnosticId) };
+    const identity = { assessmentContractVersion: LLP_PSC_ATTRIBUTION_ASSESSMENT_VERSION, algorithmVersion: LLP_PSC_ATTRIBUTION_ALGORITHM, workingAssumptionRef: LLP_PSC_WORKING_ASSUMPTION, compositionMode: compositionMode || "POLICY_DECLARED_METHOD", policyIdentity, graphReference, caseReference: caseReference || null, targetEntityId, targetProfile, basisIds: basisRecords.map(({ basisId }) => basisId), diagnosticIds: unsupportedDiagnostics.map(({ diagnosticId }) => diagnosticId) };
     return deepFreeze(cloneData({
       assessmentContractVersion: LLP_PSC_ATTRIBUTION_ASSESSMENT_VERSION,
       algorithmVersion: LLP_PSC_ATTRIBUTION_ALGORITHM,
       workingAssumptionRef: LLP_PSC_WORKING_ASSUMPTION,
+      compositionMode: compositionMode || "POLICY_DECLARED_METHOD",
       assessmentId: `${LLP_PSC_ATTRIBUTION_ASSESSMENT_VERSION}:${digest(identity).slice(0, 32)}`,
       ...(caseReference === undefined ? {} : { caseReference }),
       policyIdentity,

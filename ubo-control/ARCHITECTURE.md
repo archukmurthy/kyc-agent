@@ -328,6 +328,18 @@ Closure is qualified by holder identity, denominator compatibility, share-class 
 
 All Wave 6 artifacts are deterministic, immutable, JSON-serializable, `REVIEW_ONLY`, production-unauthorized and absent from `index.js`. Decision Application, Policy Determination, InformationNeed, planner, phases, snapshots, projections, Evidence integration, current Lab/ASDA and onboarding do not import or execute them.
 
+## Freeze Wave 7 phased successor evaluation boundary
+
+`application/evaluateUboDecisionV3Review.js` is an internal-only, data-only coordinator identified as `ubo-phased-evaluation-v1`. It accepts a sealed OwnershipCase revision, exact schema-1.3 Policy Pack, explicit `LAB` mode/evaluation time and already-approved case/evidence/review inputs. It performs no discovery, extraction, identity resolution, adjudication, persistence, UI or host work. The public factory and `index.js` do not expose it.
+
+The immutable phase order is `BASE_APPLICABILITY → CANONICAL_GRAPH_AND_DEPTH → CALCULATIONS_AND_ATTRIBUTIONS → QUALIFICATION → DERIVED_REQUIREMENT_APPLICABILITY → EVIDENCE_SUFFICIENCY → INFORMATION_NEEDS → RESOLUTION_PLANNING → DECISION_SNAPSHOT`. Each artifact pins its algorithm, earlier input IDs/hashes, output ID/hash, completion state, sign-offs, review/compatibility marker and supplied evaluation time. Verification rejects future-phase references and mismatched internal pins.
+
+Graph context preserves the existing R13 combined ownership/control convention as the maximum economic-or-voting path length while recording economic and voting depths separately. Only natural persons receive final route-union assessments. A satisfied statutory route wins disjunctively; review then indeterminate precedence follows; whole-person negative is permitted only after all material statutory routes—including management control—definitively fail. Firm-only satisfaction remains non-statutory.
+
+Phase 5 derives R02, R03 and R07 applicability from the graph and person assessments, never caller placeholders. Phase 7 remains `ubo-requirement-resolution-v1-compat`; Phase 8 remains `ubo-resolution-plan-v1-compat`. The plan is created once before the snapshot and pinned verbatim. No RegistryCapabilityProfile is fabricated. These stages are `TRANSITIONAL_REVIEW_ONLY` and are replaceable by Waves 8/9.
+
+`ubo-decision-snapshot-v2` canonically hashes every decision-significant phase output, exact plan, algorithm manifest, policy/graph identity, evaluation time and predecessor. `ubo-decision-history-v2` dispatches untouched v1 verification/reconstruction or v2 verification/reconstruction, permits an explicit-reason v1→v2 transition, and preserves linear stale-head protection. Historical reconstruction returns recorded reasoning without recalculation.
+
 ## Evidence boundary
 
 UBO Control stores only provider-neutral `EvidenceReference` values containing opaque external references and optional locator/integrity metadata. It does not copy or store raw evidence and does not import Evidence Platform types.

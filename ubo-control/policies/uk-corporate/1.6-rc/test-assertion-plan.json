@@ -925,7 +925,12 @@
       "assertion": "R02/R03 activate from graph-derived facts;",
       "classification": "WAVE_7_PHASED_COORDINATOR",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL",
+      "productionExecutable": false,
+      "compatibilityRequirementStage": "ubo-requirement-resolution-v1-compat",
+      "compatibilityPlannerStage": "ubo-resolution-plan-v1-compat",
+      "successorInformationNeedAndPlannerImplemented": false
     },
     {
       "assertionId": "F07-08-008",
@@ -934,7 +939,12 @@
       "assertion": "R07 activates from qualifying-person output;",
       "classification": "WAVE_7_PHASED_COORDINATOR",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL",
+      "productionExecutable": false,
+      "compatibilityRequirementStage": "ubo-requirement-resolution-v1-compat",
+      "compatibilityPlannerStage": "ubo-resolution-plan-v1-compat",
+      "successorInformationNeedAndPlannerImplemented": false
     },
     {
       "assertionId": "F07-08-009",
