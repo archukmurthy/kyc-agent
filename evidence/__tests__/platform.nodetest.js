@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "R4",
+    stage: "A4b",
     status: "available",
   });
 });
@@ -136,6 +136,22 @@ test("the Evidence Lab exposes explicit A4a evaluation and no-cost history", () 
   assert.match(labJs, /A4a FACT → INFORMATION NEED EVALUATION/);
   assert.match(labJs, /DOWNSTREAM KYC SATISFACTION — NOT PERFORMED/);
   assert.match(labJs, /Source and technical details/);
+});
+
+test("the Evidence Lab exposes explicit A4b coverage assessment and immutable history", () => {
+  const root = path.join(__dirname, "..", "..", "public");
+  const lab = fs.readFileSync(path.join(root, "evidence-lab.html"), "utf8");
+  const labJs = fs.readFileSync(path.join(root, "evidence-lab.js"), "utf8");
+  assert.match(lab, /A4b — EVIDENCE COVERAGE ASSESSMENT/);
+  assert.match(lab, /Explicit A4a evaluation \/ Fact candidates/);
+  for (const label of ["COVERAGE", "COMPLETENESS", "COMPARABLE DISAGREEMENT", "TEMPORAL APPLICABILITY", "EMPTY-SET STATE", "INPUT SUFFICIENCY"]) assert.match(labJs, new RegExp(label));
+  assert.match(labJs, /\/api\/evidence\/a4b-options/);
+  assert.match(labJs, /\/api\/evidence\/a4b-assess/);
+  assert.match(labJs, /\/api\/evidence\/a4b-history/);
+  assert.match(labJs, /A4a was not rerun/);
+  assert.match(labJs, /Candidate contributions — no winner/);
+  assert.match(labJs, /DOWNSTREAM KYC\/UBO DECISION — NOT PERFORMED/);
+  assert.doesNotMatch(lab, /A4b[^]*placeholder="UUID/);
 });
 
 test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {

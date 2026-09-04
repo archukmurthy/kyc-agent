@@ -51,6 +51,10 @@ const evidenceA4aConfigHandler = require(path.join(__dirname, "..", "api", "evid
 const evidenceA4aEvaluateHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-evaluate.js"));
 const evidenceA4aHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-history.js"));
 const evidenceA4aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-options.js"));
+const evidenceA4bConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-config.js"));
+const evidenceA4bOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-options.js"));
+const evidenceA4bAssessHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-assess.js"));
+const evidenceA4bHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-history.js"));
 const evidenceR1ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-config.js"));
 const evidenceR1ContextsHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-contexts.js"));
 const evidenceR1IngestHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-ingest.js"));
@@ -527,6 +531,14 @@ module.exports = function (app) {
   app.get("/api/evidence/a4a-fixture", adapt(evidenceA4aFixtureHandler));
   app.get("/api/evidence/a4a-config", adapt(evidenceA4aConfigHandler));
   for (const [route, handler] of [["/api/evidence/a4a-options", evidenceA4aOptionsHandler], ["/api/evidence/a4a-evaluate", evidenceA4aEvaluateHandler], ["/api/evidence/a4a-history", evidenceA4aHistoryHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
+  // Evidence Platform Stage A4b — immutable coverage/completeness/conflict assessment.
+  app.get("/api/evidence/a4b-config", adapt(evidenceA4bConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a4b-options", evidenceA4bOptionsHandler], ["/api/evidence/a4b-assess", evidenceA4bAssessHandler], ["/api/evidence/a4b-history", evidenceA4bHistoryHandler]]) {
     app.post(route, (req, res) => {
       let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
       req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });

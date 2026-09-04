@@ -108,3 +108,32 @@ R3 never rewrites canonical Artifacts, changes their SHA-256, persists raw provi
 - `scripts/evidence-r4-db-smoke.js` verifies migration 017, typed range semantics, one-Fact/one-extension persistence, Fact-to-Artifact/locator reconstruction, and immutable prior evidence against only the guarded disposable Evidence database.
 
 R4 represents individual source assertions only. It does not create canonical parties, compute direct or indirect UBO status, select winners or operative values, infer currentness, determine KYC satisfaction, run A4a automatically, or implement A4b.
+
+## Stage A4b additions
+
+- `evidence/a4b/domain.js` validates and canonicalizes the bounded, versioned Assessment Specification. It rejects executable policy/prompt fields and does not add downstream requiredness, KYC thresholds or UBO rules to Information Needs.
+- `evidence/a4b/comparators.js` provides the named/versioned conservative scalar and typed-relationship comparators. Exact/range overlap, explicit temporal applicability and governed party association are assessed without fuzzy matching, latest-wins logic or winner selection.
+- `evidence/a4b/setAssertions.js` validates one optional typed set-assertion extension per ordinary Fact and contains the explicitly bounded Companies House no-registrable-PSC mapping. An incomplete/failed acquisition or no extracted value can never establish an empty set.
+- `evidence/a4b/repository.js` resolves only caller-supplied immutable A4a evaluation and Fact pairs within existing subject, tenant, context and access boundaries; persists immutable runs, candidates and pairwise findings; and reopens history without a new assessment.
+- `evidence/a4b/service.js` reports coverage, completeness, comparable disagreement, temporal applicability, empty-set state and input sufficiency as separate dimensions. It never mutates a Fact, Information Need or requirement lifecycle and never emits an operative value, winner, KYC outcome or UBO conclusion.
+- `db/migrations/018_evidence_coverage_assessments.sql` additively creates the typed set-assertion extension, assessment runs, exact candidate contribution rows and pairwise comparison findings. Migrations 010-017 remain unchanged and no historical data is backfilled.
+- `api/evidence/a4b-*.js` and Evidence Lab expose human-readable explicit A4a candidate selection, bounded scalar/collection and temporal semantics, explicit party associations, immutable assessment execution and no-compute history reopening.
+- `scripts/evidence-a4b-db-smoke.js` exercises migrations 010-018 and the A4b foreign-key/append-only shape only against a guarded disposable PostgreSQL database.
+
+A4b does not run A4a, call a semantic provider, pick latest Facts/evaluations, infer source suitability/freshness, choose a winner, determine KYC satisfaction or UBO status, mutate a graph, or implement customer-question decisioning.
+
+## Characterization Net Coverage Map
+
+| A4b invariant | Protecting net |
+| --- | --- |
+| Bounded specification; no executable/downstream policy | `evidence/a4b/__tests__/a4b.nodetest.js` specification cases |
+| Exact A4a evaluation + Fact identity; access and no auto-latest | A4b service/repository tests and PostgreSQL smoke |
+| Scalar coverage and no winner | A4b scalar coverage/agreement/disagreement cases |
+| Exact/range and range/range compatibility | A4b typed comparator cases |
+| Explicit party association only | A4b stable-identifier, caller-association and same-name rejection cases |
+| Temporal overlap; no latest-wins conflict | A4b historical/current/as-of comparator cases |
+| Members do not imply closure; explicit completeness/cardinality | A4b collection and cardinality cases |
+| Legitimate empty set only from explicit successful source semantics | A4b typed-set and Companies House mapping cases |
+| Six independent dimensions; no KYC/UBO conclusion | A4b service and Evidence Lab characterization cases |
+| Immutable append and no-compute history | A4b memory/repository history cases |
+| Additive migration and relational lineage | Migration characterization and `scripts/evidence-a4b-db-smoke.js` |
