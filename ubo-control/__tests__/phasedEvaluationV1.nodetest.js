@@ -51,7 +51,47 @@ function evaluate(overrides = {}) {
   });
 }
 
-test("Wave 7 executes the frozen nine phases and pins a plan before DecisionSnapshot v2", () => {
+function recordedWave7Snapshot(wave8Snapshot) {
+  const snapshot = structuredClone(wave8Snapshot);
+  const content = snapshot.decisionContent;
+  ["requirementStageVersion", "causalInformationNeedSetV2", "informationNeedsV2", "dependentDiagnostics", "plannerCompatibilityAdapter", "specialistRoutes"].forEach((key) => delete content[key]);
+  content.pipelineMaturity = "TRANSITIONAL_REVIEW_ONLY";
+  content.algorithmManifest.requirementResolution = "ubo-requirement-resolution-v1-compat";
+  delete content.algorithmManifest.informationNeed;
+  delete content.algorithmManifest.dependentDiagnostic;
+  delete content.algorithmManifest.plannerCompatibilityAdapter;
+  const phase7 = content.phaseArtifacts[6];
+  phase7.algorithmVersion = "ubo-requirement-resolution-v1-compat";
+  phase7.marker = "TRANSITIONAL_REVIEW_ONLY";
+  phase7.output = { compatibilityStageVersion: "ubo-requirement-resolution-v1-compat", pipelineMaturity: "TRANSITIONAL_REVIEW_ONLY", orchestration: { requirementResolutions: structuredClone(content.requirementResolutions) } };
+  phase7.outputHash = hashArtifact(phase7.output);
+  phase7.outputArtifactId = `information_needs:${phase7.outputHash.slice(7, 39)}`;
+  const phase8 = content.phaseArtifacts[7];
+  phase8.marker = "TRANSITIONAL_REVIEW_ONLY";
+  phase8.inputArtifacts = [{ artifactId: phase7.outputArtifactId, artifactHash: phase7.outputHash }];
+  const plan = structuredClone(content.pinnedResolutionPlan);
+  plan.inputStateHash = phase7.outputHash;
+  const planSemantic = Object.fromEntries(Object.entries(plan).filter(([key]) => !["planId", "planHash"].includes(key)));
+  plan.planHash = hashArtifact(planSemantic);
+  plan.planId = `ubo-resolution-plan-v1-compat:${plan.planHash.slice(7, 39)}`;
+  content.pinnedResolutionPlan = plan;
+  phase8.output = { planId: plan.planId, planHash: plan.planHash, plan };
+  phase8.outputHash = hashArtifact(phase8.output);
+  phase8.outputArtifactId = `resolution_planning:${phase8.outputHash.slice(7, 39)}`;
+  const phase9 = content.phaseArtifacts[8];
+  phase9.marker = "TRANSITIONAL_REVIEW_ONLY";
+  phase9.inputArtifacts = [...content.phaseArtifacts.slice(0, 8).map(({ outputArtifactId, outputHash }) => ({ artifactId: outputArtifactId, artifactHash: outputHash })), { artifactId: plan.planId, artifactHash: plan.planHash }];
+  const { phaseManifest: ignoredManifest, phaseArtifacts, ...seedRest } = content;
+  phase9.output = { snapshotConstructionInputHash: hashArtifact({ ...seedRest, phaseArtifacts: phaseArtifacts.slice(0, 8) }), pinnedPlanId: plan.planId, pinnedPlanHash: plan.planHash };
+  phase9.outputHash = hashArtifact(phase9.output);
+  phase9.outputArtifactId = `decision_snapshot:${phase9.outputHash.slice(7, 39)}`;
+  content.phaseManifest = content.phaseArtifacts.map(({ output, ...entry }) => entry);
+  snapshot.decisionContentHash = hashArtifact(content);
+  snapshot.snapshotId = snapshot.decisionContentHash;
+  return snapshot;
+}
+
+test("Wave 8 executes the frozen nine phases and pins one transitional plan before DecisionSnapshot v2", () => {
   const result = evaluate();
   const repeated = evaluate();
   assert.deepEqual(result.phaseArtifacts.map(({ phaseId }) => phaseId), PHASE_IDS);
@@ -59,7 +99,18 @@ test("Wave 7 executes the frozen nine phases and pins a plan before DecisionSnap
   assert.equal(result.snapshot.snapshotSchemaVersion, "ubo-decision-snapshot-v2");
   assert.equal(result.snapshot.decisionContent.runtimeMode, "LAB");
   assert.equal(result.snapshot.decisionContent.productionAuthorized, false);
-  assert.equal(result.snapshot.decisionContent.pipelineMaturity, "TRANSITIONAL_REVIEW_ONLY");
+  assert.equal(result.snapshot.decisionContent.pipelineMaturity, "TRANSITIONAL_PLANNER_ONLY");
+  assert.equal(result.phaseArtifacts[6].algorithmVersion, "ubo-requirement-resolution-v2");
+  const openNeeds = result.requirementStage.requirementResolution.informationNeeds.filter(({ status }) => status === "OPEN");
+  assert.equal(openNeeds.filter(({ concept, targetKind }) => concept === "VOTING_CONTROL_STATUS" && targetKind === "REGULATED_SUBJECT").length, 1);
+  assert.equal(openNeeds.filter(({ requiredByRequirementIds, targetKind }) => requiredByRequirementIds.includes("UBO-R04") && targetKind === "FRONTIER_ENTITY").length, 0);
+  assert.equal(openNeeds.filter(({ concept }) => concept === "INDEPENDENT_CORROBORATION").length, 1);
+  assert.equal(openNeeds.filter(({ concept }) => concept === "QUALIFYING_PERSON_ATTRIBUTES").length, 1);
+  assert.equal(openNeeds.filter(({ concept }) => ["OTHER_SIGNIFICANT_CONTROL_STATUS", "TRUST_STATUS", "NOMINEE_BEARER_STATUS"].includes(concept)).length, 3);
+  assert.equal(openNeeds.some(({ concept }) => concept === "CASE_COMPLETENESS_ATTESTATION"), false);
+  assert.equal(openNeeds.some(({ requiredByRequirementIds }) => requiredByRequirementIds.includes("UBO-R13")), false);
+  const blockedControlNeedIds = new Set(openNeeds.filter(({ concept }) => ["VOTING_CONTROL_STATUS", "OTHER_SIGNIFICANT_CONTROL_STATUS", "TRUST_STATUS", "NOMINEE_BEARER_STATUS"].includes(concept)).map(({ needId }) => needId));
+  assert.equal(result.plannerCompatibilityAdapter.decisionState.resolutionOptions.some(({ informationNeedId, strategy, applicabilityState }) => blockedControlNeedIds.has(informationNeedId) && strategy.startsWith("CUSTOMER_") && applicabilityState === "APPLICABLE"), false);
   assert.equal(result.snapshot.decisionContent.pinnedResolutionPlan.planId, result.resolutionPlan.planId);
   assert.equal(result.phaseArtifacts[7].output.planHash, result.resolutionPlan.planHash);
   assert.deepEqual(result.resolutionPlan, result.snapshot.decisionContent.pinnedResolutionPlan);
@@ -106,6 +157,13 @@ test("v2 history is linear, stale-head protected and reconstructs without recalc
   assert.throws(() => appendDecisionSnapshotV2(appended, result.snapshot, { expectedHeadSnapshotId: null }), /stale/i);
 });
 
+test("Snapshot v2 dispatcher preserves recorded Wave 7 Phase 7 artifacts", () => {
+  const wave7 = recordedWave7Snapshot(evaluate().snapshot);
+  assert.equal(verifyDecisionSnapshotV2(wave7), true);
+  assert.equal(reconstructAny(wave7).recordedDecision.phaseArtifacts[6].algorithmVersion, "ubo-requirement-resolution-v1-compat");
+  assert.equal(reconstructAny(evaluate().snapshot).recordedDecision.phaseArtifacts[6].algorithmVersion, "ubo-requirement-resolution-v2");
+});
+
 test("snapshot v2 detects independently tampered phase, basis, closure, plan, algorithm and policy pins", () => {
   const result = evaluate();
   const mutations = [
@@ -121,6 +179,8 @@ test("snapshot v2 detects independently tampered phase, basis, closure, plan, al
     (value) => { value.decisionContent.pinnedResolutionPlan.planHash = "sha256:" + "1".repeat(64); },
     (value) => { value.decisionContent.algorithmManifest.graph = "tampered"; },
     (value) => { value.decisionContent.policy.identity.policyHash = "sha256:" + "2".repeat(64); },
+    (value) => { value.decisionContent.informationNeedsV2[0].reasonCode = "TAMPERED_CAUSE"; },
+    (value) => { value.decisionContent.dependentDiagnostics[0].causalNeedId = "ubo-information-need-v2:unknown"; },
     (value) => { value.decisionContent.history.previousSnapshot = { snapshotId: "fake", decisionContentHash: "fake" }; },
   ];
   mutations.forEach((mutate) => {
@@ -155,7 +215,7 @@ test("Wave 6 closure/evidence diagnostics are recorded without manufacturing a W
   assert.equal(result.percentageEvidenceAssessments[0].operationalSufficiency, "REQUIRES_POLICY_SIGNOFF");
   assert.ok(result.snapshot.decisionContent.requiredSignoffIds.includes("A-03"));
   assert.ok(result.layerClosureAssessments.every(({ statutoryClosure, exactnessNeededForDetermination }) => statutoryClosure && exactnessNeededForDetermination));
-  assert.equal(JSON.stringify(result.compatibilityRequirementStage.requirementResolution.informationNeeds).includes("EXACTNESS"), false);
+  assert.equal(JSON.stringify(result.requirementStage.requirementResolution.informationNeeds).includes("EXACTNESS"), false);
 });
 
 test("DecisionHistory v2 permits a valid v1 predecessor and requires a neutral cross-version reason", () => {
@@ -172,4 +232,20 @@ test("DecisionHistory v2 permits a valid v1 predecessor and requires a neutral c
   const appended = appendDecisionSnapshotV2(history, successor, { expectedHeadSnapshotId: previous.snapshotId });
   assert.deepEqual(appended.snapshots.map(({ snapshotSchemaVersion }) => snapshotSchemaVersion), ["ubo-decision-snapshot-v1", "ubo-decision-snapshot-v2"]);
   assert.throws(() => evaluate({ predecessorSnapshot: previous }), /approved explicit supersession reason/);
+});
+
+test("R09 comparison categories remain typed review data and never execute a regulatory report", () => {
+  const scope = evaluate({ facts: { register_scope_difference: true } }).requirementStage.requirementResolution.pscComparison;
+  const method = evaluate({ facts: { method_difference: true } }).requirementStage.requirementResolution.pscComparison;
+  const stale = evaluate({ facts: { psc_record_stale: true } }).requirementStage.requirementResolution.pscComparison;
+  const conflict = evaluate({ relevantConflicts: [{ conflictId: "conflict-1", requirementIds: ["UBO-R09"] }] }).requirementStage.requirementResolution;
+  assert.equal(scope.category, "REGISTER_SCOPE_DIFFERENCE");
+  assert.equal(method.category, "METHOD_DIFFERENCE");
+  assert.equal(stale.category, "TIMING_STALENESS");
+  assert.equal(conflict.pscComparison.category, "POTENTIAL_MATERIAL_DISCREPANCY");
+  assert.ok(conflict.reviewRequirements.some(({ requirementIds }) => requirementIds.includes("UBO-R09")));
+  [scope, method, stale, conflict.pscComparison].forEach((comparison) => {
+    assert.equal(comparison.regulatoryReportSubmitted, false);
+    assert.equal(comparison.reportCandidateCreated, false);
+  });
 });

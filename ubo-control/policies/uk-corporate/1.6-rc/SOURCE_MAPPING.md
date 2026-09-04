@@ -60,15 +60,15 @@ The runtime hash is SHA-256 over the parsed policy's `ubo-canonical-json-v1` rep
 
 | Requirement | Freeze source | Sign-off | Status / future wave | Safe default |
 |---|---|---|---|---|
-| R01 | File 02 §15 R01; File 09 §H | A-03/A-09/A-06 as applicable | Wave 8 after routes/closure | Regulated-subject intent only; no intermediary fan-out execution |
-| R02 | File 02 §15 R02; File 09 §H | None | Wave 7/8 | Graph-derived intent declared; current caller placeholder is not used by v1.6 execution because execution is absent |
-| R03 | File 02 §15 R03; File 09 §H | Evidence policy later | Wave 7/8 | Entity, relationship and source independence remain distinct |
-| R04 | File 02 §15 R04; File 09 §H | A-04; attribution A-09/A-06 | Wave 8 | Subject-level assessment; intermediary and numeric actions gated |
-| R05 | File 02 §15 R05; File 09 §H | A-12; customer content A-04/A-17 | Wave 8 | Preserve combined source semantics; require majority scope |
+| R01 | File 02 §15 R01; File 09 §H | A-03/A-09/A-06 as applicable | Wave 8 internal review execution | Causal relationship/frontier/closure needs; no per-intermediary fan-out |
+| R02 | File 02 §15 R02; File 09 §H | None | Wave 8 internal review execution | Graph-derived applicability; calculation/path effects link to their causal need |
+| R03 | File 02 §15 R03; File 09 §H | Evidence policy later | Wave 8 internal review execution | Entity, relationship, source independence and frontier causes remain distinct |
+| R04 | File 02 §15 R04; File 09 §H | A-04; attribution A-09/A-06 | Wave 8 internal review execution | One subject-level status unless a positive/material attribution route exists; numeric content remains gated |
+| R05 | File 02 §15 R05; File 09 §H | A-12; customer content A-04/A-17 | Wave 8 internal review execution | Majority-scope ambiguity is linked to a separate review requirement |
 | R06 | File 02 §15 R06; File 09 §H | A-02/A-17; fund/GP A-05 | Waves 3/8/11 | Positive supported fact or review; negative residual leg disabled |
 | R07 | File 02 §15 R07; File 09 §H | A-17 | Wave 7/8/11 | Applicability derives from future actual qualification; only missing UBO attributes |
-| R08 | File 02 §15 R08; File 09 §H | A-03 | Wave 6 evidence classification implemented internally; requirement execution remains Wave 8 | One structure-level need remains future; one artifact is one source and band corroboration is not exact verification |
-| R09 | File 02 §15 R09; File 09 §H | Later legal/operating acceptance | Wave 8 | Taxonomy declared in description/tests; no report candidate or submission |
+| R08 | File 02 §15 R08; File 09 §H | A-03 | Wave 8 internal review execution | One structure-level causal evidence need; one artifact is one source and band corroboration is not exact verification |
+| R09 | File 02 §15 R09; File 09 §H | Later legal/operating acceptance | Wave 8 internal review execution | Typed scope/method/timing/discrepancy comparison; no report candidate or submission |
 | R10 | File 02 §15 R10; File 09 §H | A-10 | Wave 9 | Current asynchronous fallback unchanged; NO_DATA is never exhaustion |
 | R11 | File 02 §15 R11; File 09 §H | A-02/A-17; A-05 where specialist fund facts arise | Waves 8/11 | Positive signal independent; unsigned negative statement disabled |
 | R12 | File 02 §15 R12; File 09 §H | A-02/A-17; A-13 where joint facts arise | Waves 8/11 | Positive signal independent; unsigned negative statement disabled |

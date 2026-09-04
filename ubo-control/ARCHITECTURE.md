@@ -393,3 +393,11 @@ The Lab API exposes an ephemeral session envelope for fixture start, live Discov
 The browser app is staged at `/ubo-control-lab/` and reuses `UboJourney` and `OwnershipGraph`. Customer and Compliance tabs render the same current sealed state. The only state-changing paths are versioned Decision Application operations followed by explicit evaluation; the browser cannot fabricate a snapshot, qualification result or resolved requirement.
 
 Live Evidence remains a disabled, explicit capability boundary until Gate 4 prerequisites exist. No mock extraction result is presented as live evidence. `src/App.js`, onboarding routes, dossiers, host persistence and database migrations remain outside G5.3D.
+
+## Freeze Wave 8 causal successor boundary
+
+New internal Snapshot v2 evaluations replace the transitional Wave 7 Phase 7 with `ubo-requirement-resolution-v2`. The stage derives canonical causal keys before requirement effects, producing one immutable `ubo-information-need-v2` for one missing fact and linking all affected requirements, calculations, paths, routes, closure and evidence assessments as dependent references. Relationship defects take precedence over broad frontiers; an unresolved upstream holder set is attached only to the topmost material frontier, not every downstream intermediary.
+
+InformationNeed lifecycle is limited to `OPEN`, `SATISFIED` and `SUPERSEDED`. Operational blockers, analyst reviews and specialist routes remain separate domain artifacts. `ubo-need-dependent-diagnostic-v1` records explain downstream effects and never become planner inputs or unresolved-count inflation.
+
+Phase 8 is deliberately unchanged: the private `ubo-information-needs-v2-to-plan-v1-compat` adapter supplies one input per open cause to `ubo-resolution-plan-v1-compat`. The internal `ubo-ownership-graph-projection-v2` projects only recorded Snapshot v2 facts and separates causal needs, diagnostics, blockers, reviews and specialists. Neither module is exported publicly or used by the current Lab. Decision Application v3, ResolutionPlan v2, RegistryCapabilityProfile, public projection/Lab v2, Evidence and onboarding remain outside Wave 8.
