@@ -1578,7 +1578,7 @@ Architecture Authority approved the one-to-one extension model, initial versione
 
 ## ADR-018 — Provisional Evidence Coverage, Completeness, and Comparable-Disagreement Assessment
 
-**Status:** APPROVED — IMPLEMENTATION AUTHORIZED
+**Status:** APPROVED — IMPLEMENTED
 
 **Date:** 2026-09-01
 
@@ -1693,4 +1693,133 @@ A4b can produce reconstructable provisional Evidence assessments without pretend
 
 Architecture Authority approved the hybrid Assessment Specification boundary, bounded schema, separate outcome dimensions, typed set-assertion extension, explicit party-association boundary, deterministic comparator direction, immutable run/candidate/finding persistence, and migration 018 on 2026-09-01.
 
+A4b was implemented and accepted at `e0dd4d85be47cfb851d86f41778a9c3a20286b16`.
+
 This decision authorizes only bounded A4b implementation and Lab characterization. It does not authorize KYC/UBO integration, indirect ownership, operative-value selection, winner selection, final satisfaction, provider calls, recollection, reinterpretation, schema mutation, or changes to existing KYC behavior.
+
+---
+
+## ADR-019 — Point-in-Time Evidence Reconstruction and Immutable Evidence Packages
+
+**Status:** APPROVED — A5A IMPLEMENTATION AUTHORIZED; A5B IMPLEMENTATION DEFERRED
+
+**Date:** 2026-09-04
+
+**Raised by:** Architecture Authority
+
+### Context
+
+A1 through A4b and R1 through R4 now preserve the independent Evidence lifecycle from collection through provisional coverage assessment. The next requirement is to answer, for one authorized subject, Evidence context, purpose, and point in time, what evidentiary picture existed and how it changed afterward.
+
+Repository diagnosis shows that the current Evidence tables already retain stable identities, source and storage provenance, domain timestamps, creation timestamps, append-only interpretations, evaluations, assessments, derivations, verification lineage, Artifact fingerprints, and explicit failure/limitation states. These source-of-truth records can support a useful chronology and point-in-time projection. Creating a second event row for every existing record would duplicate authority and create reconciliation risk.
+
+The same diagnosis also identifies a separate product need: an authorized reconstruction may optionally be frozen so that later collection, interpretation, evaluation, or assessment cannot silently alter what that package contains. Durable package identity, exact membership, manifest integrity, and supersession are not provided by the existing model.
+
+### Decision
+
+#### A5 is split at the persistence boundary
+
+The proposed next roadmap is:
+
+* **A5a — Evidence Ledger / Reconstruction**: an authorized, deterministic, point-in-time read projection over existing Evidence source-of-truth records; and
+* **A5b — Immutable Evidence Package**: an explicitly frozen, durable package created from an A5a reconstruction with its own identity, exact membership, canonical manifest, manifest fingerprint, and optional supersession lineage.
+
+The two stages share a reconstruction model but have different write and authorization consequences. A5a must be proven before A5b freezes its output.
+
+#### A5a is a projection, not a duplicate ledger
+
+No new general Evidence event or ledger table is proposed for A5a. The ledger is computed from existing material records, including Requirements and Information Needs; Collection Operations and Acquisitions; Assets and Artifacts; Extraction and Interpretation Runs; Facts, derivations, verifications, typed relationships, set assertions, and locators; A4a evaluations; and A4b assessments, candidates, findings, failures, and limitations.
+
+Every projected entry retains its source table/record identity, event kind, event-specific occurrence time, database creation time, status, relevant lineage, and authorization classification. The projection must use stable deterministic ordering, including an explicit tie-breaker where timestamps are equal. It must not invent events or restamp historical records.
+
+The initial A5a implementation should prefer repository queries or database views over persisted duplicate events. A normalized event envelope may be reconsidered only if a separately evidenced requirement cannot be met from source records, such as durable ingestion of externally generated audit events or exact transition history that no source table preserves.
+
+#### Point-in-time inclusion uses knowledge time and preserves domain time
+
+For the question "what was known by T", a record is not eligible merely because it contains an earlier capture, observation, effective, occurrence, or caller-supplied `created_at` time. It must have been durably available by T. There is no universal `inserted_at` column: some A2 graph rows are created with the operation start time and persisted only when the collection transaction completes. A5a therefore uses a governed record-type availability rule rather than assuming every `created_at` is database commit time. At minimum, collection outputs cannot be known before their parent Acquisition/Collection completion, extraction outputs cannot be known before their run completes, A4a outputs cannot be known before evaluation completion, and A4b outputs cannot be known before assessment creation. Event-specific time remains separately reported, including:
+
+* collection/acquisition/operation start and completion;
+* Asset observation and Artifact capture;
+* source-effective and relationship effective dates;
+* extraction start/completion and Fact creation;
+* derivation and verification time;
+* A4a evaluation time; and
+* A4b assessment time.
+
+`existed by T`, `observed/effective at T`, `interpreted by T`, and `assessed by T` remain distinct. Backdated source-effective data created after T must not appear as knowledge available at T.
+
+Where a current row contains start and completion timestamps, the projection may truthfully derive that the operation was in progress before its completion time. Terminal status, result, failure reason, and completion metadata must not leak into an earlier as-of view. The projection must not claim to reconstruct intermediate transitions or attempts that the source model overwrote or never persisted. If no safe availability bound can be established for a record type, strict point-in-time reconstruction must omit or qualify that record rather than backdate knowledge.
+
+#### Current reconstruction limits must remain explicit
+
+The current source model does not retain every possible historical state:
+
+* Collection and interpretation operation rows transition from running to a terminal status in place; their start/final state is available, but every intermediate transition is not.
+* There is no universal database-commit timestamp, and some A2 child records carry a logical start time in `created_at` even though their transaction commits at collection completion; reconstruction must use parent/run availability bounds.
+* A failed private-ingestion operation may be resumed on the same operation row, so the overwritten prior attempt timing is not a complete attempt ledger.
+* `evidence_requirements.status` has no status-history or `closed_at` record.
+* access scopes have creation time but no governed revocation/effective-history model.
+* an Artifact's stored SHA-256 proves the expected source-byte fingerprint, while a later successful reopen proves integrity only at that later check time unless an earlier verification was itself persisted.
+* invalid or denied requests that deliberately create no Evidence record cannot be reconstructed from Evidence tables alone.
+
+A5a must disclose these limitations. It must not fill them with inferred or fabricated history. If Architecture Authority later requires exact transition, requirement-lifecycle, authorization-policy, or integrity-check history, that is a separate additive governance decision rather than justification for a generic duplicate ledger now.
+
+#### Reconstruction scope is explicit and bounded
+
+An A5a request names one authorized tenant, Evidence context, subject, purpose, and `asOf` time. It may additionally carry bounded member-kind or Requirement/Information-Need scope. "Complete evidentiary picture" means complete relative to this explicit query scope and the Evidence records that existed by the cutoff; it is not a claim that all real-world or KYC-required evidence existed.
+
+Failed and partial acquisitions, failed interpretations, competing Facts, qualifications, and missing/policy-required A4b outcomes remain visible. There is no latest-only shortcut and no winner selection.
+
+#### A5b freezes an exact reconstruction deliberately
+
+A5b should support both modes without conflating them:
+
+```text
+authorized live point-in-time reconstruction
+        ↓ explicit freeze
+immutable Evidence Package
+        ↓ optional rendering/export
+human-readable or machine-readable export
+```
+
+The live reconstruction is transient. A frozen package has a durable opaque package identity, tenant/context/subject association, purpose/type, requested `asOf`, assembly/freeze timestamp, assembler identity or trusted actor context, manifest schema/canonicalization version, exact ordered membership, limitations, and immutable status.
+
+An interactive reconstruction view is not itself a package. A PDF, ZIP, or other rendered file is an export of the canonical package, not the canonical package. Export bytes may be stored as a derived Artifact or export record only under separately approved retention and access semantics.
+
+#### Package membership references canonical Evidence
+
+A package normally references canonical immutable Evidence identities rather than copying Evidence into a competing store. One Artifact may be a member of many packages without changing Artifact identity.
+
+Membership must identify the member kind, stable member reference, deterministic order/role, and the exact version or immutable record identity included. The package manifest should contain access-safe Evidence references and the metadata necessary to explain the package without exposing Blob URLs, storage keys, credentials, or repository internals. Internal foreign keys may use existing UUID identities, but external contracts should expose opaque stable references rather than table structure.
+
+The initial membership vocabulary should cover the A1–A4b/R1–R4 record types required for reconstruction. Exact physical table design is an implementation detail subject to referential-integrity review; a free-form unvalidated list of arbitrary IDs is not sufficient.
+
+#### Package authorization is no broader than member authorization
+
+Only a trusted, authorized server-side caller may reconstruct, freeze, reopen, or export a package. Authorization is checked against the tenant/context/subject request and every included member at assembly. It is checked again at reopen/export under current governing access policy.
+
+Package membership never grants access to a member. Effective package authorization is the intersection of all member permissions and must be evaluated member by member. Public and private Evidence may coexist only when the caller is authorized for the exact context-restricted members. A package-level classification is never sufficient authorization, and incomparable member scopes must not be reduced to one simplistic "most restrictive" scope. Membership metadata is itself sensitive and must not reveal the existence of inaccessible Evidence.
+
+If any member is no longer authorized, reopening the canonical package fails closed rather than silently returning a different or partially redacted package. Any redacted disclosure is a separately identified derived export with explicit policy and must not change the frozen package.
+
+#### The manifest fingerprint protects only the package manifest
+
+At freeze time, A5b deterministically canonicalizes the manifest under a named/versioned algorithm and stores a SHA-256 fingerprint of those canonical manifest bytes. The manifest includes the package identity and metadata, ordered member references, relevant member versions/fingerprints, as-of and freeze times, scope, and explicit limitations.
+
+This fingerprint proves only that the frozen package manifest has not changed. It does not prove that an external source remained unchanged, that a storage provider is permanently available, that a member was true or accepted, or that Artifact bytes share the package fingerprint. Artifact SHA-256 remains source-byte integrity metadata.
+
+#### Later Evidence creates a new package
+
+A package frozen at T1 never gains T2 collection, Artifact, interpretation, evaluation, or assessment records. Later Evidence is visible in a later live reconstruction and may be frozen only as a new package identity. A later package may carry an explicit `supersedes` or `derivedFrom` reference to an earlier package, but both remain immutable and independently reopenable.
+
+#### Decision ownership remains downstream
+
+A5 reconstructs Evidence and existing Evidence assessments. It does not create an operative customer value, source winner, final KYC satisfaction, UBO determination, approve/reject/refer decision, or rationale that no downstream decision system recorded. A future decision-provenance integration may reference a package, but A5 must not fabricate that lineage.
+
+### Consequences
+
+A5a is expected to require no schema migration for its minimum read-only projection, though query/index additions may later be justified for performance. A5b is expected to require one additive, forward-only migration for package identity, membership, canonical manifest/fingerprint, and supersession lineage. No migration is authorized by this proposed ADR.
+
+Existing KYC `entity_dossiers`, `events`, `session_timeline`, `field_provenance`, and related journey records remain separate systems of record. Their snapshot and append-only-event patterns are useful precedents, but they are not Evidence Package membership and must not be imported or joined as though Evidence decision lineage already exists.
+
+Architecture Authority approved the A5a/A5b split; record-type availability and point-in-time rules; explicit reconstruction limitations; A5a projection rather than a duplicate event ledger; package identity and membership direction; member-by-member authorization intersection and fail-closed behavior; manifest canonicalization and fingerprint meaning; and later-package supersession semantics on 2026-09-04. A5a implementation is authorized without a migration. A5b implementation and any package migration remain separately deferred.

@@ -206,26 +206,39 @@ R4 does not determine UBO/controller status, indirect/effective ownership, thres
 
 #### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
 
-A4b may later reason across an explicitly selected immutable set of A4a evaluations and source-backed Evidence signals to assess evidence coverage, collection/cardinality completeness, legitimate empty sets, comparable disagreement, temporal applicability, and unresolved input limitations.
+**Accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16` under approved ADR-018.**
+
+A4b reasons across an explicitly selected immutable set of A4a evaluations and source-backed Evidence signals to assess evidence coverage, collection/cardinality completeness, legitimate empty sets, comparable disagreement, temporal applicability, and unresolved input limitations.
 
 The diagnostic and proposed architecture are recorded in ADR-018. The existing Information Need remains the stable Evidence target but does not contain sufficient assessment semantics. The recommended boundary is a versioned assessment specification supplied by the consuming domain and immutably snapshotted by Evidence for each assessment. That specification must state the applicable structural and policy inputs, including scalar/collection shape, cardinality, complete-set and legitimate-empty semantics, temporal checkpoint, comparison references, and any freshness/source-suitability context.
 
 A4b outcomes remain multidimensional and provisional: coverage, completeness, comparable disagreement, temporal applicability, and missing-policy/input limitations must not be collapsed into one satisfaction status. A4b does not select an operative value or source winner, calculate indirect ownership, determine UBO/controller status, or determine final KYC satisfaction.
 
-**ADR-018 and A4b implementation are approved. One additive migration after 017 is authorized; migrations 010–017 remain immutable and no historical backfill is permitted.**
+Migration 018 is additive and forward-only. Migrations 010–017 remain immutable and no historical backfill occurred.
 
 #### Downstream KYC/Onboarding
 
 KYC/Onboarding retains source/value winner selection, operative customer values, customer dispute resolution, corroboration requirements, final KYC satisfaction, analyst/risk decisions, and approve/reject/refer/escalate or onboarding-progression decisions.
 
-### Stage A5 — Ledger and Package
+### Stage A5 — Evidence Reconstruction and Package
 
-Add:
+Stage A5 is split at the persistence boundary under approved ADR-019. A5a implementation is authorized. A5b architecture is approved conceptually, but A5b implementation and persistence remain deferred.
 
-* case Evidence Ledger;
-* historical/evidentiary view;
-* Evidence Package;
-* package manifest sufficient to demonstrate the complete independent lifecycle.
+#### Stage A5a — Evidence Ledger / Reconstruction
+
+Provide an authorized, deterministic point-in-time reconstruction over the existing A1–A4b/R1–R4 source-of-truth records. Present a stable chronology of Requirements and Information Needs, collections and failures, Assets and Artifacts, extraction/interpretation, Facts and source relationships, locators and integrity lineage, A4a evaluations, A4b assessments, conflicts, gaps, and limitations.
+
+A5a should initially be a read projection, not a duplicate persisted event ledger. It distinguishes governed record availability/knowledge time from collection, capture, observation, source-effective, extraction, verification, evaluation, and assessment time. Because `created_at` is not universally a database-commit timestamp, the projection uses safe parent operation/run completion bounds and prevents later terminal results from leaking into earlier as-of views. It exposes places where the present model cannot reproduce overwritten intermediate transitions, exact commit time, prior requirement status, access-scope revocation history, or unpersisted denied/invalid requests.
+
+A5a does not choose latest Evidence, select a winner, create an operative value, determine KYC/UBO satisfaction, or fabricate downstream decision rationale. No migration is currently proposed for the minimum A5a projection.
+
+#### Stage A5b — Immutable Evidence Package
+
+Allow an authorized A5a reconstruction to be explicitly frozen as a durable immutable package. A package has its own opaque identity, subject/context/purpose and `asOf` scope, exact ordered member references, manifest/canonicalization version, assembly time and actor lineage, explicit limitations, SHA-256 manifest fingerprint, and optional immutable supersession/derivation reference to a later or earlier package.
+
+Package membership references canonical Evidence records; it does not copy or re-identify Artifacts. Membership grants no access. Package authorization is evaluated member by member as the intersection of member authorization and is rechecked on reopen/export. A package-level classification is insufficient, and incomparable member scopes are not collapsed into one simplistic scope.
+
+A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. One additive forward-only package migration is likely, but no A5b migration or implementation is authorized until Architecture Authority approves a separate A5b build brief.
 
 ### Stage A6 — End-to-End Evidence Lab Validation
 
