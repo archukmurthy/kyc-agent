@@ -55,6 +55,9 @@ const evidenceA4bConfigHandler = require(path.join(__dirname, "..", "api", "evid
 const evidenceA4bOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-options.js"));
 const evidenceA4bAssessHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-assess.js"));
 const evidenceA4bHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-history.js"));
+const evidenceA5aConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-config.js"));
+const evidenceA5aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-options.js"));
+const evidenceA5aReconstructHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-reconstruct.js"));
 const evidenceR1ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-config.js"));
 const evidenceR1ContextsHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-contexts.js"));
 const evidenceR1IngestHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-ingest.js"));
@@ -544,6 +547,13 @@ module.exports = function (app) {
       req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
     });
   }
+  // Evidence Platform Stage A5a — read-only point-in-time reconstruction.
+  app.get("/api/evidence/a5a-config", adapt(evidenceA5aConfigHandler));
+  app.get("/api/evidence/a5a-options", adapt(evidenceA5aOptionsHandler));
+  app.post("/api/evidence/a5a-reconstruct", (req, res) => {
+    let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA5aReconstructHandler)(req, res); });
+  });
   app.get("/api/evidence/r1-config", adapt(evidenceR1ConfigHandler));
   app.get("/api/evidence/r1-contexts", adapt(evidenceR1ContextsHandler));
   for (const [route, handler] of [["/api/evidence/r1-ingest", evidenceR1IngestHandler], ["/api/evidence/r1-reopen", evidenceR1ReopenHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });

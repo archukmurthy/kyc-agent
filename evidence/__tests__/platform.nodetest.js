@@ -22,7 +22,7 @@ function responseRecorder() {
 test("the server boundary reports the current authorized build stage", () => {
   assert.deepEqual(getPlatformStatus(), {
     platform: "evidence",
-    stage: "A4b",
+    stage: "A5a",
     status: "available",
   });
 });
@@ -152,6 +152,12 @@ test("the Evidence Lab exposes explicit A4b coverage assessment and immutable hi
   assert.match(labJs, /Candidate contributions — no winner/);
   assert.match(labJs, /DOWNSTREAM KYC\/UBO DECISION — NOT PERFORMED/);
   assert.doesNotMatch(lab, /A4b[^]*placeholder="UUID/);
+});
+
+test("the Evidence Lab exposes read-only point-in-time Evidence reconstruction",()=>{
+  const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
+  assert.match(lab,/A5a — EVIDENCE RECONSTRUCTION/);assert.match(lab,/As known by/);assert.match(lab,/External source call: NO · AI call: NO · Evidence write: NO/);
+  assert.match(js,/\/api\/evidence\/a5a-options/);assert.match(js,/\/api\/evidence\/a5a-reconstruct/);assert.match(js,/EVIDENCE RECONSTRUCTION/);assert.match(js,/DOWNSTREAM KYC\/UBO DECISION/);assert.match(js,/NOT RECONSTRUCTED UNLESS SEPARATELY INTEGRATED/);
 });
 
 test("GET /api/evidence/a1-fixture returns the validated A1 demonstration", async () => {

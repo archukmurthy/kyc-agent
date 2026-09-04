@@ -122,6 +122,16 @@ R4 represents individual source assertions only. It does not create canonical pa
 
 A4b does not run A4a, call a semantic provider, pick latest Facts/evaluations, infer source suitability/freshness, choose a winner, determine KYC satisfaction or UBO status, mutate a graph, or implement customer-question decisioning.
 
+## Stage A5a additions
+
+- `evidence/a5a/domain.js` applies versioned, record-type-specific `availableAt` rules and produces a deterministic normalized chronology without persisting a second ledger.
+- `evidence/a5a/repository.js` reads only currently authorized Evidence records for one tenant, context and subject. It returns safe Evidence metadata and never exposes Artifact storage credentials or locators.
+- `evidence/a5a/service.js` enforces current context/subject authorization and answers what Evidence Platform could truthfully have known by an explicit cutoff. Source-effective, capture and observation timestamps remain visible as `occurredAt`, but never move Evidence before its reconstructable availability boundary.
+- `api/evidence/a5a-*.js` exposes server-resolved, read-only context options, configuration and reconstruction routes. Reconstruction makes no source, browser, provider, reinterpretation, A4a, A4b or persistence call.
+- Evidence Lab provides a human-readable subject/context selector, explicit as-of time, chronological projection, grouped acquisitions, Artifacts, Facts, relationships, A4a/A4b output, and explicit reconstruction limitations.
+
+A5a is a transient read projection over migrations 010–018. It introduces no migration, duplicate event ledger, frozen package, KYC/UBO conclusion, source selection, freshness decision, or A5b behavior.
+
 ## Characterization Net Coverage Map
 
 | A4b invariant | Protecting net |
@@ -137,3 +147,17 @@ A4b does not run A4a, call a semantic provider, pick latest Facts/evaluations, i
 | Six independent dimensions; no KYC/UBO conclusion | A4b service and Evidence Lab characterization cases |
 | Immutable append and no-compute history | A4b memory/repository history cases |
 | Additive migration and relational lineage | Migration characterization and `scripts/evidence-a4b-db-smoke.js` |
+
+### A5a Characterization Net Coverage Map
+
+| A5a invariant | Protecting net |
+| --- | --- |
+| Availability time is distinct from occurrence, capture and source-effective time | `evidence/a5a/__tests__/a5a.nodetest.js` backdated Artifact case |
+| Collection children and terminal results do not leak before completion | A5a record-type availability case |
+| Facts, support, locators and typed relationships wait for run completion | A5a run-child boundary case |
+| A4a and A4b results wait for their immutable completion boundary | A5a evaluation/assessment boundary case |
+| Failed acquisition becomes visible only once known | A5a completed-collection case |
+| Recollections coexist; no latest-only shortcut; deterministic order | A5a recollection chronology case |
+| Current tenant/context/subject authorization fails closed | A5a service authorization cases |
+| No source/provider/write or downstream KYC/UBO conclusion | A5a service side-effect and Evidence Lab cases |
+| Known persistence limitations are explicit rather than invented history | A5a limitation contract case |
