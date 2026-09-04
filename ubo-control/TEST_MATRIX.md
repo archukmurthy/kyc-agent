@@ -1,8 +1,8 @@
 # UBO Control test matrix
 
-## Freeze Wave 3 traceability
+## Freeze Wave 4 traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 advances exactly `F07-04-001` through `F07-04-008`; later-wave and sign-off-gated assertions remain visibly non-executable. F07-04-007 is satisfied by the internal handoff-ready assessment only; host integration remains deferred.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 retains `F07-04-001` through `F07-04-008`; Wave 4 advances exactly `F07-06-001` through `F07-06-010` as `REVIEW_MODE_EXECUTABLE`, with `productionExecutable=false` and A-09 retained (plus A-12 for appointment/removal). LLP, joint-arrangement, runtime, final-union and later-wave assertions remain non-executable.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
@@ -11,7 +11,7 @@
 | File 01 §3 Architecture invariants | Existing architecture, contract, snapshot and adapter suites | Current v1 contracts | Protected unchanged | None |
 | File 01 §4 Threshold/comparator/firm overlay | `qualificationBasisV2.nodetest.js`; v1.6 doctrine test; File 07 §4 inventory | `ubo-qualification-basis-v2`; `ubo-effective-interest-qualification-v2` | Internal effective route executable; no runtime wiring | Firm activation approval if enabled |
 | File 01 §5 Layer completeness | v1.6 doctrine test; File 07 §5 inventory | `ubo-layer-closure-v1` required | Declared, unsupported | A-03/A-13 where applicable |
-| File 01 §6 Qualification/calculation | v1.6 route test; existing percentage suite; File 07 §6 inventory | percentage v1 retained; determination v2 / attribution v1 required | Effective arithmetic preserved; successor routes pending | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
+| File 01 §6 Qualification/calculation | `qualificationBasisV2.nodetest.js`; `companyPscAttributionV1.nodetest.js`; v1.6 route test; File 07 §6 inventory | percentage v1 retained; internal attribution v1 added; determination v2 still absent | Effective arithmetic preserved; company attribution review-only and unwired | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
 | File 01 §7 Control/action gating | v1.6 gating test; File 07 §§8,10,14 inventories | Policy data now; needs/applicant v2 later | Last-resort gated; customer features disabled | A-02, A-04, A-17 |
 | File 01 §8 Listed/exhaustion/fallback/terminal states | v1.6 listed/exhaustion tests; existing async orchestration suite | orchestration v1 retained; planner v2 later | Listed routes gated; exhaustion runtime unchanged | A-01, A-07, A-10, A-14 |
 | File 01 §9 Structure acquisition | v1.6 allowed-strategy test; File 07 §9 inventory | planner v2 / RegistryCapabilityProfile v1 required | Declared, not executable | A-15 |
@@ -22,7 +22,7 @@
 | File 01 §14 ASDA characterization | Existing adapter/Lab/graph tests plus File 07 §13 inventory | v1 fixtures retained; v2 characterization later | Historical facts protected; final TDR result provisional | A-06 |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; exactly eight Wave 3 qualification assertions newly executable | Per-entry `signoffDependencies` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; eight Wave 3 assertions plus ten Wave 4 review-mode assertions executable | Per-entry `signoffDependencies` / `requiredSignoffs` |
 
 ### QualificationBasis v2 and effective-interest wrapper
 
@@ -39,6 +39,21 @@
 | Recorded calculation/path/claim/EvidenceReference fidelity without recomputation | `__tests__/qualificationBasisV2.nodetest.js`; unchanged G2.2 suite |
 | No public export or runtime/Lab/ASDA wiring | architecture/public-surface tests and repository diff scan |
 | File 08 sign-off register | exact A-01–A-18 status/default/readiness tests | `ubo-policy-readiness-v1` | No approvals; LAB `REVIEW_ONLY`; PRODUCTION `BLOCKED` | Mandatory A-08/A-09/A-10/A-11 plus enabled-feature dependencies |
+
+### Company Schedule 1A / PSC-condition attribution v1
+
+| Invariant | Protection |
+|---|---|
+| Direct company share `>25%` exact/range boundaries and separate voting condition | `__tests__/companyPscAttributionV1.nodetest.js` |
+| Canonical 60/40 distinction: 24% effective interest versus full 40% attributed target right | Wave 3/4 coexistence test; unchanged percentage engine |
+| Strict `>50%` voting majority, deep paths, unknown/ceased state and relevant-cycle conservatism | Wave 4 focused path tests |
+| Economic ownership and generic SIoC never become majority steps | Wave 4 exclusion tests |
+| Same-right deduplication, multi-chain trace, distinct-right and direct-plus-indirect aggregation | Wave 4 aggregation tests |
+| Explicit majority appointment/removal and A-12; ambiguous scope review | Wave 4 appointment tests |
+| Explicit SIoC direct basis; interpretive SIoC review; joint signal no-attribution/A-13 | Wave 4 control tests |
+| COMPANY-only target/intermediaries; LLP A-06 and trust/specialist stop | Wave 4 profile tests |
+| Stable assessment/basis/path IDs, canonical order, immutability, serialization and support fidelity | Wave 4 identity/provenance tests |
+| Review-only A-09 governance, no final person result, no public/runtime/Lab wiring | Wave 4 tests plus architecture/public-surface suite |
 
 | Material module / invariant | Protecting executable test |
 |---|---|

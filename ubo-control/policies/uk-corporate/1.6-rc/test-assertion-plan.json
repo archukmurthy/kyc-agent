@@ -502,7 +502,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-002",
@@ -513,7 +516,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-003",
@@ -524,7 +530,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-004",
@@ -535,7 +544,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-005",
@@ -546,7 +558,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-006",
@@ -558,7 +573,10 @@
         "A-09",
         "A-12"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09", "A-12"]
     },
     {
       "assertionId": "F07-06-007",
@@ -569,7 +587,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-008",
@@ -580,7 +601,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-009",
@@ -591,7 +615,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-010",
@@ -602,7 +629,10 @@
       "signoffDependencies": [
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-09"]
     },
     {
       "assertionId": "F07-06-011",

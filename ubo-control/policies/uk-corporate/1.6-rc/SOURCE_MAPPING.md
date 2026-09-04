@@ -34,7 +34,7 @@ The runtime hash is SHA-256 over the parsed policy's `ubo-canonical-json-v1` rep
 | Machine-readable governance | File 08 register; Wave 2 §§6–7 | File 08 evidence requirements | A-01–A-18 | None approved | Per feature/release | Mandatory production IDs are A-08/A-09/A-10/A-11; disabled features do not independently block |
 | Management-control route | File 01 §6.1; File 02 §3; Wave 2 §8 | MLR 2017 Reg 5(1)(a) | A-05 for fund/GP interpretation | Data declaration only | Wave 3 and specialist follow-up | Evidence/review method; no new executable rule |
 | Effective-interest route | File 01 §6.2; File 02 §3 | MLR 2017 Reg 5(1)(b) | None for existing arithmetic | Adopted interpretation declared | Wave 3 internal wrapper implemented; runtime handoff deferred | Existing `ubo-percentage-lookthrough-v1`; no arithmetic change |
-| PSC-condition attribution route | File 01 §6.3; File 02 §3 | MLR 2017 Reg 5(1)(c), 5(2)(a); CA 2006 Sch 1A | A-09; LLP also A-06; joint facts A-13; appoint/remove A-12 | Declared, unsupported | Wave 4; LLP later only after A-06 | No attribution result or qualification is produced |
+| PSC-condition attribution route | File 01 §6.3; File 02 §3 | MLR 2017 Reg 5(1)(c), 5(2)(a); CA 2006 Sch 1A | A-09; LLP also A-06; joint facts A-13; appoint/remove A-12 | Internal company assessment implemented review-only; production unauthorized and unwired | Wave 4 complete for supported COMPANY semantics; LLP/joint/runtime later | `ubo-psc-attribution-v1` retains full target rights without upstream multiplication; no final person result |
 | Statutory economic threshold | File 01 §4.1; File 02 §4 | MLR 2017 Reg 5(1)(b) | A-08 production baseline | Mandatory `>25` | Consumed by internal Wave 3 basis wrapper | Immutable policy threshold; no tenant lowering |
 | Statutory voting threshold | File 01 §4.1; File 02 §4 | MLR 2017 Reg 5(1)(b) | A-08 production baseline | Mandatory `>25` | Consumed by internal Wave 3 basis wrapper | Kept separate from economic threshold |
 | Firm collection threshold | File 01 §§4.2–4.3; File 02 §4 | Firm-policy concept | Firm approval if enabled | Disabled | Internal overlay supported; activation and runtime wiring deferred | Null threshold in this pack; test-only enabled fixture proves it cannot suppress statutory status |
@@ -79,7 +79,7 @@ The runtime hash is SHA-256 over the parsed policy's `ubo-canonical-json-v1` rep
 
 | Feature | Enabled | Required sign-off(s) | Meaning |
 |---|---:|---|---|
-| Company PSC attribution | Yes, declaration only | A-09 | Required successor route is visible but blocked by unsupported `ubo-psc-attribution-v1` and pending sign-off |
+| Company PSC attribution | Yes, internal review only | A-09 | `ubo-psc-attribution-v1` is implemented in focused internal tests; it is not publicly exported or runtime-wired and remains production-blocked |
 | LLP PSC attribution | No | A-06, A-09 | No LLP/TDR conclusion |
 | Joint-arrangement attribution | No | A-13 | No inference from aligned interests |
 | Automatic appoint/remove qualification | No | A-12 | Preserve source fact; no automatic majority conclusion |

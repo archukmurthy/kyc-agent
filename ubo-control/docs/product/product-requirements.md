@@ -61,6 +61,23 @@ Acceptance principles:
 - The modules are not exported or wired into Decision Application, v1 snapshots/projections/planner, UI, Lab, ASDA, legacy Discovery or host onboarding.
 - UK Corporate 1.6-RC remains `REVIEW_ONLY`/production-blocked and no Policy Pack bytes or hashes change.
 
+## PR-POL-004 — Company Schedule 1A / PSC-Condition Attribution v1
+
+**Status:** IMPLEMENTED INTERNALLY — REVIEW ONLY
+
+**Target:** Freeze Implementation Wave 4
+
+UBO Control must assess supported company PSC conditions as a separate statutory route without changing effective-interest arithmetic. `ubo-psc-attribution-v1` consumes operative canonical relationships, canonical COMPANY profiles and provider-neutral support references; it emits immutable route-specific QualificationBasis v2 records inside `ubo-psc-attribution-assessment-v1`.
+
+Acceptance principles:
+
+- Company shares require explicit `SHARE_OWNERSHIP`; voting, appointment/removal and SIoC stay distinct.
+- Indirect attribution requires a complete current COMPANY-only majority chain established by strict-majority voting or explicit majority appointment/removal semantics.
+- The full target right is attributed without upstream percentage multiplication; each distinct target right is counted once and every supporting chain remains visible.
+- LLP/trust/specialist paths stop with diagnostics, joint arrangements are not implemented, and trust/firm condition 5 remains unassessed.
+- Results remain A-09-dependent, review-only and production-unauthorized; A-12/A-13/A-06 are retained where applicable.
+- No whole-person result, Decision Application/Snapshot/projection/Lab behavior or public export is introduced.
+
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
 **Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED
