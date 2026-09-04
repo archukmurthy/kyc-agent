@@ -344,7 +344,10 @@
       "assertion": "`(75,100]` + `>25` → CLOSED;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-002",
@@ -353,7 +356,10 @@
       "assertion": "`[75,100]` + `>=25` → OPEN;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-003",
@@ -362,7 +368,10 @@
       "assertion": "`[76,100]` + `>=25` → CLOSED;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-004",
@@ -371,7 +380,10 @@
       "assertion": "75% + firm >=10 → OPEN;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-005",
@@ -380,7 +392,10 @@
       "assertion": "40% + 35% lower bounds, >25 → CLOSED;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-006",
@@ -389,7 +404,10 @@
       "assertion": "unknown/unidentified holder → INDETERMINATE.",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-007",
@@ -398,7 +416,10 @@
       "assertion": "dual-class shares: economic closed, voting open;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-008",
@@ -407,7 +428,10 @@
       "assertion": "invalid denominator blocks closure;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-009",
@@ -416,7 +440,10 @@
       "assertion": "overlapping interests fail;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-010",
@@ -425,7 +452,10 @@
       "assertion": "contradictory sources block closure;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-011",
@@ -434,7 +464,10 @@
       "assertion": "stale/currentness unknown blocks closure where material;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-012",
@@ -442,8 +475,13 @@
       "sourceSubsection": "Qualifiers",
       "assertion": "joint-arrangement signal blocks closure;",
       "classification": "WAVE_6_LAYER_CLOSURE",
-      "signoffDependencies": [],
-      "executableNow": false
+      "signoffDependencies": [
+        "A-13"
+      ],
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-13"]
     },
     {
       "assertionId": "F07-05-013",
@@ -452,7 +490,10 @@
       "assertion": "closure does not imply exact value verified.",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-014",
@@ -461,7 +502,10 @@
       "assertion": "band wholly above/below threshold → no exact request;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-015",
@@ -470,7 +514,10 @@
       "assertion": "interval straddles outcome → exactness needed;",
       "classification": "WAVE_6_LAYER_CLOSURE",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-05-016",
@@ -481,7 +528,10 @@
       "signoffDependencies": [
         "A-03"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-03"]
     },
     {
       "assertionId": "F07-05-017",
@@ -492,7 +542,10 @@
       "signoffDependencies": [
         "A-03"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-03"]
     },
     {
       "assertionId": "F07-06-001",

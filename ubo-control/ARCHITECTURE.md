@@ -316,6 +316,18 @@ Attribution retains the complete target right and never performs mixed voting/ec
 
 Every envelope and basis preserves `A-06-WA-01`, `REVIEW_ONLY`, `productionAuthorized=false` and A-06. Company Schedule 1A steps add A-09; appointment/removal adds A-12. The TDR characterization therefore preserves each person's `(25%,50%]` LLP voting range as a direct LLP condition while refusing to treat it as an intermediary majority step, sum the people, or emit a final ASDA result. Decision Application, current Lab/ASDA, policy determination, requirements, planner, projections, Evidence and onboarding remain unwired and unchanged; the module is absent from `index.js`.
 
+## Freeze Wave 6 layer-closure and percentage-evidence boundary
+
+`ubo-layer-closure-v1` is a pure internal evaluator for one direct COMPANY or LLP layer and one dimension at a time. COMPANY economic rights require an explicit share/equity basis; LLP economic rights require `LLP_SURPLUS_ASSET_RIGHTS`; voting remains independent for both profiles. Appointment/removal and significant-influence/control facts do not enter percentage closure. The evaluator neither traverses chains nor attributes rights, aggregates downstream paths, or determines a final UBO.
+
+Distinct target-right/interest-slot identities prevent corroborating claims and attributed copies from being counted twice. Compatible current direct-right intervals are summed with exact rational arithmetic and endpoint attainability. The residual is their exact complement within the feasible 0–100 domain; broad upper totals above 100 remain visible where feasible, while a minimum above 100 or an unattainable open lower bound at 100 is rejected. Statutory and enabled firm-policy closure remain separate results. An unsafe or malformed firm overlay produces a typed configuration error without suppressing statutory arithmetic.
+
+Closure is qualified by holder identity, denominator compatibility, share-class treatment, non-overlap, currentness, contradiction and joint-arrangement context. Arithmetic can therefore show that no additional threshold holder is possible while the overall layer remains `INDETERMINATE` or `REVIEW_REQUIRED`. Joint arrangements are never inferred from percentage patterns; positive or materially unknown signals retain A-13.
+
+`ubo-percentage-precision-assessment-v1` reports whether more precision could change a threshold or layer-closure determination, and refuses false exactness requests where a non-percentage qualifier is the real blocker. `ubo-percentage-evidence-assessment-v1` separately classifies declarations, independent bands and capable exact sources without changing claim adjudication. Band containment is endpoint-exact; corroboration never becomes exact-value verification; contradictory exact sources retain every reference and select no winner. Only the consistent declaration-plus-independent-band combination records `REQUIRES_POLICY_SIGNOFF` with A-03. No risk-tier operational sufficiency rule exists.
+
+All Wave 6 artifacts are deterministic, immutable, JSON-serializable, `REVIEW_ONLY`, production-unauthorized and absent from `index.js`. Decision Application, Policy Determination, InformationNeed, planner, phases, snapshots, projections, Evidence integration, current Lab/ASDA and onboarding do not import or execute them.
+
 ## Evidence boundary
 
 UBO Control stores only provider-neutral `EvidenceReference` values containing opaque external references and optional locator/integrity metadata. It does not copy or store raw evidence and does not import Evidence Platform types.
