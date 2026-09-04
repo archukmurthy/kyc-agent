@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w4-company-psc-attribution` |
 | Base commit | `cbffe430b087d27ce3cf1b289d3ad67996603838` (accepted PR #48 normal merge on `origin/main`). |
 | Latest accepted PR | [#48 — Freeze Wave 3: QualificationBasis v2 effective-interest wrapper](https://github.com/archukmurthy/kyc-agent/pull/48), merged normally as `cbffe430b087d27ce3cf1b289d3ad67996603838`. |
-| Current PR | Pending — Wave 4 PR will remain open for Control Room review and will not be merged automatically. |
+| Current PR | [#49 — Freeze Wave 4: company PSC-condition attribution](https://github.com/archukmurthy/kyc-agent/pull/49) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
