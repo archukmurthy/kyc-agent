@@ -304,6 +304,18 @@ Attribution retains the full direct target right held by the controlled company;
 
 Every Wave 4 result is review-only, production-unauthorized and A-09-dependent. Appointment/removal bases additionally retain A-12; explicit joint signals are not attributed and retain A-13; LLP diagnostics retain A-06. Decision Application v1/v2, Policy Determination v1, DecisionSnapshot v1, projections, planner, UI, Lab, ASDA and host composition remain unwired and unchanged. The new algorithm and QualificationBasis v2 internals are not exported from `index.js`.
 
+## Freeze Wave 5 LLP and mixed-company attribution boundary
+
+`ubo-llp-psc-attribution-v1` is a separate, replaceable, pure internal mapping governed by provisional working assumption `A-06-WA-01`. It consumes only the unchanged canonical graph, canonical entity profiles, operative claim support and an identity-verified schema-1.3 review-policy fixture. The immutable UK Corporate 1.6-RC Policy Pack is not changed or selected by current runtime behavior.
+
+For an LLP target, the operation keeps surplus-asset rights, LLP voting, explicit majority-management appointment/removal and explicit unambiguous significant influence/control as separate statutory conditions. Surplus assets are represented as `LLP_SURPLUS_ASSET_RIGHTS`, never as company shares. Trust-or-firm condition 5 is explicitly unassessed. For a COMPANY target it retains the Wave 4 target-condition semantics unchanged.
+
+Mixed chains may traverse only COMPANY and LLP entities. A chain step requires explicit strict `>50%` voting or an explicit majority-scope appointment/removal fact. Surplus-asset, profit, capital or generic economic rights never establish an LLP majority step; generic SIoC does not either. Agreement-based and dominant-control steps remain unsupported because the current canonical vocabulary does not state their exact semantics. Unsupported profiles, temporal uncertainty and cycles remain visible diagnostics.
+
+Attribution retains the complete target right and never performs mixed voting/economic multiplication. A target right is counted once even when multiple complete chains support it. Distinct non-overlapping rights may aggregate, with every chain retained. Explicit joint signals add A-13 and no attribution; the implementation never combines separate holders' percentages.
+
+Every envelope and basis preserves `A-06-WA-01`, `REVIEW_ONLY`, `productionAuthorized=false` and A-06. Company Schedule 1A steps add A-09; appointment/removal adds A-12. The TDR characterization therefore preserves each person's `(25%,50%]` LLP voting range as a direct LLP condition while refusing to treat it as an intermediary majority step, sum the people, or emit a final ASDA result. Decision Application, current Lab/ASDA, policy determination, requirements, planner, projections, Evidence and onboarding remain unwired and unchanged; the module is absent from `index.js`.
+
 ## Evidence boundary
 
 UBO Control stores only provider-neutral `EvidenceReference` values containing opaque external references and optional locator/integrity metadata. It does not copy or store raw evidence and does not import Evidence Platform types.

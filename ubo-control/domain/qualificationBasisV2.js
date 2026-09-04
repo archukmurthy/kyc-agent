@@ -121,6 +121,7 @@ function qualificationBasisIdentity(record) {
   if (record.targetRightReferences !== undefined) identity.targetRightReferences = record.targetRightReferences;
   if (record.aggregatedTargetRightValue !== undefined) identity.aggregatedTargetRightValue = record.aggregatedTargetRightValue;
   if (record.attributionChains !== undefined) identity.attributionChains = record.attributionChains;
+  if (record.workingAssumptionRef !== undefined) identity.workingAssumptionRef = record.workingAssumptionRef;
   return identity;
 }
 
@@ -178,6 +179,9 @@ function validateQualificationBasisV2(record, path = "qualificationBasisV2") {
       assertPlainObject(record.aggregatedTargetRightValue, `${path}.aggregatedTargetRightValue`);
     }
     if (record.governance !== undefined) assertPlainObject(record.governance, `${path}.governance`);
+    if (record.workingAssumptionRef !== undefined) {
+      assertNonEmptyString(record.workingAssumptionRef, `${path}.workingAssumptionRef`);
+    }
     assertPlainObject(record.policyRequirement, `${path}.policyRequirement`);
     const expectedId = `${QUALIFICATION_BASIS_VERSION}:${digest(qualificationBasisIdentity(record)).slice(0, 32)}`;
     if (record.basisId !== expectedId) basisError(`${path}.basisId does not match its semantic identity`);
