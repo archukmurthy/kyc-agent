@@ -279,6 +279,25 @@
 | Scenario/policy referential integrity | `__tests__/scenarioCorpus.nodetest.js` and `__tests__/ukPolicyPack.nodetest.js` — requirements/actions/evidence/scenario IDs exist; B/E unresolved references unchanged |
 | Entire corpus runs offline without legacy/provider services | `__tests__/scenarioCorpus.nodetest.js` and `__tests__/architecture.nodetest.js` — blocked network run and prohibited dependency scan |
 
+## Freeze Wave 6 interval closure and percentage evidence
+
+| Invariant | Protection |
+|---|---|
+| Statutory comparator truth tables | `__tests__/layerClosureV1.nodetest.js` — all required `>25` and `>=25` endpoint cases, exact 75/74/75.01 and 40+35 |
+| Separate firm overlay | `__tests__/layerClosureV1.nodetest.js` — statutory `>25` and firm `>=10` coexist; disabled, unsafe and malformed firm configurations cannot suppress statute |
+| Exact interval and residual arithmetic | `__tests__/layerClosureV1.nodetest.js` — open/inclusive endpoints, multiple intervals, exact 100, infeasible lower totals and feasible upper sums above 100 |
+| Direct-right counting | `__tests__/layerClosureV1.nodetest.js` — duplicate support and attributed copies count once; distinct rights sum; overlapping slots block |
+| Per-profile/per-dimension semantics | `__tests__/layerClosureV1.nodetest.js` — COMPANY shares, LLP surplus assets, independent ECONOMIC/VOTING closure, incompatible bases and specialist targets fail closed |
+| Closure qualifiers | `__tests__/layerClosureV1.nodetest.js` — identity, denominator, share class, overlap, temporal state, conflict and joint-arrangement contexts remain explicit |
+| Decision-sensitive precision | `__tests__/layerClosureV1.nodetest.js` — above/below, threshold-straddling, closure-sensitive, definitely-open, UNKNOWN and non-percentage-blocked states |
+| Percentage evidence states | `__tests__/percentageEvidenceAssessmentV1.nodetest.js` — declaration, independent-band corroboration and capable exact verification remain distinct |
+| Endpoint-exact consistency/conflict | `__tests__/percentageEvidenceAssessmentV1.nodetest.js` — `(25,50]` boundary cases, outside-band contradiction, exact-source disagreement and no-winner conflicts |
+| Independence and currentness | `__tests__/percentageEvidenceAssessmentV1.nodetest.js` — applicant-originated, stale and relationship-mismatched sources are ineligible; duplicated artifact rows do not create independence |
+| A-03 boundary | `__tests__/percentageEvidenceAssessmentV1.nodetest.js` — consistent declaration plus band is sign-off-gated, never exact-verified or risk-tier sufficient |
+| Internal-only architecture | Both Wave 6 suites plus `__tests__/architecture.nodetest.js` — immutable deterministic results, no provider/runtime/need/planner dependency and no public export |
+
+The exact Wave 6 assertion inventory `F07-05-001` through `F07-05-017` is `REVIEW_MODE_EXECUTABLE` only. Production remains false; `F07-05-012` retains A-13 and `F07-05-016`/`F07-05-017` retain A-03.
+
 ## UK Corporate supplied assertion plan
 
 These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_EXECUTABLE`, and one `G2_4C_EXECUTABLE`. G2.4C now protects the actual immutable R10 measures-taken DecisionSnapshot; persistence and host integrations remain later work.
