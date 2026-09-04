@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w8-frontier-information-needs-v2` |
 | Base commit | `945381f029d78fee8a6baf06b4bc79cf26b6ab51` (accepted PR #52 normal merge on `origin/main`). |
 | Latest accepted PR | [#52 — Freeze Wave 7: phased successor evaluation and DecisionSnapshot v2](https://github.com/archukmurthy/kyc-agent/pull/52), merged normally as `945381f029d78fee8a6baf06b4bc79cf26b6ab51`. |
-| Current PR | Wave 8 PR pending; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#53 — Freeze Wave 8: causal frontier InformationNeeds v2](https://github.com/archukmurthy/kyc-agent/pull/53) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
