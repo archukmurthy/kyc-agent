@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w5-llp-attribution-review-only` |
 | Base commit | `2bcae34c817a4df9ab4e9e5e8e03afeec527117a` (accepted PR #49 normal merge on `origin/main`). |
 | Latest accepted PR | [#49 — Freeze Wave 4: company PSC-condition attribution](https://github.com/archukmurthy/kyc-agent/pull/49), merged normally as `2bcae34c817a4df9ab4e9e5e8e03afeec527117a`. |
-| Current PR | Wave 5 PR pending creation; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#50 — Freeze Wave 5: review-only LLP attribution under A-06-WA-01](https://github.com/archukmurthy/kyc-agent/pull/50) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
