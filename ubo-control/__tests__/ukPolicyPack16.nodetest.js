@@ -228,7 +228,7 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
   assert.equal(new Set(ASSERTION_PLAN.assertions.map(({ assertionId }) => assertionId)).size, ASSERTION_PLAN.assertions.length);
   assert.equal(ASSERTION_PLAN.assertions.every(({ classification }) => ASSERTION_PLAN.classifications.includes(classification)), true);
   assert.equal(ASSERTION_PLAN.assertions.filter(({ executableNow }) => executableNow)
-    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION"].includes(classification)), true);
+    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION", "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION"].includes(classification)), true);
   assert.deepEqual(ASSERTION_PLAN.assertions
     .filter(({ classification, executableNow }) => classification === "WAVE_3_QUALIFICATION_BASIS" && executableNow)
     .map(({ assertionId }) => assertionId), Array.from({ length: 8 }, (_, index) => `F07-04-${String(index + 1).padStart(3, "0")}`));
@@ -240,6 +240,16 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
     && productionExecutable === false
     && JSON.stringify(requiredSignoffs) === JSON.stringify(signoffDependencies)
   )), true);
+  const wave5 = ASSERTION_PLAN.assertions
+    .filter(({ classification, executableNow }) => classification === "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION" && executableNow);
+  assert.deepEqual(wave5.map(({ assertionId }) => assertionId), Array.from({ length: 5 }, (_, index) => `F07-06-${String(index + 14).padStart(3, "0")}`));
+  assert.equal(wave5.every(({ executionStatus, productionExecutable, requiredSignoffs, signoffDependencies }) => (
+    executionStatus === "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION"
+    && productionExecutable === false
+    && requiredSignoffs.includes("A-06")
+    && JSON.stringify(requiredSignoffs) === JSON.stringify(signoffDependencies)
+  )), true);
+  assert.equal(ASSERTION_PLAN.assertions.find(({ assertionId }) => assertionId === "F07-13-012").executableNow, false);
 });
 
 test("source mapping covers every material doctrine and R01-R14 without claiming approval", () => {

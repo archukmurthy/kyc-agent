@@ -29,3 +29,16 @@
 - The approved future sequence is requirements -> causal InformationNeeds -> ResolutionPlan v2 -> DecisionSnapshot v2. Snapshot v2 will pin its plan, and planner v2 will expose that pinned plan.
 - Repository-level legacy “25% or more” guidance is non-authoritative for fresh successor UBO Control. The successor Policy Pack owns its comparator. Historical behavior and UK Corporate 1.5-RC are unchanged.
 - No Wave 2 doctrine, policy content, attribution, layer closure, planner/snapshot v2, or integration work is implemented by Wave 1.
+
+## A-06-WA-01 — review-only LLP attribution working assumption
+
+- Review-only approval date: **2026-09-04**.
+- Control Room authorizes a separate internal LLP/mixed COMPANY/LLP attribution implementation under working assumption `A-06-WA-01`; this is provisional implementation doctrine only, not an amendment to the Policy Pack and not legal or MLRO approval.
+- A direct current LLP surplus-asset or voting right above the applicable policy threshold may satisfy its distinct LLP condition. A current explicit right to appoint/remove a majority of persons entitled to participate in management, or explicit unambiguous LLP SIoC, may satisfy its own distinct condition.
+- An LLP intermediary may be traversed only through explicit strict `>50%` voting or explicit majority-management appointment/removal. Economic, surplus-asset, profit or capital rights never imply majority control. Generic SIoC, agreement wording and dominant-control wording do not become majority steps without faithful approved canonical semantics.
+- Mixed COMPANY/LLP attribution retains the full target right and does not multiply upstream voting/control percentages with downstream economic rights. Distinct holders' percentages are never summed and no joint arrangement is inferred; explicit joint signals remain review-required under A-13 and produce no attribution.
+- The three sanitized TDR holders retain separate `(25%,50%]` LLP voting ranges. Each may satisfy a direct voting condition if TDR itself is the target, but none has a proven `>50%` majority step for downstream ASDA attribution. The TDR/ASDA conclusion remains provisional; no final positive or negative natural-person UBO result is authorized.
+- Every result is `REVIEW_ONLY`, has `productionAuthorized=false`, requires A-06, and additionally retains A-09 for company Schedule 1A semantics, A-12 for appointment/removal and A-13 for a joint signal. A-06 remains `RESEARCH_COMPLETE_SIGNOFF_PENDING`; MLRO/legal validation and production authorization remain pending.
+- Production restrictions: the capability is private, is not wired into Decision Application, current Lab/ASDA, projections, planner, Evidence or onboarding, and is not publicly exported. It may not support a production determination.
+- Contained rework boundary: a later A-06 correction is confined to the versioned LLP mapping and review-policy selection. CandidateFact contracts, canonical graph, effective-interest arithmetic, company attribution, Decision Application, historical snapshots, capability ports and Evidence boundary remain unchanged.
+- This record agrees with the existing Compliance Decisions Register: A-06 remains unresolved and blocks production-authorized LLP attribution, automatic joint-arrangement attribution and a final deterministic TDR/ASDA conclusion.

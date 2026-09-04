@@ -1,8 +1,8 @@
 # UBO Control test matrix
 
-## Freeze Wave 4 traceability
+## Freeze Wave 5 traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 retains `F07-04-001` through `F07-04-008`; Wave 4 advances exactly `F07-06-001` through `F07-06-010` as `REVIEW_MODE_EXECUTABLE`, with `productionExecutable=false` and A-09 retained (plus A-12 for appointment/removal). LLP, joint-arrangement, runtime, final-union and later-wave assertions remain non-executable.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 retains `F07-04-001` through `F07-04-008`; Wave 4 retains `F07-06-001` through `F07-06-010`; Wave 5 advances exactly `F07-06-014` through `F07-06-018` as `REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION`, with `productionExecutable=false`. A-06 is always required; company semantics add A-09 and appointment/removal adds A-12. Joint attribution, a final TDR/ASDA conclusion, trust/firm condition, runtime, final-union and later-wave assertions remain non-executable.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
@@ -11,7 +11,7 @@
 | File 01 §3 Architecture invariants | Existing architecture, contract, snapshot and adapter suites | Current v1 contracts | Protected unchanged | None |
 | File 01 §4 Threshold/comparator/firm overlay | `qualificationBasisV2.nodetest.js`; v1.6 doctrine test; File 07 §4 inventory | `ubo-qualification-basis-v2`; `ubo-effective-interest-qualification-v2` | Internal effective route executable; no runtime wiring | Firm activation approval if enabled |
 | File 01 §5 Layer completeness | v1.6 doctrine test; File 07 §5 inventory | `ubo-layer-closure-v1` required | Declared, unsupported | A-03/A-13 where applicable |
-| File 01 §6 Qualification/calculation | `qualificationBasisV2.nodetest.js`; `companyPscAttributionV1.nodetest.js`; v1.6 route test; File 07 §6 inventory | percentage v1 retained; internal attribution v1 added; determination v2 still absent | Effective arithmetic preserved; company attribution review-only and unwired | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
+| File 01 §6 Qualification/calculation | `qualificationBasisV2.nodetest.js`; `companyPscAttributionV1.nodetest.js`; `llpPscAttributionV1.nodetest.js`; v1.6 route test; File 07 §6 inventory | percentage v1 retained; separate company and LLP/mixed attribution v1 operations; determination v2 still absent | Effective arithmetic preserved; attribution review-only and unwired | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
 | File 01 §7 Control/action gating | v1.6 gating test; File 07 §§8,10,14 inventories | Policy data now; needs/applicant v2 later | Last-resort gated; customer features disabled | A-02, A-04, A-17 |
 | File 01 §8 Listed/exhaustion/fallback/terminal states | v1.6 listed/exhaustion tests; existing async orchestration suite | orchestration v1 retained; planner v2 later | Listed routes gated; exhaustion runtime unchanged | A-01, A-07, A-10, A-14 |
 | File 01 §9 Structure acquisition | v1.6 allowed-strategy test; File 07 §9 inventory | planner v2 / RegistryCapabilityProfile v1 required | Declared, not executable | A-15 |
@@ -19,10 +19,10 @@
 | File 01 §11 InformationNeeds | File 07 §8 inventory | frontier needs / projection v2 required | Pending Wave 8 | A-04/A-12/A-13 where applicable |
 | File 01 §12 Evaluation order | exact phase-order test | phased coordinator / DecisionSnapshot v2 required | Declared, unsupported | None |
 | File 01 §13 Applicant versus Lab | File 07 §§14–15 inventory; current UI/Lab suites | v1 UI retained; v2 projections later | Current behavior unchanged | A-02/A-04/A-17 for applicant content |
-| File 01 §14 ASDA characterization | Existing adapter/Lab/graph tests plus File 07 §13 inventory | v1 fixtures retained; v2 characterization later | Historical facts protected; final TDR result provisional | A-06 |
+| File 01 §14 ASDA characterization | Existing adapter/Lab/graph tests, Wave 5 sanitized TDR fixture and File 07 §13 inventory | v1 fixtures retained; private attribution characterization only | Direct LLP voting distinguished from intermediary control; final TDR result remains provisional | A-06/A-09 |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; eight Wave 3 assertions plus ten Wave 4 review-mode assertions executable | Per-entry `signoffDependencies` / `requiredSignoffs` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; eight Wave 3, ten Wave 4 and five Wave 5 review-mode assertions executable | Per-entry `signoffDependencies` / `requiredSignoffs` |
 
 ### QualificationBasis v2 and effective-interest wrapper
 
@@ -54,6 +54,23 @@
 | COMPANY-only target/intermediaries; LLP A-06 and trust/specialist stop | Wave 4 profile tests |
 | Stable assessment/basis/path IDs, canonical order, immutability, serialization and support fidelity | Wave 4 identity/provenance tests |
 | Review-only A-09 governance, no final person result, no public/runtime/Lab wiring | Wave 4 tests plus architecture/public-surface suite |
+
+### LLP and mixed COMPANY/LLP PSC attribution v1
+
+| Invariant | Protection |
+|---|---|
+| Direct LLP surplus-asset and voting `>25%` exact/range endpoint semantics remain separate | `__tests__/llpPscAttributionV1.nodetest.js` |
+| Company shares cannot become LLP surplus assets; surplus assets cannot become voting | Wave 5 semantic-rejection tests |
+| Explicit majority-management appointment/removal adds A-12; unknown scope stays indeterminate | Wave 5 direct and traversal tests |
+| Direct unambiguous SIoC may satisfy; ambiguous SIoC reviews; generic SIoC is not a majority step | Wave 5 control tests |
+| Strict LLP voting `>50%` boundaries are independent of the direct `>25%` LLP condition | Wave 5 majority-boundary tests |
+| Surplus assets above 50% never establish intermediary control; unsupported agreement/dominant wording diagnoses | Wave 5 non-inference tests |
+| COMPANY target through LLP and LLP target through COMPANY retain full target rights without multiplication | Wave 5 mixed-chain tests |
+| Broken chains stop attribution; duplicate paths count one target right while retaining every chain | Wave 5 aggregation/deduplication tests |
+| Three TDR `(25%,50%]` holders stay separate; direct LLP condition may satisfy but no ASDA right is attributed | Wave 5 sanitized TDR characterization |
+| Explicit joint signal adds A-13 without attribution; fund/LP/trust profiles remain unsupported | Wave 5 governance/profile tests |
+| A-06-WA-01 identity, review-only state, production disablement, immutability and support fidelity | Wave 5 identity/governance tests |
+| No provider, legacy, runtime, arithmetic or public-entry dependency | Wave 5 source scan plus architecture/public-surface suite |
 
 | Material module / invariant | Protecting executable test |
 |---|---|

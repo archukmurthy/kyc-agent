@@ -15,6 +15,7 @@
     "EXISTING_RUNTIME_PROTECTED",
     "WAVE_3_QUALIFICATION_BASIS",
     "WAVE_4_COMPANY_ATTRIBUTION",
+    "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
     "BLOCKED_A_06",
     "BLOCKED_A_09",
     "WAVE_6_LAYER_CLOSURE",
@@ -672,60 +673,73 @@
       "sourceSection": "§6 New Doctrine C tests",
       "sourceSubsection": "LLP",
       "assertion": "surplus-asset condition;",
-      "classification": "BLOCKED_A_06",
+      "classification": "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
       "signoffDependencies": [
-        "A-06",
-        "A-09"
+        "A-06"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06"]
     },
     {
       "assertionId": "F07-06-015",
       "sourceSection": "§6 New Doctrine C tests",
       "sourceSubsection": "LLP",
       "assertion": "LLP voting;",
-      "classification": "BLOCKED_A_06",
+      "classification": "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
       "signoffDependencies": [
-        "A-06",
-        "A-09"
+        "A-06"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06"]
     },
     {
       "assertionId": "F07-06-016",
       "sourceSection": "§6 New Doctrine C tests",
       "sourceSubsection": "LLP",
       "assertion": "majority management appointment/removal;",
-      "classification": "BLOCKED_A_06",
+      "classification": "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
       "signoffDependencies": [
         "A-06",
-        "A-09"
+        "A-12"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06", "A-12"]
     },
     {
       "assertionId": "F07-06-017",
       "sourceSection": "§6 New Doctrine C tests",
       "sourceSubsection": "LLP",
       "assertion": "LLP majority-chain attribution;",
-      "classification": "BLOCKED_A_06",
+      "classification": "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
       "signoffDependencies": [
         "A-06",
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06", "A-09"]
     },
     {
       "assertionId": "F07-06-018",
       "sourceSection": "§6 New Doctrine C tests",
       "sourceSubsection": "LLP",
       "assertion": "TDR characterization remains provisional until sign-off fixture enabled.",
-      "classification": "BLOCKED_A_06",
+      "classification": "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION",
       "signoffDependencies": [
         "A-06",
         "A-09"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06", "A-09"]
     },
     {
       "assertionId": "F07-07-001",
