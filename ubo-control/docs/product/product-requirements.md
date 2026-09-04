@@ -41,6 +41,26 @@ Acceptance principles:
 - Current Decision Application v1/v2, DecisionSnapshot v1, Lab/ASDA, graph, journey, planner and public API behavior remain unchanged and continue using `1.5-RC`.
 - `test-assertion-plan.json` classifies every File 07 assertion honestly; a policy declaration is never represented as executable behavior.
 
+## PR-POL-003 — QualificationBasis v2 and Effective-Interest Route Wrapper
+
+**Status:** IMPLEMENTED INTERNALLY — FREEZE IMPLEMENTATION WAVE 3; NOT RUNTIME-WIRED
+
+**Target:** Route-specific successor qualification reasoning
+
+UBO Control must preserve effective-interest qualification reasoning as immutable statutory and firm-policy bases without altering the accepted percentage arithmetic or implying a final whole-person UBO outcome.
+
+Acceptance principles:
+
+- `ubo-qualification-basis-v2` pins policy/hash, graph, calculation, person, target, route, classification, dimension, method, threshold, state, paths and available support references.
+- `ubo-effective-interest-qualification-v2` consumes only a recorded `ubo-percentage-lookthrough-v1` result with `ADOPTED_INTERPRETATION`; it performs no graph or arithmetic work.
+- Only canonical natural persons can hold final basis records; legal entities remain graph/frontier inputs for later routes.
+- Economic and voting thresholds remain independent and `>` / `>=` plus range endpoint semantics are exact.
+- Partial, unresolved, cyclic and no-path results cannot become false negatives; no path is not calculated zero.
+- Enabled firm collection policy creates a separate `FIRM_POLICY` basis and cannot capture fewer people than statute or suppress statutory status.
+- The internal handoff result retains all bases and explicitly lists unassessed management-control and PSC-condition routes. It exposes no authoritative `isUbo`/`qualifies` boolean.
+- The modules are not exported or wired into Decision Application, v1 snapshots/projections/planner, UI, Lab, ASDA, legacy Discovery or host onboarding.
+- UK Corporate 1.6-RC remains `REVIEW_ONLY`/production-blocked and no Policy Pack bytes or hashes change.
+
 ## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
 
 **Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED

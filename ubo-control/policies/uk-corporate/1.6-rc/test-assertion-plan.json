@@ -270,7 +270,7 @@
       "assertion": "statutory `>25`;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-002",
@@ -279,7 +279,7 @@
       "assertion": "statutory `>=25`;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-003",
@@ -288,7 +288,7 @@
       "assertion": "firm `>=10`;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-004",
@@ -297,7 +297,7 @@
       "assertion": "statutory + firm simultaneously.",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-005",
@@ -306,7 +306,7 @@
       "assertion": "15% person is firm-policy person under >=10;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-006",
@@ -315,7 +315,7 @@
       "assertion": "not statutory UBO under >25;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-04-007",
@@ -324,7 +324,8 @@
       "assertion": "host handoff retains both classifications;",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "implementationNote": "The internal handoff-ready assessment retains both classifications; host integration remains deferred."
     },
     {
       "assertionId": "F07-04-008",
@@ -333,7 +334,7 @@
       "assertion": "firm threshold cannot suppress a statutory UBO.",
       "classification": "WAVE_3_QUALIFICATION_BASIS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true
     },
     {
       "assertionId": "F07-05-001",

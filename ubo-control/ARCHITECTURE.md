@@ -286,6 +286,14 @@ Customer-input provenance records the source snapshot, plan references, operatio
 
 Percentages are typed as `EXACT`, `RANGE`, or `UNKNOWN`. A range retains both bounds and inclusive/exclusive endpoints. Gate 1 never coerces a range to a scalar. G2.2 consumes the unchanged validated input shape through exact internal rational and interval arithmetic. G2.3 interprets only the resulting exact/range aggregate against a Policy Pack threshold; it does not alter the calculation.
 
+## Freeze Wave 3 internal qualification boundary
+
+`ubo-qualification-basis-v2` is the immutable route-specific successor reasoning record. `ubo-effective-interest-qualification-v2` is a pure internal wrapper over an already-recorded `ubo-percentage-lookthrough-v1` calculation; it never repeats graph traversal, path multiplication or aggregation. It requires exact schema-1.3 Policy Pack identity, an adopted EFFECTIVE_INTEREST route declaration, a canonical natural-person holder and matching calculation/graph/person/target/dimension pins.
+
+Statutory and enabled firm-policy thresholds create separate bases. Comparator and range endpoint semantics are retained exactly, and a firm threshold is rejected if it would capture fewer people than the applicable statutory threshold. The enclosing assessment identifies assessed and unassessed routes and is explicitly not a whole-person UBO determination. Management control and PSC-condition attribution are model vocabulary only in Wave 3 and produce no placeholder bases.
+
+Both modules remain private to the standalone product. Decision Application v1/v2, `ubo-policy-determination-v1`, DecisionSnapshot/projection/planner v1, UI, Lab and host integration do not import or execute them. The public `index.js` surface is unchanged and UK Corporate 1.6-RC remains review-only.
+
 ## Evidence boundary
 
 UBO Control stores only provider-neutral `EvidenceReference` values containing opaque external references and optional locator/integrity metadata. It does not copy or store raw evidence and does not import Evidence Platform types.
