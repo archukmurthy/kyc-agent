@@ -1,8 +1,8 @@
 # UBO Control test matrix
 
-## Freeze Wave 5 traceability
+## Freeze Wave 7 traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 3 retains `F07-04-001` through `F07-04-008`; Wave 4 retains `F07-06-001` through `F07-06-010`; Wave 5 advances exactly `F07-06-014` through `F07-06-018` as `REVIEW_MODE_EXECUTABLE_UNDER_WORKING_ASSUMPTION`, with `productionExecutable=false`. A-06 is always required; company semantics add A-09 and appointment/removal adds A-12. Joint attribution, a final TDR/ASDA conclusion, trust/firm condition, runtime, final-union and later-wave assertions remain non-executable.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 7 advances exactly `F07-08-007` and `F07-08-008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL`, with `productionExecutable=false`, requirement compatibility v1 and planner compatibility v1. Successor InformationNeed v2 and ResolutionPlan v2 remain unimplemented.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
@@ -16,13 +16,13 @@
 | File 01 §8 Listed/exhaustion/fallback/terminal states | v1.6 listed/exhaustion tests; existing async orchestration suite | orchestration v1 retained; planner v2 later | Listed routes gated; exhaustion runtime unchanged | A-01, A-07, A-10, A-14 |
 | File 01 §9 Structure acquisition | v1.6 allowed-strategy test; File 07 §9 inventory | planner v2 / RegistryCapabilityProfile v1 required | Declared, not executable | A-15 |
 | File 01 §10 Unwrap boundary | R01–R14 successor-intent and File 07 attribution/frontier inventory | determination/needs v2 required | Data only | A-06/A-09 as applicable |
-| File 01 §11 InformationNeeds | File 07 §8 inventory | frontier needs / projection v2 required | Pending Wave 8 | A-04/A-12/A-13 where applicable |
-| File 01 §12 Evaluation order | exact phase-order test | phased coordinator / DecisionSnapshot v2 required | Declared, unsupported | None |
+| File 01 §11 InformationNeeds | `phasedEvaluationV1.nodetest.js`; File 07 §8 inventory | `ubo-requirement-resolution-v1-compat` | R02/R03/R07 derived applicability executable; frontier needs pending Wave 8 | A-04/A-12/A-13 where applicable |
+| File 01 §12 Evaluation order | `phasedEvaluationV1.nodetest.js` | `ubo-phased-evaluation-v1`; `ubo-decision-snapshot-v2` | Internal review-mode executable, exact nine-phase order | None |
 | File 01 §13 Applicant versus Lab | File 07 §§14–15 inventory; current UI/Lab suites | v1 UI retained; v2 projections later | Current behavior unchanged | A-02/A-04/A-17 for applicant content |
-| File 01 §14 ASDA characterization | Existing adapter/Lab/graph tests, Wave 5 sanitized TDR fixture and File 07 §13 inventory | v1 fixtures retained; private attribution characterization only | Direct LLP voting distinguished from intermediary control; final TDR result remains provisional | A-06/A-09 |
+| File 01 §14 ASDA characterization | Existing v1 tests plus `asdaSuccessorCharacterization.nodetest.js` | separate internal v1.6/v2 fixture | 12 entities; TDR LLP voting retained; no economic substitution/mixed multiplication/final named conclusion | A-06/A-09/A-13 where applicable |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; eight Wave 3, ten Wave 4 and five Wave 5 review-mode assertions executable | Per-entry `signoffDependencies` / `requiredSignoffs` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; prior Wave 3–6 assertions retained and exactly two Wave 7 assertions advanced transitionally | Per-entry `signoffDependencies` / `requiredSignoffs` |
 
 ### QualificationBasis v2 and effective-interest wrapper
 
@@ -297,6 +297,23 @@
 | Internal-only architecture | Both Wave 6 suites plus `__tests__/architecture.nodetest.js` — immutable deterministic results, no provider/runtime/need/planner dependency and no public export |
 
 The exact Wave 6 assertion inventory `F07-05-001` through `F07-05-017` is `REVIEW_MODE_EXECUTABLE` only. Production remains false; `F07-05-012` retains A-13 and `F07-05-016`/`F07-05-017` retain A-03.
+
+## Freeze Wave 7 phased evaluation and Snapshot v2
+
+| Invariant | Protection |
+|---|---|
+| Exact acyclic nine-phase order, immutable/hash-pinned outputs and deterministic repeat | `phasedEvaluationV1.nodetest.js` |
+| No future-phase reference; caller depth/count authority rejected | Wave 7 phase/tamper tests |
+| Natural-person route union precedence, 60/40 separation, firm-only exclusion and management-control conservatism | `personQualificationAssessmentV2.nodetest.js`; Wave 7 kernel test |
+| R02/R03/R07 derived from graph/person phases | Wave 7 kernel test; assertions `F07-08-007` and `F07-08-008` |
+| Closure/percentage evidence and A-03/A-13 diagnostics do not create Wave 8 needs | Wave 7 closure/evidence integration test plus Wave 6 suites |
+| Compatibility plan exists before snapshot, is pinned exactly once and public planner rejects v2 | Wave 7 plan/snapshot test; unchanged public planner suite |
+| Snapshot v2 deterministic hash, internal-reference tamper detection and no missing plan | Wave 7 snapshot tests |
+| v1 untouched, v1/v2 dispatch, explicit v1→v2 reason, reconstruction and stale-head protection | Wave 7 history tests; unchanged `decisionSnapshot.nodetest.js` |
+| Separate ASDA v1.6/v2 characterization | `asdaSuccessorCharacterization.nodetest.js`; 12 entities, LLP voting bands, no person economic edge, separate attribution, provisional outcome |
+| Public export set/current Lab/legacy boundaries unchanged | architecture suite and repository diff checks |
+
+Only `F07-08-007` and `F07-08-008` advance in Wave 7, as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL`. Production execution, InformationNeed v2, ResolutionPlan v2 and RegistryCapabilityProfile remain false/unimplemented.
 
 ## UK Corporate supplied assertion plan
 

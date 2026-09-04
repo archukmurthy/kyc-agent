@@ -1,0 +1,35 @@
+{
+  "fixtureVersion": "ubo-asda-successor-characterization-v2",
+  "targetEntityId": "asda-delivery",
+  "entities": [
+    { "entityId": "asda-delivery", "category": "LEGAL_ENTITY", "name": "ASDA DELIVERY LIMITED", "profile": "COMPANY" },
+    { "entityId": "asda-stores", "category": "LEGAL_ENTITY", "name": "ASDA STORES LIMITED", "profile": "COMPANY" },
+    { "entityId": "asda-group", "category": "LEGAL_ENTITY", "name": "ASDA GROUP LIMITED", "profile": "COMPANY" },
+    { "entityId": "bellis-acquisition", "category": "LEGAL_ENTITY", "name": "BELLIS ACQUISITION COMPANY PLC", "profile": "COMPANY" },
+    { "entityId": "bellis-finco", "category": "LEGAL_ENTITY", "name": "BELLIS FINCO PLC", "profile": "COMPANY" },
+    { "entityId": "tdr-gp-a", "category": "LEGAL_ENTITY", "name": "TDR GENERAL PARTNER A", "profile": "COMPANY" },
+    { "entityId": "tdr-gp-b", "category": "LEGAL_ENTITY", "name": "TDR GENERAL PARTNER B", "profile": "COMPANY" },
+    { "entityId": "tdr-gp-c", "category": "LEGAL_ENTITY", "name": "TDR GENERAL PARTNER C", "profile": "COMPANY" },
+    { "entityId": "tdr-capital-llp", "category": "LEGAL_ENTITY", "name": "TDR CAPITAL LLP", "profile": "LLP" },
+    { "entityId": "gary-lindsay", "category": "NATURAL_PERSON", "name": "Mr Gary Lindsay" },
+    { "entityId": "thomas-mitchell", "category": "NATURAL_PERSON", "name": "Mr Thomas Andrew Mitchell" },
+    { "entityId": "manjit-dale", "category": "NATURAL_PERSON", "name": "Manjit Dale" }
+  ],
+  "relationships": [
+    { "id": "stores-delivery-economic", "from": "asda-stores", "to": "asda-delivery", "type": "ECONOMIC_OWNERSHIP", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true }, "concept": "SHARE_OWNERSHIP" },
+    { "id": "stores-delivery-voting", "from": "asda-stores", "to": "asda-delivery", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true } },
+    { "id": "group-stores-economic", "from": "asda-group", "to": "asda-stores", "type": "ECONOMIC_OWNERSHIP", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true }, "concept": "SHARE_OWNERSHIP" },
+    { "id": "group-stores-voting", "from": "asda-group", "to": "asda-stores", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true } },
+    { "id": "acquisition-group-economic", "from": "bellis-acquisition", "to": "asda-group", "type": "ECONOMIC_OWNERSHIP", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true }, "concept": "SHARE_OWNERSHIP" },
+    { "id": "acquisition-group-voting", "from": "bellis-acquisition", "to": "asda-group", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true } },
+    { "id": "finco-acquisition-economic", "from": "bellis-finco", "to": "bellis-acquisition", "type": "ECONOMIC_OWNERSHIP", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true }, "concept": "SHARE_OWNERSHIP" },
+    { "id": "finco-acquisition-voting", "from": "bellis-finco", "to": "bellis-acquisition", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true } },
+    { "id": "gp-a-finco-control", "from": "tdr-gp-a", "to": "bellis-finco", "type": "SIGNIFICANT_INFLUENCE_OR_CONTROL" },
+    { "id": "gp-b-finco-appointment", "from": "tdr-gp-b", "to": "bellis-finco", "type": "BOARD_APPOINTMENT_RIGHT" },
+    { "id": "gp-c-finco-voting", "from": "tdr-gp-c", "to": "bellis-finco", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 75, "upperBound": 100, "lowerInclusive": false, "upperInclusive": true } },
+    { "id": "llp-gp-c-voting", "from": "tdr-capital-llp", "to": "tdr-gp-c", "type": "VOTING_RIGHTS", "value": { "type": "EXACT", "value": 100 } },
+    { "id": "gary-llp-voting", "from": "gary-lindsay", "to": "tdr-capital-llp", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "sourceNature": "voting-rights-25-to-50-percent-limited-liability-partnership" },
+    { "id": "thomas-llp-voting", "from": "thomas-mitchell", "to": "tdr-capital-llp", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "sourceNature": "voting-rights-25-to-50-percent-limited-liability-partnership" },
+    { "id": "manjit-llp-voting", "from": "manjit-dale", "to": "tdr-capital-llp", "type": "VOTING_RIGHTS", "value": { "type": "RANGE", "lowerBound": 25, "upperBound": 50, "lowerInclusive": false, "upperInclusive": true }, "sourceNature": "voting-rights-25-to-50-percent-limited-liability-partnership" }
+  ]
+}

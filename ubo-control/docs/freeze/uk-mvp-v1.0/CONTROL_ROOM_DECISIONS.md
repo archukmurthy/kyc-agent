@@ -42,3 +42,12 @@
 - Production restrictions: the capability is private, is not wired into Decision Application, current Lab/ASDA, projections, planner, Evidence or onboarding, and is not publicly exported. It may not support a production determination.
 - Contained rework boundary: a later A-06 correction is confined to the versioned LLP mapping and review-policy selection. CandidateFact contracts, canonical graph, effective-interest arithmetic, company attribution, Decision Application, historical snapshots, capability ports and Evidence boundary remain unchanged.
 - This record agrees with the existing Compliance Decisions Register: A-06 remains unresolved and blocks production-authorized LLP attribution, automatic joint-arrangement attribution and a final deterministic TDR/ASDA conclusion.
+
+## Wave 7 review-only successor kernel
+
+- Wave 7 authorizes the private `ubo-phased-evaluation-v1` kernel and `ubo-decision-snapshot-v2`; it does not authorize public Decision Application v3, Lab v2, InformationNeed v2 or ResolutionPlan v2.
+- Evaluation is restricted to explicit LAB mode, schema-1.3 policy identity and deterministic evaluation time. Every snapshot is `REVIEW_ONLY`, `TRANSITIONAL_REVIEW_ONLY` and `productionAuthorized=false`.
+- R13 retains its existing combined ownership/control maximum-path semantic, with separate economic and voting depths recorded for audit. R02/R03/R07 use derived graph/person facts and reject caller authority.
+- LLP analysis may compose beside company analysis only through explicit `SUCCESSOR_REVIEW_ONLY` mode. It retains the immutable policy identity, A-06-WA-01 and A-06; the default standalone LLP method guard remains unchanged.
+- The plan-before-snapshot bridge is explicitly `ubo-resolution-plan-v1-compat`; no capability profile is provided. Wave 8 and Wave 9 own successor needs and planning.
+- Decision history v2 verifies and reconstructs recorded v1/v2 snapshots without recalculation and permits only explicit-reason, linear cross-version supersession.

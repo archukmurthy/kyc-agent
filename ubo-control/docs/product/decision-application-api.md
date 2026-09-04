@@ -39,3 +39,6 @@ The DecisionSnapshot is authoritative for graph identity, calculations, policy b
 All failures use `DecisionApplicationError` and stable `DECISION_APPLICATION_ERROR_CODE` values. Customer-input failures distinguish malformed input, unauthorized plan/action semantics, and stale source state. Private engine exceptions remain error causes rather than becoming the public type.
 
 The façade consumes only public data contracts. It has no React, Discovery execution, Extraction execution, provider, legacy endpoint, credential, host database, onboarding, persistence or Evidence Platform dependency. State may be JSON serialized after intake, customer input or decisions, restored into a new instance with the same Policy Pack and version, and evaluated deterministically without object identity, prototypes, closures or hidden mutable state.
+# Successor boundary note
+
+Freeze Wave 7 adds an internal review-only evaluation kernel and DecisionSnapshot v2. Neither is a public Decision Application operation or factory selection. The v1/v2 API documented below remains unchanged; public v3 exposure is deferred until successor InformationNeed and ResolutionPlan contracts are authorized.
