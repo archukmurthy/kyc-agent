@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w7-phased-decision-snapshot-v2` |
 | Base commit | `cdbc12525242fb6ee5a573d65c9341ebacf3af8b` (accepted PR #51 normal merge on `origin/main`). |
 | Latest accepted PR | [#51 — Freeze Wave 6: interval-aware layer closure and evidence precision](https://github.com/archukmurthy/kyc-agent/pull/51), merged normally as `cdbc12525242fb6ee5a573d65c9341ebacf3af8b`. |
-| Current PR | Wave 7 PR pending; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#52 — Freeze Wave 7: phased successor evaluation and DecisionSnapshot v2](https://github.com/archukmurthy/kyc-agent/pull/52) — open for Control Room review; do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
