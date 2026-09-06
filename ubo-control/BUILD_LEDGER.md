@@ -2,14 +2,14 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | **UBO Control Freeze Implementation — Wave 9: ResolutionPlan v2 and RegistryCapabilityProfile v1** |
+| Gate / sub-gate | **UBO Control Freeze Implementation — Wave 10: Successor Review Entry Point and UBO Control Lab v2** |
 | G5.3B | **KYB Onboarding Integration Diagnosis — ACCEPTED**; preserved at `docs/integration/kyb-onboarding-integration-diagnosis.md`. |
 | KYB onboarding integration | **DEFERRED** until after UBO Control Lab validation. |
 | Parallel-gate state | **Gate 4: PAUSED** pending Evidence prerequisites. When ready, Evidence integrates into the Lab before KYB onboarding. |
-| Branch | `codex/ubo-control-freeze-w9-resolution-planner-v2` |
-| Base commit | `bf206d619588140e786823340b650a7f1c640108` (accepted PR #53 normal merge on `origin/main`). |
-| Latest accepted PR | [#53 — Freeze Wave 8: causal frontier InformationNeeds v2](https://github.com/archukmurthy/kyc-agent/pull/53), merged normally as `bf206d619588140e786823340b650a7f1c640108`. |
-| Current PR | [#54 — Freeze Wave 9: ResolutionPlan v2 and capability-aware planning](https://github.com/archukmurthy/kyc-agent/pull/54) — open for Control Room review; do not merge automatically. |
+| Branch | `codex/ubo-control-freeze-w10-lab-v2-review` |
+| Base commit | `7167ac51f65a8b1d84f07621c59819af79feccac` (accepted PR #54 normal merge on `origin/main`). |
+| Latest accepted PR | [#54 — Freeze Wave 9: ResolutionPlan v2 and capability-aware planning](https://github.com/archukmurthy/kyc-agent/pull/54), merged normally as `7167ac51f65a8b1d84f07621c59819af79feccac`. |
+| Current PR | Wave 10 PR pending; keep open for Control Room review and do not merge automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
@@ -25,12 +25,13 @@
 | Wave 7 implementation | **Internal nine-phase successor evaluation and DecisionSnapshot v2 — implemented review-only and transitionally bridged to v1 needs/planning.** Graph-derived context, natural-person-only route union, R02/R03/R07 applicability, evidence diagnostics, `ubo-requirement-resolution-v1-compat`, plan-before-snapshot `ubo-resolution-plan-v1-compat`, v2 hashing and mixed v1/v2 reconstruction are private and production-unauthorised. |
 | Wave 8 implementation | **Internal causal InformationNeed v2 and RequirementResolution v2 — implemented review-only and transitionally bridged to the v1 planner.** One cause has one deterministic need; paths are dependent diagnostics; blockers/reviews/specialist routes remain separate; new Snapshot v2 records are `TRANSITIONAL_PLANNER_ONLY`; internal projection v2 is unexported. |
 | Wave 9 implementation | **Internal RegistryCapabilityProfile v1 and ResolutionPlan v2 — implemented review-only.** Exact capability/entitlement/freshness matching informs per-causal-group `DISCOVERY_LED`, `CHART_ASSISTED`, `SPECIALIST` or `NOT_APPLICABLE` strategy; system-first waves, attempt-aware exhaustion/retry, causal evidence bundles, no-oscillation pins and plan-before-snapshot verification are deterministic and private. |
+| Wave 10 implementation | **Dedicated review entry and Lab v2 — implemented review-only.** `ubo-control/review` exposes the actual successor pipeline without changing the stable main entry. The Lab keeps baseline 1.5-RC/session-v1 and adds successor 1.6-RC/session-v2, ten fixtures, profiles, projection filters, causal counts, route qualification, exact plan, evidence-disabled state, history and comparison. |
 | Successor policy | UK Corporate `1.6-RC`, schema `1.3`, `CONTROL_ROOM_REVIEW`, null effective date/approver, canonical hash `sha256:6f4235ca32b961868f294b862810d101516a35a5ce8fe8a031ec2d2166e6e969`; LAB readiness `REVIEW_ONLY`; PRODUCTION `BLOCKED`. Historical `1.5-RC` remains immutable at `sha256:724c2fa4820e02daddc24e652b50748646d87017cbfa632c062bc9e27de4b790`. |
-| Current Lab/runtime | Continues using UK Corporate `1.5-RC`; Decision Application v1/v2, DecisionSnapshot v1, ASDA, graph, journey and planner semantics are unchanged. |
+| Current Lab/runtime | Explicit selector preserves UK Corporate `1.5-RC` baseline behavior and adds a separate UK Corporate `1.6-RC` successor review workspace. Production remains unauthorized. |
 | Customer cycle | LAB18 runs a real foreign-HoldCo Snapshot A through `UboJourney` → `applyCustomerInput` → explicit claim adjudication → linked Snapshot B; no snapshot or alternate-field workaround. |
 | Outstanding implementation | Management-control completion, public Decision Application v3/profile/plan contracts, public projection/Lab/applicant v2, residual-confirmation content, operational A-03 sufficiency, final TDR/ASDA conclusion, Evidence integration and host onboarding remain outside Wave 9. |
 | Active escalations | None. Existing canonical qualifiers faithfully distinguish surplus-asset, voting and management-appointment rights; no graph, CandidateFact, adapter or public-contract change is required. Agreement/dominant-control majority semantics remain explicitly unsupported. |
-| Next | **Control Room review of the Wave 9 PR.** Do not begin Wave 10. |
+| Next | **Control Room review of the Wave 10 PR.** Do not begin Wave 11. |
 
 ## Scope guard
 

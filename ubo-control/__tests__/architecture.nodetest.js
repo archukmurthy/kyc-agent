@@ -173,6 +173,19 @@ test("Wave 9 capability/profile planning remains private, deterministic and exec
   assert.doesNotMatch(publicSource, /registryCapabilityProfileV1|resolutionPlanV2|planUboResolutionV2/);
 });
 
+test("Wave 10 review entry is deliberate and the successor Lab crosses only that boundary", () => {
+  const reviewEntry = fs.readFileSync(path.join(PRODUCT_ROOT, "review", "index.js"), "utf8");
+  const reviewApplication = fs.readFileSync(path.join(PRODUCT_ROOT, "application", "createUboReviewApplication.js"), "utf8");
+  const reviewLab = fs.readFileSync(path.resolve(PRODUCT_ROOT, "..", "ubo-control-lab", "server", "reviewLabEngine.js"), "utf8");
+  assert.match(reviewLab, /require\("\.\.\/\.\.\/ubo-control\/review"\)/);
+  assert.equal((reviewLab.match(/require\([^\n]*ubo-control/g) || []).length, 1);
+  assert.doesNotMatch(reviewLab, /ubo-control\/(application|domain|planning|projection|policy|calculation)\//);
+  for (const source of [reviewEntry, reviewApplication, reviewLab]) {
+    assert.doesNotMatch(source, /EvidencePlatform|ExtractionService|src[\\/]App|entity_dossiers|journey_state|@vercel|@neondatabase|fetch\s*\(/i);
+  }
+  assert.doesNotMatch(reviewApplication, /applyCustomerInput|CustomerAction|JourneyProjection/);
+});
+
 test("the journey projection is host/UI neutral and contains no resolution ranking logic", () => {
   const source = fs.readFileSync(path.join(PRODUCT_ROOT, "projection", "uboJourneyProjection.js"), "utf8");
   assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);

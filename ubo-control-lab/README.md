@@ -38,3 +38,11 @@ Production builds stage the standalone assets at `/ubo-control-lab/`. The active
 The Evidence panel displays references and external handoffs only. It contains no upload or Extraction implementation. Practitioner feedback is local to the browser session and can be copied or downloaded as JSON with the current snapshot hash and optional requirement, entity or work-item context.
 
 KYB onboarding integration remains blocked by Control Room product validation in the UBO Control Lab.
+
+## Successor review mode (Wave 10)
+
+The top-level selector now makes the doctrine explicit: `BASELINE — 1.5-RC` retains the existing session-v1 application and customer view; `SUCCESSOR REVIEW — 1.6-RC` creates only `ubo-control-lab-session-v2` sessions through `ubo-control/review`. The successor review factory exposes `intake`, `applyDecisions` and `evaluate`; it does not expose customer input, capability execution or persistence.
+
+Successor mode offers ten sanitized actual-engine fixtures, saved-result Replay with zero external calls, and one-shot Live Discovery with the existing cost warning. The two ASDA profiles are labelled `LAB REVIEW PROFILE — NOT PRODUCTION APPROVED`; their hash, effective/review period, entitlement context, capability entries, used entries and A-15 dependency are inspectable. Changing profile creates a linked Snapshot v2 with `PLANNING_CONTEXT_CHANGED` and preserves the predecessor.
+
+The workspace uses one current Snapshot v2 across Case Summary, Ownership & Control Graph, Qualifications, Requirements & Causal Needs, Resolution Plan, Evidence, Decision History, Diagnostics and Baseline Comparison. Graph filters are display-only. Counts open deterministic lists. Resolution actions and customer actions are inspection-only; the applicant panel says `APPLICANT JOURNEY v2 NOT YET ENABLED`, and Evidence says `EVIDENCE EXECUTION NOT YET CONNECTED`.

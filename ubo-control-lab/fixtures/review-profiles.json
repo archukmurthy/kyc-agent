@@ -1,0 +1,82 @@
+{
+  "contractVersion": "ubo-control-lab-review-profiles-v1",
+  "profiles": [
+    {
+      "label": "ASDA — SYSTEM COVERAGE AVAILABLE",
+      "warning": "LAB REVIEW PROFILE — NOT PRODUCTION APPROVED",
+      "profile": {
+        "contractVersion": "ubo-registry-capability-profile-v1",
+        "profileId": "asda-wave-9-further-coverage",
+        "profileVersion": "1",
+        "governanceState": "REVIEW_ONLY",
+        "assertedByReference": "SANITIZED_ASDA_WAVE_9_CHARACTERIZATION",
+        "effectivePeriod": { "from": "2026-01-01T00:00:00.000Z", "to": "2026-12-31T23:59:59.999Z" },
+        "lastReviewedDate": "2026-09-06T00:00:00.000Z",
+        "reviewByDate": "2026-12-31T23:59:59.999Z",
+        "entitlementContext": { "contextId": "ASDA_REVIEW", "state": "ENTITLED" },
+        "supportedScopes": [{ "jurisdiction": "GB", "entityProfile": "COMPANY" }],
+        "capabilityEntries": [{
+          "contractVersion": "ubo-registry-capability-entry-v1",
+          "jurisdiction": "ANY",
+          "entityProfile": "ANY",
+          "informationConcept": "ANY",
+          "relationshipDimension": "ANY",
+          "relationshipBasis": "ANY",
+          "acquisitionChannel": "REGISTRY_DISCOVERY",
+          "entitlementContext": "ASDA_REVIEW",
+          "capabilityState": "PARTIAL",
+          "entitlementState": "ENTITLED",
+          "outputCharacteristics": ["NON_EXHAUSTIVE", "POSITIVE_ASSERTIONS_ONLY"],
+          "sourceDecisionReferences": ["SANITIZED_ASDA_WAVE_9_CHARACTERIZATION"],
+          "governanceState": "REVIEW_ONLY",
+          "productionAuthorized": false,
+          "requiredSignoffs": ["A-15"],
+          "entryId": "ubo-registry-capability-entry-v1:abd0a4b2ef3c1d4dad05d27caa854204"
+        }],
+        "sourceDecisionReferences": ["A-15", "SANITIZED_ASDA_WAVE_9_CHARACTERIZATION"],
+        "productionAuthorized": false,
+        "requiredSignoffs": ["A-15"],
+        "profileHash": "sha256:d12ead02950a43d3590c1f2684e6750727889d8884fa8609843c2a8499b78e98"
+      }
+    },
+    {
+      "label": "ASDA — DISCOVERY EXHAUSTED / GOVERNANCE EVIDENCE REQUIRED",
+      "warning": "LAB REVIEW PROFILE — NOT PRODUCTION APPROVED",
+      "profile": {
+        "contractVersion": "ubo-registry-capability-profile-v1",
+        "profileId": "asda-wave-9-predictable-opacity",
+        "profileVersion": "1",
+        "governanceState": "REVIEW_ONLY",
+        "assertedByReference": "SANITIZED_ASDA_WAVE_9_CHARACTERIZATION",
+        "effectivePeriod": { "from": "2026-01-01T00:00:00.000Z", "to": "2026-12-31T23:59:59.999Z" },
+        "lastReviewedDate": "2026-09-06T00:00:00.000Z",
+        "reviewByDate": "2026-12-31T23:59:59.999Z",
+        "entitlementContext": { "contextId": "ASDA_REVIEW", "state": "ENTITLED" },
+        "supportedScopes": [{ "jurisdiction": "GB", "entityProfile": "COMPANY" }],
+        "capabilityEntries": [{
+          "contractVersion": "ubo-registry-capability-entry-v1",
+          "jurisdiction": "ANY",
+          "entityProfile": "ANY",
+          "informationConcept": "ANY",
+          "relationshipDimension": "ANY",
+          "relationshipBasis": "ANY",
+          "acquisitionChannel": "REGISTRY_DISCOVERY",
+          "entitlementContext": "ASDA_REVIEW",
+          "capabilityState": "UNSUPPORTED",
+          "entitlementState": "ENTITLED",
+          "outputCharacteristics": ["UNKNOWN"],
+          "sourceDecisionReferences": ["SANITIZED_ASDA_WAVE_9_CHARACTERIZATION"],
+          "governanceState": "REVIEW_ONLY",
+          "productionAuthorized": false,
+          "requiredSignoffs": ["A-15"],
+          "entryId": "ubo-registry-capability-entry-v1:911cabf00cc52eb6f45dee9ac54e776e"
+        }],
+        "sourceDecisionReferences": ["A-15", "SANITIZED_ASDA_WAVE_9_CHARACTERIZATION"],
+        "productionAuthorized": false,
+        "requiredSignoffs": ["A-15"],
+        "profileHash": "sha256:455c703946ad6da5092ec4b5b29ba7d9b920365e1c9f33e3a246bb2142a21b84"
+      }
+    }
+  ]
+}
+
