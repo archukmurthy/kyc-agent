@@ -6,6 +6,7 @@
 
   const h = React.createElement;
   const CONTRACT_VERSION = "ubo-ownership-graph-projection-v1";
+  const REVIEW_CONTRACT_VERSION = "ubo-ownership-graph-projection-v2";
   const DETAIL_LEVEL = Object.freeze({ CUSTOMER: "CUSTOMER", EXPLAIN: "EXPLAIN" });
   const VIEW_MODE = Object.freeze({ FIT_WIDTH: "FIT_WIDTH", OVERVIEW: "OVERVIEW" });
   const NW = 196;
@@ -72,12 +73,98 @@
     return ROLE_LABELS[role] || humanize(role || "Role");
   }
 
-  function assertProjection(projection) {
+  function normalizeReviewProjection(projection) {
+    if (projection.contractVersion !== REVIEW_CONTRACT_VERSION) return projection;
+    const nodes = projection.nodes.map((node) => ({
+      ...node,
+      displayName: node.primaryName || node.entityId,
+      semantics: [...new Set(node.semanticFlags || [])],
+    }));
+    const byId = new Map(nodes.map((node) => [node.entityId, node]));
+    const relationships = projection.relationships.map((relationship) => ({
+      ...relationship,
+      sourceEntityId: relationship.subjectEntityId,
+      targetEntityId: relationship.objectEntityId,
+      indicators: [
+        ...(relationship.evidenceStatus === "REVIEW_REQUIRED" ? ["REVIEW_REQUIRED"] : []),
+        ...(relationship.resolutionStatus === "DISPUTED" ? ["CONFLICT"] : []),
+      ],
+    }));
+    const qualifications = projection.personQualificationAssessments
+      .filter(({ routeStatus }) => routeStatus === "ROUTE_SATISFIED")
+      .map((assessment) => ({
+        entityId: assessment.personEntityId,
+        roles: assessment.basisRecords.filter(({ assessmentState, classification }) => assessmentState === "SATISFIED" && classification === "STATUTORY").map(({ route }) => route),
+        bases: assessment.basisRecords.filter(({ assessmentState, classification }) => assessmentState === "SATISFIED" && classification === "STATUTORY").map((basis) => ({
+          assessmentId: basis.basisId,
+          basisType: basis.dimension || basis.condition || basis.route,
+          requirementId: basis.policyRequirement?.requirementId || "REVIEW_POLICY",
+          rationaleCode: basis.reasonCode,
+          calculationId: basis.calculationReference?.calculationId,
+        })),
+      }));
+    const actionByNeed = new Map();
+    const plan = projection.pinnedCompatibilityPlan || projection.resolutionPlan || { recommendedActions: [] };
+    (plan.recommendedActions || []).forEach((action) => (action.coveredInformationNeedIds || []).forEach((needId) => actionByNeed.set(needId, action)));
+    const unresolved = projection.informationNeeds.map((need) => {
+      const entityId = need.frontierEntityId || need.targetReference?.entityId || need.targetReference?.personEntityId || null;
+      const action = actionByNeed.get(need.needId);
+      return {
+        unresolvedId: need.needId,
+        kind: "CAUSAL_INFORMATION_NEED",
+        concept: need.concept,
+        state: need.status,
+        entityId: byId.has(entityId) ? entityId : null,
+        requirementIds: need.requiredByRequirementIds || [],
+        relatedRelationshipIds: need.affected?.relationshipIds || [],
+        reasonCodes: [need.reasonCode].filter(Boolean),
+        resolutionRoutes: action ? [{ actor: action.actor, strategy: action.acquisitionStrategy, applicabilityState: "PLANNED" }] : [],
+        reviewData: need,
+      };
+    });
+    const reviews = projection.reviewRequirements.map((review, index) => ({
+      ...review,
+      reviewId: review.reviewRequirementId || `review-${index + 1}`,
+      reviewType: review.reviewType || review.reasonCode || "REVIEW_REQUIRED",
+      state: review.state || "REVIEW_REQUIRED",
+      entityIds: review.entityIds || review.personIds || [],
+      requirementIds: review.requirementIds || [],
+    }));
+    return {
+      ...projection,
+      subject: byId.get(projection.subjectEntityId),
+      nodes,
+      relationships,
+      qualifications,
+      unresolved,
+      conflicts: [],
+      reviews,
+      decision: {
+        snapshotId: projection.snapshotReference.snapshotId,
+        snapshotHash: projection.snapshotReference.snapshotHash,
+        checkpoint: { type: "SUCCESSOR_REVIEW" },
+        evaluationTime: null,
+        orchestrationState: plan.state || "REVIEW_ONLY",
+      },
+      summary: {
+        ...projection.summary,
+        totalEntities: nodes.length,
+        totalRelationships: relationships.length,
+        qualifyingPeople: qualifications.length,
+        unresolvedBranches: unresolved.length,
+        conflicts: 0,
+        reviewRequirements: reviews.length,
+      },
+    };
+  }
+
+  function assertProjection(supplied) {
+    const projection = normalizeReviewProjection(supplied);
     if (!projection || typeof projection !== "object" || Array.isArray(projection)) {
       throw new TypeError("OwnershipGraph requires a projection object");
     }
-    if (projection.contractVersion !== CONTRACT_VERSION) {
-      throw new TypeError(`OwnershipGraph supports only ${CONTRACT_VERSION}`);
+    if (![CONTRACT_VERSION, REVIEW_CONTRACT_VERSION].includes(projection.contractVersion)) {
+      throw new TypeError(`OwnershipGraph supports only ${CONTRACT_VERSION} or ${REVIEW_CONTRACT_VERSION}`);
     }
     ["nodes", "relationships", "calculations", "qualifications", "unresolved", "conflicts", "reviews"]
       .forEach((field) => {
@@ -274,14 +361,19 @@
 
   function badgesFor(node, projection) {
     const output = [];
-    const add = (semantic, label, css) => { if (node.semantics.includes(semantic)) output.push({ semantic, label, css }); };
+    const add = (semantic, label, css) => { if ((node.semantics || []).includes(semantic)) output.push({ semantic, label, css }); };
     add("SUBJECT", "Customer", "subject");
     add("QUALIFYING_PERSON", "Qualifying", "qualifying");
+    add("FIRM_POLICY_PERSON", "Firm policy", "qualifying");
+    add("NOT_CONFIRMED_UBO", "Not confirmed UBO", "candidate");
+    add("FRONTIER_ENTITY", "Frontier", "unresolved");
+    add("IDENTITY_UNRESOLVED", "Identity unresolved", "unresolved");
     add("UNRESOLVED_ENTITY", "Unresolved", "unresolved");
     add("REVIEW_REQUIRED", "Review", "review");
     add("CONFLICT", "Conflict", "conflict");
     add("SPECIAL_STRUCTURE", "Special structure", "special");
-    if (node.category === "NATURAL_PERSON" && !projection.qualifications.some(({ entityId }) => entityId === node.entityId)) {
+    if (node.category === "NATURAL_PERSON" && !projection.qualifications.some(({ entityId }) => entityId === node.entityId)
+      && !(node.semantics || []).includes("NOT_CONFIRMED_UBO")) {
       output.unshift({ semantic: "NOT_CONFIRMED_QUALIFYING_PERSON", label: "Not confirmed UBO", css: "candidate" });
     }
     return output;
@@ -398,6 +490,8 @@
         h("dt", null, "Dimension"), h("dd", null, relationship.dimension || "Non-percentage control"),
         h("dt", null, "Value form"), h("dd", null, relationship.measurement?.type || "Non-percentage right"),
         h("dt", null, "Temporal / currentness state"), h("dd", null, relationship.temporalState || "Unknown"),
+        h("dt", null, "Relationship / claim state"), h("dd", null, relationship.resolutionStatus || relationship.claimState || "Unknown"),
+        h("dt", null, "Evidence / support state"), h("dd", null, relationship.evidenceStatus || "UNKNOWN"),
         sourceNature && h(React.Fragment, null, h("dt", null, "Source assertion"), h("dd", null, sourceNature)),
         interpretation && h(React.Fragment, null, h("dt", null, "Control / policy interpretation"), h("dd", null, interpretation)),
         h("dt", null, "Supporting claims"), h("dd", null, String(relationship.support?.claimCount || 0))),
@@ -508,7 +602,7 @@
   }
 
   function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [] }) {
-    const projection = assertProjection(supplied);
+    const projection = React.useMemo(() => assertProjection(supplied), [supplied]);
     if (!Object.values(DETAIL_LEVEL).includes(detailLevel)) throw new TypeError("detailLevel must be CUSTOMER or EXPLAIN");
     if (!Object.values(VIEW_MODE).includes(initialView)) throw new TypeError("initialView must be FIT_WIDTH or OVERVIEW");
     const layout = React.useMemo(() => computeLayout(projection), [projection]);
@@ -666,5 +760,5 @@
       h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipLabel(relationship.relationshipType)}, ${formatMeasurement(relationship.measurement, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 
-  return Object.freeze({ CONTRACT_VERSION, DETAIL_LEVEL, VIEW_MODE, OwnershipGraph, assertProjection, basisLabel, computeLayout, entityRelationshipContext, fitScale, fitWidthScale, formatMeasurement, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });
+  return Object.freeze({ CONTRACT_VERSION, REVIEW_CONTRACT_VERSION, DETAIL_LEVEL, VIEW_MODE, OwnershipGraph, assertProjection, basisLabel, computeLayout, entityRelationshipContext, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });
 }));

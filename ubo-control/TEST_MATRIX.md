@@ -351,6 +351,22 @@ Wave 8 advances `F07-08-001`–`006`, `009`–`011`, `F07-12-001`–`004`, `006`
 
 Wave 9 advances exactly `F07-09-001`–`005`, `F07-09-007`–`010`, and `F07-16-007`. Profile-driven assertions use `REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE`, retain `productionExecutable=false`, and require A-15. `F07-09-006`, `F07-09-011`, `F07-09-012`, all A-10 measure-category execution, Wave 10/11, Evidence, public v3 and onboarding assertions remain deferred.
 
+## Freeze Wave 10 review entry and Lab v2
+
+| Invariant | Protection |
+|---|---|
+| Review entry exact exports; application exact three operations; LAB-only/readiness/typed failures; pinned plan identity | `reviewApplication.nodetest.js`, architecture suite |
+| Stable main entry unchanged; successor Lab imports only the review entry; no host/Evidence/customer-v2 execution | architecture suite |
+| Ten fixtures use the real successor engine; ASDA A is 10 groups/7 system actions and ASDA B is 6 groups/3 customer actions | `reviewLabEngine.nodetest.js` |
+| Session v2 pins policy/snapshot/profile/evaluation/history while v1 remains supported | review Lab and complete baseline Lab suites |
+| Replay uses the same normalized facts with zero transport calls; comparison makes no second search | review Lab/API tests |
+| Projection v2 renders flags, independent relationship/evidence state, causal needs and one canonical node | OwnershipGraph and review Lab tests |
+| Ownership/Voting/Control/All are presentation filters; default ownership, hidden-overlay notice and one graph | successor browser characterization |
+| Qualification routes, 60/40 distinction, TDR provisional state, truthful causal counts and exact plan | review Lab engine/browser characterization |
+| Profile change creates linked immutable history with changed profile/plan/snapshot hashes | review application and Lab tests |
+
+Wave 10 advances `F07-13-009`, `F07-13-010`, and `F07-15-001`–`010` as `REVIEW_MODE_EXECUTABLE_IN_LAB`; every entry retains `productionExecutable=false`. Wave 11 applicant/customer behavior, Evidence execution and production authorization remain deferred.
+
 ## UK Corporate supplied assertion plan
 
 These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_EXECUTABLE`, and one `G2_4C_EXECUTABLE`. G2.4C now protects the actual immutable R10 measures-taken DecisionSnapshot; persistence and host integrations remain later work.

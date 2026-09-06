@@ -85,3 +85,7 @@ The Vercel preview is protected by the project's existing team-login policy. The
 - The deployed live response exposed identity and claim decision targets and did not fabricate a snapshot before those explicit decisions.
 
 The full visual/manual checks and screenshots above were captured from the same staged production build through a local browser. Anonymous browser inspection of the branch URL redirects to Vercel login; Control Room testers require access to the Vercel team/project.
+
+## Wave 10 successor-review acceptance
+
+Wave 10 evidence is captured from its protected Vercel preview and added alongside this register before Control Room handoff. The required set covers baseline 1.5-RC, ASDA A/B, Ownership/Voting/Control filters, a causal need and affected paths, route qualification and 60/40 distinction, TDR provisional review, layer endpoint, band corroboration, profile-change history, baseline comparison, Evidence-not-connected and the persistent review watermark. All successor views must display the same current Snapshot v2; localhost evidence is not acceptance evidence.
