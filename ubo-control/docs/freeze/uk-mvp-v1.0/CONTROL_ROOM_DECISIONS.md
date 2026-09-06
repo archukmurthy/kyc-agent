@@ -51,3 +51,13 @@
 - LLP analysis may compose beside company analysis only through explicit `SUCCESSOR_REVIEW_ONLY` mode. It retains the immutable policy identity, A-06-WA-01 and A-06; the default standalone LLP method guard remains unchanged.
 - The plan-before-snapshot bridge is explicitly `ubo-resolution-plan-v1-compat`; no capability profile is provided. Wave 8 and Wave 9 own successor needs and planning.
 - Decision history v2 verifies and reconstructs recorded v1/v2 snapshots without recalculation and permits only explicit-reason, linear cross-version supersession.
+
+## Wave 9 review-only resolution planning
+
+- Wave 8 is accepted and merged normally as `bf206d619588140e786823340b650a7f1c640108`. Its InformationNeed lifecycle remains `OPEN`, `SATISFIED`, `SUPERSEDED`; operational blockers, reviews and specialist routes remain separate.
+- Wave 9 authorizes private `ubo-registry-capability-profile-v1`, `ubo-low-friction-planner-v2` and `ubo-resolution-plan-v2` implementation only. Public Decision Application v3, profile/plan export, Lab v2, applicant journey v2, Evidence execution and onboarding remain deferred.
+- RegistryCapabilityProfile is planning context, not evidence. Exact scope/concept/channel/entitlement matching and explicit evaluation-time freshness may guide route selection but cannot resolve a need, prove absence or create a fact.
+- Planning strategy is assigned per causal ResolutionGroup. `DISCOVERY_LED`, `CHART_ASSISTED`, `SPECIALIST` and `NOT_APPLICABLE` may coexist. Coherent evidence options may bundle needs while preserving each need and requirement identity; diagnostics and paths never become actions.
+- System work precedes customer work for the same group. NO_DATA, UNSUPPORTED and final INCONCLUSIVE suppress unchanged substantive repeats; PARTIAL permits residual-only planning; UNAVAILABLE/FAILED remain operational retry/hold states and do not independently burden the customer.
+- Profile, strategy, action, wave and predecessor pins are decision-significant. Equivalent material inputs cannot oscillate strategies; a material change is required and recorded before retry/pivot.
+- New snapshots use `SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY`, pin the exact Phase 8 plan and profile context, and remain `LAB`, `REVIEW_ONLY`, `productionAuthorized=false`. A-15 and A-10 remain OPEN; profile-driven behavior retains A-15 and no new A-10 measure-category execution is introduced.

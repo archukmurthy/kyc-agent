@@ -160,6 +160,19 @@ test("the resolution planner is advisory, host neutral, and contains no opaque s
   assert.doesNotMatch(source, /\.discover\s*\(|\.extract\s*\(|fetch\s*\(|createUboDecisionApplication|orchestrateResolution/);
 });
 
+test("Wave 9 capability/profile planning remains private, deterministic and execution-free", () => {
+  const planner = fs.readFileSync(path.join(PRODUCT_ROOT, "planning", "resolutionPlanV2.js"), "utf8");
+  const profile = fs.readFileSync(path.join(PRODUCT_ROOT, "planning", "registryCapabilityProfileV1.js"), "utf8");
+  for (const source of [planner, profile]) {
+    assert.doesNotMatch(source, /React|DOM|screenId|pageId|formId|buttonId|src[\\/]App/i);
+    assert.doesNotMatch(source, /frictionScore|costScore|priorityScore|providerRank|vendorRank/i);
+    assert.doesNotMatch(source, /\.discover\s*\(|\.extract\s*\(|fetch\s*\(|EvidencePlatform|upload|fileBytes|raw provider/i);
+    assert.doesNotMatch(source, /Date\.now\s*\(|new Date\s*\(/);
+  }
+  const publicSource = fs.readFileSync(path.join(PRODUCT_ROOT, "index.js"), "utf8");
+  assert.doesNotMatch(publicSource, /registryCapabilityProfileV1|resolutionPlanV2|planUboResolutionV2/);
+});
+
 test("the journey projection is host/UI neutral and contains no resolution ranking logic", () => {
   const source = fs.readFileSync(path.join(PRODUCT_ROOT, "projection", "uboJourneyProjection.js"), "utf8");
   assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);

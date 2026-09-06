@@ -1,8 +1,8 @@
 # UBO Control test matrix
 
-## Freeze Wave 7 traceability
+## Freeze implementation traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 7 advances exactly `F07-08-007` and `F07-08-008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL`, with `productionExecutable=false`, requirement compatibility v1 and planner compatibility v1. Successor InformationNeed v2 and ResolutionPlan v2 remain unimplemented.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Waves 7 and 8 remain reconstructable through their pinned compatibility algorithms. Wave 9 advances only the protected planner/profile assertions listed below; all remain review-only and production-unauthorised.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
@@ -14,15 +14,15 @@
 | File 01 §6 Qualification/calculation | `qualificationBasisV2.nodetest.js`; `companyPscAttributionV1.nodetest.js`; `llpPscAttributionV1.nodetest.js`; v1.6 route test; File 07 §6 inventory | percentage v1 retained; separate company and LLP/mixed attribution v1 operations; determination v2 still absent | Effective arithmetic preserved; attribution review-only and unwired | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
 | File 01 §7 Control/action gating | v1.6 gating test; File 07 §§8,10,14 inventories | Policy data now; needs/applicant v2 later | Last-resort gated; customer features disabled | A-02, A-04, A-17 |
 | File 01 §8 Listed/exhaustion/fallback/terminal states | v1.6 listed/exhaustion tests; existing async orchestration suite | orchestration v1 retained; planner v2 later | Listed routes gated; exhaustion runtime unchanged | A-01, A-07, A-10, A-14 |
-| File 01 §9 Structure acquisition | v1.6 allowed-strategy test; File 07 §9 inventory | planner v2 / RegistryCapabilityProfile v1 required | Declared, not executable | A-15 |
+| File 01 §9 Structure acquisition | `resolutionPlanV2.nodetest.js`; File 07 §9 inventory | `ubo-low-friction-planner-v2` / `ubo-registry-capability-profile-v1` | Internal review-mode executable | A-15 for profile-driven behavior |
 | File 01 §10 Unwrap boundary | R01–R14 successor-intent and File 07 attribution/frontier inventory | determination/needs v2 required | Data only | A-06/A-09 as applicable |
-| File 01 §11 InformationNeeds | `phasedEvaluationV1.nodetest.js`; File 07 §8 inventory | `ubo-requirement-resolution-v1-compat` | R02/R03/R07 derived applicability executable; frontier needs pending Wave 8 | A-04/A-12/A-13 where applicable |
+| File 01 §11 InformationNeeds | `informationNeedV2.nodetest.js`; `phasedEvaluationV1.nodetest.js`; File 07 §8 inventory | `ubo-requirement-resolution-v2` | Causal frontier needs executable in review mode | A-04/A-12/A-13 where applicable |
 | File 01 §12 Evaluation order | `phasedEvaluationV1.nodetest.js` | `ubo-phased-evaluation-v1`; `ubo-decision-snapshot-v2` | Internal review-mode executable, exact nine-phase order | None |
 | File 01 §13 Applicant versus Lab | File 07 §§14–15 inventory; current UI/Lab suites | v1 UI retained; v2 projections later | Current behavior unchanged | A-02/A-04/A-17 for applicant content |
 | File 01 §14 ASDA characterization | Existing v1 tests plus `asdaSuccessorCharacterization.nodetest.js` | separate internal v1.6/v2 fixture | 12 entities; TDR LLP voting retained; no economic substitution/mixed multiplication/final named conclusion | A-06/A-09/A-13 where applicable |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; prior Wave 3–6 assertions retained and exactly two Wave 7 assertions advanced transitionally | Per-entry `signoffDependencies` / `requiredSignoffs` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; prior Waves 3–8 retained and exact Wave 9 assignments advanced | Per-entry `signoffDependencies` / `requiredSignoffs` |
 
 ### QualificationBasis v2 and effective-interest wrapper
 
@@ -330,6 +330,26 @@ Only `F07-08-007` and `F07-08-008` advance in Wave 7, as `REVIEW_MODE_EXECUTABLE
 | Public exports, v1 application/snapshot/planner/projections, current Lab and legacy boundaries unchanged | architecture and complete regression suites |
 
 Wave 8 advances `F07-08-001`–`006`, `009`–`011`, `F07-12-001`–`004`, `006`, and `F07-13-007`–`008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER`. `F07-12-005` remains deferred because Wave 8 records no regulatory report candidate. Production execution remains false.
+
+## Freeze Wave 9 RegistryCapabilityProfile and ResolutionPlan v2
+
+| Invariant | Protection |
+|---|---|
+| Immutable profile/entry identity, canonical hash, JSON round-trip, exact matching, specificity precedence, ambiguity rejection and secret rejection | `resolutionPlanV2.nodetest.js` |
+| SUPPORTED/PARTIAL/UNSUPPORTED/RESTRICTED/UNKNOWN and ENTITLED/NOT_ENTITLED/UNKNOWN/NOT_APPLICABLE remain planning context, never case evidence | profile tests and architecture scans |
+| Explicit evaluation-time freshness; stale/future profiles cannot drive predictive skip | profile/planner freshness tests |
+| Per-causal-group `DISCOVERY_LED`, `CHART_ASSISTED`, `SPECIALIST`, `NOT_APPLICABLE`; mixed strategies remain possible | strategy/grouping tests |
+| Tiered system-first behavior; Discovery and held-artifact work may share a SYSTEM wave | low-friction tests |
+| NO_DATA/UNSUPPORTED/final INCONCLUSIVE suppression; PARTIAL residual-only work; UNAVAILABLE retry and FAILED hold | attempt/failure tests |
+| Material change enables retry; display-only change does not; predecessor/strategy/wave pins prevent oscillation | no-oscillation tests |
+| Six operational plan states and branch-specific versus case-wide specialist behavior | plan-state tests |
+| Causal packages retain every need/requirement ID; diagnostics and paths never become groups/actions | grouping and ASDA characterization tests |
+| Phase 8 is `ubo-resolution-plan-v2`; exact plan/profile/entry/strategy/predecessor pins are hashed before Snapshot v2 | `phasedEvaluationV1.nodetest.js` |
+| Recorded Wave 7, Wave 8 and Wave 9 snapshots reconstruct by their pinned algorithms without re-planning | Snapshot/history dispatcher tests |
+| ASDA A remains system-first; ASDA B uses a coherent TDR structure/governance package while residual content blocks and reviews stay separate | `asdaSuccessorCharacterization.nodetest.js` |
+| Public exports, current v1 Lab/ASDA/planner/projections, legacy Discovery and Evidence/onboarding boundaries remain unchanged | architecture and full regression suites |
+
+Wave 9 advances exactly `F07-09-001`–`005`, `F07-09-007`–`010`, and `F07-16-007`. Profile-driven assertions use `REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE`, retain `productionExecutable=false`, and require A-15. `F07-09-006`, `F07-09-011`, `F07-09-012`, all A-10 measure-category execution, Wave 10/11, Evidence, public v3 and onboarding assertions remain deferred.
 
 ## UK Corporate supplied assertion plan
 

@@ -1007,7 +1007,12 @@
       "assertion": "Discovery-led when capability profile predicts coverage;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-002",
@@ -1018,7 +1023,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-003",
@@ -1027,7 +1037,12 @@
       "assertion": "pivot before paid attempt where configured capability proves unavailable;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-004",
@@ -1036,7 +1051,10 @@
       "assertion": "repeated NO_DATA and common structural cause collapse into one structure request;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-005",
@@ -1045,7 +1063,10 @@
       "assertion": "chart offered as candidate structure, not proof;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-006",
@@ -1063,7 +1084,10 @@
       "assertion": "residual unsupported edges batched;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-008",
@@ -1072,7 +1096,10 @@
       "assertion": "no oscillation without material change;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-009",
@@ -1083,7 +1110,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-010",
@@ -1092,7 +1124,10 @@
       "assertion": "provider outage does not burden customer;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-011",
@@ -1755,7 +1790,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-06-EFFECTIVE-INTEREST-001",
