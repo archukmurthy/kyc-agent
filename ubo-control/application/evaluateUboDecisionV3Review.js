@@ -8,8 +8,12 @@ const { buildCanonicalOwnershipGraph, GRAPH_DIMENSION } = require("../domain/own
 const { validateOwnershipCase } = require("../domain/ownershipCase");
 const { assertAllowedKeys, assertDataOnly, cloneData, deepFreeze, fail } = require("../internal/validation");
 const { createPhaseArtifact, hashArtifact } = require("../internal/phasedArtifact");
-const { adaptInformationNeedsV2ToPlanV1Compat, INFORMATION_NEEDS_V2_TO_PLAN_V1_COMPAT } = require("../planning/informationNeedsV2ToPlanV1Compat");
-const { planResolutionV1Compat } = require("../planning/resolutionPlanV1Compat");
+const {
+  RESOLUTION_PLAN_V2,
+  RESOLUTION_PLANNER_V2,
+  buildResolutionOptionsV2,
+  planUboResolutionV2,
+} = require("../planning/resolutionPlanV2");
 const { assessCompanyPscAttributionV1 } = require("../policy/companyPscAttributionV1");
 const { deriveRequirementApplicabilityV1 } = require("../policy/derivedRequirementApplicabilityV1");
 const { assessEffectiveInterestQualificationV2 } = require("../policy/effectiveInterestQualificationV2");
@@ -124,62 +128,8 @@ function compatPolicyAssessment({ loaded, caseContext, caseState, graph, calcula
   return assessment;
 }
 
-function compatibilityOrchestration({ requirementResolution, personAssessments, resolutionAttempts, graphContext }) {
-  const needs = requirementResolution.informationNeeds || [];
-  const options = needs.flatMap((need) => (need.permittedResolutionStrategies || []).map((strategy) => {
-    const semantic = { informationNeedId: need.needId, requirementIds: need.requiredBy || [], strategy };
-    return {
-      optionId: `resolution-option:${hashArtifact(semantic).slice(7, 31)}`,
-      informationNeedId: need.needId,
-      requirementIds: [...(need.requiredBy || [])].sort(),
-      strategy,
-      applicabilityState: "APPLICABLE",
-      acceptableEvidenceTypes: [],
-      constraints: ["TRANSITIONAL_V1_COMPATIBILITY_STAGE"],
-      reasonCode: "V1_INFORMATION_NEED_STRATEGY_PRESERVED",
-    };
-  })).sort((a, b) => a.optionId.localeCompare(b.optionId));
-  const actionType = { DISCOVERY: "DISCOVER_INFORMATION", EXISTING_EVIDENCE: "INTERPRET_EXISTING_ARTIFACT", DETERMINISTIC_CALCULATION: "RECALCULATE_FROM_ESTABLISHED_FACTS", CUSTOMER_DOCUMENT: "REQUEST_CUSTOMER_EVIDENCE", CUSTOMER_QUESTION: "REQUEST_CUSTOMER_INFORMATION", CUSTOMER_ATTESTATION: "REQUEST_ATTESTATION", ANALYST_REVIEW: "ANALYST_REVIEW" };
-  const actionIntents = options.map((option) => {
-    const need = needs.find(({ needId }) => needId === option.informationNeedId);
-    const semantic = { optionId: option.optionId, type: actionType[option.strategy] || option.strategy };
-    return {
-      actionIntentId: `action-intent:${hashArtifact(semantic).slice(7, 31)}`,
-      type: semantic.type,
-      state: "OPEN",
-      informationNeedIds: [option.informationNeedId],
-      policyGapIds: requirementResolution.policyGaps.filter(({ informationNeedIds = [] }) => informationNeedIds.includes(option.informationNeedId)).map(({ gapId }) => gapId),
-      requirementIds: option.requirementIds,
-      resolutionOptionIds: [option.optionId],
-      strategy: option.strategy,
-      semanticTarget: { subjectEntityId: need.subjectEntityId || null, relationshipId: need.relationshipId || null, concept: need.concept, attribute: need.attribute || null },
-      acceptableEvidenceTypes: [], constraints: option.constraints, reasonCode: option.reasonCode,
-    };
-  }).sort((a, b) => a.actionIntentId.localeCompare(b.actionIntentId));
-  const reviewRequired = personAssessments.some(({ routeStatus }) => routeStatus === PERSON_ROUTE_STATUS.REVIEW_REQUIRED);
-  const specialistRequired = graphContext.hasSpecialistProfile;
-  if (reviewRequired || specialistRequired) {
-    const type = specialistRequired ? "SPECIALIST_REVIEW" : "ANALYST_REVIEW";
-    actionIntents.push({ actionIntentId: `action-intent:${hashArtifact({ type, target: graphContext.regulatedTargetEntityId }).slice(7, 31)}`, type, state: "OPEN", informationNeedIds: [], policyGapIds: [], requirementIds: [], resolutionOptionIds: [], semanticTarget: { subjectEntityId: graphContext.regulatedTargetEntityId }, acceptableEvidenceTypes: [], constraints: ["ASYNCHRONOUS_INTERNAL_REVIEW"], reasonCode: specialistRequired ? "SPECIALIST_PROFILE_REQUIRES_REVIEW" : "QUALIFICATION_ROUTE_REQUIRES_REVIEW" });
-  }
-  const unresolved = requirementResolution.requirementResolutions.some(({ requirementStatus }) => !["RESOLVED", "N_A"].includes(requirementStatus));
-  return deepFreeze(cloneData({
-    compatibilityOrchestrationVersion: REQUIREMENT_RESOLUTION_COMPAT_VERSION,
-    requirementResolutions: requirementResolution.requirementResolutions,
-    resolutionOptions: options,
-    actionIntents,
-    preparatoryInformationNeeds: [],
-    reviewGeneratedInformationNeeds: [],
-    reviewRequirement: null,
-    resolutionAttempts: resolutionAttempts || [],
-    terminal: unresolved
-      ? { orchestrationState: "IN_PROGRESS" }
-      : { orchestrationState: "TERMINAL", terminalOutcome: "RESOLVED" },
-  }));
-}
-
 function evaluateUboDecisionV3Review(input) {
-  assertAllowedKeys(input, ["policyPack", "runtimeMode", "caseState", "caseContext", "evaluationTime", "checkpoint", "checkpointReference", "predecessorSnapshot", "supersessionReason", "facts", "answers", "evidenceClassifications", "percentageEvidenceInputs", "relevantConflicts", "operationContexts", "priorInformationNeedRecords", "resolutionAttempts", "resolutionPlan", "recordingMetadata"], "evaluationInput");
+  assertAllowedKeys(input, ["policyPack", "runtimeMode", "caseState", "caseContext", "evaluationTime", "checkpoint", "checkpointReference", "predecessorSnapshot", "supersessionReason", "facts", "answers", "evidenceClassifications", "percentageEvidenceInputs", "relevantConflicts", "operationContexts", "priorInformationNeedRecords", "resolutionAttempts", "resolutionOptions", "registryCapabilityProfile", "predecessorResolutionPlan", "existingSystemResolutionContext", "resolutionPlan", "recordingMetadata"], "evaluationInput");
   assertDataOnly(input, "evaluationInput");
   if (input.runtimeMode !== UBO_POLICY_RUNTIME_MODE.LAB) fail("successor evaluation is restricted to explicit LAB mode");
   if (!input.evaluationTime || Number.isNaN(Date.parse(input.evaluationTime))) fail("successor evaluation requires deterministic evaluationTime");
@@ -260,9 +210,47 @@ function evaluateUboDecisionV3Review(input) {
     derivedApplicabilityApplied: { "UBO-R02": applicability.requirements["UBO-R02"], "UBO-R03": applicability.requirements["UBO-R03"], "UBO-R07": applicability.requirements["UBO-R07"] },
   };
   phases.push(phase(7, REQUIREMENT_RESOLUTION_V2, phases.at(-1), requirementStage, input.evaluationTime, requirementResolution.requirementResolutions.flatMap(({ requiredSignoffIds }) => requiredSignoffIds), "TRANSITIONAL_PLANNER_ONLY"));
-  const plannerCompatibilityAdapter = adaptInformationNeedsV2ToPlanV1Compat({ requirementResolution, resolutionAttempts: input.resolutionAttempts || [] });
-  const plan = planResolutionV1Compat({ decisionState: plannerCompatibilityAdapter.decisionState, inputStateHash: phases.at(-1).outputHash });
-  phases.push(phase(8, "ubo-resolution-plan-v1-compat", phases.at(-1), { adapter: plannerCompatibilityAdapter, planId: plan.planId, planHash: plan.planHash, plan }, input.evaluationTime, [], "TRANSITIONAL_PLANNER_ONLY"));
+  const resolutionOptionsV2 = buildResolutionOptionsV2({
+    informationNeeds: requirementResolution.informationNeeds,
+    defaultCapabilityScope: {
+      jurisdiction: String(input.caseContext.jurisdiction || "ANY").toUpperCase(),
+      entityProfile: profile(target),
+      entitlementContext: input.registryCapabilityProfile?.entitlementContext?.contextId || "ANY",
+    },
+    existingSystemResolutionContext: input.existingSystemResolutionContext || {},
+    additionalOptions: input.resolutionOptions || [],
+  });
+  const plan = planUboResolutionV2({
+    policyPack: loaded,
+    requirementResolution,
+    informationNeedSet: requirementResolution.informationNeedSet,
+    operationalBlockers: requirementResolution.operationalBlockers,
+    reviewRequirements: requirementResolution.reviewRequirements,
+    specialistRoutes: requirementResolution.specialistRoutes,
+    resolutionOptions: resolutionOptionsV2,
+    resolutionAttempts: input.resolutionAttempts || [],
+    ...(input.registryCapabilityProfile ? { registryCapabilityProfile: input.registryCapabilityProfile } : {}),
+    ...(input.predecessorResolutionPlan ? { predecessorResolutionPlan: input.predecessorResolutionPlan } : {}),
+    existingSystemResolutionContext: input.existingSystemResolutionContext || {},
+    evaluationTime: input.evaluationTime,
+    caseRevision,
+    graphFingerprint: hashArtifact(graph),
+    defaultCapabilityScope: {
+      jurisdiction: String(input.caseContext.jurisdiction || "ANY").toUpperCase(),
+      entityProfile: profile(target),
+      entitlementContext: input.registryCapabilityProfile?.entitlementContext?.contextId || "ANY",
+    },
+  });
+  phases.push(phase(8, RESOLUTION_PLAN_V2, phases.at(-1), {
+    planId: plan.planId,
+    planHash: plan.planHash,
+    plannerVersion: plan.plannerVersion,
+    registryCapabilityProfileRef: plan.registryCapabilityProfileRef,
+    usedCapabilityEntryIds: plan.usedCapabilityEntryIds,
+    strategyAssignments: plan.strategyAssignments,
+    predecessorPlan: plan.predecessorPlan,
+    plan,
+  }, input.evaluationTime, plan.requiredSignoffs, "SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY"));
   const algorithmManifest = {
     graph: "ubo-graph-v1",
     ...(calculations.length ? { percentageLookthrough: "ubo-percentage-lookthrough-v1", effectiveInterestQualification: "ubo-effective-interest-qualification-v2" } : {}),
@@ -275,15 +263,15 @@ function evaluateUboDecisionV3Review(input) {
     informationNeed: "ubo-information-need-v2",
     dependentDiagnostic: "ubo-need-dependent-diagnostic-v1",
     requirementResolution: REQUIREMENT_RESOLUTION_V2,
-    plannerCompatibilityAdapter: INFORMATION_NEEDS_V2_TO_PLAN_V1_COMPAT,
-    resolutionPlan: "ubo-resolution-plan-v1-compat",
+    registryCapabilityProfile: input.registryCapabilityProfile?.contractVersion || "NOT_PROVIDED",
+    resolutionPlanner: RESOLUTION_PLANNER_V2,
+    resolutionPlan: RESOLUTION_PLAN_V2,
     phasedEvaluation: PHASED_EVALUATION_VERSION,
     snapshotConstruction: "ubo-decision-snapshot-construction-v2",
   };
-  const allNeeds = plannerCompatibilityAdapter.decisionState.informationNeeds;
   const signoffs = [...new Set([...(readiness.unresolvedSignoffs || []).map(({ signoffId }) => signoffId), ...phases.flatMap(({ requiredSignoffIds }) => requiredSignoffIds)])].sort();
-  const snapshot = createDecisionSnapshotV2({ loadedPolicyPack: loaded, caseState: input.caseState, targetEntityId: targetId, checkpoint: input.checkpoint, checkpointReference: input.checkpointReference, evaluationTime: input.evaluationTime, readiness, algorithmManifest, phaseArtifacts: phases, pinnedPlan: plan, previousSnapshot: input.predecessorSnapshot || null, supersessionReason: input.supersessionReason || null, decisionOutputs: { graphDerivedContext: graphContext, effectiveInterestCalculations: calculations, qualificationBasisRecords: bases, companyAttributionAssessments: companyAssessments, llpAttributionAssessments: llpAssessments, layerClosureAssessments: closures, percentageEvidenceAssessments: percentageEvidence, personQualificationAssessments: personAssessments, derivedRequirementApplicability: applicability, evidenceSufficiency, requirementStageVersion: REQUIREMENT_RESOLUTION_V2, causalInformationNeedSetV2: requirementResolution.informationNeedSet, informationNeedsV2: requirementResolution.informationNeeds, dependentDiagnostics: requirementResolution.dependentDiagnostics, requirementResolutions: requirementResolution.requirementResolutions, plannerCompatibilityAdapter, informationNeedsV1Compatibility: allNeeds, informationNeedHistoryV1Compatibility: [], resolutionOptionsV1Compatibility: plannerCompatibilityAdapter.decisionState.resolutionOptions, actionIntentsV1Compatibility: plannerCompatibilityAdapter.decisionState.actionIntents, policyGaps: [], operationalBlockers: requirementResolution.operationalBlockers, reviewRequirements: requirementResolution.reviewRequirements, specialistRoutes: requirementResolution.specialistRoutes, specialistStates: { terminal: plannerCompatibilityAdapter.decisionState.terminal, reviewRequired: requirementResolution.reviewRequirements.length > 0, specialistRequired: requirementResolution.specialistRoutes.length > 0 }, requiredSignoffIds: signoffs }, recordingMetadata: input.recordingMetadata || {} });
-  return deepFreeze(cloneData({ evaluationAlgorithmVersion: PHASED_EVALUATION_VERSION, futureApplicationBoundary: { contractVersion: "ubo-decision-application-v3", exposure: "DEFERRED_UNTIL_WAVES_8_AND_9" }, phaseOrder: PHASE_IDS, phaseArtifacts: snapshot.decisionContent.phaseArtifacts, graph, calculations, effectiveAssessments, companyAssessments, llpAssessments, layerClosureAssessments: closures, percentageEvidenceAssessments: percentageEvidence, personQualificationAssessments: personAssessments, derivedRequirementApplicability: applicability, evidenceSufficiency, requirementStage, plannerCompatibilityAdapter, resolutionPlan: snapshot.decisionContent.pinnedResolutionPlan, snapshot }));
+  const snapshot = createDecisionSnapshotV2({ loadedPolicyPack: loaded, caseState: input.caseState, targetEntityId: targetId, checkpoint: input.checkpoint, checkpointReference: input.checkpointReference, evaluationTime: input.evaluationTime, readiness, algorithmManifest, phaseArtifacts: phases, pinnedPlan: plan, previousSnapshot: input.predecessorSnapshot || null, supersessionReason: input.supersessionReason || null, decisionOutputs: { graphDerivedContext: graphContext, effectiveInterestCalculations: calculations, qualificationBasisRecords: bases, companyAttributionAssessments: companyAssessments, llpAttributionAssessments: llpAssessments, layerClosureAssessments: closures, percentageEvidenceAssessments: percentageEvidence, personQualificationAssessments: personAssessments, derivedRequirementApplicability: applicability, evidenceSufficiency, requirementStageVersion: REQUIREMENT_RESOLUTION_V2, causalInformationNeedSetV2: requirementResolution.informationNeedSet, informationNeedsV2: requirementResolution.informationNeeds, dependentDiagnostics: requirementResolution.dependentDiagnostics, requirementResolutions: requirementResolution.requirementResolutions, resolutionOptionsV2, informationNeedsV1Compatibility: [], informationNeedHistoryV1Compatibility: [], resolutionOptionsV1Compatibility: [], actionIntentsV1Compatibility: [], policyGaps: [], operationalBlockers: requirementResolution.operationalBlockers, reviewRequirements: requirementResolution.reviewRequirements, specialistRoutes: requirementResolution.specialistRoutes, specialistStates: { terminal: { orchestrationState: plan.state === "COMPLETE" ? "TERMINAL" : "IN_PROGRESS" }, reviewRequired: requirementResolution.reviewRequirements.length > 0, specialistRequired: requirementResolution.specialistRoutes.length > 0 }, requiredSignoffIds: signoffs }, recordingMetadata: input.recordingMetadata || {} });
+  return deepFreeze(cloneData({ evaluationAlgorithmVersion: PHASED_EVALUATION_VERSION, futureApplicationBoundary: { contractVersion: "ubo-decision-application-v3", exposure: "DEFERRED_UNTIL_WAVE_10" }, phaseOrder: PHASE_IDS, phaseArtifacts: snapshot.decisionContent.phaseArtifacts, graph, calculations, effectiveAssessments, companyAssessments, llpAssessments, layerClosureAssessments: closures, percentageEvidenceAssessments: percentageEvidence, personQualificationAssessments: personAssessments, derivedRequirementApplicability: applicability, evidenceSufficiency, requirementStage, resolutionOptionsV2, registryCapabilityProfile: input.registryCapabilityProfile || null, resolutionPlan: snapshot.decisionContent.pinnedResolutionPlan, snapshot }));
 }
 
 module.exports = { PHASED_EVALUATION_VERSION, PHASE_IDS, REQUIREMENT_RESOLUTION_COMPAT_VERSION, evaluateUboDecisionV3Review };
