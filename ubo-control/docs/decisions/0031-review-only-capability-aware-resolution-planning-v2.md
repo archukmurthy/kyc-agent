@@ -1,6 +1,6 @@
 # ADR 0031: Review-only capability-aware ResolutionPlan v2
 
-**Status:** Accepted for Wave 9 review-mode implementation  
+**Status:** Accepted for Wave 9 review-mode implementation
 **Date:** 2026-09-06
 
 ## Context
