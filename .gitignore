@@ -8,6 +8,7 @@ build
 
 .vercel
 .config-store.json
+.didit-store.json
 .claude/
 
 # Benchmark scratch output + local DB migration (applied directly to Neon)
