@@ -867,7 +867,10 @@
       "assertion": "one missing frontier edge creates one causal need;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-002",
@@ -876,7 +879,10 @@
       "assertion": "downstream affected paths link to that need;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-003",
@@ -885,7 +891,10 @@
       "assertion": "no need per intermediary;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-004",
@@ -894,7 +903,10 @@
       "assertion": "no duplicate projection count;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-005",
@@ -905,7 +917,10 @@
       "signoffDependencies": [
         "A-04"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-04"]
     },
     {
       "assertionId": "F07-08-006",
@@ -916,7 +931,10 @@
       "signoffDependencies": [
         "A-04"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-04"]
     },
     {
       "assertionId": "F07-08-007",
@@ -953,7 +971,10 @@
       "assertion": "R08 remains one structure-level need;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-010",
@@ -962,7 +983,10 @@
       "assertion": "positive trust/nominee signal remains separate;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-08-011",
@@ -971,7 +995,10 @@
       "assertion": "negative residual statements do not fan out.",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-001",
@@ -1263,7 +1290,10 @@
       "assertion": "first-RLE/register-scope difference;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-12-002",
@@ -1272,7 +1302,10 @@
       "assertion": "effective-interest-only person absent from register → METHOD_DIFFERENCE;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-12-003",
@@ -1281,7 +1314,10 @@
       "assertion": "timing/staleness;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-12-004",
@@ -1290,7 +1326,10 @@
       "assertion": "actual contradictory registrable fact → review;",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-12-005",
@@ -1308,7 +1347,10 @@
       "assertion": "no automatic regulatory submission.",
       "classification": "WAVE_8_FRONTIER_NEEDS",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-13-001",
@@ -1375,7 +1417,10 @@
       "signoffDependencies": [
         "A-06"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06"]
     },
     {
       "assertionId": "F07-13-008",
@@ -1386,7 +1431,10 @@
       "signoffDependencies": [
         "A-06"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER",
+      "productionExecutable": false,
+      "requiredSignoffs": ["A-06"]
     },
     {
       "assertionId": "F07-13-009",

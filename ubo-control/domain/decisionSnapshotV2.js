@@ -5,26 +5,26 @@ const { createPhaseArtifact, hashArtifact } = require("../internal/phasedArtifac
 const { canonicalizeJson } = require("../policy/canonicalJson");
 const { hashPolicyPack, validatePolicyPack } = require("../policy/policyPack");
 const { verifyDecisionSnapshot } = require("./decisionSnapshot");
+const { validateInformationNeedV2 } = require("./informationNeedV2");
 
 const DECISION_SNAPSHOT_V2 = "ubo-decision-snapshot-v2";
 const DECISION_SNAPSHOT_CONSTRUCTION_V2 = "ubo-decision-snapshot-construction-v2";
 const DECISION_RECONSTRUCTION_V2 = "ubo-decision-reconstruction-v2";
-const PIPELINE_MATURITY = "TRANSITIONAL_REVIEW_ONLY";
+const PIPELINE_MATURITY_WAVE_7 = "TRANSITIONAL_REVIEW_ONLY";
+const PIPELINE_MATURITY_WAVE_8 = "TRANSITIONAL_PLANNER_ONLY";
+const PIPELINE_MATURITY = PIPELINE_MATURITY_WAVE_7;
 const HISTORY_REASONS_V2 = Object.freeze(["POLICY_CHANGED", "ALGORITHM_CHANGED", "NEW_FACTS", "REVIEW_DECISION", "CUSTOMER_INPUT"]);
 const EXPECTED_PHASES = Object.freeze([
   "BASE_APPLICABILITY", "CANONICAL_GRAPH_AND_DEPTH", "CALCULATIONS_AND_ATTRIBUTIONS", "QUALIFICATION",
   "DERIVED_REQUIREMENT_APPLICABILITY", "EVIDENCE_SUFFICIENCY", "INFORMATION_NEEDS", "RESOLUTION_PLANNING", "DECISION_SNAPSHOT",
 ]);
-const EXPECTED_PHASE_ALGORITHMS = Object.freeze([
+const EXPECTED_PHASE_ALGORITHMS_PREFIX = Object.freeze([
   "ubo-policy-readiness-v1",
   "ubo-graph-derived-context-v1",
   "ubo-calculations-and-attributions-v1",
   "ubo-person-qualification-assessment-v2",
   "ubo-derived-requirement-applicability-v1",
   "ubo-evidence-sufficiency-v1-compat",
-  "ubo-requirement-resolution-v1-compat",
-  "ubo-resolution-plan-v1-compat",
-  DECISION_SNAPSHOT_CONSTRUCTION_V2,
 ]);
 
 function same(a, b) { return canonicalizeJson(a) === canonicalizeJson(b); }
@@ -53,6 +53,8 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
   if (!predecessor && supersessionReason !== null) fail("v2 genesis cannot carry a supersession reason");
   if (readiness.runtimeMode !== "LAB" || readiness.readiness !== "REVIEW_ONLY") fail("DecisionSnapshot v2 is restricted to review-only LAB evaluation");
   const identity = policyIdentity(loadedPolicyPack);
+  const wave8 = decisionOutputs.requirementStageVersion === "ubo-requirement-resolution-v2";
+  const pipelineMaturity = wave8 ? PIPELINE_MATURITY_WAVE_8 : PIPELINE_MATURITY_WAVE_7;
   const seed = {
     snapshotSchemaVersion: DECISION_SNAPSHOT_V2,
     snapshotAlgorithmVersion: DECISION_SNAPSHOT_CONSTRUCTION_V2,
@@ -64,7 +66,7 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
     runtimeMode: "LAB",
     policyReadiness: readiness.readiness,
     governanceState: "REVIEW_ONLY",
-    pipelineMaturity: PIPELINE_MATURITY,
+    pipelineMaturity,
     productionAuthorized: false,
     registryCapabilityProfileRef: null,
     registryCapabilityProfileState: "NOT_PROVIDED",
@@ -81,6 +83,14 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
     personQualificationAssessments: cloneData(decisionOutputs.personQualificationAssessments),
     derivedRequirementApplicability: cloneData(decisionOutputs.derivedRequirementApplicability),
     evidenceSufficiency: cloneData(decisionOutputs.evidenceSufficiency),
+    ...(wave8 ? {
+      requirementStageVersion: decisionOutputs.requirementStageVersion,
+      causalInformationNeedSetV2: cloneData(decisionOutputs.causalInformationNeedSetV2),
+      informationNeedsV2: cloneData(decisionOutputs.informationNeedsV2),
+      dependentDiagnostics: cloneData(decisionOutputs.dependentDiagnostics),
+      plannerCompatibilityAdapter: cloneData(decisionOutputs.plannerCompatibilityAdapter),
+      specialistRoutes: cloneData(decisionOutputs.specialistRoutes),
+    } : {}),
     requirementResolutions: cloneData(decisionOutputs.requirementResolutions),
     informationNeedsV1Compatibility: cloneData(decisionOutputs.informationNeedsV1Compatibility),
     informationNeedHistoryV1Compatibility: cloneData(decisionOutputs.informationNeedHistoryV1Compatibility),
@@ -104,7 +114,7 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
     output: { snapshotConstructionInputHash: hashArtifact(seed), pinnedPlanId: pinnedPlan.planId, pinnedPlanHash: pinnedPlan.planHash },
     evaluationTime,
     requiredSignoffIds: seed.requiredSignoffIds,
-    marker: PIPELINE_MATURITY,
+    marker: pipelineMaturity,
   });
   const content = { ...seed, phaseArtifacts: [...seed.phaseArtifacts, cloneData(phase9)] };
   content.phaseManifest = manifestOf(content.phaseArtifacts);
@@ -125,12 +135,19 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
   const content = snapshot.decisionContent;
   if (content.snapshotAlgorithmVersion !== DECISION_SNAPSHOT_CONSTRUCTION_V2) fail("unsupported DecisionSnapshot v2 construction algorithm");
   if (snapshot.snapshotId !== snapshot.decisionContentHash || snapshot.decisionContentHash !== hashArtifact(content)) fail("DecisionSnapshot v2 canonical hash mismatch");
-  if (content.runtimeMode !== "LAB" || content.policyReadiness !== "REVIEW_ONLY" || content.governanceState !== "REVIEW_ONLY" || content.productionAuthorized !== false || content.pipelineMaturity !== PIPELINE_MATURITY) fail("DecisionSnapshot v2 governance invariant failed");
+  const phase7Algorithm = content.phaseArtifacts?.[6]?.algorithmVersion;
+  const wave8 = phase7Algorithm === "ubo-requirement-resolution-v2";
+  const expectedMaturity = wave8 ? PIPELINE_MATURITY_WAVE_8 : PIPELINE_MATURITY_WAVE_7;
+  if (!["ubo-requirement-resolution-v1-compat", "ubo-requirement-resolution-v2"].includes(phase7Algorithm)) fail("DecisionSnapshot v2 Phase 7 version is unsupported");
+  if (content.runtimeMode !== "LAB" || content.policyReadiness !== "REVIEW_ONLY" || content.governanceState !== "REVIEW_ONLY" || content.productionAuthorized !== false || content.pipelineMaturity !== expectedMaturity) fail("DecisionSnapshot v2 governance invariant failed");
   if (content.registryCapabilityProfileRef !== null || content.registryCapabilityProfileState !== "NOT_PROVIDED") fail("DecisionSnapshot v2 fabricated a RegistryCapabilityProfile");
   if (!Array.isArray(content.phaseArtifacts) || content.phaseArtifacts.length !== EXPECTED_PHASES.length) fail("DecisionSnapshot v2 phase set is incomplete");
   content.phaseArtifacts.forEach((artifact, index) => {
     if (artifact.sequence !== index + 1 || artifact.phaseId !== EXPECTED_PHASES[index]) fail("DecisionSnapshot v2 phase order is invalid");
-    if (artifact.algorithmVersion !== EXPECTED_PHASE_ALGORITHMS[index]) fail(`phase ${artifact.phaseId} algorithm version is invalid`);
+    const expectedAlgorithm = index < EXPECTED_PHASE_ALGORITHMS_PREFIX.length ? EXPECTED_PHASE_ALGORITHMS_PREFIX[index]
+      : index === 6 ? phase7Algorithm
+        : index === 7 ? "ubo-resolution-plan-v1-compat" : DECISION_SNAPSHOT_CONSTRUCTION_V2;
+    if (artifact.algorithmVersion !== expectedAlgorithm) fail(`phase ${artifact.phaseId} algorithm version is invalid`);
     if (artifact.status !== "COMPLETE" || artifact.evaluationTime !== content.checkpoint.evaluationTime) fail(`phase ${artifact.phaseId} completion metadata is invalid`);
     const expectedOutputHash = hashArtifact(artifact.output);
     if (artifact.outputHash !== expectedOutputHash
@@ -178,8 +195,44 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
     || !same(phase4.qualificationBasisRecords, content.qualificationBasisRecords)
     || !same(phase4.personQualificationAssessments, content.personQualificationAssessments)
     || !same(phase5, content.derivedRequirementApplicability)
-    || !same(phase6.evidenceSufficiency, content.evidenceSufficiency)
-    || !same(phase7.orchestration.requirementResolutions, content.requirementResolutions)) fail("DecisionSnapshot v2 duplicated decision output does not match its producing phase");
+    || !same(phase6.evidenceSufficiency, content.evidenceSufficiency)) fail("DecisionSnapshot v2 duplicated decision output does not match its producing phase");
+  if (wave8) {
+    const resolution = phase7.requirementResolution;
+    if (content.requirementStageVersion !== "ubo-requirement-resolution-v2"
+      || !same(resolution.informationNeedSet, content.causalInformationNeedSetV2)
+      || !same(resolution.informationNeeds, content.informationNeedsV2)
+      || !same(resolution.dependentDiagnostics, content.dependentDiagnostics)
+      || !same(resolution.requirementResolutions, content.requirementResolutions)
+      || !same(resolution.operationalBlockers, content.operationalBlockers)
+      || !same(resolution.reviewRequirements, content.reviewRequirements)
+      || !same(resolution.specialistRoutes, content.specialistRoutes)
+      || !same(content.phaseArtifacts[7].output.adapter, content.plannerCompatibilityAdapter)) fail("DecisionSnapshot v2 Wave 8 outputs do not match their producing phases");
+    content.informationNeedsV2.forEach((need, index) => validateInformationNeedV2(need, `decisionContent.informationNeedsV2[${index}]`));
+    content.causalInformationNeedSetV2.history.forEach((need, index) => validateInformationNeedV2(need, `decisionContent.causalInformationNeedSetV2.history[${index}]`));
+    const needIds = new Set(content.informationNeedsV2.map(({ needId }) => needId));
+    if (!same(content.causalInformationNeedSetV2.currentNeeds, content.informationNeedsV2)) fail("DecisionSnapshot v2 causal need set does not match the recorded needs");
+    const { needSetId, setHash, ...needSetSemantic } = content.causalInformationNeedSetV2;
+    if (setHash !== hashArtifact(needSetSemantic) || needSetId !== `ubo-information-need-set-v2:${setHash.slice(7, 39)}`) fail("DecisionSnapshot v2 causal need set hash is invalid");
+    content.dependentDiagnostics.forEach((diagnostic) => {
+      if (!needIds.has(diagnostic.causalNeedId)) fail("DecisionSnapshot v2 diagnostic references an unknown causal need");
+      const { diagnosticId, ...diagnosticSemantic } = diagnostic;
+      if (diagnostic.contractVersion !== "ubo-need-dependent-diagnostic-v1" || diagnosticId !== `ubo-need-dependent-diagnostic-v1:${hashArtifact(diagnosticSemantic).slice(7, 39)}`) fail("DecisionSnapshot v2 diagnostic identity is invalid");
+    });
+    const { assessmentId, assessmentHash, ...resolutionSemantic } = resolution;
+    if (assessmentHash !== hashArtifact(resolutionSemantic) || assessmentId !== `ubo-requirement-resolution-assessment-v2:${assessmentHash.slice(7, 39)}`) fail("DecisionSnapshot v2 RequirementResolution v2 hash is invalid");
+    resolution.requirementResolutions.forEach((record) => {
+      const { requirementResolutionId, ...recordSemantic } = record;
+      if (record.contractVersion !== "ubo-requirement-resolution-assessment-v2" || requirementResolutionId !== `ubo-requirement-resolution-assessment-v2:${hashArtifact(recordSemantic).slice(7, 39)}`) fail("DecisionSnapshot v2 requirement assessment identity is invalid");
+    });
+    const adapter = content.plannerCompatibilityAdapter;
+    const { adapterId, adapterHash, ...adapterSemantic } = adapter;
+    if (adapterHash !== hashArtifact(adapterSemantic) || adapterId !== `ubo-information-needs-v2-to-plan-v1-compat:${adapterHash.slice(7, 39)}`) fail("DecisionSnapshot v2 planner adapter hash is invalid");
+    const openNeedIds = content.informationNeedsV2.filter(({ status }) => status === "OPEN").map(({ needId }) => needId).sort();
+    if (!same(adapter.openCausalNeedIds, openNeedIds)
+      || !same(adapter.decisionState.informationNeeds.map(({ needId }) => needId).sort(), openNeedIds)
+      || adapter.sourceRequirementResolutionId !== resolution.assessmentId
+      || adapter.sourceRequirementResolutionHash !== resolution.assessmentHash) fail("DecisionSnapshot v2 planner adapter does not match the causal need set");
+  } else if (!same(phase7.orchestration.requirementResolutions, content.requirementResolutions)) fail("DecisionSnapshot v2 duplicated Wave 7 requirement output does not match its producing phase");
   const readinessIdentity = content.policy.readiness.policyIdentity;
   if (!same(content.policy.identity, {
     policyPackId: readinessIdentity.policyPackId,
@@ -190,7 +243,7 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
   const expectedAlgorithms = {
     graph: "ubo-graph-v1",
     personQualification: "ubo-person-qualification-assessment-v2", derivedRequirementApplicability: "ubo-derived-requirement-applicability-v1",
-    requirementResolution: "ubo-requirement-resolution-v1-compat", resolutionPlan: "ubo-resolution-plan-v1-compat",
+    requirementResolution: phase7Algorithm, resolutionPlan: "ubo-resolution-plan-v1-compat",
     phasedEvaluation: "ubo-phased-evaluation-v1", snapshotConstruction: DECISION_SNAPSHOT_CONSTRUCTION_V2,
   };
   if (content.effectiveInterestCalculations.length > 0) Object.assign(expectedAlgorithms, { percentageLookthrough: "ubo-percentage-lookthrough-v1", effectiveInterestQualification: "ubo-effective-interest-qualification-v2" });
@@ -198,6 +251,7 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
   if (content.llpAttributionAssessments.length > 0) Object.assign(expectedAlgorithms, { llpAttribution: "ubo-llp-psc-attribution-v1", llpWorkingAssumption: "A-06-WA-01" });
   if (content.layerClosureAssessments.length > 0) Object.assign(expectedAlgorithms, { layerClosure: "ubo-layer-closure-v1", percentagePrecision: "ubo-percentage-precision-v1" });
   if (content.percentageEvidenceAssessments.length > 0) expectedAlgorithms.percentageEvidence = "ubo-percentage-evidence-v1";
+  if (wave8) Object.assign(expectedAlgorithms, { informationNeed: "ubo-information-need-v2", dependentDiagnostic: "ubo-need-dependent-diagnostic-v1", plannerCompatibilityAdapter: "ubo-information-needs-v2-to-plan-v1-compat" });
   Object.entries(expectedAlgorithms).forEach(([key, value]) => { if (content.algorithmManifest[key] !== value) fail(`DecisionSnapshot v2 algorithm pin ${key} is invalid`); });
   const { phaseManifest, phaseArtifacts, ...seedRest } = content;
   const seed = { ...seedRest, phaseArtifacts: phaseArtifacts.slice(0, 8) };
@@ -221,4 +275,4 @@ function reconstructDecisionStateV2(snapshot) {
   }));
 }
 
-module.exports = { DECISION_RECONSTRUCTION_V2, DECISION_SNAPSHOT_CONSTRUCTION_V2, DECISION_SNAPSHOT_V2, HISTORY_REASONS_V2, PIPELINE_MATURITY, createDecisionSnapshotV2, reconstructDecisionStateV2, verifyDecisionSnapshotV2 };
+module.exports = { DECISION_RECONSTRUCTION_V2, DECISION_SNAPSHOT_CONSTRUCTION_V2, DECISION_SNAPSHOT_V2, HISTORY_REASONS_V2, PIPELINE_MATURITY, PIPELINE_MATURITY_WAVE_7, PIPELINE_MATURITY_WAVE_8, createDecisionSnapshotV2, reconstructDecisionStateV2, verifyDecisionSnapshotV2 };

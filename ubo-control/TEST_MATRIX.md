@@ -315,6 +315,22 @@ The exact Wave 6 assertion inventory `F07-05-001` through `F07-05-017` is `REVIE
 
 Only `F07-08-007` and `F07-08-008` advance in Wave 7, as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL`. Production execution, InformationNeed v2, ResolutionPlan v2 and RegistryCapabilityProfile remain false/unimplemented.
 
+## Freeze Wave 8 causal InformationNeeds and requirement resolution
+
+| Invariant | Protection |
+|---|---|
+| InformationNeed v2 identity, canonical ordering, immutability, JSON round-trip, target validation and three-state lifecycle | `informationNeedV2.nodetest.js` |
+| One cause merges R01/R02/R03 and multiple paths; distinct causes remain distinct; diagnostics reference one cause | `informationNeedV2.nodetest.js` |
+| One planner input and at most one current compatibility action per open cause; diagnostics never become work | `informationNeedsV2PlannerCompat.nodetest.js` |
+| Operational blockers, reviews and specialist routes remain separate from customer work | planner compatibility test |
+| Phase 7 v2, `TRANSITIONAL_PLANNER_ONLY`, exact pinned Phase 8 plan and v1/v2 reconstruction dispatch | `phasedEvaluationV1.nodetest.js`; existing Snapshot/history suites |
+| R04 subject scope, R09 typed comparison/review and no report execution | Wave 8 phased evaluation tests |
+| ASDA exact ten-cause list, one LLP governance cause, one R01 frontier, one R04 cause, 25 diagnostics and three distinct affected paths | `asdaSuccessorCharacterization.nodetest.js` |
+| Internal projection truthful counts, canonical nodes, `NOT_CONFIRMED_UBO`, no blanket unresolved entity flag | ASDA successor characterization |
+| Public exports, v1 application/snapshot/planner/projections, current Lab and legacy boundaries unchanged | architecture and complete regression suites |
+
+Wave 8 advances `F07-08-001`–`006`, `009`–`011`, `F07-12-001`–`004`, `006`, and `F07-13-007`–`008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER`. `F07-12-005` remains deferred because Wave 8 records no regulatory report candidate. Production execution remains false.
+
 ## UK Corporate supplied assertion plan
 
 These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_EXECUTABLE`, and one `G2_4C_EXECUTABLE`. G2.4C now protects the actual immutable R10 measures-taken DecisionSnapshot; persistence and host integrations remain later work.
