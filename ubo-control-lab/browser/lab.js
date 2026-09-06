@@ -34,7 +34,8 @@
   }
 
   function human(value) {
-    return String(value || "Not recorded").toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+    const recorded = value === null || value === undefined || value === "" ? "Not recorded" : value;
+    return String(recorded).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
   }
 
   function relationshipFilter(relationship) {

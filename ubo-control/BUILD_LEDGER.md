@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w10-lab-v2-review` |
 | Base commit | `7167ac51f65a8b1d84f07621c59819af79feccac` (accepted PR #54 normal merge on `origin/main`). |
 | Latest accepted PR | [#54 — Freeze Wave 9: ResolutionPlan v2 and capability-aware planning](https://github.com/archukmurthy/kyc-agent/pull/54), merged normally as `7167ac51f65a8b1d84f07621c59819af79feccac`. |
-| Current PR | Wave 10 PR pending; keep open for Control Room review and do not merge automatically. |
+| Current PR | [#55 — Freeze Wave 10: successor review entry and Lab v2](https://github.com/archukmurthy/kyc-agent/pull/55); open for Control Room review and not merged automatically. |
 | Versioning | Default `ubo-decision-application-v1` remains exactly `intake`, `applyDecisions`, `evaluate`. Explicit `ubo-decision-application-v2` adds `applyCustomerInput`. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |

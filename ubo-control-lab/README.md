@@ -46,3 +46,30 @@ The top-level selector now makes the doctrine explicit: `BASELINE — 1.5-RC` re
 Successor mode offers ten sanitized actual-engine fixtures, saved-result Replay with zero external calls, and one-shot Live Discovery with the existing cost warning. The two ASDA profiles are labelled `LAB REVIEW PROFILE — NOT PRODUCTION APPROVED`; their hash, effective/review period, entitlement context, capability entries, used entries and A-15 dependency are inspectable. Changing profile creates a linked Snapshot v2 with `PLANNING_CONTEXT_CHANGED` and preserves the predecessor.
 
 The workspace uses one current Snapshot v2 across Case Summary, Ownership & Control Graph, Qualifications, Requirements & Causal Needs, Resolution Plan, Evidence, Decision History, Diagnostics and Baseline Comparison. Graph filters are display-only. Counts open deterministic lists. Resolution actions and customer actions are inspection-only; the applicant panel says `APPLICANT JOURNEY v2 NOT YET ENABLED`, and Evidence says `EVIDENCE EXECUTION NOT YET CONNECTED`.
+
+## Wave 10 deployed manual acceptance
+
+Control Room preview: [PR #55 protected deployment](https://kyc-agent-zayzo-git-codex-ub-2203dd-archukmurthy-3271s-projects.vercel.app/ubo-control-lab/). The PR remains open and the preview is review-only.
+
+The 2026-09-06 deployed-browser pass recorded:
+
+| Acceptance item | Deployed observation |
+|---|---|
+| ASDA baseline 1.5-RC | Baseline comparison reconstructs immutable Snapshot v1 from the same normalized candidate facts, with no second search. |
+| ASDA successor A | 10 open causal needs, 10 causal groups, 7 current system actions, 2 review requirements and `SYSTEM_RESOLUTION`. |
+| ASDA successor B | Profile change preserves 10 open causal needs, exposes 3 current customer actions and changes the plan to `CUSTOMER_RESOLUTION`. |
+| Ownership default graph | One subject-centred graph; four economic relationships visible and voting/control overlays explicitly reported as hidden. |
+| Voting overlay | Nine voting relationships remain distinct; the three TDR natural persons each show the preserved `(25%,50%]` voting range. |
+| Control overlay | Significant-influence/control and board-appointment relationships remain separate, readable relationships. |
+| Causal need and affected paths | The open-needs count opens a deterministic ten-item list; the TDR governance need exposes three calculations, three paths, three relationships and three affected people. |
+| Qualification routes | Effective-interest, PSC-condition-attribution and unassessed management-control routes are displayed separately with reasoning and sign-offs. |
+| 60/40 distinction | V2-LAB-02 records 24% effective interest as not satisfied while the distinct 40% attributed target right satisfies the PSC-condition route. |
+| TDR provisional state | V2-LAB-06 preserves direct LLP voting rights `(25%,50%]`, the A-06 review requirement and `productionAuthorized=false`. |
+| Layer-closure endpoint | V2-LAB-04 records exact 25% and correctly reports both `>25%` routes as not satisfied. |
+| Percentage-band corroboration | V2-LAB-05 records an exact 80% declaration inside the independent `[75%,100%]` registry band as `INDEPENDENT_BAND_CORROBORATED`, while retaining A-03 review governance. |
+| Profile-change history | Two immutable Snapshot v2 records are linked by predecessor identity and `PLANNING_CONTEXT_CHANGED`; the second pins the ASDA B profile and plan. |
+| Baseline comparison | The UI labels policy, snapshot and graph-algorithm versions, explains that v1 unresolved rows and v2 causal needs are different metrics, and states `SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH`. |
+| Evidence state | The Evidence view says `EVIDENCE EXECUTION NOT YET CONNECTED` and provides references/assessments without upload, extraction or execution controls. |
+| Review-policy watermark | `REVIEW POLICY — NOT APPROVED FOR PRODUCTION` remains visible throughout successor review inspection. |
+
+This evidence does not authorize production use and does not introduce Wave 11 customer actions, Evidence execution, persistence or onboarding integration.
