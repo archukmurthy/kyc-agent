@@ -49,6 +49,16 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Recommended approach:** Reuse `verifyDiditWebhook` (three HMAC schemes + 300s replay window) and the module's reconciliation (untrusted simple-signature → re-pull). Needs a stable public webhook URL (client env currently uses an ephemeral Cloudflare tunnel — replace with a stable prod endpoint).
 - **Area:** new `api/idv-webhook.js`, `idv/security/webhookSignatures.js`.
 
+### IDV-5 — Spike code minors to revisit at hardening
+- **Category:** Tech debt · **Priority:** P3 · **Status:** OPEN
+- **What:** Minor code-quality items deferred from the spike's whole-branch review:
+  - `lib/didit/mapDecision.js` — speculative field-name aliases (`id_verification`, `liveness`, `expiry_date`, `issuing_country`, `formatted_address`, …) are untested `||` fallbacks; verify against real Didit responses or trim.
+  - `lib/didit/diditClient.js` — `metadata:{ref}` is redundant (`vendor_data` already carries the ref); verify Didit sandbox accepts it or drop it.
+  - `api/idv-result.js` — broad `try/catch` labels mapping/store faults as `didit_result_failed` (upstream); narrow it when hardening.
+  - `src/components/idv/__tests__/IdentityVerificationStep.test.jsx` — passing test emits React `act()` warnings (async QR resolves after the act block); flush microtasks inside `act` for pristine output.
+- **Why:** Harmless in the sandbox spike; worth cleaning when the integration goes real.
+- **Area:** `lib/didit/`, `api/idv-result.js`, IDV component test.
+
 ### IDV-4 — First-class platform fields for identity document data
 - **Category:** Data model / Product
 - **Priority:** P2

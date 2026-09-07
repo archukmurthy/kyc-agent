@@ -418,6 +418,7 @@ let handler, tmp;
 
 function mockRes() {
   return { statusCode: 200, body: null,
+    setHeader() {},
     status(c) { this.statusCode = c; return this; },
     json(d) { this.body = d; return this; } };
 }
@@ -523,6 +524,7 @@ let handler, store, tmp;
 
 function mockRes() {
   return { statusCode: 200, body: null,
+    setHeader() {},
     status(c) { this.statusCode = c; return this; },
     json(d) { this.body = d; return this; } };
 }
