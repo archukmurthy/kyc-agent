@@ -41,7 +41,7 @@ test("pulls decision, maps, stores, returns mappedFields", async () => {
   await handler({ method: "POST", body: { ref: "ref-5" } }, res);
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.verified, true);
-  assert.strictEqual(res.body.mappedFields.applicantFirstName, "ADA");
+  assert.strictEqual(res.body.mappedFields.applicantFirstName, "Ada");
   assert.strictEqual(res.body.extras.documentNumber, "X1");
-  assert.strictEqual(store.getResult("ref-5").mappedFields.applicantLastName, "LOVELACE");
+  assert.strictEqual(store.getResult("ref-5").mappedFields.applicantLastName, "Lovelace");
 });

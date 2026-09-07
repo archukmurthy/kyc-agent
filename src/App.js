@@ -4807,8 +4807,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
         {step === STEPS.identityVerification && agentType !== "preboarding" && (
           <IdentityVerificationStep
             submissionId={dossierId || onboardingSubmissionId}
-            onVerified={(mappedFields) =>
-              setApplicantAgentValues((prev) => ({ ...prev, ...mappedFields }))}
+            declared={{
+              applicantFirstName: gapRef.current.applicantFirstName,
+              applicantLastName: gapRef.current.applicantLastName,
+              applicantDateOfBirth: gapRef.current.applicantDateOfBirth,
+              applicantNationality: gapRef.current.applicantNationality,
+            }}
+            onVerified={(mappedFields) => {
+              setApplicantAgentValues((prev) => ({ ...prev, ...mappedFields }));
+              Object.entries(mappedFields).forEach(([k, v]) => { gapRef.current[k] = v; });
+              setFormVersion((v) => v + 1);
+            }}
             onContinue={() => scrollAndSetStep(STEPS.confirm)}
             cardStyle={card}
             Btn={Btn}

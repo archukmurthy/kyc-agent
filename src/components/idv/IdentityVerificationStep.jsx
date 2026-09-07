@@ -21,6 +21,8 @@ const FIELD_LABELS = {
   address: "Address",
 };
 const STATUS_KEYS = ["livenessStatus", "faceMatchStatus", "diditStatus"];
+// Meta flags computed by the mapper — surfaced as warnings, never as editable cells.
+const META_KEYS = ["documentExpired", "amlHit", "amlTotalHits"];
 const DATE_KEYS = new Set(["applicantDateOfBirth", "expirationDate", "dateOfIssue"]);
 const MAPPED_KEYS = [
   "applicantFirstName",
@@ -32,6 +34,7 @@ const MAPPED_KEYS = [
 const prettify = (k) =>
   FIELD_LABELS[k] ||
   k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+const norm = (s) => String(s == null ? "" : s).trim().toLowerCase();
 
 const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4 };
 const inputStyle = {
@@ -43,22 +46,28 @@ const gridStyle = {
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
   gap: 12, maxWidth: 640,
 };
+const warnStyle = {
+  maxWidth: 640, padding: "10px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13,
+  background: "#fef7e0", border: "1px solid #f9c74f", color: "#8a6d00",
+};
+const dangerStyle = { ...warnStyle, background: "#fce8e6", border: "1px solid #d93025", color: "#a50e0e" };
 
 // Editable model = mapped identity fields + scalar identity extras.
-// Statuses and object values (e.g. MRZ) are shown read-only, not as inputs.
+// Statuses, meta flags, and object values are shown separately, not as inputs.
 function buildEditable(data) {
   const out = {};
   Object.entries(data.mappedFields || {}).forEach(([k, v]) => {
     out[k] = v == null ? "" : String(v);
   });
   Object.entries(data.extras || {}).forEach(([k, v]) => {
-    if (STATUS_KEYS.includes(k) || v == null || typeof v === "object") return;
+    if (STATUS_KEYS.includes(k) || META_KEYS.includes(k)) return;
+    if (v == null || typeof v === "object" || typeof v === "boolean") return;
     out[k] = String(v);
   });
   return out;
 }
 
-export default function IdentityVerificationStep({ submissionId, onVerified, onContinue, cardStyle, Btn }) {
+export default function IdentityVerificationStep({ submissionId, declared = {}, onVerified, onContinue, cardStyle, Btn }) {
   const [ref] = useState(submissionId || genRef());
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -116,6 +125,8 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
       }
       const mapped = {};
       MAPPED_KEYS.forEach((k) => { if (k in edit) mapped[k] = edit[k]; });
+      // P6: a verified AML/PEP hit flags the applicant as a PEP.
+      if (result.extras && result.extras.amlHit) mapped.applicantIsPEP = "Yes";
       onVerified(mapped);
       onContinue();
     } catch (e) { setError(String(e.message || e)); }
@@ -124,6 +135,13 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
 
   const verified = result && result.verified;
   const statuses = result ? STATUS_KEYS.filter((k) => result.extras && result.extras[k]) : [];
+  const amlHit = !!(result && result.extras && result.extras.amlHit);
+  const expired = edit.expirationDate ? Date.parse(edit.expirationDate) < Date.now() : false;
+  const mismatches = verified
+    ? MAPPED_KEYS
+        .filter((k) => declared[k] && k in edit && norm(declared[k]) !== norm(edit[k]))
+        .map((k) => ({ key: k, declared: declared[k], verified: edit[k] }))
+    : [];
 
   return (
     <div style={cardStyle}>
@@ -150,6 +168,34 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
             Status: <strong style={{ color: "#137333" }}>{status}</strong>
             {" "}- review and correct the details below if needed.
           </p>
+
+          {expired && (
+            <div style={dangerStyle}>
+              <strong>Document expired.</strong> The expiry date ({edit.expirationDate}) is in the past.
+              Correct it or use a valid document before continuing.
+            </div>
+          )}
+
+          {amlHit && (
+            <div style={dangerStyle}>
+              <strong>AML / PEP screening hit</strong>
+              {result.extras.amlTotalHits ? ` (${result.extras.amlTotalHits} match${result.extras.amlTotalHits > 1 ? "es" : ""})` : ""}.
+              The applicant will be flagged as a PEP on continue.
+            </div>
+          )}
+
+          {mismatches.length > 0 && (
+            <div style={warnStyle}>
+              <strong>Verified document differs from what was entered.</strong> Confirm which is correct:
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {mismatches.map((m) => (
+                  <li key={m.key}>
+                    {prettify(m.key)} - entered: <strong>{String(m.declared)}</strong>, document: <strong>{String(m.verified)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <h3 style={{ marginBottom: 8 }}>Verified details</h3>
           <div style={gridStyle}>
@@ -178,7 +224,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
           )}
 
           <div style={{ marginTop: 20 }}>
-            <Btn onClick={cont} disabled={busy}>{busy ? "Saving…" : "Save & Continue"}</Btn>
+            <Btn onClick={cont} disabled={busy || expired}>{busy ? "Saving…" : "Save & Continue"}</Btn>
           </div>
         </div>
       )}
