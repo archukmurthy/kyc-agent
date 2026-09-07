@@ -593,14 +593,23 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // stepsFor() takes a journey explicitly so async handlers can compute the
   // correct step index without relying on a stale state closure (e.g. during
   // back-and-forth navigation between Documents and Journey).
+  const idvSpike = process.env.NODE_ENV !== "production";
   const stepsFor = (j) => j === "ai_documents"
-    ? { input: 0, documents: 1, research: 2, applicant: 3, identityVerification: 4, confirm: 5, fillGaps: 6, documentRequirements: 7, declare: 8 }
-    : { input: 0, research: 1, applicant: 2, identityVerification: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 };
+    ? (idvSpike
+        ? { input: 0, documents: 1, research: 2, applicant: 3, identityVerification: 4, confirm: 5, fillGaps: 6, documentRequirements: 7, declare: 8 }
+        : { input: 0, documents: 1, research: 2, applicant: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 })
+    : (idvSpike
+        ? { input: 0, research: 1, applicant: 2, identityVerification: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 }
+        : { input: 0, research: 1, applicant: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 });
   const isAiDocs = journeyType === "ai_documents";
   const STEPS = stepsFor(journeyType);
   const stepNames = isAiDocs
-    ? ["Company", "Documents", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
-    : ["Company", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
+    ? (idvSpike
+        ? ["Company", "Documents", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
+        : ["Company", "Documents", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"])
+    : (idvSpike
+        ? ["Company", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
+        : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]);
 
   // Loader messages — four modes: Nium API lookup, no docs (existing),
   // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
