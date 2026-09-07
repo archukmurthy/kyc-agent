@@ -25,6 +25,8 @@ const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.j
 const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
+const idvStartHandler = require(path.join(__dirname, "..", "api", "idv-start.js"));
+const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -315,6 +317,26 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(saveDossierHandler)(req, res);
+    });
+  });
+
+  // Didit IDV spike — start a session / poll its result. POST; parse JSON body.
+  app.post("/api/idv-start", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvStartHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-result", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvResultHandler)(req, res);
     });
   });
 
