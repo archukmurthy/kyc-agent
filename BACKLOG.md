@@ -59,13 +59,14 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why:** Harmless in the sandbox spike; worth cleaning when the integration goes real.
 - **Area:** `lib/didit/`, `api/idv-result.js`, IDV component test.
 
-### IDV-4 — First-class platform fields for identity document data
+### IDV-4 — First-class platform fields for identity document data (incl. review finding P8)
 - **Category:** Data model / Product
 - **Priority:** P2
 - **Status:** OPEN
-- **What:** Platform has applicant fields for name / DOB / nationality, but **none** for document number, document type, document expiry, or residential address. Spike stores these as "extras" (JSON). Decide whether to promote them to first-class schema fields (with provenance) so they surface in the UI and downstream policy/DRS.
-- **Why:** These are core KYC identity attributes; leaving them only in a blob limits their use.
-- **Area:** `lib/seedSchemas.js`, applicant schema, `field_provenance`, `src/components/applicant/`.
+- **What:** Platform has applicant fields for name / DOB / nationality, but **none** for document number, document type, document expiry, issuing state, **gender**, place of birth, or residential address. The IDV step shows + locally persists these "extras", but only the 4 mapped identity fields reach the onboarding submission (review finding **P8**). Promote the extras to first-class applicant schema fields (with provenance) and wire them into the submit payload so they're saved with the record.
+- **Why:** These are core KYC identity attributes; leaving them only in the local store means the bank form never receives them.
+- **Enum mapping needed on promotion:** Didit `gender` "F"/"M" → the app's gender vocabulary (e.g. "Female"/"Male"); `document_type` "Passport" already matches `documentRequirements.js` tokens (low risk).
+- **Area:** `lib/seedSchemas.js`, applicant schema, `field_provenance`, `src/components/applicant/`, `api/submit.js`, `src/components/idv/IdentityVerificationStep.jsx` (extend `MAPPED_KEYS`).
 
 ---
 
