@@ -141,6 +141,7 @@ import { DemoBanner } from "./components/banners/DemoBanner";
 // DemoToggle went with the journey picker — that screen was its only mount site.
 import { FillGapsPage } from "./components/fillGaps/FillGapsPage";
 import { BUSINESS_TYPE_OPTIONS, stakeholderMissingFields } from "./components/fillGaps/stakeholderHelpers";
+import IdentityVerificationStep from "./components/idv/IdentityVerificationStep";
 import {
   mapToDocAgentOwnershipType,
   extractFromDoc,
@@ -593,13 +594,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // correct step index without relying on a stale state closure (e.g. during
   // back-and-forth navigation between Documents and Journey).
   const stepsFor = (j) => j === "ai_documents"
-    ? { input: 0, documents: 1, research: 2, applicant: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 }
-    : { input: 0, research: 1, applicant: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 };
+    ? { input: 0, documents: 1, research: 2, applicant: 3, identityVerification: 4, confirm: 5, fillGaps: 6, documentRequirements: 7, declare: 8 }
+    : { input: 0, research: 1, applicant: 2, identityVerification: 3, confirm: 4, fillGaps: 5, documentRequirements: 6, declare: 7 };
   const isAiDocs = journeyType === "ai_documents";
   const STEPS = stepsFor(journeyType);
   const stepNames = isAiDocs
-    ? ["Company", "Documents", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
-    : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
+    ? ["Company", "Documents", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
+    : ["Company", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"];
 
   // Loader messages — four modes: Nium API lookup, no docs (existing),
   // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
@@ -869,6 +870,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!dId || journey !== "customer") return;
     dossierHydratedRef.current = true;
     loadDossierAndStartOnboarding(dId, tenantParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Dev-only shortcut: jump straight to the Identity Verification step via
+  // ?idvspike=1, so the spike can be exercised without walking the whole
+  // wizard. Never active in production builds.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("idvspike") === "1") {
+      setStep(stepsFor(journeyType).identityVerification);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -4777,6 +4790,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
             STEPS={STEPS}
             scrollAndSetStep={scrollAndSetStep}
             resetAll={resetAll}
+            cardStyle={card}
+            Btn={Btn}
+          />
+        )}
+
+        {step === STEPS.identityVerification && agentType !== "preboarding" && (
+          <IdentityVerificationStep
+            submissionId={dossierId || onboardingSubmissionId}
+            onVerified={(mappedFields) =>
+              setApplicantAgentValues((prev) => ({ ...prev, ...mappedFields }))}
+            onContinue={() => scrollAndSetStep(STEPS.confirm)}
             cardStyle={card}
             Btn={Btn}
           />
