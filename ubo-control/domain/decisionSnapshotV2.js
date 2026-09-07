@@ -15,7 +15,7 @@ const PIPELINE_MATURITY_WAVE_7 = "TRANSITIONAL_REVIEW_ONLY";
 const PIPELINE_MATURITY_WAVE_8 = "TRANSITIONAL_PLANNER_ONLY";
 const PIPELINE_MATURITY_WAVE_9 = "SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY";
 const PIPELINE_MATURITY = PIPELINE_MATURITY_WAVE_7;
-const HISTORY_REASONS_V2 = Object.freeze(["POLICY_CHANGED", "ALGORITHM_CHANGED", "NEW_FACTS", "REVIEW_DECISION", "CUSTOMER_INPUT"]);
+const HISTORY_REASONS_V2 = Object.freeze(["POLICY_CHANGED", "ALGORITHM_CHANGED", "PLANNING_CONTEXT_CHANGED", "NEW_FACTS", "REVIEW_DECISION", "CUSTOMER_INPUT"]);
 const EXPECTED_PHASES = Object.freeze([
   "BASE_APPLICABILITY", "CANONICAL_GRAPH_AND_DEPTH", "CALCULATIONS_AND_ATTRIBUTIONS", "QUALIFICATION",
   "DERIVED_REQUIREMENT_APPLICABILITY", "EVIDENCE_SUFFICIENCY", "INFORMATION_NEEDS", "RESOLUTION_PLANNING", "DECISION_SNAPSHOT",
@@ -75,7 +75,7 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
     registryCapabilityProfileRef: wave9 ? cloneData(pinnedPlan.registryCapabilityProfileRef) : null,
     registryCapabilityProfileState: wave9 ? pinnedPlan.registryCapabilityProfileRef.state : "NOT_PROVIDED",
     algorithmManifest: cloneData(algorithmManifest),
-    versionDirection: { futureApplicationBoundary: "ubo-decision-application-v3", publicExposure: wave9 ? "DEFERRED_UNTIL_WAVE_10" : "DEFERRED_UNTIL_WAVES_8_AND_9" },
+    versionDirection: { futureApplicationBoundary: "ubo-decision-application-v3", publicExposure: wave9 ? "REVIEW_ENTRY_ONLY_WAVE_10" : "DEFERRED_UNTIL_WAVES_8_AND_9" },
     phaseArtifacts: phaseArtifacts.map(cloneData),
     graphDerivedContext: cloneData(decisionOutputs.graphDerivedContext),
     effectiveInterestCalculations: cloneData(decisionOutputs.effectiveInterestCalculations),

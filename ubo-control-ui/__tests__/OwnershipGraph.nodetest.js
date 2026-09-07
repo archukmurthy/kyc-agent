@@ -49,6 +49,33 @@ test("UI01–UI12 committed projection fixtures render without error", () => {
   }));
 });
 
+test("review projection v2 renders semantic flags, causal needs and evidence separately", () => {
+  const v2 = {
+    contractVersion: "ubo-ownership-graph-projection-v2",
+    subjectEntityId: "customer",
+    nodes: [
+      { entityId: "customer", primaryName: "Review Customer", category: "LEGAL_ENTITY", semanticFlags: ["SUBJECT"] },
+      { entityId: "person", primaryName: "Review Person", category: "NATURAL_PERSON", semanticFlags: ["NOT_CONFIRMED_UBO", "REVIEW_REQUIRED"] },
+    ],
+    relationships: [{ relationshipId: "v2-vote", subjectEntityId: "person", objectEntityId: "customer", relationshipType: "VOTING_RIGHTS", dimension: "VOTING", temporalState: "CURRENT", resolutionStatus: "CURRENT", evidenceStatus: "CORROBORATED", measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, support: { claimIds: ["claim-1"], claimCount: 1, evidenceReferences: [{ system: "fixture", referenceId: "evidence-1" }] }, causalInformationNeedIds: ["need-1"] }],
+    personQualificationAssessments: [{ personEntityId: "person", routeStatus: "REVIEW_REQUIRED", basisRecords: [] }],
+    informationNeeds: [{ needId: "need-1", status: "OPEN", concept: "VOTING_CONTROL", requiredByRequirementIds: ["UBO-R04"], targetReference: { entityId: "person" }, affected: { relationshipIds: ["v2-vote"] } }],
+    reviewRequirements: [], calculations: [], qualificationBasisRecords: [], affectedDiagnostics: [], operationalBlockers: [], specialistRoutes: [],
+    pinnedCompatibilityPlan: { recommendedActions: [] }, summary: { totalEntities: 2, totalRelationships: 1 }, snapshotReference: { snapshotId: "snapshot-v2" }, policyIdentity: {}, algorithmIdentity: {}, governanceState: "REVIEW_ONLY", productionAuthorized: false, publicExposure: "REVIEW_ENTRY_ONLY_WAVE_10", projectionId: "projection-v2", projectionHash: "sha256:abc",
+  };
+  const rendered = renderGraph(v2, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    assert.equal(rendered.container.querySelectorAll(".ug-node").length, 2);
+    assert.equal(rendered.container.querySelectorAll(".ug-edge").length, 1);
+    assert.match(rendered.container.querySelector("[aria-label*='Not confirmed UBO']")?.getAttribute("aria-label") || "", /Not confirmed UBO/i);
+    assert.match(rendered.container.textContent, /1 unresolved/i);
+    const edge = rendered.container.querySelector(".ug-edge");
+    rendered.click(edge);
+    assert.match(rendered.container.textContent, /Corroborated/i);
+    assert.match(rendered.container.textContent, /Operative|Current/i);
+  } finally { rendered.cleanup(); }
+});
+
 test("major node categories use shape/icon/text semantics rather than colour alone", () => {
   const rendered = renderGraph(projection("UI09"));
   try {

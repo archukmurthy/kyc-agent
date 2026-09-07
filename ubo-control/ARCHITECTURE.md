@@ -415,3 +415,11 @@ Attempt keys retain cause/route/profile/material identity. NO_DATA, UNSUPPORTED 
 ResolutionPlan v2 is created before the snapshot and stored exactly once. Snapshot v2 dispatches verification and reconstruction by the recorded Phase 7/8 algorithms, preserving Wave 7, Wave 8 and Wave 9 history without re-planning. Wave 9 maturity is `SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY`; runtime is `LAB`, governance is `REVIEW_ONLY`, production authorization is false, and profile-driven behavior requires A-15.
 
 The Wave 9 modules remain internal and absent from `index.js`. Current Decision Application v1/v2, public planner/projections/customer actions, Lab, ASDA v1 output, OwnershipGraph, UboJourney, legacy Discovery, Evidence Platform and onboarding are unchanged. Public v3/Lab v2 belongs to Wave 10; applicant/customer v2 belongs to Wave 11.
+
+## Freeze Wave 10 review entry and Lab v2 boundary
+
+`ubo-control/review/index.js` is a deliberate review/testing entry point. Its exact surface is the review factory, projection-v2 function, review policy constant, contract/version constants and typed review errors. The factory exposes exactly `intake`, `applyDecisions` and `evaluate`, accepts only `LAB`, and returns the real phased successor Snapshot v2 with the exact pinned ResolutionPlan v2. It performs no provider, host, persistence, Evidence or customer-input operation. The stable `ubo-control/index.js` export surface is unchanged.
+
+The standalone Lab now keeps baseline `ubo-control-lab-session-v1` / 1.5-RC behavior alongside successor `ubo-control-lab-session-v2` / 1.6-RC review behavior. Successor server composition imports UBO semantics only through the review entry. Its Fixture, Replay and one-shot Live Discovery acquisition all feed provider-neutral candidate facts through the same review intake and explicit-decision boundary. Replay makes zero transport calls.
+
+The successor workspace renders only recorded Snapshot v2 material: projection v2, route-specific qualification, causal needs, exact pinned plan, evidence references, governance, and immutable history. Ownership/Voting/Control/All filters alter a display copy only. JourneyProjection v2, CustomerAction v2, final Decision Application v3, plan-action execution, Evidence execution, production persistence and onboarding remain deferred.

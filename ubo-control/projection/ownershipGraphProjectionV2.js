@@ -42,12 +42,17 @@ function projectOwnershipGraphV2({ decisionSnapshot }) {
     needByRelationship.get(id).push(need.needId);
   }));
   const reviewedRelationshipIds = new Set(content.reviewRequirements.flatMap(({ relationshipIds = [] }) => relationshipIds));
-  const relationships = graph.relationships.map((relationship) => ({
-    ...cloneData(relationship),
-    evidenceStatus: reviewedRelationshipIds.has(relationship.relationshipId) ? "REVIEW_REQUIRED" : "UNKNOWN",
-    resolutionStatus: relationship.temporalState === "CURRENT" ? "CURRENT" : relationship.temporalState,
-    causalInformationNeedIds: unique(needByRelationship.get(relationship.relationshipId)),
-  })).sort((a, b) => a.relationshipId.localeCompare(b.relationshipId));
+  const claimSupportById = new Map((content.phaseArtifacts[1].output.claimSupport || []).map((item) => [item.claimId, item]));
+  const relationships = graph.relationships.map((relationship) => {
+    const evidenceReferences = relationship.supportingClaimIds.flatMap((claimId) => claimSupportById.get(claimId)?.evidenceReferences || []);
+    return {
+      ...cloneData(relationship),
+      support: { claimIds: cloneData(relationship.supportingClaimIds), claimCount: relationship.supportingClaimIds.length, evidenceReferences: cloneData(evidenceReferences) },
+      evidenceStatus: reviewedRelationshipIds.has(relationship.relationshipId) ? "REVIEW_REQUIRED" : "UNKNOWN",
+      resolutionStatus: relationship.temporalState === "CURRENT" ? "CURRENT" : relationship.temporalState,
+      causalInformationNeedIds: unique(needByRelationship.get(relationship.relationshipId)),
+    };
+  }).sort((a, b) => a.relationshipId.localeCompare(b.relationshipId));
   const knownNodeIds = new Set(nodes.map(({ entityId }) => entityId));
   const knownRelationshipIds = new Set(relationships.map(({ relationshipId }) => relationshipId));
   needs.forEach((need) => {
@@ -57,8 +62,9 @@ function projectOwnershipGraphV2({ decisionSnapshot }) {
   });
   const affectedCalculationIds = unique(needs.flatMap(({ affected }) => affected.calculationIds));
   const affectedPathIds = unique(needs.flatMap(({ affected }) => affected.pathIds));
-  const customerActions = content.pinnedResolutionPlan.recommendedWave.actor === "CUSTOMER"
-    ? content.pinnedResolutionPlan.recommendedWave.actions.length : 0;
+  const currentWave = content.pinnedResolutionPlan.currentPlanningWave;
+  const currentActions = content.pinnedResolutionPlan.recommendedActions;
+  const actorCount = (actor) => currentWave.actor === actor ? currentActions.length : 0;
   const semantic = {
     contractVersion: OWNERSHIP_GRAPH_PROJECTION_V2,
     snapshotReference: { snapshotId: decisionSnapshot.snapshotId, snapshotHash: decisionSnapshot.decisionContentHash },
@@ -87,11 +93,14 @@ function projectOwnershipGraphV2({ decisionSnapshot }) {
       operationalBlockerCount: content.operationalBlockers.length,
       reviewRequirementCount: content.reviewRequirements.length,
       specialistRouteCount: content.specialistRoutes.length,
-      transitionalCustomerActionCount: customerActions,
+      currentSystemActionCount: actorCount("SYSTEM"),
+      currentCustomerActionCount: actorCount("CUSTOMER"),
+      currentInternalActionCount: actorCount("INTERNAL"),
+      currentSpecialistActionCount: actorCount("SPECIALIST"),
     },
     governanceState: "REVIEW_ONLY",
     productionAuthorized: false,
-    publicExposure: "DEFERRED_UNTIL_WAVE_10",
+    publicExposure: "REVIEW_ENTRY_ONLY_WAVE_10",
   };
   const projectionHash = hashArtifact(semantic);
   return deepFreeze(cloneData({ ...semantic, projectionId: `${OWNERSHIP_GRAPH_PROJECTION_V2}:${projectionHash.slice(7, 39)}`, projectionHash }));
