@@ -21,6 +21,7 @@ const FIELD_LABELS = {
   address: "Address",
 };
 const STATUS_KEYS = ["livenessStatus", "faceMatchStatus", "diditStatus"];
+const DATE_KEYS = new Set(["applicantDateOfBirth", "expirationDate", "dateOfIssue"]);
 const MAPPED_KEYS = [
   "applicantFirstName",
   "applicantLastName",
@@ -122,13 +123,12 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
   };
 
   const verified = result && result.verified;
-  const mrz = result && result.extras && result.extras.mrz;
   const statuses = result ? STATUS_KEYS.filter((k) => result.extras && result.extras[k]) : [];
 
   return (
     <div style={cardStyle}>
       <h2>Identity Verification</h2>
-      <p style={{ color: "#666" }}>Verify the applicant's identity with Didit (sandbox — synthetic data only).</p>
+      <p style={{ color: "#666" }}>Verify the applicant's identity with Didit (sandbox - synthetic data only).</p>
 
       {!hostedUrl && <Btn onClick={start} disabled={busy}>{busy ? "Starting…" : "Start verification"}</Btn>}
 
@@ -148,7 +148,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
         <div style={{ marginTop: 16 }}>
           <p>
             Status: <strong style={{ color: "#137333" }}>{status}</strong>
-            {" "}— review and correct the details below if needed.
+            {" "}- review and correct the details below if needed.
           </p>
 
           <h3 style={{ marginBottom: 8 }}>Verified details</h3>
@@ -158,6 +158,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
                 <label style={labelStyle} htmlFor={`idv-${k}`}>{prettify(k)}</label>
                 <input
                   id={`idv-${k}`}
+                  type={DATE_KEYS.has(k) ? "date" : "text"}
                   style={inputStyle}
                   value={edit[k]}
                   onChange={(e) => updateField(k, e.target.value)}
@@ -173,21 +174,6 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
                   {prettify(k).replace(" Status", "")}: {result.extras[k]}
                 </span>
               ))}
-            </div>
-          )}
-
-          {mrz && (
-            <div style={{ marginTop: 16 }}>
-              <label style={labelStyle}>Machine-readable zone (MRZ)</label>
-              <textarea
-                readOnly
-                value={typeof mrz === "object" ? JSON.stringify(mrz, null, 2) : String(mrz)}
-                style={{
-                  ...inputStyle, maxWidth: 640, minHeight: 96,
-                  fontFamily: "monospace", fontSize: 12, whiteSpace: "pre",
-                  overflow: "auto", resize: "vertical",
-                }}
-              />
             </div>
           )}
 
