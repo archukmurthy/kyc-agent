@@ -27,6 +27,7 @@ const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
 const idvStartHandler = require(path.join(__dirname, "..", "api", "idv-start.js"));
 const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.js"));
+const idvSaveHandler = require(path.join(__dirname, "..", "api", "idv-save.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -337,6 +338,15 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(idvResultHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-save", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvSaveHandler)(req, res);
     });
   });
 

@@ -101,11 +101,24 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
 
   const updateField = (k, v) => setEdit((p) => ({ ...p, [k]: v }));
 
-  const cont = () => {
-    const mapped = {};
-    MAPPED_KEYS.forEach((k) => { if (k in edit) mapped[k] = edit[k]; });
-    onVerified(mapped);
-    onContinue();
+  const cont = async () => {
+    setBusy(true); setError(null);
+    try {
+      // Persist corrections to the store, preserving the original values.
+      const r = await fetch("/api/idv-save", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref, edits: edit }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.detail || d.error || "save failed");
+      }
+      const mapped = {};
+      MAPPED_KEYS.forEach((k) => { if (k in edit) mapped[k] = edit[k]; });
+      onVerified(mapped);
+      onContinue();
+    } catch (e) { setError(String(e.message || e)); }
+    finally { setBusy(false); }
   };
 
   const verified = result && result.verified;
@@ -179,7 +192,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
           )}
 
           <div style={{ marginTop: 20 }}>
-            <Btn onClick={cont}>Continue</Btn>
+            <Btn onClick={cont} disabled={busy}>{busy ? "Saving…" : "Save & Continue"}</Btn>
           </div>
         </div>
       )}
