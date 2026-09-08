@@ -132,6 +132,18 @@ A4b does not run A4a, call a semantic provider, pick latest Facts/evaluations, i
 
 A5a is a transient read projection over migrations 010–018. It introduces no migration, duplicate event ledger, frozen package, KYC/UBO conclusion, source selection, freshness decision, or A5b behavior.
 
+## Stage A5b additions
+
+- `evidence/a5b/canonicalize.js` implements the golden-tested `evidence-package-canonical-json-v1` UTF-8 canonicalization and SHA-256 boundary.
+- `evidence/a5b/domain.js` validates bounded Package purposes and member types, rejects browser-supplied membership, builds `evidence-package-manifest-v1`, and verifies manifest bytes against relational order/references.
+- `evidence/a5b/repository.js` persists Package identity, canonical bytes, digest and ordered membership atomically, and rechecks current context/member authorization.
+- `evidence/a5b/service.js` freezes a complete server-generated A5a reconstruction, enforces operation-key idempotency, reopens the stored frozen projection without rerunning A5a, and verifies Package integrity without claiming Evidence truth.
+- `api/evidence/a5b-*.js` exposes local Evidence Lab configuration, freeze, list, reopen and verify routes over trusted server-side tenant/caller/actor context.
+- `db/migrations/019_evidence_packages.sql` additively introduces immutable Package and ordered Package-member persistence with no historical backfill.
+- Evidence Lab extends the A5a journey with bounded purpose selection, explicit freeze, Package history, reopen and manifest verification. It does not expose arbitrary member selection or export.
+
+A5b stores no duplicate Artifact bytes and performs no source, AI, A4a, A4b, KYC or UBO decision operation.
+
 ## Characterization Net Coverage Map
 
 | A4b invariant | Protecting net |
@@ -161,3 +173,22 @@ A5a is a transient read projection over migrations 010–018. It introduces no m
 | Current tenant/context/subject authorization fails closed | A5a service authorization cases |
 | No source/provider/write or downstream KYC/UBO conclusion | A5a service side-effect and Evidence Lab cases |
 | Known persistence limitations are explicit rather than invented history | A5a limitation contract case |
+
+### A5b Characterization Net Coverage Map
+
+| A5b invariant | Protecting net |
+| --- | --- |
+| Complete server-generated A5a reconstruction; no browser member injection | A5b service and API contract cases |
+| Opaque Package UUID independent from manifest SHA-256 | A5b freeze identity case |
+| Same-key replay, changed-request conflict, and deliberate new Package | A5b idempotency and predecessor case |
+| Versioned deterministic canonical bytes and stable digest | A5b canonicalization golden case |
+| Frozen T1 projection survives current-row and later-Evidence changes | A5b immutable reopen case |
+| Ordered relational membership matches canonical manifest | A5b integrity and PostgreSQL smoke cases |
+| Manifest corruption or member mismatch fails integrity verification | A5b corruption cases |
+| Public/private member authorization is checked at freeze and reopen | A5b mixed-access cases |
+| Access loss is non-disclosing and never silently removes a member | A5b access-loss case |
+| Failed acquisition, disagreement and A5a limitations remain frozen | A5b complete-projection case |
+| One canonical Artifact can be referenced by multiple Packages | A5b deliberate second-freeze case |
+| Reopen/verify make no source, provider, A4a, A4b or A5a computation | A5b side-effect case |
+| Package and Artifact SHA semantics remain distinct; no KYC/UBO conclusion | A5b integrity-semantics case |
+| Migration 019 is additive and has no historical backfill | A5b migration characterization and `scripts/evidence-a5b-db-smoke.js` |

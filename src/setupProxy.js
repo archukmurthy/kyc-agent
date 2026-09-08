@@ -58,6 +58,11 @@ const evidenceA4bHistoryHandler = require(path.join(__dirname, "..", "api", "evi
 const evidenceA5aConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-config.js"));
 const evidenceA5aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-options.js"));
 const evidenceA5aReconstructHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-reconstruct.js"));
+const evidenceA5bConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-config.js"));
+const evidenceA5bFreezeHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-freeze.js"));
+const evidenceA5bListHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-list.js"));
+const evidenceA5bReopenHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-reopen.js"));
+const evidenceA5bVerifyHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-verify.js"));
 const evidenceR1ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-config.js"));
 const evidenceR1ContextsHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-contexts.js"));
 const evidenceR1IngestHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-ingest.js"));
@@ -554,6 +559,14 @@ module.exports = function (app) {
     let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
     req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA5aReconstructHandler)(req, res); });
   });
+  // Evidence Platform Stage A5b — immutable Package freeze, reopen and verification.
+  app.get("/api/evidence/a5b-config", adapt(evidenceA5bConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a5b-freeze", evidenceA5bFreezeHandler], ["/api/evidence/a5b-list", evidenceA5bListHandler], ["/api/evidence/a5b-reopen", evidenceA5bReopenHandler], ["/api/evidence/a5b-verify", evidenceA5bVerifyHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
   app.get("/api/evidence/r1-config", adapt(evidenceR1ConfigHandler));
   app.get("/api/evidence/r1-contexts", adapt(evidenceR1ContextsHandler));
   for (const [route, handler] of [["/api/evidence/r1-ingest", evidenceR1IngestHandler], ["/api/evidence/r1-reopen", evidenceR1ReopenHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });
