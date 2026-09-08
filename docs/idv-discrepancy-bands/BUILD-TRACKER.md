@@ -51,7 +51,7 @@ Single source of truth for what we're building and what's done. Tick items as co
 
 ### Phase 2.5 — Evidence-compatible architecture (PIVOT — build to the "IDV - Evidence" doc)
 Adopt the existing `idv/` module foundation; refactor the plaintext PII from Phases 1-3. Comes before Phase 4 (comparison reads the canonical model / Vault).
-- [ ] Adopt `idv/` module Vault (dev = synthetic in-memory + LocalTestManagedKeyProvider) — store text PII as **opaque Vault references**, never plaintext
+- [~] Adopt `idv/` module Vault (dev = synthetic in-memory + LocalTestManagedKeyProvider) — store text PII as **opaque Vault references**, never plaintext — *sub-step 1 done: `api/idv-match/identityVault.js` wrapper + 7 tests (opaque ref, allowlist minimization, raw-evidence reject, append-only correction); not yet wired*
 - [ ] Canonical types via the module: ExtractedIdentityAttribute / VerificationObservation / ProviderDecision / ExternalEvidenceReference / lifecycle events
 - [ ] Provider-neutral: map Didit result → canonical (module's DiditAdapter / normalizeResult)
 - [ ] Refactor plaintext PII: `verification_result` → Vault ref + non-PII canonical; ComplyCube `result` → minimized (outcome/categories only, drop match PII)
