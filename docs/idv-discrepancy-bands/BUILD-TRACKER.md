@@ -19,7 +19,7 @@ Single source of truth for what we're building and what's done. Tick items as co
 
 ## A. Bands core (9 phases)
 
-### Phase 1 — Foundations  `[~] code done; migration apply + review pending`
+### Phase 1 — Foundations  `[x] done (migration applied to idv-dev, round-trip verified)`
 - [x] Add `IDV_DISCREPANCY_BANDS_ENABLED` flag (default OFF) — `api/idv-match/config.js`
 - [x] Migration 013 : `idv_verification_attempts` — file written (apply pending)
 - [x] Migration 013 : `idv_match_decisions` (outcome-type enum CHECK) — file written (apply pending)
@@ -27,8 +27,8 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [x] Officer-id capture in CH adapter + snapshot builder (`officerSnapshot.js`, month/year birth only)
 - [x] Versioned policy config file (`getPolicy()` accessor, `policyVersion`) — `api/idv-match/policy.js`
 - [x] Attempt data-access (`api/idv-match/attemptStore.js`) — code + guard tests
-- [ ] Apply migration 013 to DB (needs DB confirmation — DEP-1)
-- [ ] Phase 1 code review
+- [x] Apply migration 013 to DB (applied to Neon `idv-dev` schema-only branch; round-trip verified)
+- [ ] Phase 1 code review (optional)
 
 ### Phase 2 — Didit session rework
 - [ ] Server-created session bound to application + attempt + officer snapshot (browser can't create/modify)
