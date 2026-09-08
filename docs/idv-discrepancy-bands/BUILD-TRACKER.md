@@ -49,7 +49,7 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [ ] Live webhook verification — deferred (needs `COMPLYCUBE_WEBHOOK_SECRET` + public URL; see BACKLOG SCR-1)
 - [ ] Phase 3 code review (optional)
 
-### Phase 4 — Comparison hygiene
+### Phase 4 — Comparison hygiene  `[~] spec written`
 - [ ] DOB month/year only (never fabricate a day)
 - [ ] MRZ-first name comparison (MRZ agrees + visual differs → `extraction_error_corrected`)
 - [ ] Ignore address, nationality, gender in matching
