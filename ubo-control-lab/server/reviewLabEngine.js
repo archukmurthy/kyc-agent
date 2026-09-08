@@ -211,7 +211,10 @@ function buildView(result) {
   const needs = content.informationNeedsV2.filter(({ status }) => status === "OPEN");
   const plan = result.resolutionPlan;
   const current = plan.currentPlanningWave;
-  const journeyProjection = projectUboJourneyV2({ decisionSnapshot: result.decisionSnapshot });
+  const journeyProjection = projectUboJourneyV2({
+    decisionSnapshot: result.decisionSnapshot,
+    policyPack: UK_CORPORATE_REVIEW_POLICY_1_6_RC,
+  });
   return {
     snapshot: result.decisionSnapshot,
     graph: result.ownershipGraphProjection,

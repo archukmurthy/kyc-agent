@@ -17,6 +17,8 @@ const {
   projectUboJourneyV2,
 } = require("..");
 const { CASE_STATE_INTERNALS } = require("../application/createUboDecisionApplication");
+const { createEvidencePolicyClassification } = require("../policy/evidencePolicy");
+const { loadPolicyPack } = require("../policy/policyPack");
 const { startReviewFixture } = require("../../ubo-control-lab/server/reviewLabEngine");
 
 const NOW = "2026-09-08T10:00:00.000Z";
@@ -75,7 +77,68 @@ function testOnlyPolicy(requirementId, resolutionStrategies) {
   return fixture;
 }
 
-function evaluateCustomerPlan(session, policyFixture, evaluationTime = NOW) {
+function setSignoffStatus(fixture, signoffId, status) {
+  const signoff = fixture.signoffs.find((item) => item.signoffId === signoffId);
+  assert.ok(signoff);
+  signoff.status = status;
+  delete signoff.approver;
+  delete signoff.approvedAt;
+  delete signoff.effectiveFrom;
+  if (status === "APPROVED") {
+    signoff.approver = { identity: "WAVE_11A_TEST", capacity: "TEST_AUTHORITY" };
+    signoff.approvedAt = "2026-09-01T00:00:00.000Z";
+    signoff.effectiveFrom = "2026-09-01T00:00:00.000Z";
+  }
+}
+
+function numericControlPolicy(signoffStates, { omitA04 = false } = {}) {
+  const fixture = structuredClone(policy);
+  fixture.requirements.forEach((requirement) => {
+    requirement.resolutionStrategies = requirement.requirementId === "UBO-R04"
+      ? [structuredClone(requirement.resolutionStrategies.find(({ strategy }) => strategy === "CUSTOMER_QUESTION"))]
+      : [];
+  });
+  const feature = fixture.productionReadiness.features
+    .find(({ featureId }) => featureId === "NUMERIC_CUSTOMER_CONTROL_QUESTIONS");
+  feature.enabled = true;
+  Object.entries(signoffStates).forEach(([signoffId, status]) => setSignoffStatus(fixture, signoffId, status));
+  if (omitA04) {
+    fixture.signoffs = fixture.signoffs.filter(({ signoffId }) => signoffId !== "A-04");
+    feature.requiredSignoffIds = feature.requiredSignoffIds.filter((signoffId) => signoffId !== "A-04");
+  }
+  return fixture;
+}
+
+function r08EvidenceClassification(session, policyFixture) {
+  const caseState = CASE_STATE_INTERNALS.decodeCaseState(
+    session.caseState,
+    DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  );
+  const sourceClaim = caseState.candidateClaims.find(({ evidenceReferences }) => evidenceReferences.length > 0);
+  return createEvidencePolicyClassification({
+    loadedPolicyPack: loadPolicyPack(policyFixture),
+    caseState,
+    input: {
+      evidenceReference: sourceClaim.evidenceReferences[0],
+      evidenceCatalogueKey: "companies_house_record",
+      sourceOrigin: "INDEPENDENT_OF_APPLICANT",
+      capturedAt: NOW,
+      sourceEffectiveAt: NOW,
+      currentState: "CURRENT",
+      classificationBasis: { origin: "WAVE_11A_SCHEMA_1_3_TEST_FIXTURE" },
+      supports: [{
+        requirementId: "UBO-R08",
+        direction: "POSITIVE",
+        policyFactKey: "ownership_structure",
+        resolutionStrategy: "EXISTING_EVIDENCE",
+        basisAssessmentIds: [],
+        claimIds: [sourceClaim.claimId],
+      }],
+    },
+  });
+}
+
+function evaluateCustomerPlan(session, policyFixture, evaluationTime = NOW, resolutionInputs = {}) {
   const app = appV3(policyFixture);
   const request = {
     contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
@@ -85,9 +148,40 @@ function evaluateCustomerPlan(session, policyFixture, evaluationTime = NOW) {
     evaluationTime,
     checkpoint: "CASE_EVENT",
     checkpointReference: { referenceId: `wave11a:test-only-customer-plan:${session.caseId}` },
-    resolutionInputs: {},
+    resolutionInputs,
   };
   return { ...app.evaluate(request), app };
+}
+
+function applyConfirmation(evaluated, operationId) {
+  const view = {
+    snapshot: evaluated.decisionSnapshot,
+    plan: evaluated.resolutionPlan,
+    journeyProjection: evaluated.journeyProjection,
+  };
+  const bundle = view.journeyProjection.customerWorkBundles.find((item) =>
+    item.permittedSemanticActions.some(({ actionType }) =>
+      actionType === CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION));
+  assert.ok(bundle);
+  const relationships = bundle.knownInformation.relationships;
+  assert.ok(relationships.length > 0);
+  return evaluated.app.applyCustomerInput({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
+    caseState: evaluated.caseState,
+    sourceDecisionSnapshot: view.snapshot,
+    sourceResolutionPlan: view.plan,
+    customerAction: actionFor(
+      view,
+      bundle,
+      CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION,
+      {
+        confirmation: "CONFIRMED",
+        establishedRelationshipIds: relationships.map(({ relationshipId }) => relationshipId),
+        establishedClaimIds: relationships.flatMap(({ supportingClaimIds }) => supportingClaimIds),
+      },
+    ),
+    operationId,
+  });
 }
 
 test("Decision Application v3 exposes exactly four explicit operations and keeps v1/v2 stable", () => {
@@ -127,13 +221,13 @@ test("Decision Application v3 is LAB-only and returns Snapshot v2 with the exact
   assert.equal(result.journeyProjection.contractVersion, JOURNEY_PROJECTION_V2);
 });
 
-test("JourneyProjection v2 is deterministic, verified-snapshot-only, and preserves customer/final completion distinction", () => {
+test("JourneyProjection v2 is deterministic over a verified snapshot and identity-matched policy", () => {
   const system = startReviewFixture({ fixtureId: "V2-LAB-07" }).snapshots[0].view;
   const customer = startReviewFixture({ fixtureId: "V2-LAB-08" }).snapshots[0].view;
   const specialist = startReviewFixture({ fixtureId: "V2-LAB-10" }).snapshots[0].view;
   const blocked = startReviewFixture({ fixtureId: "V2-LAB-09" }).snapshots[0].view;
-  const first = projectUboJourneyV2({ decisionSnapshot: customer.snapshot });
-  const second = projectUboJourneyV2({ decisionSnapshot: JSON.parse(JSON.stringify(customer.snapshot)) });
+  const first = projectUboJourneyV2({ decisionSnapshot: customer.snapshot, policyPack: policy });
+  const second = projectUboJourneyV2({ decisionSnapshot: JSON.parse(JSON.stringify(customer.snapshot)), policyPack: policy });
   assert.deepEqual(first, second);
   assert.equal(system.journeyProjection.customerWorkState, "SYSTEM_RESOLUTION");
   assert.equal(system.journeyProjection.customerInputComplete, true);
@@ -152,7 +246,10 @@ test("JourneyProjection v2 is deterministic, verified-snapshot-only, and preserv
   assert.equal(system.journeyProjection.internalReview.requirements.length, system.snapshot.decisionContent.reviewRequirements.length);
   assert.equal(specialist.journeyProjection.specialistReview.routes.length, 1);
   assert.equal(blocked.journeyProjection.blockers.length, 1);
-  assert.throws(() => projectUboJourneyV2({ decisionSnapshot: { ...customer.snapshot, decisionContentHash: "sha256:tampered" } }), /projected consistently|verification/i);
+  assert.throws(() => projectUboJourneyV2({
+    decisionSnapshot: { ...customer.snapshot, decisionContentHash: "sha256:tampered" },
+    policyPack: policy,
+  }), /projected consistently|verification/i);
 });
 
 test("external Evidence action returns only a data handoff and leaves causal needs open", () => {
@@ -247,7 +344,9 @@ test("confirmation records provenance without duplicate graph relationships and 
   assert.deepEqual(confirmationResult.customerActionResult.customerConfirmation.actorReference, { referenceId: "applicant-1" });
   assert.equal(confirmationResult.customerActionResult.customerConfirmation.actorCapacity, "AUTHORISED_APPLICANT");
   assert.equal(confirmationResult.customerActionResult.customerConfirmation.informationAsAtDate, NOW);
-  assert.equal(confirmationResult.customerActionResult.customerConfirmation.independentEvidenceStillRequired, true);
+  assert.equal(confirmationResult.customerActionResult.customerConfirmation.confirmationDoesNotReplaceIndependentEvidence, true);
+  assert.equal(confirmationResult.customerActionResult.customerConfirmation.independentEvidenceRequirementState, "OPEN");
+  assert.equal("independentEvidenceStillRequired" in confirmationResult.customerActionResult.customerConfirmation, false);
   assert.equal(confirmationResult.customerActionResult.customerOriginatedCandidateFacts.length, 0);
 
   const relationship = bundle.knownInformation.relationships[0];
@@ -416,6 +515,196 @@ test("structured ownership rejects wrong concept, direction, relationship type, 
   assert.throws(() => apply({ direction: "TARGET_TO_OWNER" }), /OWNER_TO_TARGET/);
   assert.throws(() => apply({ relationshipType: "VOTING_RIGHTS" }), /ECONOMIC_OWNERSHIP/);
   assert.throws(() => apply({ targetEntityId: "asda-delivery" }), /planned subject/);
+});
+
+test("sign-off dependencies retain audit status and only exact APPROVED clears execution", () => {
+  const delegationPayload = {
+    delegateReference: "signoff-test-delegate",
+    delegateCapacity: "AUTHORISED_REPRESENTATIVE",
+    requestedWorkScope: "Provide the planned information",
+    informationAsAtExpectation: NOW,
+    correlationId: "signoff-test-correlation",
+  };
+  const noDependencies = startReviewFixture({ fixtureId: "V2-LAB-08" }).snapshots[0].view
+    .journeyProjection.customerWorkBundles
+    .flatMap(({ permittedSemanticActions }) => permittedSemanticActions)
+    .find(({ executable, signoffDependencies }) => executable && signoffDependencies.length === 0);
+  assert.ok(noDependencies);
+  assert.deepEqual(noDependencies.blockingSignoffs, []);
+
+  const cases = [
+    { label: "OPEN", statuses: { "A-04": "OPEN", "A-17": "OPEN" }, executable: false },
+    {
+      label: "RESEARCH_COMPLETE_SIGNOFF_PENDING",
+      statuses: { "A-04": "RESEARCH_COMPLETE_SIGNOFF_PENDING", "A-17": "RESEARCH_COMPLETE_SIGNOFF_PENDING" },
+      executable: false,
+    },
+    { label: "DEFERRED", statuses: { "A-04": "DEFERRED", "A-17": "DEFERRED" }, executable: false },
+    { label: "REJECTED", statuses: { "A-04": "REJECTED", "A-17": "REJECTED" }, executable: false },
+    { label: "WATCH", statuses: { "A-04": "WATCH", "A-17": "WATCH" }, executable: false },
+    { label: "APPROVED", statuses: { "A-04": "APPROVED", "A-17": "APPROVED" }, executable: true },
+    { label: "MIXED", statuses: { "A-04": "APPROVED", "A-17": "OPEN" }, executable: false },
+  ];
+  cases.forEach(({ label, statuses, executable }) => {
+    const evaluated = evaluateCustomerPlan(
+      startReviewFixture({ fixtureId: "V2-LAB-01" }),
+      numericControlPolicy(statuses),
+    );
+    const bundle = evaluated.journeyProjection.customerWorkBundles
+      .find(({ signoffDependencies }) => signoffDependencies.includes("A-04"));
+    assert.ok(bundle, label);
+    const action = bundle.permittedSemanticActions
+      .find(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.DELEGATE_CUSTOMER_WORK);
+    assert.equal(action.executable, executable, label);
+    assert.deepEqual(action.signoffDependencies.map(({ signoffId }) => signoffId), ["A-04", "A-17"], label);
+    assert.deepEqual(
+      action.blockingSignoffs.map(({ signoffId }) => signoffId),
+      executable ? [] : label === "MIXED" ? ["A-17"] : ["A-04", "A-17"],
+      label,
+    );
+    assert.deepEqual(bundle.signoffDependencies, ["A-04", "A-17"], label);
+    if (executable) {
+      const view = {
+        snapshot: evaluated.decisionSnapshot,
+        plan: evaluated.resolutionPlan,
+        journeyProjection: evaluated.journeyProjection,
+      };
+      const applied = evaluated.app.applyCustomerInput({
+        contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
+        caseState: evaluated.caseState,
+        sourceDecisionSnapshot: view.snapshot,
+        sourceResolutionPlan: view.plan,
+        customerAction: actionFor(
+          view,
+          bundle,
+          CUSTOMER_ACTION_TYPE_V2.DELEGATE_CUSTOMER_WORK,
+          delegationPayload,
+        ),
+        operationId: "wave11a-approved-signoff-execution",
+      });
+      assert.equal(applied.customerActionResult.accepted, true);
+    }
+  });
+
+  const missing = evaluateCustomerPlan(
+    startReviewFixture({ fixtureId: "V2-LAB-01" }),
+    numericControlPolicy({ "A-17": "APPROVED" }, { omitA04: true }),
+  );
+  const missingBundle = missing.journeyProjection.customerWorkBundles
+    .find(({ signoffDependencies }) => signoffDependencies.includes("A-04"));
+  const missingAction = missingBundle.permittedSemanticActions
+    .find(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.DELEGATE_CUSTOMER_WORK);
+  assert.equal(missingAction.executable, false);
+  assert.deepEqual(missingAction.blockingSignoffs, [{ signoffId: "A-04", status: "MISSING" }]);
+  const missingView = {
+    snapshot: missing.decisionSnapshot,
+    plan: missing.resolutionPlan,
+    journeyProjection: missing.journeyProjection,
+  };
+  assert.throws(() => missing.app.applyCustomerInput({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
+    caseState: missing.caseState,
+    sourceDecisionSnapshot: missingView.snapshot,
+    sourceResolutionPlan: missingView.plan,
+    customerAction: actionFor(
+      missingView,
+      missingBundle,
+      CUSTOMER_ACTION_TYPE_V2.DELEGATE_CUSTOMER_WORK,
+      delegationPayload,
+    ),
+    operationId: "wave11a-missing-signoff-rejected",
+  }), /sign-off|blocked/i);
+});
+
+test("confirmation reports the pinned R08 state without changing evidence sufficiency", () => {
+  const session = startReviewFixture({ fixtureId: "V2-LAB-07" });
+  const requirement = policy.requirements.find(({ requirementId }) => requirementId === "UBO-R06");
+  const strategy = requirement.resolutionStrategies
+    .find(({ strategy: name }) => name === "CUSTOMER_ATTESTATION");
+
+  const openPolicy = testOnlyPolicy(requirement.requirementId, [strategy]);
+  const open = evaluateCustomerPlan(session, openPolicy);
+  const openSnapshot = structuredClone(open.decisionSnapshot);
+  const openResult = applyConfirmation(open, "wave11a-confirmation-r08-open");
+  assert.equal(openResult.customerActionResult.customerConfirmation.confirmationDoesNotReplaceIndependentEvidence, true);
+  assert.equal(openResult.customerActionResult.customerConfirmation.independentEvidenceRequirementState, "OPEN");
+  assert.deepEqual(open.decisionSnapshot, openSnapshot);
+  assert.equal("decisionSnapshot" in openResult, false);
+
+  const satisfiedPolicy = testOnlyPolicy(requirement.requirementId, [strategy]);
+  const satisfiedR08 = satisfiedPolicy.requirements
+    .find(({ requirementId }) => requirementId === "UBO-R08");
+  satisfiedR08.resolutionStrategies = [structuredClone(
+    policy.requirements.find(({ requirementId }) => requirementId === "UBO-R08").resolutionStrategies[0],
+  )];
+  satisfiedR08.resolutionStrategies[0].resolutionEffect = "POSITIVE_ONLY";
+  satisfiedPolicy.evidenceCatalogue.items
+    .find(({ key }) => key === "companies_house_record")
+    .factRules.ownership_structure = {
+      canResolveAlone: true,
+      corroborationRequired: false,
+      resolutionEffect: "POSITIVE_ONLY",
+    };
+  const satisfiedEvidence = r08EvidenceClassification(session, satisfiedPolicy);
+  const satisfied = evaluateCustomerPlan(
+    session,
+    satisfiedPolicy,
+    NOW,
+    { evidenceClassifications: [satisfiedEvidence] },
+  );
+  assert.equal(
+    satisfied.decisionSnapshot.decisionContent.requirementResolutions
+      .find(({ requirementId }) => requirementId === "UBO-R08").resolutionState,
+    "RESOLVED",
+  );
+  const satisfiedResult = applyConfirmation(satisfied, "wave11a-confirmation-r08-satisfied");
+  assert.equal(satisfiedResult.customerActionResult.customerConfirmation.confirmationDoesNotReplaceIndependentEvidence, true);
+  assert.equal(satisfiedResult.customerActionResult.customerConfirmation.independentEvidenceRequirementState, "SATISFIED");
+
+  const notApplicablePolicy = testOnlyPolicy(requirement.requirementId, [strategy]);
+  notApplicablePolicy.requirements
+    .find(({ requirementId }) => requirementId === "UBO-R08")
+    .applicability.condition = "case.entity_profile == 'LLP'";
+  const notApplicable = evaluateCustomerPlan(session, notApplicablePolicy);
+  assert.equal(
+    notApplicable.decisionSnapshot.decisionContent.requirementResolutions
+      .find(({ requirementId }) => requirementId === "UBO-R08").resolutionState,
+    "N_A",
+  );
+  const notApplicableResult = applyConfirmation(notApplicable, "wave11a-confirmation-r08-na");
+  assert.equal(notApplicableResult.customerActionResult.customerConfirmation.confirmationDoesNotReplaceIndependentEvidence, true);
+  assert.equal(notApplicableResult.customerActionResult.customerConfirmation.independentEvidenceRequirementState, "NOT_APPLICABLE");
+
+  const tamperedSnapshot = structuredClone(open.decisionSnapshot);
+  tamperedSnapshot.decisionContent.requirementResolutions
+    .find(({ requirementId }) => requirementId === "UBO-R08").resolutionState = "RESOLVED";
+  assert.throws(() => open.app.applyCustomerInput({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
+    caseState: open.caseState,
+    sourceDecisionSnapshot: tamperedSnapshot,
+    sourceResolutionPlan: open.resolutionPlan,
+    customerAction: actionFor(
+      {
+        snapshot: open.decisionSnapshot,
+        plan: open.resolutionPlan,
+        journeyProjection: open.journeyProjection,
+      },
+      open.journeyProjection.customerWorkBundles.find((item) =>
+        item.permittedSemanticActions.some(({ actionType }) =>
+          actionType === CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION)),
+      CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION,
+      {
+        confirmation: "CONFIRMED",
+        establishedRelationshipIds: open.journeyProjection.customerWorkBundles
+          .flatMap(({ knownInformation }) => knownInformation.relationships)
+          .map(({ relationshipId }) => relationshipId),
+        establishedClaimIds: open.journeyProjection.customerWorkBundles
+          .flatMap(({ knownInformation }) => knownInformation.relationships)
+          .flatMap(({ supportingClaimIds }) => supportingClaimIds),
+      },
+    ),
+    operationId: "wave11a-confirmation-r08-tampered",
+  }), /verification|consistently|snapshot/i);
 });
 
 test("CustomerAction v2 rejects stale pins, fabricated fields, mismatched targets, and A-02/A-04/A-17 blocked work", () => {

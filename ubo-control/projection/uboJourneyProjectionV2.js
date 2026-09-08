@@ -9,6 +9,7 @@ const { verifyDecisionSnapshotV2, DECISION_SNAPSHOT_V2 } = require("../domain/de
 const { validateResolutionPlanV2 } = require("../planning/resolutionPlanV2");
 const { assertAllowedKeys, assertDataOnly, assertPlainObject, cloneData, deepFreeze } = require("../internal/validation");
 const { canonicalizeJson } = require("../policy/canonicalJson");
+const { loadPolicyPack } = require("../policy/policyPack");
 
 const JOURNEY_PROJECTION_V2 = "ubo-journey-projection-v2";
 const CUSTOMER_WORK_BUNDLE_V2 = "ubo-customer-work-bundle-v2";
@@ -61,9 +62,34 @@ function graphFrom(content) {
   return graph;
 }
 
-function actionContracts(action) {
+function signoffRegister(policyPack, snapshotPolicyIdentity) {
+  const loaded = loadPolicyPack(policyPack);
+  const actualIdentity = {
+    policyPackId: loaded.identity.policyPackId,
+    policyVersion: loaded.identity.version,
+    policyHash: loaded.identity.hash,
+    policySchemaVersion: loaded.identity.schemaVersion,
+  };
+  if (canonicalizeJson(actualIdentity) !== canonicalizeJson(snapshotPolicyIdentity)) {
+    throw new TypeError("JourneyProjection v2 Policy Pack does not match the DecisionSnapshot v2 policy identity");
+  }
+  return new Map(loaded.policyPack.signoffs.map((signoff) => [signoff.signoffId, signoff.status]));
+}
+
+function signoffAudit(requiredSignoffs, register) {
+  const dependencies = unique(requiredSignoffs).map((signoffId) => ({
+    signoffId,
+    status: register.get(signoffId) || "MISSING",
+  }));
+  return {
+    dependencies,
+    blocking: dependencies.filter(({ status }) => status !== "APPROVED"),
+  };
+}
+
+function actionContracts(action, audit) {
   const blockedByPolicy = action.contentReadiness === "REQUIRES_POLICY_CONTENT";
-  const blockedBySignoff = (action.requiredSignoffs || []).length > 0;
+  const blockedBySignoff = audit.blocking.length > 0;
   const base = { sourceResolutionActionId: action.actionId, sourceSemanticActionType: action.semanticActionType };
   const contracts = [];
   if (action.semanticActionType === "CONFIRM_ESTABLISHED_INFORMATION") {
@@ -84,6 +110,8 @@ function actionContracts(action) {
   contracts.push({ ...base, actionType: CUSTOMER_ACTION_TYPE_V2.DELEGATE_CUSTOMER_WORK, submissionContract: SUBMISSION_CONTRACT.DELEGATION });
   return contracts.map((contract) => ({
     ...contract,
+    signoffDependencies: clone(audit.dependencies),
+    blockingSignoffs: clone(audit.blocking),
     executable: !blockedByPolicy && !blockedBySignoff,
     blockedReason: blockedByPolicy ? "POLICY_CONTENT_REQUIRED" : blockedBySignoff ? "SIGNOFF_REQUIRED" : null,
   }));
@@ -113,7 +141,7 @@ function missingInformation(bundle, needsById) {
   }));
 }
 
-function workBundles(content, plan, graph) {
+function workBundles(content, plan, graph, register) {
   const actions = new Map(plan.customerActions.map((action) => [action.actionId, action]));
   const groups = new Map(plan.resolutionGroups.map((group) => [group.groupId, group]));
   const needs = new Map(content.informationNeedsV2.map((need) => [need.needId, need]));
@@ -122,7 +150,8 @@ function workBundles(content, plan, graph) {
     const action = actions.get(sourceBundle.actionIds[0]);
     const group = action && groups.get(action.resolutionGroupId);
     if (!action || !group) throw new TypeError("Customer work bundle references an unknown action or group");
-    const semanticActions = actionContracts(action);
+    const audit = signoffAudit(action.requiredSignoffs, register);
+    const semanticActions = actionContracts(action, audit);
     const targetEntityIds = unique((action.targetReferences || []).map(({ entityId }) => entityId));
     const frontierEntityIds = unique(action.frontierEntityIds);
     const identity = {
@@ -164,6 +193,8 @@ function workBundles(content, plan, graph) {
       } : null,
       delegationEligibility: { eligible: executable, executionOwner: "HOST", grantsAuthorization: false },
       signoffDependencies: unique(action.requiredSignoffs),
+      signoffDependencyStates: clone(audit.dependencies),
+      blockingSignoffs: clone(audit.blocking),
       productionAuthorized: false,
     };
   }).sort((a, b) => a.bundleId.localeCompare(b.bundleId));
@@ -184,7 +215,7 @@ function workState(plan, bundles) {
 function projectUboJourneyV2(input) {
   try {
     assertPlainObject(input, "journeyProjectionV2Input");
-    assertAllowedKeys(input, ["contractVersion", "decisionSnapshot"], "journeyProjectionV2Input");
+    assertAllowedKeys(input, ["contractVersion", "decisionSnapshot", "policyPack"], "journeyProjectionV2Input");
     if (input.contractVersion !== undefined && input.contractVersion !== JOURNEY_PROJECTION_V2) {
       throw projectionError(UBO_JOURNEY_PROJECTION_ERROR_CODE.UNSUPPORTED_CONTRACT_VERSION, `contractVersion must be ${JOURNEY_PROJECTION_V2}`);
     }
@@ -194,11 +225,12 @@ function projectUboJourneyV2(input) {
     }
     verifyDecisionSnapshotV2(snapshot);
     const content = snapshot.decisionContent;
+    const register = signoffRegister(input.policyPack, content.policy.identity);
     const plan = content.pinnedResolutionPlan;
     validateResolutionPlanV2(plan);
     const graph = graphFrom(content);
     const contentForBundles = { ...content, snapshotId: snapshot.snapshotId, snapshotHash: snapshot.decisionContentHash };
-    const customerWorkBundles = workBundles(contentForBundles, plan, graph);
+    const customerWorkBundles = workBundles(contentForBundles, plan, graph, register);
     const state = workState(plan, customerWorkBundles);
     const executableBundles = customerWorkBundles.filter((bundle) => bundle.permittedSemanticActions.some(({ executable }) => executable));
     const economicRelationships = graph.relationships.filter(({ dimension, temporalState }) => dimension === "ECONOMIC" && temporalState === "CURRENT");

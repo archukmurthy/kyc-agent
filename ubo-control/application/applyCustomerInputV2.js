@@ -134,7 +134,7 @@ function validateSource(caseState, loadedPolicyPack, snapshot, suppliedPlan, act
   };
   requireExact(action.policyIdentity, loadedIdentity, DECISION_APPLICATION_ERROR_CODE.STALE_CUSTOMER_ACTION,
     "customer action policy identity does not match the application policy");
-  return projectUboJourneyV2({ decisionSnapshot: snapshot });
+  return projectUboJourneyV2({ decisionSnapshot: snapshot, policyPack: loadedPolicyPack.policyPack });
 }
 
 function validatePlannedAction(action, journey) {
@@ -273,7 +273,18 @@ function entityAttributeFacts(action, bundle, operationId) {
   });
 }
 
-function confirmation(action, bundle) {
+function independentEvidenceRequirementState(snapshot) {
+  const r08 = snapshot.decisionContent.requirementResolutions
+    .find(({ requirementId }) => requirementId === "UBO-R08");
+  if (!r08) throw new TypeError("DecisionSnapshot v2 is missing the UBO-R08 RequirementResolution v2 record");
+  if (r08.resolutionState === "RESOLVED") return "SATISFIED";
+  if (r08.resolutionState === "N_A") return "NOT_APPLICABLE";
+  if (r08.resolutionState === "REVIEW_REQUIRED") return "REVIEW_REQUIRED";
+  if (["GAP", "UNRESOLVED", "CONFLICT"].includes(r08.resolutionState)) return "OPEN";
+  throw new TypeError("Unsupported UBO-R08 resolution state " + r08.resolutionState);
+}
+
+function confirmation(action, bundle, sourceSnapshot) {
   assertAllowedKeys(action.payload, ["confirmation", "establishedRelationshipIds", "establishedClaimIds"], "customerActionV2.payload");
   if (action.payload.confirmation !== "CONFIRMED") throw new TypeError("confirmation payload must state CONFIRMED");
   const relationshipIds = unique(action.payload.establishedRelationshipIds);
@@ -295,7 +306,8 @@ function confirmation(action, bundle) {
     sourceResolutionActionId: action.resolutionActionId,
     establishedRelationshipIds: relationshipIds,
     establishedClaimIds: claimIds,
-    independentEvidenceStillRequired: true,
+    confirmationDoesNotReplaceIndependentEvidence: true,
+    independentEvidenceRequirementState: independentEvidenceRequirementState(sourceSnapshot),
   };
 }
 
@@ -462,7 +474,7 @@ function applyCustomerInputV2({
     let delegation = null;
 
     if (customerAction.actionType === CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION) {
-      customerConfirmation = confirmation(customerAction, bundle);
+      customerConfirmation = confirmation(customerAction, bundle, sourceDecisionSnapshot);
     } else if (customerAction.actionType === CUSTOMER_ACTION_TYPE_V2.CORRECTION_REQUIRED) {
       const correctionResult = correction(customerAction, bundle, sourceDecisionSnapshot, operationId);
       candidateFacts = [correctionResult.candidateFact];

@@ -207,7 +207,10 @@ function createUboDecisionApplicationV3({ policyPack } = {}) {
           "evaluate returned a plan other than the exact ResolutionPlan v2 pinned in DecisionSnapshot v2");
       }
       const raw = CASE_STATE_INTERNALS.decodeCaseState(request.caseState, DECISION_APPLICATION_CONTRACT_VERSION_V3);
-      const journeyProjection = projectUboJourneyV2({ decisionSnapshot: result.decisionSnapshot });
+      const journeyProjection = projectUboJourneyV2({
+        decisionSnapshot: result.decisionSnapshot,
+        policyPack: loaded.policyPack,
+      });
       return applicationState(raw, request.caseState, {
         decisionSnapshot: result.decisionSnapshot,
         decisionHistory: result.decisionHistory,
