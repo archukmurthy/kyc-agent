@@ -222,7 +222,7 @@ KYC/Onboarding retains source/value winner selection, operative customer values,
 
 ### Stage A5 — Evidence Reconstruction and Package
 
-Stage A5 is split at the persistence boundary under approved ADR-019. A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. Detailed A5b governance and bounded implementation are authorized.
+Stage A5 is split at the persistence boundary under approved ADR-019. A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. A5b was implemented and accepted at `4602d763bd728f36b16de335cdd85cd6abced55d`.
 
 #### Stage A5a — Evidence Ledger / Reconstruction
 
@@ -238,11 +238,13 @@ Allow the complete fresh server-generated, authorized A5a reconstruction to be e
 
 Package membership references canonical Evidence records; it does not copy or re-identify Artifacts. Bounded frozen projections preserve Package meaning where source rows have mutable state, without becoming a second Evidence system. Membership grants no access. Package authorization is evaluated member by member as the intersection of member authorization and is rechecked on reopen/export. Access loss makes the canonical package non-materializable without leaking restricted member metadata; no member is silently omitted.
 
-A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package with a new freeze-operation key; idempotent retry returns the original Package while same-key changed input conflicts. Canonical JSON bytes and their SHA-256 are stored with relational membership in one atomic transaction. Reopen verifies manifest bytes, digest, version, canonical structure, and member order before authorization/materialization. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. One additive forward-only package migration after 018 and bounded A5b implementation are authorized; export remains deferred.
+A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package with a new freeze-operation key; idempotent retry returns the original Package while same-key changed input conflicts. Canonical JSON bytes and their SHA-256 are stored with relational membership in one atomic transaction. Reopen verifies manifest bytes, digest, version, canonical structure, and member order before authorization/materialization. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. Additive forward-only migration 019 and the bounded A5b implementation are accepted; export remains deferred.
 
 ### Stage A6 — End-to-End Evidence Lab Validation
 
 Exercise and demonstrate the complete lifecycle through the Evidence Lab.
+
+**Closure status: demonstrated and accepted across stage/product reviews, final A5b verification, and the frozen V1 consumer façade at `c55354aeb334c7c99201ade7a5b3d96e030d3266`.** A6 adds no new Evidence domain model or migration.
 
 Stage A is complete when Evidence Platform V1 can independently demonstrate:
 
@@ -261,11 +263,15 @@ Requirement
 
 without depending on the existing KYC customer journey.
 
+Architecture Authority confirms that this completes Evidence Core V1 architecture. Evidence Core is **CLOSED / MAINTENANCE**. Controlled-pilot and production hardening remain separate readiness work; the Evidence Lab routes are not production contracts. The precise verdict, blockers, characterization map, and deferred register are in `V1_READINESS.md`.
+
 ---
 
 ## Stage B — Prove the Producer Abstraction
 
 Prove that materially different evidence producers fit naturally into the same platform model.
+
+This is a post-Core producer track. The accepted Companies House producer and generic private Artifact ingestion already prove two materially different input paths. Further producer work should be owned by the Evidence Producers Control Room through the contract candidate in `V1_CONTRACTS.md`; it must not reopen the accepted Evidence Core identity model without a material ADR.
 
 At minimum validate:
 
@@ -275,7 +281,7 @@ Example: FCA/regulatory source.
 
 ### Producer 2 — Customer document
 
-Example: passport or proof of address.
+Example: an authorized customer-provided PDF/image such as proof of address. External-custody passport, selfie, or biometric Evidence requires the separate IDV/Vault architecture and is not an R1/Core V1 upload case.
 
 ### Producer 3 — Authoritative registry/API evidence
 
@@ -333,8 +339,8 @@ Deletion is the final step, not the migration strategy.
 
 ## Evidence Core V1 final closure implementation — Consumer Façade
 
-**Approved under ADR-020; implementation authorized.**
+**Implemented, accepted, and frozen under ADR-020 at `c55354aeb334c7c99201ade7a5b3d96e030d3266`.**
 
 Before downstream integration, publish the single supported in-process Evidence V1 consumer import at `evidence/consumer/v1/index.js`. It delegates to the accepted Artifact, R2, A5a, and A5b services; exposes explicit versioned, bounded DTOs and safe errors; keeps trusted authorization separate from consumer requests; and adds no domain behavior, HTTP transport, producer interface, or migration.
 
-Completion freezes only this public entry point and its V1 contract surface. Stage modules, repositories, storage, database tables, Lab routes, and fixtures remain internal, Lab-only, or fixture/test-only. This closes Evidence Core V1 contract productization for read-only diagnostic and fixture-adapter use; trusted production host integration and operational release gates remain separate blockers.
+Contract tests protect the exact export/operation names, version identities, trusted authorization separation, public/private access behavior, non-disclosing DTO/error projection, historical reads, reconstruction and Package side effects, and the deterministic six-relationship Bettercomms shape. Only this public entry point and its V1 DTO surface are `FROZEN`. Stage modules, repositories, storage, database tables, Lab routes, and fixtures remain internal, Lab-only, or fixture/test-only. Evidence Core V1 is **CLOSED / MAINTENANCE**; trusted production host integration and operational release gates remain separate blockers.

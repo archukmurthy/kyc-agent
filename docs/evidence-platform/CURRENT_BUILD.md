@@ -6,7 +6,7 @@
 
 A5a Evidence Ledger / Reconstruction was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` under approved ADR-019. It is a deterministic, read-only point-in-time projection and introduced no migration.
 
-This A5b brief is **APPROVED — IMPLEMENTATION AUTHORIZED**. Architecture Authority approved the complete-reconstruction freeze boundary, immutable Package identity and manifest, bounded polymorphic membership, member-by-member authorization, operation-key idempotency, neutral predecessor lineage, and one additive migration after 018. Export, signing, KYC/UBO integration, arbitrary member selection, and changes to existing Evidence history remain unauthorized.
+This A5b brief is **APPROVED — IMPLEMENTED AND ACCEPTED** at `4602d763bd728f36b16de335cdd85cd6abced55d`. Architecture Authority approved and accepted the complete-reconstruction freeze boundary, immutable Package identity and manifest, bounded polymorphic membership, member-by-member authorization, operation-key idempotency, neutral predecessor lineage, and additive migration 019. Export, signing, KYC/UBO integration, arbitrary member selection, and changes to existing Evidence history remain unauthorized.
 
 ---
 
@@ -364,7 +364,21 @@ Architecture Authority approved:
 12. no new Artifact/object store and no PDF/export/signing in v1; and
 13. the authorized additive migration-019 shape.
 
-Implement only this bounded A5b Package capability and migration 019. Do not implement export, signing/PKI, regulator-specific policy, arbitrary member selection, inclusion profiles, KYC/UBO conclusions, or changes to existing Evidence history.
+This bounded A5b Package capability and migration 019 are implemented and accepted. Export, signing/PKI, regulator-specific policy, arbitrary member selection, inclusion profiles, KYC/UBO conclusions, and changes to existing Evidence history remain deferred and unauthorized.
+
+---
+
+## 17. Evidence Core V1 closure candidate
+
+The accepted A0–A5b, A4a/A4b, and R1–R4 sequence now demonstrates the independent Evidence lifecycle through immutable Package without entering KYC, UBO, IDV, risk, or operative-value decisioning. The exact accepted inventory, characterization baseline, readiness verdicts, blockers, and deferred register are consolidated in `V1_READINESS.md`. Stable producer/consumer contract candidates and downstream handoffs are consolidated in `V1_CONTRACTS.md`.
+
+Architecture Authority accepts:
+
+* **Evidence Core V1 architecture: COMPLETE**;
+* **controlled pilot readiness: READY WITH BLOCKERS**; and
+* **production readiness: NOT READY**.
+
+This is a governance/readiness conclusion, not authorization to expose Evidence Lab routes in production, integrate a consumer, add a producer, or start another generic Evidence Core stage. Evidence Core now moves to **CLOSED / MAINTENANCE** under the final V1 closure documents.
 
 ---
 
@@ -2607,8 +2621,12 @@ Completion must prove idempotent retry and genuine identical-byte repeat uploads
 
 ## Evidence Core V1 final contract productization
 
-**Status: APPROVED — IMPLEMENTATION AUTHORIZED under ADR-020.**
+**Status: IMPLEMENTED, ACCEPTED, AND FROZEN under ADR-020 at `c55354aeb334c7c99201ade7a5b3d96e030d3266`.**
 
 The final bounded Evidence Core V1 implementation is one versioned in-process consumer façade at `evidence/consumer/v1/index.js`. It wraps accepted Artifact resolution, R2 interpretation/history, A5a reconstruction, and A5b Package services with explicit trusted authorization and allowlisted consumer DTO/error contracts. It adds no Evidence-domain behavior, HTTP transport, production authentication, producer interface, or migration.
 
-After implementation and protecting tests pass, only that façade entry point and its V1 DTO contracts may be marked `FROZEN`. Stage services, repositories, storage, tables, `api/evidence/*`, Lab flows, and fixtures remain non-public. UBO adapter implementation and production activation remain separately governed and unauthorized by this brief.
+The implementation and protecting contract tests pass. The supported import at `evidence/consumer/v1/index.js` and the bounded DTO contracts it exports are classified `FROZEN` at `c55354aeb334c7c99201ade7a5b3d96e030d3266`. Stage services, repositories, storage, tables, `api/evidence/*`, Lab flows, and fixtures remain internal, Lab-only, or fixture/test-only. UBO adapter implementation and production activation remain separately governed and unauthorized by this brief.
+
+The façade exports only version constants, stable public error codes, exact operation names, and `createEvidenceConsumer(dependencies)`. Every operation receives `(trustedAuthorizationContext, consumerRequest)`, rejects request attempts to supply authority, returns a versioned success/error envelope, and delegates to the accepted R2, A5a, and A5b services. No migration, HTTP endpoint, producer interface, storage-byte response, or Evidence-domain behavior was added.
+
+Evidence Core V1 is now **CLOSED / MAINTENANCE**. New source-specific work belongs to the Evidence Producers Control Room; consumer adapters belong to the UBO, KYC, and IDV integration workstreams; production hardening belongs to a bounded platform/security/operations programme; and Decision Provenance & Case Explanation remains a separate cross-platform capability.

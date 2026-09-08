@@ -1864,9 +1864,11 @@ Architecture Authority approved the detailed A5b freeze-source, immutable member
 
 ## ADR-020 — Evidence Core V1 Public Consumer Façade
 
-**Status:** APPROVED — IMPLEMENTATION AUTHORIZED
+**Status:** APPROVED — IMPLEMENTED AND ACCEPTED
 
 **Date:** 2026-09-08
+
+**Implementation:** `c55354aeb334c7c99201ade7a5b3d96e030d3266`
 
 **Raised by:** Architecture Authority
 
@@ -1925,6 +1927,6 @@ The façade and fixture contain no UBO graph, indirect-ownership, policy-pack, w
 
 ### Consequences
 
-Once implemented and accepted, the façade module and its DTO/version/error contracts may be classified `FROZEN`. Stage services and all other internal/Lab/test surfaces remain non-public. UBO G4.1 fixture-adapter work may then depend on the one frozen module; production activation remains blocked on trusted host authentication/authorization and normal release, security, operational, quality, and deployment controls.
+The accepted façade module and its DTO/version/error contracts are classified `FROZEN`. Stage services and all other internal/Lab/test surfaces remain non-public. UBO G4.1 fixture-adapter work may depend on the one frozen module; production activation remains blocked on trusted host authentication/authorization and normal release, security, operational, quality, and deployment controls.
 
 This task requires no migration and no Evidence-domain semantic change. If either becomes necessary, implementation must stop for Architecture Authority review.
