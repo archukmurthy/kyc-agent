@@ -173,15 +173,19 @@ function mapOfficerToStakeholder(officer, companyNumber) {
   const sourceUrl =
     `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/officers`;
 
+  const appointmentsLink =
+    (officer.links && officer.links.officer && officer.links.officer.appointments) || "";
   const idSlug =
-    (officer.links &&
-      officer.links.officer &&
-      officer.links.officer.appointments &&
-      officer.links.officer.appointments.replace(/[^a-zA-Z0-9]/g, "_")) ||
+    (appointmentsLink && appointmentsLink.replace(/[^a-zA-Z0-9]/g, "_")) ||
     `${String(fullName).replace(/\s+/g, "_").toLowerCase()}`;
+  // The stable Companies House officer id, extracted from the appointments link
+  // ("/officers/{officer_id}/appointments"). Needed to snapshot exactly which
+  // officer was selected for identity-discrepancy matching.
+  const officerId = (appointmentsLink.match(/\/officers\/([^/]+)\/appointments/) || [])[1] || null;
 
   return {
     id: `ch_${idSlug}`,
+    officer_id: officerId,
     full_name: fullName,
     role: roleLabel,
     appointment_date: officer.appointed_on || null,
