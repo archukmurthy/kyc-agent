@@ -5,6 +5,7 @@ const {
   UBO_REVIEW_APPLICATION_CONTRACT_VERSION,
   UK_CORPORATE_REVIEW_POLICY_1_6_RC,
   createUboReviewApplication,
+  projectUboJourneyV2,
 } = require("../../ubo-control/review");
 const ASDA = require("../fixtures/asda-successor-v2.json");
 const REVIEW_PROFILES = require("../fixtures/review-profiles.json");
@@ -210,10 +211,12 @@ function buildView(result) {
   const needs = content.informationNeedsV2.filter(({ status }) => status === "OPEN");
   const plan = result.resolutionPlan;
   const current = plan.currentPlanningWave;
+  const journeyProjection = projectUboJourneyV2({ decisionSnapshot: result.decisionSnapshot });
   return {
     snapshot: result.decisionSnapshot,
     graph: result.ownershipGraphProjection,
     plan,
+    journeyProjection,
     policyReadiness: result.policyReadiness,
     governance: result.governance,
     qualifications: clone(content.personQualificationAssessments),
@@ -243,6 +246,7 @@ function buildView(result) {
     },
     diagnostics: {
       reviewApplicationContract: UBO_REVIEW_APPLICATION_CONTRACT_VERSION,
+      journeyProjectionVersion: journeyProjection.contractVersion,
       snapshotVersion: result.decisionSnapshot.snapshotSchemaVersion,
       graphProjectionVersion: result.ownershipGraphProjection.contractVersion,
       pipelineMaturity: content.pipelineMaturity,

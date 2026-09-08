@@ -4,8 +4,13 @@ const { createUboControl } = require("./composition/createUboControl");
 const {
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  DECISION_APPLICATION_CONTRACT_VERSION_V3,
   createUboDecisionApplication,
 } = require("./application/createUboDecisionApplication");
+const {
+  CUSTOMER_ACTION_RESULT_V2,
+  CUSTOMER_ACTION_V2,
+} = require("./application/applyCustomerInputV2");
 const {
   APPLICABILITY_MODEL_VERSION,
   APPLICABILITY_RESULT,
@@ -65,6 +70,16 @@ const {
   projectUboJourney,
 } = require("./projection/uboJourneyProjection");
 const {
+  CUSTOMER_ACTION_TYPE_V2,
+  CUSTOMER_WORK_BUNDLE_V2,
+  CUSTOMER_WORK_DELEGATION_V1,
+  CUSTOMER_WORK_STATE_V2,
+  EXTERNAL_EVIDENCE_HANDOFF_V1,
+  JOURNEY_PROJECTION_V2,
+  SUBMISSION_CONTRACT,
+  projectUboJourneyV2,
+} = require("./projection/uboJourneyProjectionV2");
+const {
   UBO_RESOLUTION_PLAN_CONTRACT_VERSION,
   UBO_RESOLUTION_PLANNER_VERSION,
   planUboResolution,
@@ -91,6 +106,16 @@ module.exports = Object.freeze({
   CONDITION_LANGUAGE_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  DECISION_APPLICATION_CONTRACT_VERSION_V3,
+  CUSTOMER_ACTION_RESULT_V2,
+  CUSTOMER_ACTION_TYPE_V2,
+  CUSTOMER_ACTION_V2,
+  CUSTOMER_WORK_BUNDLE_V2,
+  CUSTOMER_WORK_DELEGATION_V1,
+  CUSTOMER_WORK_STATE_V2,
+  EXTERNAL_EVIDENCE_HANDOFF_V1,
+  JOURNEY_PROJECTION_V2,
+  SUBMISSION_CONTRACT,
   DECISION_APPLICATION_ERROR_CODE,
   OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
@@ -133,6 +158,7 @@ module.exports = Object.freeze({
   loadPolicyPack,
   projectOwnershipGraph,
   projectUboJourney,
+  projectUboJourneyV2,
   planUboResolution,
   validateCandidateFact,
   validateCandidatePartyReference,

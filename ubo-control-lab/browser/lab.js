@@ -5,7 +5,7 @@
   const { OwnershipGraph, UboJourney, DETAIL_LEVEL } = UboControlUI;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
-  const REVIEW_TABS = ["CASE_SUMMARY", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
+  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
   const GRAPH_FILTERS = ["OWNERSHIP", "VOTING", "CONTROL", "ALL"];
   let replayLibrary = null;
   try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
@@ -413,6 +413,39 @@
       h(OwnershipGraph, { projection: graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 840 }));
   }
 
+  function ApplicantPreview({ view }) {
+    const journey = view.journeyProjection;
+    const bundles = journey.customerWorkBundles;
+    return h("section", { className: "panel applicant-preview" },
+      h("p", { className: "source-label" }, "JOURNEYPROJECTION v2 · READ-ONLY CONTRACT PREVIEW"),
+      h("h2", null, "Applicant work preview"),
+      h("p", null, "This preview is generated only from the verified DecisionSnapshot v2. Applying input remains a separate Decision Application v3 operation."),
+      h("div", { className: "grid-3 section" },
+        h(Metric, { label: "Customer work state", value: human(journey.customerWorkState) }),
+        h(Metric, { label: "Open work bundles", value: bundles.length }),
+        h(Metric, { label: "Customer input complete", value: String(journey.customerInputComplete) }),
+        h(Metric, { label: "Final case complete", value: String(journey.finalCaseComplete) }),
+        h(Metric, { label: "Internal review pending", value: journey.finishLine.internalReviewPending }),
+        h(Metric, { label: "Evidence handoffs", value: journey.finishLine.evidenceHandoffBundles })),
+      journey.policyContentBlocks.length > 0 && h("div", { className: "notice" }, `POLICY CONTENT REQUIRED · ${journey.policyContentBlocks.length} blocked option(s). No wording has been invented.`),
+      bundles.length ? h("div", { className: "work-bundle-list section" }, bundles.map((bundle) => h("article", { className: "qualification-card", key: bundle.bundleId },
+        h("div", { className: "panel-heading" }, h("div", null, h("h3", null, `${bundle.informationNeedIds.length} causal need(s) · ${human(bundle.state)}`), h("p", null, `${human(bundle.expectedResult)} · re-evaluate: ${human(bundle.reEvaluationTrigger)}`)), h("span", { className: "status" }, bundle.permittedSemanticActions.some(({ executable }) => executable) ? "ACTION AVAILABLE" : human(bundle.state))),
+        bundle.evidenceHandoff && h("div", { className: bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "notice evidence-ready" : "notice" }, bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED" : human(bundle.evidenceHandoff.readiness)),
+        h("p", null, `Subject: ${bundle.canonicalSubject.entityId || bundle.canonicalSubject.entityIds.join(", ")} · Requirements: ${bundle.requirementIds.join(", ") || "none"}`),
+        h("details", null, h("summary", null, "Known, missing and permitted work"), h("pre", { className: "json" }, pretty({ knownInformation: bundle.knownInformation, missingInformation: bundle.missingInformation, permittedSemanticActions: bundle.permittedSemanticActions, signoffDependencies: bundle.signoffDependencies })))))) : h(Empty, null, journey.customerInputComplete ? "No customer work is currently executable. Final review and system work remain separate." : "No customer bundle is present in the pinned plan."));
+  }
+
+  function ContractInspector({ view }) {
+    return h("section", { className: "panel" },
+      h("p", { className: "source-label" }, "IMMUTABLE VERSIONED CONTRACT"),
+      h("h2", null, "JourneyProjection v2 inspector"),
+      h("div", { className: "grid-3" },
+        h(Metric, { label: "Projection", value: view.journeyProjection.contractVersion }),
+        h(Metric, { label: "Snapshot", value: `#${shortHash(view.journeyProjection.decision.snapshotHash)}` }),
+        h(Metric, { label: "Plan", value: `#${shortHash(view.journeyProjection.decision.planHash)}` })),
+      h("pre", { className: "json section contract-json" }, pretty(view.journeyProjection)));
+  }
+
   function ReviewQualifications({ view, session }) {
     const names = new Map(session.entityDirectory.map(({ entityId, party }) => [entityId, party?.name || entityId]));
     const cards = view.qualifications.map((assessment) => {
@@ -509,9 +542,11 @@
     const tabs = h("div", { className: "tabs", role: "tablist", "aria-label": "Successor review workspace views" }, REVIEW_TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name))));
     const summary = h("section", { className: "panel" }, h("h2", null, "Case Summary"), h("div", { className: "grid-2" },
       h("div", null, h("h3", null, "Decision state"), h("p", null, `${human(view.plan.state)} with ${view.counts.openCausalNeeds} open causal need(s). The exact pinned current wave is ${human(view.plan.currentPlanningWave.actor)}.`), h("p", null, `Governance: ${view.governance.readiness}; productionAuthorized=${String(view.governance.productionAuthorized)}.`)),
-      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT JOURNEY v2 NOT YET ENABLED"), h("p", null, `${view.plan.customerActions.length} planned customer action(s) are read-only. Wave 11 owns JourneyProjection v2 and CustomerAction v2.`))));
+      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. This is not the final Wave 11B React journey.`))));
     const panels = {
       CASE_SUMMARY: summary,
+      APPLICANT_PREVIEW: h(ApplicantPreview, { view }),
+      CONTRACT_INSPECTOR: h(ContractInspector, { view }),
       OWNERSHIP_AND_CONTROL_GRAPH: h(ReviewGraphPanel, { view, session, graphFilter, setGraphFilter }),
       QUALIFICATIONS: h(ReviewQualifications, { view, session }),
       REQUIREMENTS_AND_CAUSAL_NEEDS: h(ReviewRequirements, { view }),

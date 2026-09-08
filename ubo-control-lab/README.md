@@ -45,7 +45,13 @@ The top-level selector now makes the doctrine explicit: `BASELINE — 1.5-RC` re
 
 Successor mode offers ten sanitized actual-engine fixtures, saved-result Replay with zero external calls, and one-shot Live Discovery with the existing cost warning. The two ASDA profiles are labelled `LAB REVIEW PROFILE — NOT PRODUCTION APPROVED`; their hash, effective/review period, entitlement context, capability entries, used entries and A-15 dependency are inspectable. Changing profile creates a linked Snapshot v2 with `PLANNING_CONTEXT_CHANGED` and preserves the predecessor.
 
-The workspace uses one current Snapshot v2 across Case Summary, Ownership & Control Graph, Qualifications, Requirements & Causal Needs, Resolution Plan, Evidence, Decision History, Diagnostics and Baseline Comparison. Graph filters are display-only. Counts open deterministic lists. Resolution actions and customer actions are inspection-only; the applicant panel says `APPLICANT JOURNEY v2 NOT YET ENABLED`, and Evidence says `EVIDENCE EXECUTION NOT YET CONNECTED`.
+The workspace uses one current Snapshot v2 across Case Summary, Ownership & Control Graph, Qualifications, Requirements & Causal Needs, Resolution Plan, Evidence, Decision History, Diagnostics and Baseline Comparison. Graph filters are display-only. Counts open deterministic lists.
+
+## Wave 11A read-only applicant contracts
+
+The successor workspace now adds an Applicant Preview and Contract Inspector generated from public `ubo-journey-projection-v2`. They expose immutable plan-pinned customer work bundles, completion distinctions, policy-content blocks and external Evidence handoff readiness without submitting actions. The preview clearly labels `EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED` and `POLICY CONTENT REQUIRED` where applicable.
+
+This is not the final Wave 11B applicant journey. The browser does not call Decision Application v3 customer-input operations, invent unsigned policy wording, upload files, run Extraction, persist state or integrate with onboarding.
 
 ## Wave 10 deployed manual acceptance
 

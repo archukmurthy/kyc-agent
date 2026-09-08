@@ -86,9 +86,18 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "CLAIM_STATE",
     "CLAIM_STATE_MODEL_VERSION",
     "CONDITION_LANGUAGE_VERSION",
+    "CUSTOMER_ACTION_RESULT_V2",
+    "CUSTOMER_ACTION_TYPE_V2",
+    "CUSTOMER_ACTION_V2",
+    "CUSTOMER_WORK_BUNDLE_V2",
+    "CUSTOMER_WORK_DELEGATION_V1",
+    "CUSTOMER_WORK_STATE_V2",
     "DECISION_APPLICATION_CONTRACT_VERSION",
     "DECISION_APPLICATION_CONTRACT_VERSION_V2",
+    "DECISION_APPLICATION_CONTRACT_VERSION_V3",
     "DECISION_APPLICATION_ERROR_CODE",
+    "EXTERNAL_EVIDENCE_HANDOFF_V1",
+    "JOURNEY_PROJECTION_V2",
     "OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION",
     "OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE",
     "UBO_JOURNEY_PROJECTION_CONTRACT_VERSION",
@@ -119,6 +128,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "RESOLUTION_STRATEGY",
     "RISK_LEVEL",
     "RISK_LEVEL_MODEL_VERSION",
+    "SUBMISSION_CONTRACT",
     "UBO_CONFIGURATION_ERROR_CODE",
     "UboConfigurationError",
     "UboContractError",
@@ -130,6 +140,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "loadPolicyPack",
     "projectOwnershipGraph",
     "projectUboJourney",
+    "projectUboJourneyV2",
     "planUboResolution",
     "validateCandidateFact",
     "validateCandidatePartyReference",
@@ -199,6 +210,20 @@ test("customer-input application remains standalone, data-only, and cannot execu
   assert.doesNotMatch(source, /fetch\s*\(|\/api\/research|Blob|base64|fileBytes|rawFile/);
   assert.doesNotMatch(source, /senior_managing_official_fallback/);
   assert.doesNotMatch(source, /fuzzy|similar name|normalized name|confidence/i);
+});
+
+test("Wave 11A application and projection contracts remain provider-neutral, deterministic, and execution-free", () => {
+  const sources = [
+    path.join(PRODUCT_ROOT, "application", "applyCustomerInputV2.js"),
+    path.join(PRODUCT_ROOT, "application", "createUboDecisionApplicationV3.js"),
+    path.join(PRODUCT_ROOT, "projection", "uboJourneyProjectionV2.js"),
+  ].map((file) => fs.readFileSync(file, "utf8"));
+  for (const source of sources) {
+    assert.doesNotMatch(source, /React|\bdocument\b|\bwindow\b|screenId|pageId|src[\\/]App|entity_dossiers|journey_state/i);
+    assert.doesNotMatch(source, /fetch\s*\(|EvidencePlatform|ExtractionService|upload|Blob|base64|filesystem|@vercel|@neondatabase/i);
+    assert.doesNotMatch(source, /Date\.now\s*\(|new Date\s*\(/);
+  }
+  assert.match(sources[0], /acceptsFileBytes: false/);
 });
 
 test("the standalone Lab stays outside onboarding, Evidence, and persistence boundaries", () => {

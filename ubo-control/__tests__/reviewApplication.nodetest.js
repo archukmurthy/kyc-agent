@@ -116,15 +116,27 @@ function evaluate(app, decisions, overrides = {}) {
   });
 }
 
-test("review entry exposes the exact deliberate surface and the stable main entry remains unchanged", () => {
+test("review entry exposes the exact deliberate Wave 10 and Wave 11A surface", () => {
   assert.deepEqual(Object.keys(reviewApi).sort(), [
+    "CUSTOMER_ACTION_RESULT_V2",
+    "CUSTOMER_ACTION_TYPE_V2",
+    "CUSTOMER_ACTION_V2",
+    "CUSTOMER_WORK_BUNDLE_V2",
+    "CUSTOMER_WORK_DELEGATION_V1",
+    "CUSTOMER_WORK_STATE_V2",
+    "DECISION_APPLICATION_CONTRACT_VERSION_V3",
+    "EXTERNAL_EVIDENCE_HANDOFF_V1",
+    "JOURNEY_PROJECTION_V2",
     "OWNERSHIP_GRAPH_PROJECTION_V2",
+    "SUBMISSION_CONTRACT",
     "UK_CORPORATE_REVIEW_POLICY_1_6_RC",
     "UBO_REVIEW_APPLICATION_CONTRACT_VERSION",
     "UBO_REVIEW_ERROR_CODE",
     "UboReviewError",
+    "createUboDecisionApplication",
     "createUboReviewApplication",
     "projectOwnershipGraphV2",
+    "projectUboJourneyV2",
   ].sort());
   assert.equal(reviewApi.UK_CORPORATE_REVIEW_POLICY_1_6_RC.version, "1.6-RC");
   assert.equal(Object.prototype.hasOwnProperty.call(require(".."), "createUboReviewApplication"), false);
