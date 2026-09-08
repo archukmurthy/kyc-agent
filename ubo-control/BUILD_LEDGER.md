@@ -9,7 +9,7 @@
 | Branch | `codex/ubo-control-freeze-w11a-customer-contracts-v2` |
 | Base commit | `e56ec1c2923831febdb992f6beeaed3b9b51ac7f` (accepted PR #55 normal merge on `origin/main`). |
 | Latest accepted PR | [#55 — Freeze Wave 10: successor review entry and Lab v2](https://github.com/archukmurthy/kyc-agent/pull/55), merged normally as `e56ec1c2923831febdb992f6beeaed3b9b51ac7f`. |
-| Current PR | Wave 11A PR pending; it must remain open for Control Room review and must not be merged automatically. |
+| Current PR | [#56 — Wave 11A: Customer contracts v2](https://github.com/archukmurthy/kyc-agent/pull/56); open for Control Room review and not to be merged automatically. |
 | Versioning | Default v1 and explicit v2 remain unchanged. Deliberate `ubo-decision-application-v3` exposes exactly `intake`, `applyDecisions`, `applyCustomerInput`, `evaluate` for schema-1.3 LAB review. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
