@@ -30,6 +30,7 @@ const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.j
 const idvSaveHandler = require(path.join(__dirname, "..", "api", "idv-save.js"));
 const idvMatchWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "webhook.js"));
 const idvMatchStatusHandler = require(path.join(__dirname, "..", "api", "idv-match", "status.js"));
+const idvScreeningWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "screening", "webhook.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -368,6 +369,13 @@ module.exports = function (app) {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(idvMatchStatusHandler)(req, res);
     });
+  });
+  // ComplyCube screening webhook — needs the RAW body for signature verification.
+  app.post("/api/idv-match/screening/webhook", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { req.rawBody = raw; adapt(idvScreeningWebhookHandler)(req, res); });
   });
 
   // KYC Lookup Agent → Nium eKYB. POST; parse the JSON body the dev server
