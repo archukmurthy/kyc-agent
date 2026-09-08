@@ -30,7 +30,7 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [x] Apply migration 013 to DB (applied to Neon `idv-dev` schema-only branch; round-trip verified)
 - [ ] Phase 1 code review (optional)
 
-### Phase 2 — Didit session rework
+### Phase 2 — Didit session rework  `[~] spec written`
 - [ ] Server-created session bound to application + attempt + officer snapshot (browser can't create/modify)
 - [ ] Signed webhook ingestion (verify signature, reject stale/replay)
 - [ ] Polling fallback; refresh endpoint read-only
