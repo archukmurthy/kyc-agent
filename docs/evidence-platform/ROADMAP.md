@@ -328,3 +328,13 @@ Only after replacement behavior is proven:
 * remove legacy integrations that no longer have consumers.
 
 Deletion is the final step, not the migration strategy.
+
+---
+
+## Evidence Core V1 final closure implementation — Consumer Façade
+
+**Approved under ADR-020; implementation authorized.**
+
+Before downstream integration, publish the single supported in-process Evidence V1 consumer import at `evidence/consumer/v1/index.js`. It delegates to the accepted Artifact, R2, A5a, and A5b services; exposes explicit versioned, bounded DTOs and safe errors; keeps trusted authorization separate from consumer requests; and adds no domain behavior, HTTP transport, producer interface, or migration.
+
+Completion freezes only this public entry point and its V1 contract surface. Stage modules, repositories, storage, database tables, Lab routes, and fixtures remain internal, Lab-only, or fixture/test-only. This closes Evidence Core V1 contract productization for read-only diagnostic and fixture-adapter use; trusted production host integration and operational release gates remain separate blockers.

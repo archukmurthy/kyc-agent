@@ -2602,3 +2602,13 @@ interpretation and downstream decision: NOT PERFORMED
 ```
 
 Completion must prove idempotent retry and genuine identical-byte repeat uploads as different cases, preserve prior history, and leave R2/R3/R4, A4b, UBO, consumer integration, and existing KYC behavior untouched.
+
+---
+
+## Evidence Core V1 final contract productization
+
+**Status: APPROVED — IMPLEMENTATION AUTHORIZED under ADR-020.**
+
+The final bounded Evidence Core V1 implementation is one versioned in-process consumer façade at `evidence/consumer/v1/index.js`. It wraps accepted Artifact resolution, R2 interpretation/history, A5a reconstruction, and A5b Package services with explicit trusted authorization and allowlisted consumer DTO/error contracts. It adds no Evidence-domain behavior, HTTP transport, production authentication, producer interface, or migration.
+
+After implementation and protecting tests pass, only that façade entry point and its V1 DTO contracts may be marked `FROZEN`. Stage services, repositories, storage, tables, `api/evidence/*`, Lab flows, and fixtures remain non-public. UBO adapter implementation and production activation remain separately governed and unauthorized by this brief.

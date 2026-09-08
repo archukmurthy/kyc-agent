@@ -1701,9 +1701,11 @@ This decision authorizes only bounded A4b implementation and Lab characterizatio
 
 ## ADR-019 — Point-in-Time Evidence Reconstruction and Immutable Evidence Packages
 
-**Status:** APPROVED — A5A IMPLEMENTED; A5B IMPLEMENTATION AUTHORIZED
+**Status:** APPROVED — A5A AND A5B IMPLEMENTED
 
 **Date:** 2026-09-04
+
+**Implementation history:** A5a accepted at `851a029dff6a66e75c94f323007061c645cb7483`; A5b accepted at `4602d763bd728f36b16de335cdd85cd6abced55d`.
 
 **Raised by:** Architecture Authority
 
@@ -1857,3 +1859,72 @@ Existing KYC `entity_dossiers`, `events`, `session_timeline`, `field_provenance`
 Architecture Authority approved the A5a/A5b split; record-type availability and point-in-time rules; explicit reconstruction limitations; A5a projection rather than a duplicate event ledger; package identity and membership direction; member-by-member authorization intersection and fail-closed behavior; manifest canonicalization and fingerprint meaning; and later-package lineage semantics on 2026-09-04. A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483` without a migration.
 
 Architecture Authority approved the detailed A5b freeze-source, immutable member-projection, canonicalization, idempotency, bounded purpose, access-loss, storage, predecessor, and migration semantics on 2026-09-04. A5b implementation and migration 019 are authorized within this boundary. Arbitrary selection/exclusion, inclusion profiles, export, signing, KYC/UBO decisions, and changes to existing Evidence history remain unauthorized.
+
+---
+
+## ADR-020 — Evidence Core V1 Public Consumer Façade
+
+**Status:** APPROVED — IMPLEMENTATION AUTHORIZED
+
+**Date:** 2026-09-08
+
+**Raised by:** Architecture Authority
+
+### Context
+
+Evidence Core V1 is implemented through A5b, but repository inspection found no supported public consumer entry point. `evidence/platform.js` exposes status only, stage services and repositories remain internal, and `api/evidence/*` routes are Evidence Lab adapters. Data vocabularies may be accepted and versioned without making those invocation paths safe downstream contracts.
+
+The final bounded V1 productization task must provide one stable in-process server-side façade without introducing a second Evidence engine, authorization system, Fact model, reconstruction, Package implementation, HTTP transport, or migration.
+
+### Decision
+
+#### One supported V1 consumer import path
+
+`evidence/consumer/v1/index.js` is the only Evidence V1 module path designated for downstream consumer adapters. It exposes versioned, bounded operations for:
+
+* authorized Artifact reference/metadata resolution without returning bytes or storage details;
+* explicit targeted interpretation and authorized interpretation operation/history retrieval;
+* authorized point-in-time reconstruction; and
+* authorized Evidence Package list, reopen, and manifest verification.
+
+Stage directories, repositories, database tables, storage implementations, provider adapters, memory stores, fixtures, and current Lab routes remain internal, Lab-only, or fixture/test-only. The façade must delegate to accepted R1/A3, R2, A5a, and A5b services and must not reimplement their behavior.
+
+#### Trusted authorization is separate from the consumer request
+
+Every operation receives `trustedAuthorizationContext` separately from `consumerRequest`. Trusted tenant, Evidence context, caller scope, actor identity, and subject consistency where required come from a trusted host boundary; request fields, Artifact IDs, correlation, hashes, and Package membership never grant access. The façade makes this boundary explicit and testable but does not implement production authentication.
+
+Private tenant/context denial, public Evidence behavior, current authorization at historical reopen, Package member authorization, and fail-closed access loss remain governed by the accepted services. No caller may use the façade to bypass Evidence authorization or retrieve Blob URLs, filesystem paths, storage keys, credentials, internal storage references, or raw Artifact bytes.
+
+#### Explicit bounded V1 contracts
+
+The façade owns versioned DTOs for Artifact references, targeted-interpretation request/result, operation/history, requested-concept outcomes, ordinary Facts, typed relationship Facts, party snapshots, relationship values, temporal state, locators, integrity digests, safe operation errors/outcomes, point-in-time reconstruction, and Evidence Packages.
+
+Consumer contract identities use the approved V1 family: `evidence-consumer-v1`, `evidence-artifact-reference-v1`, `evidence-interpretation-request-v1`, `evidence-interpretation-result-v1`, `evidence-fact-v1`, `evidence-typed-relationship-v1`, `evidence-locator-v1`, `evidence-operation-outcome-v1`, `evidence-reconstruction-v1`, and `evidence-package-v1`. Existing governed vocabularies remain `evidence-relationship-v1`, `evidence-a5a-availability-v1`, `evidence-package-manifest-v1`, and `evidence-package-canonical-json-v1`; the façade must not replace or reinterpret them.
+
+Unknown internal properties are excluded by allowlisted DTO mapping. Internal UUIDs may be returned only as opaque Evidence references, never as business identity or authorization. Errors are bounded, versioned, and preserve Evidence-native distinctions without returning SQL, stack traces, provider secrets, credentials, storage details, or implementation names.
+
+#### Interpretation and history semantics remain unchanged
+
+Fresh interpretation requires a deliberate operation key, one Artifact or a coherent same-Asset Artifact set, neutral requested concepts, bounded extraction context, opaque correlation, and separate trusted authorization. The façade accepts no raw Artifact bytes, storage location, caller-authoritative SHA-256, arbitrary access scope, model/provider override, or downstream policy conclusion.
+
+Operation/history reopen performs no provider call and creates no Extraction Run or Fact. Fresh interpretation creates the existing immutable operation/run/Facts only through R2/A3. “Complete” remains an Evidence processing statement and never means real-world completeness, source correctness, ownership-graph completeness, KYC completion, or UBO satisfaction.
+
+#### Reconstruction and Package semantics remain unchanged
+
+A5a remains read-only. A5b reopen and verification perform no source collection, AI call, A4a/A4b recomputation, or reconstruction and preserve current member authorization and manifest-integrity behavior. The façade returns bounded DTOs rather than broad internal objects.
+
+#### Producer boundary remains separate
+
+The V1 consumer façade does not collect source Evidence or ingest uploaded bytes. Producer contracts and their write/cost/idempotency controls remain a separate boundary owned by the Evidence Producers Control Room.
+
+#### Consumer fixture and forbidden semantics
+
+A deterministic sanitized contract fixture must protect the complete accepted six-relationship Bettercomms-shaped result: four exact percentage-point ownership relationships and two qualitative officer relationships, with shared Artifact identity, Fact/locator lineage, unknown temporal state, and no mutable Lab identities.
+
+The façade and fixture contain no UBO graph, indirect-ownership, policy-pack, winner, satisfaction, or determination semantics, including `isUbo`, `thresholdPassed`, `qualifyingPerson`, `operativeClaim`, `policySatisfied`, or `customerAction`.
+
+### Consequences
+
+Once implemented and accepted, the façade module and its DTO/version/error contracts may be classified `FROZEN`. Stage services and all other internal/Lab/test surfaces remain non-public. UBO G4.1 fixture-adapter work may then depend on the one frozen module; production activation remains blocked on trusted host authentication/authorization and normal release, security, operational, quality, and deployment controls.
+
+This task requires no migration and no Evidence-domain semantic change. If either becomes necessary, implementation must stop for Architecture Authority review.
