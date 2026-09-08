@@ -49,7 +49,19 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [ ] Live webhook verification — deferred (needs `COMPLYCUBE_WEBHOOK_SECRET` + public URL; see BACKLOG SCR-1)
 - [ ] Phase 3 code review (optional)
 
-### Phase 4 — Comparison hygiene  `[~] spec written`
+### Phase 2.5 — Evidence-compatible architecture (PIVOT — build to the "IDV - Evidence" doc)
+Adopt the existing `idv/` module foundation; refactor the plaintext PII from Phases 1-3. Comes before Phase 4 (comparison reads the canonical model / Vault).
+- [ ] Adopt `idv/` module Vault (dev = synthetic in-memory + LocalTestManagedKeyProvider) — store text PII as **opaque Vault references**, never plaintext
+- [ ] Canonical types via the module: ExtractedIdentityAttribute / VerificationObservation / ProviderDecision / ExternalEvidenceReference / lifecycle events
+- [ ] Provider-neutral: map Didit result → canonical (module's DiditAdapter / normalizeResult)
+- [ ] Refactor plaintext PII: `verification_result` → Vault ref + non-PII canonical; ComplyCube `result` → minimized (outcome/categories only, drop match PII)
+- [ ] Document media store: download doc images (NOT selfies) at webhook → envelope-encrypt → private Blob → authorized+audited retrieval + provenance + our SHA-256 (migration)
+- [ ] Evidence outbox port (`IdvEvidencePublisher`, references only; no Evidence rows until Control Room approval — BACKLOG EVID-1) (migration)
+- [ ] Distinct event timestamps (occurredAt/receivedAt/recordedAt); provider outcome ≠ KYC approval
+- [ ] Tests: Evidence doc §17 list (no plaintext PII in tables/logs/outbox; no raw media/biometrics; PII only via Vault; provider approval ≠ KYC; correction preserves original; idempotency; etc.)
+- [ ] Prod infra (KMS/OIDC/separate DB) → deferred (BACKLOG IDV-2); media prod hardening + selfies + retention → BACKLOG MEDIA-1
+
+### Phase 4 — Comparison hygiene  `[~] spec written (revisit: read canonical attributes via Vault, not plaintext)`
 - [ ] DOB month/year only (never fabricate a day)
 - [ ] MRZ-first name comparison (MRZ agrees + visual differs → `extraction_error_corrected`)
 - [ ] Ignore address, nationality, gender in matching

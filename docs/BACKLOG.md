@@ -76,6 +76,16 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why:** Confirm live signature verification + the async completion path before production.
 - **Area:** `api/idv-match/screening/webhook.js`, ComplyCube portal config.
 
+### EVID-1 — Evidence Platform integration (consume the outbox)
+- **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN
+- **What:** Phase 2.5 builds the `IdvEvidencePublisher` append-only outbox (references + provenance only, no plaintext/biometrics). Do NOT create Evidence rows / call the Evidence Platform until the **Evidence Control Room** approves the external-custody + Vault-reference contract. Consumption is deferred.
+- **Area:** `api/idv-match/` evidence outbox; the `idv/` module's `IdvEvidenceIntegration` stub.
+
+### MEDIA-1 — Production media hardening + selfie storage + retention policy
+- **Category:** Security / Product · **Priority:** P2 · **Status:** OPEN
+- **What:** Document images are stored in a hardened private Blob, envelope-encrypted with the **dev/test** key provider now; production needs the **real KMS** provider (see IDV-2). **Selfie/liveness storage is deferred** — the Evidence doc forbids persisting selfie media; add only later if legally justified, as a documented restricted-store exception. Document-image **retention is currently 'forever'** — revisit per the compliance/KYC record-retention period when the user specifies.
+- **Area:** `api/idv-match/media/`, private Blob, key provider.
+
 ---
 
 ## Platform findings from the Phase 1 audit (candidates — confirm before actioning)
