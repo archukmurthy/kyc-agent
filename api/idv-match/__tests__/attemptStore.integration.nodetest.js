@@ -41,3 +41,56 @@ test("attemptStore create/get round-trips against the database and cleans up", {
 
   assert.strictEqual(await getAttempt(id), null, "test row should be cleaned up");
 });
+
+test("attemptStore session lookup + result update round-trip", { skip }, async () => {
+  const { neon } = require("@neondatabase/serverless");
+  const { randomUUID } = require("node:crypto");
+  const { createAttempt, getAttempt, getByDiditSession, updateAttempt } = require("../attemptStore");
+
+  const appId = "itest-app-" + randomUUID();
+  const sessionId = "itest-sess-" + randomUUID();
+  let id;
+  try {
+    id = await createAttempt({
+      applicationId: appId,
+      selectedOfficer: { name: "X", birthMonthYear: "1985-05", officerId: "o1" },
+      diditSessionId: sessionId,
+    });
+
+    const bySession = await getByDiditSession(sessionId);
+    assert.strictEqual(bySession.id, id, "lookup by didit session id finds the attempt");
+
+    await updateAttempt(id, {
+      status: "Approved",
+      verificationResult: { status: "Approved", verified: true, extras: { mrz: { birth_date: "850500" } } },
+      lastEventAt: "2026-09-08T00:00:00.000Z",
+    });
+
+    const row = await getAttempt(id);
+    assert.strictEqual(row.status, "Approved");
+    assert.strictEqual(row.verification_result.verified, true);
+    assert.deepStrictEqual(row.verification_result.extras.mrz, { birth_date: "850500" }); // JSONB round-trips
+    assert.ok(row.last_event_at, "last_event_at set");
+  } finally {
+    if (id) {
+      const sql = neon(process.env.DATABASE_URL);
+      await sql`DELETE FROM idv_verification_attempts WHERE id = ${id}`;
+    }
+  }
+});
+
+test("webhook event dedupe is idempotent against the real table", { skip }, async () => {
+  const { neon } = require("@neondatabase/serverless");
+  const { randomUUID } = require("node:crypto");
+  const { markEventProcessed } = require("../webhookEvents");
+
+  const eventId = "itest-evt-" + randomUUID();
+  try {
+    assert.strictEqual(await markEventProcessed(eventId, "att-x"), true, "first delivery is new");
+    assert.strictEqual(await markEventProcessed(eventId, "att-x"), false, "second delivery is a duplicate");
+  } finally {
+    const sql = neon(process.env.DATABASE_URL);
+    await sql`DELETE FROM idv_webhook_events WHERE event_id = ${eventId}`;
+  }
+});
+

@@ -30,14 +30,15 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [x] Apply migration 013 to DB (applied to Neon `idv-dev` schema-only branch; round-trip verified)
 - [ ] Phase 1 code review (optional)
 
-### Phase 2 — Didit session rework  `[~] spec written`
-- [ ] Server-created session bound to application + attempt + officer snapshot (browser can't create/modify)
-- [ ] Signed webhook ingestion (verify signature, reject stale/replay)
-- [ ] Polling fallback; refresh endpoint read-only
-- [ ] Result from one attempt can never satisfy another attempt/officer
-- [ ] Re-add MRZ extraction (hidden from UI, server-side only)
-- [ ] Compare document-extracted attributes, never echoed metadata
-- [ ] Phase 2 tests + review
+### Phase 2 — Didit session rework  `[x] done (migrations applied to idv-dev, verified)`
+- [x] Server-created session bound to application + attempt + officer snapshot (browser can't create/modify) — `session.js`
+- [x] Signed webhook ingestion (verify signature, reject stale/replay) — `webhook.js` + `webhookSignature.js`
+- [x] Polling fallback (`reconcile.js`); refresh endpoint read-only (`status.js`, no PII)
+- [x] Result from one attempt can never satisfy another (routing by `didit_session_id`, per-attempt result)
+- [x] Re-add MRZ extraction (hidden from UI, server-side only)
+- [x] Compare document-extracted attributes, never echoed metadata (mapper reads `id_verifications`)
+- [x] Migrations 014 (result cols) + 015 (webhook dedupe) applied to `idv-dev`; guarded integration green
+- [ ] Phase 2 code review (optional)
 
 ### Phase 3 — ComplyCube screening
 - [ ] Research ComplyCube screening API
