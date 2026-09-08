@@ -28,6 +28,8 @@ const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossi
 const idvStartHandler = require(path.join(__dirname, "..", "api", "idv-start.js"));
 const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.js"));
 const idvSaveHandler = require(path.join(__dirname, "..", "api", "idv-save.js"));
+const idvMatchWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "webhook.js"));
+const idvMatchStatusHandler = require(path.join(__dirname, "..", "api", "idv-match", "status.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -347,6 +349,24 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(idvSaveHandler)(req, res);
+    });
+  });
+  // Identity Discrepancy Bands (idv-match). The webhook needs the RAW body for
+  // HMAC signature verification (do NOT JSON-parse it); status is read-only.
+  app.post("/api/idv-match/webhook", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { req.rawBody = raw; adapt(idvMatchWebhookHandler)(req, res); });
+  });
+  app.get("/api/idv-match/status", adapt(idvMatchStatusHandler));
+  app.post("/api/idv-match/status", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchStatusHandler)(req, res);
     });
   });
 
