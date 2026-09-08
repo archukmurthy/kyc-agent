@@ -70,6 +70,14 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 
 ---
 
+### SCR-1 — Verify ComplyCube live webhook + provision COMPLYCUBE_WEBHOOK_SECRET
+- **Category:** Integration / Testing · **Priority:** P2 · **Status:** OPEN
+- **What:** The screening webhook (`api/idv-match/screening/webhook.js`, SDK `EventVerifier`) is unit-tested with stubs but not yet verified against a real ComplyCube-signed delivery. Needs `COMPLYCUBE_WEBHOOK_SECRET` (from the ComplyCube portal — currently missing from `.env.local`) and a public webhook URL. The create→check→result path IS proven end-to-end against the sandbox.
+- **Why:** Confirm live signature verification + the async completion path before production.
+- **Area:** `api/idv-match/screening/webhook.js`, ComplyCube portal config.
+
+---
+
 ## Platform findings from the Phase 1 audit (candidates — confirm before actioning)
 
 Surfaced during the initial audit; recorded here so they are not lost. Not part of the IDV feature. Confirm with owner whether to schedule.

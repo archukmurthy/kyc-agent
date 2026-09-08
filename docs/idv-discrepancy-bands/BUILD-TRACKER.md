@@ -40,12 +40,14 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [x] Migrations 014 (result cols) + 015 (webhook dedupe) applied to `idv-dev`; guarded integration green
 - [ ] Phase 2 code review (optional)
 
-### Phase 3 — ComplyCube screening
-- [ ] Research ComplyCube screening API
-- [ ] Build adapter + result shape
-- [ ] `hasScreeningHit()` accessor the bands consume
-- [ ] Wire env (`COMPLYCUBE_API_KEY`, `SCREENING_*`)
-- [ ] Phase 3 tests + review
+### Phase 3 — ComplyCube screening  `[x] done (SDK; sandbox proof: hit detected; migration 016 applied)`
+- [x] Research ComplyCube screening API
+- [x] Adapter (SDK client + check) + result interpreter (`interpret.js`) + config test/live guard
+- [x] `hasScreeningHit()` accessor + `startScreening()` orchestrator (`index.js`)
+- [x] Screening store + migration 016 (applied to idv-dev); webhook (EventVerifier); dev mount
+- [x] Env wired (`COMPLYCUBE_API_KEY`, `SCREENING_*`); real sandbox call proved create→check→result→interpret (hit)
+- [ ] Live webhook verification — deferred (needs `COMPLYCUBE_WEBHOOK_SECRET` + public URL; see BACKLOG SCR-1)
+- [ ] Phase 3 code review (optional)
 
 ### Phase 4 — Comparison hygiene
 - [ ] DOB month/year only (never fabricate a day)
