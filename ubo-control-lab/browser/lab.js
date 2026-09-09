@@ -2,10 +2,10 @@
   "use strict";
 
   const h = React.createElement;
-  const { OwnershipGraph, UboJourney, DETAIL_LEVEL } = UboControlUI;
+  const { OwnershipGraph, UboJourney, UboApplicantJourneyV2, DETAIL_LEVEL } = UboControlUI;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
-  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
+  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_JOURNEY_V2", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
   const GRAPH_FILTERS = ["OWNERSHIP", "VOTING", "CONTROL", "ALL"];
   let replayLibrary = null;
   try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
@@ -435,6 +435,90 @@
         h("details", null, h("summary", null, "Known, missing and permitted work"), h("pre", { className: "json" }, pretty({ knownInformation: bundle.knownInformation, missingInformation: bundle.missingInformation, permittedSemanticActions: bundle.permittedSemanticActions, signoffDependencies: bundle.signoffDependencies })))))) : h(Empty, null, journey.customerInputComplete ? "No customer work is currently executable. Final review and system work remain separate." : "No customer bundle is present in the pinned plan."));
   }
 
+  function ApplicantJourneyPanel({ catalogue, labSession, setLabSession }) {
+    const [fixtureId, setFixtureId] = React.useState("AJV2-01");
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const run = async (operation, payload) => {
+      setBusy(true);
+      setError("");
+      try {
+        const next = await request(operation, payload);
+        setLabSession(next);
+        return next;
+      } catch (cause) {
+        setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`);
+        throw cause;
+      } finally {
+        setBusy(false);
+      }
+    };
+    const start = () => run("START_APPLICANT_FIXTURE", { fixtureId });
+    if (!labSession) {
+      return h("section", { className: "panel applicant-journey-host" },
+        h("p", { className: "source-label" }, "REVIEW-ONLY | ACTUAL DECISION APPLICATION v3 CONTRACTS"),
+        h("h2", null, "Applicant Journey v2"),
+        h("p", null, "Start a sanitized scenario. Viewing this tab does not run paid Discovery, Evidence or production persistence."),
+        error && h("div", { className: "error", role: "alert" }, error),
+        h("div", { className: "field" },
+          h("label", null, "Applicant fixture"),
+          h("select", { value: fixtureId, onChange: (event) => setFixtureId(event.target.value) },
+            (catalogue?.fixtures || []).map((fixture) => h("option", { key: fixture.fixtureId, value: fixture.fixtureId }, `${fixture.fixtureId} - ${fixture.label}`)))),
+        h("button", { className: "primary", disabled: busy, onClick: start }, busy ? "Building journey..." : "Start applicant journey"));
+    }
+    const current = labSession.snapshots.at(-1);
+    const lastOperation = labSession.operationHistory.at(-1);
+    const pendingCount = labSession.pendingDecisionTargets.candidateParties.length + labSession.pendingDecisionTargets.candidateClaims.length;
+    const explicitCheckpointRecorded = ["APPLY_EXPLICIT_DECISIONS", "EXPLICIT_NO_DECISIONS_REQUIRED"].includes(lastOperation);
+    const submit = (customerAction) => run("APPLY_APPLICANT_CUSTOMER_ACTION", {
+      session: labSession,
+      customerAction,
+      operationId: `${labSession.fixtureId}:customer-action:${labSession.operationHistory.length + 1}`,
+    });
+    return h("section", { className: "applicant-journey-host" },
+      h("div", { className: "panel applicant-lab-toolbar" },
+        h("div", null,
+          h("p", { className: "source-label" }, "FIXTURE SESSION ONLY | PRODUCTION NOT AUTHORIZED"),
+          h("h2", null, `${labSession.fixtureId} - ${labSession.fixtureLabel}`),
+          h("p", null, `Snapshot #${shortHash(current.snapshot.snapshotId)} | ${labSession.policyMode} | ${labSession.snapshots.length} immutable snapshot(s)`)),
+        h("button", { className: "secondary", onClick: () => setLabSession(null), disabled: busy }, "Choose another fixture")),
+      error && h("div", { className: "error", role: "alert" }, error),
+      labSession.pendingEvaluation && h("section", { className: "panel applicant-pending", role: "status" },
+        h("p", { className: "source-label" }, "SEPARATE HOST OPERATIONS"),
+        h("h3", null, pendingCount ? "Submitted - verification/review pending" : "Submitted - ready for explicit re-evaluation"),
+        h("p", null, pendingCount
+          ? `${pendingCount} candidate identity/claim target(s) remain non-operative until an explicit Lab decision.`
+          : "No identity or claim decision is required, but the explicit decision checkpoint is still recorded separately."),
+        !explicitCheckpointRecorded && h("button", {
+          className: "secondary",
+          disabled: busy,
+          onClick: () => run("APPLY_APPLICANT_DECISIONS", { session: labSession }),
+        }, pendingCount ? "Apply explicit Lab decisions" : "Record no-decisions-required checkpoint"),
+        explicitCheckpointRecorded && h("button", {
+          className: "primary",
+          disabled: busy,
+          onClick: () => run("EVALUATE_APPLICANT_JOURNEY", { session: labSession }),
+        }, "Re-evaluate ownership case")),
+      busy && h("div", { className: "notice", role: "status" }, "Applying the selected explicit operation..."),
+      h(UboApplicantJourneyV2, {
+        journey: current.journey,
+        actorContext: labSession.actorContext,
+        actionResult: labSession.latestCustomerActionResult,
+        content: labSession.content,
+        onSubmitAction: submit,
+        onRequestRefresh: explicitCheckpointRecorded ? () => run("EVALUATE_APPLICANT_JOURNEY", { session: labSession }) : null,
+        className: "lab-applicant-journey",
+      }),
+      h("details", { className: "panel applicant-operation-log" },
+        h("summary", null, "Lab operation diagnostics"),
+        h("pre", { className: "json" }, pretty({
+          operationHistory: labSession.operationHistory,
+          pendingDecisionTargets: labSession.pendingDecisionTargets,
+          latestCustomerActionResult: labSession.latestCustomerActionResult,
+          snapshots: labSession.snapshots.map(({ sequence, reason, predecessorSnapshotId, snapshot }) => ({ sequence, reason, predecessorSnapshotId, snapshotId: snapshot.snapshotId, snapshotHash: snapshot.decisionContentHash })),
+        }))));
+  }
+
   function ContractInspector({ view }) {
     return h("section", { className: "panel" },
       h("p", { className: "source-label" }, "IMMUTABLE VERSIONED CONTRACT"),
@@ -525,10 +609,11 @@
     return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline — 1.5-RC", comparison.baseline], ["Successor review — 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
   }
 
-  function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue }) {
+  function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue, applicantCatalogue }) {
     const [tab, setTab] = React.useState("CASE_SUMMARY");
     const [graphFilter, setGraphFilter] = React.useState(session.uiState?.graphFilter || "OWNERSHIP");
     const [selectedList, setSelectedList] = React.useState(null);
+    const [applicantSession, setApplicantSession] = React.useState(null);
     const current = session.snapshots.at(-1);
     const view = current?.view;
     const run = async (operation, payload) => { setBusy(true); setError(""); try { setSession(await request(operation, payload)); } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); } finally { setBusy(false); } };
@@ -542,9 +627,14 @@
     const tabs = h("div", { className: "tabs", role: "tablist", "aria-label": "Successor review workspace views" }, REVIEW_TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name))));
     const summary = h("section", { className: "panel" }, h("h2", null, "Case Summary"), h("div", { className: "grid-2" },
       h("div", null, h("h3", null, "Decision state"), h("p", null, `${human(view.plan.state)} with ${view.counts.openCausalNeeds} open causal need(s). The exact pinned current wave is ${human(view.plan.currentPlanningWave.actor)}.`), h("p", null, `Governance: ${view.governance.readiness}; productionAuthorized=${String(view.governance.productionAuthorized)}.`)),
-      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. This is not the final Wave 11B React journey.`))));
+      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. Use Applicant Journey v2 for the separate interactive fixture-backed experience.`))));
     const panels = {
       CASE_SUMMARY: summary,
+      APPLICANT_JOURNEY_V2: h(ApplicantJourneyPanel, {
+        catalogue: applicantCatalogue,
+        labSession: applicantSession,
+        setLabSession: setApplicantSession,
+      }),
       APPLICANT_PREVIEW: h(ApplicantPreview, { view }),
       CONTRACT_INSPECTOR: h(ContractInspector, { view }),
       OWNERSHIP_AND_CONTROL_GRAPH: h(ReviewGraphPanel, { view, session, graphFilter, setGraphFilter }),
@@ -615,7 +705,7 @@
         h("button", { className: successor ? "active" : "", "aria-pressed": successor, onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved"))),
       session
         ? successor
-          ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, reset: () => { setSession(null); setError(""); } })
+          ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, applicantCatalogue: catalogue?.applicant, reset: () => { setSession(null); setError(""); } })
           : h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
         : successor
           ? h(ReviewSetup, { catalogue: catalogue?.review, mode, setMode, busy, error, savedResults, storageError, startFixture: (fixtureId, profileId) => start("START_REVIEW_FIXTURE", { fixtureId, profileId }), startLive: (companyContext, profileId) => start("START_REVIEW_LIVE", { companyContext, profileId }), startReplay: (replayRecord, profileId) => start("START_REVIEW_REPLAY", { replayRecord, profileId }) })

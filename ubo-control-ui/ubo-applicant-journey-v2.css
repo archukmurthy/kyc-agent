@@ -1,0 +1,148 @@
+.ubo-applicant-journey-v2 {
+  --uaj-ink: #16221d;
+  --uaj-muted: #607069;
+  --uaj-line: #dce5df;
+  --uaj-soft: #f3f7f4;
+  --uaj-brand: #146b4d;
+  --uaj-brand-dark: #0c4f39;
+  --uaj-warn: #7b4b00;
+  color: var(--uaj-ink);
+  display: grid;
+  gap: 22px;
+  margin: 0 auto;
+  max-width: 980px;
+  padding: 28px 20px 48px;
+  text-align: left;
+}
+
+.ubo-applicant-journey-v2 * { box-sizing: border-box; }
+.ubo-applicant-journey-v2 h1,
+.ubo-applicant-journey-v2 h2,
+.ubo-applicant-journey-v2 h3,
+.ubo-applicant-journey-v2 p { margin-top: 0; }
+.ubo-applicant-journey-v2 h1 { font-size: clamp(2rem, 4vw, 3.25rem); letter-spacing: -.045em; line-height: 1.02; max-width: 700px; }
+.ubo-applicant-journey-v2 h2 { font-size: 1.35rem; letter-spacing: -.02em; }
+.ubo-applicant-journey-v2 h3 { font-size: 1rem; }
+.uaj-hero {
+  background: linear-gradient(130deg, #0d3e30, #177353);
+  border-radius: 24px;
+  color: white;
+  min-height: 210px;
+  padding: clamp(28px, 5vw, 54px);
+}
+.uaj-hero p:last-child { color: #d6eee4; font-size: 1.05rem; max-width: 640px; }
+.uaj-kicker { color: var(--uaj-brand); font-size: .72rem; font-weight: 800; letter-spacing: .14em; margin-bottom: 7px; text-transform: uppercase; }
+.uaj-hero .uaj-kicker { color: #a8dec9; }
+.uaj-muted { color: var(--uaj-muted); }
+.uaj-progress {
+  align-items: center;
+  background: white;
+  border: 1px solid var(--uaj-line);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(20, 48, 37, .06);
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+.uaj-pulse { background: #2f9d6e; border-radius: 50%; display: inline-block; height: 9px; margin-right: 10px; width: 9px; }
+.uaj-progress-metrics { color: var(--uaj-muted); display: flex; flex-wrap: wrap; font-size: .86rem; gap: 8px 18px; }
+.uaj-review-notice { background: #f3f8fc; border: 1px solid #bdd4e7; border-radius: 12px; color: #183b56; display: grid; gap: 4px; padding: 12px 16px; }
+.uaj-card {
+  background: white;
+  border: 1px solid var(--uaj-line);
+  border-radius: 20px;
+  box-shadow: 0 10px 35px rgba(20, 48, 37, .05);
+  padding: clamp(20px, 4vw, 32px);
+}
+.uaj-card-heading,
+.uaj-section-heading { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; }
+.uaj-count,
+.uaj-status {
+  background: #e6f4ed;
+  border-radius: 999px;
+  color: var(--uaj-brand-dark);
+  font-size: .75rem;
+  font-weight: 800;
+  padding: 7px 11px;
+  white-space: nowrap;
+}
+.uaj-status--policy-content-required,
+.uaj-status--signoff-required { background: #fff2d7; color: var(--uaj-warn); }
+.uaj-relationship-groups { border-top: 1px solid var(--uaj-line); display: grid; gap: 16px; margin-top: 18px; padding-top: 18px; }
+.uaj-relationship-groups ul,
+.uaj-known-list { line-height: 1.55; margin-bottom: 0; padding-left: 21px; }
+.uaj-tasks { display: grid; gap: 16px; }
+.uaj-task { display: grid; gap: 16px; }
+.uaj-info-grid { background: var(--uaj-soft); border-radius: 14px; display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 15px; }
+.uaj-info-grid div { display: grid; gap: 4px; }
+.uaj-info-grid span { color: var(--uaj-muted); font-size: .86rem; }
+.uaj-action-list { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.uaj-action {
+  align-items: flex-start;
+  background: white;
+  border: 1px solid #b8cec3;
+  border-radius: 13px;
+  color: var(--uaj-ink);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 15px;
+  text-align: left;
+}
+.uaj-action:hover:not(:disabled) { border-color: var(--uaj-brand); box-shadow: 0 0 0 3px rgba(20, 107, 77, .09); }
+.uaj-action:disabled { cursor: not-allowed; opacity: .58; }
+.uaj-action span { color: var(--uaj-muted); font-size: .82rem; }
+.uaj-action-panel { border-top: 1px solid var(--uaj-line); padding-top: 19px; }
+.uaj-form { display: grid; gap: 15px; }
+.uaj-measurement { border: 0; display: grid; gap: 12px; margin: 0; padding: 0; }
+.uaj-measurement legend { font-size: .9rem; font-weight: 800; margin-bottom: 8px; }
+.uaj-field { display: grid; font-size: .9rem; font-weight: 700; gap: 7px; }
+.uaj-field small { color: var(--uaj-muted); font-weight: 400; }
+.uaj-field input,
+.uaj-field select,
+.uaj-field textarea {
+  background: white;
+  border: 1px solid #aebfb6;
+  border-radius: 10px;
+  color: var(--uaj-ink);
+  font: inherit;
+  padding: 11px 12px;
+  width: 100%;
+}
+.uaj-field input:focus,
+.uaj-field select:focus,
+.uaj-field textarea:focus { border-color: var(--uaj-brand); box-shadow: 0 0 0 3px rgba(20, 107, 77, .12); outline: none; }
+.uaj-owner { border: 1px solid var(--uaj-line); border-radius: 14px; display: grid; gap: 13px; margin: 0; padding: 17px; }
+.uaj-owner legend { font-weight: 800; padding: 0 6px; }
+.uaj-range { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.uaj-check { align-items: center; display: flex; gap: 9px; }
+.uaj-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+.uaj-primary,
+.uaj-secondary,
+.uaj-link { border-radius: 10px; cursor: pointer; font: inherit; font-weight: 800; padding: 10px 15px; }
+.uaj-primary { background: var(--uaj-brand); border: 1px solid var(--uaj-brand); color: white; }
+.uaj-primary:hover { background: var(--uaj-brand-dark); }
+.uaj-secondary { background: white; border: 1px solid #aebfb6; color: var(--uaj-ink); }
+.uaj-link { background: transparent; border: 0; color: var(--uaj-brand-dark); padding: 4px; text-decoration: underline; }
+.uaj-alert,
+.uaj-result,
+.uaj-handoff { background: #fff7e7; border: 1px solid #efd39d; border-radius: 12px; color: #573b0d; padding: 14px 16px; }
+.uaj-result,
+.uaj-handoff { background: #edf7f2; border-color: #bcdcca; color: var(--uaj-brand-dark); }
+.uaj-alert p:last-child,
+.uaj-result p:last-child,
+.uaj-handoff p:last-child { margin-bottom: 0; }
+.uaj-principle { border-left: 3px solid var(--uaj-brand); color: var(--uaj-muted); padding-left: 12px; }
+.uaj-footer { border-top: 1px solid var(--uaj-line); color: var(--uaj-muted); display: flex; font-size: .8rem; gap: 12px; justify-content: space-between; padding-top: 18px; }
+.uaj-contract-error { background: #fff3f0; border: 1px solid #e6aaa0; border-radius: 16px; padding: 24px; }
+@media (max-width: 720px) {
+  .ubo-applicant-journey-v2 { padding: 16px 12px 36px; }
+  .uaj-progress,
+  .uaj-card-heading,
+  .uaj-section-heading,
+  .uaj-footer { align-items: flex-start; flex-direction: column; }
+  .uaj-info-grid,
+  .uaj-action-list,
+  .uaj-range { grid-template-columns: 1fr; }
+}

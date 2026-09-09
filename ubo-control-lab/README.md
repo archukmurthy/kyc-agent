@@ -51,7 +51,15 @@ The workspace uses one current Snapshot v2 across Case Summary, Ownership & Cont
 
 The successor workspace now adds an Applicant Preview and Contract Inspector generated from public `ubo-journey-projection-v2`. They expose immutable plan-pinned customer work bundles, completion distinctions, policy-content blocks and external Evidence handoff readiness without submitting actions. The preview clearly labels `EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED` and `POLICY CONTENT REQUIRED` where applicable.
 
-This is not the final Wave 11B applicant journey. The browser does not call Decision Application v3 customer-input operations, invent unsigned policy wording, upload files, run Extraction, persist state or integrate with onboarding.
+This Wave 11A preview remains a separate read-only contract view. Only the Wave 11B1 Applicant Journey tab calls the fixture Lab's explicit Decision Application v3 customer-input operation; neither view invents unsigned policy wording, uploads files, runs Extraction, persists state or integrates with onboarding.
+
+## Wave 11B1 interactive applicant journey
+
+The successor workspace retains the Wave 11A Applicant Preview and Contract Inspector and adds `Applicant Journey v2`. Its AJV2-01 through AJV2-15 sanitized fixtures are generated through Decision Application v3, Snapshot v2, ResolutionPlan v2 and JourneyProjection v2. Test-only schema-1.3 content fixtures are labelled and never mutate the real 1.6-RC policy.
+
+Applicant submission calls only the Lab's explicit `APPLY_APPLICANT_CUSTOMER_ACTION` operation. Candidate-producing input remains pending until `APPLY_APPLICANT_DECISIONS` is selected. `EVALUATE_APPLICANT_JOURNEY` is a separate visible operation that creates Snapshot B and retains Snapshot A. The Lab session is browser-held and review-only.
+
+AJV2-13 uses the actual ASDA system-coverage plan and exposes no customer form. AJV2-14 uses the actual exhausted profile and renders exactly its three pinned bundles, including blocked residual content and external Evidence handoff only where planned. No action in this tab calls Discovery or Evidence merely by being viewed.
 
 ## Wave 10 deployed manual acceptance
 

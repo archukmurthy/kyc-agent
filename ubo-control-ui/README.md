@@ -2,6 +2,42 @@
 
 Reusable React presentation components for the public UBO Control consumer contracts. The package is intentionally outside the headless `ubo-control/` product root and has one host-supplied production dependency: React.
 
+## Successor applicant journey v2
+
+`UboApplicantJourneyV2` is the review-only applicant surface for the accepted Wave 11A contracts:
+
+```js
+const { UboApplicantJourneyV2 } = require("@ubo-control/ui");
+
+<UboApplicantJourneyV2
+  journey={journeyProjectionV2}
+  actorContext={{
+    actorReference: { referenceId: "host-applicant-reference" },
+    actorCapacity: "AUTHORISED_APPLICANT"
+  }}
+  actionResult={latestCustomerActionResultV2}
+  submissionState={{ status: "IDLE", actionId: null, error: null }}
+  content={{ templates: approvedTemplatesByReference, entityLabels }}
+  onSubmitAction={handleCustomerActionV2}
+  onCancelDraft={handleCancelDraft}
+  onRequestRefresh={requestLatestSnapshot}
+/>
+```
+
+Import `ubo-applicant-journey-v2.css`. The component accepts only `ubo-journey-projection-v2` and emits only `ubo-customer-action-v2`. The projection remains the sole product-state authority; `content` resolves only approved presentation templates and entity labels. Missing content, a non-open bundle, a non-executable action, or any `blockingSignoffs` entry fails closed.
+
+The component renders a compact textual ownership summary, one card per CustomerWorkBundle v2, and explicit system/internal/specialist/blocked/completed states. It performs no graph traversal, planning, qualification, claim decision, evaluation, Evidence execution, upload, delegation delivery, persistence, or onboarding approval. Draft identity pins snapshot hash, plan hash, bundle ID and resolution action ID. A changed projection clears the draft.
+
+The required host sequence is deliberately visible:
+
+```text
+CustomerAction v2 -> Decision Application v3.applyCustomerInput
+-> CustomerActionResult v2 -> explicit decisions where required
+-> Decision Application v3.evaluate -> fresh JourneyProjection v2
+```
+
+External Evidence stops at `ubo-external-evidence-handoff-v1`; delegation stops at `ubo-customer-work-delegation-v1`. Neither path claims that execution, authorization, upload, or work completion occurred.
+
 ## Adaptive customer journey
 
 ```js

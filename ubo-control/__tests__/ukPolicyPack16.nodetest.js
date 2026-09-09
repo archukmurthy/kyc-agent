@@ -79,7 +79,8 @@ test("UK Corporate 1.6-RC is an immutable schema-1.3 review-policy artifact", ()
 test("historical policy schemas and the v1.5 source and canonical identity remain unchanged", () => {
   [V13, V14, V15].forEach((policy) => assert.equal(validatePolicyPack(policy), true));
   assert.equal(hashPolicyPack(V15), EXPECTED_V15_CANONICAL_HASH);
-  assert.equal(createHash("sha256").update(fs.readFileSync(V15_PATH)).digest("hex"), EXPECTED_V15_BYTE_HASH);
+  const repositoryBytes = fs.readFileSync(V15_PATH, "utf8").replaceAll("\r\n", "\n");
+  assert.equal(createHash("sha256").update(repositoryBytes).digest("hex"), EXPECTED_V15_BYTE_HASH);
 });
 
 test("A-01 through A-18 exist exactly once with the accepted statuses and no approval", () => {
@@ -204,7 +205,10 @@ test("stable Decision Applications and baseline Lab remain pinned to v1.5 while 
       && !normalized.includes("/docs/");
   });
   const selectors = runtimeFiles.filter((file) => fs.readFileSync(file, "utf8").includes("1.6-rc"));
-  assert.deepEqual(selectors.map((file) => path.relative(ROOT, file).replaceAll("\\", "/")), ["ubo-control/review/index.js"]);
+  assert.deepEqual(selectors.map((file) => path.relative(ROOT, file).replaceAll("\\", "/")), [
+    "ubo-control/review/index.js",
+    "ubo-control-lab/server/applicantJourneyLab.js",
+  ]);
 });
 
 test("opaque lifecycle codes remain unresolved, disabled and dependent on A-16", () => {
@@ -228,7 +232,7 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
   assert.equal(new Set(ASSERTION_PLAN.assertions.map(({ assertionId }) => assertionId)).size, ASSERTION_PLAN.assertions.length);
   assert.equal(ASSERTION_PLAN.assertions.every(({ classification }) => ASSERTION_PLAN.classifications.includes(classification)), true);
   assert.equal(ASSERTION_PLAN.assertions.filter(({ executableNow }) => executableNow)
-    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION", "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION", "WAVE_6_LAYER_CLOSURE", "WAVE_7_PHASED_COORDINATOR", "WAVE_8_FRONTIER_NEEDS", "WAVE_9_PLANNER", "WAVE_10_LAB"].includes(classification)), true);
+    .every(({ classification }) => ["SCHEMA_PROTECTED_NOW", "READINESS_PROTECTED_NOW", "EXISTING_RUNTIME_PROTECTED", "WAVE_3_QUALIFICATION_BASIS", "WAVE_4_COMPANY_ATTRIBUTION", "WAVE_5_LLP_ATTRIBUTION_WORKING_ASSUMPTION", "WAVE_6_LAYER_CLOSURE", "WAVE_7_PHASED_COORDINATOR", "WAVE_8_FRONTIER_NEEDS", "WAVE_9_PLANNER", "WAVE_10_LAB", "WAVE_11_APPLICANT"].includes(classification)), true);
   assert.deepEqual(ASSERTION_PLAN.assertions
     .filter(({ classification, executableNow }) => classification === "WAVE_3_QUALIFICATION_BASIS" && executableNow)
     .map(({ assertionId }) => assertionId), Array.from({ length: 8 }, (_, index) => `F07-04-${String(index + 1).padStart(3, "0")}`));
@@ -259,6 +263,9 @@ test("the assertion plan covers each File 07 bullet in sections 3 through 16 exa
   const wave10 = ASSERTION_PLAN.assertions.filter(({ classification, executableNow }) => classification === "WAVE_10_LAB" && executableNow);
   assert.deepEqual(wave10.map(({ assertionId }) => assertionId), ["F07-13-009", "F07-13-010", ...Array.from({ length: 10 }, (_, index) => `F07-15-${String(index + 1).padStart(3, "0")}`)]);
   assert.equal(wave10.every(({ executionStatus, productionExecutable }) => executionStatus === "REVIEW_MODE_EXECUTABLE_IN_LAB" && productionExecutable === false), true);
+  const wave11 = ASSERTION_PLAN.assertions.filter(({ classification, executableNow }) => classification === "WAVE_11_APPLICANT" && executableNow);
+  assert.deepEqual(wave11.map(({ assertionId }) => assertionId), ["F07-14-001", "F07-14-002", "F07-14-005", "F07-14-007", "F07-14-008", "F07-14-009"]);
+  assert.equal(wave11.every(({ executionStatus, productionExecutable }) => executionStatus === "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB" && productionExecutable === false), true);
   assert.equal(ASSERTION_PLAN.assertions.find(({ assertionId }) => assertionId === "F07-09-006").executableNow, false);
   assert.equal(ASSERTION_PLAN.assertions.find(({ assertionId }) => assertionId === "F07-09-011").executableNow, false);
   assert.equal(ASSERTION_PLAN.assertions.find(({ assertionId }) => assertionId === "F07-09-012").executableNow, false);

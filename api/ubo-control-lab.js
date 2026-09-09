@@ -19,6 +19,13 @@ const {
   startReviewFixture,
   startReviewReplay,
 } = require("../ubo-control-lab/server/reviewLabEngine");
+const {
+  applyApplicantCustomerAction,
+  applyApplicantDecisions,
+  catalogue: applicantCatalogue,
+  evaluateApplicantJourney,
+  startApplicantFixture,
+} = require("../ubo-control-lab/server/applicantJourneyLab");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -34,6 +41,10 @@ const OPERATIONS = Object.freeze({
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
   CHANGE_REVIEW_PROFILE: "CHANGE_REVIEW_PROFILE",
   REVIEW_COMPARISON: "REVIEW_COMPARISON",
+  START_APPLICANT_FIXTURE: "START_APPLICANT_FIXTURE",
+  APPLY_APPLICANT_CUSTOMER_ACTION: "APPLY_APPLICANT_CUSTOMER_ACTION",
+  APPLY_APPLICANT_DECISIONS: "APPLY_APPLICANT_DECISIONS",
+  EVALUATE_APPLICANT_JOURNEY: "EVALUATE_APPLICANT_JOURNEY",
 });
 
 function explicitlyReviewBaseline(session) {
@@ -107,7 +118,7 @@ function send(res, status, payload) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method === "GET") return send(res, 200, { ...fixtureCatalogue(), review: reviewCatalogue() });
+  if (req.method === "GET") return send(res, 200, { ...fixtureCatalogue(), review: reviewCatalogue(), applicant: applicantCatalogue() });
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
     const input = req.body || {};
@@ -155,6 +166,14 @@ module.exports = async function handler(req, res) {
         const successor = startReviewFixture(input.payload);
         return send(res, 200, comparisonSummary(baseline, successor));
       }
+      case OPERATIONS.START_APPLICANT_FIXTURE:
+        return send(res, 200, startApplicantFixture(input.payload));
+      case OPERATIONS.APPLY_APPLICANT_CUSTOMER_ACTION:
+        return send(res, 200, applyApplicantCustomerAction(input.payload));
+      case OPERATIONS.APPLY_APPLICANT_DECISIONS:
+        return send(res, 200, applyApplicantDecisions(input.payload));
+      case OPERATIONS.EVALUATE_APPLICANT_JOURNEY:
+        return send(res, 200, evaluateApplicantJourney(input.payload));
       default:
         return send(res, 400, { error: "Unsupported Lab operation" });
     }

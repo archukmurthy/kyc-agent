@@ -1523,7 +1523,9 @@
       "assertion": "data-rich confirmation only;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-002",
@@ -1532,7 +1534,9 @@
       "assertion": "known information not re-requested;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-003",
@@ -1559,7 +1563,9 @@
       "assertion": "no-chart guided builder;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-006",
@@ -1580,7 +1586,9 @@
       "assertion": "separate structured statements;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-008",
@@ -1589,7 +1597,9 @@
       "assertion": "Something Changed route preserves history/conflict;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-009",
@@ -1598,7 +1608,9 @@
       "assertion": "delegation;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-010",

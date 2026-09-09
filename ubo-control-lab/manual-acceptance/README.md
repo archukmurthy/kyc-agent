@@ -89,3 +89,32 @@ The full visual/manual checks and screenshots above were captured from the same 
 ## Wave 10 successor-review acceptance
 
 Wave 10 evidence is captured from its protected Vercel preview and added alongside this register before Control Room handoff. The required set covers baseline 1.5-RC, ASDA A/B, Ownership/Voting/Control filters, a causal need and affected paths, route qualification and 60/40 distinction, TDR provisional review, layer endpoint, band corroboration, profile-change history, baseline comparison, Evidence-not-connected and the persistent review watermark. All successor views must display the same current Snapshot v2; localhost evidence is not acceptance evidence.
+
+## Wave 11B1 interactive applicant journey
+
+Date: 2026-09-09
+
+The Wave 11B1 set was captured through the staged production Lab and real local Lab API using only deterministic AJV2 fixtures. The repeatable capture is capture-wave11b1.js. Applicant submit, explicit decisions, and re-evaluation were separate visible operations; inspecting the UI caused no paid Discovery or Evidence operation.
+
+| Required acceptance view | Browser evidence | Result |
+|---|---|---|
+| Data-rich confirmation | wave11b1-01-data-rich-confirmation.png | Established projected ownership is shown without asking for owner re-entry. |
+| Confirmation, R08 satisfied | wave11b1-02-confirmation-r08-satisfied.png | Confirmation is recorded while the result truthfully reports independent Evidence SATISFIED. |
+| Confirmation, R08 open | wave11b1-03-confirmation-r08-open.png | The same principle is recorded with the distinct pinned OPEN state. |
+| Something changed | wave11b1-04-something-changed.png | One projected relationship is selected; type, target and concept are not editable. |
+| Structured foreign HoldCo | wave11b1-05-structured-foreign-holdco.png | The repeating form offers exact/range/unknown semantics and a fixed planned target. |
+| Pending explicit decision | wave11b1-06-pending-explicit-decision.png | Applicant input produces candidate targets and no hidden adjudication/evaluation. |
+| New Snapshot v2 | wave11b1-07-new-snapshot-after-decisions.png | Explicit decisions followed by separate re-evaluation create Snapshot B while Snapshot A remains in history. |
+| External Evidence handoff | wave11b1-08-external-evidence-handoff.png | The data-only handoff says execution is not connected and contains no uploader or received-document claim. |
+| Delegation handoff | wave11b1-09-delegation-handoff.png | The host handoff states that no email, authority or work completion occurred. |
+| Customer complete/internal review | wave11b1-10-customer-complete-internal-review.png | No standard customer form is created by the pending internal review. |
+| System resolution | wave11b1-11-system-resolution.png | Available system work is explained with no customer form. |
+| Specialist review | wave11b1-12-specialist-review.png | The specialist route is visible without recursive standard questions. |
+| Policy-content block | wave11b1-13-policy-content-block.png | Missing/unsigned wording remains non-executable and raw sign-off IDs stay out of the applicant surface. |
+| Stale draft | wave11b1-14-stale-draft-cleared.png | A changed snapshot/plan clears the old draft and asks the applicant to review the latest request. |
+| ASDA system profile | wave11b1-15-asda-system-profile.png | The actual system-first plan has no applicant form and retains review separately. |
+| ASDA exhausted profile | wave11b1-16-asda-exhausted-profile.png | Exactly three pinned bundles render; blocked content does not inflate the projected executable task count. |
+| Mobile 390 px | wave11b1-17-mobile-390.png | The applicant surface stacks at 390px without compressing its controls. |
+| Keyboard/accessibility | wave11b1-18-keyboard-accessibility.png | Keyboard Enter opens the selected action and focus reaches the labelled first field. |
+
+Every screenshot retains the review-policy watermark and production-not-authorized Lab chrome. None implies that Evidence upload, private ingestion, Artifact creation, delegation delivery, onboarding, persistence or production activation is connected.

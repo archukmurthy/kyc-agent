@@ -433,6 +433,30 @@ function normalizedFixtureInput({ fixtureId } = {}) {
   });
 }
 
+function applicantFixtureSeed({ fixtureId, profileId, preliminaryEvaluation = null } = {}) {
+  const fixture = FIXTURES.find(({ id }) => id === fixtureId);
+  if (!fixture) throw new TypeError("Unknown successor Lab fixture");
+  const selectedProfileId = profileId || fixture.defaultProfileId || "NOT_PROVIDED";
+  const profile = profileById(selectedProfileId);
+  const normalized = normalizedFixtureInput({ fixtureId });
+  return clone({
+    fixtureId,
+    profileId: selectedProfileId,
+    label: fixture.label,
+    caseContext: {
+      entityType: fixture.entityProfile === "LLP" ? "limited_liability_partnership" : "private_limited_company",
+      subjectEntityId: fixture.targetEntityId,
+      jurisdiction: "GB",
+      riskLevel: "MEDIUM",
+    },
+    subject: normalized.subject,
+    capabilityResult: normalized.result,
+    entityRegistrations: fixture.entities.map((entity) => registration(entity)),
+    entityLabels: Object.fromEntries(fixture.entities.map((entity) => [entity.entityId, entity.name])),
+    resolutionInputs: resolutionInputsFor(fixture, profile, preliminaryEvaluation),
+  });
+}
+
 function startReviewReplay({ replayRecord, profileId = "NOT_PROVIDED" } = {}) {
   if (!replayRecord?.discoveryResult || !replayRecord?.subject) throw new TypeError("Successor replay requires a normalized Discovery replay record");
   const subject = { entityId: replayRecord.subject.entityId, category: "LEGAL_ENTITY", name: replayRecord.subject.name, profile: replayRecord.companyContext.entityProfile || "COMPANY" };
@@ -447,6 +471,7 @@ function startReviewReplay({ replayRecord, profileId = "NOT_PROVIDED" } = {}) {
 module.exports = Object.freeze({
   REVIEW_FIXTURE_SET_VERSION,
   REVIEW_LAB_SESSION_VERSION,
+  applicantFixtureSeed,
   applyReviewDecisions,
   catalogue,
   changeReviewProfile,
