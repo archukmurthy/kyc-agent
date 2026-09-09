@@ -90,6 +90,16 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **What:** `api/idv-match/mediaCapture.js` extracts document-image presigned URLs from the Didit decision using candidate field names (`front_image` / `back_image` / `portrait_image`, plus a `documents[]`/`images[]` fallback). Confirm the exact keys against a real Didit sandbox response and trim/adjust; if the keys differ, images silently aren't captured (no error, just nothing stored).
 - **Area:** `api/idv-match/mediaCapture.js` (`KIND_FIELDS`).
 
+### SCR-2 — Wire screening (PEP/sanctions/adverse-media) into the live flow
+- **Category:** Compliance / Integration · **Priority:** P1 (compliance hole if unwired) · **Status:** OPEN
+- **What:** The screening module is built + sandbox-proven (Phase 3: ComplyCube adapter → check → interpret → store → webhook) and the band logic **consumes** `hasScreeningHit()` (Phase 5 hard-exclusion), but nothing **calls `startScreening`** in the applicant flow — so today the accessor always returns "no hit" and PEP/sanctions is never actually checked.
+- **Why non-trivial (design decisions):**
+  - **Who to screen:** the Companies House officer name, the verified *document* name, or both ("either name version" per the doc).
+  - **When:** after verification (when the real identity is known).
+  - **Async timing:** ComplyCube returns via webhook, so a hit can arrive *after* `resolve` ran while the band decision reads `hasScreeningHit` synchronously — needs a "screening pending → hold/review" state and a re-resolve when the hit lands.
+- **Impact:** production MUST wire this or sanctions/PEP is never run. Also required for a full demo of the PEP/sanctions path.
+- **Area:** `api/idv-match/screening/index.js` (`startScreening`), `resolve.js` / `pipeline.js`, `webhook` (re-resolve on screening result).
+
 ### EVID-1 — Evidence Platform integration (consume the outbox)
 - **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN
 - **What:** Phase 2.5 builds the `IdvEvidencePublisher` append-only outbox (references + provenance only, no plaintext/biometrics). Do NOT create Evidence rows / call the Evidence Platform until the **Evidence Control Room** approves the external-custody + Vault-reference contract. Consumption is deferred.
