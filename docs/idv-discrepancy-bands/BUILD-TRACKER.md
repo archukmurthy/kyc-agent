@@ -68,12 +68,12 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] Presentation-difference normalization (case/diacritics/punctuation/order/middle name) — `normalize.js`
 - [x] Phase 4 tests + review — 14 tests. **Vault-canonical revision:** `runHygiene({ officerSnapshot, identity })` takes the Vault-retrieved `{concept:value}` map (caller does the authorized read), stays pure
 
-### Phase 5 — Band assignment
-- [ ] Band A / B / C assignment logic
-- [ ] Override: name score never beats DOB month/year conflict
-- [ ] Override: missing/unreadable required data ≠ match (retry path)
-- [ ] Hard exclusion: sanctions/PEP/adverse hit or escalation flag → forces review/Band C
-- [ ] Phase 5 tests + review
+### Phase 5 — Band assignment  `[x] done (pure api/idv-match/bandAssignment.js, 9 tests)`
+- [x] Band A / B / C assignment logic — `assignBand({ hygiene, screeningHit, escalationFlag })`; Band B carries no terminal outcome (Phase 6/7 resolve)
+- [x] Override: name score never beats DOB month/year conflict — `dob.conflict` → Band C before any name check
+- [x] Override: missing/unreadable required data ≠ match (retry path) — `notMatchable` → `needsRetry`, no band
+- [x] Hard exclusion: sanctions/PEP/adverse hit or escalation flag → forces review/Band C — `unresolved_to_review`, `resolvedBy: reviewer`, escalate on flag
+- [x] Phase 5 tests + review — 9 tests; emits only valid migration-013 `outcome_type` values; records `policyVersion`
 
 ### Phase 6 — Name-equivalence engine
 - [ ] Versioned rule tables (transliteration / phonetic / patronymic), each rule an ID
