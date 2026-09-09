@@ -105,15 +105,20 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 
 ---
 
-## B. Applicant-page restructuring (behind the flag) — later phase
-- [ ] Progressive disclosure — only "Who is completing" selector first
-- [ ] Remove Signatory-ID upload (Didit replaces it)
-- [ ] Unlisted → Authority-to-Act upload → then inline Didit QR
-- [ ] Listed → Didit QR directly (no Authority-to-Act)
-- [ ] Delete the separate Verify-ID step + `?idvspike` dev shortcut
-- [ ] After verification: mandatory fields + dynamic extra-ID fields
-- [ ] Clean tick / confirm / edit UI on the applicant page
-- [ ] Persist extras into the real submission (needs `submit.js` exception — show diff first)
+## B. Applicant-page restructuring (behind the flag)
+**B server seams + screens (done):** `flags.js` (browser flag probe), `resolve.js`
+(fresh in-memory comparison), `explain.js` (dialogue answers), `session.js` HTTP
+handler; UI `src/idv-match/` `BandResultView` + `BandDialogue` + `IdvMatchVerification`.
+**B-step 3 minimal live wiring (done):** App.js flag fetch + props; ApplicantPage
+flag-gated branch. OFF path byte-identical (494 CRA tests green).
+- [~] Progressive disclosure — only "Who is completing" selector first — *deferred to full restructure (Option 2)*
+- [x] Remove Signatory-ID upload (Didit replaces it) — *flag-gated in ApplicantPage*
+- [~] Unlisted → Authority-to-Act upload → then inline Didit QR — *listed gets inline QR; unlisted keeps authority-to-act; unlisted-Didit deferred (Option 2)*
+- [x] Listed → Didit QR directly (no Authority-to-Act) — *`IdvMatchVerification` inline*
+- [ ] Delete the separate Verify-ID step + `?idvspike` dev shortcut — *deferred (Option 2)*
+- [ ] After verification: mandatory fields + dynamic extra-ID fields — *deferred (Option 2)*
+- [ ] Clean tick / confirm / edit UI on the applicant page — *deferred (Option 2)*
+- [ ] Persist extras into the real submission (needs `submit.js` exception — show diff first) — *B-step 4, next*
 
 ## C. Follow-ups (later)
 - [ ] Human review queue UI (none exists today)
