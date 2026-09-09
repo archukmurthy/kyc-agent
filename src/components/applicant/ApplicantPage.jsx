@@ -421,6 +421,12 @@ export function ApplicantPage({
     // to compare against). Unlisted applicants keep today's authority-to-act path.
     const bandsVerificationActive = idvBandsEnabled && !!applicantSelectedPerson && !applicantUnlisted;
 
+    // Progressive disclosure (flag ON): reveal the applicant fields + the rest
+    // only after the person answers "who is completing this?" — either they pick
+    // themselves from the list or choose "I am not listed".
+    const personChosen = !!applicantSelectedPerson || applicantNotListed;
+    const showApplicantBody = !idvBandsEnabled || personChosen;
+
     // Shared "proceed to Confirm" used by both the manual Continue button and the
     // bands success path. Skips the signatory check when the flag is on.
     const proceedToConfirm = () => {
@@ -493,7 +499,7 @@ export function ApplicantPage({
 
             <div style={card}>
               {renderApplicantPersonSelector()}
-              {renderApplicantFields()}
+              {showApplicantBody && renderApplicantFields()}
             </div>
 
             {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
@@ -566,7 +572,7 @@ export function ApplicantPage({
                 not a blank wipe). Layout only — onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
-            {!bandsVerificationActive && (
+            {!bandsVerificationActive && showApplicantBody && (
             <button
               disabled={continueBlocked}
               onClick={proceedToConfirm}
