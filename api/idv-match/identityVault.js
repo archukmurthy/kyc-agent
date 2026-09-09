@@ -18,6 +18,14 @@ const {
   createCustomerResponse,
   PURPOSES,
 } = require("../../idv");
+const durable = require("./vaultStore");
+
+// When an IDV database is configured, PII is stored in the durable, encrypted
+// Vault (vaultStore.js). Without a DB (unit tests) the in-memory synthetic Vault
+// is used. Callers never see the difference — this seam hides the backend.
+function useDurable() {
+  return !!process.env.IDV_DATABASE_URL;
+}
 
 let cachedStore = null;
 
@@ -70,6 +78,9 @@ async function storeExtractedIdentity({
       throw new TypeError("each attribute must be canonical (attribute_concept + attribute_value)");
     }
   }
+  if (useDurable()) {
+    return durable.storeExtractedIdentity({ sessionId, tenantId, subjectId, attributes, retentionMetadata });
+  }
   const { secureIdentityReference } = await vaultStore().storeExtractedIdentity({
     internalIdvSessionId: sessionId,
     attributes,
@@ -89,10 +100,17 @@ async function retrieveForAuthorizedPurpose({
   subjectId,
   tenantId,
   purpose = PURPOSES.KYC_DECISIONING,
+  actorId,
 }) {
   if (!reference) throw new TypeError("retrieveForAuthorizedPurpose requires a reference");
   if (!Array.isArray(fields) || fields.length === 0) {
     throw new TypeError("retrieveForAuthorizedPurpose requires a non-empty fields allowlist");
+  }
+  if (useDurable()) {
+    return durable.retrieveForAuthorizedPurpose({
+      reference, fields,
+      authorization: { actorId: actorId || subjectId || "system", purpose },
+    });
   }
   const { attributes } = await vaultStore().retrieveIdentityForAuthorizedPurpose({
     identityReference: reference,
@@ -119,6 +137,9 @@ async function recordCorrection({
   tenantId,
 }) {
   if (!reference) throw new TypeError("recordCorrection requires a reference");
+  if (useDurable()) {
+    return durable.recordCorrection({ reference, concept, submittedValue, attributeId });
+  }
   const response = createCustomerResponse({
     internalIdvSessionId: sessionId,
     attributeId,
