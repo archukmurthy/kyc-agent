@@ -34,7 +34,6 @@ const MAPPED_KEYS = [
 const prettify = (k) =>
   FIELD_LABELS[k] ||
   k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-const norm = (s) => String(s == null ? "" : s).trim().toLowerCase();
 
 const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4 };
 const inputStyle = {
@@ -137,11 +136,9 @@ export default function IdentityVerificationStep({ submissionId, declared = {}, 
   const statuses = result ? STATUS_KEYS.filter((k) => result.extras && result.extras[k]) : [];
   const amlHit = !!(result && result.extras && result.extras.amlHit);
   const expired = edit.expirationDate ? Date.parse(edit.expirationDate) < Date.now() : false;
-  const mismatches = verified
-    ? MAPPED_KEYS
-        .filter((k) => declared[k] && k in edit && norm(declared[k]) !== norm(edit[k]))
-        .map((k) => ({ key: k, declared: declared[k], verified: edit[k] }))
-    : [];
+  // NOTE: never show the applicant two versions of their data to pick from. Any
+  // document-vs-record difference is resolved server-side by the discrepancy
+  // bands (api/idv-match/), never by an applicant "confirm which is correct" UI.
 
   return (
     <div style={cardStyle}>
@@ -181,19 +178,6 @@ export default function IdentityVerificationStep({ submissionId, declared = {}, 
               <strong>AML / PEP screening hit</strong>
               {result.extras.amlTotalHits ? ` (${result.extras.amlTotalHits} match${result.extras.amlTotalHits > 1 ? "es" : ""})` : ""}.
               The applicant will be flagged as a PEP on continue.
-            </div>
-          )}
-
-          {mismatches.length > 0 && (
-            <div style={warnStyle}>
-              <strong>Verified document differs from what was entered.</strong> Confirm which is correct:
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                {mismatches.map((m) => (
-                  <li key={m.key}>
-                    {prettify(m.key)} - entered: <strong>{String(m.declared)}</strong>, document: <strong>{String(m.verified)}</strong>
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 

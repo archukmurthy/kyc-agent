@@ -89,14 +89,14 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] 5d neutral in-review state (verbatim copy) — `COPY.IN_REVIEW`
 - [x] Phase 7 tests + review — 12 tests incl. verbatim-copy guards; explanation alone never resolves; registry_error = light-touch, not blocked, reportability task
 
-### Phase 8 — Band A / Band C behaviors
-- [ ] Band A success (verbatim copy), `auto_match` / `extraction_error_corrected`
-- [ ] Band C → `demoted_to_loa_path`, set escalation flag, route to existing LOA path
-- [ ] Band C identity data stored on attempt only (never officer/UBO/etc.)
-- [ ] Record-only review task for `unresolved_to_review` / `registry_error_asserted`
-- [ ] Remove the P4 "pick one of two versions" UI
-- [ ] TODO marker for future Evidence Ledger integration
-- [ ] Phase 8 tests + review
+### Phase 8 — Band A / Band C behaviors  `[x] done (record-only behaviors.js + stores, migration 021, 6 hermetic + guarded DB)`
+- [x] Band A success (verbatim copy), `auto_match` / `extraction_error_corrected` — `recordBandOutcome` → decision row, no tasks, `COPY.BAND_A_SUCCESS`
+- [x] Band C → `demoted_to_loa_path`, set escalation flag, route to existing LOA path — escalation task (record-only, no `requires_escalation` existed), `route: loa_path`
+- [x] Band C identity data stored on attempt only (never officer/UBO/etc.) — `identityScope: attempt_only`; behaviors never writes any person-specific record
+- [x] Record-only review task for `unresolved_to_review` / `registry_error_asserted` — `idv_review_tasks` (migration 021); registry = light-touch review + reportability task, applicant proceeds
+- [x] Remove the P4 "pick one of two versions" UI — deleted the "Confirm which is correct" block from `IdentityVerificationStep.jsx` (dev-`?idvspike`-only, not the live journey); replaced with a NOTE; component test still green
+- [x] TODO marker for future Evidence Ledger integration — `TODO(evidence-ledger)` in `behaviors.js` (publish via the references-only outbox once EVID-1 approves)
+- [x] Phase 8 tests + review — 6 hermetic + 1 guarded DB (decision + task persist, append-only)
 
 ### Phase 9 — Test suite
 - [ ] All 15 required scenarios
