@@ -74,6 +74,7 @@ async function resolveAttempt(attemptId, deps = {}) {
   // Vault the extraction (idempotent) so the confirm step + reviewer reveal have a
   // reference, and record the immutable extraction_presented event. Best-effort:
   // never block resolution on the Vault/events write.
+  let vaultError = false;
   if (!attempt.secure_identity_reference && mapped.identityAttributes.length) {
     try {
       const vaultRef = await (deps.identityVault || identityVault).storeExtractedIdentity({
@@ -84,7 +85,11 @@ async function resolveAttempt(attemptId, deps = {}) {
       await (deps.identityEventsStore || identityEventsStore).appendIdentityEvent({
         attemptId, secureIdentityReference: vaultRef, eventType: "extraction_presented", actor: "system",
       });
-    } catch (err) { console.warn("[idv-match resolve] vault extraction skipped:", err && err.message); }
+    } catch (err) {
+      // Surface it: without a Vault reference the confirm step can't store extras.
+      vaultError = true;
+      console.error("[idv-match resolve] VAULT WRITE FAILED — extras cannot be confirmed:", err && err.message);
+    }
   }
 
   const documentDisplayName = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
@@ -98,6 +103,7 @@ async function resolveAttempt(attemptId, deps = {}) {
       verified: mapped.providerVerified === true,
       applicantView: mapped.providerVerified ? COPY.BAND_A_SUCCESS : COPY.IN_REVIEW,
       verifiedFields: toVerifiedFields(identity),
+      vaultError: vaultError || undefined,
     };
   }
 
@@ -114,7 +120,7 @@ async function resolveAttempt(attemptId, deps = {}) {
   }, deps);
 
   // Attach the applicant's own verified fields for the confirm/edit step.
-  return { ...result, verifiedFields: toVerifiedFields(identity) };
+  return { ...result, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
 }
 
 async function handler(req, res) {

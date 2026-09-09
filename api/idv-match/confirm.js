@@ -17,6 +17,13 @@ const SENSITIVE_FIELD_TO_CONCEPT = {
   issuingCountry: "issuing_country", gender: "gender", placeOfBirth: "place_of_birth", address: "address",
 };
 
+// Change-detection normalizer: trivial case/whitespace differences are NOT a
+// correction (avoids logging a false applicant_corrected event). The submitted
+// value is still stored verbatim when it IS a real change.
+function norm(value) {
+  return String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 async function confirmIdentity({ attemptId, confirmedFields = {} } = {}, deps = {}) {
   if (!bandsEnabled()) return { enabled: false };
   if (!attemptId) return { enabled: true, error: "attemptId_required" };
@@ -40,7 +47,7 @@ async function confirmIdentity({ attemptId, confirmedFields = {} } = {}, deps = 
       // Applicant supplied a value the document didn't carry.
       await vault.recordCorrection({ reference, concept, submittedValue: submitted });
       await events.appendIdentityEvent({ attemptId, secureIdentityReference: reference, eventType: "applicant_gap_supplied", attributeConcept: concept, actor: "applicant" });
-    } else if (String(stored) !== String(submitted)) {
+    } else if (norm(stored) !== norm(submitted)) {
       await vault.recordCorrection({ reference, concept, submittedValue: submitted });
       await events.appendIdentityEvent({ attemptId, secureIdentityReference: reference, eventType: "applicant_corrected", attributeConcept: concept, actor: "applicant" });
     } else {

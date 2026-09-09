@@ -7,14 +7,14 @@ const caseData = {
   enabled: true, status: "Approved",
   decisions: [{ band: "A", outcome_type: "auto_match", resolved_by: "system" }],
   events: [{ event_type: "extraction_presented", actor: "system" }],
-  maskedFields: { document_number: "••••4567", first_name: "••••" },
+  maskedFields: { document_number: "••••••", first_name: "••••••" },
 };
 
 test("shows status, decisions, events and masked fields", () => {
   render(<ReviewerCase caseData={caseData} />);
   expect(screen.getByText("Approved")).toBeInTheDocument();
   expect(screen.getByText(/Band A/)).toBeInTheDocument();
-  expect(screen.getByText("••••4567")).toBeInTheDocument();
+  expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
   expect(screen.getByText(/extraction_presented/)).toBeInTheDocument();
 });
 

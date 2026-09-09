@@ -155,10 +155,19 @@ async function recordCorrection({
   });
 }
 
+// List which concepts are held for a reference WITHOUT decrypting (for a masked
+// case view). Durable only; synthetic dev reviewer isn't supported (tests inject).
+async function listConcepts({ reference }) {
+  if (!reference) return [];
+  if (useDurable()) return durable.listConcepts(reference);
+  return [];
+}
+
 module.exports = {
   storeExtractedIdentity,
   retrieveForAuthorizedPurpose,
   recordCorrection,
+  listConcepts,
   // Exposed for tests that need to reset the process-wide synthetic Vault.
   _resetVaultForTests() { cachedStore = null; },
 };

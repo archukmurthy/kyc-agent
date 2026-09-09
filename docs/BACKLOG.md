@@ -95,6 +95,21 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 
 ---
 
+## Phase E findings (Evidence-contract alignment hardening)
+
+### IDVSEC-1 — Reviewer reveal endpoint is unauthenticated
+- **Category:** Security · **Priority:** P1 (blocks flag-on in prod) · **Status:** OPEN
+- **What:** `api/idv-match/reviewer.js` `revealField` returns the FULL decrypted PII for a field to any caller — it trusts the `actorId` in the request rather than verifying an authenticated reviewer (the Vault audit logs a self-declared actor). `getCase` similarly needs an authenticated reviewer.
+- **Why:** With the flag OFF + dev it's inert, but if `IDV_DISCREPANCY_BANDS_ENABLED` is turned on in production before real auth (OIDC, IDV-2), it is a PII-disclosure hole.
+- **Fix:** gate `getCase`/`revealField` behind real reviewer auth (OIDC per IDV-2); interim stopgap = the app's existing admin authentication. Do NOT enable the flag in prod until done.
+- **Area:** `api/idv-match/reviewer.js`, `src/setupProxy.js` mounts, Vercel routes.
+
+### IDVSEC-2 — Applicant IDV endpoints keyed only by attempt UUID (no auth)
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN
+- **What:** `resolve` / `confirm` / `explain` / `session` are unauthenticated, addressed by an unguessable attempt UUID (bearer-style), consistent with the Didit spike. Anyone holding the attempt id can drive/confirm that attempt.
+- **Why:** Acceptable for the applicant's own single-use flow, but should move behind session-bound auth for production (tie the attempt to the authenticated onboarding session).
+- **Area:** `api/idv-match/{resolve,confirm,explain,session}.js`.
+
 ## Platform findings from the Phase 1 audit (candidates — confirm before actioning)
 
 Surfaced during the initial audit; recorded here so they are not lost. Not part of the IDV feature. Confirm with owner whether to schedule.

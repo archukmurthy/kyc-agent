@@ -14,6 +14,7 @@ function deps(over = {}) {
     matchDecisionStore: { listByAttempt: async () => [{ band: "A", outcome_type: "auto_match", resolved_by: "system" }] },
     identityEventsStore: { listByAttempt: async () => [{ event_type: "extraction_presented", actor: "system" }] },
     identityVault: {
+      listConcepts: async () => ["document_number", "first_name"],
       retrieveForAuthorizedPurpose: async ({ fields, actorId }) => {
         reads.push({ fields, actorId });
         const all = { document_number: "X1234567", first_name: "Ada" };
@@ -33,8 +34,9 @@ test("getCase returns masked fields + decisions + events, never full values", as
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const d = deps();
   const c = await getCase("att-1", d);
-  assert.strictEqual(c.maskedFields.document_number, "••••4567");
+  assert.strictEqual(c.maskedFields.document_number, "••••••"); // masked, no decrypt
   assert.ok(!JSON.stringify(c.maskedFields).includes("X1234567"), "must not expose the full value");
+  assert.strictEqual(d.reads.length, 0, "getCase must not decrypt (no vault read)");
   assert.strictEqual(c.decisions[0].band, "A");
   assert.strictEqual(c.events[0].event_type, "extraction_presented");
 });

@@ -27,29 +27,27 @@ function keyProvider() {
   return cachedKeys;
 }
 
-// AAD binds ciphertext to its reference + concept so a value can't be relabelled
-// or moved to another identity.
-function aad(reference, concept) { return Buffer.from(JSON.stringify({ reference, concept }), "utf8"); }
+// The DEK is wrapped once per record (bound to the reference); each attribute is
+// encrypted with that shared DEK under its own nonce + AAD binding it to
+// (reference, concept) so a value can't be relabelled or moved. This means ONE
+// key-wrap call per store (not one per attribute) — important with a real KMS.
+function recordAad(reference) { return Buffer.from(JSON.stringify({ reference }), "utf8"); }
+function attrAad(reference, concept) { return Buffer.from(JSON.stringify({ reference, concept }), "utf8"); }
 
-async function encryptValue(value, reference, concept) {
-  const dek = randomBytes(32);
+// Encrypt one value with an already-wrapped DEK.
+function encryptWithDek(value, dek, reference, concept) {
   const nonce = randomBytes(12);
-  const a = aad(reference, concept);
-  try {
-    const cipher = createCipheriv("aes-256-gcm", dek, nonce);
-    cipher.setAAD(a);
-    const ct = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(value), "utf8")), cipher.final()]);
-    const wrappedDek = await keyProvider().wrapKey(dek, { aad: a });
-    return { ciphertext: ct.toString("base64"), nonce: nonce.toString("base64"), authTag: cipher.getAuthTag().toString("base64"), wrappedDek };
-  } finally { dek.fill(0); }
+  const cipher = createCipheriv("aes-256-gcm", dek, nonce);
+  cipher.setAAD(attrAad(reference, concept));
+  const ct = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(value), "utf8")), cipher.final()]);
+  return { ciphertext: ct.toString("base64"), nonce: nonce.toString("base64"), authTag: cipher.getAuthTag().toString("base64") };
 }
 
 async function decryptValue(row) {
-  const a = aad(row.secure_identity_reference, row.attribute_concept);
-  const dek = await keyProvider().unwrapKey(row.wrapped_dek, { aad: a });
+  const dek = await keyProvider().unwrapKey(row.wrapped_dek, { aad: recordAad(row.secure_identity_reference) });
   try {
     const decipher = createDecipheriv("aes-256-gcm", dek, Buffer.from(row.nonce, "base64"));
-    decipher.setAAD(a);
+    decipher.setAAD(attrAad(row.secure_identity_reference, row.attribute_concept));
     decipher.setAuthTag(Buffer.from(row.auth_tag, "base64"));
     const pt = Buffer.concat([decipher.update(Buffer.from(row.ciphertext, "base64")), decipher.final()]);
     return JSON.parse(pt.toString("utf8"));
@@ -71,15 +69,20 @@ async function storeExtractedIdentity({ sessionId, tenantId = null, subjectId = 
     INSERT INTO idv_vault_records (secure_identity_reference, session_id, tenant_id, subject_id, retention_metadata)
     VALUES (${reference}, ${sessionId}, ${tenantId}, ${subjectId}, ${JSON.stringify(retention)}::jsonb)
   `;
-  for (const attr of attributes) {
-    assertNoRawEvidence({ [attr.attribute_concept]: attr.attribute_value });
-    const enc = await encryptValue(attr.attribute_value, reference, attr.attribute_concept);
-    await sql`
-      INSERT INTO idv_vault_attributes
-        (secure_identity_reference, attribute_id, attribute_concept, ciphertext, nonce, auth_tag, wrapped_dek, envelope_version, version, source)
-      VALUES (${reference}, ${attr.attribute_id || randomUUID()}, ${attr.attribute_concept}, ${enc.ciphertext}, ${enc.nonce}, ${enc.authTag}, ${JSON.stringify(enc.wrappedDek)}::jsonb, 1, 1, 'IDV_PROVIDER_EXTRACTION')
-    `;
-  }
+  // One DEK for the whole record, wrapped once.
+  const dek = randomBytes(32);
+  const wrappedDek = await keyProvider().wrapKey(dek, { aad: recordAad(reference) });
+  try {
+    for (const attr of attributes) {
+      assertNoRawEvidence({ [attr.attribute_concept]: attr.attribute_value });
+      const enc = encryptWithDek(attr.attribute_value, dek, reference, attr.attribute_concept);
+      await sql`
+        INSERT INTO idv_vault_attributes
+          (secure_identity_reference, attribute_id, attribute_concept, ciphertext, nonce, auth_tag, wrapped_dek, envelope_version, version, source)
+        VALUES (${reference}, ${attr.attribute_id || randomUUID()}, ${attr.attribute_concept}, ${enc.ciphertext}, ${enc.nonce}, ${enc.authTag}, ${JSON.stringify(wrappedDek)}::jsonb, 1, 1, 'IDV_PROVIDER_EXTRACTION')
+      `;
+    }
+  } finally { dek.fill(0); }
   return reference;
 }
 
@@ -102,19 +105,32 @@ async function retrieveForAuthorizedPurpose({ reference, fields = [], authorizat
   return values;
 }
 
+// List which concepts are held for a reference WITHOUT decrypting anything
+// (so a case view can mask without a full decrypt of every field).
+async function listConcepts(reference) {
+  if (!reference) return [];
+  const sql = client();
+  const rows = await sql`SELECT DISTINCT attribute_concept FROM idv_vault_attributes WHERE secure_identity_reference = ${reference} AND superseded = false ORDER BY attribute_concept`;
+  return rows.map((r) => r.attribute_concept);
+}
+
 // Append a corrected value as a new version; the original is preserved (superseded).
 async function recordCorrection({ reference, concept, submittedValue, attributeId = null }) {
   if (!reference || !concept) throw new TypeError("recordCorrection requires reference + concept");
   const sql = client();
   await sql`UPDATE idv_vault_attributes SET superseded = true WHERE secure_identity_reference = ${reference} AND attribute_concept = ${concept} AND superseded = false`;
   const next = await sql`SELECT COALESCE(MAX(version), 0) + 1 AS v FROM idv_vault_attributes WHERE secure_identity_reference = ${reference} AND attribute_concept = ${concept}`;
-  const enc = await encryptValue(submittedValue, reference, concept);
-  await sql`
-    INSERT INTO idv_vault_attributes
-      (secure_identity_reference, attribute_id, attribute_concept, ciphertext, nonce, auth_tag, wrapped_dek, envelope_version, version, source)
-    VALUES (${reference}, ${attributeId || randomUUID()}, ${concept}, ${enc.ciphertext}, ${enc.nonce}, ${enc.authTag}, ${JSON.stringify(enc.wrappedDek)}::jsonb, 1, ${next[0].v}, 'APPLICANT_CORRECTION')
-  `;
+  const dek = randomBytes(32);
+  const wrappedDek = await keyProvider().wrapKey(dek, { aad: recordAad(reference) });
+  try {
+    const enc = encryptWithDek(submittedValue, dek, reference, concept);
+    await sql`
+      INSERT INTO idv_vault_attributes
+        (secure_identity_reference, attribute_id, attribute_concept, ciphertext, nonce, auth_tag, wrapped_dek, envelope_version, version, source)
+      VALUES (${reference}, ${attributeId || randomUUID()}, ${concept}, ${enc.ciphertext}, ${enc.nonce}, ${enc.authTag}, ${JSON.stringify(wrappedDek)}::jsonb, 1, ${next[0].v}, 'APPLICANT_CORRECTION')
+    `;
+  } finally { dek.fill(0); }
   return { corrected: true, version: next[0].v };
 }
 
-module.exports = { storeExtractedIdentity, retrieveForAuthorizedPurpose, recordCorrection };
+module.exports = { storeExtractedIdentity, retrieveForAuthorizedPurpose, recordCorrection, listConcepts };

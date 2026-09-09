@@ -17,6 +17,7 @@ const REVIEWABLE_CONCEPTS = [
   "document_type", "expiry_date", "issuing_country", "gender", "place_of_birth", "address",
 ];
 
+const MASK = "••••••";
 function mask(value) {
   const s = String(value == null ? "" : value);
   if (!s) return "";
@@ -36,13 +37,14 @@ async function getCase(attemptId, deps = {}) {
   const attempt = await store.getAttempt(attemptId);
   if (!attempt) return { enabled: true, error: "attempt_not_found" };
 
+  // Mask WITHOUT decrypting: list which reviewable concepts exist and show a
+  // placeholder. The full value is fetched only via an explicit audited reveal.
   const maskedFields = {};
   if (attempt.secure_identity_reference) {
-    const values = await vault.retrieveForAuthorizedPurpose({
-      reference: attempt.secure_identity_reference, fields: REVIEWABLE_CONCEPTS,
-      actorId: deps.actorId || "reviewer", purpose: "KYC_DECISIONING",
-    });
-    for (const [concept, value] of Object.entries(values)) maskedFields[concept] = mask(value);
+    const concepts = await vault.listConcepts({ reference: attempt.secure_identity_reference });
+    for (const concept of concepts) {
+      if (REVIEWABLE_CONCEPTS.includes(concept)) maskedFields[concept] = MASK;
+    }
   }
   return {
     enabled: true,
