@@ -111,13 +111,13 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 handler; UI `src/idv-match/` `BandResultView` + `BandDialogue` + `IdvMatchVerification`.
 **B-step 3 minimal live wiring (done):** App.js flag fetch + props; ApplicantPage
 flag-gated branch. OFF path byte-identical (494 CRA tests green).
-- [~] Progressive disclosure — only "Who is completing" selector first — *deferred to full restructure (Option 2)*
+- [x] Progressive disclosure — only "Who is completing" selector first — *O2-1: `personChosen` gates the applicant body when flag ON*
 - [x] Remove Signatory-ID upload (Didit replaces it) — *flag-gated in ApplicantPage*
-- [~] Unlisted → Authority-to-Act upload → then inline Didit QR — *listed gets inline QR; unlisted keeps authority-to-act; unlisted-Didit deferred (Option 2)*
+- [~] Unlisted → Authority-to-Act upload → then inline Didit QR — *listed gets inline QR; unlisted keeps authority-to-act; unlisted-Didit (verify-only, no officer) awaiting a scope decision (O2-2)*
 - [x] Listed → Didit QR directly (no Authority-to-Act) — *`IdvMatchVerification` inline*
-- [ ] Delete the separate Verify-ID step + `?idvspike` dev shortcut — *deferred (Option 2)*
-- [ ] After verification: mandatory fields + dynamic extra-ID fields — *deferred (Option 2)*
-- [ ] Clean tick / confirm / edit UI on the applicant page — *deferred (Option 2)*
+- [x] Delete the separate Verify-ID step + `?idvspike` dev shortcut — *O2-3: removed from App.js + component/test deleted (was dev-only orphan)*
+- [x] After verification: mandatory fields + dynamic extra-ID fields — *O2-4: resolve returns `verifiedFields` (name/DOB/nationality + doc number/type/expiry/issuing country/gender/POB/address); confirmed + persisted as `applicant.verifiedIdentity`. First-class schema promotion + provenance = IDV-4.*
+- [x] Clean tick / confirm / edit UI on the applicant page — *O2-4: `VerifiedFieldsConfirm` (tick + Edit + Confirm & continue)*
 - [x] Persist extras into the real submission — *B-step 4: `applicant.idvVerification` (attemptId + band + outcome, no PII) rides the existing applicant JSON blob; `submit.js` NOT touched (exception not needed). Full document-extras promotion = IDV-4.*
 
 ## C. Follow-ups (later)
