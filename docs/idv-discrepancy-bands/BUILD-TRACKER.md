@@ -81,13 +81,13 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] Records which rule ID + score + policy version resolved a case — returns `{ score, ruleIds, ruleExplained, outcome, policyVersion, ruleTableVersion }`
 - [x] Phase 6 tests + review — 9 tests (translit / phonetic / patronymic-suffix / patronymic-particle / dialogue / review)
 
-### Phase 7 — Band B resolution flow
-- [ ] 5a machine resolution first (auto-resolve `same_person_variation_accepted`)
-- [ ] 5b disclosure gate (Didit+liveness passed, own record, no restricted flag)
-- [ ] 5c one-round dialogue (5 fixed options, verbatim copy)
-- [ ] "I changed my name" evidence upload (both names present check)
-- [ ] 5d neutral in-review state (verbatim copy)
-- [ ] Phase 7 tests + review
+### Phase 7 — Band B resolution flow  `[x] done (server-side logic + verbatim copy; UI screens = applicant-page phase)`
+- [x] 5a machine resolution first (auto-resolve `same_person_variation_accepted`) — `resolution.js resolveBandB`; doc spelling canonical, CH alias, rule/score/policy recorded
+- [x] 5b disclosure gate (Didit+liveness passed, own record, no restricted flag) — gate closed → `unresolved_to_review` + neutral copy, no dialogue
+- [x] 5c one-round dialogue (5 fixed options, verbatim copy) — `copy.js` (names only, "Submit explanation"); 5 `handleExplanation` handlers
+- [x] "I changed my name" evidence upload (both names present check) — injectable `extractNames`; both present → `same_person_name_change_evidenced`, else review
+- [x] 5d neutral in-review state (verbatim copy) — `COPY.IN_REVIEW`
+- [x] Phase 7 tests + review — 12 tests incl. verbatim-copy guards; explanation alone never resolves; registry_error = light-touch, not blocked, reportability task
 
 ### Phase 8 — Band A / Band C behaviors
 - [ ] Band A success (verbatim copy), `auto_match` / `extraction_error_corrected`
