@@ -98,10 +98,10 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] TODO marker for future Evidence Ledger integration — `TODO(evidence-ledger)` in `behaviors.js` (publish via the references-only outbox once EVID-1 approves)
 - [x] Phase 8 tests + review — 6 hermetic + 1 guarded DB (decision + task persist, append-only)
 
-### Phase 9 — Test suite
-- [ ] All 15 required scenarios
-- [ ] Off-flag regression (journey identical when flag OFF)
-- [ ] Full suite green (before + after)
+### Phase 9 — Test suite  `[x] done (gated pipeline.js + 15-scenario suite)`
+- [x] All 15 required scenarios — `scenarios.nodetest.js` (1-3,5-10,14,15 + retry via `runBandPipeline`; 4 in matching, 11 in session, 12 in webhook, 13 in statusReconcile)
+- [x] Off-flag regression (journey identical when flag OFF) — pipeline returns `{ enabled:false }`, no decisions/tasks written
+- [x] Full suite green (before + after) — idv-match node suite 0 fail; CRA suite unchanged (pre-existing PLAT-4 `ubo-control` hash pin failure is on untouched `main`)
 
 ---
 
