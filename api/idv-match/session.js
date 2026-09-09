@@ -8,6 +8,7 @@ const { createSession } = require("../../lib/didit/diditClient");
 const { buildOfficerSnapshot } = require("./officerSnapshot");
 const attemptStore = require("./attemptStore");
 const { safeAppendLifecycleEvent, LIFECYCLE_EVENTS } = require("./lifecycle");
+const { bandsEnabled } = require("./config");
 
 async function startVerificationAttempt({ applicationId, officerCandidate, callbackUrl } = {}) {
   if (!applicationId) throw new Error("startVerificationAttempt: applicationId is required");
@@ -36,4 +37,26 @@ async function startVerificationAttempt({ applicationId, officerCandidate, callb
   return { attemptId, hostedVerificationUrl: session.hostedUrl };
 }
 
-module.exports = { startVerificationAttempt };
+// Browser-callable start: creates the server-authoritative attempt bound to the
+// selected officer and returns the attempt id + hosted Didit URL. Only when the
+// flag is on; the browser can never forge the binding (officer snapshot is frozen
+// server-side from the candidate it passes).
+async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (!bandsEnabled()) return res.status(404).json({ error: "not_enabled" });
+  const body = req.body || {};
+  if (!body.applicationId || !body.officerCandidate) {
+    return res.status(400).json({ error: "applicationId_and_officerCandidate_required" });
+  }
+  try {
+    const out = await startVerificationAttempt({ applicationId: body.applicationId, officerCandidate: body.officerCandidate });
+    return res.status(200).json(out);
+  } catch (err) {
+    console.error("[idv-match session]", err && err.message);
+    return res.status(500).json({ error: "session_error" });
+  }
+}
+
+module.exports = handler;
+module.exports.startVerificationAttempt = startVerificationAttempt;
+module.exports.handler = handler;

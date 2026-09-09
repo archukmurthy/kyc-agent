@@ -2,7 +2,18 @@ const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert");
 
 const attemptStore = require("../attemptStore");
-const { startVerificationAttempt } = require("../session");
+const sessionModule = require("../session");
+const { startVerificationAttempt } = sessionModule;
+
+function mockRes() {
+  const r = { statusCode: null, body: null };
+  r.setHeader = () => {};
+  r.status = (c) => { r.statusCode = c; return r; };
+  r.json = (b) => { r.body = b; return r; };
+  return r;
+}
+
+const realBandsFlag = process.env.IDV_DISCREPANCY_BANDS_ENABLED;
 
 const realFetch = global.fetch;
 const realCreate = attemptStore.createAttempt;
@@ -29,6 +40,22 @@ afterEach(() => {
   global.fetch = realFetch;
   attemptStore.createAttempt = realCreate;
   attemptStore.updateAttempt = realUpdate;
+  if (realBandsFlag === undefined) delete process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+  else process.env.IDV_DISCREPANCY_BANDS_ENABLED = realBandsFlag;
+});
+
+test("HTTP handler 404s when the flag is off", async () => {
+  delete process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+  const res = mockRes();
+  await sessionModule.handler({ method: "POST", body: { applicationId: "a", officerCandidate: {} } }, res);
+  assert.strictEqual(res.statusCode, 404);
+});
+
+test("HTTP handler 400s on missing fields when the flag is on", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const res = mockRes();
+  await sessionModule.handler({ method: "POST", body: {} }, res);
+  assert.strictEqual(res.statusCode, 400);
 });
 
 test("guards missing applicationId / officerCandidate", async () => {
