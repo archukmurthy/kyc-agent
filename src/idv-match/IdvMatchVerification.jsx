@@ -12,7 +12,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -36,7 +36,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   async function start() {
     setBusy(true); setError(null);
     try {
-      const d = await postJson("/api/idv-match/session", { applicationId, officerCandidate });
+      const d = await postJson("/api/idv-match/session", { applicationId, officerCandidate, verifyOnly });
       if (d.error) throw new Error(d.error);
       setAttemptId(d.attemptId);
       setHostedUrl(d.hostedVerificationUrl);

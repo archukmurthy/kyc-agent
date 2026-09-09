@@ -66,6 +66,18 @@ test("resolve is idempotent — an existing decision is returned, pipeline not r
   assert.strictEqual(d._decisions.length, 0, "must not record a second decision");
 });
 
+test("verify-only (unlisted) resolves as verified, no band, with verified fields", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({});
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.band, undefined, "no band comparison for verify-only");
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+  assert.strictEqual(d._decisions.length, 0, "verify-only records no band decision");
+});
+
 test("resolve reports a missing session", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));

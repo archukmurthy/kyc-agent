@@ -16,6 +16,7 @@ const { runBandPipeline } = require("./pipeline");
 const { bandsEnabled } = require("./config");
 const identityVault = require("./identityVault");
 const identityEventsStore = require("./identityEventsStore");
+const COPY = require("./copy");
 
 function identityMap(attributes) {
   const map = {};
@@ -87,6 +88,18 @@ async function resolveAttempt(attemptId, deps = {}) {
   }
 
   const documentDisplayName = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
+
+  // Verify-only (unlisted applicant): no officer to compare against, so skip band
+  // assignment entirely — this is identity proof, not a match. The applicant
+  // proceeds if the provider verified them; otherwise it goes to review.
+  if (officerSnapshot && officerSnapshot.mode === "verify_only") {
+    return {
+      enabled: true, verifyOnly: true,
+      verified: mapped.providerVerified === true,
+      applicantView: mapped.providerVerified ? COPY.BAND_A_SUCCESS : COPY.IN_REVIEW,
+      verifiedFields: toVerifiedFields(identity),
+    };
+  }
 
   const result = await pipeline({
     attemptId,

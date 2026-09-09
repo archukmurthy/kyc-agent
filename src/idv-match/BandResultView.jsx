@@ -66,7 +66,7 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
 
   // Band A success, registry note, name-change evidenced — render the server copy
   // and let the applicant proceed. In-review outcomes render copy only (no proceed).
-  const canProceed = result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true;
+  const canProceed = result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true || result.verified === true;
   const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
   return (
     <View title={view.title} body={view.body}>

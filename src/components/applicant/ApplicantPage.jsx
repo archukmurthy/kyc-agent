@@ -421,6 +421,9 @@ export function ApplicantPage({
     // Bands verification is shown only for a LISTED officer (there is an officer
     // to compare against). Unlisted applicants keep today's authority-to-act path.
     const bandsVerificationActive = idvBandsEnabled && !!applicantSelectedPerson && !applicantUnlisted;
+    // Unlisted applicants verify identity too (verify-only, no officer match),
+    // AFTER they've uploaded their authority-to-act document.
+    const unlistedVerifyActive = idvBandsEnabled && applicantUnlisted && !!authorityToActFile;
 
     // Progressive disclosure (flag ON): reveal the applicant fields + the rest
     // only after the person answers "who is completing this?" — either they pick
@@ -578,6 +581,21 @@ export function ApplicantPage({
               </div>
             )}
 
+            {/* Unlisted applicant: verify-only identity check after authority-to-act. */}
+            {unlistedVerifyActive && (
+              <div style={{ ...card, marginTop: 16 }}>
+                <IdvMatchVerification
+                  applicationId={applicationId}
+                  verifyOnly
+                  onProceed={proceedToConfirm}
+                  onResolved={onIdvResolved}
+                  onConfirmedFields={writeVerifiedFields}
+                  Btn={Btn}
+                  cardStyle={{}}
+                />
+              </div>
+            )}
+
             {/* PR: Continue + Start Over share one row (Start Over left, Continue
                 right). Start Over is onboarding-only (!landedViaLink) — hidden on
                 the dossier/invite journey; the empty <span/> keeps Continue
@@ -585,7 +603,7 @@ export function ApplicantPage({
                 not a blank wipe). Layout only — onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
-            {!bandsVerificationActive && showApplicantBody && (
+            {!bandsVerificationActive && !unlistedVerifyActive && showApplicantBody && (
             <button
               disabled={continueBlocked}
               onClick={proceedToConfirm}
