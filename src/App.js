@@ -141,7 +141,6 @@ import { DemoBanner } from "./components/banners/DemoBanner";
 // DemoToggle went with the journey picker — that screen was its only mount site.
 import { FillGapsPage } from "./components/fillGaps/FillGapsPage";
 import { BUSINESS_TYPE_OPTIONS, stakeholderMissingFields } from "./components/fillGaps/stakeholderHelpers";
-import IdentityVerificationStep from "./components/idv/IdentityVerificationStep";
 import {
   mapToDocAgentOwnershipType,
   extractFromDoc,
@@ -881,18 +880,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
     if (!dId || journey !== "customer") return;
     dossierHydratedRef.current = true;
     loadDossierAndStartOnboarding(dId, tenantParam);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Dev-only shortcut: jump straight to the Identity Verification step via
-  // ?idvspike=1, so the spike can be exercised without walking the whole
-  // wizard. Never active in production builds.
-  useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
-    const p = new URLSearchParams(window.location.search);
-    if (p.get("idvspike") === "1") {
-      setStep(stepsFor(journeyType).identityVerification);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -4823,25 +4810,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
           />
         )}
 
-        {step === STEPS.identityVerification && agentType !== "preboarding" && (
-          <IdentityVerificationStep
-            submissionId={dossierId || onboardingSubmissionId}
-            declared={{
-              applicantFirstName: gapRef.current.applicantFirstName,
-              applicantLastName: gapRef.current.applicantLastName,
-              applicantDateOfBirth: gapRef.current.applicantDateOfBirth,
-              applicantNationality: gapRef.current.applicantNationality,
-            }}
-            onVerified={(mappedFields) => {
-              setApplicantAgentValues((prev) => ({ ...prev, ...mappedFields }));
-              Object.entries(mappedFields).forEach(([k, v]) => { gapRef.current[k] = v; });
-              setFormVersion((v) => v + 1);
-            }}
-            onContinue={() => scrollAndSetStep(STEPS.confirm)}
-            cardStyle={card}
-            Btn={Btn}
-          />
-        )}
+        {/* The standalone dev Verify-ID step (?idvspike) was removed — the bands
+            flow verifies inline on the applicant page (src/idv-match/). The
+            identityVerification step index is kept in the maps to avoid
+            renumbering the later steps. */}
 
         {step === STEPS.confirm && research && agentType !== "preboarding" && (
           <ConfirmStep
