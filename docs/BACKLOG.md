@@ -78,6 +78,11 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why:** Confirm live signature verification + the async completion path before production.
 - **Area:** `api/idv-match/screening/webhook.js`, ComplyCube portal config.
 
+### BANDS-1 — "I changed my name" document name-extraction (OCR)
+- **Category:** Feature / Integration · **Priority:** P2 · **Status:** OPEN
+- **What:** The Band B `changed_name` path (`api/idv-match/explain.js` → `handleExplanation`) checks whether an uploaded marriage-cert/deed-poll contains BOTH names. Name extraction from the uploaded document is an injectable seam (`extractNames`) that is **not yet implemented** — until it is, `changed_name` with a real upload routes to `unresolved_to_review` (safe default, never a false pass). Wire real extraction (Didit document read or an OCR/name-match service) so a valid linking document resolves `same_person_name_change_evidenced`.
+- **Area:** `api/idv-match/explain.js`, `resolution.js handleExplanation`.
+
 ### EVID-1 — Evidence Platform integration (consume the outbox)
 - **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN
 - **What:** Phase 2.5 builds the `IdvEvidencePublisher` append-only outbox (references + provenance only, no plaintext/biometrics). Do NOT create Evidence rows / call the Evidence Platform until the **Evidence Control Room** approves the external-custody + Vault-reference contract. Consumption is deferred.
