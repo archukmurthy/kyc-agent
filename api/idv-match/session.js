@@ -7,6 +7,7 @@
 const { createSession } = require("../../lib/didit/diditClient");
 const { buildOfficerSnapshot } = require("./officerSnapshot");
 const attemptStore = require("./attemptStore");
+const { safeAppendLifecycleEvent, LIFECYCLE_EVENTS } = require("./lifecycle");
 
 async function startVerificationAttempt({ applicationId, officerCandidate, callbackUrl } = {}) {
   if (!applicationId) throw new Error("startVerificationAttempt: applicationId is required");
@@ -23,6 +24,13 @@ async function startVerificationAttempt({ applicationId, officerCandidate, callb
   await attemptStore.updateAttempt(attemptId, {
     status: "session_created",
     diditSessionId: session.providerSessionId,
+  });
+
+  // Domain history — best-effort, never blocks the flow. No provider time yet,
+  // so occurredAt stays absent (receivedAt is the receipt of our own action).
+  await safeAppendLifecycleEvent({
+    attemptId, type: LIFECYCLE_EVENTS.IDV_SESSION_CREATED,
+    receivedAt: new Date().toISOString(), providerReference: session.providerSessionId,
   });
 
   return { attemptId, hostedVerificationUrl: session.hostedUrl };

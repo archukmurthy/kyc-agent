@@ -10,6 +10,7 @@ const { getDecision } = require("../../lib/didit/diditClient");
 const { persistDecision } = require("./persistDecision");
 const attemptStore = require("./attemptStore");
 const webhookEvents = require("./webhookEvents");
+const { safeAppendLifecycleEvent, LIFECYCLE_EVENTS } = require("./lifecycle");
 
 // Compute an ISO time for the event from its unix-seconds timestamp.
 function eventIsoTime(payload, now) {
@@ -51,6 +52,12 @@ async function processWebhook({ rawBody, headers, now = Date.now() }, deps = {})
 
   // Map -> Vault (PII) -> store (non-PII). See persistDecision.
   await persist({ attempt, decision, receivedAt: new Date(now), lastEventAt: eventTime, statusFallback: status }, deps);
+
+  // Domain history — best-effort. occurredAt = provider event time; receivedAt =
+  // when we received the delivery. Distinct times, never conflated.
+  const nowIso = new Date(now).toISOString();
+  await safeAppendLifecycleEvent({ attemptId: attempt.id, type: LIFECYCLE_EVENTS.WEBHOOK_RECEIVED || "WEBHOOK_RECEIVED", occurredAt: eventTime, receivedAt: nowIso }, deps);
+  await safeAppendLifecycleEvent({ attemptId: attempt.id, type: LIFECYCLE_EVENTS.PROVIDER_RESULT_RECEIVED, occurredAt: eventTime, receivedAt: nowIso }, deps);
 
   return { statusCode: 200, body: { accepted: true, attemptId: attempt.id } };
 }
