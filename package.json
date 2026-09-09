@@ -18,6 +18,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
+    "postbuild": "node scripts/evidence-deployment-boundary.js --sanitize-build --verify",
     "test": "react-scripts test",
     "test:smoke:db": "node scripts/real-db-smoke.js",
     "eject": "react-scripts eject"
