@@ -118,7 +118,7 @@ flag-gated branch. OFF path byte-identical (494 CRA tests green).
 - [ ] Delete the separate Verify-ID step + `?idvspike` dev shortcut — *deferred (Option 2)*
 - [ ] After verification: mandatory fields + dynamic extra-ID fields — *deferred (Option 2)*
 - [ ] Clean tick / confirm / edit UI on the applicant page — *deferred (Option 2)*
-- [ ] Persist extras into the real submission (needs `submit.js` exception — show diff first) — *B-step 4, next*
+- [x] Persist extras into the real submission — *B-step 4: `applicant.idvVerification` (attemptId + band + outcome, no PII) rides the existing applicant JSON blob; `submit.js` NOT touched (exception not needed). Full document-extras promotion = IDV-4.*
 
 ## C. Follow-ups (later)
 - [ ] Human review queue UI (none exists today)
