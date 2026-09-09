@@ -12,7 +12,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, Btn, cardStyle, onProvideLoa, onReselect, onProceed }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -22,6 +22,16 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const Button = Btn || ((props) => <button {...props} />);
+
+  // Record the result, and — for any terminal (non-dialogue) outcome — report a
+  // compact summary up so the journey can persist the IDV reference on the
+  // submission (attempt id + band + outcome; never PII).
+  function applyResult(res) {
+    setResult(res);
+    if (onResolved && res && res.enabled !== false && !res.dialogue) {
+      onResolved({ attemptId, band: res.band || null, outcomeType: res.outcomeType || null });
+    }
+  }
 
   async function start() {
     setBusy(true); setError(null);
@@ -40,7 +50,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
     try {
       const s = await fetch(`/api/idv-match/status?attemptId=${encodeURIComponent(attemptId)}`).then((r) => r.json());
       setStatus(s.status);
-      if (s.verified) setResult(await postJson("/api/idv-match/resolve", { attemptId }));
+      if (s.verified) applyResult(await postJson("/api/idv-match/resolve", { attemptId }));
     } catch (e) { setError(String(e.message || e)); } finally { setBusy(false); }
   }
 
@@ -54,7 +64,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
       if (res.action === "reselect_officer") { if (onReselect) onReselect(); return; }
       if (res.needsUpload) { setUploadPrompt(res.uploadPrompt); return; }
       setUploadPrompt(null);
-      setResult(res);
+      applyResult(res);
     } catch (e) { setError(String(e.message || e)); } finally { setBusy(false); }
   }
 

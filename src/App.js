@@ -416,6 +416,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [drsSubmitted, setDrsSubmitted] = useState([]);   // submittedRequirements[]
   const [drsFlags, setDrsFlags] = useState({});           // feature flags from Step 2
   const [idvBandsEnabled, setIdvBandsEnabled] = useState(false); // IDV discrepancy-bands feature flag (server-owned)
+  const [idvVerification, setIdvVerification] = useState(null); // { attemptId, band, outcomeType } when the bands flow resolved (no PII)
   const [drsGapsCleared, setDrsGapsCleared] = useState(false); // declaration gate
   // Derived: is the company being onboarded publicly listed? Drives the
   // stakeholder-EDD suppression on Fill Gaps (listed-company directors and
@@ -2745,6 +2746,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       nationality: gapRef.current.applicantNationality || null,
       dateOfBirth: gapRef.current.applicantDateOfBirth || null,
       isPEP: gapRef.current.applicantIsPEP || null,
+      // IDV discrepancy-bands outcome reference (only when the flag ran the flow).
+      // A reference to the server-side decision, not identity PII.
+      idvVerification: idvVerification || null,
     };
 
     const payload = {
@@ -4815,6 +4819,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             Btn={Btn}
             idvBandsEnabled={idvBandsEnabled}
             applicationId={dossierId || onboardingSubmissionId}
+            onIdvResolved={setIdvVerification}
           />
         )}
 

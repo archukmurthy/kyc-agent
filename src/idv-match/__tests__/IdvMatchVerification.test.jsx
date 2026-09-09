@@ -20,13 +20,16 @@ test("start -> QR/link -> completed -> resolve renders the Band A success", asyn
     "/api/idv-match/resolve": () => ({ enabled: true, band: "A", outcomeType: "auto_match", applicantView: { title: "Identity verified", body: "Your identity has been matched to the selected company officer." } }),
   });
 
-  render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} />);
+  const onResolved = jest.fn();
+  render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResolved={onResolved} />);
   fireEvent.click(screen.getByText("Start verification"));
   await screen.findByText("https://verify.didit.me/s/x");
 
   fireEvent.click(screen.getByText("I've completed verification"));
   await screen.findByText("Identity verified");
   expect(screen.getByText("Your identity has been matched to the selected company officer.")).toBeInTheDocument();
+  // reports the outcome reference up (attempt id + band + outcome; no PII)
+  expect(onResolved).toHaveBeenCalledWith({ attemptId: "att-1", band: "A", outcomeType: "auto_match" });
 });
 
 test("Band B dialogue -> submit same_spelling -> explain resolves to success", async () => {

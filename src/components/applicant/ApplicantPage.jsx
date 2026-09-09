@@ -101,6 +101,7 @@ export function ApplicantPage({
   // ── IDV discrepancy bands (flag-gated; OFF = today's behaviour exactly) ──
   idvBandsEnabled = false,
   applicationId = null,
+  onIdvResolved,
 }) {
   const card = cardStyle;
 
@@ -551,6 +552,7 @@ export function ApplicantPage({
                   onProceed={proceedToConfirm}
                   onReselect={() => setApplicantSelectedPerson(null)}
                   onProvideLoa={() => setApplicantNotListed(true)}
+                  onResolved={onIdvResolved}
                   Btn={Btn}
                   cardStyle={{}}
                 />
