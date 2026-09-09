@@ -9,6 +9,7 @@
 const { neon } = require("@neondatabase/serverless");
 const { randomUUID, randomBytes, createCipheriv, createDecipheriv } = require("node:crypto");
 const { LocalTestManagedKeyProvider, assertNoRawEvidence } = require("../../idv");
+const { retentionMetadata: retentionStamp, DATA_CLASSES } = require("./retentionPolicy");
 
 function client() {
   const conn = process.env.IDV_DATABASE_URL || process.env.DATABASE_URL;
@@ -57,16 +58,18 @@ async function decryptValue(row) {
 
 // Persist canonical identity attributes. Idempotent per session (re-storing the
 // same session returns the same opaque reference without duplicating rows).
-async function storeExtractedIdentity({ sessionId, tenantId = null, subjectId = null, attributes = [], retentionMetadata = {} }) {
+async function storeExtractedIdentity({ sessionId, tenantId = null, subjectId = null, attributes = [], retentionMetadata = null }) {
   if (!sessionId) throw new TypeError("storeExtractedIdentity requires sessionId");
   const sql = client();
   const existing = await sql`SELECT secure_identity_reference FROM idv_vault_records WHERE session_id = ${sessionId}`;
   if (existing.length) return existing[0].secure_identity_reference; // idempotent
 
+  // Stamp the VAULT_PII retention clock (period unset until compliance sets it).
+  const retention = retentionMetadata || retentionStamp(DATA_CLASSES.VAULT_PII, new Date().toISOString());
   const reference = randomUUID();
   await sql`
     INSERT INTO idv_vault_records (secure_identity_reference, session_id, tenant_id, subject_id, retention_metadata)
-    VALUES (${reference}, ${sessionId}, ${tenantId}, ${subjectId}, ${JSON.stringify(retentionMetadata)}::jsonb)
+    VALUES (${reference}, ${sessionId}, ${tenantId}, ${subjectId}, ${JSON.stringify(retention)}::jsonb)
   `;
   for (const attr of attributes) {
     assertNoRawEvidence({ [attr.attribute_concept]: attr.attribute_value });
