@@ -45,15 +45,21 @@ function mapDiditDecision(payload, { receivedAt = new Date() } = {}) {
   // (name / DOB / document number), so it goes to the Vault as its own identity
   // attribute — never to an ordinary table — and stays hidden from the UI.
   const document = firstDocument(payload.decision || payload) || {};
-  if (document.mrz != null) {
+  const appendAttr = (concept, value) => {
+    if (value == null || value === "") return;
     identityAttributes.push(createIdentityAttribute({
-      concept: "mrz",
-      value: document.mrz,
+      concept, value,
       provider: normalized.provider,
       providerSessionId: normalized.provider_session_id,
       providerReportReference: normalized.provider_report_id,
     }));
-  }
+  };
+  // MRZ: checksummed name source for Phase 4 (Vault-bound, UI-hidden).
+  appendAttr("mrz", document.mrz);
+  // Extra document fields the module's field map omits but the applicant confirms
+  // (gender, place of birth). PII -> Vault, like every other identity attribute.
+  appendAttr("gender", document.gender);
+  appendAttr("place_of_birth", document.place_of_birth || document.birth_place);
 
   return {
     provider: normalized.provider,

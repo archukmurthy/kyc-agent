@@ -50,6 +50,11 @@ test("resolve maps the fresh decision and runs the pipeline -> Band A", async ()
   assert.strictEqual(r.band, "A");
   assert.strictEqual(r.outcomeType, "auto_match");
   assert.strictEqual(d._decisions.length, 1);
+  // returns the applicant's own verified fields for confirmation (no mrz)
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+  assert.strictEqual(r.verifiedFields.lastName, "Smith");
+  assert.strictEqual(r.verifiedFields.dateOfBirth, "1985-05-24");
+  assert.ok(!("mrz" in r.verifiedFields));
 });
 
 test("resolve is idempotent — an existing decision is returned, pipeline not re-run", async () => {

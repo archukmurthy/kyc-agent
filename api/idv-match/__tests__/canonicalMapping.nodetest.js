@@ -23,6 +23,8 @@ const decisionPayload = () => ({
       nationality: "GBR",
       document_number: PII.docNo,
       expiration_date: "2030-01-01",
+      gender: "F",
+      place_of_birth: "London",
       document_validity: true,
       mrz: { last_name: PII.name, first_name: PII.first, document_number: PII.docNo },
       completed_at: "2026-09-01T10:04:00Z",
@@ -86,6 +88,12 @@ test("timestamps preserve distinct provider vs receipt times", () => {
   assert.strictEqual(timestamps.provider_completed_at, "2026-09-01T10:05:00.000Z");
   assert.strictEqual(timestamps.result_received_at, receivedAt.toISOString());
   assert.notStrictEqual(timestamps.created_at, timestamps.result_received_at);
+});
+
+test("captures gender and place of birth as identity attributes", () => {
+  const concepts = mapDiditDecision(decisionPayload()).identityAttributes.map((a) => a.attribute_concept);
+  assert.ok(concepts.includes("gender"));
+  assert.ok(concepts.includes("place_of_birth"));
 });
 
 test("a decision with no MRZ omits the mrz attribute", () => {

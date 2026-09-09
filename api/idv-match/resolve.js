@@ -26,6 +26,22 @@ function livenessPassed(observations) {
   return !!(liveness && liveness.status === "PASSED");
 }
 
+// The applicant's OWN extracted fields, curated for the confirm/edit step. MRZ is
+// deliberately excluded (server-side matching only, never shown).
+const VERIFIED_FIELD_MAP = {
+  first_name: "firstName", last_name: "lastName", date_of_birth: "dateOfBirth",
+  nationality: "nationality", document_number: "documentNumber", document_type: "documentType",
+  expiry_date: "expiryDate", issuing_country: "issuingCountry", address: "address",
+  gender: "gender", place_of_birth: "placeOfBirth",
+};
+function toVerifiedFields(identity) {
+  const out = {};
+  for (const [concept, key] of Object.entries(VERIFIED_FIELD_MAP)) {
+    if (identity[concept] != null && identity[concept] !== "") out[key] = identity[concept];
+  }
+  return out;
+}
+
 async function resolveAttempt(attemptId, deps = {}) {
   if (!bandsEnabled()) return { enabled: false };
   const store = deps.attemptStore || attemptStore;
@@ -54,7 +70,7 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   const documentDisplayName = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
 
-  return pipeline({
+  const result = await pipeline({
     attemptId,
     applicationId: attempt.application_id,
     officerSnapshot,
@@ -65,6 +81,9 @@ async function resolveAttempt(attemptId, deps = {}) {
     companyDisplayName: officerSnapshot.name || "",
     documentDisplayName,
   }, deps);
+
+  // Attach the applicant's own verified fields for the confirm/edit step.
+  return { ...result, verifiedFields: toVerifiedFields(identity) };
 }
 
 async function handler(req, res) {
