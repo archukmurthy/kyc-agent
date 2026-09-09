@@ -61,12 +61,12 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] Tests: Evidence doc §17 list (no plaintext PII in tables/logs/outbox; no raw media/biometrics; PII only via Vault; provider approval ≠ KYC; correction preserves original; idempotency; etc.) — *covered across sub-steps 1-6; `evidenceInvariants.nodetest.js` consolidates the cross-cutting ones. 88 tests, 0 fail*
 - [ ] Prod infra (KMS/OIDC/separate DB) → deferred (BACKLOG IDV-2); media prod hardening + selfies + retention → BACKLOG MEDIA-1
 
-### Phase 4 — Comparison hygiene  `[~] spec written (revisit: read canonical attributes via Vault, not plaintext)`
-- [ ] DOB month/year only (never fabricate a day)
-- [ ] MRZ-first name comparison (MRZ agrees + visual differs → `extraction_error_corrected`)
-- [ ] Ignore address, nationality, gender in matching
-- [ ] Presentation-difference normalization (case/diacritics/punctuation/order/middle name)
-- [ ] Phase 4 tests + review
+### Phase 4 — Comparison hygiene  `[x] done (pure module api/idv-match/matching/, reads canonical identity via Vault, 14 tests)`
+- [x] DOB month/year only (never fabricate a day) — `compareDob.js`
+- [x] MRZ-first name comparison (MRZ agrees + visual differs → `extraction_error_corrected`) — `compareName.js`
+- [x] Ignore address, nationality, gender in matching — `hygiene.js` (`IGNORED_FIELDS`)
+- [x] Presentation-difference normalization (case/diacritics/punctuation/order/middle name) — `normalize.js`
+- [x] Phase 4 tests + review — 14 tests. **Vault-canonical revision:** `runHygiene({ officerSnapshot, identity })` takes the Vault-retrieved `{concept:value}` map (caller does the authorized read), stays pure
 
 ### Phase 5 — Band assignment
 - [ ] Band A / B / C assignment logic
