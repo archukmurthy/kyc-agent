@@ -15,7 +15,6 @@
 
 const {
   createIdvModule,
-  createIdentityAttribute,
   createCustomerResponse,
   PURPOSES,
 } = require("../../idv");
@@ -48,13 +47,13 @@ function vaultAccess({ tenantId, subjectId, purpose, fields, correlationId }) {
   };
 }
 
-// Persist extracted identity PII. `attributes` are raw { concept, value, ...
-// provenance } pairs — canonical construction (and the assertNoRawEvidence
-// guard inside the store) happen here so callers stay out of the module's
-// builders. `sessionId` (our attempt id) keys the Vault entry: re-storing the
-// same attempt updates it and returns the same opaque reference (idempotent
-// under duplicate webhooks). Returns the opaque secureIdentityReference to
-// persist in our tables.
+// Persist extracted identity PII. `attributes` are already-canonical identity
+// attributes (each with attribute_concept + attribute_value) produced by the
+// provider-neutral mapping layer — the sole producer of canonical PII. The
+// store runs assertNoRawEvidence on them. `sessionId` (our attempt id) keys the
+// Vault entry: re-storing the same attempt updates it and returns the same
+// opaque reference (idempotent under duplicate webhooks). Returns the opaque
+// secureIdentityReference to persist in our tables.
 async function storeExtractedIdentity({
   tenantId,
   subjectId,
@@ -66,22 +65,14 @@ async function storeExtractedIdentity({
   if (!Array.isArray(attributes) || attributes.length === 0) {
     throw new TypeError("storeExtractedIdentity requires at least one attribute");
   }
-  const canonical = attributes.map((attribute) =>
-    createIdentityAttribute({
-      concept: attribute.concept,
-      value: attribute.value,
-      provider: attribute.provider,
-      providerSessionId: attribute.providerSessionId,
-      providerReportReference: attribute.providerReportReference,
-      sourceDocumentType: attribute.sourceDocumentType,
-      sourceDocumentCountry: attribute.sourceDocumentCountry,
-      extractedAt: attribute.extractedAt,
-      stableOrdinal: attribute.stableOrdinal,
-    }),
-  );
+  for (const attribute of attributes) {
+    if (!attribute || !attribute.attribute_concept || attribute.attribute_value == null) {
+      throw new TypeError("each attribute must be canonical (attribute_concept + attribute_value)");
+    }
+  }
   const { secureIdentityReference } = await vaultStore().storeExtractedIdentity({
     internalIdvSessionId: sessionId,
-    attributes: canonical,
+    attributes,
     access: vaultAccess({ tenantId, subjectId, purpose: PURPOSES.PROVIDER_INGESTION }),
     retentionMetadata,
   });

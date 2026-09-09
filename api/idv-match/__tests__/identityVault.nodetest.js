@@ -2,13 +2,17 @@ const { test, beforeEach } = require("node:test");
 const assert = require("node:assert");
 
 const vault = require("../identityVault");
+const { createIdentityAttribute } = require("../../../idv");
 
 beforeEach(() => vault._resetVaultForTests());
 
+const attr = (concept, value) =>
+  createIdentityAttribute({ concept, value, provider: "DIDIT", providerSessionId: "sess-1" });
+
 const sampleAttributes = () => [
-  { concept: "full_name", value: "Ada Lovelace", provider: "DIDIT", providerSessionId: "sess-1" },
-  { concept: "date_of_birth", value: "1815-12-10", provider: "DIDIT", providerSessionId: "sess-1" },
-  { concept: "document_number", value: "X1234567", provider: "DIDIT", providerSessionId: "sess-1" },
+  attr("full_name", "Ada Lovelace"),
+  attr("date_of_birth", "1815-12-10"),
+  attr("document_number", "X1234567"),
 ];
 
 test("store returns an opaque reference that is not the plaintext PII", async () => {
@@ -60,7 +64,7 @@ test("store rejects raw evidence smuggled into an attribute value", async () => 
   await assert.rejects(
     () => vault.storeExtractedIdentity({
       sessionId: "attempt-1",
-      attributes: [{ concept: "selfie", value: "data:image/png;base64,AAAA", provider: "DIDIT", providerSessionId: "s" }],
+      attributes: [attr("selfie", "data:image/png;base64,AAAA")],
     }),
     /raw|evidence/i,
   );
