@@ -7,7 +7,7 @@
 // Deliveries are idempotent (event id) and out-of-order/stale events are ignored.
 const { verifyDiditWebhook } = require("../../lib/didit/webhookSignature");
 const { getDecision } = require("../../lib/didit/diditClient");
-const { mapDecision } = require("../../lib/didit/mapDecision");
+const { persistDecision } = require("./persistDecision");
 const attemptStore = require("./attemptStore");
 const webhookEvents = require("./webhookEvents");
 
@@ -23,7 +23,7 @@ async function processWebhook({ rawBody, headers, now = Date.now() }, deps = {})
   const store = deps.attemptStore || attemptStore;
   const events = deps.webhookEvents || webhookEvents;
   const pullDecision = deps.getDecision || getDecision;
-  const map = deps.mapDecision || mapDecision;
+  const persist = deps.persistDecision || persistDecision;
 
   const v = verify({ rawBody, headers, secret: process.env.DIDIT_WEBHOOK_SECRET, now });
   if (!v.valid) return { statusCode: 401, body: { error: "invalid_webhook", reason: v.reason } };
@@ -37,23 +37,20 @@ async function processWebhook({ rawBody, headers, now = Date.now() }, deps = {})
   const isNew = await events.markEventProcessed(payload.event_id || null, attempt.id);
   if (!isNew) return { statusCode: 200, body: { accepted: true, duplicate: true, attemptId: attempt.id } };
 
-  // A trusted scheme carries the decision; otherwise the server re-pulls it so we
-  // never persist an unverified payload.
-  let decision = decisionTrusted && payload.decision ? payload.decision : null;
-  if (!decision) decision = await pullDecision(sessionId);
-  const mapped = map(decision);
-
   // Ignore an event older than the last one we applied (out-of-order / stale).
+  // Checked before we pull or persist anything.
   const eventTime = eventIsoTime(payload, now);
   if (attempt.last_event_at && new Date(eventTime) <= new Date(attempt.last_event_at)) {
     return { statusCode: 200, body: { accepted: true, stale: true, attemptId: attempt.id } };
   }
 
-  await store.updateAttempt(attempt.id, {
-    status: mapped.status || status,
-    verificationResult: mapped,
-    lastEventAt: eventTime,
-  });
+  // A trusted scheme carries the decision; otherwise the server re-pulls it so we
+  // never persist an unverified payload.
+  let decision = decisionTrusted && payload.decision ? payload.decision : null;
+  if (!decision) decision = await pullDecision(sessionId);
+
+  // Map -> Vault (PII) -> store (non-PII). See persistDecision.
+  await persist({ attempt, decision, receivedAt: new Date(now), lastEventAt: eventTime, statusFallback: status }, deps);
 
   return { statusCode: 200, body: { accepted: true, attemptId: attempt.id } };
 }

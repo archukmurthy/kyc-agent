@@ -54,17 +54,18 @@ async function getByDiditSession(diditSessionId) {
 // Update the mutable lifecycle fields of an attempt. Only the fields provided
 // (non-null) are changed; the rest are preserved via COALESCE. This is pure data
 // access — ordering/terminal-status rules live in the webhook handler.
-async function updateAttempt(id, { status = null, diditSessionId = null, verificationResult = null, lastEventAt = null } = {}) {
+async function updateAttempt(id, { status = null, diditSessionId = null, verificationResult = null, secureIdentityReference = null, lastEventAt = null } = {}) {
   if (!id) throw new Error("updateAttempt: id is required");
   const sql = client();
   const resultJson = verificationResult == null ? null : JSON.stringify(verificationResult);
   await sql`
     UPDATE idv_verification_attempts
-    SET status              = COALESCE(${status}, status),
-        didit_session_id    = COALESCE(${diditSessionId}, didit_session_id),
-        verification_result = COALESCE(${resultJson}::jsonb, verification_result),
-        last_event_at       = COALESCE(${lastEventAt}, last_event_at),
-        updated_at          = now()
+    SET status                    = COALESCE(${status}, status),
+        didit_session_id          = COALESCE(${diditSessionId}, didit_session_id),
+        verification_result       = COALESCE(${resultJson}::jsonb, verification_result),
+        secure_identity_reference = COALESCE(${secureIdentityReference}, secure_identity_reference),
+        last_event_at             = COALESCE(${lastEventAt}, last_event_at),
+        updated_at                = now()
     WHERE id = ${id}
   `;
 }

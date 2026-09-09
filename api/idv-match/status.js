@@ -14,7 +14,7 @@ async function getAttemptStatus(attemptId, deps = {}) {
   return {
     attemptId: attempt.id,
     status: attempt.status,
-    verified: !!(result && result.verified),
+    verified: !!(result && result.providerVerified),
     hasResult: !!result,
   };
 }

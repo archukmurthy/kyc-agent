@@ -51,10 +51,10 @@ Single source of truth for what we're building and what's done. Tick items as co
 
 ### Phase 2.5 — Evidence-compatible architecture (PIVOT — build to the "IDV - Evidence" doc)
 Adopt the existing `idv/` module foundation; refactor the plaintext PII from Phases 1-3. Comes before Phase 4 (comparison reads the canonical model / Vault).
-- [~] Adopt `idv/` module Vault (dev = synthetic in-memory + LocalTestManagedKeyProvider) — store text PII as **opaque Vault references**, never plaintext — *sub-step 1 done: `api/idv-match/identityVault.js` wrapper + 7 tests (opaque ref, allowlist minimization, raw-evidence reject, append-only correction); not yet wired*
-- [ ] Canonical types via the module: ExtractedIdentityAttribute / VerificationObservation / ProviderDecision / ExternalEvidenceReference / lifecycle events
-- [ ] Provider-neutral: map Didit result → canonical (module's DiditAdapter / normalizeResult)
-- [ ] Refactor plaintext PII: `verification_result` → Vault ref + non-PII canonical; ComplyCube `result` → minimized (outcome/categories only, drop match PII)
+- [x] Adopt `idv/` module Vault (dev = synthetic in-memory + LocalTestManagedKeyProvider) — store text PII as **opaque Vault references**, never plaintext — *sub-step 1: `api/idv-match/identityVault.js` wrapper; wired via `persistDecision` in sub-step 3*
+- [x] Canonical types via the module: ExtractedIdentityAttribute / VerificationObservation / ProviderDecision / ExternalEvidenceReference / lifecycle events — *sub-step 2: `canonicalMapping.js` + MRZ append; 7 tests*
+- [x] Provider-neutral: map Didit result → canonical (module's DiditAdapter / normalizeResult) — *sub-step 2*
+- [x] Refactor plaintext PII: `verification_result` → Vault ref + non-PII canonical; ComplyCube `result` → minimized (outcome/categories only, drop match PII) — *sub-step 3: migration 017, `persistDecision` seam, `status.js` reads `providerVerified`; 62 tests*
 - [ ] Document media store: download doc images (NOT selfies) at webhook → envelope-encrypt → private Blob → authorized+audited retrieval + provenance + our SHA-256 (migration)
 - [ ] Evidence outbox port (`IdvEvidencePublisher`, references only; no Evidence rows until Control Room approval — BACKLOG EVID-1) (migration)
 - [ ] Distinct event timestamps (occurredAt/receivedAt/recordedAt); provider outcome ≠ KYC approval

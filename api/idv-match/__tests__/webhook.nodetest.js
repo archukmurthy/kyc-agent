@@ -2,9 +2,11 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const { processWebhook } = require("../webhook");
 
-// Build injectable deps with sensible defaults; override per test.
+// Build injectable deps with sensible defaults; override per test. The webhook's
+// job is routing/dedup/stale-guard/trust — the map->Vault->store work lives
+// behind the injectable persistDecision seam (tested separately).
 function makeDeps(over = {}) {
-  const calls = { update: null, pulled: false };
+  const calls = { persist: null, pulled: false };
   const deps = {
     verify: over.verify || (() => ({
       valid: true, sessionId: "sess-1", status: "Approved", decisionTrusted: true,
@@ -12,11 +14,13 @@ function makeDeps(over = {}) {
     })),
     attemptStore: {
       getByDiditSession: over.getByDiditSession || (async () => ({ id: "att-1", last_event_at: null })),
-      updateAttempt: async (id, patch) => { calls.update = { id, patch }; },
     },
     webhookEvents: { markEventProcessed: over.markEventProcessed || (async () => true) },
-    getDecision: async () => { calls.pulled = true; return { status: "Approved" }; },
-    mapDecision: over.mapDecision || ((d) => ({ status: d.status, verified: d.status === "Approved", mappedFields: {}, extras: {} })),
+    getDecision: async () => { calls.pulled = true; return { status: "Approved", pulled: true }; },
+    persistDecision: over.persistDecision || (async (args) => {
+      calls.persist = args;
+      return { providerStatus: "Approved", secureIdentityReference: "ref-1" };
+    }),
   };
   return { deps, calls };
 }
@@ -33,14 +37,13 @@ test("404 when no attempt owns the session", async () => {
   assert.strictEqual(r.statusCode, 404);
 });
 
-test("trusted decision is stored without re-pulling", async () => {
+test("trusted decision is persisted without re-pulling", async () => {
   const { deps, calls } = makeDeps();
   const r = await processWebhook({ rawBody: "{}", headers: {} }, deps);
   assert.strictEqual(r.statusCode, 200);
   assert.strictEqual(calls.pulled, false, "should not re-pull a trusted decision");
-  assert.strictEqual(calls.update.id, "att-1");
-  assert.strictEqual(calls.update.patch.status, "Approved");
-  assert.ok(calls.update.patch.verificationResult, "stores the mapped result");
+  assert.strictEqual(calls.persist.attempt.id, "att-1");
+  assert.deepStrictEqual(calls.persist.decision, { status: "Approved" }, "persists the trusted payload decision");
 });
 
 test("untrusted (simple) signature makes the SERVER re-pull the decision", async () => {
@@ -50,15 +53,15 @@ test("untrusted (simple) signature makes the SERVER re-pull the decision", async
   const r = await processWebhook({ rawBody: "{}", headers: {} }, deps);
   assert.strictEqual(r.statusCode, 200);
   assert.strictEqual(calls.pulled, true, "should re-pull when decision not trusted");
-  assert.ok(calls.update.patch.verificationResult);
+  assert.strictEqual(calls.persist.decision.pulled, true, "persists the server-pulled decision");
 });
 
-test("duplicate delivery is idempotent (no update)", async () => {
+test("duplicate delivery is idempotent (no persist)", async () => {
   const { deps, calls } = makeDeps({ markEventProcessed: async () => false });
   const r = await processWebhook({ rawBody: "{}", headers: {} }, deps);
   assert.strictEqual(r.statusCode, 200);
   assert.strictEqual(r.body.duplicate, true);
-  assert.strictEqual(calls.update, null, "duplicate must not write");
+  assert.strictEqual(calls.persist, null, "duplicate must not write");
 });
 
 test("an out-of-order (older) event is ignored", async () => {
@@ -68,5 +71,6 @@ test("an out-of-order (older) event is ignored", async () => {
   const r = await processWebhook({ rawBody: "{}", headers: {} }, deps);
   assert.strictEqual(r.statusCode, 200);
   assert.strictEqual(r.body.stale, true);
-  assert.strictEqual(calls.update, null, "stale event must not write");
+  assert.strictEqual(calls.persist, null, "stale event must not write");
+  assert.strictEqual(calls.pulled, false, "stale event must not even re-pull");
 });

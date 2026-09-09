@@ -39,6 +39,7 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **What:** Stand up the prerequisites the `idv/` module requires in production: a managed KMS-backed `ManagedKeyProvider` (local test key is forbidden in prod), an OIDC issuer/audience over HTTPS with JWKS, and the separate `IDV_DATABASE_URL` database + schema (`npm run idv:migrate`).
 - **Why:** Needed for IDV-1; module hard-guards refuse to run in production without them.
 - **Blockers/deps:** client to provide/confirm KMS, OIDC, and DB.
+- **Note (Phase 2.5):** the dev Vault is the module's **in-memory synthetic store**, which does **not** survive across serverless invocations. So today `secure_identity_reference` persists in Postgres but the referenced PII is write-and-lose between requests — fine for proving the Evidence architecture on synthetic Didit data, but the feature is not functionally end-to-end for identity read-back until the durable Postgres Vault (this item) is wired. Flag stays OFF meanwhile.
 
 ### IDV-3 — Add production webhook ingestion (HMAC) alongside polling
 - **Category:** Reliability / Integration

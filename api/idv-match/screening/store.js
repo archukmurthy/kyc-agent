@@ -41,17 +41,18 @@ async function listByAttempt(attemptId) {
   return sql`SELECT * FROM idv_screening_checks WHERE attempt_id = ${attemptId} ORDER BY created_at DESC`;
 }
 
-async function updateScreeningResult(id, { status = null, outcome = null, categories = null, result = null } = {}) {
+// Data minimization: we persist outcome + categories only. The full ComplyCube
+// payload (match PII + scores) is never stored — the raw `result` column was
+// dropped in migration 017.
+async function updateScreeningResult(id, { status = null, outcome = null, categories = null } = {}) {
   if (!id) throw new Error("updateScreeningResult: id is required");
   const sql = client();
   const categoriesJson = categories == null ? null : JSON.stringify(categories);
-  const resultJson = result == null ? null : JSON.stringify(result);
   await sql`
     UPDATE idv_screening_checks
     SET status     = COALESCE(${status}, status),
         outcome    = COALESCE(${outcome}, outcome),
         categories = COALESCE(${categoriesJson}::jsonb, categories),
-        result     = COALESCE(${resultJson}::jsonb, result),
         updated_at = now()
     WHERE id = ${id}
   `;

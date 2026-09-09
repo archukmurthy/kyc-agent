@@ -48,7 +48,6 @@ async function processScreeningWebhook({ rawBody, signature, secret }, deps = {}
     status: interpreted.status,
     outcome: interpreted.outcome,
     categories: interpreted.categories,
-    result: check.result || null,
   });
 
   return { statusCode: 200, body: { accepted: true, screeningId: row.id, hit: interpreted.hit } };

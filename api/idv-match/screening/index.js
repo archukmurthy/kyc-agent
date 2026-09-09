@@ -29,7 +29,6 @@ async function startScreening(attemptId, person, deps = {}) {
       status: interpreted.status,
       outcome: interpreted.outcome,
       categories: interpreted.categories,
-      result: check.result || null,
     });
   }
   return { screeningId, complyCubeCheckId: check.id };

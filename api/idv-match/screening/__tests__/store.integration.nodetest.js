@@ -29,7 +29,6 @@ test("screening store create/get/list/update round-trips and cleans up", { skip 
       status: "complete",
       outcome: "attention",
       categories: { watchlist: true, pep: true, adverseMedia: false, other: false },
-      result: { outcome: "attention" },
     });
 
     const after = await getByCheckId(checkId);
