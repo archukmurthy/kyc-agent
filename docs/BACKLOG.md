@@ -40,6 +40,7 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why:** Needed for IDV-1; module hard-guards refuse to run in production without them.
 - **Blockers/deps:** client to provide/confirm KMS, OIDC, and DB.
 - **Note (Phase 2.5):** the dev Vault is the module's **in-memory synthetic store**, which does **not** survive across serverless invocations. So today `secure_identity_reference` persists in Postgres but the referenced PII is write-and-lose between requests — fine for proving the Evidence architecture on synthetic Didit data, but the feature is not functionally end-to-end for identity read-back until the durable Postgres Vault (this item) is wired. Flag stays OFF meanwhile.
+- **Note (Section B, 2026-09-09):** because of the above, the live band comparison (`api/idv-match/resolve.js`) reads identity from a **fresh in-memory canonical map** (re-pull the Didit decision + `mapDiditDecision`), NOT a Vault re-read. The Vault keeps the reference for audit only. Once the durable Vault exists, switch the comparison to an **authorized Vault re-read** (`identityVault.retrieveForAuthorizedPurpose` with a field allowlist) so the identity isn't re-pulled from the provider on each resolve.
 
 ### IDV-3 — Add production webhook ingestion (HMAC) alongside polling
 - **Category:** Reliability / Integration
