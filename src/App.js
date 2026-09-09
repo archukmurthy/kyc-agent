@@ -415,6 +415,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // pre-declaration gap gate (Step5Recompute).
   const [drsSubmitted, setDrsSubmitted] = useState([]);   // submittedRequirements[]
   const [drsFlags, setDrsFlags] = useState({});           // feature flags from Step 2
+  const [idvBandsEnabled, setIdvBandsEnabled] = useState(false); // IDV discrepancy-bands feature flag (server-owned)
   const [drsGapsCleared, setDrsGapsCleared] = useState(false); // declaration gate
   // Derived: is the company being onboarded publicly listed? Drives the
   // stakeholder-EDD suppression on Fill Gaps (listed-company directors and
@@ -892,6 +893,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
       setStep(stepsFor(journeyType).identityVerification);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Learn whether the IDV discrepancy-bands feature is on (server-owned flag).
+  // Default OFF; a fetch failure leaves it OFF so the journey is unchanged.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/idv-match/flags")
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setIdvBandsEnabled(!!(d && d.idvDiscrepancyBands)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   async function loadDossierAndStartOnboarding(id, tenant) {
@@ -4801,6 +4813,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
             resetAll={resetAll}
             cardStyle={card}
             Btn={Btn}
+            idvBandsEnabled={idvBandsEnabled}
+            applicationId={dossierId || onboardingSubmissionId}
           />
         )}
 

@@ -33,6 +33,7 @@ import { SHOW_TEST_TOOLS } from "../../constants/appConstants";
 import { StableInput } from "../inputs/StableInput";
 import { DocumentUploadCard } from "../Step2DynamicForm";
 import FoundationalFactsGate from "../companyConfirm/FoundationalFactsGate";
+import IdvMatchVerification from "../../idv-match/IdvMatchVerification";
 import {
   OWNERSHIP_TYPE_LIBRARY,
   ownershipTypeLabel,
@@ -97,6 +98,9 @@ export function ApplicantPage({
   resetAll,
   cardStyle,
   Btn,
+  // ── IDV discrepancy bands (flag-gated; OFF = today's behaviour exactly) ──
+  idvBandsEnabled = false,
+  applicationId = null,
 }) {
   const card = cardStyle;
 
@@ -407,8 +411,35 @@ export function ApplicantPage({
     // Hard gate: Signatory ID is always required — Continue is blocked until the
     // file is uploaded, for every applicant. Combined with the conditional
     // authority-to-act gate below.
-    const signatoryGateBlocks = !signatoryIdFile;
+    // When the bands feature is on, Didit identity verification replaces the
+    // manual Signatory-ID upload, so its gate no longer applies.
+    const signatoryGateBlocks = !idvBandsEnabled && !signatoryIdFile;
     const continueBlocked = signatoryGateBlocks || authorityGateBlocks;
+
+    // Bands verification is shown only for a LISTED officer (there is an officer
+    // to compare against). Unlisted applicants keep today's authority-to-act path.
+    const bandsVerificationActive = idvBandsEnabled && !!applicantSelectedPerson && !applicantUnlisted;
+
+    // Shared "proceed to Confirm" used by both the manual Continue button and the
+    // bands success path. Skips the signatory check when the flag is on.
+    const proceedToConfirm = () => {
+      if (!idvBandsEnabled && !signatoryIdFile) {
+        setApplicantValidationError("Please upload the signatory ID document before continuing.");
+        return;
+      }
+      if (applicantUnlisted && !authorityToActFile) {
+        setApplicantValidationError("Please upload your authority-to-act document before continuing.");
+        return;
+      }
+      const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
+      const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
+      if (missing.length > 0) {
+        setApplicantValidationError("Please fill in " + missing.length + " required field" + (missing.length > 1 ? "s" : "") + " before continuing.");
+        return;
+      }
+      setApplicantValidationError(null);
+      scrollAndSetStep(STEPS.confirm);
+    };
 
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
@@ -472,6 +503,7 @@ export function ApplicantPage({
                 unchanged. The upload slot here is INDEPENDENT of the Required Docs
                 one (see signatoryIdFile comment; one-satisfies-both is a deferred
                 future enhancement). */}
+            {!idvBandsEnabled && (
             <div style={{ ...card, marginTop: 16 }}>
               <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
                 Please upload government-issued photo ID for each authorised
@@ -485,6 +517,7 @@ export function ApplicantPage({
                 autoSourcedResult={null}
               />
             </div>
+            )}
 
             {/* PR-044 — Authority-to-act proof, directly below the applicant
                 fields, shown whenever the applicant is unlisted: either "I am not
@@ -506,6 +539,24 @@ export function ApplicantPage({
               </div>
             )}
 
+            {/* IDV discrepancy bands (flag ON): inline Didit verification for a
+                listed officer. It creates a server-bound attempt, shows the QR,
+                and on completion resolves the band + renders the outcome. On a
+                passing outcome the applicant proceeds via proceedToConfirm. */}
+            {bandsVerificationActive && (
+              <div style={{ ...card, marginTop: 16 }}>
+                <IdvMatchVerification
+                  applicationId={applicationId}
+                  officerCandidate={applicantSelectedPerson}
+                  onProceed={proceedToConfirm}
+                  onReselect={() => setApplicantSelectedPerson(null)}
+                  onProvideLoa={() => setApplicantNotListed(true)}
+                  Btn={Btn}
+                  cardStyle={{}}
+                />
+              </div>
+            )}
+
             {/* PR: Continue + Start Over share one row (Start Over left, Continue
                 right). Start Over is onboarding-only (!landedViaLink) — hidden on
                 the dossier/invite journey; the empty <span/> keeps Continue
@@ -513,36 +564,10 @@ export function ApplicantPage({
                 not a blank wipe). Layout only — onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
+            {!bandsVerificationActive && (
             <button
               disabled={continueBlocked}
-              onClick={() => {
-                // Hard gate (PR-072): Signatory ID is always required for every
-                // applicant — check it before the conditional authority-to-act gate.
-                if (!signatoryIdFile) {
-                  setApplicantValidationError(
-                    "Please upload the signatory ID document before continuing."
-                  );
-                  return;
-                }
-                // Hard gate: unlisted applicants must upload authority-to-act first.
-                if (applicantUnlisted && !authorityToActFile) {
-                  setApplicantValidationError(
-                    "Please upload your authority-to-act document before continuing."
-                  );
-                  return;
-                }
-                const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
-                const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
-                if (missing.length > 0) {
-                  setApplicantValidationError(
-                    "Please fill in " + missing.length + " required field" +
-                    (missing.length > 1 ? "s" : "") + " before continuing."
-                  );
-                  return;
-                }
-                setApplicantValidationError(null);
-                scrollAndSetStep(STEPS.confirm);
-              }}
+              onClick={proceedToConfirm}
               style={{
                 padding: "12px 28px",
                 background: continueBlocked ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
@@ -552,6 +577,7 @@ export function ApplicantPage({
             >
               Continue →
             </button>
+            )}
             </div>
 
             {/* PR-072 — Signatory ID gate reason. Shown first (always-required

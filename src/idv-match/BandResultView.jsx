@@ -22,7 +22,13 @@ function View({ title, body, children }) {
   );
 }
 
-export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onRetry, Btn }) {
+// Outcomes on which the applicant proceeds in the journey.
+const PROCEED_OUTCOMES = new Set([
+  "auto_match", "extraction_error_corrected", "same_person_variation_accepted",
+  "same_person_name_change_evidenced", "registry_error_asserted",
+]);
+
+export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onRetry, Btn }) {
   const Button = Btn || ((props) => <button {...props} />);
   if (!result || result.enabled === false) return null;
 
@@ -57,7 +63,12 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
     );
   }
 
-  // Band A success, in-review, registry note, name-change evidenced — all just
-  // render their server-provided title/body.
-  return <View title={view.title} body={view.body} />;
+  // Band A success, registry note, name-change evidenced — render the server copy
+  // and let the applicant proceed. In-review outcomes render copy only (no proceed).
+  const canProceed = result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true;
+  return (
+    <View title={view.title} body={view.body}>
+      {canProceed && onProceed && <Button type="button" onClick={() => onProceed()}>Continue →</Button>}
+    </View>
+  );
 }
