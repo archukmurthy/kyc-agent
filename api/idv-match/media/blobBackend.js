@@ -37,13 +37,13 @@ class VercelBlobBackend {
     return { key, url: res.url };
   }
   async get(key) {
-    // `get` returns the object body for a private blob under the rw token.
-    const res = await this.blob.get(key, { token: this.token });
+    // `get` requires the access level and returns a { stream } (web
+    // ReadableStream) for a private blob read under the rw token.
+    const res = await this.blob.get(key, { access: "private", token: this.token });
     if (!res) throw new Error(`blob not found: ${key}`);
-    const buf = typeof res.arrayBuffer === "function"
-      ? Buffer.from(await res.arrayBuffer())
-      : Buffer.from(res.body || res);
-    return buf;
+    const stream = res.stream || res.body;
+    if (!stream) throw new Error(`blob body missing: ${key}`);
+    return Buffer.from(await new Response(stream).arrayBuffer());
   }
   async del(key) { await this.blob.del(key, { token: this.token }); }
 }
