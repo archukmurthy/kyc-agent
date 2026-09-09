@@ -449,14 +449,15 @@ export function ApplicantPage({
       scrollAndSetStep(STEPS.confirm);
     };
 
-    // After the applicant confirms their verified fields: write the core fields
-    // into the form (so they flow into the submission's applicant object) and
-    // report the full set (incl. extra ID fields) up for persistence.
+    // After the applicant confirms: write the DECLARED fields (name/DOB/nationality)
+    // into the form (as today's applicant data), and report ONLY the opaque Vault
+    // reference up for the submission — the sensitive extras (document number, etc.)
+    // live in the Vault, never on the submission.
     const writeVerifiedFields = (fields) => {
       const toGap = { firstName: "applicantFirstName", lastName: "applicantLastName", dateOfBirth: "applicantDateOfBirth", nationality: "applicantNationality" };
       Object.entries(toGap).forEach(([k, g]) => { if (fields && fields[k] != null && fields[k] !== "") gapRef.current[g] = fields[k]; });
       setFormVersion((v) => v + 1);
-      if (onIdvVerifiedFields) onIdvVerifiedFields(fields);
+      if (onIdvVerifiedFields) onIdvVerifiedFields({ secureIdentityReference: (fields && fields.secureIdentityReference) || null });
     };
 
     return (

@@ -35,6 +35,7 @@ const idvMatchFlagsHandler = require(path.join(__dirname, "..", "api", "idv-matc
 const idvMatchResolveHandler = require(path.join(__dirname, "..", "api", "idv-match", "resolve.js"));
 const idvMatchExplainHandler = require(path.join(__dirname, "..", "api", "idv-match", "explain.js"));
 const idvMatchSessionHandler = require(path.join(__dirname, "..", "api", "idv-match", "session.js"));
+const idvMatchConfirmHandler = require(path.join(__dirname, "..", "api", "idv-match", "confirm.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -401,6 +402,15 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(idvMatchSessionHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-match/confirm", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchConfirmHandler)(req, res);
     });
   });
   // ComplyCube screening webhook — needs the RAW body for signature verification.

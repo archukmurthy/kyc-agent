@@ -14,6 +14,8 @@ const { mapDiditDecision } = require("./canonicalMapping");
 const { hasScreeningHit } = require("./screening");
 const { runBandPipeline } = require("./pipeline");
 const { bandsEnabled } = require("./config");
+const identityVault = require("./identityVault");
+const identityEventsStore = require("./identityEventsStore");
 
 function identityMap(attributes) {
   const map = {};
@@ -67,6 +69,22 @@ async function resolveAttempt(attemptId, deps = {}) {
   const identity = identityMap(mapped.identityAttributes);
   const officerSnapshot = attempt.selected_officer || {};
   const screeningHit = await screeningHitFor(attemptId);
+
+  // Vault the extraction (idempotent) so the confirm step + reviewer reveal have a
+  // reference, and record the immutable extraction_presented event. Best-effort:
+  // never block resolution on the Vault/events write.
+  if (!attempt.secure_identity_reference && mapped.identityAttributes.length) {
+    try {
+      const vaultRef = await (deps.identityVault || identityVault).storeExtractedIdentity({
+        sessionId: attemptId, subjectId: attemptId, attributes: mapped.identityAttributes,
+      });
+      await store.updateAttempt(attemptId, { secureIdentityReference: vaultRef });
+      attempt.secure_identity_reference = vaultRef;
+      await (deps.identityEventsStore || identityEventsStore).appendIdentityEvent({
+        attemptId, secureIdentityReference: vaultRef, eventType: "extraction_presented", actor: "system",
+      });
+    } catch (err) { console.warn("[idv-match resolve] vault extraction skipped:", err && err.message); }
+  }
 
   const documentDisplayName = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
 

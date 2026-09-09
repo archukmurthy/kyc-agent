@@ -54,6 +54,24 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
     } catch (e) { setError(String(e.message || e)); } finally { setBusy(false); }
   }
 
+  // On confirm: post the confirmed fields so sensitive extras are stored in the
+  // Vault (never on the submission); keep only the declared fields + the opaque
+  // reference for the journey to persist.
+  async function confirmFields(confirmed) {
+    let secureIdentityReference = null;
+    try {
+      const res = await postJson("/api/idv-match/confirm", { attemptId, confirmedFields: confirmed });
+      secureIdentityReference = (res && res.secureIdentityReference) || null;
+    } catch (e) { setError(String(e.message || e)); }
+    const declared = {
+      firstName: confirmed.firstName, lastName: confirmed.lastName,
+      dateOfBirth: confirmed.dateOfBirth, nationality: confirmed.nationality,
+      secureIdentityReference,
+    };
+    if (onConfirmedFields) onConfirmedFields(declared);
+    if (onProceed) onProceed();
+  }
+
   async function submitExplanation(category, file) {
     setBusy(true); setError(null);
     try {
@@ -77,7 +95,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
         onUploadEvidence={(c, f) => submitExplanation(c, f)}
         onProvideLoa={onProvideLoa}
         onProceed={onProceed}
-        onConfirm={(confirmed) => { if (onConfirmedFields) onConfirmedFields(confirmed); if (onProceed) onProceed(); }}
+        onConfirm={(confirmed) => confirmFields(confirmed)}
         onRetry={() => { setResult(null); setStatus(null); }}
         Btn={Btn}
       />

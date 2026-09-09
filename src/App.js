@@ -2737,8 +2737,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // IDV discrepancy-bands outcome reference (only when the flag ran the flow).
       // A reference to the server-side decision, not identity PII.
       idvVerification: idvVerification || null,
-      // Applicant-confirmed verified identity fields (incl. document extras like
-      // number/expiry/gender/POB). Present only when the applicant confirmed them.
+      // Opaque Vault reference to the confirmed verified identity. Sensitive
+      // extras (document number/expiry/gender/POB/address) live in the Vault, NOT
+      // on the submission — this is a reference only, no plaintext.
       verifiedIdentity: idvVerifiedFields || null,
     };
 
