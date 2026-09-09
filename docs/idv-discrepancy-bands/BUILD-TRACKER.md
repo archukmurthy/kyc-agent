@@ -75,11 +75,11 @@ Adopt the existing `idv/` module foundation; refactor the plaintext PII from Pha
 - [x] Hard exclusion: sanctions/PEP/adverse hit or escalation flag → forces review/Band C — `unresolved_to_review`, `resolvedBy: reviewer`, escalate on flag
 - [x] Phase 5 tests + review — 9 tests; emits only valid migration-013 `outcome_type` values; records `policyVersion`
 
-### Phase 6 — Name-equivalence engine
-- [ ] Versioned rule tables (transliteration / phonetic / patronymic), each rule an ID
-- [ ] Configurable thresholds (auto-resolve, skip-to-review, combined)
-- [ ] Records which rule ID + score + policy version resolved a case
-- [ ] Phase 6 tests + review
+### Phase 6 — Name-equivalence engine  `[x] done (pure nameRules.js + nameEquivalence.js, 9 tests)`
+- [x] Versioned rule tables (transliteration / phonetic / patronymic), each rule an ID — `nameRules.js` (`RULE_TABLE_VERSION`, soundex, translit groups, patronymic particles/suffixes)
+- [x] Configurable thresholds (auto-resolve, skip-to-review, combined) — reads `getPolicy().thresholds`; rule-explained variance clears at the lower `combinedExplanation` bar
+- [x] Records which rule ID + score + policy version resolved a case — returns `{ score, ruleIds, ruleExplained, outcome, policyVersion, ruleTableVersion }`
+- [x] Phase 6 tests + review — 9 tests (translit / phonetic / patronymic-suffix / patronymic-particle / dialogue / review)
 
 ### Phase 7 — Band B resolution flow
 - [ ] 5a machine resolution first (auto-resolve `same_person_variation_accepted`)
