@@ -113,15 +113,25 @@ handler; UI `src/idv-match/` `BandResultView` + `BandDialogue` + `IdvMatchVerifi
 flag-gated branch. OFF path byte-identical (494 CRA tests green).
 - [x] Progressive disclosure — only "Who is completing" selector first — *O2-1: `personChosen` gates the applicant body when flag ON*
 - [x] Remove Signatory-ID upload (Didit replaces it) — *flag-gated in ApplicantPage*
-- [~] Unlisted → Authority-to-Act upload → then inline Didit QR — *listed gets inline QR; unlisted keeps authority-to-act; unlisted-Didit (verify-only, no officer) awaiting a scope decision (O2-2)*
+- [x] Unlisted → Authority-to-Act upload → then inline Didit QR — *O2-2 / E7: unlisted verify-only scan (no officer match) after authority-to-act*
 - [x] Listed → Didit QR directly (no Authority-to-Act) — *`IdvMatchVerification` inline*
 - [x] Delete the separate Verify-ID step + `?idvspike` dev shortcut — *O2-3: removed from App.js + component/test deleted (was dev-only orphan)*
 - [x] After verification: mandatory fields + dynamic extra-ID fields — *O2-4: resolve returns `verifiedFields` (name/DOB/nationality + doc number/type/expiry/issuing country/gender/POB/address); confirmed + persisted as `applicant.verifiedIdentity`. First-class schema promotion + provenance = IDV-4.*
 - [x] Clean tick / confirm / edit UI on the applicant page — *O2-4: `VerifiedFieldsConfirm` (tick + Edit + Confirm & continue)*
 - [x] Persist extras into the real submission — *B-step 4: `applicant.idvVerification` (attemptId + band + outcome, no PII) rides the existing applicant JSON blob; `submit.js` NOT touched (exception not needed). Full document-extras promotion = IDV-4.*
 
+## E. Evidence-contract alignment (spec: phase-E-evidence-contract-spec.md) — DONE
+- [x] E1 — dedicated isolated IDV database (`IDV_DATABASE_URL`)
+- [x] E2 — durable encrypted Vault (envelope AES-256-GCM + managed key, dev key; prod KMS = IDV-2)
+- [x] E3 — fix plaintext-extras conflict + immutable identity events (extraction/confirm/correct/gap)
+- [x] E4 — reviewer authorized+audited reveal (masked default) + minimal read-only view
+- [x] E5 — separate retention/deletion structure per data class (periods unset)
+- [x] E6 — references-only Evidence outbox published per decision (unconsumed until EVID-1)
+- [x] E7 — unlisted verify-only identity scan (O2-2)
+- Deferred to IDV-2 (prod infra): real KMS provider, OIDC identity provider, truly-isolated prod DB.
+
 ## C. Follow-ups (later)
-- [ ] Human review queue UI (none exists today)
+- [ ] Human review queue UI (none exists today; E4 shipped the server reveal + a minimal view)
 - [ ] DB-backed threshold config (migrate from policy file)
 
 ---
