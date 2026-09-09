@@ -43,17 +43,20 @@ test("every successor fixture runs the review application and pins one real Snap
   });
 });
 
-test("successor browser exposes version isolation, filters, deterministic counts and Wave 11 exclusions", () => {
+test("successor browser exposes version isolation, filters, deterministic counts and the read-only Wave 11A boundary", () => {
   const source = fs.readFileSync(path.resolve(__dirname, "..", "browser", "lab.js"), "utf8");
   assert.match(source, /BASELINE — 1\.5-RC/);
   assert.match(source, /SUCCESSOR REVIEW — 1\.6-RC/);
   assert.match(source, /const GRAPH_FILTERS = \["OWNERSHIP", "VOTING", "CONTROL", "ALL"\]/);
   assert.match(source, /filteredReviewGraph\(view\.graph, graphFilter/);
   assert.match(source, /PRESENTATION FILTER ONLY/);
-  assert.match(source, /APPLICANT JOURNEY v2 NOT YET ENABLED/);
-  assert.match(source, /EVIDENCE EXECUTION NOT YET CONNECTED/);
+  assert.match(source, /APPLICANT CONTRACT PREVIEW AVAILABLE/);
+  assert.match(source, /JOURNEYPROJECTION v2 · READ-ONLY CONTRACT PREVIEW/);
+  assert.match(source, /EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED/);
+  assert.match(source, /POLICY CONTENT REQUIRED/);
+  assert.match(source, /CONTRACT_INSPECTOR/);
   assert.match(source, /deterministic-list/);
-  assert.doesNotMatch(source, /START_REVIEW_ACTION|APPLY_CUSTOMER_INPUT_V2|JourneyProjection v2 enabled/i);
+  assert.doesNotMatch(source, /START_REVIEW_ACTION|APPLY_CUSTOMER_INPUT_V2/);
   assert.equal((source.match(/h\(OwnershipGraph, \{ projection: graph/g) || []).length, 1);
 });
 

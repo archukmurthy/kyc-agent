@@ -36,6 +36,7 @@ const {
 
 const DECISION_APPLICATION_CONTRACT_VERSION = "ubo-decision-application-v1";
 const DECISION_APPLICATION_CONTRACT_VERSION_V2 = "ubo-decision-application-v2";
+const DECISION_APPLICATION_CONTRACT_VERSION_V3 = "ubo-decision-application-v3";
 const CASE_STATE_TYPE = "DECISION_APPLICATION_CASE_STATE";
 const CASE_STATE_ENCODING = "base64url-canonical-json-v1";
 const TERMINAL_CLAIM_STATES = new Set([CLAIM_STATE.REJECTED, CLAIM_STATE.SUPERSEDED]);
@@ -264,10 +265,14 @@ function normalizeResolutionInputs(value) {
 }
 
 function createUboDecisionApplication({ policyPack, contractVersion = DECISION_APPLICATION_CONTRACT_VERSION } = {}) {
+  if (contractVersion === DECISION_APPLICATION_CONTRACT_VERSION_V3) {
+    const { createUboDecisionApplicationV3 } = require("./createUboDecisionApplicationV3");
+    return createUboDecisionApplicationV3({ policyPack });
+  }
   if (![DECISION_APPLICATION_CONTRACT_VERSION, DECISION_APPLICATION_CONTRACT_VERSION_V2].includes(contractVersion)) {
     throw applicationError(
       DECISION_APPLICATION_ERROR_CODE.UNSUPPORTED_CONTRACT_VERSION,
-      `contractVersion must be ${DECISION_APPLICATION_CONTRACT_VERSION} or ${DECISION_APPLICATION_CONTRACT_VERSION_V2}`,
+      `contractVersion must be ${DECISION_APPLICATION_CONTRACT_VERSION}, ${DECISION_APPLICATION_CONTRACT_VERSION_V2}, or ${DECISION_APPLICATION_CONTRACT_VERSION_V3}`,
     );
   }
   const loadedPolicyPack = runWithErrorCode(
@@ -451,5 +456,7 @@ function createUboDecisionApplication({ policyPack, contractVersion = DECISION_A
 module.exports = {
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  DECISION_APPLICATION_CONTRACT_VERSION_V3,
+  CASE_STATE_INTERNALS: Object.freeze({ decodeCaseState, decisionTargetsFor, encodeCaseState }),
   createUboDecisionApplication,
 };
