@@ -1,5 +1,6 @@
 import React from "react";
 import BandDialogue from "./BandDialogue";
+import VerifiedFieldsConfirm from "./VerifiedFieldsConfirm";
 
 // Renders whatever the live resolve call returned. Presentational only — the
 // verbatim copy comes from the server (result.applicantView / dialogue), never
@@ -28,7 +29,7 @@ const PROCEED_OUTCOMES = new Set([
   "same_person_name_change_evidenced", "registry_error_asserted",
 ]);
 
-export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onRetry, Btn }) {
+export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onConfirm, onRetry, Btn }) {
   const Button = Btn || ((props) => <button {...props} />);
   if (!result || result.enabled === false) return null;
 
@@ -66,9 +67,13 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
   // Band A success, registry note, name-change evidenced — render the server copy
   // and let the applicant proceed. In-review outcomes render copy only (no proceed).
   const canProceed = result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true;
+  const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
   return (
     <View title={view.title} body={view.body}>
-      {canProceed && onProceed && <Button type="button" onClick={() => onProceed()}>Continue →</Button>}
+      {canProceed && hasVerifiedFields && onConfirm && (
+        <VerifiedFieldsConfirm fields={result.verifiedFields} onConfirm={onConfirm} Btn={Btn} />
+      )}
+      {canProceed && !hasVerifiedFields && onProceed && <Button type="button" onClick={() => onProceed()}>Continue →</Button>}
     </View>
   );
 }

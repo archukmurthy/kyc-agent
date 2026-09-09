@@ -102,6 +102,7 @@ export function ApplicantPage({
   idvBandsEnabled = false,
   applicationId = null,
   onIdvResolved,
+  onIdvVerifiedFields,
 }) {
   const card = cardStyle;
 
@@ -448,6 +449,16 @@ export function ApplicantPage({
       scrollAndSetStep(STEPS.confirm);
     };
 
+    // After the applicant confirms their verified fields: write the core fields
+    // into the form (so they flow into the submission's applicant object) and
+    // report the full set (incl. extra ID fields) up for persistence.
+    const writeVerifiedFields = (fields) => {
+      const toGap = { firstName: "applicantFirstName", lastName: "applicantLastName", dateOfBirth: "applicantDateOfBirth", nationality: "applicantNationality" };
+      Object.entries(toGap).forEach(([k, g]) => { if (fields && fields[k] != null && fields[k] !== "") gapRef.current[g] = fields[k]; });
+      setFormVersion((v) => v + 1);
+      if (onIdvVerifiedFields) onIdvVerifiedFields(fields);
+    };
+
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
         <FoundationalFactsGate
@@ -559,6 +570,7 @@ export function ApplicantPage({
                   onReselect={() => setApplicantSelectedPerson(null)}
                   onProvideLoa={() => setApplicantNotListed(true)}
                   onResolved={onIdvResolved}
+                  onConfirmedFields={writeVerifiedFields}
                   Btn={Btn}
                   cardStyle={{}}
                 />

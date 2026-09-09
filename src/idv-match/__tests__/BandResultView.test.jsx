@@ -73,6 +73,16 @@ test("name-change upload affordance appears with the verbatim prompt", () => {
   expect(onUploadEvidence).toHaveBeenCalledWith("changed_name", file);
 });
 
+test("a passing outcome with verified fields shows the confirm/edit panel", () => {
+  const onConfirm = jest.fn();
+  const result = { enabled: true, band: "A", outcomeType: "auto_match", applicantView: { title: "Identity verified", body: "matched." }, verifiedFields: { firstName: "John", dateOfBirth: "1985-05-24" } };
+  render(<BandResultView result={result} onConfirm={onConfirm} />);
+  expect(screen.getByText("Confirm your verified details")).toBeInTheDocument();
+  expect(screen.getByText("John")).toBeInTheDocument();
+  fireEvent.click(screen.getByText(/Confirm & continue/));
+  expect(onConfirm).toHaveBeenCalledWith({ firstName: "John", dateOfBirth: "1985-05-24" });
+});
+
 test("missing/unreadable data shows a retry, not a pass", () => {
   const onRetry = jest.fn();
   render(<BandResultView result={{ enabled: true, needsRetry: true }} onRetry={onRetry} />);

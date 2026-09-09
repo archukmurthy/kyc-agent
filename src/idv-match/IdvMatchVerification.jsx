@@ -12,7 +12,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -77,6 +77,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
         onUploadEvidence={(c, f) => submitExplanation(c, f)}
         onProvideLoa={onProvideLoa}
         onProceed={onProceed}
+        onConfirm={(confirmed) => { if (onConfirmedFields) onConfirmedFields(confirmed); if (onProceed) onProceed(); }}
         onRetry={() => { setResult(null); setStatus(null); }}
         Btn={Btn}
       />
