@@ -34,7 +34,7 @@ test("attemptStore create/get round-trips against the database and cleans up", {
   } finally {
     // Always remove the test row, even if an assertion above failed.
     if (id) {
-      const sql = neon(process.env.DATABASE_URL);
+      const sql = neon((process.env.IDV_DATABASE_URL || process.env.DATABASE_URL));
       await sql`DELETE FROM idv_verification_attempts WHERE id = ${id}`;
     }
   }
@@ -73,7 +73,7 @@ test("attemptStore session lookup + result update round-trip", { skip }, async (
     assert.ok(row.last_event_at, "last_event_at set");
   } finally {
     if (id) {
-      const sql = neon(process.env.DATABASE_URL);
+      const sql = neon((process.env.IDV_DATABASE_URL || process.env.DATABASE_URL));
       await sql`DELETE FROM idv_verification_attempts WHERE id = ${id}`;
     }
   }
@@ -89,7 +89,7 @@ test("webhook event dedupe is idempotent against the real table", { skip }, asyn
     assert.strictEqual(await markEventProcessed(eventId, "att-x"), true, "first delivery is new");
     assert.strictEqual(await markEventProcessed(eventId, "att-x"), false, "second delivery is a duplicate");
   } finally {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon((process.env.IDV_DATABASE_URL || process.env.DATABASE_URL));
     await sql`DELETE FROM idv_webhook_events WHERE event_id = ${eventId}`;
   }
 });

@@ -37,7 +37,7 @@ test("screening store create/get/list/update round-trips and cleans up", { skip 
     assert.strictEqual(after.categories.pep, true); // JSONB round-trips
   } finally {
     if (id) {
-      const sql = neon(process.env.DATABASE_URL);
+      const sql = neon((process.env.IDV_DATABASE_URL || process.env.DATABASE_URL));
       await sql`DELETE FROM idv_screening_checks WHERE id = ${id}`;
     }
   }

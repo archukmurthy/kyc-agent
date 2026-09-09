@@ -8,7 +8,7 @@ const { neon } = require("@neondatabase/serverless");
 const { randomUUID } = require("node:crypto");
 
 function client() {
-  const conn = process.env.DATABASE_URL;
+  const conn = process.env.IDV_DATABASE_URL || process.env.DATABASE_URL;
   if (!conn) throw new Error("DATABASE_URL not set");
   return neon(conn);
 }

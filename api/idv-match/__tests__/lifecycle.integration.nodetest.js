@@ -3,7 +3,7 @@ const assert = require("node:assert");
 const { neon } = require("@neondatabase/serverless");
 
 // GUARDED DB integration. IDV_MATCH_DB_TEST=1 + dev DATABASE_URL.
-const RUN = process.env.IDV_MATCH_DB_TEST === "1" && !!process.env.DATABASE_URL;
+const RUN = process.env.IDV_MATCH_DB_TEST === "1" && !!(process.env.IDV_DATABASE_URL || process.env.DATABASE_URL);
 const { appendLifecycleEvent, listLifecycle } = require("../lifecycle");
 
 test("out-of-order events reconstruct in causal order; missing time falls back", { skip: !RUN }, async () => {
@@ -19,7 +19,7 @@ test("out-of-order events reconstruct in causal order; missing time falls back",
     // The no-occurred_at event kept its null occurred time (not fabricated).
     assert.strictEqual(events[2].occurred_at, null);
   } finally {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon((process.env.IDV_DATABASE_URL || process.env.DATABASE_URL));
     await sql`DELETE FROM idv_lifecycle_events WHERE attempt_id = ${attemptId}`;
   }
 });
