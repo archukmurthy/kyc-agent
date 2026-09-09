@@ -25,9 +25,6 @@ const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.j
 const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
-const idvStartHandler = require(path.join(__dirname, "..", "api", "idv-start.js"));
-const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.js"));
-const idvSaveHandler = require(path.join(__dirname, "..", "api", "idv-save.js"));
 const idvMatchWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "webhook.js"));
 const idvMatchStatusHandler = require(path.join(__dirname, "..", "api", "idv-match", "status.js"));
 const idvScreeningWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "screening", "webhook.js"));
@@ -330,34 +327,6 @@ module.exports = function (app) {
     });
   });
 
-  // Didit IDV spike — start a session / poll its result. POST; parse JSON body.
-  app.post("/api/idv-start", (req, res) => {
-    let raw = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => { raw += chunk; });
-    req.on("end", () => {
-      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
-      adapt(idvStartHandler)(req, res);
-    });
-  });
-  app.post("/api/idv-result", (req, res) => {
-    let raw = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => { raw += chunk; });
-    req.on("end", () => {
-      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
-      adapt(idvResultHandler)(req, res);
-    });
-  });
-  app.post("/api/idv-save", (req, res) => {
-    let raw = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => { raw += chunk; });
-    req.on("end", () => {
-      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
-      adapt(idvSaveHandler)(req, res);
-    });
-  });
   // Identity Discrepancy Bands (idv-match). The webhook needs the RAW body for
   // HMAC signature verification (do NOT JSON-parse it); status is read-only.
   app.post("/api/idv-match/webhook", (req, res) => {

@@ -52,7 +52,9 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Area:** new `api/idv-webhook.js`, `idv/security/webhookSignatures.js`.
 
 ### IDV-5 — Spike code minors to revisit at hardening
-- **Category:** Tech debt · **Priority:** P3 · **Status:** OPEN
+- **Category:** Tech debt · **Priority:** P3 · **Status:** MOSTLY RESOLVED (spike removed 2026-09-09)
+- **Resolved:** the Didit spike endpoints (`api/idv-start|idv-result|idv-save.js`), `lib/didit/mapDecision.js` (speculative aliases), `lib/didit/store.js`, `lib/didit/iso3to2.js`, `IdentityVerificationStep` + its `act()`-warning test, and their tests were **deleted** (orphaned once the bands flow replaced the spike). `api/idv-result.js` broad try/catch is gone with it.
+- **Remaining:** `lib/didit/diditClient.js` — `metadata:{ref}` is redundant (`vendor_data` carries the ref); verify Didit accepts it or drop. (diditClient + webhookSignature are kept — idv-match uses them.)
 - **What:** Minor code-quality items deferred from the spike's whole-branch review:
   - `lib/didit/mapDecision.js` — speculative field-name aliases (`id_verification`, `liveness`, `expiry_date`, `issuing_country`, `formatted_address`, …) are untested `||` fallbacks; verify against real Didit responses or trim.
   - `lib/didit/diditClient.js` — `metadata:{ref}` is redundant (`vendor_data` already carries the ref); verify Didit sandbox accepts it or drop it.
