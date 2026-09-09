@@ -12,6 +12,7 @@ const { parseOfficerName, buildDocName, buildMrzName } = require("./matching/nor
 const { handleExplanation } = require("./resolution");
 const { recordBandOutcome } = require("./behaviors");
 const { bandsEnabled } = require("./config");
+const { extractNameTokens } = require("./nameExtraction");
 
 function identityMap(attributes) {
   const map = {};
@@ -34,13 +35,13 @@ async function explainAttempt({ attemptId, category, evidence } = {}, deps = {})
   const identity = identityMap(mapped.identityAttributes);
   const officer = attempt.selected_officer || {};
 
-  const outcome = handleExplanation({
+  const outcome = await handleExplanation({
     category,
     officerName: parseOfficerName(officer.name),
     docName: buildDocName({ firstName: identity.first_name, lastName: identity.last_name }),
     mrzName: identity.mrz != null ? buildMrzName(identity.mrz) : null,
     evidence,
-    extractNames: deps.extractNames,
+    extractNames: deps.extractNames || ((e) => extractNameTokens(e, deps)),
   });
 
   // Terminal outcomes are recorded; non-terminal (needsUpload / reselect_officer)

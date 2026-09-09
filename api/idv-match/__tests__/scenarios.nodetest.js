@@ -66,16 +66,16 @@ test("7: near-threshold variance -> dialogue shown; explanation corroborates -> 
   assert.strictEqual(r.band, "B");
   assert.ok(r.dialogue, "shows the one-round dialogue");
 
-  const cleared = handleExplanation({ category: "same_spelling", officerName: { surname: "abd", forenames: ["xyz"] }, docName: { surname: "abc", forenames: ["xyz"] } });
+  const cleared = await handleExplanation({ category: "same_spelling", officerName: { surname: "abd", forenames: ["xyz"] }, docName: { surname: "abc", forenames: ["xyz"] } });
   assert.strictEqual(cleared.outcomeType, "same_person_variation_accepted");
-  const notCleared = handleExplanation({ category: "same_spelling", officerName: { surname: "abcd", forenames: ["xyz"] }, docName: { surname: "wxyz", forenames: ["xyz"] } });
+  const notCleared = await handleExplanation({ category: "same_spelling", officerName: { surname: "abcd", forenames: ["xyz"] }, docName: { surname: "wxyz", forenames: ["xyz"] } });
   assert.strictEqual(notCleared.outcomeType, "unresolved_to_review");
 });
 
 test("8: changed_name + linking document with both names -> evidenced; missing one -> review", async () => {
-  const both = handleExplanation({ category: "changed_name", officerName: { surname: "smith", forenames: ["jane"] }, docName: { surname: "jones", forenames: ["jane"] }, evidence: { extractedTokens: ["smith", "jones", "jane"] } });
+  const both = await handleExplanation({ category: "changed_name", officerName: { surname: "smith", forenames: ["jane"] }, docName: { surname: "jones", forenames: ["jane"] }, evidence: { extractedTokens: ["smith", "jones", "jane"] } });
   assert.strictEqual(both.outcomeType, "same_person_name_change_evidenced");
-  const missing = handleExplanation({ category: "changed_name", officerName: { surname: "smith", forenames: ["jane"] }, docName: { surname: "jones", forenames: ["jane"] }, evidence: { extractedTokens: ["jones", "jane"] } });
+  const missing = await handleExplanation({ category: "changed_name", officerName: { surname: "smith", forenames: ["jane"] }, docName: { surname: "jones", forenames: ["jane"] }, evidence: { extractedTokens: ["jones", "jane"] } });
   assert.strictEqual(missing.outcomeType, "unresolved_to_review");
 });
 

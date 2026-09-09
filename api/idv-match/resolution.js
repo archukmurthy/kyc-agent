@@ -80,7 +80,7 @@ function containsName(extractedTokenSet, name) {
 // Handle a 5c explanation. `extractNames` is an injectable seam that turns an
 // uploaded evidence document into a set of normalized name tokens (real
 // extraction is wired later; tests inject a fake).
-function handleExplanation({ category, officerName, docName, mrzName, evidence, extractNames } = {}) {
+async function handleExplanation({ category, officerName, docName, mrzName, evidence, extractNames } = {}) {
   const primary = mrzName || docName;
   switch (category) {
     case "same_spelling": {
@@ -100,7 +100,7 @@ function handleExplanation({ category, officerName, docName, mrzName, evidence, 
     case "changed_name": {
       if (!evidence) return { resolved: false, needsUpload: true, uploadPrompt: COPY.NAME_CHANGE_UPLOAD_PROMPT };
       const extract = extractNames || ((e) => new Set(e && e.extractedTokens ? e.extractedTokens : []));
-      const tokens = extract(evidence);
+      const tokens = await extract(evidence);
       const set = tokens instanceof Set ? tokens : new Set(tokens || []);
       // Check exactly one thing: does the document contain BOTH names?
       const hasBoth = containsName(set, officerName) && containsName(set, primary);

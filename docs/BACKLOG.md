@@ -78,10 +78,15 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why:** Confirm live signature verification + the async completion path before production.
 - **Area:** `api/idv-match/screening/webhook.js`, ComplyCube portal config.
 
-### BANDS-1 — "I changed my name" document name-extraction (OCR)
-- **Category:** Feature / Integration · **Priority:** P2 · **Status:** OPEN
-- **What:** The Band B `changed_name` path (`api/idv-match/explain.js` → `handleExplanation`) checks whether an uploaded marriage-cert/deed-poll contains BOTH names. Name extraction from the uploaded document is an injectable seam (`extractNames`) that is **not yet implemented** — until it is, `changed_name` with a real upload routes to `unresolved_to_review` (safe default, never a false pass). Wire real extraction (Didit document read or an OCR/name-match service) so a valid linking document resolves `same_person_name_change_evidenced`.
-- **Area:** `api/idv-match/explain.js`, `resolution.js handleExplanation`.
+### BANDS-1 — "I changed my name" IMAGE OCR adapter
+- **Category:** Feature / Integration · **Priority:** P2 · **Status:** PARTIAL (port built; image adapter remains)
+- **What:** The name-extraction **port is now built** (`api/idv-match/nameExtraction.js`) and wired into `explain.js`/`handleExplanation`: **text-layer** documents (deed-poll exports, typed transcriptions) are tokenized and the BOTH-names check works today. What remains is an **image-OCR adapter** for scanned certs/images (the seam accepts an injected `ocr(bytes, contentType)` fn). Recommended: **tesseract.js** (free, local, no paid API — but a heavy WASM dependency, so confirm before adding) or a cloud OCR (paid — needs approval). Until an image adapter exists, an image with no text routes to `unresolved_to_review` (never a false pass).
+- **Area:** `api/idv-match/nameExtraction.js` (add image adapter), `IdvMatchVerification.jsx` (send bytes for image uploads).
+
+### BANDS-2 — Verify Didit document-image field names
+- **Category:** Integration / Correctness · **Priority:** P2 · **Status:** OPEN
+- **What:** `api/idv-match/mediaCapture.js` extracts document-image presigned URLs from the Didit decision using candidate field names (`front_image` / `back_image` / `portrait_image`, plus a `documents[]`/`images[]` fallback). Confirm the exact keys against a real Didit sandbox response and trim/adjust; if the keys differ, images silently aren't captured (no error, just nothing stored).
+- **Area:** `api/idv-match/mediaCapture.js` (`KIND_FIELDS`).
 
 ### EVID-1 — Evidence Platform integration (consume the outbox)
 - **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN

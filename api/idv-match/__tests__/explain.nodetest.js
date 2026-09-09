@@ -51,6 +51,13 @@ test("changed_name without evidence -> needsUpload, no decision", async () => {
   assert.strictEqual(d._decisions.length, 0);
 });
 
+test("changed_name with text evidence containing BOTH names -> name change evidenced", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps(); // officer "ABD, Xyz", document Abc Xyz
+  const r = await explainAttempt({ attemptId: "att-1", category: "changed_name", evidence: { text: "Deed poll: Abd Xyz, also known as Abc Xyz" } }, d);
+  assert.strictEqual(r.outcomeType, "same_person_name_change_evidenced");
+});
+
 test("wrong_person -> reselect action, no decision", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const d = deps();

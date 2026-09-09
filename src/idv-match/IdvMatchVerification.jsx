@@ -75,9 +75,16 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   async function submitExplanation(category, file) {
     setBusy(true); setError(null);
     try {
-      // OCR name-extraction from the uploaded document is BANDS-1; until then the
-      // filename is sent as context and changed_name safely routes to review.
-      const evidence = file ? { filename: file.name } : undefined;
+      // Send the document text when it's a text-layer file (deed poll exports,
+      // etc.) so the server can check both names. Image OCR is BANDS-1; an image
+      // with no text safely routes to review.
+      let evidence;
+      if (file) {
+        evidence = { filename: file.name, contentType: file.type };
+        if (file.type && file.type.startsWith("text") && typeof file.text === "function") {
+          try { evidence.text = await file.text(); } catch (_) { /* fall back to filename only */ }
+        }
+      }
       const res = await postJson("/api/idv-match/explain", { attemptId, category, evidence });
       if (res.action === "reselect_officer") { if (onReselect) onReselect(); return; }
       if (res.needsUpload) { setUploadPrompt(res.uploadPrompt); return; }

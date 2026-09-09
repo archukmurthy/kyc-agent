@@ -11,6 +11,7 @@
 const { mapDiditDecision } = require("./canonicalMapping");
 const identityVault = require("./identityVault");
 const attemptStore = require("./attemptStore");
+const { captureDocumentMedia } = require("./mediaCapture");
 
 async function persistDecision({ attempt, decision, receivedAt = new Date(), lastEventAt = null, statusFallback = null }, deps = {}) {
   if (!attempt || !attempt.id) throw new Error("persistDecision: attempt is required");
@@ -53,7 +54,15 @@ async function persistDecision({ attempt, decision, receivedAt = new Date(), las
     lastEventAt,
   });
 
-  return { providerStatus, secureIdentityReference, verificationResult };
+  // Capture the short-lived Didit document images into our encrypted media store
+  // (best-effort; document images only, never selfie/liveness/biometrics).
+  const capture = deps.captureDocumentMedia || captureDocumentMedia;
+  let capturedMedia = [];
+  try {
+    capturedMedia = await capture({ attemptId: attempt.id, decision }, deps);
+  } catch (err) { console.warn("[idv-match] media capture skipped:", err && err.message); }
+
+  return { providerStatus, secureIdentityReference, verificationResult, capturedMedia };
 }
 
 module.exports = { persistDecision };
