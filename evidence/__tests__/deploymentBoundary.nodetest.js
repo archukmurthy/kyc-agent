@@ -43,8 +43,38 @@ test("frozen façade and ordinary application APIs are not excluded", () => {
 
 test("production-boundary verifier accepts the repository source inventory", () => {
   const result = verifyBoundary(root, { requireBuild: false });
+  assert.equal(result.sourceInventoryMode, "repository");
   assert.equal(result.inventory.apiFunctions.length, 40);
   assert.deepEqual(result.buildLabAssets, []);
+});
+
+test("production-boundary verifier requires a filtered Vercel upload to contain no Lab source", () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "evidence-vercel-upload-"));
+  try {
+    fs.mkdirSync(path.join(temporaryRoot, "api"), { recursive: true });
+    fs.mkdirSync(path.join(temporaryRoot, "evidence", "consumer", "v1"), { recursive: true });
+    fs.mkdirSync(path.join(temporaryRoot, "public"), { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, ".vercelignore"), `${REQUIRED_IGNORE_RULES.join("\n")}\n`);
+    fs.writeFileSync(path.join(temporaryRoot, "api", "research.js"), "module.exports = {};");
+    fs.writeFileSync(path.join(temporaryRoot, "api", "doc-search.js"), "module.exports = {};");
+    fs.writeFileSync(path.join(temporaryRoot, "evidence", "consumer", "v1", "index.js"), "module.exports = {};");
+
+    const result = verifyBoundary(temporaryRoot, {
+      requireBuild: false,
+      requireSourceInventory: false,
+    });
+    assert.equal(result.sourceInventoryMode, "filtered-vercel-upload");
+    assert.deepEqual(result.inventory, { apiFunctions: [], publicAssets: [] });
+
+    fs.mkdirSync(path.join(temporaryRoot, "api", "evidence"), { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, "api", "evidence", "status.js"), "module.exports = {};");
+    assert.throws(
+      () => verifyBoundary(temporaryRoot, { requireBuild: false, requireSourceInventory: false }),
+      /survived Vercel upload filtering/,
+    );
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test("build sanitizer removes only Evidence Lab assets", () => {

@@ -67,17 +67,24 @@ function sanitizeBuildOutput(root) {
   return removed.map((file) => relative(root, file)).sort();
 }
 
-function verifyBoundary(root, { requireBuild = true } = {}) {
+function verifyBoundary(root, {
+  requireBuild = true,
+  requireSourceInventory = process.env.VERCEL !== "1",
+} = {}) {
   const rules = readIgnoreRules(root);
   for (const rule of REQUIRED_IGNORE_RULES) {
     if (!rules.includes(rule)) throw new Error(`Required Vercel exclusion is missing: ${rule}`);
   }
 
   const inventory = inventoryLabSurfaces(root);
-  if (!inventory.apiFunctions.length) throw new Error("No Evidence Lab API functions were discovered");
-  if (!inventory.publicAssets.length) throw new Error("No Evidence Lab public assets were discovered");
-  for (const file of [...inventory.apiFunctions, ...inventory.publicAssets]) {
-    if (!isExcluded(file, rules)) throw new Error(`Evidence Lab surface is deployable: ${file}`);
+  if (requireSourceInventory) {
+    if (!inventory.apiFunctions.length) throw new Error("No Evidence Lab API functions were discovered");
+    if (!inventory.publicAssets.length) throw new Error("No Evidence Lab public assets were discovered");
+    for (const file of [...inventory.apiFunctions, ...inventory.publicAssets]) {
+      if (!isExcluded(file, rules)) throw new Error(`Evidence Lab surface is deployable: ${file}`);
+    }
+  } else if (inventory.apiFunctions.length || inventory.publicAssets.length) {
+    throw new Error("Evidence Lab source survived Vercel upload filtering");
   }
 
   const frozenFacade = "evidence/consumer/v1/index.js";
@@ -97,7 +104,13 @@ function verifyBoundary(root, { requireBuild = true } = {}) {
   const buildLabAssets = walk(buildRoot).map((file) => relative(buildRoot, file)).filter((file) => path.basename(file).startsWith("evidence-lab"));
   if (buildLabAssets.length) throw new Error(`Evidence Lab assets remain in production build: ${buildLabAssets.join(", ")}`);
 
-  return { ignoreRules: rules, inventory, deployableFunctionCount: functions.length, buildLabAssets };
+  return {
+    ignoreRules: rules,
+    sourceInventoryMode: requireSourceInventory ? "repository" : "filtered-vercel-upload",
+    inventory,
+    deployableFunctionCount: functions.length,
+    buildLabAssets,
+  };
 }
 
 if (require.main === module) {
