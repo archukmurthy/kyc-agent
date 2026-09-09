@@ -8,6 +8,9 @@ const { getPolicy } = require("./policy");
 const COPY = require("./copy");
 const matchDecisionStore = require("./matchDecisionStore");
 const reviewTaskStore = require("./reviewTaskStore");
+const evidenceOutboxStore = require("./evidenceOutboxStore");
+const { assertReferencesOnly } = require("./evidenceOutbox");
+const { assertNoRawEvidence } = require("../../idv");
 
 // Map an outcome to its verbatim applicant view when the decision didn't already
 // carry one (e.g. Band A/C from Phase 5).
@@ -42,6 +45,32 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
   const result = { decisionId, tasks: [], escalated: false, route: null, applicantView: viewFor(decision) };
   const reason = (decision.reasons || []).join(",") || null;
 
+  // Publish a references-only Evidence envelope to the append-only outbox for
+  // this finalized decision (idempotent per decision). No plaintext, no
+  // biometrics — references + provenance only. NOTHING consumes the outbox and no
+  // Evidence rows are created until the Evidence Control Room approves (EVID-1).
+  // Best-effort: a publish failure never blocks the decision.
+  const outbox = deps.evidenceOutboxStore || evidenceOutboxStore;
+  const envelope = {
+    schema: "idv-evidence-outbox/1",
+    attempt_id: attemptId,
+    application_id: applicationId || null,
+    secure_identity_reference: decision.secureIdentityReference || null,
+    band: decision.band,
+    outcome_type: decision.outcomeType,
+    resolved_by: decision.resolvedBy || "system",
+    policy_version: decision.policyVersion || getPolicy().policyVersion,
+    decision_id: decisionId,
+    provider_verified: decision.providerVerified === true,
+    reasons: decision.reasons || [],
+  };
+  assertNoRawEvidence(envelope);
+  assertReferencesOnly(envelope);
+  try {
+    const published = await outbox.appendOutbox({ attemptId, idempotencyKey: `${attemptId}:${decisionId}`, envelope });
+    result.evidencePublished = !!(published && published.inserted);
+  } catch (err) { console.warn("[idv-match] outbox publish skipped:", err && err.message); }
+
   // Band C: escalation task + existing LOA path. Identity data is scoped to the
   // attempt only — never written to the officer/UBO/any person-specific record.
   if (decision.band === "C" || decision.outcomeType === "demoted_to_loa_path") {
@@ -64,11 +93,10 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
     result.applicantProceeds = true;
   }
 
-  // TODO(evidence-ledger): when the Evidence Control Room approves the
-  // external-custody + Vault-reference contract (BACKLOG EVID-1), publish this
-  // band outcome to the durable Evidence Ledger via the references-only outbox
-  // (api/idv-match/evidenceOutbox.js). Until then the outbox stays unconsumed and
-  // nothing is written to the Evidence Platform / Evidence Ledger.
+  // The references-only envelope is published to the outbox above. TODO(evidence-
+  // ledger): the outbox stays UNCONSUMED — no Evidence rows, no Evidence Platform
+  // call — until the Evidence Control Room approves the contract (BACKLOG EVID-1).
+  // A later governed adapter (Evidence V1.1) consumes this outbox.
 
   return result;
 }

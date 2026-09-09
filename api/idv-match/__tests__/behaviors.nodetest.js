@@ -7,11 +7,13 @@ const COPY = require("../copy");
 function fakes() {
   const decisions = [];
   const tasks = [];
+  const envelopes = [];
   return {
-    decisions, tasks,
+    decisions, tasks, envelopes,
     deps: {
       matchDecisionStore: { recordDecision: async (d) => { decisions.push(d); return `dec-${decisions.length}`; } },
       reviewTaskStore: { createTask: async (t) => { tasks.push(t); return { id: `t-${tasks.length}`, taskType: t.taskType }; } },
+      evidenceOutboxStore: { appendOutbox: async (e) => { envelopes.push(e); return { id: `o-${envelopes.length}`, inserted: true }; } },
     },
   };
 }
@@ -25,6 +27,20 @@ test("Band A auto_match: records the decision, no tasks, verbatim success view",
   assert.strictEqual(r.escalated, false);
   assert.deepStrictEqual(r.applicantView, COPY.BAND_A_SUCCESS);
   assert.strictEqual(r.decisionId, "dec-1");
+  // a references-only Evidence envelope was published to the outbox
+  assert.strictEqual(f.envelopes.length, 1);
+  assert.strictEqual(f.envelopes[0].envelope.decision_id, "dec-1");
+  assert.strictEqual(r.evidencePublished, true);
+});
+
+test("published Evidence envelope is references-only (no plaintext identity)", async () => {
+  const f = fakes();
+  await recordBandOutcome({ attemptId: "att-1", decision: { band: "A", outcomeType: "auto_match", resolvedBy: "system", secureIdentityReference: "vault-ref", policyVersion: "p1" } }, f.deps);
+  const blob = JSON.stringify(f.envelopes[0].envelope);
+  assert.ok(blob.includes("vault-ref"), "carries the opaque reference");
+  for (const pii of ["first_name", "date_of_birth", "document_number", "attribute_value"]) {
+    assert.ok(!blob.includes(pii), `envelope must not carry ${pii}`);
+  }
 });
 
 test("Band C demoted_to_loa_path: escalation task, LOA route, identity scoped to the attempt", async () => {
