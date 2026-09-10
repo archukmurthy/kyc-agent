@@ -48,6 +48,14 @@ function resolveBandB({
     return acceptedVariation(eq, primary, officerName, `algorithmic equivalence${eq.ruleIds.length ? ` (rule ${eq.ruleIds.join(", ")})` : ""}`, "system");
   }
 
+  // Not plausibly the same person (fails phonetic + transliteration + fuzzy, well
+  // below the ask-threshold): don't ask "what explains the difference?" of a
+  // clearly different person — route straight to review. (Precise Band-C demotion
+  // for clearly-different names is BACKLOG BANDS-3.)
+  if (!eq.ruleExplained && eq.score < getPolicy().thresholds.skipToReview) {
+    return toReview(["not_plausibly_same_person"]);
+  }
+
   // 5b disclosure gate: only ask if it's provably the applicant's own document
   // and nothing restricts communication.
   const gateOpen = livenessPassed === true && ownRecord === true && restrictedFlag !== true && escalationFlag !== true;

@@ -90,6 +90,12 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **What:** `api/idv-match/mediaCapture.js` extracts document-image presigned URLs from the Didit decision using candidate field names (`front_image` / `back_image` / `portrait_image`, plus a `documents[]`/`images[]` fallback). Confirm the exact keys against a real Didit sandbox response and trim/adjust; if the keys differ, images silently aren't captured (no error, just nothing stored).
 - **Area:** `api/idv-match/mediaCapture.js` (`KIND_FIELDS`).
 
+### BANDS-3 — Clearly-different name should demote to Band C, not neutral review
+- **Category:** Bands / Correctness · **Priority:** P2 · **Status:** OPEN
+- **What:** When the document name is not plausibly the same person as the CH officer (fails phonetic + transliteration + fuzzy, score below `thresholds.skipToReview`), `resolveBandB` now short-circuits to neutral **review** (`not_plausibly_same_person`) instead of opening the "what explains the difference?" dialogue — correct not to interrogate a clearly-different person. But per the bands doc this case is really **Band C** (different person → LOA path / escalation), not a silent in-review. `assignBand` still routes any `name.comparable` case to Band B before the resolver sees it.
+- **Do:** route the clearly-different case to Band C (LOA path + escalation) at band-assignment time, with the verbatim Band C copy, rather than resolver-level review. Add a scenario test.
+- **Area:** `api/idv-match/bandAssignment.js`, `api/idv-match/resolution.js` (`resolveBandB` short-circuit), `scenarios.nodetest.js`.
+
 ### SCR-2 — Wire screening (PEP/sanctions/adverse-media) into the live flow
 - **Category:** Compliance / Integration · **Priority:** P1 (compliance hole if unwired) · **Status:** OPEN
 - **What:** The screening module is built + sandbox-proven (Phase 3: ComplyCube adapter → check → interpret → store → webhook) and the band logic **consumes** `hasScreeningHit()` (Phase 5 hard-exclusion), but nothing **calls `startScreening`** in the applicant flow — so today the accessor always returns "no hit" and PEP/sanctions is never actually checked.
