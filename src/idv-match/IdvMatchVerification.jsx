@@ -48,9 +48,12 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
     if (!attemptId) return;
     setBusy(true); setError(null);
     try {
-      const s = await fetch(`/api/idv-match/status?attemptId=${encodeURIComponent(attemptId)}`).then((r) => r.json());
-      setStatus(s.status);
-      if (s.verified) applyResult(await postJson("/api/idv-match/resolve", { attemptId }));
+      // Resolve pulls the decision from Didit directly (works locally — no webhook
+      // needed). If the check isn't complete yet, it comes back needs-retry.
+      const res = await postJson("/api/idv-match/resolve", { attemptId });
+      if (res && res.error) { setStatus("waiting for verification…"); return; }
+      if (res && res.needsRetry) { setStatus("Not complete yet — finish the Didit check, then click again."); return; }
+      applyResult(res);
     } catch (e) { setError(String(e.message || e)); } finally { setBusy(false); }
   }
 

@@ -514,7 +514,10 @@ export function ApplicantPage({
 
             <div style={card}>
               {renderApplicantPersonSelector()}
-              {showApplicantBody && renderApplicantFields()}
+              {/* Listed officer + bands ON: skip the manual fields — go straight to
+                  Didit verification; the fields appear as the fetched cells after.
+                  Unlisted (and flag OFF) still show the manual fields here. */}
+              {showApplicantBody && !bandsVerificationActive && renderApplicantFields()}
             </div>
 
             {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always

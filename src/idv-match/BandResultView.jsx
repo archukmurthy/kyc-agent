@@ -54,26 +54,27 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
   }
 
   const view = result.applicantView || {};
-
-  // Band C -> the could-not-confirm copy + the existing LOA path.
-  if (result.band === "C" || result.outcomeType === "demoted_to_loa_path" || result.route === "loa_path") {
-    return (
-      <View title={view.title} body={view.body}>
-        <Button type="button" onClick={() => onProvideLoa && onProvideLoa()}>Provide letter of authorization</Button>
-      </View>
-    );
-  }
-
-  // Band A success, registry note, name-change evidenced — render the server copy
-  // and let the applicant proceed. In-review outcomes render copy only (no proceed).
-  const canProceed = result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true || result.verified === true;
+  const isBandC = result.band === "C" || result.outcomeType === "demoted_to_loa_path" || result.route === "loa_path";
+  const canProceed = !isBandC && (result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true || result.verified === true);
   const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
+
   return (
     <View title={view.title} body={view.body}>
-      {canProceed && hasVerifiedFields && onConfirm && (
-        <VerifiedFieldsConfirm fields={result.verifiedFields} onConfirm={onConfirm} Btn={Btn} />
+      {/* Show the fetched identity fields after verification for ANY outcome:
+          editable + "Confirm & continue" on a passing band; read-only otherwise. */}
+      {hasVerifiedFields && (
+        <VerifiedFieldsConfirm
+          fields={result.verifiedFields}
+          onConfirm={canProceed && onConfirm ? onConfirm : undefined}
+          Btn={Btn}
+        />
       )}
-      {canProceed && !hasVerifiedFields && onProceed && <Button type="button" onClick={() => onProceed()}>Continue →</Button>}
+      {isBandC && (
+        <Button type="button" onClick={() => onProvideLoa && onProvideLoa()}>Provide letter of authorization</Button>
+      )}
+      {canProceed && !hasVerifiedFields && onProceed && (
+        <Button type="button" onClick={() => onProceed()}>Continue →</Button>
+      )}
     </View>
   );
 }

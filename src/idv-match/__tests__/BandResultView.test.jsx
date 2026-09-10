@@ -41,6 +41,18 @@ test("Band C renders LOA copy + routes to the letter-of-authorization flow", () 
   expect(onProvideLoa).toHaveBeenCalled();
 });
 
+test("any outcome with fetched fields shows the cells (read-only for Band C) + LOA", () => {
+  const result = { ...bandC, verifiedFields: { firstName: "Bob", documentNumber: "Z9" } };
+  render(<BandResultView result={result} onProvideLoa={jest.fn()} onConfirm={jest.fn()} />);
+  // fetched cells are shown...
+  expect(screen.getByText("Details read from your document")).toBeInTheDocument();
+  expect(screen.getByText("Bob")).toBeInTheDocument();
+  expect(screen.getByText("Z9")).toBeInTheDocument();
+  // ...read-only (no Confirm & continue / Edit) and still routed to LOA
+  expect(screen.queryByText(/Confirm & continue/)).toBeNull();
+  expect(screen.getByText("Provide letter of authorization")).toBeInTheDocument();
+});
+
 test("dialogue shows the two names, the five options, and Submit explanation", () => {
   render(<BandResultView result={dialogue} />);
   expect(screen.getByText("Help us confirm your details")).toBeInTheDocument();

@@ -21,16 +21,20 @@ export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn }) {
 
   const setValue = (k, v) => setValues((prev) => ({ ...prev, [k]: v }));
 
+  // When there's no onConfirm, this is a read-only review of what was fetched
+  // (e.g. a non-passing band still shows the applicant what the document held).
+  const editable = typeof onConfirm === "function";
+
   return (
     <div>
-      <h3 style={{ marginTop: 0 }}>Confirm your verified details</h3>
-      <p style={{ fontSize: 13, color: "#1a3a4a" }}>These were read from your document. Edit anything that's wrong, then confirm.</p>
+      <h3 style={{ marginTop: 0 }}>{editable ? "Confirm your verified details" : "Details read from your document"}</h3>
+      {editable && <p style={{ fontSize: 13, color: "#1a3a4a" }}>These were read from your document. Edit anything that's wrong, then confirm.</p>}
       <div>
         {keys.map((k) => (
           <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #eee" }}>
             <span aria-hidden="true" style={{ color: "#137333" }}>✓</span>
             <label style={{ width: 140, fontSize: 12, color: "#1a3a4a80" }} htmlFor={`vf-${k}`}>{LABELS[k] || k}</label>
-            {editing[k] ? (
+            {editable && editing[k] ? (
               <input
                 id={`vf-${k}`}
                 value={values[k] || ""}
@@ -40,15 +44,19 @@ export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn }) {
             ) : (
               <strong style={{ flex: 1 }}>{values[k]}</strong>
             )}
-            <button type="button" onClick={() => setEditing((p) => ({ ...p, [k]: !p[k] }))} style={{ fontSize: 12, background: "transparent", border: "none", color: "#0B3D91", cursor: "pointer" }}>
-              {editing[k] ? "Done" : "Edit"}
-            </button>
+            {editable && (
+              <button type="button" onClick={() => setEditing((p) => ({ ...p, [k]: !p[k] }))} style={{ fontSize: 12, background: "transparent", border: "none", color: "#0B3D91", cursor: "pointer" }}>
+                {editing[k] ? "Done" : "Edit"}
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 16 }}>
-        <Button type="button" onClick={() => onConfirm && onConfirm(values)}>Confirm &amp; continue →</Button>
-      </div>
+      {editable && (
+        <div style={{ marginTop: 16 }}>
+          <Button type="button" onClick={() => onConfirm(values)}>Confirm &amp; continue →</Button>
+        </div>
+      )}
     </div>
   );
 }
