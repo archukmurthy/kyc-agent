@@ -5,9 +5,10 @@ knowledge of the implementation. Where something can't be shown in the app, it
 gives the DB/script route instead.
 
 - **Environment:** local — `npm start` on `http://localhost:3000`, using `.env.local`.
-- **Run all commands in:** `E:\kyc-agent-dev`
+- **Run all commands in:** `E:\kyc-agent-dev` (PowerShell).
 - **The feature is behind an OFF switch** — you turn it on for the demo (Section 1).
 - **Nothing here changes live behaviour until the flag is on.**
+- **Placeholders:** `ATTEMPT_ID` and `MEDIA_ID` mean "paste the real id here" — **no angle brackets** (`<…>` breaks in PowerShell). The seed script prints the exact `inspect.js` command with the real id already filled in — just copy that.
 
 ---
 
@@ -158,13 +159,13 @@ This creates one attempt (`application_id = DEMO-FULL`) touching **every** store
 
 ### 7b. Inspect it (masked, then authorized reveal)
 ```
-node -r dotenv/config scripts/demo/inspect.js <attemptId> dotenv_config_path=.env.local
+node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID dotenv_config_path=.env.local
 ```
 Shows, for that attempt: the **attempt** (reference, no plaintext), the **Vault** (ciphertext, masked) + **access‑audit count**, **band decisions**, **immutable events**, **lifecycle**, **document media** (encrypted pointer), **screening**, and the **evidence outbox envelope**.
 
 Add `--reveal` to do the **authorized, audited decrypt** of the identity:
 ```
-node -r dotenv/config scripts/demo/inspect.js <attemptId> --reveal dotenv_config_path=.env.local
+node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID --reveal dotenv_config_path=.env.local
 ```
 **Point this out:** masked by default → `--reveal` shows the real values → the **audit count goes up** (every reveal is logged). That's the reviewer security story.
 
@@ -199,9 +200,9 @@ The **ciphertext object** for a document image lives in **Vercel → Storage →
 ## 8. See a stored document image as a picture
 
 ```
-node -r dotenv/config scripts/demo/image-roundtrip.js <mediaId> dotenv_config_path=.env.local
+node -r dotenv/config scripts/demo/image-roundtrip.js MEDIA_ID dotenv_config_path=.env.local
 ```
-(`<mediaId>` is printed by the seed, or shown in `inspect.js` under DOCUMENT MEDIA.)
+(`MEDIA_ID` is printed by the seed, or shown in `inspect.js` under DOCUMENT MEDIA.)
 
 It does the **authorized + audited decrypt** and writes a **viewable image file** into `scratch\` (gitignored). Open that file to see the picture.
 
@@ -241,8 +242,8 @@ Run everything in `E:\kyc-agent-dev`.
 | `node scripts/demo/band-outcomes.js` | Band A/B/C/retry/PEP logic | printed decisions | band demo |
 | `node scripts/demo/screening-fixture.js` | PEP/sanctions/adverse interpretation | printed hits | screening demo |
 | `node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local` | Seed one complete attempt | prints attempt id | DB demo |
-| `node -r dotenv/config scripts/demo/inspect.js <attemptId> [--reveal] dotenv_config_path=.env.local` | Show every store for an attempt | printed trail | DB demo |
-| `node -r dotenv/config scripts/demo/image-roundtrip.js <mediaId> dotenv_config_path=.env.local` | Decrypt a stored image to a file | writes `scratch\decrypted-*.png` | media demo |
+| `node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID [--reveal] dotenv_config_path=.env.local` | Show every store for an attempt | printed trail | DB demo |
+| `node -r dotenv/config scripts/demo/image-roundtrip.js MEDIA_ID dotenv_config_path=.env.local` | Decrypt a stored image to a file | writes `scratch\decrypted-*.png` | media demo |
 | `IDV_MATCH_DB_TEST=1 node -r dotenv/config --test api/idv-match/__tests__/*.integration.nodetest.js dotenv_config_path=.env.local` | Run the guarded DB integration tests | all pass | proof |
 | `node --test api/idv-match/**/__tests__/*.nodetest.js api/idv-match/__tests__/*.nodetest.js` | Run the offline test suite | ~pass, guarded skipped | proof |
 
