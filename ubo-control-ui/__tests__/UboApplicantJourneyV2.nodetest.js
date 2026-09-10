@@ -192,6 +192,44 @@ test("mobile stylesheet has a 720px responsive breakpoint and accessible semanti
   } finally { rendered.cleanup(); }
 });
 
+test("applicant confirmation is one primary action with a processing live region and no internal controls", async () => {
+  const { session, journey } = state("AJV2-01");
+  let calls = 0;
+  const rendered = renderApplicant(journey, {
+    content: session.content,
+    onSubmitAction: async () => { calls += 1; },
+  });
+  try {
+    rendered.click([...rendered.container.querySelectorAll(".uaj-action")]
+      .find((button) => /Confirm/i.test(button.textContent)));
+    const form = rendered.container.querySelector("form[data-action-type='CONFIRM_ESTABLISHED_INFORMATION']");
+    await rendered.submit(form);
+    assert.equal(calls, 1);
+    rendered.render(journey, { content: session.content, submissionState: { status: "SUBMITTING" } });
+    rendered.click([...rendered.container.querySelectorAll(".uaj-action")]
+      .find((button) => /Confirm/i.test(button.textContent)));
+    assert.equal(rendered.container.querySelector("button[type='submit']"), null);
+    assert.match(rendered.container.querySelector("[aria-live='polite']").textContent, /Saving your response and refreshing/i);
+    assert.doesNotMatch(rendered.container.textContent, /Record no-decisions|required checkpoint|Re-evaluate ownership/i);
+  } finally { rendered.cleanup(); }
+});
+
+test("submitted pending bundles are removed from current forms and a refreshed snapshot receives focus", () => {
+  const first = state("AJV2-04");
+  const submittedBundleId = first.journey.customerWorkBundles[0].bundleId;
+  const rendered = renderApplicant(first.journey, { content: first.session.content, submittedBundleIds: [submittedBundleId] });
+  try {
+    assert.equal(rendered.container.querySelector(`[data-bundle-id='${submittedBundleId}']`), null);
+    const next = structuredClone(first.journey);
+    next.decision.snapshotId = "sha256:next";
+    next.decision.snapshotHash = "sha256:next";
+    next.decision.planId = "ubo-resolution-plan-v2:next";
+    next.decision.planHash = "sha256:next-plan";
+    rendered.render(next, { content: first.session.content, submittedBundleIds: [] });
+    assert.equal(rendered.dom.window.document.activeElement.getAttribute("aria-label"), "Review status");
+  } finally { rendered.cleanup(); }
+});
+
 test("inline validation moves keyboard focus to the first actionable error", async () => {
   const { session, journey } = state("AJV2-04");
   const rendered = renderApplicant(journey, { content: session.content });

@@ -17,6 +17,7 @@ const { UboApplicantJourneyV2 } = require("@ubo-control/ui");
   }}
   actionResult={latestCustomerActionResultV2}
   submissionState={{ status: "IDLE", actionId: null, error: null }}
+  submittedBundleIds={hostRecordedPendingBundleIds}
   content={{ templates: approvedTemplatesByReference, entityLabels }}
   onSubmitAction={handleCustomerActionV2}
   onCancelDraft={handleCancelDraft}
@@ -28,7 +29,7 @@ Import `ubo-applicant-journey-v2.css`. The component accepts only `ubo-journey-p
 
 The component renders a compact textual ownership summary, one card per CustomerWorkBundle v2, and explicit system/internal/specialist/blocked/completed states. It performs no graph traversal, planning, qualification, claim decision, evaluation, Evidence execution, upload, delegation delivery, persistence, or onboarding approval. Draft identity pins snapshot hash, plan hash, bundle ID and resolution action ID. A changed projection clears the draft.
 
-The required host sequence is deliberately visible:
+The required host sequence remains explicit and auditable at the host boundary:
 
 ```text
 CustomerAction v2 -> Decision Application v3.applyCustomerInput
@@ -37,6 +38,8 @@ CustomerAction v2 -> Decision Application v3.applyCustomerInput
 ```
 
 External Evidence stops at `ubo-external-evidence-handoff-v1`; delegation stops at `ubo-customer-work-delegation-v1`. Neither path claims that execution, authorization, upload, or work completion occurred.
+
+The component invokes only `onSubmitAction`. A host may automatically orchestrate a no-decisions-required checkpoint and evaluation when the accepted result has no judgment, correction, Evidence, delegation, policy-content or sign-off blocker. The component disables submission while that callback is pending, announces `Saving your response and refreshing the ownership review…`, and focuses the refreshed status. `submittedBundleIds` lets the host prevent an accepted, review-pending bundle from remaining as a current form without altering JourneyProjection v2.
 
 ## Adaptive customer journey
 

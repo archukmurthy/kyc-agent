@@ -172,7 +172,7 @@
     };
   }
 
-  function ActionForm({ journey, bundle, action, actorContext, content, onSubmit, onCancel }) {
+  function ActionForm({ journey, bundle, action, actorContext, content, onSubmit, onCancel, submitting = false }) {
     const [values, setValues] = React.useState({});
     const [owners, setOwners] = React.useState([emptyOwner()]);
     const [correctionMeasurement, setCorrectionMeasurement] = React.useState(emptyMeasurement());
@@ -250,8 +250,9 @@
       };
     }
 
-    function submit(event) {
+    async function submit(event) {
       event.preventDefault();
+      if (submitting) return;
       try {
         const now = new Date().toISOString();
         const customerAction = buildCustomerActionV2({
@@ -259,7 +260,7 @@
           submittedAt: now, informationAsAtDate, delegatedFrom: actorContext.delegatedFrom || null,
         });
         setError("");
-        onSubmit(customerAction);
+        await onSubmit(customerAction);
       } catch (cause) {
         setError(cause.message);
       }
@@ -326,8 +327,12 @@
       controls,
       error && h("p", { className: "uaj-alert", role: "alert", ref: errorRef, tabIndex: -1 }, error),
       h("div", { className: "uaj-form-actions" },
-        h("button", { type: "button", className: "uaj-secondary", onClick: onCancel }, "Cancel"),
-        h("button", { type: "submit", className: "uaj-primary" }, action.actionType === ACTION.EVIDENCE ? "Continue securely" : action.actionType === ACTION.DELEGATE ? "Create request" : "Submit and review")));
+        h("button", { type: "button", className: "uaj-secondary", disabled: submitting, onClick: onCancel }, "Cancel"),
+        h("button", { type: "submit", className: "uaj-primary", disabled: submitting }, submitting
+          ? "Saving…"
+          : action.actionType === ACTION.CONFIRM ? "Confirm and continue"
+            : action.actionType === ACTION.EVIDENCE ? "Continue securely"
+              : action.actionType === ACTION.DELEGATE ? "Create request" : "Submit and review")));
   }
 
   function ResultNotice({ result, onRefresh }) {
@@ -391,7 +396,7 @@
               h("li", { key: relationship.relationshipId }, `${human(relationship.relationshipType)}: ${entityLabel(relationship.subjectEntityId, content)} to ${entityLabel(relationship.objectEntityId, content)}`))))));
   }
 
-  function BundleCard({ journey, bundle, actorContext, content, selected, setSelected, result, onSubmitAction, onCancelDraft, onRequestRefresh }) {
+  function BundleCard({ journey, bundle, actorContext, content, selected, setSelected, result, onSubmitAction, onCancelDraft, onRequestRefresh, submitting }) {
     const subjectId = bundle.canonicalSubject.entityId || bundle.canonicalSubject.entityIds[0];
     const configuredActions = bundle.permittedSemanticActions.map((action) => ({
       action,
@@ -423,7 +428,7 @@
           type: "button",
           className: "uaj-action",
           key: `${action.sourceResolutionActionId}:${action.actionType}`,
-          disabled: !executable,
+          disabled: !executable || submitting,
           onClick: () => setSelected({ bundleId: bundle.bundleId, actionType: action.actionType, pin: draftKey(journey, bundle, action) }),
         },
         h("strong", null, copy.title || actionLabel(action.actionType)),
@@ -438,6 +443,7 @@
           content,
           onSubmit: onSubmitAction,
           onCancel: () => { setSelected(null); if (onCancelDraft) onCancelDraft({ bundleId: bundle.bundleId, actionId: active.action.sourceResolutionActionId }); },
+          submitting,
         })),
       h(ResultNotice, { result, onRefresh: onRequestRefresh }));
   }
@@ -466,6 +472,7 @@
     onSubmitAction,
     onCancelDraft,
     onRequestRefresh,
+    submittedBundleIds = [],
     content,
     className = "",
   }) {
@@ -480,7 +487,12 @@
     const [selected, setSelected] = React.useState(null);
     const [staleDraft, setStaleDraft] = React.useState(false);
     const [submitError, setSubmitError] = React.useState("");
+    const [submitting, setSubmitting] = React.useState(false);
+    const statusRef = React.useRef(null);
+    const priorStatusPin = React.useRef(null);
     const currentDecisionPin = `${verified.decision.snapshotHash}|${verified.decision.planHash}`;
+    const submittedPin = [...submittedBundleIds].sort().join("|");
+    const processing = submitting || submissionState?.status === "SUBMITTING";
 
     React.useEffect(() => {
       if (selected && !selected.pin.startsWith(currentDecisionPin)) {
@@ -489,8 +501,15 @@
       }
     }, [currentDecisionPin]);
 
+    React.useEffect(() => {
+      const nextPin = `${currentDecisionPin}|${submittedPin}`;
+      if (priorStatusPin.current && priorStatusPin.current !== nextPin && statusRef.current) statusRef.current.focus();
+      priorStatusPin.current = nextPin;
+    }, [currentDecisionPin, submittedPin]);
+
     const activeBundles = verified.customerWorkBundles.filter((bundle) => bundle.state === "OPEN"
-      || bundle.state === "POLICY_CONTENT_REQUIRED" || bundle.state === "SIGNOFF_REQUIRED");
+      || bundle.state === "POLICY_CONTENT_REQUIRED" || bundle.state === "SIGNOFF_REQUIRED")
+      .filter((bundle) => !submittedBundleIds.includes(bundle.bundleId));
     const progressTotal = verified.finishLine.currentCustomerBundles
       + verified.finishLine.systemActionsRemaining
       + verified.finishLine.internalReviewPending
@@ -499,12 +518,16 @@
     const statusLabel = presentationState === "CUSTOMER_INPUT_REQUIRED" ? "Your input is needed" : human(presentationState);
 
     async function submit(customerAction) {
+      if (processing) return;
       try {
         setSubmitError("");
+        setSubmitting(true);
         await onSubmitAction(customerAction);
         setSelected(null);
       } catch (error) {
         setSubmitError(error.message || "The action could not be applied.");
+      } finally {
+        setSubmitting(false);
       }
     }
 
@@ -517,7 +540,7 @@
         h("p", { className: "uaj-kicker" }, "Ownership review"),
         h("h1", null, "Help us complete your UBO review"),
         h("p", null, "Review what is established, complete only the current approved task, and we will reassess the case."))),
-    h("section", { className: "uaj-progress", "aria-label": "Review status" },
+    h("section", { className: "uaj-progress", "aria-label": "Review status", ref: statusRef, tabIndex: -1 },
       h("div", null, h("span", { className: "uaj-pulse", "aria-hidden": "true" }), h("strong", null, statusLabel)),
       h("div", { className: "uaj-progress-metrics" },
         h("span", null, `${verified.finishLine.currentCustomerBundles} customer task${verified.finishLine.currentCustomerBundles === 1 ? "" : "s"}`),
@@ -535,8 +558,10 @@
       h("p", null, "Your previous draft was cleared because its snapshot or plan is no longer current."),
       h("button", { type: "button", className: "uaj-link", onClick: () => setStaleDraft(false) }, "Dismiss")),
     submitError && h("section", { className: "uaj-alert", role: "alert" }, submitError),
-    submissionState?.status && h("section", { className: "uaj-result", role: "status" },
-      submissionState.status === "SUBMITTING" ? "Submitting your response..." : submissionState.error || human(submissionState.status)),
+    (processing || submissionState?.status) && h("section", { className: "uaj-result", role: "status", "aria-live": "polite" },
+      processing
+        ? "Saving your response and refreshing the ownership review…"
+        : submissionState.error || human(submissionState.status)),
     activeBundles.length > 0
       ? h("section", { className: "uaj-tasks", "aria-labelledby": "uaj-tasks-title" },
         h("div", { className: "uaj-section-heading" },
@@ -554,6 +579,7 @@
           onSubmitAction: submit,
           onCancelDraft,
           onRequestRefresh,
+          submitting: processing,
         })))
       : h(NonCustomerState, { journey: verified }),
     h("footer", { className: "uaj-footer" },

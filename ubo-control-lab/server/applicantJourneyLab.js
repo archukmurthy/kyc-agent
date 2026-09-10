@@ -9,6 +9,7 @@ const {
 const { createEvidencePolicyClassification } = require("../../ubo-control/policy/evidencePolicy");
 const { loadPolicyPack } = require("../../ubo-control/policy/policyPack");
 const { CASE_STATE_INTERNALS } = require("../../ubo-control/application/createUboDecisionApplication");
+const { verifyDecisionSnapshotV2 } = require("../../ubo-control/domain/decisionSnapshotV2");
 const {
   createResolutionAttemptSemantics,
   materialGraphFingerprint,
@@ -16,6 +17,7 @@ const {
 const { applicantFixtureSeed } = require("./reviewLabEngine");
 
 const APPLICANT_LAB_SESSION_VERSION = "ubo-applicant-journey-lab-session-v1";
+const APPLICANT_LAB_ORCHESTRATION_VERSION = "ubo-applicant-lab-orchestration-v1";
 const NOW = "2026-09-09T10:00:00.000Z";
 
 const FIXTURES = Object.freeze([
@@ -223,7 +225,7 @@ function evaluateInitial(app, fixture, seed, caseState, policyFixture) {
   return { evaluated, resolutionInputs };
 }
 
-function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
+function startApplicantFixture({ fixtureId = "AJV2-01", profileId = null } = {}) {
   const fixture = fixtureById(fixtureId);
   const policyFixture = policyFor(fixture);
   const app = appFor(fixture);
@@ -261,6 +263,11 @@ function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
   const content = contentFor(policyFixture, seed, evaluated.journeyProjection);
   return clone({
     contractVersion: APPLICANT_LAB_SESSION_VERSION,
+    orchestrationContractVersion: APPLICANT_LAB_ORCHESTRATION_VERSION,
+    sessionId: `ubo-applicant-lab-session:${fixture.fixtureId.toLowerCase()}`,
+    sourceMode: "FIXTURE",
+    sourceIdentity: { fixtureId: fixture.fixtureId, sourceFixtureId: fixture.sourceFixtureId },
+    profileIdentity: profileId ? { profileId } : null,
     sessionOnly: true,
     fixtureId: fixture.fixtureId,
     fixtureLabel: fixture.label,
@@ -281,6 +288,18 @@ function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
     }],
     latestCustomerActionResult: null,
     completedCustomerAttempts: [],
+    customerActivityHistory: [],
+    submittedBundleIds: [],
+    acceptedOperations: [],
+    orchestrationHistory: [],
+    orchestrationState: { status: "READY", operationId: null },
+    fixtureReviewConfiguration: fixture.mode === "OWNERSHIP" ? {
+      contractVersion: "ubo-applicant-fixture-review-decisions-v1",
+      label: "DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS",
+      identityDecisionStatus: "RESOLVED",
+      claimResultingState: "OPERATIVE",
+      reasonCode: "EXPLICIT_LAB_REVIEW_DECISION",
+    } : null,
     pendingDecisionTargets: { candidateParties: [], candidateClaims: [] },
     pendingEvaluation: false,
     operationHistory: ["INTAKE", "EXPLICIT_FIXTURE_DECISIONS", "EVALUATE"],
@@ -356,7 +375,54 @@ function validateSession(value) {
   if (!value || value.contractVersion !== APPLICANT_LAB_SESSION_VERSION || value.sessionOnly !== true) {
     throw new TypeError("Unsupported applicant journey Lab session");
   }
-  return clone(value);
+  if (!value.sessionId || !["FIXTURE", "REPLAY", "LIVE"].includes(value.sourceMode)) {
+    throw new TypeError("Applicant journey Lab session identity is invalid");
+  }
+  const session = clone(value);
+  session.snapshots.forEach((entry, index) => {
+    verifyDecisionSnapshotV2(entry.snapshot, index ? { previousSnapshot: session.snapshots[index - 1].snapshot } : {});
+    if (entry.snapshot.snapshotId !== entry.snapshot.decisionContentHash
+      || entry.journey.decision.snapshotId !== entry.snapshot.snapshotId
+      || entry.journey.decision.snapshotHash !== entry.snapshot.decisionContentHash
+      || entry.plan.planId !== entry.journey.decision.planId
+      || entry.plan.planHash !== entry.journey.decision.planHash) {
+      throw new TypeError("Applicant journey Lab session snapshot, plan or projection pins do not match");
+    }
+  });
+  return session;
+}
+
+function appendOrchestrationEvent(session, eventType, details = {}) {
+  session.orchestrationHistory = [...(session.orchestrationHistory || []), {
+    sequence: (session.orchestrationHistory || []).length + 1,
+    eventType,
+    ...clone(details),
+  }];
+}
+
+function customerActivity(session, customerAction, result, operationId) {
+  const state = result.externalEvidenceHandoff
+    ? "EVIDENCE_HANDOFF_PENDING"
+    : result.delegationHandoff
+      ? "DELEGATION_HANDOFF_PENDING"
+      : (result.identityDecisionTargets || []).length || (result.claimAdjudicationTargets || []).length
+        || (result.correctionTargets || []).length || session.pendingDecisionTargets.candidateParties.length
+        || session.pendingDecisionTargets.candidateClaims.length
+        ? "INTERNAL_REVIEW_PENDING"
+        : "RECORDED";
+  return {
+    activityId: stableId("applicant-customer-activity", { operationId, customerInputId: result.customerInputId }),
+    operationId,
+    bundleId: customerAction.bundleId,
+    actionType: customerAction.actionType,
+    status: state,
+    submittedAt: customerAction.submittedAt,
+    actorReference: clone(customerAction.actorReference),
+    actorCapacity: customerAction.actorCapacity,
+    customerInputId: result.customerInputId,
+    evidenceHandoffId: result.externalEvidenceHandoff?.handoffId || null,
+    delegationHandoffId: result.delegationHandoff?.handoffId || null,
+  };
 }
 
 function repinEvidenceClassifications({ classifications, caseState, policyFixture }) {
@@ -384,6 +450,9 @@ function repinEvidenceClassifications({ classifications, caseState, policyFixtur
 
 function applyApplicantCustomerAction({ session: supplied, customerAction, operationId } = {}) {
   const session = validateSession(supplied);
+  const resolvedOperationId = operationId || stableId("applicant-action", customerAction);
+  const prior = (session.acceptedOperations || []).find((entry) => entry.operationId === resolvedOperationId);
+  if (prior) return session;
   const fixture = fixtureById(session.fixtureId);
   const current = session.snapshots.at(-1);
   const applied = appFor(fixture).applyCustomerInput({
@@ -392,7 +461,7 @@ function applyApplicantCustomerAction({ session: supplied, customerAction, opera
     sourceDecisionSnapshot: current.snapshot,
     sourceResolutionPlan: current.plan,
     customerAction,
-    operationId: operationId || stableId("applicant-action", customerAction),
+    operationId: resolvedOperationId,
   });
   session.caseState = applied.caseState;
   session.latestCustomerActionResult = applied.customerActionResult;
@@ -412,16 +481,41 @@ function applyApplicantCustomerAction({ session: supplied, customerAction, opera
   session.pendingDecisionTargets = clone(applied.decisionTargets);
   session.pendingEvaluation = true;
   session.operationHistory.push("APPLY_CUSTOMER_INPUT");
+  session.submittedBundleIds = [...new Set([...(session.submittedBundleIds || []), customerAction.bundleId])];
+  session.acceptedOperations = [...(session.acceptedOperations || []), {
+    operationId: resolvedOperationId,
+    customerInputId: applied.customerActionResult.customerInputId,
+    bundleId: customerAction.bundleId,
+    status: "ACCEPTED",
+  }];
+  session.customerActivityHistory = [...(session.customerActivityHistory || []), customerActivity(
+    session, customerAction, applied.customerActionResult, resolvedOperationId,
+  )];
+  appendOrchestrationEvent(session, "CUSTOMER_ACTION_SUBMITTED", {
+    operationId: resolvedOperationId,
+    actionType: customerAction.actionType,
+    actorReference: customerAction.actorReference,
+  });
+  appendOrchestrationEvent(session, "CUSTOMER_ACTION_RESULT_ACCEPTED", {
+    operationId: resolvedOperationId,
+    customerInputId: applied.customerActionResult.customerInputId,
+  });
   return session;
 }
 
-function applyApplicantDecisions({ session: supplied, recordedAt = new Date().toISOString() } = {}) {
+function applyApplicantDecisions({ session: supplied, recordedAt = new Date().toISOString(), actorReference = { referenceId: "ubo-control-lab-host" }, orchestrationOperationId = null } = {}) {
   const session = validateSession(supplied);
   const fixture = fixtureById(session.fixtureId);
   const targets = session.pendingDecisionTargets;
   if (!session.pendingEvaluation) throw new TypeError("No accepted customer action is awaiting decisions");
   if (!targets.candidateParties.length && !targets.candidateClaims.length) {
     session.operationHistory.push("EXPLICIT_NO_DECISIONS_REQUIRED");
+    appendOrchestrationEvent(session, "NO_DECISIONS_REQUIRED_CHECKPOINT_RECORDED", {
+      recordedAt,
+      actorReference,
+      actorCapacity: "LAB_HOST_SYSTEM",
+      operationId: orchestrationOperationId,
+    });
     return session;
   }
   const partyEntities = new Map();
@@ -475,6 +569,11 @@ function applyApplicantDecisions({ session: supplied, recordedAt = new Date().to
   session.caseState = decided.caseState;
   session.pendingDecisionTargets = clone(decided.decisionTargets);
   session.operationHistory.push("APPLY_EXPLICIT_DECISIONS");
+  appendOrchestrationEvent(session, "EXPLICIT_FIXTURE_REVIEW_DECISIONS_APPLIED", {
+    recordedAt,
+    actorReference,
+    actorCapacity: "LAB_FIXTURE_REVIEWER",
+  });
   return session;
 }
 
@@ -519,6 +618,122 @@ function evaluateApplicantJourney({ session: supplied, evaluationTime = new Date
   session.content = contentFor(policyFor(fixture), seedFor(fixture), evaluated.journeyProjection);
   session.pendingEvaluation = false;
   session.operationHistory.push("EVALUATE");
+  appendOrchestrationEvent(session, "DECISION_APPLICATION_EVALUATED", { evaluationTime });
+  appendOrchestrationEvent(session, "SNAPSHOT_CREATED", {
+    snapshotId: evaluated.decisionSnapshot.snapshotId,
+    predecessorSnapshotId: previous.snapshot.snapshotId,
+  });
+  appendOrchestrationEvent(session, "JOURNEY_PROJECTION_REFRESHED", {
+    snapshotId: evaluated.decisionSnapshot.snapshotId,
+    customerTaskCount: evaluated.journeyProjection.finishLine.currentCustomerBundles,
+  });
+  return session;
+}
+
+function automaticContinuationBlockers(session) {
+  const result = session.latestCustomerActionResult;
+  const sourceBundle = session.snapshots.at(-1).journey.customerWorkBundles
+    .find(({ bundleId }) => bundleId === result?.sourceWork?.bundleId);
+  const correctionTargets = result?.correctionTargets || [];
+  const policyBlocked = !sourceBundle || sourceBundle.state !== "OPEN" || (sourceBundle.blockingSignoffs || []).length > 0;
+  return [
+    ...(session.pendingDecisionTargets.candidateParties.length ? ["IDENTITY_DECISIONS_REQUIRED"] : []),
+    ...(session.pendingDecisionTargets.candidateClaims.length ? ["CLAIM_ADJUDICATIONS_REQUIRED"] : []),
+    ...(correctionTargets.length ? ["CORRECTION_REVIEW_REQUIRED"] : []),
+    ...(result?.externalEvidenceHandoff ? ["EXTERNAL_EVIDENCE_HANDOFF"] : []),
+    ...(result?.delegationHandoff ? ["DELEGATION_HANDOFF"] : []),
+    ...(policyBlocked ? ["POLICY_OR_SIGNOFF_BLOCK"] : []),
+    ...(result?.requiredNextOperation !== "EVALUATE" ? ["NEXT_OPERATION_IS_NOT_EVALUATE"] : []),
+  ];
+}
+
+function markAcceptedOperation(session, operationId, status) {
+  const entry = (session.acceptedOperations || []).find((item) => item.operationId === operationId);
+  if (entry) entry.status = status;
+}
+
+function continueAcceptedApplicantAction(session, operationId, options = {}) {
+  const blockers = automaticContinuationBlockers(session);
+  if (blockers.length) {
+    const result = session.latestCustomerActionResult;
+    session.pendingEvaluation = blockers.some((blocker) => ["IDENTITY_DECISIONS_REQUIRED", "CLAIM_ADJUDICATIONS_REQUIRED", "CORRECTION_REVIEW_REQUIRED"].includes(blocker));
+    session.orchestrationState = {
+      status: result.externalEvidenceHandoff ? "EVIDENCE_HANDOFF_PENDING"
+        : result.delegationHandoff ? "DELEGATION_HANDOFF_PENDING" : "INTERNAL_REVIEW_PENDING",
+      operationId,
+      blockers,
+    };
+    markAcceptedOperation(session, operationId, session.orchestrationState.status);
+    return session;
+  }
+  const operationTime = options.operationTime || session.latestCustomerActionResult?.actionProvenance?.submittedAt || new Date().toISOString();
+  const checkpointAlreadyRecorded = (session.orchestrationHistory || []).some(({ eventType, operationId: recordedOperationId }) =>
+    eventType === "NO_DECISIONS_REQUIRED_CHECKPOINT_RECORDED" && recordedOperationId === operationId);
+  if (!checkpointAlreadyRecorded) {
+    session = applyApplicantDecisions({
+      session,
+      recordedAt: operationTime,
+      actorReference: { referenceId: "ubo-control-lab-host" },
+      orchestrationOperationId: operationId,
+    });
+  }
+  try {
+    const evaluateOperation = options.evaluateOperation || evaluateApplicantJourney;
+    session = evaluateOperation({ session, evaluationTime: operationTime });
+    session.orchestrationState = { status: "ADVANCED", operationId, blockers: [] };
+    session.orchestrationError = null;
+    markAcceptedOperation(session, operationId, "COMPLETED");
+    return session;
+  } catch (_error) {
+    session.orchestrationState = { status: "EVALUATION_FAILED", operationId, blockers: [] };
+    session.orchestrationError = {
+      code: "LAB_EVALUATION_RETRY_REQUIRED",
+      message: "Your response was recorded, but the refreshed review could not be created. Review the latest recorded activity before retrying.",
+    };
+    session.operationHistory.push("EVALUATION_FAILED");
+    markAcceptedOperation(session, operationId, "EVALUATION_RETRY_REQUIRED");
+    return session;
+  }
+}
+
+function submitApplicantActionAndAdvance({ session: supplied, customerAction, operationId } = {}, options = {}) {
+  let session = validateSession(supplied);
+  const resolvedOperationId = operationId || stableId("applicant-action", customerAction);
+  const prior = (session.acceptedOperations || []).find((entry) => entry.operationId === resolvedOperationId);
+  if (prior?.status === "COMPLETED") return session;
+  if (!prior) session = applyApplicantCustomerAction({ session, customerAction, operationId: resolvedOperationId });
+  return continueAcceptedApplicantAction(session, resolvedOperationId, {
+    ...options,
+    operationTime: customerAction?.submittedAt || session.latestCustomerActionResult?.actionProvenance?.submittedAt,
+  });
+}
+
+function resumeApplicantAdvance({ session: supplied, operationId } = {}, options = {}) {
+  const session = validateSession(supplied);
+  const accepted = (session.acceptedOperations || []).find((entry) => entry.operationId === operationId);
+  if (!accepted) throw new TypeError("No recorded applicant operation is available to resume");
+  if (accepted.status === "COMPLETED") return session;
+  return continueAcceptedApplicantAction(session, operationId, options);
+}
+
+function completeApplicantFixtureReviewAndAdvance({ session: supplied, recordedAt = new Date().toISOString() } = {}) {
+  let session = validateSession(supplied);
+  if (session.sourceMode !== "FIXTURE" || !session.fixtureReviewConfiguration
+    || session.fixtureReviewConfiguration.contractVersion !== "ubo-applicant-fixture-review-decisions-v1") {
+    throw new TypeError("Preconfigured fixture review is unavailable for this applicant session");
+  }
+  if (!session.pendingDecisionTargets.candidateParties.length && !session.pendingDecisionTargets.candidateClaims.length) {
+    throw new TypeError("No preconfigured fixture decisions are pending");
+  }
+  session = applyApplicantDecisions({
+    session,
+    recordedAt,
+    actorReference: { referenceId: "ubo-control-lab-preconfigured-fixture-reviewer" },
+  });
+  session = evaluateApplicantJourney({ session, evaluationTime: recordedAt });
+  session.orchestrationState = { status: "ADVANCED_AFTER_FIXTURE_REVIEW", operationId: null, blockers: [] };
+  const activeBundleIds = new Set(session.snapshots.at(-1).journey.customerWorkBundles.map(({ bundleId }) => bundleId));
+  session.submittedBundleIds = (session.submittedBundleIds || []).filter((bundleId) => activeBundleIds.has(bundleId));
   return session;
 }
 
@@ -534,9 +749,14 @@ function catalogue() {
 
 module.exports = Object.freeze({
   APPLICANT_LAB_SESSION_VERSION,
+  APPLICANT_LAB_ORCHESTRATION_VERSION,
   applyApplicantCustomerAction,
   applyApplicantDecisions,
   catalogue,
+  completeApplicantFixtureReviewAndAdvance,
   evaluateApplicantJourney,
+  resumeApplicantAdvance,
   startApplicantFixture,
+  submitApplicantActionAndAdvance,
+  validateSession,
 });

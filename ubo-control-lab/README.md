@@ -31,7 +31,7 @@ Candidate parties and claims remain pending until a practitioner uses the identi
 
 Run `npm start`, then open `http://localhost:3000/ubo-control-lab/`. Live Discovery uses the same server-side environment and route configuration as `/api/ubo-discovery`; fixture mode needs no provider configuration.
 
-Production builds stage the standalone assets at `/ubo-control-lab/`. The active Lab case remains session-only and non-resumable: refreshing resets decisions and history. Only saved Discovery replay inputs persist locally in the same browser; there is no database or server-side replay persistence. The sealed Decision Application envelope and immutable DecisionSnapshot history remain authoritative during an active session.
+Production builds stage the standalone assets at `/ubo-control-lab/`. Fixture applicant sessions use the integrity-checked `ubo-control-lab-applicant-session-cache-v1` contract at browser-local key `ubo-control-lab.applicant-sessions.v2`. Refreshing or reopening the protected preview restores the last valid fixture session, including its active Snapshot, history and completed-task state. `Resume last demo`, `Start new case` and confirmed `Reset this demo` controls govern that local state. This is a Lab demo convenience only: there is no database, server-side, multi-device or production case persistence. Fresh Live sessions are not cached without explicit opt-in. The sealed Decision Application envelope and verified immutable DecisionSnapshot history remain authoritative.
 
 ## Evidence and feedback
 
@@ -57,7 +57,11 @@ This Wave 11A preview remains a separate read-only contract view. Only the Wave 
 
 The successor workspace retains the Wave 11A Applicant Preview and Contract Inspector and adds `Applicant Journey v2`. Its AJV2-01 through AJV2-15 sanitized fixtures are generated through Decision Application v3, Snapshot v2, ResolutionPlan v2 and JourneyProjection v2. Test-only schema-1.3 content fixtures are labelled and never mutate the real 1.6-RC policy.
 
-Applicant submission calls only the Lab's explicit `APPLY_APPLICANT_CUSTOMER_ACTION` operation. Candidate-producing input remains pending until `APPLY_APPLICANT_DECISIONS` is selected. `EVALUATE_APPLICANT_JOURNEY` is a separate visible operation that creates Snapshot B and retains Snapshot A. The Lab session is browser-held and review-only.
+The applicant calls one Lab-host operation, `SUBMIT_APPLICANT_ACTION_AND_ADVANCE`. The host still calls Decision Application v3 `applyCustomerInput`, records its result, records the no-decisions-required checkpoint where safe, then calls `evaluate` and refreshes JourneyProjection v2. Those operations remain separate and visible in analyst diagnostics, but the applicant sees one coherent submission. Any candidate identity, claim, correction/review, external Evidence, delegation, policy-content or sign-off target stops automatic continuation and moves the response to the truthful pending state.
+
+Applicant-facing checkpoint and re-evaluation controls have been removed. For deterministic ownership fixtures only, the Decision History view may show `DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS` and one internal continuation button. It uses the normal `applyDecisions` and `evaluate` operations and is unavailable for Live or Replay data. Submitted activity, current tasks and internal progress are presented separately.
+
+The durable design principle is: domain operations remain explicit and auditable, while the host automatically orchestrates non-judgmental steps so the applicant performs only genuine customer actions. Lab browser-local resumability is a demo/testing convenience and is not production case persistence.
 
 AJV2-13 uses the actual ASDA system-coverage plan and exposes no customer form. AJV2-14 uses the actual exhausted profile and renders exactly its three pinned bundles, including blocked residual content and external Evidence handoff only where planned. No action in this tab calls Discovery or Evidence merely by being viewed.
 

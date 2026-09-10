@@ -8,8 +8,12 @@ const {
   applyApplicantCustomerAction,
   applyApplicantDecisions,
   catalogue,
+  completeApplicantFixtureReviewAndAdvance,
   evaluateApplicantJourney,
+  resumeApplicantAdvance,
   startApplicantFixture,
+  submitApplicantActionAndAdvance,
+  validateSession,
 } = require("../server/applicantJourneyLab");
 const { buildCustomerActionV2 } = require("../../ubo-control-ui/UboApplicantJourneyV2");
 
@@ -158,6 +162,55 @@ test("confirmed information with no decision targets re-evaluates against the cu
   assert.deepEqual(session.operationHistory.slice(-3), ["APPLY_CUSTOMER_INPUT", "EXPLICIT_NO_DECISIONS_REQUIRED", "EVALUATE"]);
 });
 
+test("one confirmation submission automatically checkpoints, evaluates and refreshes AJV2-01", () => {
+  let session = startApplicantFixture({ fixtureId: "AJV2-01" });
+  const before = structuredClone(current(session).snapshot);
+  const customerAction = action(session, "CONFIRM_ESTABLISHED_INFORMATION", confirmPayload(session));
+  session = submitApplicantActionAndAdvance({ session, customerAction, operationId: "AJV2-01:seamless-confirm" });
+  assert.equal(session.snapshots.length, 2);
+  assert.deepEqual(session.snapshots[0].snapshot, before);
+  assert.equal(current(session).journey.finishLine.currentCustomerBundles, 0);
+  assert.equal(current(session).journey.customerInputComplete, true);
+  assert.equal(current(session).journey.finalCaseComplete, false);
+  assert.equal(current(session).plan.state, "INTERNAL_REVIEW");
+  assert.equal(session.completedCustomerAttempts.length, 1);
+  assert.equal(session.customerActivityHistory.length, 1);
+  assert.equal(session.customerActivityHistory[0].status, "RECORDED");
+  assert.equal(session.orchestrationState.status, "ADVANCED");
+  assert.deepEqual(session.operationHistory.slice(-3), ["APPLY_CUSTOMER_INPUT", "EXPLICIT_NO_DECISIONS_REQUIRED", "EVALUATE"]);
+  assert.deepEqual(session.orchestrationHistory.map(({ eventType }) => eventType), [
+    "CUSTOMER_ACTION_SUBMITTED",
+    "CUSTOMER_ACTION_RESULT_ACCEPTED",
+    "NO_DECISIONS_REQUIRED_CHECKPOINT_RECORDED",
+    "DECISION_APPLICATION_EVALUATED",
+    "SNAPSHOT_CREATED",
+    "JOURNEY_PROJECTION_REFRESHED",
+  ]);
+  assert.equal(session.orchestrationHistory.some(({ eventType }) => eventType.includes("ADJUDICAT")), false);
+  assert.equal(session.latestCustomerActionResult.customerConfirmation.independentEvidenceRequirementState, "SATISFIED");
+  assert.equal(validateSession(session).snapshots.length, 2);
+});
+
+test("same operation is idempotent and an evaluation failure retains the accepted action for safe retry", () => {
+  let session = startApplicantFixture({ fixtureId: "AJV2-01" });
+  const customerAction = action(session, "CONFIRM_ESTABLISHED_INFORMATION", confirmPayload(session));
+  session = submitApplicantActionAndAdvance(
+    { session, customerAction, operationId: "AJV2-01:retryable" },
+    { evaluateOperation() { throw new Error("test-only failure"); } },
+  );
+  assert.equal(session.snapshots.length, 1);
+  assert.equal(session.completedCustomerAttempts.length, 1);
+  assert.equal(session.orchestrationState.status, "EVALUATION_FAILED");
+  assert.equal(session.operationHistory.filter((item) => item === "EXPLICIT_NO_DECISIONS_REQUIRED").length, 1);
+  session = resumeApplicantAdvance({ session, operationId: "AJV2-01:retryable" }, { operationTime: AT });
+  assert.equal(session.snapshots.length, 2);
+  assert.equal(session.completedCustomerAttempts.length, 1);
+  assert.equal(session.operationHistory.filter((item) => item === "EXPLICIT_NO_DECISIONS_REQUIRED").length, 1);
+  const replayed = submitApplicantActionAndAdvance({ session, customerAction, operationId: "AJV2-01:retryable" });
+  assert.equal(replayed.snapshots.length, 2);
+  assert.equal(replayed.acceptedOperations.length, 1);
+});
+
 test("TDR missing-controller work never receives generic confirmation and remains review-only when no route is executable", () => {
   const internal = startApplicantFixture({ fixtureId: "AJV2-08" });
   const controllerNeeds = current(internal).snapshot.decisionContent.informationNeedsV2.filter(({ requiredFact }) => requiredFact.type === "NATURAL_PERSON_CONTROL_ATTRIBUTION");
@@ -207,6 +260,40 @@ test("customer input, explicit decisions and re-evaluation are three separate op
   assert.notEqual(current(session).snapshot.snapshotId, first.snapshotId);
   assert.deepEqual(session.snapshots[0].snapshot, first);
   assert.deepEqual(session.operationHistory.slice(-3), ["APPLY_CUSTOMER_INPUT", "APPLY_EXPLICIT_DECISIONS", "EVALUATE"]);
+});
+
+test("structured ownership stops for review and only the fixture helper applies preconfigured decisions", () => {
+  let session = startApplicantFixture({ fixtureId: "AJV2-04" });
+  const { bundle } = findAction(session, "SUBMIT_STRUCTURED_RELATIONSHIP");
+  const customerAction = action(session, "SUBMIT_STRUCTURED_RELATIONSHIP", {
+    relationships: [{
+      localPartyKey: "fixture-owner",
+      owner: { localPartyKey: "fixture-owner", name: "Foreign Owner Example", entityType: "LEGAL_ENTITY", jurisdiction: "NL", externalIdentifiers: [] },
+      targetEntityId: bundle.canonicalSubject.entityId,
+      concept: "SHARE_OWNERSHIP",
+      direction: "OWNER_TO_TARGET",
+      relationshipType: "ECONOMIC_OWNERSHIP",
+      measurement: { type: "EXACT", value: 10 },
+      assertionState: "CURRENT",
+      asAtDate: AT,
+    }],
+  });
+  session = submitApplicantActionAndAdvance({ session, customerAction, operationId: "AJV2-04:seamless" });
+  assert.equal(session.snapshots.length, 1);
+  assert.equal(session.orchestrationState.status, "INTERNAL_REVIEW_PENDING");
+  assert.equal(session.pendingDecisionTargets.candidateClaims.length, 1);
+  assert.equal(session.operationHistory.includes("EVALUATE"), true);
+  assert.equal(session.operationHistory.at(-1), "APPLY_CUSTOMER_INPUT");
+  const graphBefore = structuredClone(current(session).snapshot.decisionContent.phaseArtifacts
+    .find(({ phaseId }) => phaseId === "CANONICAL_GRAPH_AND_DEPTH").output.graph);
+  session = completeApplicantFixtureReviewAndAdvance({ session, recordedAt: AT });
+  assert.equal(session.snapshots.length, 2);
+  assert.equal(session.pendingDecisionTargets.candidateClaims.length, 0);
+  assert.notDeepEqual(current(session).snapshot.decisionContent.phaseArtifacts
+    .find(({ phaseId }) => phaseId === "CANONICAL_GRAPH_AND_DEPTH").output.graph, graphBefore);
+  const replay = startApplicantFixture({ fixtureId: "AJV2-04" });
+  replay.sourceMode = "REPLAY";
+  assert.throws(() => completeApplicantFixtureReviewAndAdvance({ session: replay }), /unavailable/);
 });
 
 test("structured ownership preserves exact, range and unknown candidate values", () => {
@@ -262,6 +349,38 @@ test("external Evidence stops at a byte-free handoff and leaves work open", () =
   assert.doesNotMatch(JSON.stringify(handoff), /base64|blob:|filesystem|artifactId|filePath/i);
 });
 
+test("Evidence and delegation handoffs never auto-evaluate and remain resumable pending activity", () => {
+  for (const [fixtureId, actionType, payloadFor, expectedState] of [
+    ["AJV2-05", "REQUEST_EXTERNAL_EVIDENCE", (bundle) => ({ requestCorrelationId: "evidence", evidenceCategories: bundle.evidenceHandoff.semanticEvidenceCategories, requestedConcepts: bundle.evidenceHandoff.requestedConcepts, informationAsAtDate: AT }), "EVIDENCE_HANDOFF_PENDING"],
+    ["AJV2-06", "DELEGATE_CUSTOMER_WORK", () => ({ delegateReference: "Secretary", delegateCapacity: "COMPANY_SECRETARY", requestedWorkScope: "Ownership details", informationAsAtExpectation: AT, correlationId: "delegate" }), "DELEGATION_HANDOFF_PENDING"],
+  ]) {
+    let session = startApplicantFixture({ fixtureId });
+    const selected = findAction(session, actionType);
+    const beforeNeedCount = current(session).snapshot.decisionContent.informationNeedsV2.filter(({ status }) => status === "OPEN").length;
+    session = submitApplicantActionAndAdvance({
+      session,
+      customerAction: action(session, actionType, payloadFor(selected.bundle)),
+      operationId: `${fixtureId}:handoff`,
+    });
+    assert.equal(session.snapshots.length, 1);
+    assert.equal(session.orchestrationState.status, expectedState);
+    assert.equal(session.customerActivityHistory.at(-1).status, expectedState);
+    assert.equal(current(session).snapshot.decisionContent.informationNeedsV2.filter(({ status }) => status === "OPEN").length, beforeNeedCount);
+    assert.equal(/"artifactId"\s*:/.test(JSON.stringify(session.latestCustomerActionResult)), false);
+  }
+});
+
+test("restored applicant sessions verify immutable Snapshot and projection authority", () => {
+  const session = startApplicantFixture({ fixtureId: "AJV2-01" });
+  assert.equal(validateSession(session).snapshots.length, 1);
+  const tampered = structuredClone(session);
+  tampered.snapshots[0].snapshot.decisionContentHash = "sha256:tampered";
+  assert.throws(() => validateSession(tampered), /hash|snapshot/i);
+  const wrongProjection = structuredClone(session);
+  wrongProjection.snapshots[0].journey.decision.snapshotId = "sha256:other";
+  assert.throws(() => validateSession(wrongProjection), /pins do not match/);
+});
+
 test("delegation prepares only a host handoff and grants no authority or completion", () => {
   let session = startApplicantFixture({ fixtureId: "AJV2-06" });
   session = applyApplicantCustomerAction({
@@ -292,15 +411,19 @@ test("ASDA system and exhausted profiles agree with their pinned plans", () => {
   assert.equal(current(exhausted).journey.customerWorkBundles.length, 3);
 });
 
-test("Lab browser keeps preview and analyst views while exposing the explicit applicant cycle", () => {
+test("Lab browser exposes one applicant submit while retaining internal operations outside the applicant view", () => {
   const source = fs.readFileSync(path.resolve(__dirname, "..", "browser", "lab.js"), "utf8");
   assert.match(source, /APPLICANT_JOURNEY_V2/);
   assert.match(source, /APPLICANT_PREVIEW/);
   assert.match(source, /CONTRACT_INSPECTOR/);
-  assert.match(source, /APPLY_APPLICANT_CUSTOMER_ACTION/);
-  assert.match(source, /APPLY_APPLICANT_DECISIONS/);
-  assert.match(source, /EVALUATE_APPLICANT_JOURNEY/);
-  assert.match(source, /Completed customer submission/);
-  assert.match(source, /completedCustomerAttempts/);
+  assert.match(source, /SUBMIT_APPLICANT_ACTION_AND_ADVANCE/);
+  assert.match(source, /Complete fixture review and refresh journey/);
+  assert.match(source, /ApplicantSessionDiagnostics/);
+  assert.doesNotMatch(source, /Record no-decisions-required checkpoint|Re-evaluate ownership case/);
+  assert.match(source, /SUBMITTED ACTIVITY/);
+  assert.match(source, /submittedBundleIds/);
+  assert.match(source, /Restored your local Lab demo session/);
+  assert.match(source, /Save this Lab session locally for demo\/testing/);
+  assert.match(source, /Saved only in this browser — Lab testing, not production case storage/);
   assert.doesNotMatch(source, /input[^\n]+type:\s*"file"/);
 });

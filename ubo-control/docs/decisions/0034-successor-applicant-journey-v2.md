@@ -10,7 +10,7 @@ The successor applicant experience is a separate `UboApplicantJourneyV2` compone
 
 `ubo-journey-projection-v2` is the sole authoritative product-state input. Host-resolved content supplies presentation wording only and cannot add bundles, actions, targets, concepts or permissions. The component emits a fully pinned `ubo-customer-action-v2` through a host callback and performs no decision reasoning.
 
-The Lab exposes the lifecycle as separate operations: `applyCustomerInput`, explicit identity/claim decisions, then `evaluate`. Applicant submission cannot silently produce a new snapshot. Snapshot history is retained.
+The Lab preserves the lifecycle as separate operations: `applyCustomerInput`, an explicit no-decisions checkpoint or human identity/claim decisions, then `evaluate`. The Lab host automatically orchestrates the non-judgmental checkpoint/evaluate path after one applicant submission. Candidate-producing, correction, Evidence and delegation paths stop for their required external or human action. Snapshot history and every internal orchestration event are retained in analyst diagnostics; no hidden adjudication occurs.
 
 Applicant and analyst views remain distinct. The applicant receives a compact, read-only ownership summary and coherent bundle tasks, not the analyst graph or causal diagnostics.
 
@@ -20,4 +20,4 @@ The uncommitted Evidence adapter worktree is neither imported nor used. Wave 11B
 
 ## Consequences
 
-The UI package gains one deliberate React export and stylesheet. The fixture-only successor Lab gains four explicit host operations and fifteen actual-contract scenarios. The headless UBO public root, domain contracts, policy JSON, planning semantics and Decision Application v3 semantics remain unchanged.
+The UI package retains its one deliberate React export and stylesheet. The fixture-only successor Lab adds explicit host orchestration, an analyst-only preconfigured fixture review helper, and integrity-checked browser-local demo resumability. Domain operations remain explicit and auditable, while the host automatically orchestrates non-judgmental steps so the applicant performs only genuine customer actions. Lab browser-local resumability is a demo/testing convenience and is not production case persistence. The headless UBO public root, domain contracts, policy JSON, planning semantics and Decision Application v3 semantics remain unchanged.

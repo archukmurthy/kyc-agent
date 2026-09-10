@@ -2,6 +2,14 @@
 
 Status: review-only correction on the open Wave 11B1 pull request.
 
+## Seamless host orchestration clarification
+
+The completed semantic attempt remains the decisive protection against confirmation-loop recurrence. The Lab applicant no longer operates the separate checkpoint and evaluation steps directly. `SUBMIT_APPLICANT_ACTION_AND_ADVANCE` records the CustomerAction result, automatically records the system/Lab no-decisions-required checkpoint only when no judgment or external work is required, and then evaluates to a linked Snapshot B. The analyst diagnostics retain the exact operation order.
+
+Candidate identity, claim, correction/review, external Evidence, delegation, policy-content and sign-off conditions prevent automatic evaluation. Deterministic fixture decisions may be applied only through the labelled analyst helper and the normal Decision Application operations.
+
+Fixture sessions are sealed in the browser-local `ubo-control-lab-applicant-session-cache-v1` cache and verified before restore. This prevents a browser refresh from recreating Snapshot A and reopening the exhausted confirmation route. The cache is explicitly Lab-only and is not production persistence.
+
 ## Decision
 
 `CONFIRM_ESTABLISHED_INFORMATION` is compatible only with an InformationNeed that asks whether an already identified relationship remains current. It cannot cover a missing person, owner, relationship, percentage, control attribution or other absent substantive fact. The AJV2-01/AJV2-02 test-only fixtures therefore make the established `tdr-gp-a → bellis-finco` control relationship's currentness unknown; they no longer map the separate missing-natural-person-controller frontier to generic confirmation.
