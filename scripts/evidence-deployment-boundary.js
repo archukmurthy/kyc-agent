@@ -7,6 +7,10 @@ const REQUIRED_IGNORE_RULES = Object.freeze([
   "api/evidence/**",
   "public/evidence-lab*",
 ]);
+const REQUIRED_DENIAL_ROUTES = Object.freeze([
+  Object.freeze({ src: "/api/evidence(/.*)?", status: 404 }),
+  Object.freeze({ src: "/evidence-lab.*", status: 404 }),
+]);
 
 function relative(root, file) {
   return path.relative(root, file).split(path.sep).join("/");
@@ -24,6 +28,61 @@ function readIgnoreRules(root) {
   const ignorePath = path.join(root, ".vercelignore");
   if (!fs.existsSync(ignorePath)) throw new Error(".vercelignore is missing from the Vercel project root");
   return fs.readFileSync(ignorePath, "utf8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+}
+
+function readVercelConfig(root) {
+  const configPath = path.join(root, "vercel.json");
+  if (!fs.existsSync(configPath)) throw new Error("vercel.json is missing from the Vercel project root");
+  return JSON.parse(fs.readFileSync(configPath, "utf8"));
+}
+
+function patternMatches(pattern, requestPath) {
+  return new RegExp(`^(?:${pattern})$`).test(requestPath);
+}
+
+function routingDisposition(config, requestPath) {
+  const route = (config.routes || []).find((candidate) => patternMatches(candidate.src, requestPath));
+  if (route) return route.status ? { kind: "denied", status: route.status } : { kind: "route", destination: route.dest };
+
+  const rewrite = (config.rewrites || []).find((candidate) => patternMatches(candidate.source, requestPath));
+  if (!rewrite) return { kind: "filesystem" };
+  if (rewrite.destination === "/index.html") return { kind: "spa", destination: rewrite.destination };
+  return { kind: "rewrite", destination: rewrite.destination };
+}
+
+function verifyRoutingBoundary(root) {
+  const config = readVercelConfig(root);
+  for (const required of REQUIRED_DENIAL_ROUTES) {
+    if (!(config.routes || []).some((route) => route.src === required.src && route.status === required.status)) {
+      throw new Error(`Required Evidence denial route is missing: ${required.src}`);
+    }
+  }
+
+  for (const requestPath of [
+    "/api/evidence/status",
+    "/api/evidence/a2-config",
+    "/evidence-lab.html",
+    "/evidence-lab.js",
+    "/evidence-lab-state.js",
+  ]) {
+    const disposition = routingDisposition(config, requestPath);
+    if (disposition.kind !== "denied" || disposition.status !== 404) {
+      throw new Error(`Evidence path is not explicitly denied: ${requestPath}`);
+    }
+  }
+
+  if (routingDisposition(config, "/").kind !== "spa") throw new Error("Ordinary KYC root no longer reaches the SPA");
+  if (routingDisposition(config, "/admin/settings").kind !== "spa") throw new Error("Ordinary KYC SPA routing was changed");
+  const apiDisposition = routingDisposition(config, "/api/config");
+  if (apiDisposition.kind !== "rewrite" || apiDisposition.destination !== "/api/$1") {
+    throw new Error("Ordinary non-Evidence API routing was changed");
+  }
+
+  return {
+    denialRoutes: REQUIRED_DENIAL_ROUTES,
+    ordinarySpa: routingDisposition(config, "/admin/settings"),
+    ordinaryApi: apiDisposition,
+  };
 }
 
 function isExcluded(deploymentPath, rules) {
@@ -75,6 +134,7 @@ function verifyBoundary(root, {
   for (const rule of REQUIRED_IGNORE_RULES) {
     if (!rules.includes(rule)) throw new Error(`Required Vercel exclusion is missing: ${rule}`);
   }
+  const routing = verifyRoutingBoundary(root);
 
   const inventory = inventoryLabSurfaces(root);
   if (requireSourceInventory) {
@@ -106,6 +166,7 @@ function verifyBoundary(root, {
 
   return {
     ignoreRules: rules,
+    routing,
     sourceInventoryMode: requireSourceInventory ? "repository" : "filtered-vercel-upload",
     inventory,
     deployableFunctionCount: functions.length,
@@ -121,11 +182,15 @@ if (require.main === module) {
 }
 
 module.exports = {
+  REQUIRED_DENIAL_ROUTES,
   REQUIRED_IGNORE_RULES,
   deployableFunctionInventory,
   inventoryLabSurfaces,
   isExcluded,
   readIgnoreRules,
+  readVercelConfig,
+  routingDisposition,
   sanitizeBuildOutput,
   verifyBoundary,
+  verifyRoutingBoundary,
 };

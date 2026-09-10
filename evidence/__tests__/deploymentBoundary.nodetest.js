@@ -7,13 +7,17 @@ const path = require("path");
 const test = require("node:test");
 
 const {
+  REQUIRED_DENIAL_ROUTES,
   REQUIRED_IGNORE_RULES,
   deployableFunctionInventory,
   inventoryLabSurfaces,
   isExcluded,
   readIgnoreRules,
+  readVercelConfig,
+  routingDisposition,
   sanitizeBuildOutput,
   verifyBoundary,
+  verifyRoutingBoundary,
 } = require("../../scripts/evidence-deployment-boundary");
 
 const root = path.resolve(__dirname, "..", "..");
@@ -41,6 +45,23 @@ test("frozen façade and ordinary application APIs are not excluded", () => {
   assert.equal(deployable.includes("api/research.js"), true);
 });
 
+test("Evidence paths are denied before the SPA fallback while ordinary routing remains intact", () => {
+  const config = readVercelConfig(root);
+  assert.deepEqual(config.routes, REQUIRED_DENIAL_ROUTES);
+  for (const requestPath of [
+    "/api/evidence/status",
+    "/api/evidence/a5b-verify",
+    "/evidence-lab.html",
+    "/evidence-lab.js",
+    "/evidence-lab-state.js",
+  ]) {
+    assert.deepEqual(routingDisposition(config, requestPath), { kind: "denied", status: 404 });
+  }
+  assert.deepEqual(routingDisposition(config, "/admin/settings"), { kind: "spa", destination: "/index.html" });
+  assert.deepEqual(routingDisposition(config, "/api/config"), { kind: "rewrite", destination: "/api/$1" });
+  assert.doesNotThrow(() => verifyRoutingBoundary(root));
+});
+
 test("production-boundary verifier accepts the repository source inventory", () => {
   const result = verifyBoundary(root, { requireBuild: false });
   assert.equal(result.sourceInventoryMode, "repository");
@@ -55,6 +76,14 @@ test("production-boundary verifier requires a filtered Vercel upload to contain 
     fs.mkdirSync(path.join(temporaryRoot, "evidence", "consumer", "v1"), { recursive: true });
     fs.mkdirSync(path.join(temporaryRoot, "public"), { recursive: true });
     fs.writeFileSync(path.join(temporaryRoot, ".vercelignore"), `${REQUIRED_IGNORE_RULES.join("\n")}\n`);
+    fs.writeFileSync(path.join(temporaryRoot, "vercel.json"), JSON.stringify({
+      routes: REQUIRED_DENIAL_ROUTES,
+      rewrites: [
+        { source: "/api/(.*)", destination: "/api/$1" },
+        { source: "/admin/(.*)", destination: "/index.html" },
+        { source: "/(.*)", destination: "/index.html" },
+      ],
+    }));
     fs.writeFileSync(path.join(temporaryRoot, "api", "research.js"), "module.exports = {};");
     fs.writeFileSync(path.join(temporaryRoot, "api", "doc-search.js"), "module.exports = {};");
     fs.writeFileSync(path.join(temporaryRoot, "evidence", "consumer", "v1", "index.js"), "module.exports = {};");
