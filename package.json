@@ -28,6 +28,7 @@
     "idv:migrate": "node idv/persistence/applyModuleSchema.js",
     "idv:db:migrate": "node -r dotenv/config db/apply-idv.js dotenv_config_path=.env.local",
     "idv:db:seed": "node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local",
+    "idv:db:seed:populated": "node -r dotenv/config scripts/demo/seed-populated.js dotenv_config_path=.env.local",
     "idv:harness": "node idv/harness/server.js",
     "eject": "react-scripts eject"
   },

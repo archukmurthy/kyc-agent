@@ -262,6 +262,7 @@ Run everything in `E:\kyc-agent-dev`.
 | `node scripts/demo/screening-fixture.js` | PEP/sanctions/adverse interpretation | printed hits | screening demo |
 | `npm run idv:db:migrate` | Apply IDV migrations 013–023 to `idv` (after console recreate) | schema built | Neon console setup (7c) |
 | `npm run idv:db:seed` | Seed one complete attempt into `idv` | prints attempt id | Neon console setup (7c) |
+| `npm run idv:db:seed:populated` | Seed 6 varied attempts (Band A/B/C + clear/PEP/sanctions/adverse) | populated tables | fuller console demo |
 | `node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local` | Seed one complete attempt | prints attempt id | DB demo |
 | `node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID [--reveal] dotenv_config_path=.env.local` | Show every store for an attempt | printed trail | DB demo |
 | `node -r dotenv/config scripts/demo/image-roundtrip.js MEDIA_ID dotenv_config_path=.env.local` | Decrypt a stored image to a file | writes `scratch\decrypted-*.png` | media demo |
