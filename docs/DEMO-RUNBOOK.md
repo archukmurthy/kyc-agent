@@ -171,26 +171,30 @@ node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID --reveal dotenv_config_
 
 ### 7c. Neon Console walkthrough (the visual DB demo)
 
-> **One‑time setup so the console shows `idv`.** The `idv` database was originally
-> created via raw SQL, so Neon's console never registered it and it doesn't appear
-> in the database dropdown (Neon only lists databases created **through** its
-> console/API). Recreate it **once, through the console**, and it shows normally.
-> Its data is synthetic and fully re‑seeded, so this is safe.
+> **`idv` is already registered in the console** — it shows on branch **`main`** in
+> **Branches → Databases** (owner `neondb_owner`), alongside `neondb`. Nothing to
+> create. If you "couldn't see it" before, it was **selection**, not a missing DB:
+> the SQL Editor's branch/database pickers were pointed at the wrong branch (or at
+> `neondb`).
 
-**Setup (do once, before the demo):**
-1. **Stop `npm start`** (so nothing holds a connection to `idv`).
-2. Neon console → **select the branch whose compute endpoint is `ep-blue-mouse-abxjk5d5`** (that's the branch `IDV_DATABASE_URL` points at — *not* the main‑app branch `ep-snowy-cherry-abf2ntrs`).
-3. Drop the old raw DB — open the **SQL Editor** on the `neondb` database of that branch and run:
-   ```sql
-   DROP DATABASE idv WITH (FORCE);
-   ```
-4. **Databases** tab → **New Database** → name **`idv`**, owner **`neondb_owner`**. (This is the step that registers it with the console.)
-5. Rebuild schema + data from the repo:
-   ```
-   npm run idv:db:migrate   # applies migrations 013–023 to IDV_DATABASE_URL
-   npm run idv:db:seed      # seeds one complete attempt (application_id = DEMO-FULL)
-   ```
-`idv` now appears in the console dropdown with all 13 `idv_*` tables and demo data.
+**To view it (two ways):**
+1. **Databases tab → the `idv` row → "Edit data"** — opens Neon's table browser for
+   `idv`; pick any `idv_*` table and read rows directly. Simplest visual demo.
+2. **SQL Editor** → at the top pick **branch `main`** and **database `idv`** (not
+   `neondb`) → run the queries below.
+
+**Sanity check it's the live DB the app writes to:** open `idv_verification_attempts`
+via *Edit data* — you should see rows (~9 from prior runs + the seed). Empty means
+the console branch differs from `IDV_DATABASE_URL`'s endpoint (`ep-blue-mouse-abxjk5d5`) —
+realign the branch (or `.env.local`) before demoing.
+
+**Rebuild from scratch (only if you ever need a clean `idv` or a brand‑new branch):**
+```
+npm run idv:db:migrate   # applies migrations 013–023 to IDV_DATABASE_URL
+npm run idv:db:seed      # seeds one complete attempt (application_id = DEMO-FULL)
+```
+(If you deliberately recreate the database, create it via the **Databases tab → Add
+database** so the console registers it, then run the two commands above.)
 
 **During the demo:** SQL Editor → pick the `ep-blue-mouse` branch → database **`idv`** → run each query and say the line next to it:
 
@@ -269,7 +273,7 @@ Run everything in `E:\kyc-agent-dev`.
 - *DB connection hangs/`database "idv" does not exist`* → the pooled host lags on a new DB; `.env.local` already points `IDV_DATABASE_URL` at the direct host, so just re‑run.
 - *`/api/idv-match/*` 404 in the app* → the dev server didn't pick up new routes; restart `npm start`.
 - *flags shows `false`* → set the flag to `1` and restart `npm start`.
-- *Neon web console shows only `neondb`, no `idv` / "relation … does not exist"* → two causes: (a) the console has the **wrong branch** selected — pick the one with endpoint `ep-blue-mouse-abxjk5d5`; and (b) the `idv` DB was created via raw SQL so the console never registered it — do the **one‑time recreate in Section 7c** to make it appear. Until then use `inspect.js` (7b). Never query `idv_*` against `neondb`.
+- *Neon web console shows only `neondb`, no `idv` / "relation … does not exist"* → it's a **selection** issue, not a missing DB. `idv` is registered on branch **`main`** (see it in Branches → Databases). In the SQL Editor pick **branch `main`** and **database `idv`** (never query `idv_*` against `neondb`), or just use the **Edit data** button on the `idv` row (Section 7c).
 
 ---
 
