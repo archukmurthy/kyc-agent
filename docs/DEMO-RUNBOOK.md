@@ -19,7 +19,7 @@ gives the DB/script route instead.
 - Flag OFF vs ON behaviour (the journey reverts exactly to today when OFF).
 
 **Demoable through the DB / a script (not in the app UI):**
-- The **Vault** (encrypted identity), the **reference** on the attempt, **immutable events**, **access audit**, **document media** (encrypted), **evidence outbox**, **lifecycle**, **screening result**, band decisions. → use **`inspect.js`** (Section 7 — the recommended way). *(The `idv` database is NOT visible in the Neon web console; for raw SQL use a desktop SQL client — see 7c.)*
+- The **Vault** (encrypted identity), the **reference** on the attempt, **immutable events**, **access audit**, **document media** (encrypted), **evidence outbox**, **lifecycle**, **screening result**, band decisions. → use **`inspect.js`** (Section 7b — fastest), or show it visually in the **Neon console** after the one‑time setup in Section 7c.
 - Seeing a **stored document image as a picture** → `image-roundtrip.js` (Section 8).
 
 **Demoable only through isolated scripts/tests:**
@@ -169,31 +169,46 @@ node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID --reveal dotenv_config_
 ```
 **Point this out:** masked by default → `--reveal` shows the real values → the **audit count goes up** (every reveal is logged). That's the reviewer security story.
 
-### 7c. Or query with raw SQL (use a desktop SQL client — NOT the Neon web console)
-> ⚠️ **The Neon web console will NOT list the `idv` database** (it was created via SQL; Neon's console only lists databases made through its console/API). So the `idv_*` tables won't appear there — you'll only see `neondb`, and queries against it error with *"relation … does not exist"*. This is a console‑visibility quirk, not a data problem.
->
-> To run raw SQL, use a **desktop SQL client** — TablePlus, DBeaver, or `psql` — connected with the **`IDV_DATABASE_URL`** value from `.env.local` (that points at the `idv` database on host `ep-snowy-cherry-abf2ntrs`). Then run:
-```sql
--- Vault: sensitive identity, CIPHERTEXT only (no plaintext)
-SELECT attribute_concept, left(ciphertext,24) AS ciphertext_sample, nonce, version FROM idv_vault_attributes;
--- Every Vault read is audited
-SELECT actor_id, purpose, outcome, at FROM idv_vault_access_audit ORDER BY at DESC;
--- The reference lives on the attempt (no plaintext identity)
-SELECT id, application_id, status, secure_identity_reference, verification_result FROM idv_verification_attempts;
--- Non-PII: band decisions
-SELECT band, outcome_type, resolved_by, policy_version FROM idv_match_decisions;
--- Immutable events (references + metadata only)
-SELECT event_type, attribute_concept, actor, occurred_at FROM idv_identity_events ORDER BY occurred_at;
--- Lifecycle timeline
-SELECT event_type, occurred_at, received_at, recorded_at FROM idv_lifecycle_events;
--- Encrypted document media (pointer + wrapped key + hash, NO bytes)
-SELECT evidence_kind, blob_key, content_type, sha256 FROM idv_document_media;
--- Screening (isolated)
-SELECT outcome, categories FROM idv_screening_checks;
--- Evidence outbox (references-only envelope; unconsumed)
-SELECT idempotency_key, status, envelope FROM idv_evidence_outbox;
-```
-The **ciphertext object** for a document image lives in **Vercel → Storage → Blob** under the `blob_key` shown above (opening it shows encrypted bytes, not a picture — by design).
+### 7c. Neon Console walkthrough (the visual DB demo)
+
+> **One‑time setup so the console shows `idv`.** The `idv` database was originally
+> created via raw SQL, so Neon's console never registered it and it doesn't appear
+> in the database dropdown (Neon only lists databases created **through** its
+> console/API). Recreate it **once, through the console**, and it shows normally.
+> Its data is synthetic and fully re‑seeded, so this is safe.
+
+**Setup (do once, before the demo):**
+1. **Stop `npm start`** (so nothing holds a connection to `idv`).
+2. Neon console → **select the branch whose compute endpoint is `ep-blue-mouse-abxjk5d5`** (that's the branch `IDV_DATABASE_URL` points at — *not* the main‑app branch `ep-snowy-cherry-abf2ntrs`).
+3. Drop the old raw DB — open the **SQL Editor** on the `neondb` database of that branch and run:
+   ```sql
+   DROP DATABASE idv WITH (FORCE);
+   ```
+4. **Databases** tab → **New Database** → name **`idv`**, owner **`neondb_owner`**. (This is the step that registers it with the console.)
+5. Rebuild schema + data from the repo:
+   ```
+   npm run idv:db:migrate   # applies migrations 013–023 to IDV_DATABASE_URL
+   npm run idv:db:seed      # seeds one complete attempt (application_id = DEMO-FULL)
+   ```
+`idv` now appears in the console dropdown with all 13 `idv_*` tables and demo data.
+
+**During the demo:** SQL Editor → pick the `ep-blue-mouse` branch → database **`idv`** → run each query and say the line next to it:
+
+| Query | What it proves (say this) |
+| --- | --- |
+| `SELECT attribute_concept, left(ciphertext,24) AS ciphertext_sample, nonce, version FROM idv_vault_attributes;` | **The Vault** — sensitive identity stored as **ciphertext only**, per‑attribute nonce, versioned. No plaintext anywhere. |
+| `SELECT actor_id, purpose, outcome, at FROM idv_vault_access_audit ORDER BY at DESC;` | **Every Vault read is audited** — run `inspect.js --reveal` and watch a row get added. |
+| `SELECT id, application_id, status, secure_identity_reference, verification_result FROM idv_verification_attempts;` | Ordinary tables hold only an **opaque reference** to the Vault — never identity text. |
+| `SELECT band, outcome_type, resolved_by, policy_version FROM idv_match_decisions;` | **Band decisions** (A/B/C) — non‑PII, append‑only, policy‑versioned. |
+| `SELECT event_type, attribute_concept, actor, occurred_at FROM idv_identity_events ORDER BY occurred_at;` | **Immutable identity events** — references + metadata, the audit trail. |
+| `SELECT event_type, occurred_at, received_at, recorded_at FROM idv_lifecycle_events;` | **Lifecycle timeline** of the attempt. |
+| `SELECT evidence_kind, blob_key, content_type, sha256 FROM idv_document_media;` | **Document media** — encrypted pointer + hash, **no bytes** in the DB (bytes are encrypted in Vercel Blob). |
+| `SELECT outcome, categories FROM idv_screening_checks;` | **Screening** (PEP/sanctions/adverse‑media) — isolated result. |
+| `SELECT idempotency_key, status, envelope FROM idv_evidence_outbox;` | **Evidence outbox** — references‑only envelope, append‑only, **unconsumed** (awaits Evidence Control Room). |
+
+The **ciphertext object** for a document image lives in **Vercel → Storage → Blob** under the `blob_key` above (opening it shows encrypted bytes, not a picture — by design).
+
+*(Alternative, no console setup: a desktop SQL client — TablePlus/DBeaver/`psql` — connected with `IDV_DATABASE_URL` from `.env.local` runs the same queries against `idv` on host `ep-blue-mouse-abxjk5d5`.)*
 
 ---
 
@@ -241,6 +256,8 @@ Run everything in `E:\kyc-agent-dev`.
 | `curl http://localhost:3000/api/idv-match/flags` | Check the flag | `{"idvDiscrepancyBands":true/false}` | any |
 | `node scripts/demo/band-outcomes.js` | Band A/B/C/retry/PEP logic | printed decisions | band demo |
 | `node scripts/demo/screening-fixture.js` | PEP/sanctions/adverse interpretation | printed hits | screening demo |
+| `npm run idv:db:migrate` | Apply IDV migrations 013–023 to `idv` (after console recreate) | schema built | Neon console setup (7c) |
+| `npm run idv:db:seed` | Seed one complete attempt into `idv` | prints attempt id | Neon console setup (7c) |
 | `node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local` | Seed one complete attempt | prints attempt id | DB demo |
 | `node -r dotenv/config scripts/demo/inspect.js ATTEMPT_ID [--reveal] dotenv_config_path=.env.local` | Show every store for an attempt | printed trail | DB demo |
 | `node -r dotenv/config scripts/demo/image-roundtrip.js MEDIA_ID dotenv_config_path=.env.local` | Decrypt a stored image to a file | writes `scratch\decrypted-*.png` | media demo |
@@ -252,7 +269,7 @@ Run everything in `E:\kyc-agent-dev`.
 - *DB connection hangs/`database "idv" does not exist`* → the pooled host lags on a new DB; `.env.local` already points `IDV_DATABASE_URL` at the direct host, so just re‑run.
 - *`/api/idv-match/*` 404 in the app* → the dev server didn't pick up new routes; restart `npm start`.
 - *flags shows `false`* → set the flag to `1` and restart `npm start`.
-- *Neon web console shows only `neondb`, no `idv` / "relation … does not exist"* → expected; the console can't list the SQL‑created `idv` DB. Use `inspect.js` (Section 7b) or a desktop SQL client (Section 7c). Don't query `idv_*` against `neondb`.
+- *Neon web console shows only `neondb`, no `idv` / "relation … does not exist"* → two causes: (a) the console has the **wrong branch** selected — pick the one with endpoint `ep-blue-mouse-abxjk5d5`; and (b) the `idv` DB was created via raw SQL so the console never registered it — do the **one‑time recreate in Section 7c** to make it appear. Until then use `inspect.js` (7b). Never query `idv_*` against `neondb`.
 
 ---
 
