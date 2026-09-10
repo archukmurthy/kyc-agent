@@ -1,0 +1,4 @@
+"use strict";
+const defaults=require("./a5a-dependencies");const {EvidenceReconstructionService}=require("../../evidence/a5a/service");
+function createHandler(factory=defaults.create){return async function(req,res){if(req.method!=="POST"){res.setHeader("Allow","POST");return res.status(405).json({error:"Method not allowed"});}let dependencies;try{dependencies=await factory(req.body||{});const result=await new EvidenceReconstructionService(dependencies).reconstructEvidence({authorizedTenant:defaults.tenant(),authorizedContext:req.body?.contextId,subject:req.body?.subjectReferenceId||null,asOf:req.body?.asOf});return res.status(200).json({result});}catch(error){return res.status(error.statusCode||400).json({error:"Evidence reconstruction failed",code:error.code||"a5a_reconstruction_failed",message:error.message});}finally{if(dependencies?.close)await dependencies.close();}};}
+const handler=createHandler();handler.createHandler=createHandler;module.exports=handler;

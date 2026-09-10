@@ -8,6 +8,10 @@
     "api/self-source.js": { "maxDuration": 60 },
     "api/generate-policy.js": { "maxDuration": 300 }
   },
+  "routes": [
+    { "src": "/api/evidence(/.*)?", "status": 404 },
+    { "src": "/evidence-lab.*", "status": 404 }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/super-admin/(.*)", "destination": "/index.html" },
