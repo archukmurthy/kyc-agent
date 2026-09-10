@@ -13,7 +13,7 @@ const LABELS = {
 };
 const ORDER = ["firstName", "lastName", "dateOfBirth", "nationality", "documentType", "documentNumber", "expiryDate", "issuingCountry", "gender", "placeOfBirth", "address"];
 
-export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn }) {
+export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn, extraFields }) {
   const [values, setValues] = useState({ ...(fields || {}) });
   const [editing, setEditing] = useState({});
   const Button = Btn || ((props) => <button {...props} />);
@@ -52,6 +52,9 @@ export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn }) {
           </div>
         ))}
       </div>
+      {/* Fields not read from the document (email, mobile, job title, PEP…) —
+          rendered as blank inputs the applicant fills in before continuing. */}
+      {extraFields && <div style={{ marginTop: 20 }}>{extraFields}</div>}
       {editable && (
         <div style={{ marginTop: 16 }}>
           <Button type="button" onClick={() => onConfirm(values)}>Confirm &amp; continue →</Button>

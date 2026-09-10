@@ -10,8 +10,9 @@ import VerifiedFieldsConfirm from "./VerifiedFieldsConfirm";
 //   result       — the /api/idv-match/resolve response
 //   uploadPrompt — server-provided name-change upload prompt (dialogue round-trip)
 //   onSubmitExplanation(categoryId), onUploadEvidence(categoryId, file)
-//   onProvideLoa() — Band C: enter the existing letter-of-authorization flow
+//   onProvideLoa() — Band C: enter the letter-of-authorization flow (secondary)
 //   onRetry()      — missing/unreadable data: recovery path
+//   extraFields    — node of blank not-fetched fields, rendered under the cells
 //   Btn            — optional button component
 function View({ title, body, children }) {
   return (
@@ -23,13 +24,7 @@ function View({ title, body, children }) {
   );
 }
 
-// Outcomes on which the applicant proceeds in the journey.
-const PROCEED_OUTCOMES = new Set([
-  "auto_match", "extraction_error_corrected", "same_person_variation_accepted",
-  "same_person_name_change_evidenced", "registry_error_asserted",
-]);
-
-export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onConfirm, onRetry, Btn }) {
+export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onConfirm, onRetry, Btn, extraFields }) {
   const Button = Btn || ((props) => <button {...props} />);
   if (!result || result.enabled === false) return null;
 
@@ -55,25 +50,35 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
 
   const view = result.applicantView || {};
   const isBandC = result.band === "C" || result.outcomeType === "demoted_to_loa_path" || result.route === "loa_path";
-  const canProceed = !isBandC && (result.band === "A" || PROCEED_OUTCOMES.has(result.outcomeType) || result.applicantProceeds === true || result.verified === true);
   const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
 
   return (
     <View title={view.title} body={view.body}>
-      {/* Show the fetched identity fields after verification for ANY outcome:
-          editable + "Confirm & continue" on a passing band; read-only otherwise. */}
+      {/* Fetched identity fields after verification, editable on ANY outcome
+          (tick + edit), with the blank not-fetched fields below and a single
+          "Confirm & continue". Band C additionally offers the LOA path as a
+          secondary action rather than a wall. */}
       {hasVerifiedFields && (
         <VerifiedFieldsConfirm
           fields={result.verifiedFields}
-          onConfirm={canProceed && onConfirm ? onConfirm : undefined}
+          onConfirm={onConfirm}
+          extraFields={extraFields}
           Btn={Btn}
         />
       )}
-      {isBandC && (
-        <Button type="button" onClick={() => onProvideLoa && onProvideLoa()}>Provide letter of authorization</Button>
-      )}
-      {canProceed && !hasVerifiedFields && onProceed && (
+      {!hasVerifiedFields && onProceed && (
         <Button type="button" onClick={() => onProceed()}>Continue →</Button>
+      )}
+      {isBandC && onProvideLoa && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => onProvideLoa()}
+            style={{ background: "transparent", border: "none", color: "#0B3D91", textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: 14, padding: 0 }}
+          >
+            Provide letter of authorization instead
+          </button>
+        </div>
       )}
     </View>
   );

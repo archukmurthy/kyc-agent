@@ -37,20 +37,31 @@ test("Band C renders LOA copy + routes to the letter-of-authorization flow", () 
   const onProvideLoa = jest.fn();
   render(<BandResultView result={bandC} onProvideLoa={onProvideLoa} />);
   expect(screen.getByText("We couldn't confirm your details against the company's registered officers")).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Provide letter of authorization"));
+  fireEvent.click(screen.getByText("Provide letter of authorization instead"));
   expect(onProvideLoa).toHaveBeenCalled();
 });
 
-test("any outcome with fetched fields shows the cells (read-only for Band C) + LOA", () => {
+test("Band C with fetched fields shows editable cells + blank extra fields + Continue, LOA secondary", () => {
+  const onConfirm = jest.fn();
   const result = { ...bandC, verifiedFields: { firstName: "Bob", documentNumber: "Z9" } };
-  render(<BandResultView result={result} onProvideLoa={jest.fn()} onConfirm={jest.fn()} />);
-  // fetched cells are shown...
-  expect(screen.getByText("Details read from your document")).toBeInTheDocument();
+  render(
+    <BandResultView
+      result={result}
+      onProvideLoa={jest.fn()}
+      onConfirm={onConfirm}
+      extraFields={<label>Email address<input aria-label="Email address" /></label>}
+    />,
+  );
+  // fetched cells shown and EDITABLE (Confirm & continue present)...
+  expect(screen.getByText("Confirm your verified details")).toBeInTheDocument();
   expect(screen.getByText("Bob")).toBeInTheDocument();
   expect(screen.getByText("Z9")).toBeInTheDocument();
-  // ...read-only (no Confirm & continue / Edit) and still routed to LOA
-  expect(screen.queryByText(/Confirm & continue/)).toBeNull();
-  expect(screen.getByText("Provide letter of authorization")).toBeInTheDocument();
+  // ...the blank not-fetched field renders under the cells...
+  expect(screen.getByLabelText("Email address")).toBeInTheDocument();
+  // ...Continue is primary, LOA is offered as a secondary action.
+  fireEvent.click(screen.getByText(/Confirm & continue/));
+  expect(onConfirm).toHaveBeenCalledWith({ firstName: "Bob", documentNumber: "Z9" });
+  expect(screen.getByText("Provide letter of authorization instead")).toBeInTheDocument();
 });
 
 test("dialogue shows the two names, the five options, and Submit explanation", () => {

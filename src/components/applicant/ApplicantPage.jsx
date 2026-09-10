@@ -45,6 +45,13 @@ import {
   getApplicantCandidates as deriveApplicantCandidates,
 } from "../../workflows/applicantWorkflow";
 
+// Applicant gap-fields the identity document supplies (shown as the verified
+// cells after Didit). Excluded from the blank "extra fields" rendered under the
+// cells so the same field is never asked twice.
+const DOCUMENT_COVERED_APPLICANT_FIELDS = new Set([
+  "applicantFirstName", "applicantLastName", "applicantDateOfBirth", "applicantNationality",
+]);
+
 export function ApplicantPage({
   // ── lookup facts shown by the gate ──
   companyName,
@@ -200,13 +207,16 @@ export function ApplicantPage({
   // nationality, PEP) rendered as a standalone block. Same StableInput rendering
   // the Fill Gaps applicant section used — extracted here now that Applicant is
   // its own step.
-  const renderApplicantFields = () => {
+  const renderApplicantFields = ({ exclude } = {}) => {
     const schemaItems = getCombinedGaps()
       .filter((g) => g.section === "applicant")
       .filter(dependsOnSatisfied);
     // Fall back to the hardcoded applicant fields when the schema yields none
     // (activeSchema null / not yet resolved), so the page is never blank.
-    const items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    let items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    // When shown alongside the document-fetched cells (bands flow), drop the
+    // fields the document already provides so they aren't asked twice.
+    if (exclude) items = items.filter((g) => !exclude.has(g.field));
     if (items.length === 0) return null;
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
@@ -578,6 +588,7 @@ export function ApplicantPage({
                   onProvideLoa={() => setApplicantNotListed(true)}
                   onResolved={onIdvResolved}
                   onConfirmedFields={writeVerifiedFields}
+                  extraFields={renderApplicantFields({ exclude: DOCUMENT_COVERED_APPLICANT_FIELDS })}
                   Btn={Btn}
                   cardStyle={{}}
                 />

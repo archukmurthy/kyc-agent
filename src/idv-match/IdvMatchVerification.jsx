@@ -12,7 +12,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields, extraFields }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -107,6 +107,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
         onProceed={onProceed}
         onConfirm={(confirmed) => confirmFields(confirmed)}
         onRetry={() => { setResult(null); setStatus(null); }}
+        extraFields={extraFields}
         Btn={Btn}
       />
     );
