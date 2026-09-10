@@ -78,6 +78,24 @@ test("verify-only (unlisted) resolves as verified, no band, with verified fields
   assert.strictEqual(d._decisions.length, 0, "verify-only records no band decision");
 });
 
+test("resolve holds (needsRetry) while the Didit session is still in progress — selfie not done yet", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  // Document step finished (fields present) but the overall session is still
+  // In Progress (liveness/selfie pending) -> must NOT return the cells yet.
+  const d = deps({
+    getDecision: async () => ({
+      status: "In Progress",
+      decision: { session_id: "sess-1", status: "In Progress", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }] },
+    }),
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.band, undefined, "no band assigned before the session is terminal");
+  assert.strictEqual(r.verifiedFields, undefined, "no fields leaked before the selfie completes");
+  assert.strictEqual(d._decisions.length, 0, "records nothing while in progress");
+});
+
 test("resolve reports a missing session", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));

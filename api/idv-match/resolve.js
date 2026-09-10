@@ -14,6 +14,7 @@ const { mapDiditDecision } = require("./canonicalMapping");
 const { hasScreeningHit } = require("./screening");
 const { runBandPipeline } = require("./pipeline");
 const { bandsEnabled } = require("./config");
+const { TERMINAL_STATUSES } = require("../../idv/domain/constants");
 const identityVault = require("./identityVault");
 const identityEventsStore = require("./identityEventsStore");
 const COPY = require("./copy");
@@ -67,6 +68,18 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   const decision = await pullDecision(attempt.didit_session_id);
   const mapped = map(decision);
+
+  // Didit returns the extracted document fields as soon as the document step
+  // finishes — BEFORE the applicant completes liveness/selfie. Pulling then would
+  // render the cells early and the applicant could close the Didit session
+  // thinking they're done. Only treat the session as ready when its overall
+  // status is TERMINAL (the whole flow, selfie included, has completed); until
+  // then report "in progress" so the client keeps polling and shows nothing.
+  const sessionStatus = mapped.providerDecision && mapped.providerDecision.canonical_status;
+  if (!TERMINAL_STATUSES.has(sessionStatus)) {
+    return { enabled: true, needsRetry: true, pending: true, reasons: ["verification_in_progress"] };
+  }
+
   const identity = identityMap(mapped.identityAttributes);
   const officerSnapshot = attempt.selected_officer || {};
   const screeningHit = await screeningHitFor(attemptId);
