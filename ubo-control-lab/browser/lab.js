@@ -509,12 +509,21 @@
         onRequestRefresh: explicitCheckpointRecorded ? () => run("EVALUATE_APPLICANT_JOURNEY", { session: labSession }) : null,
         className: "lab-applicant-journey",
       }),
+      (labSession.completedCustomerAttempts || []).length > 0 && h("section", { className: "panel applicant-submission-history", "aria-label": "Completed customer submissions" },
+        h("p", { className: "source-label" }, "RECORDED CUSTOMER HISTORY"),
+        h("h3", null, "Completed customer submission"),
+        h("p", null, "The response remains recorded even when the current plan has no further executable customer task. Open needs may continue through system or internal review."),
+        h("pre", { className: "json" }, pretty({
+          latestCustomerActionResult: labSession.latestCustomerActionResult,
+          completedAttempt: labSession.completedCustomerAttempts.at(-1),
+        }))),
       h("details", { className: "panel applicant-operation-log" },
         h("summary", null, "Lab operation diagnostics"),
         h("pre", { className: "json" }, pretty({
           operationHistory: labSession.operationHistory,
           pendingDecisionTargets: labSession.pendingDecisionTargets,
           latestCustomerActionResult: labSession.latestCustomerActionResult,
+          completedCustomerAttempts: labSession.completedCustomerAttempts || [],
           snapshots: labSession.snapshots.map(({ sequence, reason, predecessorSnapshotId, snapshot }) => ({ sequence, reason, predecessorSnapshotId, snapshotId: snapshot.snapshotId, snapshotHash: snapshot.decisionContentHash })),
         }))));
   }

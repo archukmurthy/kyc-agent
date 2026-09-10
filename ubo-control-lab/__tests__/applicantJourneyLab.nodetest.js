@@ -77,12 +77,44 @@ test("confirmation records the non-replacement principle and exact SATISFIED/OPE
 test("confirmed information with no decision targets re-evaluates against the current case revision", () => {
   let session = startApplicantFixture({ fixtureId: "AJV2-01" });
   const first = structuredClone(current(session).snapshot);
+  const firstGraph = structuredClone(first.decisionContent.phaseArtifacts
+    .find(({ phaseId }) => phaseId === "CANONICAL_GRAPH_AND_DEPTH").output.graph);
+  const firstQualifications = first.decisionContent.personQualificationAssessments.map(({ personEntityId, routeStatus, satisfiedBasisIds }) => ({
+    personEntityId,
+    routeStatus,
+    satisfiedBasisCount: satisfiedBasisIds.length,
+  }));
+  const firstJourney = structuredClone(current(session).journey);
+  const firstPlan = structuredClone(current(session).plan);
+  const firstBundle = findAction(session, "CONFIRM_ESTABLISHED_INFORMATION").bundle;
+  const firstAction = firstPlan.customerActions.find(({ actionId }) => firstBundle.actionIds.includes(actionId));
+  assert.equal(firstBundle.informationNeedIds[0], "ubo-information-need-v2:52dac3be7b992e0c62415b77da61af34");
+  assert.equal(firstBundle.resolutionGroupId, "ubo-resolution-group-v1:a035131d4c4ca9ea23414284a3558a99");
+  assert.equal(firstAction.actionId, "ubo-resolution-action-v2:c57ec4c97df41bd97df2d4ae35c3583b");
+  assert.deepEqual(firstBundle.missingInformation.map(({ concept, requiredFact }) => ({ concept, requiredFact })), [{
+    concept: "RELATIONSHIP_CURRENTNESS",
+    requiredFact: { type: "CURRENTNESS_STATE", requiredValue: "CURRENT" },
+  }]);
+  assert.equal(firstBundle.knownInformation.relationships[0].subjectEntityId, "tdr-gp-a");
+  assert.equal(firstBundle.knownInformation.relationships[0].objectEntityId, "bellis-finco");
   const initialClassification = structuredClone(session.resolutionInputs.evidenceClassifications[0]);
   session = applyApplicantCustomerAction({
     session,
     customerAction: action(session, "CONFIRM_ESTABLISHED_INFORMATION", confirmPayload(session)),
     operationId: "AJV2-01:confirmation-reevaluation",
   });
+  assert.equal(session.completedCustomerAttempts.length, 1);
+  const completedAttempt = session.completedCustomerAttempts[0];
+  assert.equal(completedAttempt.sourceCustomerWorkBundleId, firstBundle.bundleId);
+  assert.equal(completedAttempt.sourceResolutionActionId, firstAction.actionId);
+  assert.equal(completedAttempt.submissionContract, "ubo-established-information-confirmation-v1");
+  assert.equal(completedAttempt.capabilityOutcomeState, "NO_DATA");
+  assert.equal(completedAttempt.outcome, "NO_RESOLUTION");
+  assert.equal(completedAttempt.semanticAttemptKey, "ubo-resolution-semantic-attempt:be41d0d30ab0448be8759de822dc9fd5");
+  assert.equal(completedAttempt.outcome, "NO_RESOLUTION");
+  assert.equal(completedAttempt.needChangedByAction, false);
+  assert.match(completedAttempt.semanticAttemptKey, /^ubo-resolution-semantic-attempt:/);
+  assert.match(completedAttempt.materialCauseFingerprint, /^sha256:/);
   assert.deepEqual(session.pendingDecisionTargets, { candidateParties: [], candidateClaims: [] });
   session = applyApplicantDecisions({ session, recordedAt: "2026-09-09T12:01:00.000Z" });
   assert.equal(session.operationHistory.at(-1), "EXPLICIT_NO_DECISIONS_REQUIRED");
@@ -98,7 +130,50 @@ test("confirmed information with no decision targets re-evaluates against the cu
   assert.equal(classification.durableEvidenceId, initialClassification.durableEvidenceId);
   assert.notEqual(classification.classificationId, initialClassification.classificationId);
   assert.equal(r08.status, "SUFFICIENT");
+  assert.equal(current(session).journey.customerInputComplete, true);
+  assert.equal(current(session).plan.state, "INTERNAL_REVIEW");
+  assert.equal(current(session).plan.planId, "ubo-resolution-plan-v2:cf5f5e9c1ab62077f77feee00210ac2d");
+  assert.equal(current(session).journey.finalCaseComplete, false);
+  assert.equal(current(session).journey.customerWorkBundles.length, 0);
+  assert.equal(current(session).snapshot.decisionContent.informationNeedsV2
+    .some(({ needId, status }) => needId === firstBundle.informationNeedIds[0] && status === "OPEN"), true);
+  assert.equal(current(session).plan.customerActions.some(({ semanticActionType }) => semanticActionType === "CONFIRM_ESTABLISHED_INFORMATION"), false);
+  assert.equal(current(session).plan.attemptHistory.length, 1);
+  assert.equal(current(session).plan.attemptHistory.some(({ semanticAttemptKey }) => semanticAttemptKey === completedAttempt.semanticAttemptKey), true);
+  assert.equal(current(session).snapshot.decisionContent.pinnedResolutionPlan.attemptHistory
+    .some(({ semanticAttemptKey }) => semanticAttemptKey === completedAttempt.semanticAttemptKey), true);
+  assert.equal(session.latestCustomerActionResult.customerConfirmation.status, "CONFIRMED");
+  assert.equal(session.latestCustomerActionResult.needSatisfiedByReceipt, false);
+  const nextGraph = current(session).snapshot.decisionContent.phaseArtifacts
+    .find(({ phaseId }) => phaseId === "CANONICAL_GRAPH_AND_DEPTH").output.graph;
+  assert.deepEqual(nextGraph.nodes, firstGraph.nodes);
+  assert.deepEqual(nextGraph.relationships, firstGraph.relationships);
+  assert.deepEqual(current(session).snapshot.decisionContent.personQualificationAssessments.map(({ personEntityId, routeStatus, satisfiedBasisIds }) => ({
+    personEntityId,
+    routeStatus,
+    satisfiedBasisCount: satisfiedBasisIds.length,
+  })), firstQualifications);
+  assert.equal(current(session).journey.qualifyingPersonSummary.count, 0);
+  assert.equal(firstJourney.customerWorkBundles.length, 1);
   assert.deepEqual(session.operationHistory.slice(-3), ["APPLY_CUSTOMER_INPUT", "EXPLICIT_NO_DECISIONS_REQUIRED", "EVALUATE"]);
+});
+
+test("TDR missing-controller work never receives generic confirmation and remains review-only when no route is executable", () => {
+  const internal = startApplicantFixture({ fixtureId: "AJV2-08" });
+  const controllerNeeds = current(internal).snapshot.decisionContent.informationNeedsV2.filter(({ requiredFact }) => requiredFact.type === "NATURAL_PERSON_CONTROL_ATTRIBUTION");
+  assert.equal(controllerNeeds.length > 0, true);
+  assert.equal(current(internal).plan.customerActions.some(({ semanticActionType }) => semanticActionType === "CONFIRM_ESTABLISHED_INFORMATION"), false);
+  assert.equal(current(internal).journey.customerInputComplete, true);
+  assert.equal(current(internal).journey.finalCaseComplete, false);
+  assert.equal(current(internal).journey.internalReview.requirements.length > 0, true);
+
+  const real = startApplicantFixture({ fixtureId: "AJV2-14" });
+  const tdrBundle = current(real).journey.customerWorkBundles.find(({ missingInformation }) => missingInformation.some(({ requiredFact }) => requiredFact.type === "NATURAL_PERSON_CONTROL_ATTRIBUTION"));
+  assert.ok(tdrBundle);
+  assert.equal(tdrBundle.permittedSemanticActions.some(({ actionType }) => actionType === "CONFIRM_ESTABLISHED_INFORMATION"), false);
+  assert.equal(tdrBundle.blockingSignoffs.some(({ signoffId }) => signoffId === "A-04"), true);
+  assert.equal(tdrBundle.blockingSignoffs.some(({ signoffId }) => signoffId === "A-17"), true);
+  assert.doesNotMatch(JSON.stringify(tdrBundle), /questionText|percentageQuestion|name the controller/i);
 });
 
 test("customer input, explicit decisions and re-evaluation are three separate operations with immutable Snapshot A", () => {
@@ -225,5 +300,7 @@ test("Lab browser keeps preview and analyst views while exposing the explicit ap
   assert.match(source, /APPLY_APPLICANT_CUSTOMER_ACTION/);
   assert.match(source, /APPLY_APPLICANT_DECISIONS/);
   assert.match(source, /EVALUATE_APPLICANT_JOURNEY/);
+  assert.match(source, /Completed customer submission/);
+  assert.match(source, /completedCustomerAttempts/);
   assert.doesNotMatch(source, /input[^\n]+type:\s*"file"/);
 });

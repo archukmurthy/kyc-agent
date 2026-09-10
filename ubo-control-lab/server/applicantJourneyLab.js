@@ -9,6 +9,10 @@ const {
 const { createEvidencePolicyClassification } = require("../../ubo-control/policy/evidencePolicy");
 const { loadPolicyPack } = require("../../ubo-control/policy/policyPack");
 const { CASE_STATE_INTERNALS } = require("../../ubo-control/application/createUboDecisionApplication");
+const {
+  createResolutionAttemptSemantics,
+  materialGraphFingerprint,
+} = require("../../ubo-control/planning/resolutionAttemptSemantics");
 const { applicantFixtureSeed } = require("./reviewLabEngine");
 
 const APPLICANT_LAB_SESSION_VERSION = "ubo-applicant-journey-lab-session-v1";
@@ -97,6 +101,18 @@ function policyFor(fixture) {
   }
   if (fixture.mode === "SPECIALIST") return onlyApplicable(testOnlyPolicy("UBO-R11", []), "UBO-R11");
   return clone(policy);
+}
+function seedFor(fixture, options = {}) {
+  const seed = applicantFixtureSeed({ fixtureId: fixture.sourceFixtureId, ...options });
+  if (fixture.mode.startsWith("CONFIRM")) {
+    const establishedControl = seed.capabilityResult.candidateFacts.find((fact) => fact.type === "RELATIONSHIP"
+      && fact.subject?.entityId === "tdr-gp-a"
+      && fact.object?.entityId === "bellis-finco"
+      && fact.relationship === "SIGNIFICANT_INFLUENCE_OR_CONTROL");
+    if (!establishedControl) throw new TypeError("Confirmation fixture requires its established TDR control relationship");
+    establishedControl.qualifiers.currentState = "UNKNOWN";
+  }
+  return seed;
 }
 function appFor(fixture) {
   return createUboDecisionApplication({
@@ -211,7 +227,7 @@ function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
   const fixture = fixtureById(fixtureId);
   const policyFixture = policyFor(fixture);
   const app = appFor(fixture);
-  let seed = applicantFixtureSeed({ fixtureId: fixture.sourceFixtureId });
+  let seed = seedFor(fixture);
   let state = app.intake({
     contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
     caseInput: {
@@ -236,8 +252,7 @@ function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
       checkpointReference: { referenceId: `${fixture.fixtureId}:preliminary-planning` },
       resolutionInputs: {},
     });
-    seed = applicantFixtureSeed({
-      fixtureId: fixture.sourceFixtureId,
+    seed = seedFor(fixture, {
       preliminaryEvaluation: preliminary,
     });
   }
@@ -265,11 +280,76 @@ function startApplicantFixture({ fixtureId = "AJV2-01" } = {}) {
       journey: evaluated.journeyProjection,
     }],
     latestCustomerActionResult: null,
+    completedCustomerAttempts: [],
     pendingDecisionTargets: { candidateParties: [], candidateClaims: [] },
     pendingEvaluation: false,
     operationHistory: ["INTAKE", "EXPLICIT_FIXTURE_DECISIONS", "EVALUATE"],
     productionAuthorized: false,
   });
+}
+
+function completedConfirmationAttempt({ current, customerAction, customerActionResult, sequence }) {
+  const sourceAction = current.plan.customerActions.find(({ actionId }) => actionId === customerAction.resolutionActionId);
+  const sourceGroup = current.plan.resolutionGroups.find(({ groupId }) => groupId === customerAction.resolutionGroupId);
+  const sourceBundle = current.plan.customerBundles.find(({ actionIds }) => actionIds.includes(customerAction.resolutionActionId));
+  if (!sourceAction || !sourceGroup || !sourceBundle) throw new TypeError("Accepted confirmation does not pin its source route");
+  const needIds = new Set(customerAction.informationNeedIds);
+  const needs = current.snapshot.decisionContent.informationNeedsV2.filter(({ needId }) => needIds.has(needId));
+  const graph = current.snapshot.decisionContent.phaseArtifacts
+    .find(({ phaseId }) => phaseId === "CANONICAL_GRAPH_AND_DEPTH").output.graph;
+  const attemptSemantics = createResolutionAttemptSemantics({
+    policyIdentity: current.plan.policyIdentity,
+    causalGroupingKey: sourceGroup.causalGroupingKey,
+    needs,
+    semanticActionType: sourceAction.semanticActionType,
+    submissionContract: customerAction.submissionContract,
+    contentReference: sourceAction.actionTemplateReference,
+    targetReferences: sourceAction.targetReferences,
+    frontierEntityIds: sourceAction.frontierEntityIds,
+    expectedCandidateFacts: sourceAction.expectedFactsOrEvidence,
+    graphFingerprint: materialGraphFingerprint(graph),
+  });
+  const acceptedCustomerActionId = stableId("accepted-customer-action-v2", customerAction);
+  const semantic = {
+    attemptModelVersion: "ubo-resolution-attempt-v1",
+    sequence,
+    caseReference: clone(current.plan.caseReference),
+    policyIdentity: clone(current.plan.policyIdentity),
+    sourceDecisionSnapshot: clone(customerAction.sourceDecisionSnapshot),
+    sourceResolutionPlan: clone(customerAction.sourceResolutionPlan),
+    sourceResolutionBundleId: sourceBundle.bundleId,
+    sourceCustomerWorkBundleId: customerAction.bundleId,
+    resolutionGroupId: customerAction.resolutionGroupId,
+    sourceResolutionActionId: customerAction.resolutionActionId,
+    acceptedCustomerActionId,
+    informationNeedIds: clone(customerAction.informationNeedIds),
+    semanticActionType: sourceAction.semanticActionType,
+    strategy: "CUSTOMER_ATTESTATION",
+    submissionContract: customerAction.submissionContract,
+    actionTemplateReference: sourceAction.actionTemplateReference,
+    targetReferences: clone(sourceAction.targetReferences),
+    frontierEntityIds: clone(sourceAction.frontierEntityIds),
+    actorReference: clone(customerAction.actorReference),
+    actorCapacity: customerAction.actorCapacity,
+    submittedAt: customerAction.submittedAt,
+    informationAsAtDate: customerAction.informationAsAtDate,
+    customerActionResultReference: {
+      customerInputId: customerActionResult.customerInputId,
+      operationId: customerActionResult.operationId,
+      recordedInRevision: customerActionResult.recordedInRevision,
+    },
+    capabilityOutcomeState: "NO_DATA",
+    outcome: "NO_RESOLUTION",
+    resultingFactReferences: [],
+    resultingEvidenceReferences: [],
+    final: true,
+    reasonCode: "CUSTOMER_CONFIRMATION_RECORDED_NEED_REMAINS_OPEN",
+    needChangedByAction: false,
+    repeatEligibility: "MATERIAL_CHANGE_REQUIRED",
+    materialInputFingerprint: current.plan.materialInputFingerprint,
+    ...attemptSemantics,
+  };
+  return { attemptId: stableId("resolution-attempt", semantic), ...semantic };
 }
 
 function validateSession(value) {
@@ -316,6 +396,19 @@ function applyApplicantCustomerAction({ session: supplied, customerAction, opera
   });
   session.caseState = applied.caseState;
   session.latestCustomerActionResult = applied.customerActionResult;
+  if (customerAction.actionType === "CONFIRM_ESTABLISHED_INFORMATION") {
+    const attempt = completedConfirmationAttempt({
+      current,
+      customerAction,
+      customerActionResult: applied.customerActionResult,
+      sequence: (session.resolutionInputs.resolutionAttempts || []).length + 1,
+    });
+    session.resolutionInputs.resolutionAttempts = [
+      ...(session.resolutionInputs.resolutionAttempts || []),
+      attempt,
+    ];
+    session.completedCustomerAttempts = [...(session.completedCustomerAttempts || []), attempt];
+  }
   session.pendingDecisionTargets = clone(applied.decisionTargets);
   session.pendingEvaluation = true;
   session.operationHistory.push("APPLY_CUSTOMER_INPUT");
@@ -423,7 +516,7 @@ function evaluateApplicantJourney({ session: supplied, evaluationTime = new Date
     plan: evaluated.resolutionPlan,
     journey: evaluated.journeyProjection,
   });
-  session.content = contentFor(policyFor(fixture), applicantFixtureSeed({ fixtureId: fixture.sourceFixtureId }), evaluated.journeyProjection);
+  session.content = contentFor(policyFor(fixture), seedFor(fixture), evaluated.journeyProjection);
   session.pendingEvaluation = false;
   session.operationHistory.push("EVALUATE");
   return session;
