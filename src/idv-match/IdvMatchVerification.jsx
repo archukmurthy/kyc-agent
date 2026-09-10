@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import QRCode from "qrcode";
 import BandResultView from "./BandResultView";
 
@@ -22,6 +22,30 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const Button = Btn || ((props) => <button {...props} />);
+
+  // Auto-poll: once the session is started, pull the decision from Didit every
+  // few seconds so the fetched data appears WITHOUT the applicant clicking. The
+  // webhook (the production auto-fetch path) can't reach localhost, so polling
+  // gives the same "fetches automatically" behaviour in the demo. The manual
+  // "I've completed verification" button stays as a fallback. Stops on any
+  // terminal outcome (result set) or on unmount.
+  useEffect(() => {
+    if (!attemptId || result) return undefined;
+    let cancelled = false;
+    async function poll() {
+      try {
+        const res = await postJson("/api/idv-match/resolve", { attemptId });
+        if (cancelled) return;
+        // Ignore "not complete yet" (needsRetry) and transient errors — keep
+        // polling. Any terminal outcome renders immediately.
+        if (res && !res.error && !res.needsRetry) applyResult(res);
+      } catch (_) { /* keep polling; manual button still available */ }
+    }
+    const id = setInterval(poll, 4000);
+    return () => { cancelled = true; clearInterval(id); };
+    // applyResult is a stable closure over attemptId/onResolved (both in deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attemptId, result]);
 
   // Record the result, and — for any terminal (non-dialogue) outcome — report a
   // compact summary up so the journey can persist the IDV reference on the
@@ -130,6 +154,9 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
             <a href={hostedUrl} target="_blank" rel="noreferrer">{hostedUrl}</a>
           </p>
           <Button type="button" disabled={busy} onClick={check}>{busy ? "Checking…" : "I've completed verification"}</Button>
+          <p style={{ fontSize: 12, color: "#1a3a4a80", marginTop: 8 }}>
+            This updates on its own once you finish — or click the button to check now.
+          </p>
           {status && <p>Status: <strong>{status}</strong></p>}
         </div>
       )}
