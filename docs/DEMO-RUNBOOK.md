@@ -18,7 +18,7 @@ gives the DB/script route instead.
 - Flag OFF vs ON behaviour (the journey reverts exactly to today when OFF).
 
 **Demoable through the DB / a script (not in the app UI):**
-- The **Vault** (encrypted identity), the **reference** on the attempt, **immutable events**, **access audit**, **document media** (encrypted), **evidence outbox**, **lifecycle**, **screening result**, band decisions. → use `inspect.js` or the SQL in Section 7.
+- The **Vault** (encrypted identity), the **reference** on the attempt, **immutable events**, **access audit**, **document media** (encrypted), **evidence outbox**, **lifecycle**, **screening result**, band decisions. → use **`inspect.js`** (Section 7 — the recommended way). *(The `idv` database is NOT visible in the Neon web console; for raw SQL use a desktop SQL client — see 7c.)*
 - Seeing a **stored document image as a picture** → `image-roundtrip.js` (Section 8).
 
 **Demoable only through isolated scripts/tests:**
@@ -168,8 +168,10 @@ node -r dotenv/config scripts/demo/inspect.js <attemptId> --reveal dotenv_config
 ```
 **Point this out:** masked by default → `--reveal` shows the real values → the **audit count goes up** (every reveal is logged). That's the reviewer security story.
 
-### 7c. Or query directly in Neon
-Neon console → your project → the branch whose endpoint host is **`ep-snowy-cherry-abf2ntrs`** → **SQL Editor** → set **Database = `idv`**, then:
+### 7c. Or query with raw SQL (use a desktop SQL client — NOT the Neon web console)
+> ⚠️ **The Neon web console will NOT list the `idv` database** (it was created via SQL; Neon's console only lists databases made through its console/API). So the `idv_*` tables won't appear there — you'll only see `neondb`, and queries against it error with *"relation … does not exist"*. This is a console‑visibility quirk, not a data problem.
+>
+> To run raw SQL, use a **desktop SQL client** — TablePlus, DBeaver, or `psql` — connected with the **`IDV_DATABASE_URL`** value from `.env.local` (that points at the `idv` database on host `ep-snowy-cherry-abf2ntrs`). Then run:
 ```sql
 -- Vault: sensitive identity, CIPHERTEXT only (no plaintext)
 SELECT attribute_concept, left(ciphertext,24) AS ciphertext_sample, nonce, version FROM idv_vault_attributes;
@@ -249,6 +251,7 @@ Run everything in `E:\kyc-agent-dev`.
 - *DB connection hangs/`database "idv" does not exist`* → the pooled host lags on a new DB; `.env.local` already points `IDV_DATABASE_URL` at the direct host, so just re‑run.
 - *`/api/idv-match/*` 404 in the app* → the dev server didn't pick up new routes; restart `npm start`.
 - *flags shows `false`* → set the flag to `1` and restart `npm start`.
+- *Neon web console shows only `neondb`, no `idv` / "relation … does not exist"* → expected; the console can't list the SQL‑created `idv` DB. Use `inspect.js` (Section 7b) or a desktop SQL client (Section 7c). Don't query `idv_*` against `neondb`.
 
 ---
 
