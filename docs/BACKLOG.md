@@ -90,6 +90,20 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **What:** `api/idv-match/mediaCapture.js` extracts document-image presigned URLs from the Didit decision using candidate field names (`front_image` / `back_image` / `portrait_image`, plus a `documents[]`/`images[]` fallback). Confirm the exact keys against a real Didit sandbox response and trim/adjust; if the keys differ, images silently aren't captured (no error, just nothing stored).
 - **Area:** `api/idv-match/mediaCapture.js` (`KIND_FIELDS`).
 
+### UX-1 — One-click onboarding: reduce user interactions (remaining slices)
+- **Category:** UX / Architecture · **Priority:** P2 · **Status:** OPEN (Slice 1 DONE)
+- **Goal:** exception-based interaction model — the system proceeds automatically wherever it already has reliable data; the user is involved only for genuine input (upload, edit-wrong-data, missing info) or ambiguity. Target happy path ≈ 3 actions (name+country+entity → Didit selfie → consent → submit).
+- **DONE — Slice 1:** Applicant dropdown → Didit-first backend auto-route (`officerMatch.pickBestOfficer`, `auto_match` snapshot). Extracted cells auto-accepted, edit retained.
+- **Remaining slices (queued; do on request, in rough impact order):**
+  1. **Kill the journey picker** — default to auto max-prefill research; "upload docs" becomes the low-coverage exception (the Confirm-page escape already exists). Touches `JourneyPicker`, `proceedFromJourney` (App.js), Input step.
+  2. **Auto-confirm foundational facts** → exception-only (5-fact gate on Applicant page; all 5 are system-known). Surface only a disputed fact. `FoundationalFactsGate`.
+  3. **Pre-fill nature/account gap fields** from research analogues (`annualRevenue→sizeAnnualTurnover`, `employees→sizeTotalEmployees`, `countriesOfOperation→natureOperatingCountries`, `sicCode→natureIndustryCodes`) — currently re-asked blank. `getCombinedGaps`/`FillGapsPage`.
+  4. **Auto-advance Confirm** when nothing needs-you & no missing docs (Confirm becomes exception-only). `ConfirmStep`/`submitBlockers`.
+  5. **Remove the legacy `identityVerification` step** (index 3, `idvSpike`) — redundant with inline bands IDV on the Applicant page.
+  6. **Auto-proceed from verified cells** when all required applicant fields present (drop the extra confirm click).
+- **Compliance guardrail (from the audit):** keep explicit user action ONLY where regulation demands it — consent checkbox, PEP self-declaration, and low-confidence/unverified sources. Everything the system is confident about is auto-confirmed silently.
+- **Area:** `src/App.js`, `src/components/{applicant,companyConfirm,fillGaps}`, `api/idv-match/*`.
+
 ### BANDS-3 — Clearly-different name should demote to Band C, not neutral review
 - **Category:** Bands / Correctness · **Priority:** P2 · **Status:** OPEN
 - **What:** When the document name is not plausibly the same person as the CH officer (fails phonetic + transliteration + fuzzy, score below `thresholds.skipToReview`), `resolveBandB` now short-circuits to neutral **review** (`not_plausibly_same_person`) instead of opening the "what explains the difference?" dialogue — correct not to interrogate a clearly-different person. But per the bands doc this case is really **Band C** (different person → LOA path / escalation), not a silent in-review. `assignBand` still routes any `name.comparable` case to Band B before the resolver sees it.
