@@ -74,6 +74,33 @@ test("confirmation records the non-replacement principle and exact SATISFIED/OPE
   }
 });
 
+test("confirmed information with no decision targets re-evaluates against the current case revision", () => {
+  let session = startApplicantFixture({ fixtureId: "AJV2-01" });
+  const first = structuredClone(current(session).snapshot);
+  const initialClassification = structuredClone(session.resolutionInputs.evidenceClassifications[0]);
+  session = applyApplicantCustomerAction({
+    session,
+    customerAction: action(session, "CONFIRM_ESTABLISHED_INFORMATION", confirmPayload(session)),
+    operationId: "AJV2-01:confirmation-reevaluation",
+  });
+  assert.deepEqual(session.pendingDecisionTargets, { candidateParties: [], candidateClaims: [] });
+  session = applyApplicantDecisions({ session, recordedAt: "2026-09-09T12:01:00.000Z" });
+  assert.equal(session.operationHistory.at(-1), "EXPLICIT_NO_DECISIONS_REQUIRED");
+  session = evaluateApplicantJourney({ session, evaluationTime: "2026-09-09T12:02:00.000Z" });
+
+  const classification = session.resolutionInputs.evidenceClassifications[0];
+  const r08 = current(session).snapshot.decisionContent.evidenceSufficiency
+    .find(({ requirementId }) => requirementId === "UBO-R08");
+  assert.equal(session.snapshots.length, 2);
+  assert.deepEqual(session.snapshots[0].snapshot, first);
+  assert.equal(classification.caseReference.revisionId,
+    current(session).snapshot.decisionContent.caseReference.revisionId);
+  assert.equal(classification.durableEvidenceId, initialClassification.durableEvidenceId);
+  assert.notEqual(classification.classificationId, initialClassification.classificationId);
+  assert.equal(r08.status, "SUFFICIENT");
+  assert.deepEqual(session.operationHistory.slice(-3), ["APPLY_CUSTOMER_INPUT", "EXPLICIT_NO_DECISIONS_REQUIRED", "EVALUATE"]);
+});
+
 test("customer input, explicit decisions and re-evaluation are three separate operations with immutable Snapshot A", () => {
   let session = startApplicantFixture({ fixtureId: "AJV2-04" });
   const first = structuredClone(current(session).snapshot);

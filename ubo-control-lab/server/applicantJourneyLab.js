@@ -279,6 +279,29 @@ function validateSession(value) {
   return clone(value);
 }
 
+function repinEvidenceClassifications({ classifications, caseState, policyFixture }) {
+  if (!classifications?.length) return [];
+  const loadedPolicyPack = loadPolicyPack(policyFixture);
+  const currentCase = CASE_STATE_INTERNALS.decodeCaseState(
+    caseState,
+    DECISION_APPLICATION_CONTRACT_VERSION_V3,
+  );
+  return classifications.map((classification) => createEvidencePolicyClassification({
+    loadedPolicyPack,
+    caseState: currentCase,
+    input: {
+      evidenceReference: classification.evidenceReference,
+      sourceOrigin: classification.sourceOrigin,
+      classificationBasis: classification.classificationBasis,
+      supports: classification.supports,
+      ...(classification.evidenceCatalogueKey === undefined ? {} : { evidenceCatalogueKey: classification.evidenceCatalogueKey }),
+      ...(classification.capturedAt === undefined ? {} : { capturedAt: classification.capturedAt }),
+      ...(classification.sourceEffectiveAt === undefined ? {} : { sourceEffectiveAt: classification.sourceEffectiveAt }),
+      ...(classification.currentState === undefined ? {} : { currentState: classification.currentState }),
+    },
+  }));
+}
+
 function applyApplicantCustomerAction({ session: supplied, customerAction, operationId } = {}) {
   const session = validateSession(supplied);
   const fixture = fixtureById(session.fixtureId);
@@ -370,6 +393,12 @@ function evaluateApplicantJourney({ session: supplied, evaluationTime = new Date
   }
   const fixture = fixtureById(session.fixtureId);
   const previous = session.snapshots.at(-1);
+  const resolutionInputs = clone(session.resolutionInputs);
+  resolutionInputs.evidenceClassifications = repinEvidenceClassifications({
+    classifications: resolutionInputs.evidenceClassifications,
+    caseState: session.caseState,
+    policyFixture: policyFor(fixture),
+  });
   const evaluated = appFor(fixture).evaluate({
     contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
     runtimeMode: "LAB",
@@ -381,10 +410,11 @@ function evaluateApplicantJourney({ session: supplied, evaluationTime = new Date
     decisionHistory: session.decisionHistory,
     expectedHeadSnapshotId: previous.snapshot.snapshotId,
     supersessionReason: "CUSTOMER_INPUT",
-    resolutionInputs: session.resolutionInputs,
+    resolutionInputs,
   });
   session.caseState = evaluated.caseState;
   session.decisionHistory = evaluated.decisionHistory;
+  session.resolutionInputs = resolutionInputs;
   session.snapshots.push({
     sequence: session.snapshots.length + 1,
     reason: "EXPLICIT_CUSTOMER_INPUT_REEVALUATION",
