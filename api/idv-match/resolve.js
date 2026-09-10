@@ -13,6 +13,8 @@ const { getDecision } = require("../../lib/didit/diditClient");
 const { mapDiditDecision } = require("./canonicalMapping");
 const { hasScreeningHit } = require("./screening");
 const { runBandPipeline } = require("./pipeline");
+const { pickBestOfficer } = require("./officerMatch");
+const { recordBandOutcome } = require("./behaviors");
 const { bandsEnabled } = require("./config");
 const { TERMINAL_STATUSES } = require("../../idv/domain/constants");
 const identityVault = require("./identityVault");
@@ -81,7 +83,7 @@ async function resolveAttempt(attemptId, deps = {}) {
   }
 
   const identity = identityMap(mapped.identityAttributes);
-  const officerSnapshot = attempt.selected_officer || {};
+  let officerSnapshot = attempt.selected_officer || {};
   const screeningHit = await screeningHitFor(attemptId);
 
   // Vault the extraction (idempotent) so the confirm step + reviewer reveal have a
@@ -106,6 +108,30 @@ async function resolveAttempt(attemptId, deps = {}) {
   }
 
   const documentDisplayName = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
+
+  // Auto-match (one-click): the attempt froze the WHOLE candidate list instead of
+  // one selected officer. Pick the officer the document belongs to from data we
+  // already have — the applicant never chose from a dropdown. A plausible match
+  // becomes the comparison target (the pipeline then decides Band A/B/C exactly as
+  // if they'd been selected); no plausible match means they aren't a registered
+  // officer -> route to the LOA path (unless the document itself is unreadable, in
+  // which case it's a retry, not an LOA).
+  if (officerSnapshot && officerSnapshot.mode === "auto_match") {
+    const pick = (deps.pickBestOfficer || pickBestOfficer)({ candidates: officerSnapshot.candidates || [], identity });
+    if (pick.matched) {
+      officerSnapshot = pick.officer;
+    } else {
+      const nameReadable = !!(identity.mrz || (identity.first_name && identity.last_name));
+      if (!nameReadable) {
+        return { enabled: true, band: null, needsRetry: true, reasons: ["missing_required_data"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+      }
+      const recorded = await (deps.recordBandOutcome || recordBandOutcome)({
+        attemptId, applicationId: attempt.application_id,
+        decision: { band: "C", outcomeType: "demoted_to_loa_path", resolvedBy: "system", escalate: true, reasons: ["no_officer_match"] },
+      }, deps);
+      return { enabled: true, band: "C", outcomeType: "demoted_to_loa_path", ...recorded, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+    }
+  }
 
   // Verify-only (unlisted applicant): no officer to compare against, so skip band
   // assignment entirely — this is identity proof, not a match. The applicant

@@ -60,7 +60,16 @@ test("HTTP handler 400s on missing fields when the flag is on", async () => {
 
 test("guards missing applicationId / officerCandidate", async () => {
   await assert.rejects(startVerificationAttempt({ officerCandidate: {} }), /applicationId is required/);
-  await assert.rejects(startVerificationAttempt({ applicationId: "app-1" }), /officerCandidate is required/);
+  await assert.rejects(startVerificationAttempt({ applicationId: "app-1" }), /officerCandidate or officerCandidates is required/);
+});
+
+test("auto_match: freezes the whole candidate list on the attempt", async () => {
+  const out = await startVerificationAttempt({
+    applicationId: "app-1",
+    officerCandidates: [{ name: "SMITH, John", dob: "1985-05-24" }, { name: "DOE, Jane" }],
+  });
+  assert.ok(out.attemptId);
+  assert.ok(out.hostedVerificationUrl);
 });
 
 test("binds the Didit session to the server-created attempt (vendor_data = attempt id)", async () => {

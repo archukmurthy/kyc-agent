@@ -96,6 +96,44 @@ test("resolve holds (needsRetry) while the Didit session is still in progress â€
   assert.strictEqual(d._decisions.length, 0, "records nothing while in progress");
 });
 
+test("auto_match: backend picks the matching officer from the document -> Band A (no dropdown)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps();
+  // Attempt froze the WHOLE candidate list; the doc is John Smith 1985-05.
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "DOE, Jane", birthMonthYear: "1990-01" },
+      { name: "SMITH, John", birthMonthYear: "1985-05" },
+    ] },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(r.outcomeType, "auto_match");
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
+test("auto_match: document matches no candidate -> LOA path (Band C), no dropdown, no retry", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps();
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "DOE, Jane", birthMonthYear: "1990-01" },
+      { name: "BLOGGS, Fred", birthMonthYear: "1970-03" },
+    ] },
+  });
+  // Provide a recordBandOutcome stub so we don't touch the evidence outbox/DB.
+  d.recordBandOutcome = async ({ decision }) => ({ decisionId: "dec-c", route: "loa_path", escalated: true, applicantView: { title: "loa" }, reasons: decision.reasons });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "demoted_to_loa_path");
+  assert.strictEqual(r.route, "loa_path");
+  assert.strictEqual(r.needsRetry, undefined);
+  // still shows the applicant their own fetched fields (read-only + LOA upload)
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
 test("resolve reports a missing session", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));

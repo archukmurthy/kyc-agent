@@ -23,4 +23,12 @@ function buildOfficerSnapshot(candidate, opts = {}) {
   };
 }
 
-module.exports = { buildOfficerSnapshot, monthYearOnly };
+// Auto-match: freeze the WHOLE candidate-officer list on the attempt, so resolve
+// can pick the one the document belongs to without the applicant selecting from a
+// dropdown. Same per-officer snapshot rules (month/year birth only, no re-fetch).
+function buildAutoMatchSnapshot(candidates, opts = {}) {
+  const list = (candidates || []).map((c) => buildOfficerSnapshot(c, opts)).filter(Boolean);
+  return { mode: "auto_match", candidates: list };
+}
+
+module.exports = { buildOfficerSnapshot, buildAutoMatchSnapshot, monthYearOnly };

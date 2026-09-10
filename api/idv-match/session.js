@@ -5,18 +5,26 @@
 // attempt via vendor_data = attempt id. The browser never creates or modifies
 // this binding — it only receives the attempt id + hosted URL to open.
 const { createSession } = require("../../lib/didit/diditClient");
-const { buildOfficerSnapshot } = require("./officerSnapshot");
+const { buildOfficerSnapshot, buildAutoMatchSnapshot } = require("./officerSnapshot");
 const attemptStore = require("./attemptStore");
 const { safeAppendLifecycleEvent, LIFECYCLE_EVENTS } = require("./lifecycle");
 const { bandsEnabled } = require("./config");
 
-async function startVerificationAttempt({ applicationId, officerCandidate, callbackUrl, verifyOnly = false } = {}) {
+async function startVerificationAttempt({ applicationId, officerCandidate, officerCandidates, callbackUrl, verifyOnly = false } = {}) {
   if (!applicationId) throw new Error("startVerificationAttempt: applicationId is required");
-  if (!verifyOnly && !officerCandidate) throw new Error("startVerificationAttempt: officerCandidate is required");
+  const autoMatch = Array.isArray(officerCandidates) && officerCandidates.length > 0;
+  if (!verifyOnly && !officerCandidate && !autoMatch) {
+    throw new Error("startVerificationAttempt: officerCandidate or officerCandidates is required");
+  }
 
-  // Verify-only (unlisted applicant): identity proof with no officer to compare
-  // against, so no frozen officer snapshot — just a mode marker.
-  const snapshot = verifyOnly ? { mode: "verify_only" } : buildOfficerSnapshot(officerCandidate);
+  // Snapshot frozen at session creation. auto_match freezes the WHOLE candidate
+  // list so resolve can pick the matching officer from the document (no dropdown);
+  // verify_only carries no officer; the legacy single-officer path is unchanged.
+  const snapshot = verifyOnly
+    ? { mode: "verify_only" }
+    : autoMatch
+      ? buildAutoMatchSnapshot(officerCandidates)
+      : buildOfficerSnapshot(officerCandidate);
   const attemptId = await attemptStore.createAttempt({ applicationId, selectedOfficer: snapshot });
 
   const session = await createSession({
@@ -47,11 +55,12 @@ async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (!bandsEnabled()) return res.status(404).json({ error: "not_enabled" });
   const body = req.body || {};
-  if (!body.applicationId || (!body.officerCandidate && !body.verifyOnly)) {
+  const hasCandidates = Array.isArray(body.officerCandidates) && body.officerCandidates.length > 0;
+  if (!body.applicationId || (!body.officerCandidate && !body.verifyOnly && !hasCandidates)) {
     return res.status(400).json({ error: "applicationId_and_officerCandidate_required" });
   }
   try {
-    const out = await startVerificationAttempt({ applicationId: body.applicationId, officerCandidate: body.officerCandidate, verifyOnly: !!body.verifyOnly });
+    const out = await startVerificationAttempt({ applicationId: body.applicationId, officerCandidate: body.officerCandidate, officerCandidates: body.officerCandidates, verifyOnly: !!body.verifyOnly });
     return res.status(200).json(out);
   } catch (err) {
     console.error("[idv-match session]", err && err.message);

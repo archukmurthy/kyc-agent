@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 import BandResultView from "./BandResultView";
 
@@ -12,7 +12,7 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields, extraFields, loaUpload, loaUploaded }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, officerCandidates, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields, extraFields, loaUpload, loaUploaded }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
@@ -22,6 +22,17 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const Button = Btn || ((props) => <button {...props} />);
+
+  // Auto-start: create the session and show the QR the moment the step opens —
+  // no "Start verification" click. Guarded so it fires exactly once. The manual
+  // button remains as a fallback if the auto-start errored.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-poll: once the session is started, pull the decision from Didit every
   // few seconds so the fetched data appears WITHOUT the applicant clicking. The
@@ -60,7 +71,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   async function start() {
     setBusy(true); setError(null);
     try {
-      const d = await postJson("/api/idv-match/session", { applicationId, officerCandidate, verifyOnly });
+      const d = await postJson("/api/idv-match/session", { applicationId, officerCandidate, officerCandidates, verifyOnly });
       if (d.error) throw new Error(d.error);
       setAttemptId(d.attemptId);
       setHostedUrl(d.hostedVerificationUrl);

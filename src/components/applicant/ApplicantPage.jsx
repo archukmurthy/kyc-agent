@@ -428,18 +428,21 @@ export function ApplicantPage({
     const signatoryGateBlocks = !idvBandsEnabled && !signatoryIdFile;
     const continueBlocked = signatoryGateBlocks || authorityGateBlocks;
 
-    // Bands verification is shown only for a LISTED officer (there is an officer
-    // to compare against). Unlisted applicants keep today's authority-to-act path.
-    const bandsVerificationActive = idvBandsEnabled && !!applicantSelectedPerson && !applicantUnlisted;
-    // Unlisted applicants verify identity too (verify-only, no officer match),
-    // AFTER they've uploaded their authority-to-act document.
+    // Auto-match (one-click): when research found candidate officers, the applicant
+    // no longer picks themselves from a dropdown. We show the Didit QR immediately,
+    // freeze the WHOLE candidate list on the attempt, and the backend picks the
+    // matching officer from the document — or routes to LOA if none match.
+    const applicantCandidates = getApplicantCandidates();
+    const autoMatchActive = idvBandsEnabled && applicantCandidates.length > 0;
+    // Unlisted applicants (research found NO candidate officers) verify identity
+    // too (verify-only), AFTER they've uploaded their authority-to-act document.
     const unlistedVerifyActive = idvBandsEnabled && applicantUnlisted && !!authorityToActFile;
 
-    // Progressive disclosure (flag ON): reveal the applicant fields + the rest
-    // only after the person answers "who is completing this?" — either they pick
-    // themselves from the list or choose "I am not listed".
+    // Progressive disclosure (flag ON): the auto-match verification shows straight
+    // away once the foundational facts are confirmed; the manual (flag-off / no-
+    // candidate) path still waits for "who is completing this?".
     const personChosen = !!applicantSelectedPerson || applicantNotListed;
-    const showApplicantBody = !idvBandsEnabled || personChosen;
+    const showApplicantBody = !idvBandsEnabled || personChosen || autoMatchActive;
 
     // Shared "proceed to Confirm" used by both the manual Continue button and the
     // bands success path. Skips the signatory check when the flag is on.
@@ -523,11 +526,11 @@ export function ApplicantPage({
             </div>
 
             <div style={card}>
-              {renderApplicantPersonSelector()}
-              {/* Listed officer + bands ON: skip the manual fields — go straight to
-                  Didit verification; the fields appear as the fetched cells after.
-                  Unlisted (and flag OFF) still show the manual fields here. */}
-              {showApplicantBody && !bandsVerificationActive && renderApplicantFields()}
+              {/* Auto-match (bands ON, candidates found): no dropdown — go straight
+                  to Didit; the fields appear as the fetched cells after. The manual
+                  path (flag OFF / no candidates) still shows the selector + fields. */}
+              {!autoMatchActive && renderApplicantPersonSelector()}
+              {showApplicantBody && !autoMatchActive && renderApplicantFields()}
             </div>
 
             {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
@@ -578,14 +581,12 @@ export function ApplicantPage({
                 listed officer. It creates a server-bound attempt, shows the QR,
                 and on completion resolves the band + renders the outcome. On a
                 passing outcome the applicant proceeds via proceedToConfirm. */}
-            {bandsVerificationActive && (
+            {autoMatchActive && (
               <div style={{ ...card, marginTop: 16 }}>
                 <IdvMatchVerification
                   applicationId={applicationId}
-                  officerCandidate={applicantSelectedPerson}
+                  officerCandidates={applicantCandidates}
                   onProceed={proceedToConfirm}
-                  onReselect={() => setApplicantSelectedPerson(null)}
-                  onProvideLoa={() => setApplicantNotListed(true)}
                   onResolved={onIdvResolved}
                   onConfirmedFields={writeVerifiedFields}
                   extraFields={renderApplicantFields({ exclude: DOCUMENT_COVERED_APPLICANT_FIELDS })}
@@ -634,7 +635,7 @@ export function ApplicantPage({
                 not a blank wipe). Layout only — onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
-            {!bandsVerificationActive && !unlistedVerifyActive && showApplicantBody && (
+            {!autoMatchActive && !unlistedVerifyActive && showApplicantBody && (
             <button
               disabled={continueBlocked}
               onClick={proceedToConfirm}

@@ -22,7 +22,7 @@ test("start -> QR/link -> completed -> resolve renders the Band A success", asyn
 
   const onResolved = jest.fn();
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResolved={onResolved} />);
-  fireEvent.click(screen.getByText("Start verification"));
+  // Auto-start shows the QR/link with no click.
   await screen.findByText("https://verify.didit.me/s/x");
 
   fireEvent.click(screen.getByText("I've completed verification"));
@@ -44,7 +44,6 @@ test("Band B dialogue -> submit same_spelling -> explain resolves to success", a
   });
 
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "LOVELACE, Ada" }} />);
-  fireEvent.click(screen.getByText("Start verification"));
   await screen.findByText("https://verify.didit.me/s/y");
   fireEvent.click(screen.getByText("I've completed verification"));
 
@@ -57,6 +56,6 @@ test("Band B dialogue -> submit same_spelling -> explain resolves to success", a
 test("session error surfaces, no crash", async () => {
   global.fetch = mockFetch({ "/api/idv-match/session": () => ({ error: "not_enabled" }) });
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "X" }} />);
-  fireEvent.click(screen.getByText("Start verification"));
+  // Auto-start hits the error path — surfaced, no crash.
   await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
 });
