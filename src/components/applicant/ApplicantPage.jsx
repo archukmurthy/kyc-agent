@@ -589,6 +589,23 @@ export function ApplicantPage({
                   onResolved={onIdvResolved}
                   onConfirmedFields={writeVerifiedFields}
                   extraFields={renderApplicantFields({ exclude: DOCUMENT_COVERED_APPLICANT_FIELDS })}
+                  loaUploaded={!!authorityToActFile}
+                  loaUpload={
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
+                        Because we couldn't confirm you against the company's registered
+                        officers, please upload a document showing you are authorised to act
+                        for the company before continuing.
+                      </p>
+                      <DocumentUploadCard
+                        item={authorityToActItem}
+                        uploaded={authorityToActFile}
+                        onUpload={(_req, file) => handleAuthorityToActUpload(file)}
+                        onRemove={() => setAuthorityToActFile(null)}
+                        autoSourcedResult={null}
+                      />
+                    </div>
+                  }
                   Btn={Btn}
                   cardStyle={{}}
                 />

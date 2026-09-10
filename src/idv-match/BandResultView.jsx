@@ -24,7 +24,7 @@ function View({ title, body, children }) {
   );
 }
 
-export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onConfirm, onRetry, Btn, extraFields }) {
+export default function BandResultView({ result, uploadPrompt, onSubmitExplanation, onUploadEvidence, onProvideLoa, onProceed, onConfirm, onRetry, Btn, extraFields, loaUpload, loaUploaded = false }) {
   const Button = Btn || ((props) => <button {...props} />);
   if (!result || result.enabled === false) return null;
 
@@ -51,34 +51,31 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
   const view = result.applicantView || {};
   const isBandC = result.band === "C" || result.outcomeType === "demoted_to_loa_path" || result.route === "loa_path";
   const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
+  // Band C is a person-mismatch: the applicant MUST upload a letter of
+  // authorization before they can continue — Confirm stays disabled until then.
+  const loaGate = isBandC && !loaUploaded;
 
   return (
     <View title={view.title} body={view.body}>
       {/* Fetched identity fields after verification, editable on ANY outcome
           (tick + edit), with the blank not-fetched fields below and a single
-          "Confirm & continue". Band C additionally offers the LOA path as a
-          secondary action rather than a wall. */}
+          "Confirm & continue". On Band C the letter-of-authorization upload is
+          rendered inline and Continue is gated on it. */}
       {hasVerifiedFields && (
         <VerifiedFieldsConfirm
           fields={result.verifiedFields}
           onConfirm={onConfirm}
-          extraFields={extraFields}
+          extraFields={isBandC ? <>{extraFields}{loaUpload}</> : extraFields}
+          confirmDisabled={loaGate}
+          disabledNote="Upload your letter of authorization above to continue."
           Btn={Btn}
         />
       )}
-      {!hasVerifiedFields && onProceed && (
-        <Button type="button" onClick={() => onProceed()}>Continue →</Button>
+      {!hasVerifiedFields && isBandC && onProvideLoa && (
+        <Button type="button" onClick={() => onProvideLoa()}>Provide letter of authorization</Button>
       )}
-      {isBandC && onProvideLoa && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            onClick={() => onProvideLoa()}
-            style={{ background: "transparent", border: "none", color: "#0B3D91", textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: 14, padding: 0 }}
-          >
-            Provide letter of authorization instead
-          </button>
-        </div>
+      {!hasVerifiedFields && !isBandC && onProceed && (
+        <Button type="button" onClick={() => onProceed()}>Continue →</Button>
       )}
     </View>
   );

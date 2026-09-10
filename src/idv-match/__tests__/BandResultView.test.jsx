@@ -37,31 +37,43 @@ test("Band C renders LOA copy + routes to the letter-of-authorization flow", () 
   const onProvideLoa = jest.fn();
   render(<BandResultView result={bandC} onProvideLoa={onProvideLoa} />);
   expect(screen.getByText("We couldn't confirm your details against the company's registered officers")).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Provide letter of authorization instead"));
+  fireEvent.click(screen.getByText("Provide letter of authorization"));
   expect(onProvideLoa).toHaveBeenCalled();
 });
 
-test("Band C with fetched fields shows editable cells + blank extra fields + Continue, LOA secondary", () => {
+test("Band C shows editable cells + blank fields + inline LOA upload, gating Continue until uploaded", () => {
   const onConfirm = jest.fn();
   const result = { ...bandC, verifiedFields: { firstName: "Bob", documentNumber: "Z9" } };
-  render(
+  const { rerender } = render(
     <BandResultView
       result={result}
-      onProvideLoa={jest.fn()}
       onConfirm={onConfirm}
       extraFields={<label>Email address<input aria-label="Email address" /></label>}
+      loaUpload={<div>UPLOAD LOA HERE</div>}
+      loaUploaded={false}
     />,
   );
-  // fetched cells shown and EDITABLE (Confirm & continue present)...
+  // editable cells + blank field + the inline LOA upload are all shown
   expect(screen.getByText("Confirm your verified details")).toBeInTheDocument();
   expect(screen.getByText("Bob")).toBeInTheDocument();
-  expect(screen.getByText("Z9")).toBeInTheDocument();
-  // ...the blank not-fetched field renders under the cells...
   expect(screen.getByLabelText("Email address")).toBeInTheDocument();
-  // ...Continue is primary, LOA is offered as a secondary action.
+  expect(screen.getByText("UPLOAD LOA HERE")).toBeInTheDocument();
+  // Continue is BLOCKED until the LOA is uploaded — clicking does nothing
+  expect(screen.getByText(/Upload your letter of authorization/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText(/Confirm & continue/));
+  expect(onConfirm).not.toHaveBeenCalled();
+  // once uploaded, Continue works
+  rerender(
+    <BandResultView
+      result={result}
+      onConfirm={onConfirm}
+      extraFields={<label>Email address<input aria-label="Email address" /></label>}
+      loaUpload={<div>UPLOAD LOA HERE</div>}
+      loaUploaded={true}
+    />,
+  );
   fireEvent.click(screen.getByText(/Confirm & continue/));
   expect(onConfirm).toHaveBeenCalledWith({ firstName: "Bob", documentNumber: "Z9" });
-  expect(screen.getByText("Provide letter of authorization instead")).toBeInTheDocument();
 });
 
 test("dialogue shows the two names, the five options, and Submit explanation", () => {

@@ -13,7 +13,7 @@ const LABELS = {
 };
 const ORDER = ["firstName", "lastName", "dateOfBirth", "nationality", "documentType", "documentNumber", "expiryDate", "issuingCountry", "gender", "placeOfBirth", "address"];
 
-export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn, extraFields }) {
+export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn, extraFields, confirmDisabled = false, disabledNote }) {
   const [values, setValues] = useState({ ...(fields || {}) });
   const [editing, setEditing] = useState({});
   const Button = Btn || ((props) => <button {...props} />);
@@ -57,7 +57,16 @@ export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn, extraFie
       {extraFields && <div style={{ marginTop: 20 }}>{extraFields}</div>}
       {editable && (
         <div style={{ marginTop: 16 }}>
-          <Button type="button" onClick={() => onConfirm(values)}>Confirm &amp; continue →</Button>
+          <Button
+            type="button"
+            disabled={confirmDisabled}
+            onClick={() => { if (confirmDisabled) return; onConfirm(values); }}
+          >
+            Confirm &amp; continue →
+          </Button>
+          {confirmDisabled && disabledNote && (
+            <p style={{ marginTop: 10, fontSize: 13, color: "#92400E" }}>{disabledNote}</p>
+          )}
         </div>
       )}
     </div>
