@@ -16,6 +16,7 @@ gives the DB/script route instead.
 
 **Demoable directly in the app (flag ON):**
 - The applicant journey: progressive disclosure → "who is completing" → pick a director → inline **Didit** QR → verification → **band result** → (Band B) one‑round dialogue → **confirm + dynamic extra‑ID fields** → **Band C** letter‑of‑authorization path → **unlisted verify‑only**.
+- **Screening runs live now** (PEP/sanctions/adverse‑media): the app screens the verified identity during the journey on both the **listed** (matched director) and **unlisted** (verify‑only) paths. A hit routes the applicant to review on screen. To force an on‑screen hit for the demo, set `SCREENING_DEMO_FORCE_HIT=1` (Section 6).
 - Flag OFF vs ON behaviour (the journey reverts exactly to today when OFF).
 
 **Demoable through the DB / a script (not in the app UI):**
@@ -24,12 +25,12 @@ gives the DB/script route instead.
 
 **Demoable only through isolated scripts/tests:**
 - **Band A / B / C outcomes on demand** → `band-outcomes.js` (the live Didit sandbox can't force these reliably — see Section 4).
-- **PEP / sanctions / adverse‑media (criminal)** → `screening-fixture.js` (offline) or a live ComplyCube **sandbox** check (Section 6).
+- **Each screening category shown side‑by‑side** (PEP vs sanctions vs adverse‑media) → `screening-fixture.js` (offline, deterministic — Section 6a). The *live* flow screens for real but ComplyCube's sandbox won't let you pick *which* category hits, so use the fixture to show each one distinctly.
 
 **Built but NOT wired / NOT demoable in the live flow (by design):**
-- **Screening is not called by the live applicant flow** (BACKLOG **SCR‑2**) — so a PEP/sanctions hit will not appear during the live journey; demo it in isolation (Section 6).
-- **No reviewer/admin page** — the "reviewer reveal" is shown via `inspect.js --reveal` (Section 7), not a UI.
+- **No reviewer/admin page** — the "reviewer reveal" is shown via `inspect.js --reveal` (Section 7), not a UI. **The applicant never sees which screening category hit** — a hit shows the neutral "we're completing our checks" copy; the PEP/sanctions/adverse‑media detail is visible only in the DB (`idv_screening_checks.categories`, Section 7).
 - Real **Didit document‑image capture** only runs on a real webhook and needs its field names confirmed (BACKLOG **BANDS‑2**) — demo the media store with the seed instead (Sections 7–8).
+- **No‑officer‑match (Band C) identities are not auto‑screened** — they escalate to a human reviewer instead (tracked as **SCR‑6**, pending compliance sign‑off).
 
 ---
 
@@ -97,7 +98,7 @@ This is the one band the **live Didit sandbox** shows reliably (the verified per
 6. Click **"I've completed verification."**
    - *Behind the scenes:* `GET /api/idv-match/status` → when verified, `POST /api/idv-match/resolve` re‑pulls the Didit decision, maps it, **stores the identity in the Vault**, compares it to the officer, and decides the band.
 7. Because the verified person ≠ the chosen director, you'll see **Band C copy**: *"We couldn't confirm your details against the company's registered officers"* + **Provide letter of authorization**.
-   - *Behind the scenes:* Band C recorded `demoted_to_loa_path`, set the escalation flag, and routes to the existing LOA path. The verified identity stays on the attempt only.
+   - *Behind the scenes:* Band C recorded `demoted_to_loa_path`, set the escalation flag, and routes to the existing LOA path. The verified identity stays on the attempt only. **This no‑match path is not auto‑screened** (it already escalates to a human — SCR‑6); screening runs on the **matched** (Band A) and **verify‑only** paths. To see a screening hit on screen, use a matched/verify‑only journey with `SCREENING_DEMO_FORCE_HIT=1` (Section 6b).
 8. **Verify in the DB** what just happened (Section 7): find the attempt for your application and run `inspect.js` — you'll see the Vault reference, the band decision, the events, the outbox envelope.
 
 > To also show **confirm + dynamic extra‑ID fields**: use a flow that lands on a *passing* band (Band A) — easiest via the seed + `inspect.js`, or explain it using Section 5's Band A output plus the confirm screen description below.
@@ -128,22 +129,27 @@ node scripts/demo/band-outcomes.js
 
 ## 6. FLOW — Screening (PEP / sanctions / adverse‑media)
 
-**Constraint:** screening is intentionally **NOT wired into the live applicant flow** (BACKLOG **SCR‑2**), so it won't trigger during Section 4. Demo it in isolation.
+**Screening is now wired into the live flow (SCR‑2).** When the flag is ON, the app screens the **verified identity** during the journey — on both the **listed** (matched director) and **unlisted** (verify‑only) paths — after Didit verification completes. Any hit routes the applicant to review (uniform hard‑exclusion). It runs against ComplyCube's **sandbox** (`COMPLYCUBE_API_KEY` test key in `.env.local`).
 
-### 6a. Offline (guaranteed, no network)
+**Required env for screening (already set in `.env.local`):** `COMPLYCUBE_API_KEY` (a `test_` key), `SCREENING_RUNTIME_MODE=test`, `IDV_DATABASE_URL`, plus the feature flag `IDV_DISCREPANCY_BANDS_ENABLED=1`. (The webhook secret is optional — the flow polls the result, it doesn't need the push webhook.)
+
+### 6a. Show each category distinctly (offline, deterministic)
 ```
 node scripts/demo/screening-fixture.js
 ```
-**You'll see** each category interpreted by the real logic: **PEP hit**, **sanctions (watchlist) hit**, **adverse‑media/criminal hit**, and **clear** — each showing `HIT: true/false`, the categories, and the band effect ("HARD EXCLUSION → routed to review").
+**You'll see** each category interpreted by the **real** decision logic: **PEP hit**, **sanctions (watchlist) hit**, **adverse‑media/criminal hit**, and **clear** — each showing `HIT: true/false`, the categories, and the band effect ("HARD EXCLUSION → routed to review"). Use this to demonstrate that each category is detected and acted on — the live sandbox can force *a* hit but not steer *which* category, so this is how you show them side‑by‑side.
 
-### 6b. Live ComplyCube **sandbox** check (optional, real API call)
-Use this to show a real end‑to‑end screening hit. It calls ComplyCube's **sandbox** (free; uses `COMPLYCUBE_API_KEY` from `.env.local`).
-- The proven create→check→interpret path lives in `api/idv-match/screening/` (`index.js` `startScreening`, `complyCubeClient.js`, `interpret.js`).
-- To run a live sandbox screening for a name, use the screening module's `startScreening` with a synthetic sanctioned/PEP test name (ComplyCube's sandbox returns "attention" for its test names).
-- **Where to verify the result:** the `idv_screening_checks` table (Section 7) — `outcome` + `categories`.
+### 6b. Force an on‑screen hit in the LIVE journey (demo switch)
+By default the live flow screens the name Didit extracted — which won't match a danger list, so the journey passes. To make the **real on‑screen flow land on a screening hit**, turn on the demo switch:
+1. In `.env.local` add `SCREENING_DEMO_FORCE_HIT=1`, then restart `npm start`.
+2. Run the normal journey (Section 4). During screening the app sends last name **`attention`** to ComplyCube's sandbox, which returns a hit → the applicant lands on the neutral **"We're completing our checks"** review screen.
+3. **Safety:** this switch only works in **sandbox/test mode** — it is ignored in live mode, so it can never alter a real screening. Turn it off (`0`) for a normal demo.
 
-*What `startScreening` does:* creates a ComplyCube client → runs an `extensive_screening_check` → the async **webhook** delivers the result → `interpret.js` turns it into `outcome` + `categories`, stored in `idv_screening_checks`. The band logic reads it via `hasScreeningHit(attemptId)`.
-*Why it's not in the live flow yet:* wiring needs a design decision (which name to screen, when, and how to handle the async webhook vs the synchronous band decision) — tracked as **SCR‑2**.
+### 6c. Prove it's a real ComplyCube call (not a fixture)
+The offline fixture (6a) uses sample answers we wrote. To prove the **real vendor connection**: run a direct `startScreening` with last name `attention` against the sandbox, then read the stored result.
+- `startScreening` creates a ComplyCube client → runs an `extensive_screening_check` → `interpret.js` turns the response into `outcome` + `categories`, stored in `idv_screening_checks`. The band logic reads it via `hasScreeningHit(attemptId)`.
+- **Where to verify the result:** the `idv_screening_checks` table (Section 7) — `outcome` = `attention`, `categories` = the real breakdown ComplyCube returned.
+- (Async note: ComplyCube can also push the result via webhook, which then **re‑resolves** the band — but the live flow doesn't depend on it; it polls.)
 
 ---
 
@@ -237,7 +243,8 @@ It does the **authorized + audited decrypt** and writes a **viewable image file*
 2. Upload the **Authority‑to‑act** document (this path is unchanged from today).
 3. The **Didit verification** box then appears (verify‑only mode — no officer to match).
 4. Complete Didit → the applicant proceeds on a successful check.
-   - *Behind the scenes:* `session` was created with `verifyOnly` (no officer snapshot); `resolve` **skips the band comparison** and just returns verified/not — no band decision row is written.
+   - *Behind the scenes:* `session` was created with `verifyOnly` (no officer snapshot); `resolve` **skips the band comparison** (there's no officer to compare against) but **still screens the verified identity** — a PEP/sanctions/adverse‑media hit routes them to review instead of passing. No band decision row is written on this path.
+   - *To show a hit here:* set `SCREENING_DEMO_FORCE_HIT=1` (Section 6b) and this verify‑only pass will land on the review screen instead.
 
 ---
 
@@ -259,7 +266,8 @@ Run everything in `E:\kyc-agent-dev`.
 | `npm start` | Run the app + dev API | app on :3000 | app demo |
 | `curl http://localhost:3000/api/idv-match/flags` | Check the flag | `{"idvDiscrepancyBands":true/false}` | any |
 | `node scripts/demo/band-outcomes.js` | Band A/B/C/retry/PEP logic | printed decisions | band demo |
-| `node scripts/demo/screening-fixture.js` | PEP/sanctions/adverse interpretation | printed hits | screening demo |
+| `node scripts/demo/screening-fixture.js` | PEP/sanctions/adverse interpretation (each category, offline) | printed hits | screening demo (6a) |
+| set `SCREENING_DEMO_FORCE_HIT=1` in `.env.local` + restart | force an on‑screen screening hit in the live journey (sandbox only) | applicant lands on review | live screening demo (6b) |
 | `npm run idv:db:migrate` | Apply IDV migrations 013–023 to `idv` (after console recreate) | schema built | Neon console setup (7c) |
 | `npm run idv:db:seed` | Seed one complete attempt into `idv` | prints attempt id | Neon console setup (7c) |
 | `npm run idv:db:seed:populated` | Seed 6 varied attempts (Band A/B/C + clear/PEP/sanctions/adverse) | populated tables | fuller console demo |
@@ -280,7 +288,7 @@ Run everything in `E:\kyc-agent-dev`.
 
 ## 12. Current limitations (state these plainly)
 
-1. **Screening is not wired into the live flow** (SCR‑2) — PEP/sanctions won't trigger during the live journey; demo it via Section 6.
+1. **Screening runs live, but the sandbox can't steer the category** — a hit triggers during the journey (use `SCREENING_DEMO_FORCE_HIT=1` to force one on screen), but to show PEP vs sanctions vs adverse‑media *distinctly* use the offline fixture (Section 6a). No‑officer‑match (Band C) identities aren't auto‑screened (they escalate to a human — SCR‑6). Category detail is DB‑only, never shown to the applicant.
 2. **No reviewer/admin UI** — the Vault/reference/events/audit/outbox are shown via `inspect.js` or SQL, not a page.
 3. **Live Didit can only reliably show Band C** — A and B are shown via `band-outcomes.js` (Section 5).
 4. **Real Didit document images** are only captured on a live webhook and need field‑name confirmation (BANDS‑2) — the media store itself is demoed with the seed (Sections 7–8).
@@ -290,7 +298,7 @@ Run everything in `E:\kyc-agent-dev`.
 
 ## 13. Proposed "Demo Readiness" (NOT built — for reference)
 
-If you later want a smoother demo, the intended scope is **D3 only**: turn the flag on + a demo seed (this runbook has it) + a short guided script covering Band A / B / C / PEP / unlisted. Per the current constraints we are **not** wiring screening into the live flow and **not** building an admin/inspector page — the isolated scripts above stand in for both.
+If you later want a smoother demo, the intended scope is **D3 only**: turn the flag on + a demo seed (this runbook has it) + a short guided script covering Band A / B / C / PEP / unlisted. Screening is now wired into the live flow; what remains not built is an admin/inspector page — the isolated scripts above stand in for it.
 
 ---
 
