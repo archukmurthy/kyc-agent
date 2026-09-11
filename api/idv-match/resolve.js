@@ -84,7 +84,7 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   const identity = identityMap(mapped.identityAttributes);
   let officerSnapshot = attempt.selected_officer || {};
-  const screeningHit = await screeningHitFor(attemptId);
+  const screening = await screeningHitFor(attemptId);
 
   // Vault the extraction (idempotent) so the confirm step + reviewer reveal have a
   // reference, and record the immutable extraction_presented event. Best-effort:
@@ -151,7 +151,7 @@ async function resolveAttempt(attemptId, deps = {}) {
     applicationId: attempt.application_id,
     officerSnapshot,
     identity,
-    screeningHit,
+    screeningHit: screening.hit,
     escalationFlag: false, // no prior-escalation source wired yet (Section B follow-up)
     livenessPassed: livenessPassed(mapped.observations),
     companyDisplayName: officerSnapshot.name || "",

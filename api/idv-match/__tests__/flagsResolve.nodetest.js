@@ -32,6 +32,7 @@ function deps(over = {}) {
       decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
     })),
     hasScreeningHit: over.hasScreeningHit || (async () => false),
+    runBandPipeline: over.runBandPipeline,
     matchDecisionStore: { recordDecision: async (d) => { decisions.push(d); return `dec-${decisions.length}`; }, listByAttempt: over.listByAttempt || (async () => []) },
     reviewTaskStore: { createTask: async (t) => { tasks.push(t); return { id: "t1", taskType: t.taskType }; } },
   };
@@ -138,4 +139,16 @@ test("resolve reports a missing session", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));
   assert.strictEqual(r.error, "no_session");
+});
+
+test("resolveAttempt passes a boolean screeningHit (not the accessor object) into the pipeline", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  let capturedScreeningHit = "UNSET";
+  const d = deps({
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+    runBandPipeline: async (input) => { capturedScreeningHit = input.screeningHit; return { enabled: true, band: "A", outcomeType: "auto_match" }; },
+  });
+  await resolveAttempt("att-1", d);
+  assert.strictEqual(typeof capturedScreeningHit, "boolean");
+  assert.strictEqual(capturedScreeningHit, false);
 });
