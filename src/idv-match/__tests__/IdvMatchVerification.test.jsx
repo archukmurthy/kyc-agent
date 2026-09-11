@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import IdvMatchVerification from "../IdvMatchVerification";
 
@@ -51,6 +51,43 @@ test("Band B dialogue -> submit same_spelling -> explain resolves to success", a
   fireEvent.click(screen.getByLabelText(/Same name, different spelling/));
   fireEvent.click(screen.getByText("Submit explanation"));
   await screen.findByText("Identity verified");
+});
+
+test("screening hold (needsRetry/pending, e.g. screening_pending) keeps the auto-poll going until a terminal band arrives", async () => {
+  jest.useFakeTimers();
+  try {
+    let resolveCalls = 0;
+    global.fetch = mockFetch({
+      "/api/idv-match/session": () => ({ attemptId: "att-1", hostedVerificationUrl: "https://verify.didit.me/s/z" }),
+      "/api/idv-match/resolve": () => {
+        resolveCalls += 1;
+        // First tick: screening still running — same needsRetry/pending shape as
+        // the pre-existing verification_in_progress hold. Second tick: terminal.
+        if (resolveCalls === 1) {
+          return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"] };
+        }
+        return { enabled: true, band: "A", outcomeType: "auto_match", applicantView: { title: "Identity verified", body: "Your identity has been matched to the selected company officer." } };
+      },
+    });
+
+    render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} />);
+    await act(async () => { await Promise.resolve(); }); // let auto-start's session call land
+    await screen.findByText("https://verify.didit.me/s/z");
+
+    // First poll tick: hold response — must NOT render a terminal result and must
+    // keep the QR/link screen up so the interval fires again.
+    await act(async () => { jest.advanceTimersByTime(4000); await Promise.resolve(); await Promise.resolve(); });
+    expect(resolveCalls).toBe(1);
+    expect(screen.queryByText("Identity verified")).not.toBeInTheDocument();
+    expect(screen.getByText("https://verify.didit.me/s/z")).toBeInTheDocument();
+
+    // Second poll tick: terminal band arrives — same interval, no extra click.
+    await act(async () => { jest.advanceTimersByTime(4000); await Promise.resolve(); await Promise.resolve(); });
+    expect(resolveCalls).toBe(2);
+    await screen.findByText("Identity verified");
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("session error surfaces, no crash", async () => {
