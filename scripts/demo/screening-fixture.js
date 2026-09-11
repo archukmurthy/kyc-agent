@@ -2,11 +2,13 @@
 /*
  * DEMO: screening interpretation (PEP / sanctions / adverse-media), OFFLINE.
  * Feeds sample ComplyCube "attention" results through the REAL interpreter to
- * show the exact signal the band logic consumes. No network, no wiring into the
- * live flow. Run:  node scripts/demo/screening-fixture.js
+ * show the exact signal the band logic consumes. No network, no live calls.
+ * Run:  node scripts/demo/screening-fixture.js
  *
- * NOTE: screening is intentionally NOT wired into the live applicant flow yet
- * (BACKLOG SCR-2). This proves the screening decision logic in isolation.
+ * NOTE: screening IS NOW wired into the live applicant flow (both the
+ * auto_match and verify_only paths). This script demonstrates each category's
+ * interpretation in isolation/offline, using fixture data instead of a real
+ * ComplyCube call.
  */
 const { interpretCheck } = require("../../api/idv-match/screening/interpret");
 
@@ -27,5 +29,6 @@ show("PEP hit", fixture("pep"));
 show("Sanctions hit (watchlist)", fixture("watchlist"));
 show("Adverse-media / criminal hit", fixture("adverseMedia"));
 show("Clear (no hit)", fixture(null, "clear"));
-console.log("\nIn the LIVE flow (once SCR-2 wires startScreening in), any HIT above forces the");
-console.log("band decision to 'unresolved_to_review' regardless of how well the name matched.");
+console.log("\nIn the LIVE flow, any HIT above forces the band decision to 'unresolved_to_review'");
+console.log("regardless of how well the name matched (screening is wired into both the");
+console.log("auto_match and verify_only paths).");

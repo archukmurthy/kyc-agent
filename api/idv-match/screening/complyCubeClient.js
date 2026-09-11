@@ -22,17 +22,29 @@ function personEmail(person) {
   return person.email || `screening+${randomUUID()}@idv.invalid`;
 }
 
+// DEMO-ONLY sandbox affordance: force a ComplyCube "attention"/hit outcome so a
+// demo can show the in-review path. Sandbox-only trigger word for last name.
+// Gated on BOTH screeningConfig().mode === "test" AND the env flag below — if
+// mode is "live" this is ALWAYS ignored, no matter the flag. This can never
+// alter a live screening: it only changes the name string sent to ComplyCube
+// for matching, never the applicant's stored/verified identity.
+function demoForceHitEnabled() {
+  const v = String(process.env.SCREENING_DEMO_FORCE_HIT || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 async function createClient(person, deps = {}) {
   if (!person || !person.firstName || !person.lastName) {
     throw new Error("createClient: person firstName and lastName are required");
   }
+  const demoHit = screeningConfig().mode === "test" && demoForceHitEnabled();
   const cc = deps.client || realClient();
   return cc.client.create({
     type: "person",
     email: personEmail(person),
     personDetails: {
       firstName: person.firstName,
-      lastName: person.lastName,
+      lastName: demoHit ? "attention" : person.lastName,
       ...(person.dob ? { dob: person.dob } : {}),
       ...(person.nationality ? { nationality: person.nationality } : {}),
     },
