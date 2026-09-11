@@ -6,7 +6,6 @@ const { ScreeningProvider } = require("../contracts/screeningProvider");
 const defaultClient = require("../complyCubeClient");
 const { interpretCheck } = require("../interpret");
 const { normalizeScreening } = require("../canonical");
-const { processScreeningWebhook } = require("../webhook");
 const { screeningConfig } = require("../config");
 
 class ComplyCubeScreeningAdapter extends ScreeningProvider {
@@ -19,11 +18,6 @@ class ComplyCubeScreeningAdapter extends ScreeningProvider {
     // canonical result when the provider already graded it synchronously.
     const result = interpreted.outcome ? normalizeScreening(interpreted) : null;
     return { providerClientId: client.id, providerCheckId: check.id, result };
-  }
-
-  async handleWebhook(args, deps = {}) {
-    const res = await processScreeningWebhook(args, deps);
-    return res; // { statusCode, body: { ..., hit } } — re-resolve is driven by the route (Task 8)
   }
 
   getCapabilities() {
