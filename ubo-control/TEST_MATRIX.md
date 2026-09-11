@@ -434,3 +434,18 @@ Wave 11B1 advances exactly `F07-14-001`, `F07-14-002`, `F07-14-005`, `F07-14-007
 | Confirmation maps pinned R08 as SATISFIED/OPEN/NOT_APPLICABLE/REVIEW_REQUIRED, does not replace evidence and never mutates or recalculates sufficiency | Wave 11A confirmation/R08 matrix and tampered-snapshot rejection |
 
 Wave 11A makes the versioned application/customer boundary executable in review mode only. It does not change policy sign-offs, authorize production, implement Evidence/G4.1, or deliver the Wave 11B applicant experience.
+
+## G4.1 Evidence extraction adapter
+
+| Invariant | Protection |
+|---|---|
+| Adapter imports only `evidence/consumer/v1/index.js`, receives an already-constructed consumer and obtains trusted authorization from a separate injected provider | `evidencePlatformExtractionAdapter.nodetest.js`; architecture/import-boundary scans |
+| Existing Artifact references are correlated to UBO needs without accepting bytes, Blob URLs, filesystem paths or fabricated Artifact IDs | adapter contract and rejection tests |
+| One Artifact may ground six separately located CandidateFacts while remaining one independent source | frozen Bettercomms fixture characterization |
+| Exact, range, unknown and qualitative values preserve typed relationship and temporal semantics without UBO conclusions | adapter value/temporal matrix |
+| Unsupported requested facts and incomplete requested concepts produce `PARTIAL`; unsupported supplemental discovered facts remain retained as `DISCOVERED` issues without overriding an otherwise `COMPLETE` requested result | actual-facade requested-versus-discovered outcome regression |
+| `OFFICER_OF` maps only to bounded `officer_relationship` entity-attribute metadata and never ownership, voting, control or qualification | Bettercomms fixture and outcome-scope regression |
+| Frozen consumer failures, authorization failures, integrity failures, stale/mismatched correlation and malformed results fail closed with typed capability outcomes | adapter failure/idempotency/authorization tests |
+| Adapter output enters Decision Application v3 only through the existing ExtractionService seam; adjudication and evaluation remain separate | actual-facade Decision Application integration tests |
+
+G4.1 is fixture/contract tested and review-only. No live provider is called. Private trusted Artifact ingestion, Evidence execution/composition, Evidence-backed Discovery, Wave 11B2, onboarding, persistence and production authorization remain deferred.
