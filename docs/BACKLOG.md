@@ -111,14 +111,34 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Area:** `api/idv-match/bandAssignment.js`, `api/idv-match/resolution.js` (`resolveBandB` short-circuit), `scenarios.nodetest.js`.
 
 ### SCR-2 — Wire screening (PEP/sanctions/adverse-media) into the live flow
-- **Category:** Compliance / Integration · **Priority:** P1 (compliance hole if unwired) · **Status:** OPEN
+- **Category:** Compliance / Integration · **Priority:** P1 (compliance hole if unwired) · **Status:** WIRED (flag-gated OFF; live sandbox proof pending approval)
 - **What:** The screening module is built + sandbox-proven (Phase 3: ComplyCube adapter → check → interpret → store → webhook) and the band logic **consumes** `hasScreeningHit()` (Phase 5 hard-exclusion), but nothing **calls `startScreening`** in the applicant flow — so today the accessor always returns "no hit" and PEP/sanctions is never actually checked.
 - **Why non-trivial (design decisions):**
   - **Who to screen:** the Companies House officer name, the verified *document* name, or both ("either name version" per the doc).
   - **When:** after verification (when the real identity is known).
   - **Async timing:** ComplyCube returns via webhook, so a hit can arrive *after* `resolve` ran while the band decision reads `hasScreeningHit` synchronously — needs a "screening pending → hold/review" state and a re-resolve when the hit lands.
 - **Impact:** production MUST wire this or sanctions/PEP is never run. Also required for a full demo of the PEP/sanctions path.
+- **Decisions locked (2026-09-11):** (1) **separate `ScreeningProvider` abstraction** + shared provider-kit, parallel to the IDV `ProviderAdapter` — do NOT force screening into the 7-method IDV contract; (2) **sync-now, monitoring-later**: screen after IDV terminal, sync result feeds band, pending → hold → re-resolve on webhook/reconcile, monitoring hook stubbed not wired; (3) **screen the verified document identity, post-IDV** (Didit-proven name/DOB); (4) **uniform hard-exclusion** for any hit for now.
+- **Must-fix bug (do as part of wiring):** `resolve.js:87` passes the whole `hasScreeningHit()` object into the pipeline; `bandAssignment.js:46` does `!!(screeningHit || escalationFlag)` — a non-null object is always truthy, so once wired *every* resolve would force `hard_exclusion → review`. Pass `screeningHit.hit` (and thread `categories`/`pending`).
 - **Area:** `api/idv-match/screening/index.js` (`startScreening`), `resolve.js` / `pipeline.js`, `webhook` (re-resolve on screening result).
+- **Follow-ups still open:** SCR-1 (live webhook secret), SCR-3 (ongoing monitoring), SCR-4 (category policy), SCR-5 (provider-kit extraction) — all deferred, tracked below.
+
+### SCR-3 — Screening: ongoing-monitoring + full async (deferred alternative to SCR-2)
+- **Category:** Compliance / Integration · **Priority:** P2 · **Status:** OPEN (deferred by SCR-2 decision)
+- **What:** SCR-2 ships "sync-now, monitoring-later". This item is the deferred half: subscribe to ComplyCube **ongoing monitoring** (`enableMonitoring`) so a watchlist change days/weeks after onboarding produces a late hit that **auto-reopens** the case for review. SCR-2 leaves the monitoring hook stubbed; wire it here.
+- **Why:** real AML requires continuous screening, not a one-shot at onboarding.
+- **Area:** `screening/` adapter (`getMonitoringStatus`/subscribe), webhook re-resolve path, a "reopen case" state.
+
+### SCR-4 — Category-specific screening decision policy (deferred alternative to SCR-2)
+- **Category:** Compliance / Product · **Priority:** P2 · **Status:** OPEN (deferred by SCR-2 decision)
+- **What:** SCR-2 ships **uniform hard-exclusion** (any hit → review). This item replaces it with a **category → action matrix** — e.g. sanctions → hard block, PEP → enhanced-diligence review, adverse-media → analyst review, watchlist-other → review. No such policy exists in code or docs today (`bandAssignment.js` branches on none of it); needs the client/compliance owner to define the exact mapping before building.
+- **Area:** `api/idv-match/bandAssignment.js`, `ScreeningObservation` categories, resolution routing.
+
+### SCR-5 — Extract a shared provider-kit (deferred plumbing from SCR-2)
+- **Category:** Architecture / Tech debt · **Priority:** P3 · **Status:** OPEN (deferred by SCR-2 decision, 2026-09-11)
+- **What:** SCR-2 builds the `ScreeningProvider` contract + ComplyCube adapter + canonical model + registry (the part that makes "add a provider" real), but deliberately does NOT build the "shared provider-kit" (HMAC verify / idempotency / sandbox guard / injectable deps shared across BOTH the IDV `ProviderAdapter` family and the screening family). Reason: every one of those pieces already exists and works (ComplyCube SDK `EventVerifier`, `screening/config.assertKeyMatchesMode`, natural webhook re-pull idempotency, the `deps={}` pattern) — extracting a shared module for a single real consumer is speculative. Extract it only once a **second** screening provider (or an IDV-onto-kit migration) exists, so the common shape reveals itself instead of being guessed around ComplyCube.
+- **Why deferred:** building the abstraction before two real consumers exist repeats the "leaky, refactor-later" failure mode we rejected when declining "force screening into the IDV adapter."
+- **Area:** new `shared/providerKit/` (future), `idv/providers/*`, `api/idv-match/screening/*`.
 
 ### EVID-1 — Evidence Platform integration (consume the outbox)
 - **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN

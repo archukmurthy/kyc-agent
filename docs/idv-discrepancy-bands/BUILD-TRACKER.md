@@ -47,6 +47,7 @@ Single source of truth for what we're building and what's done. Tick items as co
 - [x] Screening store + migration 016 (applied to idv-dev); webhook (EventVerifier); dev mount
 - [x] Env wired (`COMPLYCUBE_API_KEY`, `SCREENING_*`); real sandbox call proved create→check→result→interpret (hit)
 - [ ] Live webhook verification — deferred (needs `COMPLYCUBE_WEBHOOK_SECRET` + public URL; see BACKLOG SCR-1)
+- [x] SCR-2 live wiring — startScreening called in resolveAttempt (verified identity, post-IDV); pending-hold + webhook re-resolve; object-truthiness bug fixed; ScreeningProvider abstraction + ComplyCube adapter + registry + canonical model. Kit extraction deferred (SCR-5), monitoring deferred (SCR-3), category policy deferred (SCR-4), live webhook secret deferred (SCR-1). Flag still OFF.
 - [ ] Phase 3 code review (optional)
 
 ### Phase 2.5 — Evidence-compatible architecture (PIVOT — build to the "IDV - Evidence" doc)
