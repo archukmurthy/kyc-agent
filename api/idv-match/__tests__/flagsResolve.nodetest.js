@@ -39,7 +39,11 @@ function deps(over = {}) {
     listScreeningByAttempt: over.listScreeningByAttempt || (async () => []),
     runBandPipeline: over.runBandPipeline,
     matchDecisionStore: { recordDecision: async (d) => { decisions.push(d); return `dec-${decisions.length}`; }, listByAttempt: over.listByAttempt || (async () => []) },
-    reviewTaskStore: { createTask: async (t) => { tasks.push(t); return { id: "t1", taskType: t.taskType }; } },
+    _tasks: tasks,
+    reviewTaskStore: over.reviewTaskStore || {
+      createTask: async (t) => { tasks.push(t); return { id: "t1", taskType: t.taskType }; },
+      listByAttempt: async () => [],
+    },
   };
 }
 
@@ -129,6 +133,73 @@ test("verify-only + providerVerified + screening HIT -> requires review, NOT aut
   assert.strictEqual(r.requiresReview, true);
   assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
   assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + screening HIT -> writes a review task for back-office", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(d._tasks.length, 1, "exactly one review task written");
+  assert.strictEqual(d._tasks[0].taskType, "review");
+  assert.strictEqual(d._tasks[0].outcomeType, "unresolved_to_review");
+  assert.strictEqual(d._tasks[0].reason, "screening_hit");
+  assert.strictEqual(d._tasks[0].applicationId, "app-1");
+});
+
+test("verify-only + screening HIT + a review task already exists -> does not duplicate (idempotent)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { created: 0 };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+    reviewTaskStore: {
+      listByAttempt: async () => [{ task_type: "review" }],
+      createTask: async (t) => { calls.created += 1; return { id: "t1", taskType: t.taskType }; },
+    },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(calls.created, 0, "createTask must not be called when a review task already exists");
+});
+
+test("verify-only + screening CLEAR -> no review task written", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.deepStrictEqual(r.applicantView, require("../copy").BAND_A_SUCCESS);
+  assert.strictEqual(d._tasks.length, 0);
+});
+
+test("verify-only + screening HIT + task store throws -> error swallowed, still returns the review hold", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+    reviewTaskStore: {
+      listByAttempt: async () => { throw new Error("db unavailable"); },
+      createTask: async () => { throw new Error("db unavailable"); },
+    },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
 });
 
 test("verify-only + NOT providerVerified -> IN_REVIEW, no screening started", async () => {

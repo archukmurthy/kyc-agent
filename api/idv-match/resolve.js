@@ -16,6 +16,7 @@ const screeningStore = require("./screening/store");
 const { runBandPipeline } = require("./pipeline");
 const { pickBestOfficer } = require("./officerMatch");
 const { recordBandOutcome } = require("./behaviors");
+const reviewTaskStore = require("./reviewTaskStore");
 const { bandsEnabled } = require("./config");
 const { TERMINAL_STATUSES } = require("../../idv/domain/constants");
 const identityVault = require("./identityVault");
@@ -215,7 +216,21 @@ async function resolveAttempt(attemptId, deps = {}) {
     const gate = await screeningGate();
     if (gate.hold) return gate.hold;
     if (gate.screening.hit) {
-      // a proven identity with a sanctions/PEP/adverse-media hit must not auto-pass
+      // A proven identity with a sanctions/PEP/adverse-media hit must not auto-pass.
+      // The listed/auto-match path records a review task via recordBandOutcome; the
+      // verify-only path has no band, so create the review task directly so this lands
+      // in the same back-office queue. Idempotent (repeated polls / webhook re-resolve
+      // must not duplicate the ticket) and best-effort (the hit is already persisted in
+      // idv_screening_checks; a task-write blip must not drop the review hold).
+      const tasks = deps.reviewTaskStore || reviewTaskStore;
+      try {
+        const existingTasks = await tasks.listByAttempt(attemptId);
+        if (!existingTasks.some((t) => t.task_type === "review")) {
+          await tasks.createTask({ attemptId, applicationId: attempt.application_id, taskType: "review", outcomeType: "unresolved_to_review", reason: "screening_hit" });
+        }
+      } catch (err) {
+        console.error("[idv-match resolve] verify_only review-task write failed:", err && err.message);
+      }
       return { enabled: true, verifyOnly: true, verified: true, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
     }
     return { enabled: true, verifyOnly: true, verified: true, applicantView: COPY.BAND_A_SUCCESS, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
