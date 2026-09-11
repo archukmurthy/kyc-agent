@@ -146,10 +146,13 @@ By default the live flow screens the name Didit extracted — which won't match 
 3. **Safety:** this switch only works in **sandbox/test mode** — it is ignored in live mode, so it can never alter a real screening. Turn it off (`0`) for a normal demo.
 
 ### 6c. Prove it's a real ComplyCube call (not a fixture)
-The offline fixture (6a) uses sample answers we wrote. To prove the **real vendor connection**: run a direct `startScreening` with last name `attention` against the sandbox, then read the stored result.
-- `startScreening` creates a ComplyCube client → runs an `extensive_screening_check` → `interpret.js` turns the response into `outcome` + `categories`, stored in `idv_screening_checks`. The band logic reads it via `hasScreeningHit(attemptId)`.
-- **Where to verify the result:** the `idv_screening_checks` table (Section 7) — `outcome` = `attention`, `categories` = the real breakdown ComplyCube returned.
-- (Async note: ComplyCube can also push the result via webhook, which then **re‑resolves** the band — but the live flow doesn't depend on it; it polls.)
+The offline fixture (6a) uses sample answers we wrote. To prove the **real vendor connection**, make one live sandbox call (free) with last name `attention` and see the real answer:
+```
+node -r dotenv/config scripts/demo/screening-live.js dotenv_config_path=.env.local
+```
+It calls ComplyCube's sandbox over the network and prints the real `outcome` (`attention`), the categories, and the band effect — with a line confirming it came from ComplyCube's servers, not a local fixture. Pass a different last name to see a **clear** result: `... screening-live.js Smith dotenv_config_path=.env.local`.
+
+*(The live journey with `SCREENING_DEMO_FORCE_HIT=1` (6b) also makes this same real call and stores the result in `idv_screening_checks` — Section 7 shows `outcome` + `categories` there. ComplyCube can additionally push the result via webhook, which **re‑resolves** the band, but the flow polls and doesn't depend on it.)*
 
 ---
 
