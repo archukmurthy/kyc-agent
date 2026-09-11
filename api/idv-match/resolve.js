@@ -11,7 +11,8 @@ const attemptStore = require("./attemptStore");
 const matchDecisionStore = require("./matchDecisionStore");
 const { getDecision } = require("../../lib/didit/diditClient");
 const { mapDiditDecision } = require("./canonicalMapping");
-const { hasScreeningHit } = require("./screening");
+const { hasScreeningHit, startScreening } = require("./screening");
+const screeningStore = require("./screening/store");
 const { runBandPipeline } = require("./pipeline");
 const { pickBestOfficer } = require("./officerMatch");
 const { recordBandOutcome } = require("./behaviors");
@@ -55,6 +56,8 @@ async function resolveAttempt(attemptId, deps = {}) {
   const pullDecision = deps.getDecision || getDecision;
   const map = deps.mapDiditDecision || mapDiditDecision;
   const screeningHitFor = deps.hasScreeningHit || hasScreeningHit;
+  const runScreening = deps.startScreening || startScreening;
+  const listScreening = deps.listScreeningByAttempt || screeningStore.listByAttempt;
   const pipeline = deps.runBandPipeline || runBandPipeline;
 
   const attempt = await store.getAttempt(attemptId);
@@ -84,7 +87,6 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   const identity = identityMap(mapped.identityAttributes);
   let officerSnapshot = attempt.selected_officer || {};
-  const screening = await screeningHitFor(attemptId);
 
   // Vault the extraction (idempotent) so the confirm step + reviewer reveal have a
   // reference, and record the immutable extraction_presented event. Best-effort:
@@ -144,6 +146,30 @@ async function resolveAttempt(attemptId, deps = {}) {
       verifiedFields: toVerifiedFields(identity),
       vaultError: vaultError || undefined,
     };
+  }
+
+  // Screen the verified document identity once IDV is terminal and the officer is
+  // known (decision (3): screen the proven identity). Idempotent: only start if no
+  // screening row exists for this attempt. ComplyCube is async — a pending result
+  // holds the band decision (client keeps polling; the webhook re-resolves).
+  const existingScreening = await listScreening(attemptId);
+  if (!existingScreening.length) {
+    const subject = {
+      firstName: identity.first_name, lastName: identity.last_name,
+      dob: identity.date_of_birth || undefined, nationality: identity.nationality || undefined,
+    };
+    if (subject.firstName && subject.lastName) {
+      try {
+        await runScreening(attemptId, subject, deps);
+      } catch (err) {
+        // Never block resolution on a screening-start failure; surface via reasons.
+        console.error("[idv-match resolve] screening start failed:", err && err.message);
+      }
+    }
+  }
+  const screening = await screeningHitFor(attemptId);
+  if (screening.pending) {
+    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
   }
 
   const result = await pipeline({

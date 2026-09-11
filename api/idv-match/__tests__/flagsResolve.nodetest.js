@@ -31,7 +31,9 @@ function deps(over = {}) {
       status: "Approved",
       decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
     })),
-    hasScreeningHit: over.hasScreeningHit || (async () => false),
+    hasScreeningHit: over.hasScreeningHit || (async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 0 })),
+    startScreening: over.startScreening || (async () => ({ screeningId: "s1" })),
+    listScreeningByAttempt: over.listScreeningByAttempt || (async () => []),
     runBandPipeline: over.runBandPipeline,
     matchDecisionStore: { recordDecision: async (d) => { decisions.push(d); return `dec-${decisions.length}`; }, listByAttempt: over.listByAttempt || (async () => []) },
     reviewTaskStore: { createTask: async (t) => { tasks.push(t); return { id: "t1", taskType: t.taskType }; } },
@@ -151,4 +153,33 @@ test("resolveAttempt passes a boolean screeningHit (not the accessor object) int
   await resolveAttempt("att-1", d);
   assert.strictEqual(typeof capturedScreeningHit, "boolean");
   assert.strictEqual(capturedScreeningHit, false);
+});
+
+test("resolveAttempt screens the verified identity once, then holds while screening is pending", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const calls = { started: 0 };
+  let rows = []; // no screening rows yet
+  const d = deps({
+    // terminal Didit decision with a readable identity + an auto_match officer that resolves
+    startScreening: async () => { calls.started += 1; rows = [{ status: "pending", outcome: null }]; return { screeningId: "s1" }; },
+    hasScreeningHit: async () => rows.length ? { hit: false, pending: true, notProcessed: false, categories: {}, count: 1 } : { hit: false, pending: false, categories: {}, count: 0 },
+    listScreeningByAttempt: async () => rows,
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.equal(calls.started, 1);
+  assert.equal(r.pending, true);
+  assert.deepEqual(r.reasons, ["screening_pending"]);
+  assert.equal(r.band, undefined); // no decision recorded on a hold
+});
+
+test("resolveAttempt does not re-screen when a screening row already exists", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const calls = { started: 0 };
+  const d = deps({
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  await resolveAttempt("att-1", d);
+  assert.equal(calls.started, 0);
 });
