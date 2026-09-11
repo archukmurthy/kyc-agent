@@ -56,6 +56,24 @@ test("createClient builds a person client with name/DOB and requires a name", as
   await assert.rejects(createClient({ firstName: "John" }, { client: cc }), /firstName and lastName are required/);
 });
 
+test("createClient normalizes an ISO-3 nationality to ISO-2 before sending to ComplyCube", async () => {
+  const { cc, calls } = stubClient();
+  await createClient({ firstName: "John", lastName: "Doe", nationality: "POL" }, { client: cc });
+  assert.strictEqual(calls.clientReq.personDetails.nationality, "PL");
+});
+
+test("createClient omits nationality entirely when it's not a code ComplyCube accepts", async () => {
+  const { cc, calls } = stubClient();
+  await createClient({ firstName: "John", lastName: "Doe", nationality: "ZZ" }, { client: cc });
+  assert.ok(!("nationality" in calls.clientReq.personDetails));
+});
+
+test("createClient omits nationality when none was supplied", async () => {
+  const { cc, calls } = stubClient();
+  await createClient({ firstName: "John", lastName: "Doe" }, { client: cc });
+  assert.ok(!("nationality" in calls.clientReq.personDetails));
+});
+
 test("createScreeningCheck runs an extensive_screening_check against the client", async () => {
   const { cc, calls } = stubClient();
   const out = await createScreeningCheck("cc-client-1", { client: cc });

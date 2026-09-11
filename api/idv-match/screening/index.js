@@ -3,6 +3,8 @@
 // Screening orchestration + the single signal the band logic consumes.
 const store = require("./store");
 const { getScreeningProvider } = require("./registry");
+const complyCubeClient = require("./complyCubeClient");
+const { interpretCheck } = require("./interpret");
 
 // Start screening for one person on an attempt via the configured provider, and
 // store a pending row bound to the attempt. The result normally arrives later via
@@ -59,4 +61,28 @@ async function hasScreeningHit(attemptId, deps = {}) {
   return { hit, pending, notProcessed, categories, count: rows.length };
 }
 
-module.exports = { startScreening, hasScreeningHit };
+// A ComplyCube screening result normally arrives via webhook; locally (and as a
+// production fallback with no webhook configured) there's no other way to learn
+// the outcome. Re-pull any still-pending check for the attempt and store its
+// result, mirroring what webhook.js does per delivery — so a poll of /resolve
+// can advance a pending row toward terminal without waiting on a webhook.
+async function reconcileScreening(attemptId, deps = {}) {
+  const s = deps.store || store;
+  const cc = deps.complyCubeClient || complyCubeClient;
+  const rows = await s.listByAttempt(attemptId);
+  for (const row of rows) {
+    const pending = row.status !== "complete" && row.outcome == null && row.complycube_check_id;
+    if (!pending) continue;
+    try {
+      const check = await cc.getCheck(row.complycube_check_id);
+      const interpreted = interpretCheck(check);
+      if (interpreted.outcome) {
+        await s.updateScreeningResult(row.id, { status: interpreted.status, outcome: interpreted.outcome, categories: interpreted.categories });
+      }
+    } catch (err) {
+      console.error("[idv-match screening reconcile] getCheck failed for", row.complycube_check_id, "-", err && err.message);
+    }
+  }
+}
+
+module.exports = { startScreening, hasScreeningHit, reconcileScreening };

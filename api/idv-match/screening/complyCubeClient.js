@@ -7,6 +7,7 @@
 const { ComplyCube } = require("@complycube/api");
 const { randomUUID } = require("node:crypto");
 const { screeningConfig, assertKeyMatchesMode } = require("./config");
+const { toComplyCubeNationality } = require("./iso3to2");
 
 const SCREENING_CHECK_TYPE = "extensive_screening_check";
 
@@ -39,6 +40,10 @@ async function createClient(person, deps = {}) {
   }
   const demoHit = screeningConfig().mode === "test" && demoForceHitEnabled();
   const cc = deps.client || realClient();
+  // Didit returns nationality as ISO-3 (e.g. "POL"); ComplyCube requires ISO-2
+  // and 400s on anything else — normalize and only send it when it's a code
+  // ComplyCube actually accepts, otherwise omit it rather than fail the call.
+  const nationality = toComplyCubeNationality(person.nationality);
   return cc.client.create({
     type: "person",
     email: personEmail(person),
@@ -46,7 +51,7 @@ async function createClient(person, deps = {}) {
       firstName: person.firstName,
       lastName: demoHit ? "attention" : person.lastName,
       ...(person.dob ? { dob: person.dob } : {}),
-      ...(person.nationality ? { nationality: person.nationality } : {}),
+      ...(nationality ? { nationality } : {}),
     },
   });
 }

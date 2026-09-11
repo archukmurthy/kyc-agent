@@ -11,7 +11,7 @@ const attemptStore = require("./attemptStore");
 const matchDecisionStore = require("./matchDecisionStore");
 const { getDecision } = require("../../lib/didit/diditClient");
 const { mapDiditDecision } = require("./canonicalMapping");
-const { hasScreeningHit, startScreening } = require("./screening");
+const { hasScreeningHit, startScreening, reconcileScreening } = require("./screening");
 const screeningStore = require("./screening/store");
 const { runBandPipeline } = require("./pipeline");
 const { pickBestOfficer } = require("./officerMatch");
@@ -184,6 +184,12 @@ async function resolveAttempt(attemptId, deps = {}) {
         }
       }
     }
+    // A ComplyCube screening result normally arrives via webhook; locally (and as a
+    // production fallback) there may be no webhook, so re-pull any pending check now
+    // so the flow can complete on the next poll. Best-effort: never block resolution.
+    try { await (deps.reconcileScreening || reconcileScreening)(attemptId, deps); }
+    catch (err) { console.error("[idv-match resolve] screening reconcile failed:", err && err.message); }
+
     let screening;
     try {
       screening = await screeningHitFor(attemptId);

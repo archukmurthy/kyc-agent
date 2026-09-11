@@ -324,6 +324,25 @@ test("resolveAttempt does not re-screen when a screening row already exists", as
   assert.equal(calls.started, 0);
 });
 
+test("resolveAttempt reconciles a pending screening mid-poll -> proceeds to a band instead of holding", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  // Shared mutable state: hasScreeningHit reads it; the injected reconcileScreening
+  // flips it from pending to clear, mirroring a getCheck resolving mid-poll.
+  const screening = { pending: true };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => (screening.pending
+      ? { hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }
+      : { hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.reconcileScreening = async () => { screening.pending = false; };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(r.outcomeType, "auto_match");
+  assert.strictEqual(r.pending, undefined, "must not hold once reconcile clears the pending row");
+  assert.strictEqual(r.reasons, undefined);
+});
+
 test("resolveAttempt fails CLOSED with screening_unavailable when the screening-hit read throws (never 500s, never decides a band)", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
   const d = deps({
