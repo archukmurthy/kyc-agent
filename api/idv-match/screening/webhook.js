@@ -50,6 +50,16 @@ async function processScreeningWebhook({ rawBody, signature, secret }, deps = {}
     categories: interpreted.categories,
   });
 
+  // Re-resolve the band now the screening result is stored — covers the case where
+  // the applicant left our tab and is no longer polling /resolve. resolveAttempt is
+  // idempotent (a decision already recorded is returned as-is), so a concurrent poll
+  // can't double-record. Best-effort: a re-resolve failure never fails the webhook.
+  const reResolve = deps.resolveAttempt || require("../resolve").resolveAttempt;
+  if (row.attempt_id) {
+    try { await reResolve(row.attempt_id); }
+    catch (err) { console.error("[idv-match screening webhook] re-resolve failed:", err && err.message); }
+  }
+
   return { statusCode: 200, body: { accepted: true, screeningId: row.id, hit: interpreted.hit } };
 }
 
