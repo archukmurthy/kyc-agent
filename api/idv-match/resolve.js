@@ -223,6 +223,9 @@ async function resolveAttempt(attemptId, deps = {}) {
       // must not duplicate the ticket) and best-effort (the hit is already persisted in
       // idv_screening_checks; a task-write blip must not drop the review hold).
       const tasks = deps.reviewTaskStore || reviewTaskStore;
+      // ponytail: read-then-write race — two concurrent first resolves can both see
+      // zero tasks and both create a ticket; harmless dup, not a wrong verdict.
+      // Upgrade path: unique index on idv_review_tasks(attempt_id, task_type).
       try {
         const existingTasks = await tasks.listByAttempt(attemptId);
         if (!existingTasks.some((t) => t.task_type === "review")) {
