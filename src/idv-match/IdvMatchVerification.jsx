@@ -12,12 +12,16 @@ async function postJson(url, body) {
   return res.json();
 }
 
-export default function IdvMatchVerification({ applicationId, officerCandidate, officerCandidates, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields, extraFields, loaUpload, loaUploaded }) {
+export default function IdvMatchVerification({ applicationId, officerCandidate, officerCandidates, verifyOnly = false, Btn, cardStyle, onProvideLoa, onReselect, onProceed, onResolved, onConfirmedFields, extraFields, loaUpload, loaUploaded, savedResult, onResultCache }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hostedUrl, setHostedUrl] = useState(null);
   const [qr, setQr] = useState(null);
   const [status, setStatus] = useState(null);
-  const [result, setResult] = useState(null);
+  // Seeded from savedResult (the App-level cache) so navigating back to this
+  // step re-shows the already-resolved outcome instead of starting a new
+  // Didit session. See the auto-start effect below, which skips start() when
+  // a saved result is present.
+  const [result, setResult] = useState(savedResult || null);
   const [uploadPrompt, setUploadPrompt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -28,7 +32,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   // button remains as a fallback if the auto-start errored.
   const startedRef = useRef(false);
   useEffect(() => {
-    if (startedRef.current) return;
+    if (startedRef.current || savedResult) return;
     startedRef.current = true;
     start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,6 +67,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   // submission (attempt id + band + outcome; never PII).
   function applyResult(res) {
     setResult(res);
+    if (onResultCache) onResultCache(res);
     if (onResolved && res && res.enabled !== false && !res.dialogue) {
       onResolved({ attemptId, band: res.band || null, outcomeType: res.outcomeType || null });
     }
@@ -124,7 +129,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
         }
       }
       const res = await postJson("/api/idv-match/explain", { attemptId, category, evidence });
-      if (res.action === "reselect_officer") { if (onReselect) onReselect(); return; }
+      if (res.action === "reselect_officer") { if (onResultCache) onResultCache(null); if (onReselect) onReselect(); return; }
       if (res.needsUpload) { setUploadPrompt(res.uploadPrompt); return; }
       setUploadPrompt(null);
       applyResult(res);
@@ -141,7 +146,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
         onProvideLoa={onProvideLoa}
         onProceed={onProceed}
         onConfirm={(confirmed) => confirmFields(confirmed)}
-        onRetry={() => { setResult(null); setStatus(null); }}
+        onRetry={() => { setResult(null); setStatus(null); if (onResultCache) onResultCache(null); }}
         extraFields={extraFields}
         loaUpload={loaUpload}
         loaUploaded={loaUploaded}

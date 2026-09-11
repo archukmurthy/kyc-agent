@@ -96,3 +96,36 @@ test("session error surfaces, no crash", async () => {
   // Auto-start hits the error path — surfaced, no crash.
   await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
 });
+
+test("savedResult restores the view instantly with no new /session call", async () => {
+  global.fetch = mockFetch({
+    "/api/idv-match/session": () => ({ attemptId: "att-new", hostedVerificationUrl: "https://verify.didit.me/s/should-not-be-called" }),
+  });
+  const savedResult = {
+    enabled: true, band: "A", outcomeType: "auto_match",
+    applicantView: { title: "Identity verified", body: "Your identity has been matched to the selected company officer." },
+  };
+
+  render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} savedResult={savedResult} />);
+
+  // Restored result view shows immediately — no QR/session round trip.
+  expect(await screen.findByText("Identity verified")).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/idv-match/session"), expect.anything());
+});
+
+test("resolve completing calls onResultCache with the terminal result", async () => {
+  const terminal = { enabled: true, band: "A", outcomeType: "auto_match", applicantView: { title: "Identity verified", body: "Your identity has been matched to the selected company officer." } };
+  global.fetch = mockFetch({
+    "/api/idv-match/session": () => ({ attemptId: "att-1", hostedVerificationUrl: "https://verify.didit.me/s/cache" }),
+    "/api/idv-match/resolve": () => terminal,
+  });
+
+  const onResultCache = jest.fn();
+  render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResultCache={onResultCache} />);
+  await screen.findByText("https://verify.didit.me/s/cache");
+
+  fireEvent.click(screen.getByText("I've completed verification"));
+  await screen.findByText("Identity verified");
+
+  expect(onResultCache).toHaveBeenCalledWith(terminal);
+});

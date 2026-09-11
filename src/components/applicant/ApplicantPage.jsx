@@ -110,6 +110,8 @@ export function ApplicantPage({
   applicationId = null,
   onIdvResolved,
   onIdvVerifiedFields,
+  idvResult = null,
+  onIdvResultCache,
 }) {
   const card = cardStyle;
 
@@ -588,6 +590,8 @@ export function ApplicantPage({
                   officerCandidates={applicantCandidates}
                   onProceed={proceedToConfirm}
                   onResolved={onIdvResolved}
+                  savedResult={idvResult}
+                  onResultCache={onIdvResultCache}
                   onConfirmedFields={writeVerifiedFields}
                   extraFields={renderApplicantFields({ exclude: DOCUMENT_COVERED_APPLICANT_FIELDS })}
                   loaUploaded={!!authorityToActFile}
@@ -621,6 +625,8 @@ export function ApplicantPage({
                   verifyOnly
                   onProceed={proceedToConfirm}
                   onResolved={onIdvResolved}
+                  savedResult={idvResult}
+                  onResultCache={onIdvResultCache}
                   onConfirmedFields={writeVerifiedFields}
                   Btn={Btn}
                   cardStyle={{}}
