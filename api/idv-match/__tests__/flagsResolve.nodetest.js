@@ -183,3 +183,30 @@ test("resolveAttempt does not re-screen when a screening row already exists", as
   await resolveAttempt("att-1", d);
   assert.equal(calls.started, 0);
 });
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening-hit read throws (never 500s, never decides a band)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }], // already screened; only the verdict read fails
+    hasScreeningHit: async () => { throw new Error("db unavailable"); },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when screening status is unknown");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening-list read throws (never 500s, never decides a band)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => { throw new Error("db unavailable"); },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when screening status is unknown");
+  assert.strictEqual(d._decisions.length, 0);
+});

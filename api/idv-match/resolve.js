@@ -152,7 +152,20 @@ async function resolveAttempt(attemptId, deps = {}) {
   // known (decision (3): screen the proven identity). Idempotent: only start if no
   // screening row exists for this attempt. ComplyCube is async — a pending result
   // holds the band decision (client keeps polling; the webhook re-resolves).
-  const existingScreening = await listScreening(attemptId);
+  //
+  // Both reads below are wrapped: this is an AML screening control, and a control
+  // must never auto-decide the band when its status is unknown. A transient DB
+  // failure on read must not 500 (crash) and must not fall through to pipeline()
+  // unscreened (pass silently) — it fails CLOSED, holding with the same shape as a
+  // genuine pending result (client retries; a normal empty/complete read is
+  // unaffected and behaves exactly as before).
+  let existingScreening;
+  try {
+    existingScreening = await listScreening(attemptId);
+  } catch (err) {
+    console.error("[idv-match resolve] screening list read failed — holding (fail closed):", err && err.message);
+    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+  }
   if (!existingScreening.length) {
     const subject = {
       firstName: identity.first_name, lastName: identity.last_name,
@@ -162,12 +175,20 @@ async function resolveAttempt(attemptId, deps = {}) {
       try {
         await runScreening(attemptId, subject, deps);
       } catch (err) {
-        // Never block resolution on a screening-start failure; surface via reasons.
+        // Never block resolution on a screening-start failure: logged and continues.
+        // No reason is surfaced for a start failure specifically — the verdict read
+        // just below is the single source of truth for pending vs. unavailable.
         console.error("[idv-match resolve] screening start failed:", err && err.message);
       }
     }
   }
-  const screening = await screeningHitFor(attemptId);
+  let screening;
+  try {
+    screening = await screeningHitFor(attemptId);
+  } catch (err) {
+    console.error("[idv-match resolve] screening verdict read failed — holding (fail closed):", err && err.message);
+    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+  }
   if (screening.pending) {
     return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
   }
