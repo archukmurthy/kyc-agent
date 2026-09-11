@@ -140,6 +140,14 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Why deferred:** building the abstraction before two real consumers exist repeats the "leaky, refactor-later" failure mode we rejected when declining "force screening into the IDV adapter."
 - **Area:** new `shared/providerKit/` (future), `idv/providers/*`, `api/idv-match/screening/*`.
 
+### SCR-6 — No-officer-match (Band C) identities are not screened — compliance sign-off (flag-on prerequisite)
+- **Category:** Compliance · **Priority:** P1 (flag-on blocker) · **Status:** OPEN (needs compliance decision)
+- **What:** SCR-2 screens the verify_only path (fixed) and the auto_match path. The remaining unscreened path is the **no-officer-match Band C** early return in `resolve.js` (`officerSnapshot.mode === "auto_match"` with `pick.matched === false`): the applicant's document didn't match any registered officer, so they're demoted to the LOA path with `escalate: true` and the function returns **before** the screening gate — so their identity is never PEP/sanctions-screened by us.
+- **Mitigation already in place:** that path sets `escalate:true` → a human reviewer looks at every one (unlike the verify_only hole, which had no backstop and is now fixed). So this is partially covered by manual review, not a silent auto-pass.
+- **Decision needed:** does compliance want the no-officer-match identity **auto-screened** too (belt-and-suspenders on top of manual review), or is manual-review escalation sufficient? If auto-screening is wanted, run the screening gate before the Band C return.
+- **Gate:** resolve this (with compliance sign-off) before enabling `IDV_DISCREPANCY_BANDS_ENABLED` in production.
+- **Area:** `api/idv-match/resolve.js` (no-officer-match Band C branch).
+
 ### EVID-1 — Evidence Platform integration (consume the outbox)
 - **Category:** Architecture / Integration · **Priority:** P2 · **Status:** OPEN
 - **What:** Phase 2.5 builds the `IdvEvidencePublisher` append-only outbox (references + provenance only, no plaintext/biometrics). Do NOT create Evidence rows / call the Evidence Platform until the **Evidence Control Room** approves the external-custody + Vault-reference contract. Consumption is deferred.

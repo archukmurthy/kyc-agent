@@ -840,3 +840,12 @@ Note the sandbox proof (hit detected via the provider seam) in BUILD-TRACKER; do
 ## Open risk noted for the executor
 - **Poll/webhook re-resolve race:** a client poll and the webhook can both enter `resolveAttempt` near-simultaneously; the idempotency guard (`decisions.listByAttempt` early-return) closes most of the window but not all. Acceptable for sync-now; if duplicate decision rows ever appear, add a unique partial index on `(attempt_id)` for terminal decisions. `ponytail:` documented ceiling, upgrade path is the unique index.
 - **`identity.date_of_birth` format** must match ComplyCube's expected `dob` (`YYYY-MM-DD`); Task 10 confirms against the sandbox. If Didit returns another format, normalize in the adapter's `screenPerson` before `createClient`.
+
+---
+
+## Post-final-review amendments (2026-09-11)
+Superseding notes after the whole-branch review (all applied, verified merge-ready):
+- **ScreeningProvider contract is 3 methods, not 4** — `handleWebhook` was trimmed (it was dead: the `screening/webhook.js` route owns webhook handling + re-resolve directly). Provider-neutral webhook handling is deferred to SCR-5 with the shared kit. Ignore the 4-method `handleWebhook` references in Tasks 3/4 above.
+- **Fail-CLOSED on screening-start failure** — beyond the read-path holds, a start failure that leaves no row (`screeningStartAttempted && count===0`) also holds with `screening_unavailable`; a screening outage never silently onboards an unscreened applicant.
+- **verify_only path is screened too** — the screening gate was extracted to `screeningGate()` and applied to both the auto_match and verify_only paths; a verify_only screening hit → review (never auto-success); an unverified verify_only is not screened.
+- **Band C no-officer-match** identities remain unscreened (already escalate to manual review) — tracked as SCR-6, a compliance-signed flag-on prerequisite.
