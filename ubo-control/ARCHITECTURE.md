@@ -443,3 +443,11 @@ The successor Lab is the review-only host. Applicant submission invokes `applyCu
 Compliance question wording remains policy/content controlled. Missing content or any projected `blockingSignoffs` disables execution, while `requiredSignoffs` remain available in Lab diagnostics for audit. External Evidence and delegation stop at their data-only handoff contracts: there is no upload, private ingestion, Artifact creation, email, authorization, or completion claim.
 
 Wave 11B1 remains fixture-backed, LAB-only and production-unauthorised. The frozen Evidence adapter worktree is neither imported nor copied. Wave 11B2, Evidence execution/release, host onboarding, persistence and production policy activation remain deferred.
+
+## G4.1 Evidence extraction adapter boundary
+
+The UBO-owned `integrations/ubo-control/evidence-platform-extraction` adapter implements the established `ExtractionService` capability against only the frozen `evidence/consumer/v1/index.js` public entry. A trusted composition root supplies an already-constructed Evidence consumer and a separate trusted-authorization provider. The adapter accepts existing Artifact references only; it contains no upload, private ingestion, provider selection, storage, Evidence mutation or host authorization implementation.
+
+Evidence typed relationships become source-backed CandidateFacts and never operative claims, graph mutations, qualification results or policy decisions. One Artifact may ground several separately located facts, while remaining one independent source. Requested facts determine requested-concept completeness. Unsupported supplemental discovered facts remain visible as scoped issues without overriding a complete requested result; the same issue is blocking when its concept was requested. `OFFICER_OF` is bounded non-ownership entity-attribute metadata and cannot imply economic, voting or control rights.
+
+The release remains review-only and production-unauthorised. Trusted private Artifact ingestion, live Evidence execution/composition, Wave 11B2, onboarding and production persistence remain outside this boundary. Evidence Core, UBO core contracts, policy JSON and policy sign-off statuses are unchanged.

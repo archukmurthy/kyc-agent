@@ -2,14 +2,14 @@
 
 | Field | Current state |
 |---|---|
-| Gate / sub-gate | **UBO Control Freeze Implementation — Wave 11A: Decision Application v3, JourneyProjection v2 and CustomerAction v2 contracts** |
+| Gate / sub-gate | **G4.1 Evidence integration: extraction adapter release** |
 | G5.3B | **KYB Onboarding Integration Diagnosis — ACCEPTED**; preserved at `docs/integration/kyb-onboarding-integration-diagnosis.md`. |
 | KYB onboarding integration | **DEFERRED** until after UBO Control Lab validation. |
-| Parallel-gate state | **Gate 4: PAUSED** pending Evidence prerequisites. When ready, Evidence integrates into the Lab before KYB onboarding. |
-| Branch | `codex/ubo-control-freeze-w11a-customer-contracts-v2` |
-| Base commit | `e56ec1c2923831febdb992f6beeaed3b9b51ac7f` (accepted PR #55 normal merge on `origin/main`). |
-| Latest accepted PR | [#55 — Freeze Wave 10: successor review entry and Lab v2](https://github.com/archukmurthy/kyc-agent/pull/55), merged normally as `e56ec1c2923831febdb992f6beeaed3b9b51ac7f`. |
-| Current PR | [#56 — Wave 11A: Customer contracts v2](https://github.com/archukmurthy/kyc-agent/pull/56); open for Control Room review and not to be merged automatically. |
+| Parallel-gate state | Evidence Core V1 prerequisites are verified on `main`; the separate G4.1 extraction-adapter release is under review before any later execution or host integration. |
+| Branch | `codex/ubo-evidence-g4-1-adapter-release` |
+| Base commit | `6ffb6eb3fa221eec525dbf801ff0bb038330d0ea` (accepted Wave 11B1 PR #58 normal merge on `origin/main`, over verified Evidence main `e5026c878037a16a6597e9c9ef61bc9a113b2cb1`). |
+| Latest accepted PR | [#58 — Wave 11B1 applicant journey](https://github.com/archukmurthy/kyc-agent/pull/58), merged normally as `6ffb6eb3fa221eec525dbf801ff0bb038330d0ea`. |
+| Current PR | G4.1 extraction-adapter release; to be opened for Control Room review and kept unmerged. |
 | Versioning | Default v1 and explicit v2 remain unchanged. Deliberate `ubo-decision-application-v3` exposes exactly `intake`, `applyDecisions`, `applyCustomerInput`, `evaluate` for schema-1.3 LAB review. |
 | Completed G5.3C implementation | Snapshot/plan-pinned customer-action validation; customer provenance; candidate relationship and identity-attribute facts; case-scoped natural-person registration; exact-ID identity resolution; confirmation/correction/negative-answer semantics; senior-management preparation; alternative provenance; external evidence handoff; explicit decision targets; separate evaluation. |
 | Product architecture | `DecisionSnapshot + ResolutionPlan + ubo-customer-action-v1 → applyCustomerInput → sealed caseState → applyDecisions if required → evaluate → fresh DecisionSnapshot`. |
@@ -28,12 +28,17 @@
 | Wave 10 implementation | **Dedicated review entry and Lab v2 — implemented review-only.** `ubo-control/review` exposes the actual successor pipeline without changing the stable main entry. The Lab keeps baseline 1.5-RC/session-v1 and adds successor 1.6-RC/session-v2, ten fixtures, profiles, projection filters, causal counts, route qualification, exact plan, evidence-disabled state, history and comparison. |
 | Wave 11A implementation | **Decision Application v3, JourneyProjection v2 and CustomerAction/Result v2 — implemented review-only.** Immutable plan-pinned work bundles, confirmation/correction, structured company-share candidates, identity-attribute contract gating, external Evidence handoff, data-only delegation, stale-action protection and a read-only Lab contract preview are present. |
 | Wave 11B1 implementation | **Interactive successor applicant journey v2 — implemented fixture-backed and review-only, including seamless Lab-host orchestration.** The applicant performs one genuine customer action. The Lab host preserves separate apply-input → no-decisions checkpoint → evaluate operations, automatically continues only where no judgment/external/policy block exists, and retains immutable Snapshot and customer-activity history. Decision-required work moves to the fixture-only analyst helper. A versioned, integrity-checked browser-local Lab cache resumes fixture/replay demos; live saving requires explicit opt-in and is not production persistence. |
+| G4.1 adapter release | **Existing-Artifact extraction adapter — implemented review-only.** The UBO-owned adapter imports only the frozen Evidence consumer v1 entry, receives trusted authorization separately, maps source-backed typed relationships to CandidateFacts, retains one-source/many-facts provenance, and distinguishes requested mapping failures from supplemental discovered issues. `OFFICER_OF` remains bounded non-ownership metadata. |
 | Successor policy | UK Corporate `1.6-RC`, schema `1.3`, `CONTROL_ROOM_REVIEW`, null effective date/approver, canonical hash `sha256:6f4235ca32b961868f294b862810d101516a35a5ce8fe8a031ec2d2166e6e969`; LAB readiness `REVIEW_ONLY`; PRODUCTION `BLOCKED`. Historical `1.5-RC` remains immutable at `sha256:724c2fa4820e02daddc24e652b50748646d87017cbfa632c062bc9e27de4b790`. |
 | Current Lab/runtime | Explicit selector preserves UK Corporate `1.5-RC` baseline behavior and adds a separate UK Corporate `1.6-RC` successor review workspace. Production remains unauthorized. |
 | Customer cycle | AJV2-01 runs one confirmation through `applyCustomerInput` → host-recorded no-decisions checkpoint → `evaluate` → linked Snapshot B without further applicant clicks. Structured fixture work stops for explicit review and can use only the visibly labelled preconfigured fixture helper. No hidden adjudication, snapshot mutation or alternate-field workaround occurs. |
-| Outstanding implementation | Wave 11B2 secure upload/private ingestion, management-control completion, residual-confirmation content, numeric-control/identity content, operational A-03 sufficiency, final TDR/ASDA conclusion, Evidence adapter release/execution, persistence and host onboarding remain outside Wave 11B1. |
-| Active escalations | None. Existing canonical qualifiers faithfully distinguish surplus-asset, voting and management-appointment rights; no graph, CandidateFact, adapter or public-contract change is required. Agreement/dominant-control majority semantics remain explicitly unsupported. |
-| Next | **Control Room review of the Wave 11B1 PR.** Do not merge, begin Wave 11B2, release the Evidence adapter or integrate onboarding. |
+| Outstanding implementation | Wave 11B2 secure upload/private trusted Artifact ingestion, live Evidence execution/composition, management-control completion, residual-confirmation content, numeric-control/identity content, operational A-03 sufficiency, final TDR/ASDA conclusion, persistence and host onboarding remain outside this release. |
+| Active escalations | None. The remaining private trusted-Artifact ingestion and live composition gap is explicitly deferred; no new Evidence or UBO public contract is required for this adapter release. Agreement/dominant-control majority semantics remain explicitly unsupported. |
+| Next | **Control Room review of the separate G4.1 adapter PR.** Keep it unmerged; do not begin Wave 11B2, private ingestion, Evidence-backed Discovery, onboarding or production activation. |
+
+## G4.1 adapter scope guard
+
+The adapter consumes only existing Evidence Artifact references through an injected frozen consumer. It does not accept bytes, Blob URLs or filesystem paths; create or mutate Evidence records; fabricate Artifact IDs; invoke a live provider in tests; determine UBO status; or alter Evidence Core, UBO core contracts, policies, sign-offs, migrations, legacy Discovery, Wave 11B2, onboarding, persistence or production activation. Requested-concept deficiencies remain blocking; unsupported supplemental discoveries remain retained and auditable without falsely degrading an otherwise complete requested extraction.
 
 ## Wave 11B1 scope guard
 
