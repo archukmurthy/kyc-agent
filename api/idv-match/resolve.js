@@ -166,18 +166,25 @@ async function resolveAttempt(attemptId, deps = {}) {
     console.error("[idv-match resolve] screening list read failed — holding (fail closed):", err && err.message);
     return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
   }
+  // ponytail: two near-simultaneous first resolves can both read existingScreening
+  // as empty and each start a screening check (duplicate paid ComplyCube call).
+  // Harmless to correctness — hasScreeningHit aggregates all rows for the attempt,
+  // so a duplicate is just wasted spend, not a wrong verdict. Upgrade path: a
+  // unique index on idv_screening_checks(attempt_id) to make the guard atomic.
+  let screeningStartAttempted = false;
   if (!existingScreening.length) {
     const subject = {
       firstName: identity.first_name, lastName: identity.last_name,
       dob: identity.date_of_birth || undefined, nationality: identity.nationality || undefined,
     };
     if (subject.firstName && subject.lastName) {
+      screeningStartAttempted = true;
       try {
         await runScreening(attemptId, subject, deps);
       } catch (err) {
-        // Never block resolution on a screening-start failure: logged and continues.
-        // No reason is surfaced for a start failure specifically — the verdict read
-        // just below is the single source of truth for pending vs. unavailable.
+        // Never THROW on a screening-start failure: logged and continues to the
+        // verdict read below. That read is what actually decides fail-open vs.
+        // fail-closed — see the screeningStartAttempted check just after it.
         console.error("[idv-match resolve] screening start failed:", err && err.message);
       }
     }
@@ -187,6 +194,13 @@ async function resolveAttempt(attemptId, deps = {}) {
     screening = await screeningHitFor(attemptId);
   } catch (err) {
     console.error("[idv-match resolve] screening verdict read failed — holding (fail closed):", err && err.message);
+    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+  }
+  // A screening start was attempted above but no row exists for this attempt
+  // (count === 0): the start failed (outage / store write error) before it could
+  // even create a pending row. Reading that as "clear" would silently onboard an
+  // unscreened applicant — fail CLOSED instead, same shape as the read failures.
+  if (screeningStartAttempted && screening.count === 0) {
     return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
   }
   if (screening.pending) {

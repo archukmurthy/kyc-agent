@@ -31,7 +31,10 @@ function deps(over = {}) {
       status: "Approved",
       decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
     })),
-    hasScreeningHit: over.hasScreeningHit || (async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 0 })),
+    // count: 1 mirrors reality — the default startScreening below succeeds, which
+    // means a row was created (count 0 with a completed start is the failure case
+    // covered by its own dedicated test further down).
+    hasScreeningHit: over.hasScreeningHit || (async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 })),
     startScreening: over.startScreening || (async () => ({ screeningId: "s1" })),
     listScreeningByAttempt: over.listScreeningByAttempt || (async () => []),
     runBandPipeline: over.runBandPipeline,
@@ -208,5 +211,20 @@ test("resolveAttempt fails CLOSED with screening_unavailable when the screening-
   assert.strictEqual(r.needsRetry, true);
   assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
   assert.strictEqual(r.band, undefined, "no band decision recorded when screening status is unknown");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening START throws and no row was created (outage, not read failure)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => [], // no existing rows -> a start is attempted
+    startScreening: async () => { throw new Error("ComplyCube outage"); },
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 0 }), // no row exists: start failed
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when a screening start failed");
   assert.strictEqual(d._decisions.length, 0);
 });
