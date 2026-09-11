@@ -187,18 +187,28 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const params = typeof window !== "undefined"
         ? new URLSearchParams(window.location.search)
         : null;
-      if (params && params.get("demo") === "true") return true;
-      if (typeof sessionStorage !== "undefined"
-          && sessionStorage.getItem("demo_mode") === "true") return true;
+      if (params) {
+        if (params.get("demo") === "true") return true;
+        if (params.get("demo") === "false") return false;      // explicit opt-out via URL
+      }
+      if (typeof sessionStorage !== "undefined") {
+        const ss = sessionStorage.getItem("demo_mode");
+        if (ss === "true") return true;
+        if (ss === "false") return false;                       // explicit session opt-out
+      }
+      // Localhost defaults demo ON so a dev run never silently spends on real research.
+      // Gated out of the test env so the suite's real-research paths are unaffected.
+      if (typeof window !== "undefined"
+          && process.env.NODE_ENV !== "test"
+          && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+        return true;
+      }
     } catch (_) { /* ignore */ }
     return false;
   });
   const setDemoMode = useCallback((next) => {
     setDemoModeState(next);
-    try {
-      if (next) sessionStorage.setItem("demo_mode", "true");
-      else sessionStorage.removeItem("demo_mode");
-    } catch (_) { /* ignore */ }
+    try { sessionStorage.setItem("demo_mode", next ? "true" : "false"); } catch (_) { /* ignore */ }
   }, []);
   // Visibility gate — the toggle is hidden on production end-customer URLs.
   // Surfaces when ?demo=true is in the URL, on localhost, or when a ?tenant=
@@ -1422,6 +1432,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   });
 
   const doResearch = async (journeyOverride) => {
+    // Safety net: doResearch is the REAL, paid path (Anthropic + web search). In
+    // dev/testing contexts (demo toggle available) confirm before spending, so an
+    // accidental non-demo run can't silently bill. Real end-customer URLs
+    // (demoToggleVisible false) are unaffected — that's the intended paid path.
+    if (!demoMode && demoToggleVisible && typeof window !== "undefined" && typeof window.confirm === "function") {
+      const ok = window.confirm("Demo mode is OFF — this runs a REAL research call (Anthropic API + web search) and will COST money. Continue?");
+      if (!ok) return;
+    }
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
     if (!entityType) { setError("Please select an entity type."); return; }
     if (!countryCode) { setError("Please select a country."); return; }
