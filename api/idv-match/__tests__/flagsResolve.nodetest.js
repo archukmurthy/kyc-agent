@@ -84,6 +84,72 @@ test("verify-only (unlisted) resolves as verified, no band, with verified fields
   assert.strictEqual(d._decisions.length, 0, "verify-only records no band decision");
 });
 
+test("verify-only + providerVerified + screening clear -> verified success (BAND_A_SUCCESS)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, undefined);
+  assert.strictEqual(r.requiresReview, undefined);
+  assert.deepStrictEqual(r.applicantView, require("../copy").BAND_A_SUCCESS);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + providerVerified + screening pending -> holds (screening_pending), no auto-pass", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => ({ hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_pending"]);
+  assert.strictEqual(r.verified, undefined);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + providerVerified + screening HIT -> requires review, NOT auto success", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + NOT providerVerified -> IN_REVIEW, no screening started", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { started: 0 };
+  const d = deps({
+    getDecision: async () => ({
+      status: "Declined",
+      decision: { session_id: "sess-1", status: "Declined", id_verifications: [{ status: "Declined", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Declined" }] },
+    }),
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, false);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(calls.started, 0, "no screening should be started for an unverified identity");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
 test("resolve holds (needsRetry) while the Didit session is still in progress — selfie not done yet", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   // Document step finished (fields present) but the overall session is still

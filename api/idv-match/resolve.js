@@ -135,77 +135,95 @@ async function resolveAttempt(attemptId, deps = {}) {
     }
   }
 
-  // Verify-only (unlisted applicant): no officer to compare against, so skip band
-  // assignment entirely — this is identity proof, not a match. The applicant
-  // proceeds if the provider verified them; otherwise it goes to review.
-  if (officerSnapshot && officerSnapshot.mode === "verify_only") {
-    return {
-      enabled: true, verifyOnly: true,
-      verified: mapped.providerVerified === true,
-      applicantView: mapped.providerVerified ? COPY.BAND_A_SUCCESS : COPY.IN_REVIEW,
-      verifiedFields: toVerifiedFields(identity),
-      vaultError: vaultError || undefined,
-    };
-  }
-
-  // Screen the verified document identity once IDV is terminal and the officer is
-  // known (decision (3): screen the proven identity). Idempotent: only start if no
-  // screening row exists for this attempt. ComplyCube is async — a pending result
-  // holds the band decision (client keeps polling; the webhook re-resolves).
+  // Screen the verified document identity once IDV is terminal (decision (3):
+  // screen the proven identity). Shared by the auto_match/pipeline path AND the
+  // verify_only path below — same fail-closed gate either way; an identity proven
+  // by the provider must never onboard without an AML screen. Idempotent: only
+  // starts if no screening row exists for this attempt. ComplyCube is async — a
+  // pending result holds (client keeps polling; the webhook re-resolves).
   //
   // Both reads below are wrapped: this is an AML screening control, and a control
-  // must never auto-decide the band when its status is unknown. A transient DB
-  // failure on read must not 500 (crash) and must not fall through to pipeline()
+  // must never let the caller proceed when its status is unknown. A transient DB
+  // failure on read must not 500 (crash) and must not let the caller fall through
   // unscreened (pass silently) — it fails CLOSED, holding with the same shape as a
   // genuine pending result (client retries; a normal empty/complete read is
   // unaffected and behaves exactly as before).
-  let existingScreening;
-  try {
-    existingScreening = await listScreening(attemptId);
-  } catch (err) {
-    console.error("[idv-match resolve] screening list read failed — holding (fail closed):", err && err.message);
-    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
-  }
-  // ponytail: two near-simultaneous first resolves can both read existingScreening
-  // as empty and each start a screening check (duplicate paid ComplyCube call).
-  // Harmless to correctness — hasScreeningHit aggregates all rows for the attempt,
-  // so a duplicate is just wasted spend, not a wrong verdict. Upgrade path: a
-  // unique index on idv_screening_checks(attempt_id) to make the guard atomic.
-  let screeningStartAttempted = false;
-  if (!existingScreening.length) {
-    const subject = {
-      firstName: identity.first_name, lastName: identity.last_name,
-      dob: identity.date_of_birth || undefined, nationality: identity.nationality || undefined,
-    };
-    if (subject.firstName && subject.lastName) {
-      screeningStartAttempted = true;
-      try {
-        await runScreening(attemptId, subject, deps);
-      } catch (err) {
-        // Never THROW on a screening-start failure: logged and continues to the
-        // verdict read below. That read is what actually decides fail-open vs.
-        // fail-closed — see the screeningStartAttempted check just after it.
-        console.error("[idv-match resolve] screening start failed:", err && err.message);
+  //
+  // Returns { hold } (a ready-to-return response) when screening isn't a clean/
+  // known-clear terminal state, or { screening } (the resolved hasScreeningHit
+  // object) when the caller may proceed.
+  async function screeningGate() {
+    let existingScreening;
+    try {
+      existingScreening = await listScreening(attemptId);
+    } catch (err) {
+      console.error("[idv-match resolve] screening list read failed — holding (fail closed):", err && err.message);
+      return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
+    }
+    // ponytail: two near-simultaneous first resolves can both read existingScreening
+    // as empty and each start a screening check (duplicate paid ComplyCube call).
+    // Harmless to correctness — hasScreeningHit aggregates all rows for the attempt,
+    // so a duplicate is just wasted spend, not a wrong verdict. Upgrade path: a
+    // unique index on idv_screening_checks(attempt_id) to make the guard atomic.
+    let screeningStartAttempted = false;
+    if (!existingScreening.length) {
+      const subject = {
+        firstName: identity.first_name, lastName: identity.last_name,
+        dob: identity.date_of_birth || undefined, nationality: identity.nationality || undefined,
+      };
+      if (subject.firstName && subject.lastName) {
+        screeningStartAttempted = true;
+        try {
+          await runScreening(attemptId, subject, deps);
+        } catch (err) {
+          // Never THROW on a screening-start failure: logged and continues to the
+          // verdict read below. That read is what actually decides fail-open vs.
+          // fail-closed — see the screeningStartAttempted check just after it.
+          console.error("[idv-match resolve] screening start failed:", err && err.message);
+        }
       }
     }
+    let screening;
+    try {
+      screening = await screeningHitFor(attemptId);
+    } catch (err) {
+      console.error("[idv-match resolve] screening verdict read failed — holding (fail closed):", err && err.message);
+      return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
+    }
+    // A screening start was attempted above but no row exists for this attempt
+    // (count === 0): the start failed (outage / store write error) before it could
+    // even create a pending row. Reading that as "clear" would silently onboard an
+    // unscreened applicant — fail CLOSED instead, same shape as the read failures.
+    if (screeningStartAttempted && screening.count === 0) {
+      return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
+    }
+    if (screening.pending) {
+      return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
+    }
+    return { screening };
   }
-  let screening;
-  try {
-    screening = await screeningHitFor(attemptId);
-  } catch (err) {
-    console.error("[idv-match resolve] screening verdict read failed — holding (fail closed):", err && err.message);
-    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+
+  // Verify-only (unlisted applicant): no officer to compare against, so skip band
+  // assignment entirely — this is identity proof, not a match. The applicant
+  // proceeds if the provider verified them AND the screen comes back clear;
+  // otherwise it goes to review.
+  if (officerSnapshot && officerSnapshot.mode === "verify_only") {
+    if (mapped.providerVerified !== true) {
+      // not proven -> review, nothing to screen
+      return { enabled: true, verifyOnly: true, verified: false, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+    }
+    const gate = await screeningGate();
+    if (gate.hold) return gate.hold;
+    if (gate.screening.hit) {
+      // a proven identity with a sanctions/PEP/adverse-media hit must not auto-pass
+      return { enabled: true, verifyOnly: true, verified: true, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+    }
+    return { enabled: true, verifyOnly: true, verified: true, applicantView: COPY.BAND_A_SUCCESS, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
   }
-  // A screening start was attempted above but no row exists for this attempt
-  // (count === 0): the start failed (outage / store write error) before it could
-  // even create a pending row. Reading that as "clear" would silently onboard an
-  // unscreened applicant — fail CLOSED instead, same shape as the read failures.
-  if (screeningStartAttempted && screening.count === 0) {
-    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
-  }
-  if (screening.pending) {
-    return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
-  }
+
+  const gate = await screeningGate();
+  if (gate.hold) return gate.hold;
+  const screening = gate.screening;
 
   const result = await pipeline({
     attemptId,
