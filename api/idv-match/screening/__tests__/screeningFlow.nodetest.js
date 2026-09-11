@@ -4,38 +4,30 @@ const { startScreening, hasScreeningHit } = require("../index");
 const { processScreeningWebhook } = require("../webhook");
 
 // ---------- startScreening ----------
-test("startScreening creates a ComplyCube client + check and stores a pending row", async () => {
-  const calls = {};
-  const deps = {
-    complyCubeClient: {
-      createClient: async (p) => { calls.person = p; return { id: "ccc-1" }; },
-      createScreeningCheck: async (id) => { calls.checkClientId = id; return { id: "chk-1", status: "pending" }; },
-    },
-    store: {
-      createScreening: async (args) => { calls.created = args; return "srow-1"; },
-      updateScreeningResult: async (...a) => { calls.updated = a; },
-    },
+test("startScreening drives the provider, stores a pending row bound to the attempt", async () => {
+  const calls = { created: null, updated: null };
+  const provider = {
+    screenPerson: async (subject) => { calls.created = subject; return { providerClientId: "cli", providerCheckId: "chk", result: null }; },
   };
-  const out = await startScreening("att-1", { firstName: "John", lastName: "Doe" }, deps);
-  assert.deepStrictEqual(out, { screeningId: "srow-1", complyCubeCheckId: "chk-1" });
-  assert.strictEqual(calls.checkClientId, "ccc-1");
-  assert.strictEqual(calls.created.attemptId, "att-1");
-  assert.strictEqual(calls.created.complyCubeCheckId, "chk-1");
-  assert.strictEqual(calls.updated, undefined, "pending check is not stored as a result yet");
+  const store = {
+    createScreening: async (row) => { calls.row = row; return "scr-1"; },
+    updateScreeningResult: async (id, patch) => { calls.updated = { id, patch }; },
+  };
+  const out = await startScreening("att-1", { firstName: "John", lastName: "Doe" }, { screeningProvider: provider, store });
+  assert.deepEqual(out, { screeningId: "scr-1", providerCheckId: "chk" });
+  assert.equal(calls.row.complyCubeCheckId, "chk");
+  assert.equal(calls.updated, null); // pending -> no result write
 });
 
-test("startScreening records a synchronously-complete check", async () => {
-  const calls = {};
-  const deps = {
-    complyCubeClient: {
-      createClient: async () => ({ id: "ccc-2" }),
-      createScreeningCheck: async () => ({ id: "chk-2", status: "complete", result: { outcome: "clear", breakdown: { summary: {}, matches: [] } } }),
-    },
-    store: { createScreening: async () => "srow-2", updateScreeningResult: async (id, patch) => { calls.updated = { id, patch }; } },
+test("startScreening records a synchronously-complete canonical result", async () => {
+  const provider = {
+    screenPerson: async () => ({ providerClientId: "cli", providerCheckId: "chk", result: { status: "complete", outcome: "attention", hit: true, notProcessed: false, observations: { watchlist: false, pep: true, adverseMedia: false, other: false }, matchCount: 1 } }),
   };
-  await startScreening("att-2", { firstName: "A", lastName: "B" }, deps);
-  assert.strictEqual(calls.updated.id, "srow-2");
-  assert.strictEqual(calls.updated.patch.outcome, "clear");
+  let written;
+  const store = { createScreening: async () => "scr-2", updateScreeningResult: async (id, patch) => { written = patch; } };
+  await startScreening("att-2", { firstName: "A", lastName: "B" }, { screeningProvider: provider, store });
+  assert.equal(written.outcome, "attention");
+  assert.deepEqual(written.categories, { watchlist: false, pep: true, adverseMedia: false, other: false });
 });
 
 // ---------- hasScreeningHit ----------

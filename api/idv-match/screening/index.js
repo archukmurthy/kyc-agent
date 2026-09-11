@@ -1,37 +1,33 @@
 "use strict";
 
 // Screening orchestration + the single signal the band logic consumes.
-const complyCubeClient = require("./complyCubeClient");
 const store = require("./store");
-const { interpretCheck } = require("./interpret");
+const { getScreeningProvider } = require("./registry");
 
-// Start screening for one person on an attempt: create a ComplyCube client, run
-// an extensive screening check, and store a pending row bound to the attempt.
-// The result normally arrives later via webhook (or server reconcile); if the
-// check already completed synchronously, it is recorded immediately.
+// Start screening for one person on an attempt via the configured provider, and
+// store a pending row bound to the attempt. The result normally arrives later via
+// webhook (or server reconcile); a synchronously-graded result is recorded now.
 async function startScreening(attemptId, person, deps = {}) {
   if (!attemptId) throw new Error("startScreening: attemptId is required");
-  const cc = deps.complyCubeClient || complyCubeClient;
+  const provider = deps.screeningProvider || getScreeningProvider();
   const s = deps.store || store;
 
-  const ccClient = await cc.createClient(person);
-  const check = await cc.createScreeningCheck(ccClient.id);
+  const { providerClientId, providerCheckId, result } = await provider.screenPerson(person, deps);
   const screeningId = await s.createScreening({
     attemptId,
     provider: "complycube",
-    complyCubeClientId: ccClient.id,
-    complyCubeCheckId: check.id,
+    complyCubeClientId: providerClientId,
+    complyCubeCheckId: providerCheckId,
   });
 
-  const interpreted = interpretCheck(check);
-  if (interpreted.outcome) {
+  if (result && result.outcome) {
     await s.updateScreeningResult(screeningId, {
-      status: interpreted.status,
-      outcome: interpreted.outcome,
-      categories: interpreted.categories,
+      status: result.status,
+      outcome: result.outcome,
+      categories: result.observations,
     });
   }
-  return { screeningId, complyCubeCheckId: check.id };
+  return { screeningId, providerCheckId };
 }
 
 // Aggregate all screening rows for an attempt (e.g. document name + CH name): a
