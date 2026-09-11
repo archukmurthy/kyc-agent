@@ -89,3 +89,38 @@ The full visual/manual checks and screenshots above were captured from the same 
 ## Wave 10 successor-review acceptance
 
 Wave 10 evidence is captured from its protected Vercel preview and added alongside this register before Control Room handoff. The required set covers baseline 1.5-RC, ASDA A/B, Ownership/Voting/Control filters, a causal need and affected paths, route qualification and 60/40 distinction, TDR provisional review, layer endpoint, band corroboration, profile-change history, baseline comparison, Evidence-not-connected and the persistent review watermark. All successor views must display the same current Snapshot v2; localhost evidence is not acceptance evidence.
+
+## Wave 11B1 interactive applicant journey
+
+Date: 2026-09-09
+
+The original Wave 11B1 set was captured through the staged production Lab and real local Lab API using only deterministic AJV2 fixtures. The repeatable capture is `capture-wave11b1.js`. The seamless-orchestration remediation replaces that evidence set: applicant submission is now one coherent action while the host preserves checkpoint, decision and evaluation operations separately in analyst history. Inspecting the UI causes no paid Discovery or Evidence operation.
+
+| Required acceptance view | Browser evidence | Result |
+|---|---|---|
+| AJV2-01 initial state | wave11b1-01-ajv2-01-initial.png | Snapshot A has one current confirmation task. |
+| Single applicant action | wave11b1-02-single-confirmation-action.png | The customer sees one `Confirm and continue` action and no internal controls. |
+| Automatic processing | wave11b1-03-automatic-processing.png | The accessible live region truthfully says the response is being saved and the review refreshed. |
+| Snapshot B / zero tasks | wave11b1-04-snapshot-b-zero-tasks.png | One submit creates Snapshot B and removes the completed confirmation from current tasks. |
+| Recorded customer history | wave11b1-05-recorded-customer-history.png | The completed confirmation remains visible as submitted activity. |
+| Internal review required | wave11b1-06-internal-review-required.png | Final internal review remains distinct after customer work is exhausted. |
+| Refresh restore | wave11b1-07-refresh-restored-snapshot-b.png | A refresh restores the verified Snapshot B, zero-task state and completed history. |
+| Explicit reset | wave11b1-08-explicit-reset-to-snapshot-a.png | Confirmed reset deliberately returns the fixture to Snapshot A. |
+| Structured ownership pending | wave11b1-09-structured-ownership-pending-review.png | Candidate facts stop for identity/claim review and are not silently adjudicated. |
+| Fixture-only review helper | wave11b1-10-fixture-review-helper.png | The one-click helper is isolated to Decision History and visibly marked as preconfigured fixture decisions. |
+| Snapshot after fixture review | wave11b1-11-snapshot-b-after-fixture-review.png | Normal `applyDecisions` and `evaluate` operations produce the linked Snapshot B. |
+| Evidence handoff restored | wave11b1-12-evidence-handoff-restored.png | The pending data-only handoff survives refresh with no uploader, Artifact or false completion. |
+| Delegation restored | wave11b1-13-delegation-restored.png | The pending host handoff survives refresh; no invitation is claimed. |
+| Live not saved | wave11b1-14-live-not-saved-by-default.png | A live-mode acceptance harness state shows the explicit not-saved mode and no production-persistence claim. |
+| Explicit live save | wave11b1-15-live-explicit-local-save.png | Opt-in displays the exact browser-only demo/testing notice. |
+| Stale-action protection | wave11b1-16-stale-draft-protection.png | The action remains pinned to its current Snapshot/Plan; automated component tests prove a changed pin clears it rather than submitting stale data. |
+| Mobile 390 px | wave11b1-17-mobile-390.png | The remediated applicant surface stacks without compressing its controls. |
+| Keyboard flow | wave11b1-18-keyboard-flow.png | Keyboard activation opens the action and focus reaches the labelled first field. |
+
+Every screenshot retains the review-policy watermark and production-not-authorized Lab chrome. None implies that Evidence upload, private ingestion, Artifact creation, delegation delivery, onboarding, persistence or production activation is connected.
+
+### Seamless-orchestration remediation evidence
+
+The refreshed Wave 11B1 evidence set records the applicant-only one-submit experience separately from the analyst controls: AJV2-01 starts with one snapshot/one task, shows the processing live region, and ends at Snapshot B with zero current tasks, recorded customer history and internal review required. Refresh restores that same verified Snapshot B from `ubo-control-lab-applicant-session-cache-v1`; reset explicitly returns to Snapshot A. Structured ownership stops at pending verification and the only continuation control appears in Decision History under `DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS`. Evidence and delegation handoffs remain pending across refresh. The live-mode pair proves not-saved-by-default and the explicit browser-local demo/testing notice without implying production persistence.
+
+The durable design principle is: domain operations remain explicit and auditable, while the host automatically orchestrates non-judgmental steps so the applicant performs only genuine customer actions. Lab browser-local resumability is a demo/testing convenience and is not production case persistence.

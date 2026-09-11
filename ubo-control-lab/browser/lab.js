@@ -2,13 +2,15 @@
   "use strict";
 
   const h = React.createElement;
-  const { OwnershipGraph, UboJourney, DETAIL_LEVEL } = UboControlUI;
+  const { OwnershipGraph, UboJourney, UboApplicantJourneyV2, DETAIL_LEVEL } = UboControlUI;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
-  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
+  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_JOURNEY_V2", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
   const GRAPH_FILTERS = ["OWNERSHIP", "VOTING", "CONTROL", "ALL"];
   let replayLibrary = null;
   try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
+  let applicantSessionCache = null;
+  try { applicantSessionCache = UboLabApplicantSessions.createApplicantSessionCache(window.localStorage); } catch (_error) { applicantSessionCache = null; }
 
   async function request(operation, payload) {
     const response = await fetch(API, {
@@ -435,6 +437,132 @@
         h("details", null, h("summary", null, "Known, missing and permitted work"), h("pre", { className: "json" }, pretty({ knownInformation: bundle.knownInformation, missingInformation: bundle.missingInformation, permittedSemanticActions: bundle.permittedSemanticActions, signoffDependencies: bundle.signoffDependencies })))))) : h(Empty, null, journey.customerInputComplete ? "No customer work is currently executable. Final review and system work remain separate." : "No customer bundle is present in the pinned plan."));
   }
 
+  function ApplicantJourneyPanel({ catalogue, labSession, setLabSession, profileId, cachedRecord, cacheNotice, cacheError, resumeCached, startNew, resetCurrent, saveLiveLocally }) {
+    const [fixtureId, setFixtureId] = React.useState("AJV2-01");
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const run = async (operation, payload) => {
+      setBusy(true);
+      setError("");
+      try {
+        const next = await request(operation, payload);
+        setLabSession(next);
+        return next;
+      } catch (cause) {
+        setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`);
+        throw cause;
+      } finally {
+        setBusy(false);
+      }
+    };
+    const start = () => run("START_APPLICANT_FIXTURE", { fixtureId, profileId });
+    if (!labSession) {
+      return h("section", { className: "panel applicant-journey-host" },
+        h("p", { className: "source-label" }, "REVIEW-ONLY | ACTUAL DECISION APPLICATION v3 CONTRACTS"),
+        h("h2", null, "Applicant Journey v2"),
+        h("p", null, "Start a sanitized scenario. Viewing this tab does not run paid Discovery, Evidence or production persistence."),
+        cacheNotice && h("div", { className: "notice", role: "status" }, cacheNotice),
+        cacheError && h("div", { className: "error", role: "alert" }, cacheError),
+        error && h("div", { className: "error", role: "alert" }, error),
+        cachedRecord && h("button", { className: "primary", disabled: busy, onClick: resumeCached }, "Resume last demo"),
+        h("div", { className: "field" },
+          h("label", null, "Applicant fixture"),
+          h("select", { value: fixtureId, onChange: (event) => setFixtureId(event.target.value) },
+            (catalogue?.fixtures || []).map((fixture) => h("option", { key: fixture.fixtureId, value: fixture.fixtureId }, `${fixture.fixtureId} - ${fixture.label}`)))),
+        h("button", { className: "primary", disabled: busy, onClick: start }, busy ? "Building journey..." : "Start applicant journey"));
+    }
+    const current = labSession.snapshots.at(-1);
+    const submit = async (customerAction) => {
+      const operationId = `${labSession.sessionId}:customer-action:${(labSession.acceptedOperations || []).length + 1}`;
+      if (applicantSessionCache) {
+        try { await applicantSessionCache.markInFlight(labSession, operationId, labSession.liveSaveOptIn === true); }
+        catch (_cause) { /* Submission may continue with the visible Lab-only storage warning. */ }
+      }
+      return run("SUBMIT_APPLICANT_ACTION_AND_ADVANCE", { session: labSession, customerAction, operationId });
+    };
+    const resumeEvaluation = () => run("RESUME_APPLICANT_ADVANCE", {
+      session: labSession,
+      operationId: labSession.orchestrationState.operationId,
+    });
+    const latestActivity = (labSession.customerActivityHistory || []).at(-1);
+    return h("section", { className: "applicant-journey-host" },
+      h("div", { className: "panel applicant-lab-toolbar" },
+        h("div", null,
+          h("p", { className: "source-label" }, labSession.sourceMode === "LIVE"
+            ? (labSession.liveSaveOptIn === true ? "LIVE LAB CASE — SAVED LOCALLY FOR DEMO/TESTING" : "LIVE LAB CASE — NOT SAVED")
+            : "LAB SESSION — SAVED LOCALLY IN THIS BROWSER"),
+          h("h2", null, `${labSession.fixtureId} - ${labSession.fixtureLabel}`),
+          h("p", null, `Snapshot #${shortHash(current.snapshot.snapshotId)} | ${labSession.policyMode} | ${labSession.snapshots.length} immutable snapshot(s)`)),
+        h("div", { className: "actions" },
+          h("button", { className: "secondary", onClick: startNew, disabled: busy }, "Start new case"),
+          h("button", { className: "secondary", onClick: resetCurrent, disabled: busy }, "Reset this demo"),
+          labSession.sourceMode === "LIVE" && labSession.liveSaveOptIn !== true
+            ? h("button", { className: "secondary", onClick: saveLiveLocally, disabled: busy }, "Save this Lab session locally for demo/testing")
+            : null)),
+      cacheNotice && h("div", { className: "notice", role: "status" }, cacheNotice),
+      cacheError && h("div", { className: "error", role: "alert" }, cacheError),
+      error && h("div", { className: "error", role: "alert" }, error),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, "Saving your response and refreshing the ownership review…"),
+      labSession.orchestrationState?.status === "INTERNAL_REVIEW_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "Your response has been submitted."),
+        h("p", null, "Our review team needs to verify it.")),
+      labSession.orchestrationState?.status === "EVIDENCE_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED"),
+        h("p", null, "Nothing was uploaded and no Evidence Artifact was created.")),
+      labSession.orchestrationState?.status === "DELEGATION_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "Help request prepared"),
+        h("p", null, "Host execution is pending. No invitation was sent and the work is not complete.")),
+      labSession.orchestrationState?.status === "EVALUATION_FAILED" && h("section", { className: "panel applicant-pending", role: "alert" },
+        h("h3", null, "Your response is recorded"),
+        h("p", null, labSession.orchestrationError?.message),
+        h("button", { className: "primary", disabled: busy, onClick: resumeEvaluation }, "Refresh review status")),
+      h(UboApplicantJourneyV2, {
+        journey: current.journey,
+        actorContext: labSession.actorContext,
+        actionResult: labSession.latestCustomerActionResult,
+        content: labSession.content,
+        onSubmitAction: submit,
+        submittedBundleIds: labSession.submittedBundleIds || [],
+        submissionState: busy ? { status: "SUBMITTING" } : null,
+        className: "lab-applicant-journey",
+      }),
+      latestActivity && h("section", { className: "panel applicant-submission-history", "aria-label": "Submitted customer activity" },
+        h("p", { className: "source-label" }, "SUBMITTED ACTIVITY"),
+        h("h3", null, latestActivity.actionType === "CONFIRM_ESTABLISHED_INFORMATION" ? "Confirmation recorded" : "Customer response recorded"),
+        h("p", null, `${human(latestActivity.status)} · submitted ${latestActivity.submittedAt}.`),
+        h("p", null, "This activity remains recorded even when it is no longer a current task.")));
+  }
+
+  function ApplicantInternalReviewPanel({ applicantSession, busy, completeFixtureReview }) {
+    if (!applicantSession) return null;
+    const pendingCount = applicantSession.pendingDecisionTargets.candidateParties.length
+      + applicantSession.pendingDecisionTargets.candidateClaims.length;
+    return h("section", { className: "panel section" },
+      h("p", { className: "source-label" }, "APPLICANT SESSION — INTERNAL ORCHESTRATION"),
+      h("h2", null, "Applicant submission review"),
+      h("p", null, `${pendingCount} explicit identity/claim decision target(s) pending.`),
+      applicantSession.sourceMode === "FIXTURE" && applicantSession.fixtureReviewConfiguration && pendingCount > 0
+        ? h("div", { className: "notice" },
+          h("strong", null, "DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS"),
+          h("p", null, "This deterministic fixture helper calls the normal applyDecisions and evaluate operations. It is unavailable for live or replay data."),
+          h("button", { className: "primary", disabled: busy, onClick: completeFixtureReview }, "Complete fixture review and refresh journey"))
+        : pendingCount > 0 ? h("p", null, "A reviewer must complete the explicit decisions through an authorised internal workflow.") : null);
+  }
+
+  function ApplicantSessionDiagnostics({ applicantSession }) {
+    if (!applicantSession) return null;
+    return h("section", { className: "panel section" },
+      h("h2", null, "Applicant session diagnostics"),
+      h("pre", { className: "json" }, pretty({
+        operationHistory: applicantSession.operationHistory,
+        orchestrationHistory: applicantSession.orchestrationHistory,
+        pendingDecisionTargets: applicantSession.pendingDecisionTargets,
+        latestCustomerActionResult: applicantSession.latestCustomerActionResult,
+        completedCustomerAttempts: applicantSession.completedCustomerAttempts || [],
+        snapshots: applicantSession.snapshots.map(({ sequence, reason, predecessorSnapshotId, snapshot }) => ({ sequence, reason, predecessorSnapshotId, snapshotId: snapshot.snapshotId, snapshotHash: snapshot.decisionContentHash })),
+      })));
+  }
+
   function ContractInspector({ view }) {
     return h("section", { className: "panel" },
       h("p", { className: "source-label" }, "IMMUTABLE VERSIONED CONTRACT"),
@@ -525,15 +653,96 @@
     return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline — 1.5-RC", comparison.baseline], ["Successor review — 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
   }
 
-  function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue }) {
+  function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue, applicantCatalogue }) {
     const [tab, setTab] = React.useState("CASE_SUMMARY");
     const [graphFilter, setGraphFilter] = React.useState(session.uiState?.graphFilter || "OWNERSHIP");
     const [selectedList, setSelectedList] = React.useState(null);
+    const [applicantSession, setApplicantSession] = React.useState(null);
+    const [cachedApplicantRecord, setCachedApplicantRecord] = React.useState(null);
+    const [applicantCacheNotice, setApplicantCacheNotice] = React.useState("");
+    const [applicantCacheError, setApplicantCacheError] = React.useState(applicantSessionCache ? "" : "Browser-local applicant session storage is unavailable.");
+    const suppressNextApplicantSave = React.useRef(false);
     const current = session.snapshots.at(-1);
     const view = current?.view;
     const run = async (operation, payload) => { setBusy(true); setError(""); try { setSession(await request(operation, payload)); } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); } finally { setBusy(false); } };
     const apply = ({ identityDecisions, claimDecisions }) => run("APPLY_REVIEW_DECISIONS", { session, identityDecisions, claimDecisions });
     const changeProfile = (profileId) => run("CHANGE_REVIEW_PROFILE", { session, profileId, evaluationTime: new Date().toISOString() });
+    React.useEffect(() => {
+      if (!applicantSessionCache) return;
+      applicantSessionCache.restoreLast().then(async ({ record, error: restoreError }) => {
+        if (restoreError) { setApplicantCacheError(restoreError); return; }
+        if (!record) return;
+        setCachedApplicantRecord(record);
+        try {
+          const verified = await request("VALIDATE_APPLICANT_SESSION", { session: record.session });
+          suppressNextApplicantSave.current = true;
+          setApplicantSession(verified);
+          setTab("APPLICANT_JOURNEY_V2");
+          setApplicantCacheNotice(record.inFlightOperation
+            ? "Your previous submission may still be processing. Review the latest recorded activity before trying again."
+            : "Restored your local Lab demo session");
+        } catch (_cause) {
+          setApplicantCacheError("The saved applicant session failed Snapshot verification and was not restored.");
+        }
+      });
+    }, []);
+    React.useEffect(() => {
+      if (!applicantSessionCache || !applicantSession) return;
+      if (suppressNextApplicantSave.current) { suppressNextApplicantSave.current = false; return; }
+      if (!["FIXTURE", "REPLAY"].includes(applicantSession.sourceMode) && applicantSession.liveSaveOptIn !== true) return;
+      applicantSessionCache.save(applicantSession, { liveOptIn: applicantSession.liveSaveOptIn === true })
+        .then((record) => { setCachedApplicantRecord(record); setApplicantCacheError(""); })
+        .catch(() => setApplicantCacheError("This Lab session could not be saved locally."));
+    }, [applicantSession]);
+    const resumeCachedApplicant = async () => {
+      if (!cachedApplicantRecord) return;
+      setBusy(true); setError("");
+      try {
+        const verified = await request("VALIDATE_APPLICANT_SESSION", { session: cachedApplicantRecord.session });
+        suppressNextApplicantSave.current = true;
+        setApplicantSession(verified);
+        setApplicantCacheNotice("Restored your local Lab demo session");
+      } catch (cause) { setApplicantCacheError(cause.message); }
+      finally { setBusy(false); }
+    };
+    const startNewApplicant = () => {
+      if (applicantSession && !window.confirm("Start a new Lab demo? The current demo remains available through Resume last demo.")) return;
+      setApplicantSession(null);
+      setApplicantCacheNotice("Choose a fixture to start a new Lab demo. Your previous saved demo has not been deleted.");
+    };
+    const resetApplicant = async () => {
+      if (!applicantSession || !window.confirm("Reset this demo to its initial fixture state? Its locally saved progress will be removed.")) return;
+      const fixtureId = applicantSession.fixtureId;
+      setBusy(true); setError("");
+      try {
+        if (applicantSessionCache) await applicantSessionCache.remove(applicantSession.sessionId);
+        const next = await request("START_APPLICANT_FIXTURE", { fixtureId, profileId: applicantSession.profileIdentity?.profileId || session.selectedProfileId });
+        setApplicantSession(next);
+        setApplicantCacheNotice("Demo reset to its initial fixture state.");
+      } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const completeFixtureReview = async () => {
+      setBusy(true); setError("");
+      try {
+        setApplicantSession(await request("COMPLETE_APPLICANT_FIXTURE_REVIEW", { session: applicantSession }));
+        setApplicantCacheNotice("Preconfigured fixture review completed and the applicant journey was refreshed.");
+      } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const saveLiveApplicantLocally = async () => {
+      if (!applicantSessionCache || !applicantSession || applicantSession.sourceMode !== "LIVE") return;
+      setBusy(true); setError("");
+      try {
+        const next = { ...applicantSession, liveSaveOptIn: true };
+        const record = await applicantSessionCache.save(next, { liveOptIn: true });
+        suppressNextApplicantSave.current = true;
+        setApplicantSession(next);
+        setCachedApplicantRecord(record);
+        setApplicantCacheNotice("Saved only in this browser — Lab testing, not production case storage");
+      } catch (cause) { setApplicantCacheError(cause.message); }
+      finally { setBusy(false); }
+    };
     if (!view) return h("main", { className: "shell" }, h("header", { className: "workspace-header" }, h("div", null, h("h2", null, session.companyContext.legalEntityName), h("p", null, "Successor intake is candidate-before-conclusion; explicit identity and claim decisions are required.")), h("button", { className: "secondary", onClick: reset }, "New case")), error && h("div", { className: "error" }, error), h(DecisionsPanel, { session, busy, apply }));
     const profileOptions = (catalogue?.profiles || []).map((profile) => h("option", { key: profile.profileId, value: profile.profileId }, profile.label));
     const header = h("header", { className: "workspace-header" },
@@ -542,9 +751,22 @@
     const tabs = h("div", { className: "tabs", role: "tablist", "aria-label": "Successor review workspace views" }, REVIEW_TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name))));
     const summary = h("section", { className: "panel" }, h("h2", null, "Case Summary"), h("div", { className: "grid-2" },
       h("div", null, h("h3", null, "Decision state"), h("p", null, `${human(view.plan.state)} with ${view.counts.openCausalNeeds} open causal need(s). The exact pinned current wave is ${human(view.plan.currentPlanningWave.actor)}.`), h("p", null, `Governance: ${view.governance.readiness}; productionAuthorized=${String(view.governance.productionAuthorized)}.`)),
-      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. This is not the final Wave 11B React journey.`))));
+      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. Use Applicant Journey v2 for the separate interactive fixture-backed experience.`))));
     const panels = {
       CASE_SUMMARY: summary,
+      APPLICANT_JOURNEY_V2: h(ApplicantJourneyPanel, {
+        catalogue: applicantCatalogue,
+        labSession: applicantSession,
+        setLabSession: setApplicantSession,
+        profileId: session.selectedProfileId,
+        cachedRecord: cachedApplicantRecord,
+        cacheNotice: applicantCacheNotice,
+        cacheError: applicantCacheError,
+        resumeCached: resumeCachedApplicant,
+        startNew: startNewApplicant,
+        resetCurrent: resetApplicant,
+        saveLiveLocally: saveLiveApplicantLocally,
+      }),
       APPLICANT_PREVIEW: h(ApplicantPreview, { view }),
       CONTRACT_INSPECTOR: h(ContractInspector, { view }),
       OWNERSHIP_AND_CONTROL_GRAPH: h(ReviewGraphPanel, { view, session, graphFilter, setGraphFilter }),
@@ -552,8 +774,12 @@
       REQUIREMENTS_AND_CAUSAL_NEEDS: h(ReviewRequirements, { view }),
       RESOLUTION_PLAN: h(ReviewPlan, { view }),
       EVIDENCE: h(ReviewEvidence, { view }),
-      DECISION_HISTORY: h(ReviewHistory, { session }),
-      DIAGNOSTICS: h(ReviewDiagnostics, { view, session, graphFilter }),
+      DECISION_HISTORY: h(React.Fragment, null,
+        h(ReviewHistory, { session }),
+        h(ApplicantInternalReviewPanel, { applicantSession, busy, completeFixtureReview })),
+      DIAGNOSTICS: h(React.Fragment, null,
+        h(ReviewDiagnostics, { view, session, graphFilter }),
+        h(ApplicantSessionDiagnostics, { applicantSession })),
       BASELINE_COMPARISON: h(ReviewComparison, { session }),
     };
     return h("main", { className: "shell successor-workspace" }, header,
@@ -571,7 +797,27 @@
     const [error, setError] = React.useState("");
     const [savedResults, setSavedResults] = React.useState([]);
     const [storageError, setStorageError] = React.useState(replayLibrary ? "" : "Browser-local replay storage is unavailable.");
+    const attemptedApplicantRestore = React.useRef(false);
     React.useEffect(() => { fetch(API).then((response) => response.json()).then(setCatalogue).catch(() => setError("Fixture catalogue could not be loaded.")); }, []);
+    React.useEffect(() => {
+      if (!applicantSessionCache || attemptedApplicantRestore.current
+        || new URLSearchParams(window.location.search).has("newCase")) return;
+      attemptedApplicantRestore.current = true;
+      applicantSessionCache.restoreLast().then(async ({ record }) => {
+        if (!record || !["FIXTURE", "REPLAY", "LIVE"].includes(record.sourceMode)
+          || !record.sourceIdentity?.sourceFixtureId) return;
+        setDoctrine("SUCCESSOR_REVIEW");
+        setBusy(true);
+        try {
+          setSession(await request("START_REVIEW_FIXTURE", {
+            fixtureId: record.sourceIdentity.sourceFixtureId,
+            profileId: record.profileIdentity?.profileId || "NOT_PROVIDED",
+          }));
+        } catch (_cause) {
+          setError("The saved applicant demo could not restore its Lab workspace.");
+        } finally { setBusy(false); }
+      });
+    }, []);
     React.useEffect(() => {
       if (!replayLibrary) return;
       const saved = replayLibrary.read();
@@ -608,14 +854,14 @@
     const readiness = session?.policyReadiness || currentView?.policyReadiness || (successor ? setupReviewReadiness : catalogue?.policyReadiness);
     const selectDoctrine = (value) => { setDoctrine(value); setSession(null); setError(""); setMode("FIXTURE"); };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "CASE NON-RESUMABLE / REPLAY LOCAL"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
       h(PolicyReadinessWatermark, { readiness }),
       h("nav", { className: "doctrine-selector", "aria-label": "Policy and engine version" },
         h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
         h("button", { className: successor ? "active" : "", "aria-pressed": successor, onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved"))),
       session
         ? successor
-          ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, reset: () => { setSession(null); setError(""); } })
+          ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, applicantCatalogue: catalogue?.applicant, reset: () => { setSession(null); setError(""); } })
           : h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
         : successor
           ? h(ReviewSetup, { catalogue: catalogue?.review, mode, setMode, busy, error, savedResults, storageError, startFixture: (fixtureId, profileId) => start("START_REVIEW_FIXTURE", { fixtureId, profileId }), startLive: (companyContext, profileId) => start("START_REVIEW_LIVE", { companyContext, profileId }), startReplay: (replayRecord, profileId) => start("START_REVIEW_REPLAY", { replayRecord, profileId }) })

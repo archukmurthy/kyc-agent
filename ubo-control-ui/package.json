@@ -5,6 +5,7 @@
   "main": "index.js",
   "style": "ownership-graph.css",
   "journeyStyle": "ubo-journey.css",
+  "applicantJourneyV2Style": "ubo-applicant-journey-v2.css",
   "scripts": {
     "demo": "node demo/server.js",
     "fixtures": "node fixtures/buildFixtureProjections.js",

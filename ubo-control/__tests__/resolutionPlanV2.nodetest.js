@@ -23,6 +23,10 @@ const {
   planUboResolutionV2,
   validateResolutionPlanV2,
 } = require("../planning/resolutionPlanV2");
+const {
+  createResolutionAttemptSemantics,
+  submissionContractFor,
+} = require("../planning/resolutionAttemptSemantics");
 
 const NOW = "2026-09-06T10:00:00.000Z";
 const loaded = loadPolicyPack(policy);
@@ -95,7 +99,8 @@ function option(actionType, ids, overrides = {}) {
     currentlyAvailable: overrides.currentlyAvailable !== false,
     causalGroupingKey: overrides.causalGroupingKey || ids.join("+"),
     coverageBasis: overrides.coverageBasis || (ids.length > 1 ? "COHERENT_EVIDENCE_PACKAGE" : "SINGLE_CAUSAL_NEED"),
-    expectedCandidateFacts: [{ type: "OWNERSHIP_STRUCTURE" }],
+    expectedCandidateFacts: overrides.expectedCandidateFacts || [{ type: "OWNERSHIP_STRUCTURE" }],
+    ...(overrides.actionTemplateReference === undefined ? {} : { actionTemplateReference: overrides.actionTemplateReference }),
     retryPermitted: overrides.retryPermitted !== false,
   };
 }
@@ -116,6 +121,36 @@ function plannerInput(needs, overrides = {}) {
     graphFingerprint: "sha256:" + "a".repeat(64),
     defaultCapabilityScope: { jurisdiction: "GB", entityProfile: "COMPANY", entitlementContext: "UK_REVIEW" },
     ...inputOverrides,
+  };
+}
+function attemptFor(input, needs, route, overrides = {}) {
+  const normalizedPolicyIdentity = {
+    policyPackId: loaded.identity.policyPackId,
+    policyVersion: loaded.identity.version,
+    policyHash: loaded.identity.hash,
+    policySchemaVersion: loaded.identity.schemaVersion,
+  };
+  const semantics = createResolutionAttemptSemantics({
+    policyIdentity: normalizedPolicyIdentity,
+    causalGroupingKey: route.causalGroupingKey || needs.map(({ needId }) => needId).join("+"),
+    needs,
+    semanticActionType: route.semanticActionType,
+    submissionContract: submissionContractFor(route),
+    contentReference: route.actionTemplateReference,
+    targetReferences: [...new Set(needs.flatMap((item) => [item.frontierEntityId, item.targetReference?.entityId, item.targetReference?.personEntityId].filter(Boolean)))].sort().map((entityId) => ({ entityId })),
+    frontierEntityIds: [...new Set(needs.map(({ frontierEntityId }) => frontierEntityId).filter(Boolean))].sort(),
+    expectedCandidateFacts: route.expectedCandidateFacts,
+    graphFingerprint: input.graphFingerprint,
+  });
+  return {
+    informationNeedIds: needs.map(({ needId }) => needId),
+    semanticActionType: route.semanticActionType,
+    capabilityOutcomeState: "NO_DATA",
+    outcome: "NO_DATA",
+    final: true,
+    materialInputFingerprint: "transient-plan-fingerprint-does-not-govern-this-attempt",
+    ...semantics,
+    ...overrides,
   };
 }
 
@@ -388,4 +423,105 @@ test("strategy does not oscillate for an unchanged predecessor and a material pi
   const pivoted = planUboResolutionV2({ ...discoveryInput, registryCapabilityProfile: profile([entry({ capabilityState: CAPABILITY_STATE.UNSUPPORTED })], { profileVersion: "2" }), predecessorResolutionPlan: first });
   assert.equal(pivoted.strategyAssignments[0].strategy, ACQUISITION_STRATEGY.CHART_ASSISTED);
   assert.equal(pivoted.strategyAssignments[0].changeReason, "MATERIAL_INPUT_CHANGE");
+});
+
+test("generic confirmation covers established relationship currentness, never a missing controller", () => {
+  const controller = need("need-controller", {
+    dimension: "CONTROL",
+    requiredFact: { type: "NATURAL_PERSON_CONTROL_ATTRIBUTION" },
+    requirementIds: ["UBO-R03", "UBO-R06"],
+  });
+  const incompatible = option(ACTION_TYPE.CONFIRM_ESTABLISHED_INFORMATION, [controller.needId], {
+    resolutionStrategy: "CUSTOMER_ATTESTATION",
+    acquisitionChannel: "CUSTOMER_ATTESTATION",
+    actionTemplateReference: "TEST_ONLY_CONFIRM_ESTABLISHED",
+    expectedCandidateFacts: [{ type: "NATURAL_PERSON_CONTROL_ATTRIBUTION" }],
+  });
+  const reviewed = planUboResolutionV2(plannerInput([controller], {
+    resolutionOptions: [incompatible],
+    reviewRequirements: [{ reviewRequirementId: "controller-review", relatedInformationNeedIds: [controller.needId], requirementIds: ["UBO-R06"] }],
+  }));
+  assert.equal(reviewed.state, PLAN_STATE.INTERNAL_REVIEW);
+  assert.equal(reviewed.customerActions.length, 0);
+
+  const currentness = need("need-currentness-confirm", {
+    concept: "RELATIONSHIP_CURRENTNESS",
+    targetKind: "RELATIONSHIP",
+    targetReference: { relationshipId: "rel-established", subjectEntityId: "owner", objectEntityId: "target" },
+    frontierEntityId: null,
+    dimension: "CONTROL",
+    requiredFact: { type: "CURRENTNESS_STATE", requiredValue: "CURRENT" },
+  });
+  const compatible = option(ACTION_TYPE.CONFIRM_ESTABLISHED_INFORMATION, [currentness.needId], {
+    resolutionStrategy: "CUSTOMER_ATTESTATION",
+    acquisitionChannel: "CUSTOMER_ATTESTATION",
+    actionTemplateReference: "TEST_ONLY_CONFIRM_ESTABLISHED",
+    expectedCandidateFacts: [{ type: "CURRENTNESS_STATE", requiredValue: "CURRENT" }],
+  });
+  const confirmation = planUboResolutionV2(plannerInput([currentness], { resolutionOptions: [compatible] }));
+  assert.equal(confirmation.state, PLAN_STATE.CUSTOMER_RESOLUTION);
+  assert.equal(confirmation.customerActions[0].semanticActionType, ACTION_TYPE.CONFIRM_ESTABLISHED_INFORMATION);
+});
+
+test("substantive exhaustion outranks current availability across customer, chart and system routes", () => {
+  const n = need("need-exhaustion-precedence");
+  for (const actionType of [ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION, ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE, ACTION_TYPE.EXTRACT_EXISTING_ARTIFACT]) {
+    const route = option(actionType, [n.needId], {
+      resolutionStrategy: actionType === ACTION_TYPE.EXTRACT_EXISTING_ARTIFACT ? "EXISTING_EVIDENCE" : actionType,
+      actionTemplateReference: actionType === ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION ? "DISCLOSE_SHARE_OWNERSHIP" : undefined,
+    });
+    const input = plannerInput([n], { resolutionOptions: [route] });
+    const first = planUboResolutionV2(input);
+    const exhausted = planUboResolutionV2({ ...input, resolutionAttempts: [attemptFor(input, [n], route)] });
+    assert.equal(first.recommendedActions.length, 1, actionType);
+    assert.equal(exhausted.recommendedActions.length, 0, actionType);
+    assert.equal(exhausted.rationaleCodes.includes("SUBSTANTIVE_ROUTE_EXHAUSTED"), true, actionType);
+  }
+});
+
+test("semantic attempts survive transient revision IDs, reset only for material cause change, and do not block another route", () => {
+  const n = need("need-semantic-attempt");
+  const confirmedRoute = option(ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION, [n.needId], {
+    actionTemplateReference: "DISCLOSE_SHARE_OWNERSHIP",
+  });
+  const alternateRoute = option(ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE, [n.needId], {
+    evidenceCategories: ["group_structure_note"],
+  });
+  const input = plannerInput([n], { resolutionOptions: [confirmedRoute, alternateRoute] });
+  const attempt = attemptFor(input, [n], confirmedRoute);
+  const exhausted = planUboResolutionV2({ ...input, resolutionAttempts: [attempt] });
+  assert.equal(exhausted.recommendedActions[0].semanticActionType, ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE);
+
+  const revisionOnly = planUboResolutionV2({
+    ...input,
+    caseRevision: { caseId: "case-1", revisionId: "revision-2", revision: 2 },
+    resolutionAttempts: [attempt],
+  });
+  assert.equal(revisionOnly.recommendedActions[0].semanticActionType, ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE);
+  assert.equal(revisionOnly.customerActions.some(({ actionTemplateReference }) => actionTemplateReference === "DISCLOSE_SHARE_OWNERSHIP"), false);
+
+  const materiallyChanged = { ...input, graphFingerprint: "sha256:" + "b".repeat(64), resolutionAttempts: [attempt] };
+  const reset = planUboResolutionV2(materiallyChanged);
+  assert.equal(reset.customerActions.some(({ actionTemplateReference }) => actionTemplateReference === "DISCLOSE_SHARE_OWNERSHIP"), true);
+  assert.equal(reset.rationaleCodes.includes("MATERIAL_CHANGE_PERMITS_RETRY"), true);
+
+  const otherNeed = need("need-unrelated-cause", { entityId: "other-branch" });
+  const otherRoute = option(ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION, [otherNeed.needId], { actionTemplateReference: "DISCLOSE_SHARE_OWNERSHIP" });
+  const unrelatedInput = plannerInput([otherNeed], { resolutionOptions: [otherRoute], resolutionAttempts: [attempt] });
+  assert.equal(planUboResolutionV2(unrelatedInput).recommendedActions.length, 1);
+});
+
+test("one grouped substantive attempt exhausts only that coherent multi-need route", () => {
+  const needs = [need("grouped-one"), need("grouped-two", { concept: "ADDITIONAL_DIRECT_HOLDER" })];
+  const grouped = option(ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE, needs.map(({ needId }) => needId), {
+    coverageBasis: "COHERENT_EVIDENCE_PACKAGE",
+    evidenceCategories: ["group_structure_note"],
+  });
+  const distinct = option(ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION, [needs[0].needId], {
+    actionTemplateReference: "DISCLOSE_SHARE_OWNERSHIP",
+  });
+  const input = plannerInput(needs, { resolutionOptions: [grouped, distinct] });
+  const exhausted = planUboResolutionV2({ ...input, resolutionAttempts: [attemptFor(input, needs, grouped)] });
+  assert.equal(exhausted.customerActions.some(({ semanticActionType }) => semanticActionType === ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE), false);
+  assert.equal(exhausted.customerActions.some(({ semanticActionType }) => semanticActionType === ACTION_TYPE.REQUEST_STRUCTURED_INFORMATION), true);
 });

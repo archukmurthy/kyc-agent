@@ -2,6 +2,12 @@
 
 This register records product research hypotheses and their Control Room product decisions. Entries are not regulatory authority or Policy Pack content. Source evidence `PRACTITIONER-001` remains explicitly classified `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; approved statuses below authorize only the stated product behavior.
 
+## Wave 11B1 implementation note
+
+The review-only successor applicant Lab now exercises the approved fact-led journey through actual JourneyProjection v2 customer bundles. It presents one coherent task per bundle, suppresses customer forms during system/internal/specialist work, distinguishes customer-input completion from final case completion, and retains the established ownership story as context without exposing the analyst graph.
+
+Only projection-carried approved question content is executable. Real-policy A-02, A-04 and A-17 blocks remain visible to Lab diagnostics and fail closed in the applicant view. External Evidence and delegation are data-only handoffs; no upload, ingestion, message delivery, authorization or production onboarding behavior is implied.
+
 ## JH-001 — Suppress unnecessary customer questions
 
 **Statement:** A customer question should normally be suppressed when the relevant policy requirement has already been resolved to the required evidential standard.

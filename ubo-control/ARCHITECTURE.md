@@ -433,3 +433,13 @@ The successor workspace renders only recorded Snapshot v2 material: projection v
 `ubo-customer-action-v2` is a closed semantic command, not a general fact-injection API. It rejects stale or mismatched case, snapshot, plan, bundle, group, action, need, requirement, subject, frontier, policy, action type and submission contract pins. Company-share submissions preserve owner-to-target `ECONOMIC_OWNERSHIP`, `SHARE_OWNERSHIP`, current/as-at state and exact/range/unknown measurement as candidate facts. Confirmation creates no duplicate fact and reports the pinned R08 state without recalculating or changing evidence sufficiency; correction retains the established claim and records a candidate change. Explicit identity and claim decisions remain mandatory before a later evaluation can create a new snapshot.
 
 Evidence and delegation remain external data handoffs. No Evidence adapter, upload, extraction execution, provider details, host authorization, persistence or communication is present. The successor Lab only adds a read-only applicant preview and contract inspector. Wave 11B UI, G4.1 Evidence integration and onboarding integration remain closed.
+
+## Freeze Wave 11B1 applicant-journey boundary
+
+`UboApplicantJourneyV2` is a separate applicant component exported only by `ubo-control-ui`. It accepts `ubo-journey-projection-v2` as its sole authoritative product-state input and emits only fully pinned `ubo-customer-action-v2` values through a host callback. It imports no UBO domain/private module, Decision Application, Evidence implementation, onboarding surface or persistence layer.
+
+The successor Lab is the review-only host. Applicant submission invokes `applyCustomerInput`; explicit identity/claim decisions and `evaluate` remain separate operator actions. A new applicant projection is rendered only after a new verified Snapshot v2 exists, while prior snapshots remain in Lab session history. The applicant summary is derived only from projected established-spine material and does not rebuild or expose the analyst graph.
+
+Compliance question wording remains policy/content controlled. Missing content or any projected `blockingSignoffs` disables execution, while `requiredSignoffs` remain available in Lab diagnostics for audit. External Evidence and delegation stop at their data-only handoff contracts: there is no upload, private ingestion, Artifact creation, email, authorization, or completion claim.
+
+Wave 11B1 remains fixture-backed, LAB-only and production-unauthorised. The frozen Evidence adapter worktree is neither imported nor copied. Wave 11B2, Evidence execution/release, host onboarding, persistence and production policy activation remain deferred.

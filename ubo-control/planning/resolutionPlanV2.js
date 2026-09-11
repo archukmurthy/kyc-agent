@@ -14,6 +14,11 @@ const {
 const { hashArtifact } = require("../internal/phasedArtifact");
 const { canonicalizeJson } = require("../policy/canonicalJson");
 const {
+  actionSemanticallyCompatible,
+  createResolutionAttemptSemantics,
+  submissionContractFor,
+} = require("./resolutionAttemptSemantics");
+const {
   CAPABILITY_STATE,
   ENTITLEMENT_STATE,
   MATCH_STATE,
@@ -218,7 +223,11 @@ function buildResolutionOptionsV2({ informationNeeds, defaultCapabilityScope = {
   const needsById = new Map(open.map((need) => [need.needId, need]));
   const generated = open.flatMap((need) => (need.permittedResolutionStrategyReferences || []).map((reference) => mappedOption(need, reference, defaultCapabilityScope, existingSystemResolutionContext)));
   const normalized = [...generated, ...additionalOptions].map((option, index) => normalizeOption(option, index, needsById, defaultCapabilityScope));
-  const byId = new Map(normalized.map((option) => [option.optionId, option]));
+  const compatible = normalized.filter((option) => actionSemanticallyCompatible(
+    option.semanticActionType,
+    option.informationNeedIds.map((needId) => needsById.get(needId)),
+  ));
+  const byId = new Map(compatible.map((option) => [option.optionId, option]));
   return deepFreeze(cloneData(sortBy([...byId.values()], "optionId")));
 }
 
@@ -242,8 +251,9 @@ function groupNeeds(openNeeds, options) {
   }).sort((a, b) => a.groupId.localeCompare(b.groupId));
 }
 function attemptOutcome(attempt) { return attempt.capabilityOutcomeState || attempt.outcomeState || attempt.outcome || null; }
-function relevantAttempts(group, option, attempts) {
+function relevantAttempts(group, option, attempts, attemptSemantics) {
   return attempts.filter((attempt) => {
+    if (attempt.semanticRouteKey) return attempt.semanticRouteKey === attemptSemantics.semanticRouteKey;
     const ids = attempt.informationNeedIds || attempt.coveredInformationNeedIds || [];
     const sameNeed = ids.some((id) => group.needs.some(({ needId }) => needId === id)) || attempt.resolutionGroupId === group.groupId;
     const sameRoute = !attempt.semanticActionType || attempt.semanticActionType === option.semanticActionType || attempt.strategy === option.resolutionStrategy;
@@ -254,7 +264,7 @@ function capabilityCannotMeetRequiredPrecision(entry, query) {
   return query.informationConcept === "EXACT_ECONOMIC_PERCENTAGE"
     && !entry.outputCharacteristics.includes(OUTPUT_CHARACTERISTIC.EXACT);
 }
-function optionDecision({ group, option, attempts, profile, evaluationTime, materialFingerprint }) {
+function optionDecision({ group, option, attempts, profile, evaluationTime, materialFingerprint, attemptSemantics }) {
   const rationaleCodes = [];
   let capabilityMatch = null;
   if (option.semanticActionType === ACTION_TYPE.DISCOVER_INFORMATION && profile) {
@@ -274,9 +284,13 @@ function optionDecision({ group, option, attempts, profile, evaluationTime, mate
         || profile.entitlementContext.state === ENTITLEMENT_STATE.NOT_ENTITLED) rationaleCodes.push("ENTITLEMENT_UNAVAILABLE");
     } else if (capabilityMatch.freshnessState !== PROFILE_FRESHNESS_STATE.CURRENT) rationaleCodes.push("PROFILE_STALE");
   }
-  const relevant = relevantAttempts(group, option, attempts);
-  const unchanged = relevant.filter((attempt) => !attempt.materialInputFingerprint || attempt.materialInputFingerprint === materialFingerprint);
-  const changed = relevant.filter((attempt) => attempt.materialInputFingerprint && attempt.materialInputFingerprint !== materialFingerprint);
+  const relevant = relevantAttempts(group, option, attempts, attemptSemantics);
+  const unchanged = relevant.filter((attempt) => attempt.materialCauseFingerprint
+    ? attempt.materialCauseFingerprint === attemptSemantics.materialCauseFingerprint
+    : !attempt.materialInputFingerprint || attempt.materialInputFingerprint === materialFingerprint);
+  const changed = relevant.filter((attempt) => attempt.materialCauseFingerprint
+    ? attempt.materialCauseFingerprint !== attemptSemantics.materialCauseFingerprint
+    : attempt.materialInputFingerprint && attempt.materialInputFingerprint !== materialFingerprint);
   if (changed.length > 0) rationaleCodes.push("MATERIAL_CHANGE_PERMITS_RETRY");
   const substantive = unchanged.find((attempt) => SUBSTANTIVE_OUTCOMES.has(attemptOutcome(attempt))
     || (attemptOutcome(attempt) === "INCONCLUSIVE" && (attempt.final === true || attempt.finalOutcome === true)));
@@ -375,7 +389,7 @@ function profilePin(profile, state, usedEntryIds) {
 }
 
 function planUboResolutionV2(input) {
-  assertAllowedKeys(input, ["policyPack", "requirementResolution", "informationNeedSet", "operationalBlockers", "reviewRequirements", "specialistRoutes", "resolutionOptions", "resolutionAttempts", "registryCapabilityProfile", "predecessorResolutionPlan", "existingSystemResolutionContext", "evaluationTime", "caseRevision", "graphFingerprint", "defaultCapabilityScope"], "resolutionPlannerV2Input");
+  assertAllowedKeys(input, ["policyPack", "requirementResolution", "informationNeedSet", "operationalBlockers", "reviewRequirements", "specialistRoutes", "resolutionOptions", "resolutionAttempts", "registryCapabilityProfile", "predecessorResolutionPlan", "existingSystemResolutionContext", "evaluationTime", "caseRevision", "graphFingerprint", "materialGraphFingerprint", "defaultCapabilityScope"], "resolutionPlannerV2Input");
   assertDataOnly(input, "resolutionPlannerV2Input");
   const policy = policyIdentity(input.policyPack);
   const revision = caseReference(input.caseRevision);
@@ -392,7 +406,10 @@ function planUboResolutionV2(input) {
     assertArray(input.resolutionOptions, "resolutionOptions");
     options = input.resolutionOptions.map((option, index) => normalizeOption(option, index, needsById, input.defaultCapabilityScope || {}));
   } else options = buildResolutionOptionsV2({ informationNeeds: openNeeds, defaultCapabilityScope: input.defaultCapabilityScope || {}, existingSystemResolutionContext: input.existingSystemResolutionContext || {} });
-  options = sortBy(options, "optionId");
+  options = sortBy(options.filter((option) => actionSemanticallyCompatible(
+    option.semanticActionType,
+    option.informationNeedIds.map((needId) => needsById.get(needId)),
+  )), "optionId");
   const profile = input.registryCapabilityProfile || null;
   if (profile) validateRegistryCapabilityProfileV1(profile);
   const freshnessState = profile ? evaluateProfileFreshness(profile, input.evaluationTime) : "NOT_PROVIDED";
@@ -408,16 +425,30 @@ function planUboResolutionV2(input) {
   const groups = groupNeeds(openNeeds, options);
   const usedEntryIds = [];
   const groupResults = groups.map((group) => {
-    const decisions = group.options.map((option) => ({ option, decision: optionDecision({ group, option, attempts: attemptHistory, profile, evaluationTime: input.evaluationTime, materialFingerprint: materialInputFingerprint }) }));
+    const decisions = group.options.map((option) => {
+      const attemptSemantics = createResolutionAttemptSemantics({
+        policyIdentity: policy,
+        causalGroupingKey: group.causalGroupingKey,
+        needs: group.needs,
+        semanticActionType: option.semanticActionType,
+        submissionContract: submissionContractFor(option),
+        contentReference: option.actionTemplateReference,
+        targetReferences: unique(group.needs.flatMap(targetEntities)).map((entityId) => ({ entityId })),
+        frontierEntityIds: unique(group.needs.map(({ frontierEntityId }) => frontierEntityId)),
+        expectedCandidateFacts: option.expectedCandidateFacts,
+        graphFingerprint: input.materialGraphFingerprint || input.graphFingerprint,
+      });
+      return { option, decision: optionDecision({ group, option, attempts: attemptHistory, profile, evaluationTime: input.evaluationTime, materialFingerprint: materialInputFingerprint, attemptSemantics }) };
+    });
     decisions.forEach(({ decision }) => { if (decision.capabilityMatch?.entry) usedEntryIds.push(decision.capabilityMatch.entry.entryId); });
     const specialists = linkedSpecialists(group, input.specialistRoutes || []);
     const reviews = linkedReviews(group, input.reviewRequirements || []);
     const blockers = sortCanonical((input.operationalBlockers || []).filter((blocker) => (blocker.affectedInformationNeedIds || []).some((id) => group.needs.some(({ needId }) => needId === id))));
     const discovery = decisions.filter(({ option, decision }) => option.semanticActionType === ACTION_TYPE.DISCOVER_INFORMATION && decision.executable);
     const zeroFriction = decisions.filter(({ option, decision }) => SYSTEM_ACTIONS.has(option.semanticActionType) && option.semanticActionType !== ACTION_TYPE.DISCOVER_INFORMATION && decision.executable);
-    const chartCandidates = decisions.filter(({ option, decision }) => option.semanticActionType === ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE && option.contentReadiness !== CONTENT_READINESS.REQUIRES_POLICY_CONTENT && (decision.executable || option.currentlyAvailable));
-    const customerCandidates = decisions.filter(({ option, decision }) => CUSTOMER_ACTIONS.has(option.semanticActionType) && option.contentReadiness !== CONTENT_READINESS.REQUIRES_POLICY_CONTENT && (decision.executable || option.currentlyAvailable));
-    const internalCandidates = decisions.filter(({ option, decision }) => option.semanticActionType === ACTION_TYPE.INTERNAL_REVIEW && (decision.executable || option.currentlyAvailable));
+    const chartCandidates = decisions.filter(({ option, decision }) => option.semanticActionType === ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE && option.contentReadiness !== CONTENT_READINESS.REQUIRES_POLICY_CONTENT && decision.executable);
+    const customerCandidates = decisions.filter(({ option, decision }) => CUSTOMER_ACTIONS.has(option.semanticActionType) && option.contentReadiness !== CONTENT_READINESS.REQUIRES_POLICY_CONTENT && decision.executable);
+    const internalCandidates = decisions.filter(({ option, decision }) => option.semanticActionType === ACTION_TYPE.INTERNAL_REVIEW && decision.executable);
     const predictsOpacity = decisions.some(({ decision }) => decision.rationaleCodes.some((code) => ["CAPABILITY_PREDICTS_OPACITY", "CAPABILITY_INSUFFICIENT_FOR_REQUIRED_PRECISION", "ENTITLEMENT_UNAVAILABLE", "SUBSTANTIVE_ROUTE_EXHAUSTED"].includes(code)));
     const operationalFailure = decisions.find(({ decision }) => decision.operational && OPERATIONAL_OUTCOMES.has(decision.operational));
     const structural = group.needs.some(isStructural);
@@ -439,17 +470,17 @@ function planUboResolutionV2(input) {
     } else if (structural && predictsOpacity && chartCandidates.length > 0) {
       strategy = ACQUISITION_STRATEGY.CHART_ASSISTED;
       const chosen = [...chartCandidates].sort((a, b) => b.option.informationNeedIds.length - a.option.informationNeedIds.length || a.option.optionId.localeCompare(b.option.optionId))[0];
-      selected = [actionFrom(group, chosen.option, strategy, { ...chosen.decision, executable: true }, ["STRUCTURE_EVIDENCE_COVERS_MULTIPLE_NEEDS", ...(group.needs.length > 1 ? ["SHARED_STRUCTURAL_CAUSE"] : [])], profile?.profileHash || null)];
+      selected = [actionFrom(group, chosen.option, strategy, chosen.decision, ["STRUCTURE_EVIDENCE_COVERS_MULTIPLE_NEEDS", ...(group.needs.length > 1 ? ["SHARED_STRUCTURAL_CAUSE"] : [])], profile?.profileHash || null)];
       rationale.push("CAPABILITY_PREDICTS_OPACITY", "STRUCTURE_EVIDENCE_COVERS_MULTIPLE_NEEDS");
     } else if (customerCandidates.length > 0) {
       strategy = structural && customerCandidates[0].option.semanticActionType === ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE ? ACQUISITION_STRATEGY.CHART_ASSISTED : ACQUISITION_STRATEGY.NOT_APPLICABLE;
       const chosen = [...customerCandidates].sort((a, b) => b.option.informationNeedIds.length - a.option.informationNeedIds.length || a.option.optionId.localeCompare(b.option.optionId))[0];
-      selected = [actionFrom(group, chosen.option, strategy, { ...chosen.decision, executable: true }, ["CUSTOMER_INPUT_REQUIRED_BY_POLICY"] )];
+      selected = [actionFrom(group, chosen.option, strategy, chosen.decision, ["CUSTOMER_INPUT_REQUIRED_BY_POLICY"] )];
       rationale.push("CUSTOMER_INPUT_REQUIRED_BY_POLICY");
     } else if (reviews.length > 0 || internalCandidates.length > 0) {
       strategy = ACQUISITION_STRATEGY.NOT_APPLICABLE;
       selected = reviews.map((review) => actionFrom(group, reviewOption(group, review), strategy, { executable: true, operational: null, capabilityMatch: null, rationaleCodes: ["HUMAN_INTERPRETATION_REQUIRED"], attempt: null }));
-      if (selected.length === 0) selected = internalCandidates.slice(0, 1).map(({ option, decision }) => actionFrom(group, option, strategy, { ...decision, executable: true }, ["HUMAN_INTERPRETATION_REQUIRED"]));
+      if (selected.length === 0) selected = internalCandidates.slice(0, 1).map(({ option, decision }) => actionFrom(group, option, strategy, decision, ["HUMAN_INTERPRETATION_REQUIRED"]));
       rationale.push("HUMAN_INTERPRETATION_REQUIRED");
     } else {
       strategy = structural && predictsOpacity ? ACQUISITION_STRATEGY.CHART_ASSISTED : ACQUISITION_STRATEGY.NOT_APPLICABLE;

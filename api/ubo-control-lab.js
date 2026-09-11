@@ -19,6 +19,17 @@ const {
   startReviewFixture,
   startReviewReplay,
 } = require("../ubo-control-lab/server/reviewLabEngine");
+const {
+  applyApplicantCustomerAction,
+  applyApplicantDecisions,
+  catalogue: applicantCatalogue,
+  completeApplicantFixtureReviewAndAdvance,
+  evaluateApplicantJourney,
+  resumeApplicantAdvance,
+  startApplicantFixture,
+  submitApplicantActionAndAdvance,
+  validateSession: validateApplicantSession,
+} = require("../ubo-control-lab/server/applicantJourneyLab");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -34,6 +45,14 @@ const OPERATIONS = Object.freeze({
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
   CHANGE_REVIEW_PROFILE: "CHANGE_REVIEW_PROFILE",
   REVIEW_COMPARISON: "REVIEW_COMPARISON",
+  START_APPLICANT_FIXTURE: "START_APPLICANT_FIXTURE",
+  APPLY_APPLICANT_CUSTOMER_ACTION: "APPLY_APPLICANT_CUSTOMER_ACTION",
+  APPLY_APPLICANT_DECISIONS: "APPLY_APPLICANT_DECISIONS",
+  EVALUATE_APPLICANT_JOURNEY: "EVALUATE_APPLICANT_JOURNEY",
+  SUBMIT_APPLICANT_ACTION_AND_ADVANCE: "SUBMIT_APPLICANT_ACTION_AND_ADVANCE",
+  RESUME_APPLICANT_ADVANCE: "RESUME_APPLICANT_ADVANCE",
+  COMPLETE_APPLICANT_FIXTURE_REVIEW: "COMPLETE_APPLICANT_FIXTURE_REVIEW",
+  VALIDATE_APPLICANT_SESSION: "VALIDATE_APPLICANT_SESSION",
 });
 
 function explicitlyReviewBaseline(session) {
@@ -107,7 +126,7 @@ function send(res, status, payload) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method === "GET") return send(res, 200, { ...fixtureCatalogue(), review: reviewCatalogue() });
+  if (req.method === "GET") return send(res, 200, { ...fixtureCatalogue(), review: reviewCatalogue(), applicant: applicantCatalogue() });
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
     const input = req.body || {};
@@ -155,6 +174,22 @@ module.exports = async function handler(req, res) {
         const successor = startReviewFixture(input.payload);
         return send(res, 200, comparisonSummary(baseline, successor));
       }
+      case OPERATIONS.START_APPLICANT_FIXTURE:
+        return send(res, 200, startApplicantFixture(input.payload));
+      case OPERATIONS.APPLY_APPLICANT_CUSTOMER_ACTION:
+        return send(res, 200, applyApplicantCustomerAction(input.payload));
+      case OPERATIONS.APPLY_APPLICANT_DECISIONS:
+        return send(res, 200, applyApplicantDecisions(input.payload));
+      case OPERATIONS.EVALUATE_APPLICANT_JOURNEY:
+        return send(res, 200, evaluateApplicantJourney(input.payload));
+      case OPERATIONS.SUBMIT_APPLICANT_ACTION_AND_ADVANCE:
+        return send(res, 200, submitApplicantActionAndAdvance(input.payload));
+      case OPERATIONS.RESUME_APPLICANT_ADVANCE:
+        return send(res, 200, resumeApplicantAdvance(input.payload));
+      case OPERATIONS.COMPLETE_APPLICANT_FIXTURE_REVIEW:
+        return send(res, 200, completeApplicantFixtureReviewAndAdvance(input.payload));
+      case OPERATIONS.VALIDATE_APPLICANT_SESSION:
+        return send(res, 200, validateApplicantSession(input.payload?.session));
       default:
         return send(res, 400, { error: "Unsupported Lab operation" });
     }

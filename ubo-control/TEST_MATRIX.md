@@ -409,6 +409,26 @@ These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B s
 | Structured company-share input preserves `SHARE_OWNERSHIP`, range semantics and provenance as candidate claims until explicit identity/adjudication decisions; re-evaluation creates a new snapshot without changing the old one | Wave 11A structured ownership cycle |
 | External Evidence action emits a data-only handoff, retains correlation, leaves needs open and performs no extraction; delegation remains data-only and incomplete | Wave 11A handoff/delegation tests and architecture scans |
 | A-02/A-04/A-17 blocks remain effective and no unsigned residual/control/identity content becomes executable | real 1.6-RC projection/action negative tests |
+
+## Freeze Wave 11B1 interactive applicant journey v2
+
+| Invariant | Protection |
+|---|---|
+| Separate `ubo-applicant-journey-ui-v2` accepts only JourneyProjection v2, emits CustomerAction v2, preserves `UboJourney` v1 and adds exactly one deliberate UI export | `UboApplicantJourneyV2.nodetest.js`, architecture/export checks |
+| Status/finish line, compact projected ownership summary, one card per CustomerWorkBundle, known/missing separation and applicant-safe copy | component fixtures and applicant Lab characterization |
+| Confirmation reports the pinned R08 state; correction targets one allowed established relationship and remains pending review | component and `applicantJourneyLab.nodetest.js` |
+| Exact/range/unknown company-share input preserves direction, concept, endpoint semantics and candidate-only state through explicit decisions | applicant Lab cycle tests |
+| External Evidence and delegation stop at data-only handoffs with no upload, Artifact, message, authorization or completion | component/Lab tests and architecture scans |
+| Snapshot/plan/bundle/action draft pins fail closed; fresh projections invalidate stale drafts; no hidden evaluation | component and Lab lifecycle tests |
+| SYSTEM, INTERNAL, SPECIALIST, BLOCKED, CUSTOMER_INPUT_COMPLETE and COMPLETE remain distinct applicant states | AJV2 fixture/component tests |
+| ASDA system and exhausted profiles consume actual pinned JourneyProjection v2 bundles without path/need duplication | AJV2-13/14 characterization |
+| Mobile/keyboard/accessibility path and applicant/analyst separation remain usable | AJV2-15 plus manual-acceptance evidence |
+| One applicant submission invokes the Lab host, which records the accepted result and automatically performs only the no-decisions-required checkpoint/evaluate/snapshot/projection sequence | `applicantJourneyLab.nodetest.js` exact orchestration-order, idempotency and failed-evaluation retry matrix |
+| Candidate identity/claim/correction targets, Evidence handoffs, delegation and policy/sign-off blocks stop automatic continuation and remain pending for the proper actor | applicant host branch tests and fixture-only analyst-helper tests |
+| Browser-local fixture/replay sessions resume from verified Snapshot v2 state; live sessions require explicit opt-in; integrity failure, forbidden content and in-flight uncertainty fail safely | `applicantSessionStore.nodetest.js` and applicant Lab characterization |
+| Applicant current tasks exclude accepted submitted bundles while submitted activity and internal progress remain visible; internal checkpoint/evaluation controls are absent from the applicant surface | `UboApplicantJourneyV2.nodetest.js`, browser-source assertions and manual evidence |
+
+Wave 11B1 advances exactly `F07-14-001`, `F07-14-002`, `F07-14-005`, `F07-14-007`, `F07-14-008`, and `F07-14-009` as `REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB`; every entry retains `productionExecutable=false`. A-02, A-04 and A-17 remain unchanged and continue to block their real-policy content. Evidence upload/private ingestion, Wave 11B2, persistence, onboarding and production authorization remain deferred.
 | Successor Lab exposes only a read-only applicant preview and contract inspector with explicit Evidence/content boundary messages | `reviewLabEngine.nodetest.js` |
 | Sign-off dependencies remain audit-complete while only exact `APPROVED` clears execution; OPEN, pending, deferred, mixed and missing records fail closed | Wave 11A schema-1.3 sign-off matrix |
 | Confirmation maps pinned R08 as SATISFIED/OPEN/NOT_APPLICABLE/REVIEW_REQUIRED, does not replace evidence and never mutates or recalculates sufficiency | Wave 11A confirmation/R08 matrix and tampered-snapshot rejection |

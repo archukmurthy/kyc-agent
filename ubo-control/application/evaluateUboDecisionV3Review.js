@@ -14,6 +14,7 @@ const {
   buildResolutionOptionsV2,
   planUboResolutionV2,
 } = require("../planning/resolutionPlanV2");
+const { materialGraphFingerprint } = require("../planning/resolutionAttemptSemantics");
 const { assessCompanyPscAttributionV1 } = require("../policy/companyPscAttributionV1");
 const { deriveRequirementApplicabilityV1 } = require("../policy/derivedRequirementApplicabilityV1");
 const { assessEffectiveInterestQualificationV2 } = require("../policy/effectiveInterestQualificationV2");
@@ -235,6 +236,7 @@ function evaluateUboDecisionV3Review(input) {
     evaluationTime: input.evaluationTime,
     caseRevision,
     graphFingerprint: hashArtifact(graph),
+    materialGraphFingerprint: materialGraphFingerprint(graph),
     defaultCapabilityScope: {
       jurisdiction: String(input.caseContext.jurisdiction || "ANY").toUpperCase(),
       entityProfile: profile(target),

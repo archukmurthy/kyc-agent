@@ -29,6 +29,24 @@ function toV3State(v2State) {
   return CASE_STATE_INTERNALS.encodeCaseState(raw, DECISION_APPLICATION_CONTRACT_VERSION_V3);
 }
 
+function confirmationCompatibleSession() {
+  const session = startReviewFixture({ fixtureId: "V2-LAB-07" });
+  const raw = structuredClone(CASE_STATE_INTERNALS.decodeCaseState(
+    session.caseState,
+    DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  ));
+  const establishedControl = raw.candidateClaims.find((claim) => claim.status === "OPERATIVE"
+    && claim.relationship === "SIGNIFICANT_INFLUENCE_OR_CONTROL"
+    && claim.subject?.party?.entityId === "tdr-gp-a"
+    && claim.object?.party?.entityId === "bellis-finco");
+  assert.ok(establishedControl, "confirmation test requires the established TDR control relationship");
+  establishedControl.qualifiers.currentState = "UNKNOWN";
+  return {
+    ...session,
+    caseState: CASE_STATE_INTERNALS.encodeCaseState(raw, DECISION_APPLICATION_CONTRACT_VERSION_V2),
+  };
+}
+
 function actionFor(view, bundle, actionType, payload, overrides = {}) {
   const permitted = bundle.permittedSemanticActions.find((item) => item.actionType === actionType);
   assert.ok(permitted, `bundle should expose ${actionType}`);
@@ -312,7 +330,7 @@ test("delegation is a data-only host handoff and is never treated as completion"
 });
 
 test("confirmation records provenance without duplicate graph relationships and correction preserves history", () => {
-  const session = startReviewFixture({ fixtureId: "V2-LAB-07" });
+  const session = confirmationCompatibleSession();
   const requirement = policy.requirements.find(({ requirementId }) => requirementId === "UBO-R06");
   const strategy = requirement.resolutionStrategies.find(({ strategy: name }) => name === "CUSTOMER_ATTESTATION");
   const evaluated = evaluateCustomerPlan(session, testOnlyPolicy(requirement.requirementId, [strategy]));
@@ -617,7 +635,7 @@ test("sign-off dependencies retain audit status and only exact APPROVED clears e
 });
 
 test("confirmation reports the pinned R08 state without changing evidence sufficiency", () => {
-  const session = startReviewFixture({ fixtureId: "V2-LAB-07" });
+  const session = confirmationCompatibleSession();
   const requirement = policy.requirements.find(({ requirementId }) => requirementId === "UBO-R06");
   const strategy = requirement.resolutionStrategies
     .find(({ strategy: name }) => name === "CUSTOMER_ATTESTATION");
