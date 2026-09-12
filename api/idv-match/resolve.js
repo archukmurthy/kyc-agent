@@ -142,7 +142,11 @@ async function resolveAttempt(attemptId, deps = {}) {
           attemptId, applicationId: attempt.application_id,
           decision: { band: "C", outcomeType: "unresolved_to_review", resolvedBy: "reviewer", requiresReview: true, escalate: true, reasons: ["no_officer_match", "screening_hit"] },
         }, deps);
-        return { enabled: true, band: "C", outcomeType: "unresolved_to_review", ...recorded, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+        // route: null overrides the "loa_path" that recordBandOutcome sets for any
+        // Band C decision — this is a review outcome (Fix 1 hard-stops the applicant
+        // on requiresReview), so it must not also carry a route the UI could read as
+        // "still on the LOA path".
+        return { enabled: true, band: "C", outcomeType: "unresolved_to_review", ...recorded, route: null, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
       }
       // clear → existing Band C demoted_to_loa_path (unchanged below)
       const recorded = await (deps.recordBandOutcome || recordBandOutcome)({

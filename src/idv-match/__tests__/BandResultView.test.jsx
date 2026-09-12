@@ -129,3 +129,34 @@ test("renders nothing when the flag is off", () => {
   const { container } = render(<BandResultView result={{ enabled: false }} />);
   expect(container).toBeEmptyDOMElement();
 });
+
+test("requiresReview HARD STOPS the applicant even with verifiedFields + Band C/loa_path shape (no-match screening hit)", () => {
+  const onConfirm = jest.fn();
+  const onProvideLoa = jest.fn();
+  const result = {
+    enabled: true, band: "C", outcomeType: "unresolved_to_review", route: "loa_path",
+    requiresReview: true, screeningHit: true,
+    applicantView: { title: "We're completing our checks", body: "Your application has been saved. We'll be in touch if we need anything further." },
+    verifiedFields: { firstName: "Bob", documentNumber: "Z9" },
+  };
+  render(<BandResultView result={result} onConfirm={onConfirm} onProvideLoa={onProvideLoa} />);
+  expect(screen.getByText("We're completing our checks")).toBeInTheDocument();
+  expect(screen.queryByText(/confirm/i)).toBeNull();
+  expect(screen.queryByText(/continue/i)).toBeNull();
+  expect(screen.queryByText(/letter of authorization/i)).toBeNull();
+});
+
+test("requiresReview HARD STOPS the applicant on a matched-hit outcome (band B)", () => {
+  const onConfirm = jest.fn();
+  const onProceed = jest.fn();
+  const result = {
+    enabled: true, band: "B", outcomeType: "unresolved_to_review",
+    requiresReview: true,
+    applicantView: { title: "We're completing our checks", body: "Your application has been saved. We'll be in touch if we need anything further." },
+    verifiedFields: { firstName: "Bob" },
+  };
+  render(<BandResultView result={result} onConfirm={onConfirm} onProceed={onProceed} />);
+  expect(screen.getByText("We're completing our checks")).toBeInTheDocument();
+  expect(screen.queryByText(/confirm/i)).toBeNull();
+  expect(screen.queryByText(/continue/i)).toBeNull();
+});

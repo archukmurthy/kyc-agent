@@ -49,6 +49,15 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
   }
 
   const view = result.applicantView || {};
+
+  // A review-required outcome (hard exclusion — e.g. a sanctions/PEP/adverse-media
+  // screening hit) is a HARD STOP: show the neutral review copy only. No confirm,
+  // no continue, no letter-of-authorization flow — the applicant cannot proceed
+  // past a flagged case (back-office review takes over).
+  if (result.requiresReview === true) {
+    return <View title={view.title} body={view.body} />;
+  }
+
   const isBandC = result.band === "C" || result.outcomeType === "demoted_to_loa_path" || result.route === "loa_path";
   const hasVerifiedFields = result.verifiedFields && Object.keys(result.verifiedFields).length > 0;
   // Band C is a person-mismatch: the applicant MUST upload a letter of
