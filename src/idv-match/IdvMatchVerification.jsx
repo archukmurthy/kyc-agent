@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 import BandResultView from "./BandResultView";
+import { SHOW_TEST_TOOLS } from "../constants/appConstants";
 
 // Inline identity verification for the discrepancy-bands flow (Section B). Starts
 // a server-authoritative idv-match attempt bound to the selected officer, shows
@@ -175,6 +176,23 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
           </p>
           {status && <p>Status: <strong>{status}</strong></p>}
         </div>
+      )}
+      {/* DEV ONLY (SHOW_TEST_TOOLS, off in production): skip the Didit session and
+          inject a synthetic verified pass so you can click through to later pages
+          without scanning the QR / doing the selfie every time. Screening is NOT
+          run on this path — use the real flow to test screening/bands. */}
+      {SHOW_TEST_TOOLS && !result && (
+        <button
+          type="button"
+          onClick={() => applyResult({
+            enabled: true, band: "A", outcomeType: "auto_match",
+            applicantView: { title: "Identity verified (test skip)", body: "Didit skipped with test data - dev only." },
+            verifiedFields: { firstName: "Test", lastName: "User", dateOfBirth: "1990-01-01", nationality: "GB" },
+          })}
+          style={{ marginTop: 12, padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: "transparent", color: "#4a9e8e", border: "2px dashed #4a9e8e" }}
+        >
+          ⏭ Skip verification (test)
+        </button>
       )}
     </div>
   );

@@ -32,6 +32,20 @@ test("start -> QR/link -> completed -> resolve renders the Band A success", asyn
   expect(onResolved).toHaveBeenCalledWith({ attemptId: "att-1", band: "A", outcomeType: "auto_match" });
 });
 
+test("dev skip button (SHOW_TEST_TOOLS) injects a verified pass without Didit", async () => {
+  // NODE_ENV=test -> SHOW_TEST_TOOLS is true, so the dev skip button renders.
+  global.fetch = mockFetch({
+    "/api/idv-match/session": () => ({ attemptId: "att-1", hostedVerificationUrl: "https://verify.didit.me/s/skip" }),
+  });
+  const onResolved = jest.fn();
+  render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResolved={onResolved} />);
+  const skip = await screen.findByText(/Skip verification \(test\)/);
+  fireEvent.click(skip);
+  // Renders the synthetic Band A pass — no /resolve or /status call needed.
+  await screen.findByText("Identity verified (test skip)");
+  expect(onResolved).toHaveBeenCalledWith(expect.objectContaining({ band: "A", outcomeType: "auto_match" }));
+});
+
 test("Band B dialogue -> submit same_spelling -> explain resolves to success", async () => {
   global.fetch = mockFetch({
     "/api/idv-match/session": () => ({ attemptId: "att-1", hostedVerificationUrl: "https://verify.didit.me/s/y" }),
