@@ -52,8 +52,12 @@ function phase(sequence, algorithmVersion, previous, output, evaluationTime, sig
     marker,
   });
 }
-function claimSupport(caseState) {
-  return caseState.candidateClaims.map(({ claimId, evidenceReferences = [] }) => ({ claimId, evidenceReferences: cloneData(evidenceReferences) }));
+function claimSupport(caseState, graph) {
+  const operativeRelationshipClaims = new Set(graph.relationships
+    .flatMap(({ supportingClaimIds = [] }) => supportingClaimIds));
+  return caseState.candidateClaims
+    .filter(({ claimId }) => operativeRelationshipClaims.has(claimId))
+    .map(({ claimId, evidenceReferences = [] }) => ({ claimId, evidenceReferences: cloneData(evidenceReferences) }));
 }
 function naturalPeople(caseState) {
   return caseState.canonicalEntities.filter(({ category }) => category === CANONICAL_ENTITY_CATEGORY.NATURAL_PERSON);
@@ -149,7 +153,7 @@ function evaluateUboDecisionV3Review(input) {
   phases.push(phase(1, "ubo-policy-readiness-v1", null, { targetEntity: cloneData(target), caseContext: cloneData(input.caseContext), basePolicyApplicability: baseApplicability, policyReadiness: readiness }, input.evaluationTime, readiness.unresolvedSignoffs.map(({ signoffId }) => signoffId)));
   const graph = buildCanonicalOwnershipGraph(input.caseState);
   const graphContext = deriveGraphContextV1({ caseState: input.caseState, graph, targetEntityId: targetId });
-  phases.push(phase(2, "ubo-graph-derived-context-v1", phases.at(-1), { graph: cloneData(graph), graphDerivedContext: graphContext, claimSupport: claimSupport(input.caseState) }, input.evaluationTime));
+  phases.push(phase(2, "ubo-graph-derived-context-v1", phases.at(-1), { graph: cloneData(graph), graphDerivedContext: graphContext, claimSupport: claimSupport(input.caseState, graph) }, input.evaluationTime));
 
   const calculations = [];
   naturalPeople(input.caseState).forEach((person) => Object.values(GRAPH_DIMENSION).forEach((dimension) => {
@@ -159,8 +163,8 @@ function evaluateUboDecisionV3Review(input) {
   calculations.sort((a, b) => `${a.subjectEntityId}|${a.dimension}`.localeCompare(`${b.subjectEntityId}|${b.dimension}`));
   const effectiveAssessments = calculations.map((calculation) => assessEffectiveInterestQualificationV2({ policyPack: loaded, calculationResult: calculation, holderEntity: targetEntity(input.caseState, calculation.subjectEntityId), targetEntityId: targetId, caseRevision: { caseId: input.caseState.caseId, revisionId: input.caseState.revisionId, revision: input.caseState.revision }, graphVersion: graph.graphVersion }));
   const caseRevision = { caseId: input.caseState.caseId, revisionId: input.caseState.revisionId, revision: input.caseState.revision };
-  const companyAssessments = profile(target) === "COMPANY" ? [assessCompanyPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState), targetEntityId: targetId, caseRevision })] : [];
-  const llpAssessments = (profile(target) === "LLP" || graphContext.hasLlpProfile) ? [assessLlpPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState), targetEntityId: targetId, caseRevision, compositionMode: "SUCCESSOR_REVIEW_ONLY" })] : [];
+  const companyAssessments = profile(target) === "COMPANY" ? [assessCompanyPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState, graph), targetEntityId: targetId, caseRevision })] : [];
+  const llpAssessments = (profile(target) === "LLP" || graphContext.hasLlpProfile) ? [assessLlpPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState, graph), targetEntityId: targetId, caseRevision, compositionMode: "SUCCESSOR_REVIEW_ONLY" })] : [];
   const closures = deriveClosures({ loaded, caseState: input.caseState, graph, evaluationTime: input.evaluationTime });
   const percentageEvidence = (input.percentageEvidenceInputs || []).map((item) => assessPercentageEvidenceV1({ policyPack: loaded, ...item, evaluationTime: input.evaluationTime }));
   phases.push(phase(3, "ubo-calculations-and-attributions-v1", phases.at(-1), { calculations, effectiveAssessments, companyAssessments, llpAssessments, layerClosureAssessments: closures, percentageEvidenceAssessments: percentageEvidence }, input.evaluationTime, [...companyAssessments, ...llpAssessments, ...closures, ...percentageEvidence].flatMap((item) => item.governance?.requiredSignoffIds || item.requiredSignoffIds || [])));

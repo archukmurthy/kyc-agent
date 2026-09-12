@@ -118,6 +118,14 @@ Discovery and interpretation of already-held artifacts share the zero-customer-f
 
 One artifact may yield several candidate facts, each affecting a different policy requirement. Capturing those candidate facts does not itself evaluate or resolve R04, R05 or R06.
 
+## JH-008 — Existing Artifact demonstration boundary
+
+**Statement:** A review-only journey may satisfy a plan-derived Evidence handoff from an already-ingested, authorized Artifact, provided the host keeps Artifact correlation outside the immutable handoff, exposes extracted facts as candidates, and requires explicit identity/claim decisions before re-evaluation.
+
+**Status:** `SUPPORTED / WAVE 11B2A DEMONSTRATED`
+
+**Caution:** This proves an existing-Artifact Evidence-to-UBO cycle. It is not a private-upload, trusted-ingestion, persistence, onboarding or production-authorization design.
+
 ## Practitioner research backlog
 
 The unanswered research questions supporting these hypotheses are retained in [PRACTITIONER-001](../research/practitioner/PRACTITIONER-001-ubo-operational-resolution.md#practitioner-research-backlog). They are not implementation requirements.

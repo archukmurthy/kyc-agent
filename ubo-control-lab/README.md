@@ -63,6 +63,18 @@ Applicant-facing checkpoint and re-evaluation controls have been removed. For de
 
 The durable design principle is: domain operations remain explicit and auditable, while the host automatically orchestrates non-judgmental steps so the applicant performs only genuine customer actions. Lab browser-local resumability is a demo/testing convenience and is not production case persistence.
 
+## Wave 11B2A pre-ingested Bettercomms demonstration
+
+Choose `BETTERCOMMS EVIDENCE DEMO` in the top-level Lab selector. The fixture starts with Snapshot A and a real plan-derived `ExternalEvidenceHandoff v1`. `Use pre-ingested Bettercomms ownership chart` passes the accepted existing Artifact reference through an `EvidenceConsumerV1` constructed from `evidence/consumer/v1/index.js`, the merged UBO Evidence extraction adapter, and the existing ExtractionService seam. Trusted fixture authority is supplied only by the server composition root.
+
+The candidate review displays six source-backed facts from one Artifact and stays explicitly non-operative. The fixture-only Compliance helper then applies exact source-occurrence identity decisions and claim decisions through Decision Application v3. Snapshot B retains Snapshot A and shows four economic graph relationships, Mitchell Fortescue's exact 75% statutory effective-interest result, Lee Taylor's exact-25% route-specific non-satisfaction, and two officer-role facts as non-control metadata.
+
+The accepted Lab scenario explicitly establishes the four economic chart assertions as current at `2026-09-08T10:00:00.000Z`; the two officer assertions retain the Evidence fixture's `UNKNOWN` temporal state. This fixture-only currentness is what permits the fresh engine to evaluate the economic path, and it is never inferred from the Artifact capture timestamp.
+
+Completed demo state is sealed locally under `ubo-control-lab-preingested-evidence-cache-v1` at `ubo-control-lab.preingested-evidence-sessions.v1`, then re-verified by the server on restore. The cache contains public references and immutable UBO records only—no document bytes, raw provider payload, credentials, access tokens, Blob URLs, filesystem paths, or Evidence internal objects.
+
+Wave 11B2A proves the existing-Artifact Evidence-to-UBO decision cycle. It does not provide a production private-upload front door. Trusted private ingestion remains a separate production-readiness programme.
+
 AJV2-13 uses the actual ASDA system-coverage plan and exposes no customer form. AJV2-14 uses the actual exhausted profile and renders exactly its three pinned bundles, including blocked residual content and external Evidence handoff only where planned. No action in this tab calls Discovery or Evidence merely by being viewed.
 
 ## Wave 10 deployed manual acceptance

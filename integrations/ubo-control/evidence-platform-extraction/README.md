@@ -21,6 +21,8 @@ The adapter distinguishes facts responsive to requested UBO concepts from supple
 
 `OFFICER_OF` is deliberately mapped only to bounded `officer_relationship` entity-attribute metadata. It is not economic ownership, voting rights, formal control, or evidence of qualification. If officer information is explicitly requested and cannot be mapped, it blocks completeness like any other requested concept.
 
+An Evidence relationship may carry the explicit public qualification `economic_interest_concept:SHARE_OWNERSHIP`. The adapter preserves that exact source qualification as the UBO `economicInterestConcept`; it does not infer company shares from a generic economic relationship or alter percentage arithmetic.
+
 ## Deliberately unimplemented
 
 Trusted private Artifact ingestion and host composition remain separate future work. This adapter cannot accept bytes, Blob URLs or filesystem paths, and it cannot fabricate Artifact IDs. Evidence Core and its public contract are unchanged; UBO core contracts, policy packs and sign-off statuses are unchanged; production remains unauthorized.

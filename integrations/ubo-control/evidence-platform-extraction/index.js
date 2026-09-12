@@ -276,6 +276,9 @@ function operationEvidenceReferences(interpretation, artifactById) {
 }
 
 function relationshipQualifiers(relationship, fact) {
+  const economicConcept = (relationship.qualifications || []).includes("economic_interest_concept:SHARE_OWNERSHIP")
+    ? "SHARE_OWNERSHIP"
+    : null;
   return {
     ...temporalQualifiers(relationship.temporal),
     evidenceRelationshipType: relationship.relationshipType,
@@ -286,6 +289,7 @@ function relationshipQualifiers(relationship, fact) {
     evidenceRequestRelation: fact.requestRelation || null,
     evidenceGroundingType: fact.groundingType || null,
     evidenceSupportState: fact.supportState || null,
+    ...(economicConcept ? { economicInterestConcept: economicConcept } : {}),
   };
 }
 

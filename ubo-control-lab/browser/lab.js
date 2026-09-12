@@ -11,6 +11,8 @@
   try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
   let applicantSessionCache = null;
   try { applicantSessionCache = UboLabApplicantSessions.createApplicantSessionCache(window.localStorage); } catch (_error) { applicantSessionCache = null; }
+  let preingestedEvidenceCache = null;
+  try { preingestedEvidenceCache = UboLabPreingestedEvidenceSessions.createCache(window.localStorage); } catch (_error) { preingestedEvidenceCache = null; }
 
   async function request(operation, payload) {
     const response = await fetch(API, {
@@ -653,6 +655,107 @@
     return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline — 1.5-RC", comparison.baseline], ["Successor review — 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
   }
 
+  function PreingestedEvidenceWorkspace({ readiness }) {
+    const [demo, setDemo] = React.useState(null);
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const [notice, setNotice] = React.useState("");
+    const [restored, setRestored] = React.useState(false);
+    React.useEffect(() => {
+      if (!preingestedEvidenceCache) { setRestored(true); return; }
+      preingestedEvidenceCache.restore().then(async ({ record, error: cacheError }) => {
+        if (cacheError) setError(cacheError);
+        if (record) {
+          try {
+            const verified = await request("VALIDATE_PREINGESTED_EVIDENCE_SESSION", { session: record.session });
+            setDemo(verified);
+            setNotice("Restored Snapshot and Evidence references from this browser’s sealed Lab-only cache.");
+          } catch (_cause) { setError("The saved Bettercomms demo failed server-side Snapshot or Artifact-reference verification."); }
+        }
+        setRestored(true);
+      });
+    }, []);
+    React.useEffect(() => {
+      if (!restored || !demo || !preingestedEvidenceCache) return;
+      preingestedEvidenceCache.save(demo).catch(() => setError("This Bettercomms Lab session could not be saved locally."));
+    }, [demo, restored]);
+    const run = async (operation, payload) => {
+      setBusy(true); setError(""); setNotice("");
+      try { setDemo(await request(operation, payload)); }
+      catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const reset = () => {
+      if (preingestedEvidenceCache) preingestedEvidenceCache.clear();
+      setDemo(null); setError(""); setNotice("Demo reset. A new session will receive a new idempotent operation identity.");
+    };
+    const current = demo?.snapshots?.at(-1);
+    const extracted = demo?.extraction?.capabilityResult;
+    const finalContent = demo?.stage === "SNAPSHOT_B" ? current.snapshot.decisionContent : null;
+    const assessments = finalContent?.personQualificationAssessments || [];
+    const assessmentFor = (id) => assessments.find(({ personEntityId }) => personEntityId === id);
+    const effectiveBasis = (id) => assessmentFor(id)?.basisRecords.find(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
+    const mitchell = effectiveBasis("mitchell-fortescue");
+    const lee = effectiveBasis("lee-taylor");
+    const evidenceNeedCount = current?.snapshot?.decisionContent?.informationNeedsV2?.filter(({ status, requiredByRequirementIds }) => status === "OPEN" && requiredByRequirementIds.some((id) => ["UBO-R01", "UBO-R08"].includes(id))).length || 0;
+    if (!demo) return h("main", { className: "shell preingested-demo" },
+      h("section", { className: "panel demo-hero" },
+        h("p", { className: "source-label" }, "PRE-INGESTED DEMO ARTIFACT"),
+        h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"),
+        h("h2", null, "BETTERCOMMS — PRE-INGESTED OWNERSHIP CHART"),
+        h("p", null, "Prove the existing-Artifact Evidence-to-UBO decision cycle through the frozen Evidence public façade, merged adapter, explicit review decisions, Decision Application v3 and Snapshot v2."),
+        h("div", { className: "notice" }, "No file chooser, customer upload, live provider, paid search or production persistence is used."),
+        notice && h("div", { className: "notice", role: "status" }, notice),
+        error && h("div", { className: "error", role: "alert" }, error),
+        h("button", { className: "primary", disabled: busy, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, busy ? "Starting…" : "Open Bettercomms demo")));
+    return h("main", { className: "shell preingested-demo" },
+      h("header", { className: "workspace-header" },
+        h("div", null, h("p", { className: "source-label" }, "PRE-INGESTED DEMO ARTIFACT"), h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
+        h("button", { className: "secondary", disabled: busy, onClick: reset }, "Reset demo")),
+      notice && h("div", { className: "notice", role: "status" }, notice),
+      error && h("div", { className: "error", role: "alert" }, error),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED" ? "Interpreting the existing Artifact through EvidenceConsumerV1…" : "Applying explicit fixture decisions and creating Snapshot B…"),
+      h("section", { className: "panel" },
+        h("div", { className: "grid-3" },
+          h(Metric, { label: "Stage", value: human(demo.stage) }), h(Metric, { label: "Active snapshot", value: `#${shortHash(current.snapshot.snapshotId)}` }), h(Metric, { label: "Open ownership/evidence needs", value: evidenceNeedCount }),
+          h(Metric, { label: "Customer work bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Evidence facts", value: extracted?.candidateFacts?.length || 0 }), h(Metric, { label: "Production", value: "NOT AUTHORIZED" })),
+        demo.stage === "EVIDENCE_REQUIRED" && h("div", { className: "section" },
+          h("h3", null, "1. Ownership structure Evidence is required"),
+          h("p", null, "Snapshot A records the unresolved ownership/evidence need and pins the planner’s structure-Evidence request."),
+          h("details", null, h("summary", null, "Inspect the pinned ExternalEvidenceHandoff plan"), h("pre", { className: "json" }, pretty(current.journey.customerWorkBundles))),
+          h("button", { className: "primary section", disabled: busy || demo.sourceMode !== "FIXTURE", onClick: () => run("USE_PREINGESTED_BETTERCOMMS_ARTIFACT", { session: demo }) }, "Use pre-ingested Bettercomms ownership chart")),
+        demo.stage === "SOURCE_FACTS_EXTRACTED" && h("div", { className: "section" },
+          h("div", { className: "evidence-extracted-state" }, "SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH"),
+          h("p", null, `${extracted.candidateFacts.length} extracted facts from one source document. No claim is operative and no UBO calculation has run from them yet.`),
+          h("div", { className: "grid-3 section" }, h(Metric, { label: "Identity targets", value: demo.decisionTargets.candidateParties.length }), h(Metric, { label: "Claim targets", value: demo.decisionTargets.candidateClaims.length }), h(Metric, { label: "Interpretation", value: extracted.outcome.state })),
+          h("button", { className: "primary section", disabled: busy, onClick: () => run("APPLY_PREINGESTED_FIXTURE_DECISIONS", { session: demo }) }, "DEMO FIXTURE — APPLY PRECONFIGURED IDENTITY AND CLAIM DECISIONS"))),
+      extracted && h("section", { className: "panel section" },
+        h("h2", null, "Evidence extraction review"),
+        h("div", { className: "grid-3" }, h(Metric, { label: "Artifact", value: demo.extraction.artifact.artifactId }), h(Metric, { label: "SHA-256", value: demo.extraction.artifact.digest }), h(Metric, { label: "Media", value: demo.extraction.artifact.mediaType }), h(Metric, { label: "Interpretation operation", value: demo.extraction.interpretation.operationId }), h(Metric, { label: "Source documents", value: 1 }), h(Metric, { label: "Extracted facts", value: 6 })),
+        h("div", { className: "fact-grid section" }, extracted.candidateFacts.map((fact) => h("article", { className: "fact-card", key: fact.factId },
+          h("span", { className: "source-label" }, fact.type === "ENTITY_ATTRIBUTE" ? "DISCOVERED METADATA" : "REQUESTED OWNERSHIP"),
+          h("h3", null, fact.type === "RELATIONSHIP" ? `${fact.subject.name} → ${fact.object.name}` : `${fact.subject.name} · officer metadata`),
+          h("p", null, fact.type === "RELATIONSHIP" ? `${human(fact.relationship)} · ${human(fact.measurement.type)} ${fact.measurement.value}%` : `${human(fact.attribute)} · ${fact.value.relationshipValue.qualitative}`),
+          h("p", null, `Fact ${fact.factId} · temporal ${human(fact.qualifiers?.currentState || fact.value?.temporal?.state)}`),
+          h("details", null, h("summary", null, "Proof locator and source reference"), h("pre", { className: "json" }, pretty(fact.evidenceReferences)))))),
+        h("details", { className: "section" }, h("summary", null, `Typed adapter limitations · ${extracted.issues.length}`), h("pre", { className: "json" }, pretty(extracted.issues)))),
+      finalContent && h(React.Fragment, null,
+        h("section", { className: "panel section result-panel" },
+          h("p", { className: "source-label" }, "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, "Qualifying person found"),
+          h("article", { className: "positive-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Statutory effective-interest route · 75% effective economic interest"), h("p", null, "75% × 100% = 75%"), h("p", null, `Threshold ${mitchell?.threshold?.comparator || ">"}${mitchell?.threshold?.value || 25}% · ${mitchell?.assessmentState || "SATISFIED"}`)),
+          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor — route-specific boundary result"), h("strong", null, "25% × 100% = 25%"), h("p", null, `The >25% effective-economic route is ${lee?.assessmentState || "NOT_SATISFIED"}: exactly 25% is not greater than 25%. Other routes are not collapsed into a conclusive non-UBO statement.`)),
+          h("p", null, "Officer roles remain source-backed entity metadata only; they create no control edge, appointment/removal right or qualification basis."),
+          h("details", null, h("summary", null, "Pinned route, calculation, path and Evidence references"), h("pre", { className: "json" }, pretty({ mitchell, lee, policy: finalContent.policy.identity, productionAuthorized: false })))),
+        h("section", { className: "panel section review-graph-panel" }, h("h2", null, "Ownership graph"), h("p", null, "Four economic relationships; officer metadata is intentionally absent from the graph."), h(OwnershipGraph, { projection: current.graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })),
+        h("section", { className: "panel section" }, h("h2", null, "Applicant journey after re-evaluation"), h("div", { className: "grid-3" }, h(Metric, { label: "Ownership document", value: "REVIEWED" }), h(Metric, { label: "Ownership structure", value: "UPDATED" }), h(Metric, { label: "Statutory qualifying people", value: assessmentFor("mitchell-fortescue")?.routeStatus === "ROUTE_SATISFIED" ? 1 : 0 }), h(Metric, { label: "Customer bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Internal review pending", value: current.journey.finishLine.internalReviewPending }), h(Metric, { label: "Final case complete", value: String(current.journey.finalCaseComplete) })), current.journey.customerWorkBundles.length ? h("pre", { className: "json section" }, pretty(current.journey.customerWorkBundles)) : h("p", { className: "notice" }, "The original ownership-document request is no longer present in the pinned plan."))),
+      h("section", { className: "panel section history" },
+        h("div", { className: "history-list" }, demo.snapshots.map((item) => h("article", { className: "history-item", key: item.snapshot.snapshotId }, h("strong", null, `${item.sequence}. ${human(item.reason)}`), h("span", null, `#${shortHash(item.snapshot.snapshotId)}`), h("span", null, item.snapshot.decisionContent.history.supersessionReason || "GENESIS")))),
+        h("div", null, h("h2", null, "Immutable Decision History"), h("p", null, "Snapshot A remains reconstructable. Snapshot B is linked with NEW_FACTS and pins the graph, calculations, qualifications, Evidence references, needs and plan."), h("details", null, h("summary", null, "Evidence handoff correlation and decision audit"), h("pre", { className: "json" }, pretty({ externalEvidenceHandoff: demo.externalEvidenceHandoff, artifactCorrelation: demo.artifactCorrelation, decisionAudit: demo.decisionAudit }))))),
+      h("section", { className: "panel section" }, h("h2", null, "Presenter guide"), h("ol", null,
+        h("li", null, "Show Snapshot A’s unresolved ownership need and planned Evidence request."), h("li", null, "Use the pre-ingested Bettercomms ownership chart."), h("li", null, "Inspect six source-backed CandidateFacts and one Artifact."), h("li", null, "Apply the fixture-only explicit identity and claim decisions."), h("li", null, "Show Snapshot B, the graph, Mitchell’s 75% route, Lee’s exact-25% boundary, officer isolation and history."))),
+      readiness && h("p", { className: "field-help" }, `Policy ${readiness.policyIdentity?.version || "1.6-RC"} remains REVIEW ONLY and not production approved.`));
+  }
+
   function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue, applicantCatalogue }) {
     const [tab, setTab] = React.useState("CASE_SUMMARY");
     const [graphFilter, setGraphFilter] = React.useState(session.uiState?.graphFilter || "OWNERSHIP");
@@ -847,19 +950,23 @@
       try { setSavedResults(replayLibrary ? replayLibrary.clear() : []); setStorageError(""); }
       catch (_cause) { setStorageError("Browser-local replay storage could not be cleared."); }
     };
-    const successor = doctrine === "SUCCESSOR_REVIEW";
+    const evidenceDemo = doctrine === "PREINGESTED_EVIDENCE";
+    const successor = doctrine !== "BASELINE";
     const currentView = session?.snapshots?.at(-1)?.view;
     const reviewPolicy = catalogue?.review?.policy;
     const setupReviewReadiness = reviewPolicy ? { watermarkRequired: true, policyIdentity: { policyPackId: reviewPolicy.policyPackId, version: reviewPolicy.version }, readiness: reviewPolicy.readiness, blockingReasons: [{ code: "POLICY_NOT_PRODUCTION_APPROVED" }], unresolvedSignoffs: Array.from({ length: reviewPolicy.blockingSignoffCount }, (_, index) => ({ signoffId: `REVIEW_SIGNOFF_${index + 1}` })) } : null;
     const readiness = session?.policyReadiness || currentView?.policyReadiness || (successor ? setupReviewReadiness : catalogue?.policyReadiness);
     const selectDoctrine = (value) => { setDoctrine(value); setSession(null); setError(""); setMode("FIXTURE"); };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
       h(PolicyReadinessWatermark, { readiness }),
-      h("nav", { className: "doctrine-selector", "aria-label": "Policy and engine version" },
+      h("nav", { className: "doctrine-selector with-evidence-demo", "aria-label": "Policy and engine version" },
         h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
-        h("button", { className: successor ? "active" : "", "aria-pressed": successor, onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved"))),
-      session
+        h("button", { className: doctrine === "SUCCESSOR_REVIEW" ? "active" : "", "aria-pressed": doctrine === "SUCCESSOR_REVIEW", onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved")),
+        h("button", { className: evidenceDemo ? "active" : "", "aria-pressed": evidenceDemo, onClick: () => selectDoctrine("PREINGESTED_EVIDENCE") }, h("strong", null, "BETTERCOMMS EVIDENCE DEMO"), h("span", null, "Pre-ingested Artifact · No upload"))),
+      evidenceDemo
+        ? h(PreingestedEvidenceWorkspace, { readiness })
+        : session
         ? successor
           ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, applicantCatalogue: catalogue?.applicant, reset: () => { setSession(null); setError(""); } })
           : h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })

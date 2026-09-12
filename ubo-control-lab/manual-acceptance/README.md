@@ -119,6 +119,12 @@ The original Wave 11B1 set was captured through the staged production Lab and re
 
 Every screenshot retains the review-policy watermark and production-not-authorized Lab chrome. None implies that Evidence upload, private ingestion, Artifact creation, delegation delivery, onboarding, persistence or production activation is connected.
 
+## Wave 11B2A pre-ingested Evidence demo
+
+Capture the deployed `BETTERCOMMS EVIDENCE DEMO` flow in this order: Snapshot A unresolved ownership need; pinned structure-Evidence request; pre-ingested Artifact control; interpretation progress; six CandidateFacts; Artifact ID/digest and six locators; ten identity plus six claim targets; fixture-only review helper; Snapshot B; five-node/four-edge graph; Mitchell 75% calculation and statutory route; Lee exact-25% boundary; officer metadata isolation; updated applicant journey; linked Decision History; hard-refresh restoration; persistent review-policy watermark.
+
+Acceptance fails if any view implies customer upload, production ingestion, automatic real-case adjudication, production policy approval, live/paid interpretation, or production persistence. The expected visible labels are `PRE-INGESTED DEMO ARTIFACT`, `REVIEW LAB — NOT PRODUCTION UPLOAD`, and `SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH`.
+
 ### Seamless-orchestration remediation evidence
 
 The refreshed Wave 11B1 evidence set records the applicant-only one-submit experience separately from the analyst controls: AJV2-01 starts with one snapshot/one task, shows the processing live region, and ends at Snapshot B with zero current tasks, recorded customer history and internal review required. Refresh restores that same verified Snapshot B from `ubo-control-lab-applicant-session-cache-v1`; reset explicitly returns to Snapshot A. Structured ownership stops at pending verification and the only continuation control appears in Decision History under `DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS`. Evidence and delegation handoffs remain pending across refresh. The live-mode pair proves not-saved-by-default and the explicit browser-local demo/testing notice without implying production persistence.

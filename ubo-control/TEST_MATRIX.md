@@ -401,6 +401,8 @@ These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B s
 | Invariant | Protection |
 |---|---|
 | Decision Application v3 has exactly four operations, is schema-1.3/LAB-only, returns Snapshot v2 and its exact pinned Plan v2, and leaves v1/v2 unchanged | `wave11aContracts.nodetest.js`; review/public architecture tests |
+| Wave 11B2A existing-Artifact cycle creates an actual ExternalEvidenceHandoff, six candidates/one source, explicit decisions, linked Snapshot B, four-edge graph, Mitchell 75% satisfied and Lee 25% not satisfied | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js` |
+| Wave 11B2A preserves candidate-before-conclusion, exact source-occurrence identity decisions, officer metadata isolation, idempotent same-session replay, typed failures, sealed browser restore and no-upload/deep-import boundaries | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js`; G4.1 actual-façade tests |
 | JourneyProjection v2 accepts only a verified Snapshot v2 plus its exact identity-matched schema-1.3 Policy Pack, is deterministic/immutable, and creates one customer bundle per pinned customer plan bundle/action | `wave11aContracts.nodetest.js` |
 | System, customer, internal review, specialist review, blockers, policy content and final completion remain distinct; affected paths are not customer task counts | Wave 11A projection tests over V2-LAB-07/08/09/10 |
 | CustomerAction v2 authenticates case revision, snapshot/plan hashes, bundle/group/action, needs, requirements, subject/frontier, policy and submission contract | Wave 11A negative contract tests |
