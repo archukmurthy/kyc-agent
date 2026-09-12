@@ -201,3 +201,12 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 ### PLAT-5 — Inconsistent Claude model IDs across code/docs
 - **Category:** Correctness · **Priority:** P3 · **Status:** OPEN
 - **What/Why:** `claude-sonnet-4-5`, `claude-sonnet-4-6`, and `claude-sonnet-4-20250514` all appear. Verify each referenced model ID exists to avoid runtime 404s.
+
+### BRAND-1 — Neutralize residual "Nium" brand naming (make the product brand-neutral / config-driven)
+- **Category:** UX / Architecture · **Priority:** P3 · **Status:** OPEN (discuss before actioning — 2026-09-12)
+- **What:** The hardcoded-tenant-**default** bug is fixed (3-strict tenant resolution; no `tenant || "nium"` fallback anywhere; brand falls back to the tenant id). What remains is "Nium" baked in as **product/brand naming**, unrelated to tenant resolution — a rebrand question, not a default-logic defect:
+  - `src/App.js` — `C.niumBlue` color token, "Powered by Nium Intelligence Platform", the `nium_api` journey type, `niumRegNumber` field, and a `nium_invite_` localStorage key prefix.
+  - Likely more across the codebase (search `nium`/`Nium` case-insensitive; exclude the intentional `seedConfig`/`buildDefaultConfig` Nium reference-tenant seed and `api/config.js` seedTenant policy).
+- **Why deferred:** this is a "should the product itself be brand-neutral / fully config-driven" decision, larger than the tenant-leakage fix. Needs a product call on how far to go (rename tokens/keys, make product name config-driven, migrate the `nium_invite_` storage key without breaking existing links, etc.).
+- **Action:** revisit with the user before implementing — they asked to discuss again later.
+- **Area:** `src/App.js` (+ a repo-wide sweep).
