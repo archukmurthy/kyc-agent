@@ -277,6 +277,101 @@ test("auto_match: document matches no candidate -> LOA path (Band C), no dropdow
   assert.strictEqual(r.verifiedFields.firstName, "John");
 });
 
+test("auto_match: no candidate match + readable name + screening HIT -> Band C routed to review, not LOA", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  let recordedDecision = null;
+  d.recordBandOutcome = async ({ decision }) => {
+    recordedDecision = decision;
+    return { decisionId: "dec-c", tasks: [{ id: "t1", taskType: "review" }], escalated: true, route: "loa_path", applicantView: { title: "review" } };
+  };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "unresolved_to_review");
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(recordedDecision.outcomeType, "unresolved_to_review", "must record unresolved_to_review, not demoted_to_loa_path");
+  assert.strictEqual(recordedDecision.band, "C");
+});
+
+test("auto_match: no candidate match + readable name + screening CLEAR -> Band C demoted_to_loa_path (unchanged)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps(); // default hasScreeningHit -> clear
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  d.recordBandOutcome = async ({ decision }) => ({ decisionId: "dec-c", route: "loa_path", escalated: true, applicantView: { title: "loa" }, reasons: decision.reasons });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "demoted_to_loa_path");
+  assert.strictEqual(r.route, "loa_path");
+  assert.strictEqual(r.screeningHit, undefined);
+  assert.strictEqual(r.needsRetry, undefined);
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
+test("auto_match: no candidate match + screening PENDING -> holds, no decision recorded", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { recorded: 0 };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => ({ hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  d.recordBandOutcome = async () => { calls.recorded += 1; return {}; };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.strictEqual(r.pending, true);
+  assert.deepStrictEqual(r.reasons, ["screening_pending"]);
+  assert.strictEqual(r.band, undefined);
+  assert.strictEqual(calls.recorded, 0, "no band decision while screening is pending");
+});
+
+test("auto_match: no candidate match + UNREADABLE name -> missing_required_data retry, screening not attempted", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { started: 0 };
+  const d = deps({
+    getDecision: async () => ({
+      status: "Approved",
+      decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
+    }),
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["missing_required_data"]);
+  assert.strictEqual(r.band, null);
+  assert.strictEqual(calls.started, 0, "screening must not be attempted for an unreadable identity");
+});
+
 test("resolve reports a missing session", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));

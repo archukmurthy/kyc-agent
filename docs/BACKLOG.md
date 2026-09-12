@@ -141,11 +141,9 @@ These were agreed during design of the Didit IDV spike (Hybrid Option A: spike t
 - **Area:** new `shared/providerKit/` (future), `idv/providers/*`, `api/idv-match/screening/*`.
 
 ### SCR-6 — No-officer-match (Band C) identities are not screened — compliance sign-off (flag-on prerequisite)
-- **Category:** Compliance · **Priority:** P1 (flag-on blocker) · **Status:** OPEN (needs compliance decision)
-- **What:** SCR-2 screens the verify_only path (fixed) and the auto_match path. The remaining unscreened path is the **no-officer-match Band C** early return in `resolve.js` (`officerSnapshot.mode === "auto_match"` with `pick.matched === false`): the applicant's document didn't match any registered officer, so they're demoted to the LOA path with `escalate: true` and the function returns **before** the screening gate — so their identity is never PEP/sanctions-screened by us.
-- **Mitigation already in place:** that path sets `escalate:true` → a human reviewer looks at every one (unlike the verify_only hole, which had no backstop and is now fixed). So this is partially covered by manual review, not a silent auto-pass.
-- **Decision needed:** does compliance want the no-officer-match identity **auto-screened** too (belt-and-suspenders on top of manual review), or is manual-review escalation sufficient? If auto-screening is wanted, run the screening gate before the Band C return.
-- **Gate:** resolve this (with compliance sign-off) before enabling `IDV_DISCREPANCY_BANDS_ENABLED` in production.
+- **Category:** Compliance · **Priority:** P1 (flag-on blocker) · **Status:** DONE (implemented 2026-09-12)
+- **What:** SCR-2 screens the verify_only path and the auto_match path. The remaining unscreened path was the **no-officer-match Band C** early return in `resolve.js` (`officerSnapshot.mode === "auto_match"` with `pick.matched === false`): the applicant's document didn't match any registered officer, so they're demoted to the LOA path with `escalate: true`, and the function returned **before** the screening gate — so their identity was never PEP/sanctions-screened by us.
+- **Resolved:** the no-officer-match branch now runs the same shared `screeningGate()` (fail-closed hold on pending/unavailable) before deciding the outcome. A screening **hit** routes to `unresolved_to_review` (superseding the LOA path — a review + escalation task are both created); a **clear** result proceeds to the existing Band C `demoted_to_loa_path` outcome unchanged.
 - **Area:** `api/idv-match/resolve.js` (no-officer-match Band C branch).
 
 ### EVID-1 — Evidence Platform integration (consume the outbox)

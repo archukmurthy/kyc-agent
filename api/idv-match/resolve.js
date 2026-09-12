@@ -128,6 +128,23 @@ async function resolveAttempt(attemptId, deps = {}) {
       if (!nameReadable) {
         return { enabled: true, band: null, needsRetry: true, reasons: ["missing_required_data"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
       }
+      // Screen the verified identity even though no officer matched — a real person
+      // being onboarded (via the LOA path) must still be AML-screened. Uses the same
+      // shared screeningGate() as the matched/verify_only paths (fail-closed hold on
+      // pending/unavailable; screen-once is idempotent).
+      const gate = await screeningGate();
+      if (gate.hold) return gate.hold;
+      if (gate.screening.hit) {
+        // Hard exclusion: a sanctions/PEP/adverse hit routes to review, superseding the
+        // LOA path. Record a Band C review decision (recordBandOutcome creates the
+        // review task for unresolved_to_review AND the escalation task for band C).
+        const recorded = await (deps.recordBandOutcome || recordBandOutcome)({
+          attemptId, applicationId: attempt.application_id,
+          decision: { band: "C", outcomeType: "unresolved_to_review", resolvedBy: "reviewer", requiresReview: true, escalate: true, reasons: ["no_officer_match", "screening_hit"] },
+        }, deps);
+        return { enabled: true, band: "C", outcomeType: "unresolved_to_review", ...recorded, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
+      }
+      // clear → existing Band C demoted_to_loa_path (unchanged below)
       const recorded = await (deps.recordBandOutcome || recordBandOutcome)({
         attemptId, applicationId: attempt.application_id,
         decision: { band: "C", outcomeType: "demoted_to_loa_path", resolvedBy: "system", escalate: true, reasons: ["no_officer_match"] },

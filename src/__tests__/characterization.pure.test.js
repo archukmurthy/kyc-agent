@@ -124,7 +124,7 @@ test('demo self-source results keep the synthetic sentinel identity', () => {
 test('demo fixtures keep their pre-refactor keys', () => {
   expect(TEST_DATA.applicantFirstName).toBe('Jane');
   expect(DUMMY_RESEARCH_VALUES.businessRegistrationNumber).toBe('12345678');
-  expect(JSON.parse(DUMMY_RESEARCH_VALUES.directors)).toHaveLength(3);
+  expect(JSON.parse(DUMMY_RESEARCH_VALUES.directors)).toHaveLength(4);
 });
 
 test('local fallback config covers all entity:jurisdiction schemas', () => {

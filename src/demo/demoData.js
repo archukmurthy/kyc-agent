@@ -245,6 +245,7 @@ export const DUMMY_RESEARCH_VALUES = {
     { full_name: "John Smith", role: "CEO", nationality: "British", date_of_birth: "1965-08", country_of_residence: "United Kingdom" },
     { full_name: "Jane Doe", role: "CFO", nationality: "British", date_of_birth: "1972-03", country_of_residence: "United Kingdom" },
     { full_name: "Mark Lee", role: "CTO", nationality: "Singaporean", date_of_birth: "1980-11", country_of_residence: "Singapore" },
+    { full_name: "Jan Kowalski", role: "Director", nationality: "Polish", date_of_birth: "1990-06", country_of_residence: "Poland" },
   ]),
   companySecretary: "Jane Doe",
   isPEP: "No",
@@ -287,6 +288,7 @@ export const DUMMY_RESEARCH_VALUES = {
     { full_name: "John Smith", role: "CEO", nationality: "British", date_of_birth: "1965-08", country_of_residence: "United Kingdom" },
     { full_name: "Jane Doe", role: "CFO", nationality: "British", date_of_birth: "1972-03", country_of_residence: "United Kingdom" },
     { full_name: "Mark Lee", role: "CTO", nationality: "Singaporean", date_of_birth: "1980-11", country_of_residence: "Singapore" },
+    { full_name: "Jan Kowalski", role: "Director", nationality: "Polish", date_of_birth: "1990-06", country_of_residence: "Poland" },
   ]),
   ubo_parent_company: JSON.stringify([
     { full_name: "ACME Group Holdings Ltd", role: "Parent Company", share_percentage: 100 },
