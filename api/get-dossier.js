@@ -10,16 +10,24 @@
 // CommonJS (module.exports) so src/setupProxy.js can require() it for local dev,
 // mirroring api/submit.js, api/save-dossier.js, etc.
 const { neon } = require("@neondatabase/serverless");
+const { getTenantIdFromRequest } = require("../lib/tenant");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { id, tenant } = req.query;
+  const { id } = req.query;
 
   if (!id) {
     return res.status(400).json({ error: "dossierId required" });
+  }
+
+  // 3-strict: no hardcoded "nium" fallback — an unresolved tenant is a 400,
+  // not a silent default (mirrors api/config.js).
+  const tenant = getTenantIdFromRequest(req);
+  if (!tenant) {
+    return res.status(400).json({ error: "tenant_required" });
   }
 
   if (!process.env.DATABASE_URL) {
@@ -60,7 +68,7 @@ module.exports = async function handler(req, res) {
         saved_at AS generated_at
       FROM entity_dossiers
       WHERE id = ${id}
-      AND tenant_id = ${tenant || "nium"}
+      AND tenant_id = ${tenant}
       AND status != 'deleted'
       LIMIT 1
     `;

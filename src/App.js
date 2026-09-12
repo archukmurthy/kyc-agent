@@ -891,13 +891,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const dossierHydratedRef = useRef(false);
   useEffect(() => {
     if (dossierHydratedRef.current) return;
+    // 3-strict: no tenant means nothing to fetch — mirrors the config-loading
+    // effect's own !tenantId guard. The landing gate renders NoTenantLanding
+    // regardless, so there's no dossier to hydrate into.
+    if (!tenantId) return;
     const params = new URLSearchParams(window.location.search);
     const dId = params.get("dossierId");
     const journey = params.get("journey");
-    const tenantParam = params.get("tenant");
     if (!dId || journey !== "customer") return;
     dossierHydratedRef.current = true;
-    loadDossierAndStartOnboarding(dId, tenantParam);
+    loadDossierAndStartOnboarding(dId, tenantId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -917,7 +920,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
-      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant || "nium")}`);
+      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant)}`);
       const data = await res.json();
       if (data.success && data.dossier) {
         const d = data.dossier;
