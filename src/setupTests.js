@@ -15,3 +15,16 @@ import "@testing-library/jest-dom";
 beforeEach(() => {
   window.confirm = jest.fn(() => true);
 });
+
+// The app is tenant-scoped and "3-strict": src/utils/tenant.js#getTenantId()
+// resolves ONLY from ?tenant= in the URL, with no default tenant. jsdom's
+// default test URL is "http://localhost/" (no query string), which reads as
+// "no tenant selected" and renders NoTenantLanding — not the flow that
+// hundreds of existing render tests drive. Give every test a tenant by
+// default so they keep reaching the real app; a test that wants a different
+// URL (a different tenant, a path, ?preboarding=1, or the no-tenant landing
+// itself) calls history.pushState in its OWN beforeEach/test, which runs
+// after this one and wins.
+beforeEach(() => {
+  window.history.pushState({}, "", "/?tenant=nium");
+});

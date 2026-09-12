@@ -52,8 +52,10 @@ beforeEach(() => {
   });
   jest.useFakeTimers();
   // The entry mechanism: the param is read during render, so it must be set
-  // BEFORE the first render for the early-return branch to fire.
-  window.history.pushState({}, "", "/?preboarding=1");
+  // BEFORE the first render for the early-return branch to fire. Carries
+  // ?tenant= too — this pushState runs after setupTests.js's default one and
+  // would otherwise wipe it out, landing on NoTenantLanding instead of gate.
+  window.history.pushState({}, "", "/?preboarding=1&tenant=nium");
 });
 
 afterEach(() => {

@@ -187,7 +187,7 @@ export default function AdminSetup({ token, onLogout }) {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", opacity: 0.7 }}>
             Admin Console
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{config.company?.name || "Nium"}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{config.company?.name || config._tenantId}</div>
           <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>Tenant: {config._tenantId} · v{config._version}</div>
         </div>
 

@@ -1,29 +1,27 @@
 // Client-side tenant ID resolution. Mirrored by lib/tenant.js (CommonJS) for
 // API routes — keep the two in sync. The client doesn't see TENANT_ID at
-// runtime unless it's exposed via REACT_APP_TENANT_ID; for the browser the
-// authoritative source is the ?tenant= URL parameter.
+// runtime; for the browser the ONLY source of truth is the ?tenant= URL
+// parameter — this app is "3-strict": there is no default tenant.
 
 /**
  * Sanitise a tenant ID: lowercase, strip anything non-alphanumeric (excluding
- * hyphens), clamp to 32 chars. Falls back to "nium" if the result is empty.
+ * hyphens), clamp to 32 chars. Returns "" if the input is empty/invalid —
+ * there is no fallback tenant.
  */
 export function sanitiseTenantId(id) {
-  return (
-    (id || "nium")
-      .toString()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "")
-      .slice(0, 32) || "nium"
-  );
+  return (id || "")
+    .toString()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 32);
 }
 
 /**
  * Resolve the active tenant ID in browser context.
  *
- * Priority:
- *   1. ?tenant= URL query parameter
- *   2. REACT_APP_TENANT_ID build-time env var (rare)
- *   3. "nium"
+ * Source: ?tenant= URL query parameter, and ONLY that — no env var fallback,
+ * no default tenant. Returns "" when absent, which callers must treat as
+ * "no tenant selected" (see NoTenantLanding).
  */
 export function getTenantId() {
   if (typeof window !== "undefined") {
@@ -36,23 +34,17 @@ export function getTenantId() {
       // fall through.
     }
   }
-  if (typeof process !== "undefined" && process.env && process.env.REACT_APP_TENANT_ID) {
-    return sanitiseTenantId(process.env.REACT_APP_TENANT_ID);
-  }
-  return "nium";
+  return "";
 }
 
 /**
- * Build a URL that preserves the active tenant parameter. The default tenant
- * ("nium" on this deployment) is omitted from the URL so primary-tenant links
- * stay clean.
+ * Build a URL that preserves the active tenant parameter. There is no
+ * default tenant to omit: a non-empty tenantId is always appended; an empty
+ * one leaves the path unchanged (there's nothing to append).
  */
 export function tenantUrl(path, tenantId) {
-  const defaultTenant = sanitiseTenantId(
-    (typeof process !== "undefined" && process.env && process.env.REACT_APP_TENANT_ID) || "nium"
-  );
   const t = sanitiseTenantId(tenantId);
-  if (t === defaultTenant) return path;
+  if (!t) return path;
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}tenant=${t}`;
 }

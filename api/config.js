@@ -108,6 +108,9 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const tenant = getTenantIdFromRequest(req);
+  if (!tenant) {
+    return res.status(400).json({ error: "tenant_required" });
+  }
 
   try {
     if (req.method === "GET") {

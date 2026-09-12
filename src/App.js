@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getTenantId, isPreviewMode } from "./utils/tenant";
+import NoTenantLanding from "./components/NoTenantLanding";
 import {
   OWNERSHIP_TYPE_LIBRARY,
   ownershipTypeLabel,
@@ -164,10 +165,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // when running in preview mode (the admin "Preview" button stages the
   // current unsaved config under the "preview_config" key).
   //
-  // Tenant resolution comes from the URL (?tenant=X) so this component can
-  // serve any tenant; "nium" is the default for plain /. Preview mode is
-  // either triggered by the /preview route (index.js sets previewMode prop)
-  // or by ?preview=true in the URL.
+  // Tenant resolution comes from the URL (?tenant=X) ONLY — 3-strict, no
+  // default tenant. Plain / (no ?tenant=) renders NoTenantLanding instead.
+  // Preview mode is either triggered by the /preview route (index.js sets
+  // previewMode prop) or by ?preview=true in the URL.
   const [tenantId] = useState(() => getTenantId());
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -227,6 +228,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    // 3-strict: no tenant means nothing to load. Render bails out to
+    // NoTenantLanding further down (after all hooks) — don't hit /api/config
+    // or read staged preview config for a tenant that doesn't exist.
+    if (!tenantId) {
+      setConfigLoading(false);
+      return () => {};
+    }
     // Preview can be triggered two ways: index.js route /preview (sets the
     // previewMode prop) OR admin Preview button which opens /?preview=true
     // (detected by isPreviewMode()). Both should load the staged config
@@ -4030,9 +4038,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     })
   );
 
+  // 3-strict: no ?tenant= means no tenant. This must come after every hook
+  // above (React rules-of-hooks — the last hook call in this component is
+  // ~3000 lines up, well before this point) but before any of the normal
+  // header/flow renders below. No fetch happened for this case either (see
+  // the config-loading effect's own !tenantId guard).
+  if (!tenantId) {
+    return <NoTenantLanding />;
+  }
+
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
-  const companyName_ = tenantConfig?.company?.name || "Nium";
+  // Fallback is the tenant's own id, never another tenant's brand name.
+  const companyName_ = tenantConfig?.company?.name || tenantId;
   const companyLogo_ = tenantConfig?.company?.logo || null;
   const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
   const activeEntityTypes = (tenantConfig?.entityTypes || [])
@@ -4115,7 +4133,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             )}
           </div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: C.text, margin: "0 0 8px 0", letterSpacing: "-0.5px" }}>
-            {tenantConfig?.company?.name || "Nium"} Intelligence Platform
+            {tenantConfig?.company?.name || tenantId} Intelligence Platform
           </h1>
           <p style={{ fontSize: 16, color: C.textSec, margin: 0, maxWidth: 480, lineHeight: 1.5 }}>
             Select the agent you would like to work with today.
@@ -4566,7 +4584,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               display: "flex", alignItems: "center", justifyContent: "center",
               color: "#fff", fontSize: 18, fontWeight: 800,
             }}>
-              {(companyName_ || "N").trim().charAt(0).toUpperCase()}
+              {(companyName_ || tenantId || "?").trim().charAt(0).toUpperCase()}
             </div>
           )}
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: agentType === "preboarding" ? "#7C3AED" : "#4a9e8e", marginBottom: 4 }}>{companyName_} {agentType === "preboarding" ? "Pre-boarding" : "Compliance"}</div>
