@@ -59,6 +59,23 @@ function claimSupport(caseState, graph) {
     .filter(({ claimId }) => operativeRelationshipClaims.has(claimId))
     .map(({ claimId, evidenceReferences = [] }) => ({ claimId, evidenceReferences: cloneData(evidenceReferences) }));
 }
+function calculationWithSupport(calculation, caseState, graph) {
+  const relationshipIds = new Set([
+    ...calculation.knownPaths,
+    ...calculation.unresolvedPaths,
+  ].flatMap(({ relationshipIds: ids = [] }) => ids));
+  const claimsById = new Map(caseState.candidateClaims.map((claim) => [claim.claimId, claim]));
+  const relationshipReferences = graph.relationships
+    .filter(({ relationshipId }) => relationshipIds.has(relationshipId))
+    .map((relationship) => ({
+      relationshipId: relationship.relationshipId,
+      supportingClaimIds: cloneData(relationship.supportingClaimIds),
+      evidenceReferences: relationship.supportingClaimIds
+        .flatMap((claimId) => claimsById.get(claimId)?.evidenceReferences || [])
+        .map((reference) => cloneData(reference)),
+    }));
+  return { ...cloneData(calculation), relationshipReferences };
+}
 function naturalPeople(caseState) {
   return caseState.canonicalEntities.filter(({ category }) => category === CANONICAL_ENTITY_CATEGORY.NATURAL_PERSON);
 }
@@ -161,7 +178,7 @@ function evaluateUboDecisionV3Review(input) {
     if (calculation.status !== CALCULATION_STATUS.NO_PATH) calculations.push(calculation);
   }));
   calculations.sort((a, b) => `${a.subjectEntityId}|${a.dimension}`.localeCompare(`${b.subjectEntityId}|${b.dimension}`));
-  const effectiveAssessments = calculations.map((calculation) => assessEffectiveInterestQualificationV2({ policyPack: loaded, calculationResult: calculation, holderEntity: targetEntity(input.caseState, calculation.subjectEntityId), targetEntityId: targetId, caseRevision: { caseId: input.caseState.caseId, revisionId: input.caseState.revisionId, revision: input.caseState.revision }, graphVersion: graph.graphVersion }));
+  const effectiveAssessments = calculations.map((calculation) => assessEffectiveInterestQualificationV2({ policyPack: loaded, calculationResult: calculationWithSupport(calculation, input.caseState, graph), holderEntity: targetEntity(input.caseState, calculation.subjectEntityId), targetEntityId: targetId, caseRevision: { caseId: input.caseState.caseId, revisionId: input.caseState.revisionId, revision: input.caseState.revision }, graphVersion: graph.graphVersion }));
   const caseRevision = { caseId: input.caseState.caseId, revisionId: input.caseState.revisionId, revision: input.caseState.revision };
   const companyAssessments = profile(target) === "COMPANY" ? [assessCompanyPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState, graph), targetEntityId: targetId, caseRevision })] : [];
   const llpAssessments = (profile(target) === "LLP" || graphContext.hasLlpProfile) ? [assessLlpPscAttributionV1({ policyPack: loaded, ownershipGraph: graph, canonicalEntities: input.caseState.canonicalEntities, claimSupport: claimSupport(input.caseState, graph), targetEntityId: targetId, caseRevision, compositionMode: "SUCCESSOR_REVIEW_ONLY" })] : [];

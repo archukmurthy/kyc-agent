@@ -106,6 +106,11 @@ test("explicit fixture decisions create Snapshot B and exact 75/25 fresh-engine 
   assert.equal(mitchell.basis.threshold.comparator, ">");
   assert.equal(mitchell.basis.threshold.value, 25);
   assert.equal(mitchell.basis.recordedCalculation.status, "COMPLETE");
+  assert.equal(mitchell.basis.relationshipReferences.length, 2);
+  assert.ok(mitchell.basis.relationshipReferences.every(({ supportingClaimIds, evidenceReferences }) => supportingClaimIds.length === 1 && evidenceReferences.length === 1));
+  assert.equal(mitchell.basis.operativeClaimReferences.length, 2);
+  assert.equal(mitchell.basis.evidenceReferences.length, 2);
+  assert.ok(current(session).graph.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferences.length === 1));
 
   const lee = basis(session, ENTITY_IDS.lee);
   assert.equal(lee.basis.assessmentState, "NOT_SATISFIED");
