@@ -893,7 +893,7 @@
 
   function App() {
     const [catalogue, setCatalogue] = React.useState(null);
-    const [doctrine, setDoctrine] = React.useState("BASELINE");
+    const [doctrine, setDoctrine] = React.useState(() => preingestedEvidenceCache?.hasSaved() ? "PREINGESTED_EVIDENCE" : "BASELINE");
     const [mode, setMode] = React.useState("FIXTURE");
     const [session, setSession] = React.useState(null);
     const [busy, setBusy] = React.useState(false);
@@ -903,7 +903,7 @@
     const attemptedApplicantRestore = React.useRef(false);
     React.useEffect(() => { fetch(API).then((response) => response.json()).then(setCatalogue).catch(() => setError("Fixture catalogue could not be loaded.")); }, []);
     React.useEffect(() => {
-      if (!applicantSessionCache || attemptedApplicantRestore.current
+      if (!applicantSessionCache || attemptedApplicantRestore.current || preingestedEvidenceCache?.hasSaved()
         || new URLSearchParams(window.location.search).has("newCase")) return;
       attemptedApplicantRestore.current = true;
       applicantSessionCache.restoreLast().then(async ({ record }) => {

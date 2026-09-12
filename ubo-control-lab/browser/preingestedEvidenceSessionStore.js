@@ -73,6 +73,7 @@
           return { record: null, error: "Saved Bettercomms demo was corrupted, unsupported, or unsafe and was not restored." };
         }
       },
+      hasSaved() { return storage.getItem(STORAGE_KEY) !== null; },
       clear() { storage.removeItem(STORAGE_KEY); },
     });
   }

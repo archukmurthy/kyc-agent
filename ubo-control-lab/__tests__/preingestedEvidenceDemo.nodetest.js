@@ -180,7 +180,9 @@ test("browser-local cache restores Snapshot B and rejects tampering or forbidden
   session = applyPreconfiguredFixtureDecisions({ session: await usePreingestedBettercommsArtifact({ session }) });
   const storage = memoryStorage();
   const cache = createCache(storage);
+  assert.equal(cache.hasSaved(), false);
   await cache.save(session);
+  assert.equal(cache.hasSaved(), true);
   const restored = await cache.restore();
   assert.equal(restored.error, null);
   assert.equal(restored.record.session.stage, "SNAPSHOT_B");
@@ -203,6 +205,7 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   const server = fs.readFileSync(path.join(root, "ubo-control-lab/server/preingestedEvidenceDemo.js"), "utf8");
   assert.match(browser, /Use pre-ingested Bettercomms ownership chart/);
   assert.match(browser, /Qualifying person found/);
+  assert.match(browser, /preingestedEvidenceCache\?\.hasSaved\(\).*PREINGESTED_EVIDENCE/);
   assert.doesNotMatch(browser, /type:\s*["']file["']/);
   assert.match(server, /evidence\/consumer\/v1\/index\.js/);
   assert.doesNotMatch(server, /evidence\/(?:repositories|stages|models|storage|producer|collector)/i);
