@@ -17,7 +17,7 @@ const director = (over = {}) => person({ personType: 'director', ...over });
 
 afterEach(() => setHighRiskCountries([])); // shipped default: matches nothing
 
-describe('CD-03 headline — person type keys the document, not the attribute', () => {
+describe('CD-03 headline - person type keys the document, not the attribute', () => {
   const attrs = [
     ['dob', 'Proof of Identity'],
     ['nationality', 'Proof of Identity'],
@@ -40,7 +40,7 @@ describe('CD-03 headline — person type keys the document, not the attribute', 
   });
 });
 
-describe('CD-03 — country of birth', () => {
+describe('CD-03 - country of birth', () => {
   it('never asks for its own document (POI carries it), for either person type', () => {
     for (const p of [person(), director()]) {
       const r = classifyChange({ ...p, attribute: 'country_of_birth' });
@@ -49,7 +49,7 @@ describe('CD-03 — country of birth', () => {
     }
   });
 
-  it('is a separate signal from nationality — it does not fold into it', () => {
+  it('is a separate signal from nationality - it does not fold into it', () => {
     const cob = classifyChange(person({ attribute: 'country_of_birth' }));
     const nat = classifyChange(person({ attribute: 'nationality' }));
     expect(cob.matchedRule).toBe('PERSON-COUNTRY-OF-BIRTH');
@@ -57,7 +57,7 @@ describe('CD-03 — country of birth', () => {
   });
 });
 
-describe('CD-03 — the name three-way question', () => {
+describe('CD-03 - the name three-way question', () => {
   it('typo (AI error, same person) → accept, no document', () => {
     const r = classifyChange(person({ attribute: 'name', nameCase: 'typo' }));
     expect(r.workflow).toBe('accept_silent');
@@ -93,7 +93,7 @@ describe('CD-03 — the name three-way question', () => {
   });
 });
 
-describe('CD-03 — removal requests the list document, keyed by person type', () => {
+describe('CD-03 - removal requests the list document, keyed by person type', () => {
   it('director → list of directors', () => {
     expect(classifyChange(director({ attribute: 'removal' })).docType).toBe('List of Directors');
   });
@@ -102,14 +102,14 @@ describe('CD-03 — removal requests the list document, keyed by person type', (
     expect(classifyChange(person({ attribute: 'removal' })).docType).toBe('Ownership Chart');
   });
 
-  it('the document request IS the analyst trigger — no separate flag', () => {
+  it('the document request IS the analyst trigger - no separate flag', () => {
     const r = classifyChange(director({ attribute: 'removal' }));
     expect(r.workflow).toBe('doc_required');
     expect(r.escalation).toBe(false); // requesting the doc is the review trigger
   });
 });
 
-describe('CD-03 — PEP is add-only', () => {
+describe('CD-03 - PEP is add-only', () => {
   it('PEP = yes → Source of Wealth + EDD flag', () => {
     const r = classifyChange(person({ attribute: 'pep', pepValue: 'yes' }));
     expect(r.workflow).toBe('doc_required');
@@ -124,13 +124,13 @@ describe('CD-03 — PEP is add-only', () => {
     expect(r.eddFlag).toBe(false);
   });
 
-  it('applies to a director-only person too — PEP is not person-type gated', () => {
+  it('applies to a director-only person too - PEP is not person-type gated', () => {
     expect(classifyChange(director({ attribute: 'pep', pepValue: 'yes' })).docType)
       .toBe('Source of Wealth');
   });
 });
 
-describe('CD-03 — EDD is a flag only, on an injectable list', () => {
+describe('CD-03 - EDD is a flag only, on an injectable list', () => {
   it('does not fire by default: the shipped list is empty', () => {
     expect(isHighRiskCountry('Neverland')).toBe(false);
     expect(classifyChange(person({ attribute: 'nationality', highRiskCountry: false })).eddFlag).toBe(false);
@@ -144,13 +144,13 @@ describe('CD-03 — EDD is a flag only, on an injectable list', () => {
     }
   });
 
-  it('flags EDD either way — including where the attribute asks for no document', () => {
+  it('flags EDD either way - including where the attribute asks for no document', () => {
     const r = classifyChange(director({ attribute: 'nationality', highRiskCountry: true }));
     expect(r.docType).toBeNull();      // director-only: still no document
     expect(r.eddFlag).toBe(true);      // but the EDD flag still fires
   });
 
-  it('never triggers an EDD collection flow — flag only', () => {
+  it('never triggers an EDD collection flow - flag only', () => {
     const r = classifyChange(person({ attribute: 'nationality', highRiskCountry: true }));
     expect(r.workflow).not.toBe('edd');
   });
@@ -164,7 +164,7 @@ describe('CD-03 — EDD is a flag only, on an injectable list', () => {
   });
 });
 
-describe('CD-03 — role changes', () => {
+describe('CD-03 - role changes', () => {
   it('a non-removal role change is accepted silently (director → secretary)', () => {
     const r = classifyChange(person({ attribute: 'role' }));
     expect(r.workflow).toBe('accept_silent');
@@ -173,7 +173,7 @@ describe('CD-03 — role changes', () => {
   });
 });
 
-describe('CD-03 — adding a person (commit 7)', () => {
+describe('CD-03 - adding a person (commit 7)', () => {
   it('adding a director requests the List of Directors', () => {
     const r = classifyChange(director({ attribute: 'added' }));
     expect(r).toMatchObject({ workflow: 'doc_required', docType: 'List of Directors' });
@@ -193,7 +193,7 @@ describe('CD-03 — adding a person (commit 7)', () => {
       .toMatchObject({ workflow: 'doc_required', docType: 'Proof of Address' });
   });
 
-  it('an added director-only person needs NO POI or POA — identification only', () => {
+  it('an added director-only person needs NO POI or POA - identification only', () => {
     for (const attribute of ['added_poi', 'added_poa']) {
       const r = classifyChange(director({ attribute }));
       expect(r.workflow).toBe('accept_silent');
@@ -201,7 +201,7 @@ describe('CD-03 — adding a person (commit 7)', () => {
     }
   });
 
-  it('the list document IS the analyst trigger — no separate flag', () => {
+  it('the list document IS the analyst trigger - no separate flag', () => {
     const r = classifyChange(director({ attribute: 'added' }));
     expect(r.workflow).toBe('doc_required');
     expect(r.escalation).toBe(false);

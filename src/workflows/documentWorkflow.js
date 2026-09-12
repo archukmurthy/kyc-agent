@@ -2,11 +2,11 @@ import { readFileAsBase64 } from "../utils/files";
 import { mapExtractedKey } from "../utils/extractionMapping";
 
 /* ═══════════════════════════════════════════
-   DOC SEARCH AGENT (Step 2 — Document Intelligence)
+   DOC SEARCH AGENT (Step 2 - Document Intelligence)
    Browser-side helpers for the doc search sub-agent
    (agents/docSearchAgent.js, called via /api/doc-search).
    mapToDocAgentOwnershipType is copied inline from
-   agents/docSearchAgentCall.js — that file is a Node.js module and cannot
+   agents/docSearchAgentCall.js - that file is a Node.js module and cannot
    be imported into the browser bundle.
    ═══════════════════════════════════════════ */
 

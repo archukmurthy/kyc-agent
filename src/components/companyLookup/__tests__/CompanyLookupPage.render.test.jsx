@@ -112,7 +112,7 @@ async function fillAll({ country = "United King", regNumber } = {}) {
   fireEvent.focus(ownershipInput());
   pickOption("Private Limited Company");
   fireEvent.change(countryInput(), { target: { value: country } });
-  pickOption(country === "United King" ? "GB — United Kingdom" : "FR — France");
+  pickOption(country === "United King" ? "GB - United Kingdom" : "FR - France");
   await settle(0);
 }
 
@@ -264,7 +264,7 @@ describe("licence banner", () => {
   it("shows the licensed-market banner for GB", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     await settle(0);
 
     const text = bodyText();
@@ -278,7 +278,7 @@ describe("licence banner", () => {
   it("shows the no-licence fallback for a non-licensed market (FR)", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "France" } });
-    pickOption("FR — France");
+    pickOption("FR - France");
     await settle(0);
 
     const text = bodyText();
@@ -290,7 +290,7 @@ describe("licence banner", () => {
   it("adds the Corporate form-set line once an entity type is chosen", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     await settle(0);
     // Form set only renders with an entity type.
     expect(bodyText()).not.toMatch(/📑 Form set:/);
@@ -305,7 +305,7 @@ describe("licence banner", () => {
   it("shows the FI form set for a Financial Institution", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     fireEvent.change(entityInput(), { target: { value: "Financial Institution" } });
     pickOption("Financial Institution");
     await settle(0);
@@ -333,7 +333,7 @@ describe("force-refresh cache override", () => {
 
     fireEvent.click(box);
     await settle(0);
-    expect(bodyText()).toMatch(/⚠ Live API call — this will cost tokens/);
+    expect(bodyText()).toMatch(/⚠ Live API call - this will cost tokens/);
     expect(bodyText()).not.toMatch(/Cache saves API costs/);
 
     fireEvent.click(document.querySelector('input[type="checkbox"]'));
@@ -385,7 +385,7 @@ describe("Continue gate", () => {
     expect(isGated(continueBtn())).toBe(true); // country still missing
   });
 
-  it("a gated Continue is inert — clicking it does not open the picker", async () => {
+  it("a gated Continue is inert - clicking it does not open the picker", async () => {
     await mountLookup();
     fireEvent.change(nameInput(), { target: { value: "Britannia Group Limited" } });
     await settle(0);
@@ -406,7 +406,7 @@ describe("Continue gate", () => {
     expect(continueBtn().style.opacity).toBe("1");
   });
 
-  it("OPENS the journey picker — the seam into JourneyPicker", async () => {
+  it("OPENS the journey picker - the seam into JourneyPicker", async () => {
     await mountLookup();
     await fillAll();
 

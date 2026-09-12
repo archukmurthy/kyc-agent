@@ -15,7 +15,7 @@ describe("sanitiseTenantId", () => {
     expect(sanitiseTenantId("a".repeat(40))).toBe("a".repeat(32));
   });
 
-  it("returns '' for empty/nullish input — no fallback tenant", () => {
+  it("returns '' for empty/nullish input - no fallback tenant", () => {
     expect(sanitiseTenantId("")).toBe("");
     expect(sanitiseTenantId(null)).toBe("");
     expect(sanitiseTenantId(undefined)).toBe("");
@@ -29,7 +29,7 @@ describe("getTenantId", () => {
     expect(getTenantId()).toBe("acme");
   });
 
-  it("returns '' with no ?tenant= param — no default tenant", () => {
+  it("returns '' with no ?tenant= param - no default tenant", () => {
     window.history.pushState({}, "", "/");
     expect(getTenantId()).toBe("");
   });
@@ -49,7 +49,7 @@ describe("tenantUrl", () => {
     expect(tenantUrl("/admin?x=1", "acme")).toBe("/admin?x=1&tenant=acme");
   });
 
-  it("leaves the path unchanged for an empty tenant id — nothing to omit a default for", () => {
+  it("leaves the path unchanged for an empty tenant id - nothing to omit a default for", () => {
     expect(tenantUrl("/admin", "")).toBe("/admin");
     expect(tenantUrl("/admin", null)).toBe("/admin");
   });

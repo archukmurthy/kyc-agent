@@ -133,12 +133,12 @@ export default function StepSchemas({
     if (totalSchemas <= 1) return;
     if (!updated || !updated.field) {
       // eslint-disable-next-line no-console
-      console.warn("Copy modal: skipping — saved field has no id", updated);
+      console.warn("Copy modal: skipping - saved field has no id", updated);
       return;
     }
     if (!selectedCell || !(config?.schemas || {})[selectedCell]) {
       // eslint-disable-next-line no-console
-      console.warn("Copy modal: skipping — sourceCell not found", selectedCell);
+      console.warn("Copy modal: skipping - sourceCell not found", selectedCell);
       return;
     }
     setLastSavedField(updated);
@@ -165,7 +165,7 @@ export default function StepSchemas({
       },
     });
     const total = (finalSchema.researchFields?.length || 0) + (finalSchema.gapFields?.length || 0);
-    setCopyToast(`✅ Schema imported — ${total} field${total === 1 ? "" : "s"} (${mode})`);
+    setCopyToast(`✅ Schema imported - ${total} field${total === 1 ? "" : "s"} (${mode})`);
     setTimeout(() => setCopyToast(null), 3500);
   }
 
@@ -443,7 +443,7 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                 if (!associated && !has) {
                   return (
                     <td key={l.id} style={notAssoc}>
-                      —
+                      -
                     </td>
                   );
                 }
@@ -533,7 +533,7 @@ function NoSchemaOptions({ schemas, entityId, onCopy, onTemplate, onScratch }) {
           value={copySource}
           onChange={(e) => setCopySource(e.target.value)}
         >
-          <option value="">— Select source —</option>
+          <option value="">- Select source -</option>
           {sourceCells.map((k) => (
             <option key={k} value={k}>{k}</option>
           ))}
@@ -686,7 +686,7 @@ function SchemaEditor({
           {!fields.length && (
             <tr>
               <td colSpan={activeTab === "research" ? 6 : 4} style={{ padding: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-                No fields yet — click "+ Add Field" to get started.
+                No fields yet - click "+ Add Field" to get started.
               </td>
             </tr>
           )}
@@ -775,7 +775,7 @@ function BannerImportCallout({ entityTypeName, licenceName, onImport }) {
           Already have your fields in a spreadsheet?
         </div>
         <div style={{ fontSize: 12, color: "#0369A1", marginTop: 3 }}>
-          Import an Excel file with all your fields — fastest way to set this schema up.
+          Import an Excel file with all your fields - fastest way to set this schema up.
         </div>
       </div>
       <SchemaImportButton

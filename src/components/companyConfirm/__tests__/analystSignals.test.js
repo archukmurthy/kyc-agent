@@ -48,7 +48,7 @@ describe("outcome classification helpers", () => {
   });
 });
 
-describe("buildAnalystSignal — reads the recorded decision, invents nothing", () => {
+describe("buildAnalystSignal - reads the recorded decision, invents nothing", () => {
   it("returns null with no event", () => {
     expect(buildAnalystSignal({})).toBeNull();
     expect(buildAnalystSignal({ event: null })).toBeNull();
@@ -63,7 +63,7 @@ describe("buildAnalystSignal — reads the recorded decision, invents nothing", 
     expect(s.silent).toBe(false);
   });
 
-  it("classifies a generic ops_review as type 2 — no machinery behind it", () => {
+  it("classifies a generic ops_review as type 2 - no machinery behind it", () => {
     const s = buildAnalystSignal({ event: genericEvent });
     expect(s.type).toBe("type2");
     expect(s.docType).toBeNull();
@@ -111,10 +111,10 @@ describe("buildAnalystSignal — reads the recorded decision, invents nothing", 
   });
 });
 
-describe("signalLines — wording is derived, not hardcoded per row", () => {
+describe("signalLines - wording is derived, not hardcoded per row", () => {
   it("leads with the registry mismatch for a type-1 change", () => {
     const lines = signalLines(buildAnalystSignal({ event: addressEvent, correctedValue: "1 New Street" }));
-    expect(lines[0]).toBe("Customer value differs from registry — flagged for analyst review.");
+    expect(lines[0]).toBe("Customer value differs from registry - flagged for analyst review.");
     expect(lines).toContain("Document required: Notice of Change of Address");
   });
 
@@ -138,15 +138,15 @@ describe("signalLines — wording is derived, not hardcoded per row", () => {
       })
     );
     expect(lines).toContain("EDD flag set.");
-    expect(lines.some((l) => l.includes("Silent outcome: edd (customer sees nothing) — rule UBO-EDD"))).toBe(true);
+    expect(lines.some((l) => l.includes("Silent outcome: edd (customer sees nothing) - rule UBO-EDD"))).toBe(true);
   });
 
   it("says plainly when there is no automated consequence", () => {
     const lines = signalLines(buildAnalystSignal({ event: genericEvent }));
     expect(lines[0]).toBe(
-      "No automated consequence for this field class (generic → ops_review, no document). This is expected — surfaced for testing."
+      "No automated consequence for this field class (generic → ops_review, no document). This is expected - surfaced for testing."
     );
-    expect(lines.some((l) => l.includes("Silent outcome: ops_review (customer sees nothing) — rule GENERIC"))).toBe(true);
+    expect(lines.some((l) => l.includes("Silent outcome: ops_review (customer sees nothing) - rule GENERIC"))).toBe(true);
   });
 
   it("notes a mismatch on a type-2 field without implying a consequence", () => {

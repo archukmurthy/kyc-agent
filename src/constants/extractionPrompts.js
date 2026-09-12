@@ -68,7 +68,7 @@ For each field: extract the actual answer from the questionnaire. If the questio
    Each prompt instructs Claude to read a PDF (or
    image, for org chart) and return a JSON array of
    {fieldId, value} objects. The keys returned are
-   "generic" — mapEXTRACTION_KEY_TO_SCHEMA() below
+   "generic" - mapEXTRACTION_KEY_TO_SCHEMA() below
    maps them onto the active schema's field IDs.
    ═══════════════════════════════════════════ */
 export const CERT_EXTRACTION_PROMPT = `Extract the following from this Certificate of Incorporation or equivalent company registration document:
@@ -107,7 +107,7 @@ Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
 
 export const ORG_CHART_EXTRACTION_PROMPT = `Extract the following from this ownership structure or org chart document:
 - ubo_names: names of ultimate beneficial owners
-- ubo_share_percentage: ownership percentages — return the EXACT text as stated (e.g. "75% or more", "25% to 50%", "Significant influence or control"). Do not convert, round, average a range, or strip qualifiers like "or more"/"to".
+- ubo_share_percentage: ownership percentages - return the EXACT text as stated (e.g. "75% or more", "25% to 50%", "Significant influence or control"). Do not convert, round, average a range, or strip qualifiers like "or more"/"to".
 - group_structure: description of corporate structure
 - parent_company: immediate parent company name if shown
 

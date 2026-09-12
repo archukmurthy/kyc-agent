@@ -58,7 +58,7 @@ describe("rowState", () => {
     expect(rowState(verified, { checked: false, correction: "   " })).toBe(ROW_STATE.NEEDS_YOU);
   });
 
-  it("is corrected once a value is saved — regardless of confidence or tick", () => {
+  it("is corrected once a value is saved - regardless of confidence or tick", () => {
     expect(rowState(verified, { checked: false, correction: "new" })).toBe(ROW_STATE.CORRECTED);
     expect(rowState(probable, { checked: true, correction: "new" })).toBe(ROW_STATE.CORRECTED);
   });
@@ -196,7 +196,7 @@ describe("submitBlockers", () => {
   });
 });
 
-describe("scope-aware document dedup (6a) — identity evidence is per person", () => {
+describe("scope-aware document dedup (6a) - identity evidence is per person", () => {
   const johnDob = { fieldId: "ubo::sh_john::dob", docType: "Proof of Identity", personName: "John Smith" };
   const johnNat = { fieldId: "ubo::sh_john::nationality", docType: "Proof of Identity", personName: "John Smith" };
   const janeNat = { fieldId: "ubo::sh_jane::nationality", docType: "Proof of Identity", personName: "Jane Doe" };
@@ -274,7 +274,7 @@ describe("scope-aware document dedup (6a) — identity evidence is per person", 
   it("labels a person document with the person and leaves company docs unnamed", () => {
     const docs = canonicalDocs([janeNat, addr1]);
     const blockers = submitBlockers({ found: [], docs, uploads: {} });
-    expect(blockers.find((b) => b.stakeholderId === "sh_jane").label).toBe("Proof of Identity — Jane Doe");
+    expect(blockers.find((b) => b.stakeholderId === "sh_jane").label).toBe("Proof of Identity - Jane Doe");
     expect(blockers.find((b) => !b.stakeholderId).label).toBe("Notice of Change of Address");
   });
 });
@@ -299,12 +299,12 @@ describe("company-wide documents are ONE request however many people trigger the
     expect(docs[0].docType).toBe("Ownership Chart");
   });
 
-  it("the single chart belongs to nobody — it is not labelled with a person", () => {
+  it("the single chart belongs to nobody - it is not labelled with a person", () => {
     const docs = canonicalDocs([johnRemoval, janeRemoval]);
     expect(docs[0].stakeholderId).toBeNull();
     expect(docs[0].personName).toBeNull();
     const blockers = submitBlockers({ found: [], docs, uploads: {} });
-    expect(blockers[0].label).toBe("Ownership Chart"); // not "— John Smith"
+    expect(blockers[0].label).toBe("Ownership Chart"); // not "- John Smith"
   });
 
   it("uploading it once closes it for everyone", () => {
@@ -338,7 +338,7 @@ describe("company-wide documents are ONE request however many people trigger the
     const blockers = submitBlockers({ found: [], docs, uploads });
     expect(blockers).toHaveLength(1);
     expect(blockers[0].stakeholderId).toBe("sh_jane");
-    expect(blockers[0].label).toBe("Proof of Identity — Jane Doe");
+    expect(blockers[0].label).toBe("Proof of Identity - Jane Doe");
   });
 
   it("an unknown person-triggered docType stays per-person (fail-safe default)", () => {
@@ -421,7 +421,7 @@ describe("per-field placeholder documents do not collapse", () => {
     const uploads = { [docKey(brn)]: { name: "brn.pdf", uploadFailed: false } };
     const blockers = submitBlockers({ found: [], docs, uploads });
     expect(blockers).toHaveLength(1);
-    expect(blockers[0].label).toBe("Supporting Registration Document — VAT Number");
+    expect(blockers[0].label).toBe("Supporting Registration Document - VAT Number");
   });
 
   it("the same field asking twice is still one request", () => {
@@ -434,7 +434,7 @@ describe("per-field placeholder documents do not collapse", () => {
     expect(isPerFieldDocType("Ownership Chart")).toBe(false);
   });
 
-  it("company-wide documents still collapse — the split is scoped to O3 only", () => {
+  it("company-wide documents still collapse - the split is scoped to O3 only", () => {
     const a = { fieldId: "addressLine1", docType: "Notice of Change of Address" };
     const b = { fieldId: "addressLine2", docType: "Notice of Change of Address" };
     expect(canonicalDocs([a, b])).toHaveLength(1);
@@ -586,7 +586,7 @@ describe("person attributes count toward the tiles", () => {
     const blockers = submitBlockers({ found: [], personItems: items });
     expect(blockers).toHaveLength(1);
     expect(blockers[0].kind).toBe(BLOCKER_KIND.PERSON_ATTRIBUTE);
-    expect(blockers[0].label).toBe("Nationality — John Smith");
+    expect(blockers[0].label).toBe("Nationality - John Smith");
   });
 
   /**
@@ -677,7 +677,7 @@ describe("prefillBreakdown", () => {
     expect(b).toMatchObject({ total: 27, document: 4, tier1: 18, tier2: 3, tier3: 2, unverified: 5 });
   });
 
-  it("never drops an unrecognised tier — the parts always sum to the total", () => {
+  it("never drops an unrecognised tier - the parts always sum to the total", () => {
     const b = prefillBreakdown([
       { sourceTier: "tier1", count: 2 },
       { sourceTier: undefined, count: 3 },
@@ -706,7 +706,7 @@ describe("prefillBreakdown", () => {
   });
 });
 
-describe("rows form — original indices survive a filtered subset", () => {
+describe("rows form - original indices survive a filtered subset", () => {
   // The vital-row table renders a SUBSET of research.found (stakeholder fields
   // render as person cards). `checks` stays keyed by the original index, so the
   // gate must be fed {item, idx} pairs — re-indexing would read the wrong row.
@@ -725,7 +725,7 @@ describe("rows form — original indices survive a filtered subset", () => {
   });
 });
 
-describe("alignment — the gate, the tile and the amber styling are one set", () => {
+describe("alignment - the gate, the tile and the amber styling are one set", () => {
   // The row renderer marks a row amber when rowState(...rowContext(...)) is
   // NEEDS_YOU; the tile counts the same; the gate lists the same as kind (a).
   // This asserts they cannot drift apart.
@@ -794,7 +794,7 @@ describe("computeConfirmCounts", () => {
   });
 });
 
-describe("blockerSummary — the button always says what's wrong", () => {
+describe("blockerSummary - the button always says what's wrong", () => {
   it("is null when nothing blocks", () => {
     expect(blockerSummary([])).toBeNull();
   });

@@ -179,7 +179,7 @@ export default function StepPublish({
             You are about to publish:
             <ul style={{ margin: "6px 0 0 18px" }}>
               <li>
-                {(config?.licences || []).length} licence{(config?.licences || []).length === 1 ? "" : "s"} —{" "}
+                {(config?.licences || []).length} licence{(config?.licences || []).length === 1 ? "" : "s"} -{" "}
                 {(config?.licences || []).map((l) => `${flagFor(l.jurisdictionCode)} ${l.jurisdictionCode}`).join(" · ")}
               </li>
               <li>
@@ -269,13 +269,13 @@ function SectionHeading({ children, style }) {
 function ReadinessChecklist({ readiness, config }) {
   const items = [
     readiness.company
-      ? { tone: "ok", text: `Company setup — ${config?.company?.name}` }
+      ? { tone: "ok", text: `Company setup - ${config?.company?.name}` }
       : { tone: "warn", text: "Company name not set (optional)" },
     readiness.licences
-      ? { tone: "ok", text: `Licences — ${(config?.licences || []).length} configured` }
+      ? { tone: "ok", text: `Licences - ${(config?.licences || []).length} configured` }
       : { tone: "warn", text: "No licences configured" },
     readiness.entityTypes
-      ? { tone: "ok", text: `Entity types — ${(config?.entityTypes || []).filter((e) => e.active).length} active` }
+      ? { tone: "ok", text: `Entity types - ${(config?.entityTypes || []).filter((e) => e.active).length} active` }
       : { tone: "warn", text: "No entity types configured" },
     readiness.schemasComplete
       ? { tone: "ok", text: `All schemas configured (${readiness.configuredCells.length} of ${readiness.schemaCells.length} cells)` }

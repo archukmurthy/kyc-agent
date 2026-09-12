@@ -163,9 +163,9 @@ export default function MiniWizardAddLicence({ config, onComplete, onCancel }) {
         <Card title="Review">
           <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 13, lineHeight: 1.7 }}>
             <li><strong>New licence:</strong> {flagFor(newLicence.jurisdictionCode)} {newLicence.jurisdictionName} ({newLicence.licenceType})</li>
-            <li><strong>Associated entity types:</strong> {selectedEntityIds.map((id) => entityTypes.find((e) => e.id === id)?.label || id).join(", ") || "—"}</li>
+            <li><strong>Associated entity types:</strong> {selectedEntityIds.map((id) => entityTypes.find((e) => e.id === id)?.label || id).join(", ") || "-"}</li>
             <li><strong>Schemas configured:</strong> {configuredCount} of {newCells.length}</li>
-            <li><strong>Countries covered:</strong> {(newLicence.countriesCovered || []).join(", ") || "(none — used as catch-all)"}</li>
+            <li><strong>Countries covered:</strong> {(newLicence.countriesCovered || []).join(", ") || "(none - used as catch-all)"}</li>
           </ul>
           {configuredCount < newCells.length && (
             <div style={{ marginTop: 12, fontSize: 12, color: adminColors.statusIncomplete }}>

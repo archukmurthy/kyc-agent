@@ -92,7 +92,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
       // needed). If the check isn't complete yet, it comes back needs-retry.
       const res = await postJson("/api/idv-match/resolve", { attemptId });
       if (res && res.error) { setStatus("waiting for verification…"); return; }
-      if (res && res.needsRetry) { setStatus("Not complete yet — finish the Didit check, then click again."); return; }
+      if (res && res.needsRetry) { setStatus("Not complete yet - finish the Didit check, then click again."); return; }
       applyResult(res);
     } catch (e) { setError(String(e.message || e)); } finally { setBusy(false); }
   }
@@ -171,7 +171,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
           </p>
           <Button type="button" disabled={busy} onClick={check}>{busy ? "Checking…" : "I have completed the verification"}</Button>
           <p style={{ fontSize: 12, color: "#1a3a4a80", marginTop: 8 }}>
-            This updates on its own once you finish — or click the button to check now.
+            This updates on its own once you finish - or click the button to check now.
           </p>
           {status && <p>Status: <strong>{status}</strong></p>}
         </div>

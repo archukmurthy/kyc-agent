@@ -283,7 +283,7 @@ Nium Onboarding Team`;
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
               <strong>To:</strong> {inviteEmail || '[customer email]'}
               &nbsp;·&nbsp;
-              <strong>Subject:</strong> Your Nium onboarding is ready — {companyDisplayName}
+              <strong>Subject:</strong> Your Nium onboarding is ready - {companyDisplayName}
             </div>
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
               <pre style={{

@@ -3,7 +3,7 @@
 export function DemoToggle({ on, onChange }) {
   return (
     <label
-      title="Skip API calls and pre-fill the flow with sample data — for demos and testing"
+      title="Skip API calls and pre-fill the flow with sample data - for demos and testing"
       style={{
         display: "inline-flex",
         alignItems: "center",

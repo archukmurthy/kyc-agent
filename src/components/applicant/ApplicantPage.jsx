@@ -194,9 +194,9 @@ export function ApplicantPage({
         >
           <option value="">Select your name...</option>
           {candidates.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}  —  {c.role}</option>
+            <option key={c.id} value={c.id}>{c.name}  -  {c.role}</option>
           ))}
-          <option value="none">I am not listed — fill in manually</option>
+          <option value="none">I am not listed - fill in manually</option>
         </select>
         <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "6px 2px 0" }}>
           Picking your name pre-fills the fields below from the official registry. Edit any field that's wrong.
@@ -321,7 +321,7 @@ export function ApplicantPage({
     const regValue = customerReg || systemReg || "";
 
     const facts = [
-      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "—", disputable: true },
+      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "-", disputable: true },
       {
         key: "registrationNumber",
         label: "Registration / company number",
@@ -333,15 +333,15 @@ export function ApplicantPage({
           : (regValue || "Not provided"),
         disputable: regProvenance === "system",
         note: regNumberChangeDeclared?.to
-          ? `Changed from "${regNumberChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          ? `Changed from "${regNumberChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
           : regProvenance === "customer"
             ? "✓ You provided this"
             : regProvenance === "system"
-            ? "Found by research — please verify"
+            ? "Found by research - please verify"
             : "Not provided on lookup",
       },
-      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
-      { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
+      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "-", disputable: true },
+      { key: "entityType", label: "Entity type", value: entityType || "-", disputable: true },
       {
         key: "ownershipType",
         label: "Ownership type",
@@ -351,10 +351,10 @@ export function ApplicantPage({
         // and note that the supporting documents were added to Fill Gaps.
         value: ownershipChangeDeclared?.to
           ? ownershipChangeDeclared.to
-          : (ownershipTypeLabel(ownershipType) || ownershipType || "—"),
+          : (ownershipTypeLabel(ownershipType) || ownershipType || "-"),
         disputable: true,
         note: ownershipChangeDeclared?.to
-          ? `Changed from "${ownershipChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          ? `Changed from "${ownershipChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
           : undefined,
       },
     ];
@@ -518,7 +518,7 @@ export function ApplicantPage({
                 <button
                   type="button"
                   onClick={fillApplicantTestData}
-                  title="Testing only — fills the applicant form with sample data"
+                  title="Testing only - fills the applicant form with sample data"
                   style={{
                     flexShrink: 0,
                     padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -532,7 +532,7 @@ export function ApplicantPage({
               )}
             </div>
 
-            {/* Auto-match (bands ON, candidates found): no dropdown — go straight
+            {/* Auto-match (bands ON, candidates found): no dropdown - go straight
                 to Didit; the fields appear as the fetched cells after. The manual
                 path (flag OFF / no candidates) still shows the selector + fields.
                 In the auto-match flow both children below are false, so the card
@@ -544,10 +544,10 @@ export function ApplicantPage({
               </div>
             )}
 
-            {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
+            {/* PR-072 - Signatory ID proof, COPIED from Required Docs. Always
                 shown (every applicant), directly below the applicant fields and
                 ABOVE the conditional Authority-to-act card. Reuses the exact same
-                Required Docs DocumentUploadCard. This is a COPY — the Signatory ID
+                Required Docs DocumentUploadCard. This is a COPY - the Signatory ID
                 card ALSO still renders in Required Docs (Step2DynamicForm),
                 unchanged. The upload slot here is INDEPENDENT of the Required Docs
                 one (see signatoryIdFile comment; one-satisfies-both is a deferred
@@ -568,7 +568,7 @@ export function ApplicantPage({
             </div>
             )}
 
-            {/* PR-044 — Authority-to-act proof, directly below the applicant
+            {/* PR-044 - Authority-to-act proof, directly below the applicant
                 fields, shown whenever the applicant is unlisted: either "I am not
                 listed" was selected, or no directors/UBOs were found (manual-entry
                 fallback). Reuses the Required Docs DocumentUploadCard. */}
@@ -644,10 +644,10 @@ export function ApplicantPage({
             )}
 
             {/* PR: Continue + Start Over share one row (Start Over left, Continue
-                right). Start Over is onboarding-only (!landedViaLink) — hidden on
+                right). Start Over is onboarding-only (!landedViaLink) - hidden on
                 the dossier/invite journey; the empty <span/> keeps Continue
                 right-aligned there. Start Over reuses resetAll (pre-filled lookup,
-                not a blank wipe). Layout only — onClick/gating unchanged. */}
+                not a blank wipe). Layout only - onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
             {!autoMatchActive && !unlistedVerifyActive && showApplicantBody && (
@@ -666,7 +666,7 @@ export function ApplicantPage({
             )}
             </div>
 
-            {/* PR-072 — Signatory ID gate reason. Shown first (always-required
+            {/* PR-072 - Signatory ID gate reason. Shown first (always-required
                 slot); the authority-to-act reason follows when that card blocks too. */}
             {signatoryGateBlocks && (
               <div style={{

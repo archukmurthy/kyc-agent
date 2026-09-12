@@ -186,7 +186,7 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
             <span>
               Nium retrieves this automatically.{' '}
               {clientMayAlsoProvide(item)
-                ? 'Upload only if you already have it — it can speed up review.'
+                ? 'Upload only if you already have it - it can speed up review.'
                 : 'No action needed.'}
             </span>
           </div>
@@ -346,7 +346,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         {onboardingCountry && (
           <div style={styles.jurisdictionBanner}>
             <span>📋</span>
-            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Nium {onboardingCountry}</strong></span>
+            <span>Requirements for <strong>{companyName}</strong> - onboarding via <strong>Nium {onboardingCountry}</strong></span>
           </div>
         )}
         {requiredTotal > 0 && (
@@ -363,7 +363,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         )}
         {SHOW_TEST_TOOLS && (
           <div style={styles.testRow}>
-            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all required uploads with sample documents">
+            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only - fills all required uploads with sample documents">
               ✨ Fill with test data
             </button>
           </div>
@@ -374,7 +374,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Already sourced for you</h3>
           <p style={styles.sectionDesc}>
-            We found {uncoveredAutoSourced.length === 1 ? 'this document' : 'these documents'} automatically — no action needed.
+            We found {uncoveredAutoSourced.length === 1 ? 'this document' : 'these documents'} automatically - no action needed.
           </p>
           {uncoveredAutoSourced.map(d => (
             <div
@@ -392,13 +392,13 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
       )}
 
       {/* Company-registry documents retrieved by the self-source agent on the
-          Documents step — surfaced here too and marked auto-sourced. Only the
+          Documents step - surfaced here too and marked auto-sourced. Only the
           successfully retrieved items (not the manual/captcha ones). */}
       {(selfSourceResults?.results || []).some(r => r.status === 'retrieved' || r.status === 'retrieved_unverified') && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Sourced from company registry</h3>
           <p style={styles.sectionDesc}>
-            Retrieved automatically from official registries — no action needed.
+            Retrieved automatically from official registries - no action needed.
           </p>
           {(selfSourceResults.results || [])
             .filter(r => r.status === 'retrieved' || r.status === 'retrieved_unverified')
@@ -451,7 +451,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         </div>
       )}
 
-      {/* "Nium will retrieve these for you" (self-sourced) section — hidden for
+      {/* "Nium will retrieve these for you" (self-sourced) section - hidden for
           now per request, but kept here for future use. `selfSourced` is still
           computed above and still counted as submitted in handleContinue, so the
           downstream document gate is unaffected; only the UI is hidden. To
@@ -460,7 +460,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
           <p style={styles.sectionDesc}>
-            We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
+            We source these from official registries - no action needed. You can optionally upload any you already have to speed up review.
           </p>
           {selfSourced.map(item => (
             <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
@@ -472,7 +472,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
       <div style={styles.footer}>
         <p style={styles.footerNote}>
           {allDone
-            ? 'All required documents provided — you can continue.'
+            ? 'All required documents provided - you can continue.'
             : `${requiredTotal - requiredDone} required item${requiredTotal - requiredDone > 1 ? 's' : ''} still needed. You can continue and complete them before declaration.`}
         </p>
         <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>

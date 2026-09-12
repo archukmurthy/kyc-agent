@@ -11,7 +11,7 @@ describe("NoTenantLanding", () => {
     expect(screen.getByText("?tenant=<your-tenant-id>")).toBeInTheDocument();
   });
 
-  it("names no real tenants — neutral branding only", () => {
+  it("names no real tenants - neutral branding only", () => {
     render(<NoTenantLanding />);
     const text = document.body.textContent || "";
     expect(text).not.toMatch(/nium/i);

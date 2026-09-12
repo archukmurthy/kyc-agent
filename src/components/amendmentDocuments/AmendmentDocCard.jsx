@@ -90,7 +90,7 @@ export function AmendmentDocCard({
       ) : upload ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {upload.uploadFailed ? (
-            <span style={WARN}>⚠ {upload.name} — not stored, please re-upload</span>
+            <span style={WARN}>⚠ {upload.name} - not stored, please re-upload</span>
           ) : (
             <span style={UPLOADED}>✓ {upload.name}</span>
           )}

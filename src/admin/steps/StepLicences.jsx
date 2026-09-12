@@ -90,7 +90,7 @@ export default function StepLicences({
     flashNotice(
       isStandalone || addMode
         ? "✅ Licence added"
-        : "✅ Licence added — configure its schemas in Step 4"
+        : "✅ Licence added - configure its schemas in Step 4"
     );
   }
 
@@ -170,7 +170,7 @@ export default function StepLicences({
         ))}
         {!licences.length && (
           <div style={{ padding: 16, border: `1px dashed ${adminColors.border}`, borderRadius: 10, color: adminColors.textMuted, fontSize: 13, textAlign: "center" }}>
-            No licences yet — add one below.
+            No licences yet - add one below.
           </div>
         )}
       </div>
@@ -341,7 +341,7 @@ function LicenceCard({ licence, expanded, onToggle, onPatch, onDelete }) {
             )}
           </div>
           <div style={{ fontSize: 12, color: adminColors.textMuted, marginTop: 3 }}>
-            {licence.licenceType || "—"}
+            {licence.licenceType || "-"}
             {Array.isArray(licence.countriesCovered) && licence.countriesCovered.length > 0
               ? ` · covers ${licence.countriesCovered.length} countr${licence.countriesCovered.length === 1 ? "y" : "ies"}`
               : isDefault

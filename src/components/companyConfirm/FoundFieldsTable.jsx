@@ -118,7 +118,7 @@ export function FoundFieldsTable({
       return (
         <span
           onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-          title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence — from unverified source"}
+          title={revealedTs[idx] ? "Click to hide timestamp" : "Low confidence - from unverified source"}
           style={{ ...badgeBaseStyle, color: "#C2410C", background: "transparent" }}
         >
           {revealedTs[idx] ? `🕒 ${ts}` : `⚠ ${item.source}`}
@@ -129,7 +129,7 @@ export function FoundFieldsTable({
     return (
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
-        title={revealedTs[idx] ? "Click to hide timestamp" : "Probable — from company source, please confirm"}
+        title={revealedTs[idx] ? "Click to hide timestamp" : "Probable - from company source, please confirm"}
         style={{ ...badgeBaseStyle, color: C.warning, background: "transparent" }}
       >
         {revealedTs[idx] ? `🕒 ${ts}` : `~ ${item.source}`}
@@ -149,7 +149,7 @@ export function FoundFieldsTable({
     // is upstream (enrichStakeholders re-attaches .stakeholders so these render
     // as cards); this guards any residual case.
     if (isStakeholderField(item.field) && /^\s*\[\s*\{/.test(String(item.value || ""))) {
-      displayValue = "Director / owner information sourced — details to be confirmed";
+      displayValue = "Director / owner information sourced - details to be confirmed";
     }
     // PR-041: empty stakeholder array → human-readable text instead of raw "[]".
     // getDisplayValue only returns a different (string) value in that exact case;
@@ -212,7 +212,7 @@ export function FoundFieldsTable({
         borderBottom: "1px solid rgba(26,58,74,0.04)",
         // Unchecking a field is NOT disabling it — keep the row fully legible.
       }}>
-        {/* Main block — label ABOVE value (prototype layout), not side-by-side. */}
+        {/* Main block - label ABOVE value (prototype layout), not side-by-side. */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
@@ -243,7 +243,7 @@ export function FoundFieldsTable({
               whiteSpace: "normal", lineHeight: 1.45,
             }}>
               {/* Corrected: the customer's value leads, the registry value stays
-                  beside it struck through — original + corrected coexist. */}
+                  beside it struck through - original + corrected coexist. */}
               {isCorrected ? (
                 <>
                   <span>{String(correction)}</span>
@@ -261,28 +261,28 @@ export function FoundFieldsTable({
           )}
           {item.originalAIValue && item.originalAIValue !== displayValue && (
             <div style={{ marginTop: 4, fontSize: 10, color: "#1a3a4a90" }}>
-              AI returned "{item.originalAIValue}" — mapped to dropdown option
+              AI returned "{item.originalAIValue}" - mapped to dropdown option
             </div>
           )}
           {isUnmappedDropdown && (
             <div style={{ marginTop: 4, fontSize: 10, fontStyle: "italic", color: "#8c5500" }}>
-              Doesn't match any dropdown option — please correct on the next page
+              Doesn't match any dropdown option - please correct on the next page
             </div>
           )}
           {/* The source prompt is a QUESTION, so it goes once the row answers
               it. It used to render off item.sourceTier alone, so "please
               confirm this is correct" stayed under a value the customer had
               already corrected, confirmed or marked wrong. needsAttention is
-              exactly "low confidence and still unresolved" — the same
+              exactly "low confidence and still unresolved" - the same
               condition driving the amber stripe. */}
           {needsAttention && item.sourceTier === "tier2" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
-              From a company source — please confirm this is correct.
+              From a company source - please confirm this is correct.
             </Notice>
           )}
           {needsAttention && item.sourceTier === "tier3" && (
             <Notice tier="tier2" style={{ marginTop: 6 }}>
-              From an unverified source — please verify this is correct.
+              From an unverified source - please verify this is correct.
             </Notice>
           )}
           {item.sharePercentageWarning && (
@@ -293,19 +293,19 @@ export function FoundFieldsTable({
             }}>
               <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
               <div>
-                <div style={{ fontWeight: 600 }}>Ownership band — verify qualifier</div>
+                <div style={{ fontWeight: 600 }}>Ownership band - verify qualifier</div>
                 <div style={{ marginTop: 2 }}>
                   {item.sharePercentageSuggested
-                    ? `Registry likely states "${item.sharePercentageSuggested}" — confirm exact wording.`
+                    ? `Registry likely states "${item.sharePercentageSuggested}" - confirm exact wording.`
                     : item.sharePercentageWarning}
                 </div>
               </div>
             </div>
           )}
-          {/* Capture-mode change dialogue — mounts beneath an unchecked field,
+          {/* Capture-mode change dialogue - mounts beneath an unchecked field,
               captures intent/registry + records one append-only change_event.
               onResolved (commit 3) bumps formVersion so the row re-renders the
-              moment classification completes and the inline editor can appear —
+              moment classification completes and the inline editor can appear -
               the questions always come first, the value input second. */}
           {!checks[idx] && (
             <ChangeDialogue
@@ -323,11 +323,11 @@ export function FoundFieldsTable({
               onPersist={persistDialogueState}
             />
           )}
-          {/* Inline correction editor (commit 3) — value capture ON Confirm.
+          {/* Inline correction editor (commit 3) - value capture ON Confirm.
               Gated on the dialogue having emitted (classification first), so a
               value can never be saved before the initial event exists. Writes
               through saveInlineCorrection: gapRef["corrected_<field>"] (same
-              key Fill Gaps renders — the value shows pre-filled there) + the
+              key Fill Gaps renders - the value shows pre-filled there) + the
               superseding change-event. Once saved, the value renders inline on
               the row above (with the original struck through) and this editor
               only re-opens on demand via "Edit again".  */}
@@ -355,7 +355,7 @@ export function FoundFieldsTable({
               />
             );
           })()}
-          {/* Inline document request (commit 4) — the upload lives WHERE the
+          {/* Inline document request (commit 4) - the upload lives WHERE the
               change happened. Same card, same store and same upload call as the
               Fill Gaps panel, so a file added in either place satisfies both.
               Matched by docType against the canonical list so two fields
@@ -395,7 +395,7 @@ export function FoundFieldsTable({
               />
             );
           })()}
-          {/* TEST VIEW — DISABLED, kept for debugging. Shows what the engine
+          {/* TEST VIEW - DISABLED, kept for debugging. Shows what the engine
               actually decided for this row (rule id, workflow, document,
               verifiability), including outcomes the customer never sees. It is
               read-only: it never re-classifies and never affects the gate.
@@ -419,7 +419,7 @@ export function FoundFieldsTable({
           })()}
           */}
         </div>
-        {/* Right rail — provenance is supporting detail (quiet, two lines),
+        {/* Right rail - provenance is supporting detail (quiet, two lines),
             then the affordances. Fixed width so a long source string can never
             squeeze the value column. */}
         <div style={{
@@ -440,13 +440,13 @@ export function FoundFieldsTable({
             )}
           </div>
           {/* Already confirmed on the Applicant page's five-fact gate, so this
-              row is read-only here — see GATE_CONFIRMED_FIELDS. The spacer
+              row is read-only here - see GATE_CONFIRMED_FIELDS. The spacer
               keeps the source-badge column aligned with every other row. */}
           {isGateConfirmedField(item.field) ? (
             <div style={{ width: 56, flexShrink: 0 }} aria-hidden="true" />
           ) : (
           <div style={{ display: "flex", gap: 4, paddingTop: 1 }}>
-            {/* Contextual control PAIR, per the prototype — never three buttons.
+            {/* Contextual control PAIR, per the prototype - never three buttons.
                 The prototype only ever shows two row states; ours has four, so
                 the rule is applied by meaning rather than copied by position:
                   needs-attention / disputed → ✓ ✕  ("is this right or wrong?")
@@ -465,7 +465,7 @@ export function FoundFieldsTable({
               onClick={() => { if (!rowChecked) toggleCheck(idx); affirmRow(item); }}
               aria-label={isCorrected || isDisputed ? `Restore the original value for ${item.label}` : `Confirm ${item.label}`}
               aria-pressed={rowChecked && !needsAttention}
-              title={isCorrected || isDisputed ? "Undo — keep the original value" : "Correct — keep this value"}
+              title={isCorrected || isDisputed ? "Undo - keep the original value" : "Correct - keep this value"}
               style={{
                 ...btnBase,
                 background: rowChecked && !needsAttention ? "#4a9e8e" : "#fff",
@@ -479,7 +479,7 @@ export function FoundFieldsTable({
                 onClick={() => { if (rowChecked) toggleCheck(idx); }}
                 aria-label={`Mark ${item.label} as incorrect`}
                 aria-pressed={isDisputed}
-                title="Wrong — flag this value for correction"
+                title="Wrong - flag this value for correction"
                 style={{
                   ...btnBase,
                   background: isDisputed ? C.error : "#fff",
@@ -527,7 +527,7 @@ export function FoundFieldsTable({
             }}>
               {humaniseSection(section)}
             </div>
-            {/* Fidelity pass: the prototype has no table header — each row is a
+            {/* Fidelity pass: the prototype has no table header - each row is a
                 self-describing card (tiny uppercase label above its value, with
                 the provenance and affordances on the right), so the column
                 header bar is gone rather than restyled. */}

@@ -114,7 +114,7 @@ export function PreboardingGate({
             Access Pre-boarding Agent
           </button>
 
-          {/* PARKED — "← Back to agent selection" button. Its destination is the
+          {/* PARKED - "← Back to agent selection" button. Its destination is the
               agent-selection screen (renderLandingPage in App.js), which is itself
               currently parked. A button pointing at a parked destination dead-ends:
               clearing agentType re-traps the user, because the routing block
@@ -122,7 +122,7 @@ export function PreboardingGate({
               button is parked to match its destination rather than fixed.
 
               RE-ENABLE this together with renderLandingPage when the agent-selection
-              screen is restored. NOT deleted — restore by uncommenting. The handler
+              screen is restored. NOT deleted - restore by uncommenting. The handler
               below is unchanged and still correct for the un-parked world; the
               dead-end is a property of the parked destination, not of this code.
           <button

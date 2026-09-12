@@ -63,7 +63,7 @@ export default function MatrixOverview({ config, onCellClick }) {
 
                 let bg = "#F9FAFB";
                 let color = adminColors.textMuted;
-                let content = "—";
+                let content = "-";
                 let sub = "Not associated";
 
                 if (associated) {

@@ -39,7 +39,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
             </div>
             <StatusBadge isInternal={isNium} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
           </div>
-          {/* Tenant ID is the routing/storage key, not a display name — kept
+          {/* Tenant ID is the routing/storage key, not a display name - kept
               behind an expander so it stays available to operators without
               surfacing "nium" on the branded dashboard. A full rename to a
               prod-ready ID is tracked separately (see the Notion task). */}
@@ -72,7 +72,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
 
           <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap", fontSize: 12, color: adminColors.textMuted }}>
             <span>
-              Created: <strong style={{ color: adminColors.text }}>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}</strong>
+              Created: <strong style={{ color: adminColors.text }}>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "-"}</strong>
             </span>
             <span>
               Last published: <strong style={{ color: adminColors.text }}>

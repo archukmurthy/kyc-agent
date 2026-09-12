@@ -76,7 +76,7 @@ async function driveToConfirm() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);

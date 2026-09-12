@@ -52,7 +52,7 @@ function LicenceCard({ lic, onChange, onDelete, onSetPrimary, deletable }) {
           <input value={lic.licenceNumber || ""} onChange={(e) => set("licenceNumber", e.target.value)} style={inputBase} />
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
-          <label style={label}>Countries covered (comma-separated ISO codes — empty = catch-all)</label>
+          <label style={label}>Countries covered (comma-separated ISO codes - empty = catch-all)</label>
           <input
             value={(lic.countriesCovered || []).join(", ")}
             onChange={(e) => set("countriesCovered", e.target.value.split(",").map(s => s.trim().toUpperCase()).filter(Boolean))}

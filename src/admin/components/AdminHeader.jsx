@@ -96,7 +96,7 @@ export default function AdminHeader({
           disabled={!previewReady}
           title={
             previewReady
-              ? "Opens a preview with your current unsaved changes — before publishing. If the preview tab is already open, click Refresh in the preview tab to see your latest changes."
+              ? "Opens a preview with your current unsaved changes - before publishing. If the preview tab is already open, click Refresh in the preview tab to see your latest changes."
               : "Loading configuration…"
           }
           style={{

@@ -119,7 +119,7 @@ async function driveToDossier() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -135,7 +135,7 @@ async function driveToInvite() {
 }
 
 /* ═══════════════════════════════════════════
-   1. The gate — entry and unlock
+   1. The gate - entry and unlock
    ═══════════════════════════════════════════ */
 describe("pre-boarding gate", () => {
   it("?preboarding=1 lands on the gate, not the onboarding lookup screen", async () => {
@@ -176,7 +176,7 @@ describe("pre-boarding gate", () => {
 });
 
 /* ═══════════════════════════════════════════
-   2. THE BACK-BUTTON DEAD END — pins a BUG
+   2. THE BACK-BUTTON DEAD END - pins a BUG
    ═══════════════════════════════════════════ */
 describe("back to agent selection", () => {
   /**
@@ -198,7 +198,7 @@ describe("back to agent selection", () => {
    * assertion should be rewritten again — to expect an actual return to agent
    * selection.
    */
-  it("the back-to-agent-selection control is PARKED — no dead-end affordance renders", async () => {
+  it("the back-to-agent-selection control is PARKED - no dead-end affordance renders", async () => {
     await mountAtGate();
     expect(codeInput()).toBeInTheDocument();
 
@@ -212,7 +212,7 @@ describe("back to agent selection", () => {
 });
 
 /* ═══════════════════════════════════════════
-   3. The dossier view — reached with NO stub
+   3. The dossier view - reached with NO stub
    ═══════════════════════════════════════════ */
 describe("dossier view", () => {
   it("opens after research even though the offline save fails", async () => {
@@ -298,7 +298,7 @@ describe("ask for more information", () => {
 });
 
 /* ═══════════════════════════════════════════
-   5. The invite screen — BOTH branches
+   5. The invite screen - BOTH branches
    ═══════════════════════════════════════════ */
 describe("invite screen", () => {
   const inviteForm = () => ({
@@ -324,7 +324,7 @@ describe("invite screen", () => {
   });
 
   // ── FALLBACK branch: no stub, save fails, dossierId stays null ──
-  it("FALLBACK — with no saved dossier the link falls back to a ?ref= token", async () => {
+  it("FALLBACK - with no saved dossier the link falls back to a ?ref= token", async () => {
     await driveToInvite();
     await sendInvite();
 
@@ -335,7 +335,7 @@ describe("invite screen", () => {
   });
 
   // ── POPULATED branch: /api/save-dossier stubbed so dossierId is real ──
-  it("POPULATED — a saved dossier produces a dossier-backed customer link", async () => {
+  it("POPULATED - a saved dossier produces a dossier-backed customer link", async () => {
     fetchRoutes["/api/save-dossier"] = () =>
       Promise.resolve({
         ok: true,
@@ -353,7 +353,7 @@ describe("invite screen", () => {
     expect(text).not.toContain("?ref=");
   });
 
-  it("POPULATED — offers a copy control alongside the link", async () => {
+  it("POPULATED - offers a copy control alongside the link", async () => {
     fetchRoutes["/api/save-dossier"] = () =>
       Promise.resolve({
         ok: true,

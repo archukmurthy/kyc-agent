@@ -101,7 +101,7 @@ export default function AdminRoot() {
           }}
           title={configError}
         >
-          API offline — using local defaults
+          API offline - using local defaults
         </div>
       )}
       <AdminDashboard

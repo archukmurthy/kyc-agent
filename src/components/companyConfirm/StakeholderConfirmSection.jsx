@@ -136,7 +136,7 @@ export function StakeholderConfirmSection({
       <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <span style={{ color: "#1a3a4a80", width: 130, flexShrink: 0 }}>{f.label}</span>
         {/* Corrected: the customer's value leads and the original stays beside
-            it struck through — the same old-beside-new treatment a corrected
+            it struck through - the same old-beside-new treatment a corrected
             pre-filled row gets. Overwriting in place lost what changed. */}
         <span style={{ fontWeight: 600, color: corrected ? C.info : "#1a3a4a", flex: 1, minWidth: 0 }}>
           {stkFieldDisplay(s, f.key)}
@@ -156,12 +156,12 @@ export function StakeholderConfirmSection({
           <button
             type="button"
             onClick={() => {
-              if (!ticked) togglePersonField(item, s, f); // undo — restore the value
+              if (!ticked) togglePersonField(item, s, f); // undo - restore the value
               affirmPersonField(s.id, f.key);
             }}
             aria-label={disputed ? `Restore the original ${f.label}` : `Confirm ${f.label}`}
             aria-pressed={settled}
-            title={disputed ? "Undo — keep the original value" : "Correct — keep this value"}
+            title={disputed ? "Undo - keep the original value" : "Correct - keep this value"}
             style={{
               ...btn,
               background: settled ? "#4a9e8e" : "#fff",
@@ -180,7 +180,7 @@ export function StakeholderConfirmSection({
             aria-label={needsAffirm || disputed ? `Mark ${f.label} as incorrect` : `Edit ${f.label}`}
             aria-pressed={disputed}
             title={needsAffirm || disputed
-              ? "Wrong — flag this value for correction"
+              ? "Wrong - flag this value for correction"
               : corrected ? "Edit again" : "Edit this value"}
             style={{
               ...btn,
@@ -210,7 +210,7 @@ export function StakeholderConfirmSection({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1a6b56" }}>
               {addedHere
-                ? `${s.full_name} — added by you`
+                ? `${s.full_name} - added by you`
                 : `New ${isCorporateStakeholder(s) ? "company" : ubo ? "beneficial owner" : "director"} added`}
             </div>
             <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.85, marginTop: 2 }}>
@@ -302,18 +302,18 @@ export function StakeholderConfirmSection({
                   onRemove={handleAmendmentRemove}
                   variant="inline"
                   hint={companyWide
-                    ? `One ${evDocType.toLowerCase()} covers the whole company — upload it once.`
+                    ? `One ${evDocType.toLowerCase()} covers the whole company - upload it once.`
                     : `Required for ${s.full_name}.`}
                 />
               )}
-              {/* Same document, already requested against another person — say
+              {/* Same document, already requested against another person - say
                   so rather than silently showing nothing here. */}
               {showCoveredNote && (
                 <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", padding: "6px 0" }}>
-                  Covered by the single {evDocType.toLowerCase()} requested for this company — you only upload it once.
+                  Covered by the single {evDocType.toLowerCase()} requested for this company - you only upload it once.
                 </div>
               )}
-              {/* TEST VIEW — DISABLED, kept for debugging. See the twin block
+              {/* TEST VIEW - DISABLED, kept for debugging. See the twin block
                   in renderFoundRow for how to re-enable.
 
               <AnalystSignalStrip
@@ -388,11 +388,11 @@ export function StakeholderConfirmSection({
         </div>
         <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "0 0 4px", lineHeight: 1.5 }}>
           Found {count} {count === 1 ? "person" : "people"} from {item.source || "research"}. Expand each
-          person to review the details we found — keep the green tick on anything correct, or untick a
+          person to review the details we found - keep the green tick on anything correct, or untick a
           field to edit it on the next page. Anything we couldn't find is collected on the next page too.
         </p>
         <p style={{ fontSize: 11, color: C.textMuted, margin: "0 0 10px", fontStyle: "italic" }}>
-          Editing who is on this list is coming soon — for now, untick anyone who doesn't belong.
+          Editing who is on this list is coming soon - for now, untick anyone who doesn't belong.
         </p>
         {realStakeholders.map((s) => {
           const rejected = isStakeholderRejected(item.field, s.id);
@@ -440,7 +440,7 @@ export function StakeholderConfirmSection({
                 transition: "border-color .15s",
               }}
             >
-              {/* Header row — click anywhere to expand/collapse */}
+              {/* Header row - click anywhere to expand/collapse */}
               <div
                 onClick={() => toggleStakeholderExpanded(s.id)}
                 style={{
@@ -459,7 +459,7 @@ export function StakeholderConfirmSection({
                   }}
                   aria-label={
                     personNeedsAttention
-                      ? `${s.full_name} belongs on this list — ${attentionFields.length} detail${attentionFields.length === 1 ? "" : "s"} still need confirming`
+                      ? `${s.full_name} belongs on this list - ${attentionFields.length} detail${attentionFields.length === 1 ? "" : "s"} still need confirming`
                       : `Confirm ${s.full_name}`
                   }
                 />
@@ -507,12 +507,12 @@ export function StakeholderConfirmSection({
                   {!expanded && (
                     <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 3 }}>
                       {rejected
-                        ? "⚠ Marked as incorrect — tap to review"
+                        ? "⚠ Marked as incorrect - tap to review"
                         : "Tap to expand and review the details we found"}
                     </div>
                   )}
                 </div>
-                {/* Per-card status badge — shown ONLY when this person needs
+                {/* Per-card status badge - shown ONLY when this person needs
                     something from the customer here, i.e. a found value not yet
                     confirmed. Driven by attentionFields, NOT by everything
                     routed to the next page: a gap has no control on this card,
@@ -593,7 +593,7 @@ export function StakeholderConfirmSection({
                   the same type (the 6a under-collection fix). */}
               {renderPersonDocuments(s)}
 
-              {/* Validation flag — director/UBO failed a check: stripped share
+              {/* Validation flag - director/UBO failed a check: stripped share
                   band, non-official source, or cross-source attribute merge.
                   Always visible (independent of expand state). The share-band
                   case is prioritised and shown with its suggested registry band. */}
@@ -614,17 +614,17 @@ export function StakeholderConfirmSection({
                   <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
                   {s.sharePercentageWarning ? (
                     <div>
-                      <div style={{ fontWeight: 600 }}>Ownership band — verify qualifier</div>
+                      <div style={{ fontWeight: 600 }}>Ownership band - verify qualifier</div>
                       <div style={{ marginTop: 2, fontWeight: 500 }}>
                         {s.sharePercentageSuggested
-                          ? `Registry likely states "${s.sharePercentageSuggested}" — confirm exact wording.`
+                          ? `Registry likely states "${s.sharePercentageSuggested}" - confirm exact wording.`
                           : s.sharePercentageWarning}
                       </div>
                     </div>
                   ) : (
                     <span>
                       {s.notes?.includes("cross-source")
-                        ? "Details stripped — attributes from multiple sources detected. Verify details manually."
+                        ? "Details stripped - attributes from multiple sources detected. Verify details manually."
                         : "Source not confirmed as official registry. Verify this director manually before proceeding."}
                     </span>
                   )}
@@ -637,7 +637,7 @@ export function StakeholderConfirmSection({
                   padding: "12px 16px 14px",
                   borderTop: "1px solid rgba(26,58,74,0.08)",
                 }}>
-                  {/* Source badge — SAME click-to-reveal-timestamp interaction as
+                  {/* Source badge - SAME click-to-reveal-timestamp interaction as
                       the pre-filled rows (renderSourceBadge). This used to be a
                       badge plus a separate "🕐 When?" chip whose timestamp only
                       appeared in a native title tooltip: two different
@@ -671,7 +671,7 @@ export function StakeholderConfirmSection({
 
                   {rejected ? (
                     <div style={{ fontSize: 12, color: "#1a3a4a70", fontStyle: "italic" }}>
-                      This person is marked incorrect — you'll enter the correct details on the next page.
+                      This person is marked incorrect - you'll enter the correct details on the next page.
                     </div>
                   ) : !needsEDD ? (
                     // Listed-company person: the AI-returned values render
@@ -690,7 +690,7 @@ export function StakeholderConfirmSection({
                           .map((f) => renderPersonAttributeRow(item, s, f, isPersonLowConfidence(s, item)))}
                       </div>
                       <Notice tier="tier1" style={{ marginTop: 10 }}>
-                        Verified from official sources — no additional details required for a listed company.
+                        Verified from official sources - no additional details required for a listed company.
                         Untick a field to correct a value we got wrong, or untick this person above if they
                         don't belong; you'll make the change on the next page.
                       </Notice>
@@ -725,12 +725,12 @@ export function StakeholderConfirmSection({
                       <div style={{ fontSize: 11, color: "#1a3a4a70", marginTop: 10, fontStyle: "italic" }}>
                         {nextPageFields.length > 0
                           ? `On the next page you'll complete: ${nextPageFields.join(", ")}.`
-                          : "All details confirmed — nothing further needed on the next page."}
+                          : "All details confirmed - nothing further needed on the next page."}
                       </div>
                     </>
                   )}
 
-                  {/* Inline correction editor — LAST in the card, under the
+                  {/* Inline correction editor - LAST in the card, under the
                       next-page line. It used to render above the header, which
                       pushed the editor away from the row it belongs to and put
                       it on top of every value. It edits one of the attributes
@@ -759,7 +759,7 @@ export function StakeholderConfirmSection({
           );
         })}
 
-        {/* Customer-added people (pending) — created here, completed next page */}
+        {/* Customer-added people (pending) - created here, completed next page */}
         {getStakeholders(item.field)
           .filter((s) => s.customer_added && !isRegistryExemptionNotice(s))
           .map((s) => renderPendingAddedStakeholder(item.field, s, ubo))}

@@ -37,8 +37,8 @@ function FieldEditor({ field, onSave, onCancel, tab }) {
           <div style={{ marginBottom: 12 }}>
             <label style={label}>Tier</label>
             <select value={f.tier || 1} onChange={(e) => set("tier", Number(e.target.value))} style={inputBase}>
-              <option value={1}>Tier 1 — basic identity / public registry</option>
-              <option value={2}>Tier 2 — enrichment / risk screening</option>
+              <option value={1}>Tier 1 - basic identity / public registry</option>
+              <option value={2}>Tier 2 - enrichment / risk screening</option>
             </select>
           </div>
           <div style={{ marginBottom: 12 }}>
@@ -282,7 +282,7 @@ function FieldRow({ f, idx, tab, n, onMove, onRemove, onEdit }) {
       <span>{tab === "research" ? `Tier ${f.tier || 1}` : f.inputType || "text"}</span>
       <span style={{ color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {tab === "research"
-          ? (f.searchHint ? "✓" : "—")
+          ? (f.searchHint ? "✓" : "-")
           : (f.required ? "Yes" : "No")}
       </span>
       <span style={{ display: "flex", gap: 4 }}>

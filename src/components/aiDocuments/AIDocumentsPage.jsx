@@ -325,7 +325,7 @@ export function AIDocumentsPage({
               <div style={card}>
                 <style>{`@keyframes kspin { to { transform: rotate(360deg); } }`}</style>
 
-                {/* Testing-mode toggle — demo data vs real agent call. Hidden once
+                {/* Testing-mode toggle - demo data vs real agent call. Hidden once
                     the real agents have been triggered (test/demo only). */}
                 {(demoMode || SHOW_TEST_TOOLS) && !hasRunRealAgent && (
                   <div style={{
@@ -388,7 +388,7 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
-                {/* Unified loading panel — held until BOTH agents finish, then
+                {/* Unified loading panel - held until BOTH agents finish, then
                     all results + uploads reveal together below. */}
                 {isLoading && (
                   <div style={{ textAlign: "center", padding: "40px 20px" }}>
@@ -403,7 +403,7 @@ export function AIDocumentsPage({
                 {/* Everything below is held back until both agents complete. */}
                 {!isLoading && (<>
 
-                {/* Empty state — both agents done, nothing found anywhere. */}
+                {/* Empty state - both agents done, nothing found anywhere. */}
                 {foundDocs.length === 0 && !(selfSourceResults?.results?.length > 0) && (
                   <div style={{
                     padding: "16px", background: C.warningBg,
@@ -414,7 +414,7 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
-                {/* Test/demo-only diagnostic — surfaces a swallowed registry-agent
+                {/* Test/demo-only diagnostic - surfaces a swallowed registry-agent
                     API error (e.g. billing/credits) so it isn't hidden as "manual
                     retrieval". NEVER shown in production (gated on test/demo). */}
                 {(demoMode || SHOW_TEST_TOOLS) && selfSourceDiag && (
@@ -422,17 +422,17 @@ export function AIDocumentsPage({
                     padding: "12px 16px", background: "#fff1f0", border: "1px solid #ffa39e",
                     borderRadius: 10, marginBottom: 20, fontSize: 12, color: "#a8071a",
                   }}>
-                    <strong>🧪 Test diagnostic — registry agent AI call failed:</strong>
+                    <strong>🧪 Test diagnostic - registry agent AI call failed:</strong>
                     <div style={{ marginTop: 4, fontFamily: "monospace", wordBreak: "break-word", lineHeight: 1.4 }}>
                       {selfSourceDiag}
                     </div>
                     <div style={{ marginTop: 6, color: "#a8071a99" }}>
-                      Items below fell back to manual retrieval because the AI call didn't run — not because the documents are missing.
+                      Items below fell back to manual retrieval because the AI call didn't run - not because the documents are missing.
                     </div>
                   </div>
                 )}
 
-                {/* Section A error — subtle, never blocks progress */}
+                {/* Section A error - subtle, never blocks progress */}
                 {docSearchError && (
                   <div style={{
                     padding: "12px 16px",
@@ -447,7 +447,7 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
-                {/* Registry self-source error — subtle, never blocks progress */}
+                {/* Registry self-source error - subtle, never blocks progress */}
                 {selfSourceError && (
                   <div style={{
                     padding: "12px 16px",
@@ -462,7 +462,7 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
-                {/* PR-043 — unified Documents Sourced panel: automated registry
+                {/* PR-043 - unified Documents Sourced panel: automated registry
                     docs, internet-research docs (annual report / Wolfsberg) and
                     manual uploads, deduped by type and labelled by origin. */}
                 {!isLoading && mergedSourcedDocs.length > 0 && (
@@ -482,7 +482,7 @@ export function AIDocumentsPage({
                       )}
                     </div>
                     <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
-                      Documents gathered for <strong>{companyName}</strong> — from official
+                      Documents gathered for <strong>{companyName}</strong> - from official
                       registries, public sources, and your manual uploads.
                     </p>
 
@@ -549,7 +549,7 @@ export function AIDocumentsPage({
                               )}
                             </div>
 
-                            {/* View link — /api/get-document for manual uploads (the
+                            {/* View link - /api/get-document for manual uploads (the
                                 blob is private and streamed back by the server),
                                 registry/source URL for automated docs. Hidden when a
                                 manual upload failed (blobUrl null / uploadFailed). */}
@@ -563,14 +563,14 @@ export function AIDocumentsPage({
                               </a>
                             )}
 
-                            {/* Manual upload failed — warn but never block the journey. */}
+                            {/* Manual upload failed - warn but never block the journey. */}
                             {e.uploaded && e.uploadFailed && (
                               <div style={{ marginTop: 6, fontSize: 12, color: C.warning }}>
-                                ⚠ Upload could not be stored permanently — please re-upload before submitting.
+                                ⚠ Upload could not be stored permanently - please re-upload before submitting.
                               </div>
                             )}
 
-                            {/* Manually-uploaded doc — filename + remove. */}
+                            {/* Manually-uploaded doc - filename + remove. */}
                             {e.uploaded && (
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12, color: e.uploadFailed ? C.warning : C.success }}>
                                 <span>{e.uploadFailed ? "⚠" : "✓"}</span>
@@ -581,11 +581,11 @@ export function AIDocumentsPage({
                               </div>
                             )}
 
-                            {/* Captcha-blocked registry doc — offer manual download + upload. */}
+                            {/* Captcha-blocked registry doc - offer manual download + upload. */}
                             {e.captcha && (
                               <div style={{ marginTop: 6 }}>
                                 <div style={{ fontSize: 12, color: C.warning, marginBottom: 6 }}>
-                                  🔒 Behind captcha — cannot be retrieved automatically
+                                  🔒 Behind captcha - cannot be retrieved automatically
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                                   {e.openUrl && (
@@ -618,7 +618,7 @@ export function AIDocumentsPage({
                             )}
                           </div>
 
-                          {/* Research docs — accept-to-extract toggle (unchanged behaviour). */}
+                          {/* Research docs - accept-to-extract toggle (unchanged behaviour). */}
                           {e.kind === "research" && (
                             <div style={{ flexShrink: 0 }}>
                               {accepted ? (
@@ -642,7 +642,7 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
-                {/* Search details — collapsible diagnostic table (doc-search agent). */}
+                {/* Search details - collapsible diagnostic table (doc-search agent). */}
                 {docSearchResults?.summaryTable?.length > 0 && (
                   <details style={{ marginTop: -8, marginBottom: 24 }}>
                     <summary style={{
@@ -740,7 +740,7 @@ export function AIDocumentsPage({
                           }}>
                             <span>✓</span>
                             <span>
-                              We sourced this automatically — upload here only if you prefer to provide your own version.
+                              We sourced this automatically - upload here only if you prefer to provide your own version.
                             </span>
                           </div>
                         )}
@@ -783,7 +783,7 @@ export function AIDocumentsPage({
                 <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: uploadedCount > 0 ? "#f0f9f6" : "#fafcfb", color: uploadedCount > 0 ? "#1a6b56" : "#1a3a4a70", fontSize: 12, fontWeight: 600 }}>
                   {uploadedCount > 0
                     ? `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} ready to upload`
-                    : "No documents selected — AI will use web search only"}
+                    : "No documents selected - AI will use web search only"}
                 </div>
                 </>)}
               </div>
@@ -799,7 +799,7 @@ export function AIDocumentsPage({
                   {(demoMode || SHOW_TEST_TOOLS) && (
                     <button
                       onClick={() => { setError(""); doDummyResearch("ai_documents"); }}
-                      title="Skip the real search — fills the rest of the flow with demo data at no cost"
+                      title="Skip the real search - fills the rest of the flow with demo data at no cost"
                       style={{
                         fontSize: 13,
                         fontWeight: 600,

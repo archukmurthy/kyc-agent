@@ -81,7 +81,7 @@ async function satisfyConfirmGate() {
     );
     if (cont) return cont;
   }
-  throw new Error("Confirm gate never opened — the driver, not the shell, is broken");
+  throw new Error("Confirm gate never opened - the driver, not the shell, is broken");
 }
 
 /** Company → dummy research → Applicant → Confirm → Fill Gaps. */
@@ -108,7 +108,7 @@ async function driveToFillGaps() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -200,7 +200,7 @@ describe("renderGapSection", () => {
     );
   });
 
-  it("EXCLUDES the applicant section — it was collected on the Applicant page", async () => {
+  it("EXCLUDES the applicant section - it was collected on the Applicant page", async () => {
     await driveToFillGaps();
     // The call site filters s !== "applicant" before mapping.
     expect(screen.queryByText("Applicant Details")).not.toBeInTheDocument();
@@ -279,7 +279,7 @@ describe("the gapRef wiring", () => {
   });
 });
 
-describe("the Continue gate — two refusals, asserted separately", () => {
+describe("the Continue gate - two refusals, asserted separately", () => {
   it("(a) refuses on stakeholder errors, listing each one", async () => {
     await driveToFillGaps();
     fireEvent.click(continueBtn());
@@ -338,7 +338,7 @@ describe("the StakeholderGapForms mount", () => {
   // mounts it and renders what it returns — the thing slice 2 could break.
   it("still renders the extracted stakeholder component below the gap sections", async () => {
     await driveToFillGaps();
-    expect(screen.getByText("People — additional details needed")).toBeInTheDocument();
+    expect(screen.getByText("People - additional details needed")).toBeInTheDocument();
     expect(screen.getByText(/UBO \/ Ownership Analysis/)).toBeInTheDocument();
     expect(screen.getAllByText("Trustees").length).toBeGreaterThan(0);
   });

@@ -737,7 +737,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantOverrides([]);
     setApplicantValidationError(null); setDossierStakeholders(null);
     setApplicantNotListed(false); setAuthorityToActFile(null); setSignatoryIdFile(null);
-    setAmendmentUploads({}); // PR-071 — drop amendment uploads on Start Over
+    setAmendmentUploads({}); // PR-071 - drop amendment uploads on Start Over
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     setRegNumberFork(null); setRegNumberChangeDeclared(null);
@@ -1448,7 +1448,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // accidental non-demo run can't silently bill. Real end-customer URLs
     // (demoToggleVisible false) are unaffected — that's the intended paid path.
     if (!demoMode && demoToggleVisible && typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm("Demo mode is OFF — this runs a REAL research call (Anthropic API + web search) and will COST money. Continue?");
+      const ok = window.confirm("Demo mode is OFF - this runs a REAL research call (Anthropic API + web search) and will COST money. Continue?");
       if (!ok) return;
     }
     if (!companyName.trim()) { setError("Please enter a company name."); return; }
@@ -1609,7 +1609,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("Raw research response (could not parse):", text);
-        throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens — see browser console for the full response.`);
+        throw new Error(`Response was not valid JSON (${e.message}). Likely the model hit max_tokens - see browser console for the full response.`);
       }
       const webFetchTs = new Date().toISOString();
       // Classify one raw research row into our tiered/verification shape.
@@ -1680,7 +1680,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       let ranGapRecovery = false;
       if (shouldRunGapRecovery) {
         ranGapRecovery = true;
-        setResearchStatus(`Found ${cov.populatedFields} fields — running targeted search for ${cov.missingFieldCount} more…`);
+        setResearchStatus(`Found ${cov.populatedFields} fields - running targeted search for ${cov.missingFieldCount} more…`);
         try {
           const gapResp = await fetch("/api/research", {
             method: "POST",
@@ -2214,7 +2214,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // max-duration to kill it, so without this the Documents step waits on
   // `selfSourceLoading` forever. On timeout we abort the request, surface a
   // note, and let the customer proceed (web research still covers the fields).
-  const AGENT_TIMEOUT_MS = 120000; // 2 minutes — matches the typical serverless cap.
+  const AGENT_TIMEOUT_MS = 120000; // 2 minutes - matches the typical serverless cap.
 
   const runRealSelfSource = () => {
     setSelfSourceResults(null);
@@ -2290,7 +2290,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .catch(err => {
         setSelfSourceError(
           err.name === "AbortError"
-            ? "Registry self-source timed out — continuing without it. Web research and document upload still cover these fields."
+            ? "Registry self-source timed out - continuing without it. Web research and document upload still cover these fields."
             : err.message
         );
         setSelfSourceLoading(false);
@@ -2306,7 +2306,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     const docOwnershipType = mapToDocAgentOwnershipType(
       ownershipType,
       entityType,
-      false // effectivelyListed not known yet — research hasn't run
+      false // effectivelyListed not known yet - research hasn't run
     );
 
     const controller = new AbortController();
@@ -2337,7 +2337,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       .catch(err => {
         setDocSearchError(
           err.name === "AbortError"
-            ? "Document search timed out — you can upload documents manually below and continue."
+            ? "Document search timed out - you can upload documents manually below and continue."
             : err.message
         );
         setDocSearchLoading(false);
@@ -2919,7 +2919,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       const result = await resp.json();
       if (result.sessionId) {
         // eslint-disable-next-line no-console
-        console.log(`[Submit] ✅ Saved — session: ${result.sessionId}`);
+        console.log(`[Submit] ✅ Saved - session: ${result.sessionId}`);
         trackEvent("application_submitted", {
           companyName: submitCompany.name,
           sessionId: result.sessionId,
@@ -3348,8 +3348,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // fallback for sections that aren't in the hardcoded sectionConfig.
 
   const sectionConfig = {
-    corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields — please provide correct values", twoCol: true },
-    missing_research: { title: "Missing Research Fields", icon: "❓", sub: "We could not find these from any source — fill in if you have the data (all optional).", twoCol: true },
+    corrections: { title: "Corrections Required", icon: "🔄", sub: "You unchecked these fields - please provide correct values", twoCol: true },
+    missing_research: { title: "Missing Research Fields", icon: "❓", sub: "We could not find these from any source - fill in if you have the data (all optional).", twoCol: true },
     applicant: { title: "Applicant Details", icon: "👤", sub: "Person authorised to submit this application", twoCol: true },
     business: { title: "Business Details", icon: "🏢", sub: "Confirm and complete business information", twoCol: true },
     business_entity: { title: "Business Entity", icon: "🏢", sub: "Registered identity and core business details", twoCol: true },
@@ -4599,7 +4599,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           )}
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: agentType === "preboarding" ? "#7C3AED" : "#4a9e8e", marginBottom: 4 }}>{companyName_} {agentType === "preboarding" ? "Pre-boarding" : "Compliance"}</div>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>{agentType === "preboarding" ? "Pre-boarding Agent" : "KYC Onboarding Agent"}</h1>
-          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>{agentType === "preboarding" ? "Intelligence-led due diligence — build the entity dossier and customer request before contact" : "AI-powered multi-jurisdiction company research and data collection"}</p>
+          <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>{agentType === "preboarding" ? "Intelligence-led due diligence - build the entity dossier and customer request before contact" : "AI-powered multi-jurisdiction company research and data collection"}</p>
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24, flexWrap: "wrap" }}>
@@ -4757,7 +4757,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             </div>
             {loaderPhase > 0 && (
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0B3D91", marginBottom: 6 }}>
-                {loaderPhase === 1 ? "Phase 1 of 2 — Documents" : "Phase 2 of 2 — Web research"}
+                {loaderPhase === 1 ? "Phase 1 of 2 - Documents" : "Phase 2 of 2 - Web research"}
               </div>
             )}
             <div style={{ fontSize: 13, color: "#4a9e8e", fontStyle: "italic", marginBottom: researchStatus ? 6 : 22, minHeight: 18 }}>
@@ -4863,7 +4863,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           />
         )}
 
-        {/* The standalone dev Verify-ID step (?idvspike) was removed — the bands
+        {/* The standalone dev Verify-ID step (?idvspike) was removed - the bands
             flow verifies inline on the applicant page (src/idv-match/). The
             identityVerification step index is kept in the maps to avoid
             renumbering the later steps. */}
@@ -4966,7 +4966,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
           />
         )}
 
-        {/* DRS — dynamic document-requirements step (Step 2 of the CDD brief),
+        {/* DRS - dynamic document-requirements step (Step 2 of the CDD brief),
             placed after Fill Gaps so classifiers + research are settled. */}
         {step === STEPS.documentRequirements && (
           <div>

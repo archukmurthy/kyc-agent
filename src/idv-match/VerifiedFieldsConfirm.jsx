@@ -52,7 +52,7 @@ export default function VerifiedFieldsConfirm({ fields, onConfirm, Btn, extraFie
           </div>
         ))}
       </div>
-      {/* Fields not read from the document (email, mobile, job title, PEP…) —
+      {/* Fields not read from the document (email, mobile, job title, PEP…) -
           rendered as blank inputs the applicant fills in before continuing. */}
       {extraFields && <div style={{ marginTop: 20 }}>{extraFields}</div>}
       {editable && (

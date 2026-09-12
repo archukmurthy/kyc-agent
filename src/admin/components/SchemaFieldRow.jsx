@@ -81,7 +81,7 @@ export default function SchemaFieldRow({
       )}
       {tab === "research" && (
         <td style={{ ...td, fontSize: 11, color: adminColors.textMuted, maxWidth: 200 }}>
-          <span title={field.searchHint || ""}>{truncate(field.searchHint || "—", 40)}</span>
+          <span title={field.searchHint || ""}>{truncate(field.searchHint || "-", 40)}</span>
         </td>
       )}
       <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>

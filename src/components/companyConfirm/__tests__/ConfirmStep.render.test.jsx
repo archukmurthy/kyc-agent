@@ -125,7 +125,7 @@ describe("the header", () => {
     expect(screen.getByText("Corporate")).toBeInTheDocument();
   });
 
-  it("carries NO permanent 'items need your input' pill — it was removed", () => {
+  it("carries NO permanent 'items need your input' pill - it was removed", () => {
     renderConfirm();
     // Case-SENSITIVE: the removed pill was uppercase ("4 ITEMS NEED YOUR
     // INPUT"). The reassurance line below the name still says "…items need
@@ -143,7 +143,7 @@ describe("the header", () => {
   });
 });
 
-describe("hover tooltips — hidden by default, shown on hover, no layout shift", () => {
+describe("hover tooltips - hidden by default, shown on hover, no layout shift", () => {
   // The name appears twice — the tooltip trigger in the <h2>, and a <strong>
   // in the reassurance line — so the trigger must be addressed via the heading.
   const nameTrigger = () =>
@@ -197,7 +197,7 @@ describe("the found table and People section are injected by App.js", () => {
     expect(screen.getByText("PEOPLE SECTION")).toBeInTheDocument();
   });
 
-  it("does NOT render the add-a-person panel — it was removed from this page", () => {
+  it("does NOT render the add-a-person panel - it was removed from this page", () => {
     renderConfirm({ stakeholderFound: [{ item: { field: "directors" }, idx: 0 }] });
     expect(screen.queryByText("ADD PERSON")).not.toBeInTheDocument();
   });
@@ -230,8 +230,8 @@ describe("the documents panel", () => {
     });
     // Two separate entries of the SAME docType, one per person.
     expect(screen.getAllByText("Proof of Identity")).toHaveLength(2);
-    expect(screen.getByText(/— John Smith/)).toBeInTheDocument();
-    expect(screen.getByText(/— Jane Doe/)).toBeInTheDocument();
+    expect(screen.getByText(/- John Smith/)).toBeInTheDocument();
+    expect(screen.getByText(/- Jane Doe/)).toBeInTheDocument();
   });
 
   it("switches to 'All uploaded' once every document is satisfied", () => {
@@ -241,7 +241,7 @@ describe("the documents panel", () => {
       confirmCounts: { needsYou: 0, confirmed: 5, corrected: 1, docsNeeded: 0 },
     });
     expect(screen.getByText("All uploaded")).toBeInTheDocument();
-    expect(screen.getByText(/Uploaded — notice.pdf/)).toBeInTheDocument();
+    expect(screen.getByText(/Uploaded - notice.pdf/)).toBeInTheDocument();
   });
 
   it("surfaces a failed upload rather than treating it as done", () => {

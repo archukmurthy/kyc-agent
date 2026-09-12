@@ -130,7 +130,7 @@ async function driveToPicker() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
   await settle(0);
@@ -217,7 +217,7 @@ describe("the cards that render", () => {
     expect(screen.getByText(/Most comprehensive · Highest coverage/)).toBeInTheDocument();
   });
 
-  it("does NOT render card D (Nium API Lookup) — demoMode is off by default", async () => {
+  it("does NOT render card D (Nium API Lookup) - demoMode is off by default", async () => {
     await driveToPicker();
     expect(screen.queryByText(CARD_D)).not.toBeInTheDocument();
   });
@@ -287,7 +287,7 @@ describe("Continue with nothing selected", () => {
   });
 });
 
-describe("routing — card A (documents + AI)", () => {
+describe("routing - card A (documents + AI)", () => {
   it("advances to the Documents step", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_A));
@@ -334,7 +334,7 @@ describe("routing — card A (documents + AI)", () => {
   });
 });
 
-describe("routing — card B (AI research only)", () => {
+describe("routing - card B (AI research only)", () => {
   it("kicks off research with journey ai_only", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_B));
@@ -373,7 +373,7 @@ describe("routing — card B (AI research only)", () => {
   });
 });
 
-describe("routing — card C (manual form)", () => {
+describe("routing - card C (manual form)", () => {
   it("opens the manual form in a new tab", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_C));
@@ -414,7 +414,7 @@ describe("routing — card C (manual form)", () => {
   });
 });
 
-describe("routing — card E (max prefill)", () => {
+describe("routing - card E (max prefill)", () => {
   it("kicks off research with journey max_prefill", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_E));
@@ -425,7 +425,7 @@ describe("routing — card E (max prefill)", () => {
     expect(researchStartedJourneys()).toEqual(["max_prefill"]);
   });
 
-  it("routes through standard research — no Documents step", async () => {
+  it("routes through standard research - no Documents step", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_E));
     await settle(0);
@@ -472,7 +472,7 @@ describe("demo-mode short-circuit", () => {
   it("shows the demo-mode notice on the picker while it is on", async () => {
     await driveToPicker();
     await enableDemoMode();
-    expect(screen.getByText(/Demo mode active — using sample data/)).toBeInTheDocument();
+    expect(screen.getByText(/Demo mode active - using sample data/)).toBeInTheDocument();
   });
 });
 
@@ -551,7 +551,7 @@ describe("the ← Back control", () => {
   });
 });
 
-describe("the search cap — unlocked state (the only reachable one)", () => {
+describe("the search cap - unlocked state (the only reachable one)", () => {
   it("renders neither cap banner at zero attempts", async () => {
     await driveToPicker();
     expect(screen.queryByTestId("search-locked-banner")).not.toBeInTheDocument();
@@ -567,7 +567,7 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
     });
   });
 
-  it("card E is clickable and sets no opacity at all — it has no lock branch", async () => {
+  it("card E is clickable and sets no opacity at all - it has no lock branch", async () => {
     await driveToPicker();
     // Recorded fact: card E is a search card that proceedFromJourney DOES cap
     // (isSearchCard includes "E"), yet its style has no locked branch, so it
@@ -576,7 +576,7 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
     expect(card(CARD_E).style.opacity).toBe("");
   });
 
-  it("card C carries no lock styling — it is the never-blocked exception", async () => {
+  it("card C carries no lock styling - it is the never-blocked exception", async () => {
     await driveToPicker();
     // Cards A/B read `locked` into cursor+opacity; card C hardcodes
     // cursor:"pointer" and opacity:0.92 and has no locked branch at all.
@@ -584,7 +584,7 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
   });
 });
 
-describe("SHOW_NIUM_REG_PANEL is false — the reg-resolver panel must not render", () => {
+describe("SHOW_NIUM_REG_PANEL is false - the reg-resolver panel must not render", () => {
   it("renders no registration-number resolver in the default (non-demo) picker", async () => {
     await driveToPicker();
     expect(screen.queryByLabelText(/Registration Number/i)).not.toBeInTheDocument();

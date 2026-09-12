@@ -152,7 +152,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#4a9e8e", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>Recommended</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🔍📄</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Upload documents &amp; let AI fill the rest</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Upload any documents you have — we extract data from them instantly. For anything we can't find in your documents, our AI searches public registries and web sources.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Upload any documents you have - we extract data from them instantly. For anything we can't find in your documents, our AI searches public registries and web sources.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#4a9e8e" }}>Fastest · Most accurate · Lowest effort</div>
             </div>
           );
@@ -201,7 +201,7 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card D — Nium API Lookup. TEST MODE ONLY: visible when demoMode
+        {/* Card D - Nium API Lookup. TEST MODE ONLY: visible when demoMode
             is on OR ?test=1 is in the URL. Pulls verified registry data
             straight from the Nium eKYB API (the KYC Lookup Agent) instead
             of AI research, then flows into the same Confirm step. Clicking
@@ -227,9 +227,9 @@ export function JourneyPicker({
                   countryCode === "SG";
                 if (!isFixtureSelection) {
                   window.alert(
-                    "🔗 Nium API Lookup — Test Environment\n\n" +
+                    "🔗 Nium API Lookup - Test Environment\n\n" +
                     "This sandbox has limited data. The next screen will show " +
-                    "sample data for \"STAR FINANCE PRIVATE LIMITED\" — not live " +
+                    "sample data for \"STAR FINANCE PRIVATE LIMITED\" - not live " +
                     "data for the company you entered.\n\n" +
                     "Click OK to continue with the demo."
                   );
@@ -257,7 +257,7 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card E — Max Prefill. Runs every available source at once for
+        {/* Card E - Max Prefill. Runs every available source at once for
             the highest possible pre-fill. The dedicated pipeline is TBD
             (wired next); for now selecting it routes through standard AI
             research so both the onboarding and pre-boarding flows demo end
@@ -277,7 +277,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Nium's KYB data — to pre-fill as much of your application as possible.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once - uploaded documents, public registries, web research and Nium's KYB data - to pre-fill as much of your application as possible.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
             </div>
           );
@@ -291,7 +291,7 @@ export function JourneyPicker({
       {SHOW_NIUM_REG_PANEL && (demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
         <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
           <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
-            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
+            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>- required for Nium API Lookup</span>
           </label>
           <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
             The Nium KYB registry searches by registration number (a name-only search isn't supported). Type it, or look it up from the company name (UK only). <em>Preprod test value: 00445790 (GB).</em>
@@ -324,7 +324,7 @@ export function JourneyPicker({
           {niumSearchResults && niumSearchResults.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
-                {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} — top one filled in, pick another if needed:
+                {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} - top one filled in, pick another if needed:
               </div>
               {niumSearchResults.map((m) => {
                 const picked = m.registrationNumber === niumRegNumber;
@@ -357,7 +357,7 @@ export function JourneyPicker({
 
       {demoMode && (
         <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#92400E", borderLeft: "3px solid #FCD34D" }}>
-          Demo mode active — using sample data. Document extraction and web research are simulated.
+          Demo mode active - using sample data. Document extraction and web research are simulated.
         </div>
       )}
 

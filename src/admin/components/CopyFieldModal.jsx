@@ -306,7 +306,7 @@ function StageChoose({
 
       <Footer>
         <button type="button" onClick={onClose} style={{ ...adminStyles.btnGhost, color: adminColors.textMuted }}>
-          Skip — keep change here only
+          Skip - keep change here only
         </button>
         <button
           type="button"
@@ -371,7 +371,7 @@ function SectionList({ title, cells, checkedCells, setCheckedCells, getCellDispl
                 {getCellDisplayName(cellKey)}
               </div>
               <div style={{ fontSize: 11, color: isAdd ? "#92400E" : adminColors.textMuted, marginTop: 2 }}>
-                {isAdd ? "⚠ Field does not exist here — you will be asked to confirm" : "Will update existing field"}
+                {isAdd ? "⚠ Field does not exist here - you will be asked to confirm" : "Will update existing field"}
               </div>
             </div>
           </label>
@@ -387,7 +387,7 @@ function FieldSummary({ field }) {
     ["Field id", field?.field],
     ["Type", field?.inputType || "text"],
     ["Required", field?.required ? "Yes" : "No"],
-    ["Section", field?.section || "—"],
+    ["Section", field?.section || "-"],
     ["Origin", field?.aiSearch ? "Research (AI-search)" : "Gap (manual)"],
   ];
   if (isSelect) {
@@ -489,14 +489,14 @@ function StageConfirmAdditions({ field, cellKey, cursor, total, getCellDisplayNa
           onClick={() => onDecision(cellKey, "no")}
           style={{ ...adminStyles.btnGhost, color: adminColors.textMuted }}
         >
-          ✗ No — skip this schema
+          ✗ No - skip this schema
         </button>
         <button
           type="button"
           onClick={() => onDecision(cellKey, "yes")}
           style={adminStyles.btnPrimary}
         >
-          ✓ Yes — add to this schema
+          ✓ Yes - add to this schema
         </button>
       </Footer>
       <p style={{ fontSize: 11, color: adminColors.textMuted, textAlign: "center", margin: "6px 0 0" }}>

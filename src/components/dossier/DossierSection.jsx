@@ -27,7 +27,7 @@ export function DossierSection({ title, subtitle, items, bg, borderColor, color,
           {rows.map((item, i) => {
             const fieldId = item.field || item.fieldId;
             const label = item.label || (getLabel ? getLabel(fieldId) : fieldId) || fieldId;
-            const displayValue = typeof item.value === "object" ? JSON.stringify(item.value) : String(item.value || "—");
+            const displayValue = typeof item.value === "object" ? JSON.stringify(item.value) : String(item.value || "-");
             return (
               <div key={fieldId || i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "8px 0", borderBottom: i < rows.length - 1 ? `1px solid ${borderColor}` : "none" }}>
                 <div style={{ width: 200, flexShrink: 0, fontSize: 12, fontWeight: 600, color, opacity: 0.8, lineHeight: 1.4, paddingTop: 1 }}>{label}</div>

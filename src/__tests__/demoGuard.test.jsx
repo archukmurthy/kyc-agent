@@ -72,7 +72,7 @@ async function driveToResearchKickoff() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
   fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
   await settle(0);
 
@@ -127,7 +127,7 @@ describe("setDemoMode persistence", () => {
     fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
       target: { value: "United King" },
     });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
     await settle(0);
 

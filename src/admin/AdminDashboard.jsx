@@ -148,7 +148,7 @@ export default function AdminDashboard({
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      setPublishMsg({ ok: true, text: `Published — v${data.version} is live` });
+      setPublishMsg({ ok: true, text: `Published - v${data.version} is live` });
       setHasUnpublishedChanges(false);
       // Clear staged preview now that the same config is live — prevents an
       // open preview tab from continuing to show pre-publish state on refresh.
@@ -421,7 +421,7 @@ function ConfigStatusCard({ status, onContinue }) {
         <div style={{ fontSize: 13, color: allOk ? adminColors.statusComplete : adminColors.textMuted }}>
           {allOk
             ? "✅ All configuration complete"
-            : "Your configuration has gaps — some onboarding flows may not work correctly."}
+            : "Your configuration has gaps - some onboarding flows may not work correctly."}
         </div>
         {!allOk && (
           <button type="button" onClick={onContinue} style={adminStyles.btnPrimary}>
@@ -518,7 +518,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
             Welcome to your onboarding platform
           </h2>
           <p style={{ fontSize: 14, color: adminColors.textMuted, margin: "10px 0 0" }}>
-            Let&apos;s get you set up. We&apos;ll guide you through configuring your onboarding flows —
+            Let&apos;s get you set up. We&apos;ll guide you through configuring your onboarding flows -
             it takes about 10 minutes and you can pause at any time.
           </p>
         </div>
@@ -544,7 +544,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-          Your current configuration is pre-loaded with Nium defaults — nothing is blank.
+          Your current configuration is pre-loaded with Nium defaults - nothing is blank.
         </div>
       </div>
     </div>

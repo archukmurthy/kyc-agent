@@ -41,7 +41,7 @@ test('the DAL module surface exposes exactly one write path and zero mutations',
   );
 });
 
-test('an explicit id is rejected — no caller can overwrite a row by id', async () => {
+test('an explicit id is rejected - no caller can overwrite a row by id', async () => {
   const db = makeFakeDb();
   await assert.rejects(() => writeEvent(db, baseEvent({ id: 99 })), /id is server-assigned/);
 });
@@ -85,7 +85,7 @@ test('after a chain of N supersedes: current = tail, history = all N in order', 
   assert.deepEqual(history.map((r) => r.after_value.v), [0, 1, 2, 3, 4]); // in order
 });
 
-test('a revert to the AI value grows history — it never shrinks', async () => {
+test('a revert to the AI value grows history - it never shrinks', async () => {
   const db = makeFakeDb();
   // Customer edits the AI value...
   const e1 = await writeEvent(

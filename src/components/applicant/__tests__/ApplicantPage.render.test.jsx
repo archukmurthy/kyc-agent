@@ -83,7 +83,7 @@ async function driveToApplicant() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -122,7 +122,7 @@ describe("reaching the Applicant step", () => {
     await driveToApplicant();
     expect(screen.getByTestId("foundational-facts-gate")).toBeInTheDocument();
     expect(
-      screen.getByText(/Before you continue — confirm the company we researched/)
+      screen.getByText(/Before you continue - confirm the company we researched/)
     ).toBeInTheDocument();
   });
 
@@ -162,7 +162,7 @@ describe("the person selector", () => {
     expect(screen.getByText("Who is completing this application?")).toBeInTheDocument();
     const select = personSelect();
     expect(within(select).getByText("Select your name...")).toBeInTheDocument();
-    expect(within(select).getByText(/I am not listed — fill in manually/)).toBeInTheDocument();
+    expect(within(select).getByText(/I am not listed - fill in manually/)).toBeInTheDocument();
     // Dummy research supplies directors, so there is at least one real
     // candidate between the placeholder and the opt-out.
     expect(within(select).getAllByRole("option").length).toBeGreaterThan(2);

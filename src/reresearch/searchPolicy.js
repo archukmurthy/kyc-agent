@@ -20,7 +20,7 @@ const SEARCH_CAP = 2;
 
 // Shown on the SECOND attempt — the usual cause of a second miss is the name.
 const LEGAL_NAME_ALERT =
-  "Use the legal entity name exactly as registered with the local authority — " +
+  "Use the legal entity name exactly as registered with the local authority - " +
   "not a trade name or common name.";
 
 // Shown once the cap is hit and only manual entry remains.

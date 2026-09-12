@@ -126,13 +126,13 @@ export default function MiniWizardAddSchema({ config, preselectedCell = null, on
         <Card title="Which combination do you want to configure?">
           <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
             <select value={pickedEntity} onChange={(e) => setPickedEntity(e.target.value)} style={adminStyles.input}>
-              <option value="">— Entity type —</option>
+              <option value="">- Entity type -</option>
               {entityTypes.map((e) => (
                 <option key={e.id} value={e.id}>{e.icon} {e.label}</option>
               ))}
             </select>
             <select value={pickedLicence} onChange={(e) => setPickedLicence(e.target.value)} style={adminStyles.input}>
-              <option value="">— Licence —</option>
+              <option value="">- Licence -</option>
               {licences.map((l) => (
                 <option key={l.id} value={l.id}>{l.jurisdictionName}</option>
               ))}

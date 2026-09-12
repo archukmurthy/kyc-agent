@@ -100,7 +100,7 @@ export function buildTemplateWorkbook(existingSchema = null, entityTypeName = ""
 
   // Instructions sheet
   const instructions = [
-    ["Intelligence-Led Onboarding — Field Schema Configuration"],
+    ["Intelligence-Led Onboarding - Field Schema Configuration"],
     [""],
     ["HOW TO USE THIS FILE"],
     [""],
@@ -342,7 +342,7 @@ export function validateParsedRows(rows) {
         errors.push({
           row: row._rowNumber,
           field: "Field ID",
-          message: `Field ID '${row.id}' contains invalid characters. Use letters, numbers and underscores only — no spaces or punctuation.`,
+          message: `Field ID '${row.id}' contains invalid characters. Use letters, numbers and underscores only - no spaces or punctuation.`,
           severity: "error",
         });
       }
@@ -357,7 +357,7 @@ export function validateParsedRows(rows) {
         warnings.push({
           row: row._rowNumber,
           field: "Field ID",
-          message: `Duplicate Field ID '${row.id}' in ${row.aiResearch ? "Research" : "Gap"} tab. The later row will replace the earlier one on save — consider renaming to keep both.`,
+          message: `Duplicate Field ID '${row.id}' in ${row.aiResearch ? "Research" : "Gap"} tab. The later row will replace the earlier one on save - consider renaming to keep both.`,
           severity: "warning",
         });
       }
@@ -367,7 +367,7 @@ export function validateParsedRows(rows) {
       warnings.push({
         row: row._rowNumber,
         field: "Field Type",
-        message: `Unknown type '${row._rawType}' — defaulted to 'text'. Valid types: ${VALID_FIELD_TYPES.join(", ")}.`,
+        message: `Unknown type '${row._rawType}' - defaulted to 'text'. Valid types: ${VALID_FIELD_TYPES.join(", ")}.`,
         severity: "warning",
       });
     }
@@ -391,7 +391,7 @@ export function validateParsedRows(rows) {
       warnings.push({
         row: row._rowNumber,
         field: "Show Only If (Value)",
-        message: `Field '${row.label}' has a parent field but no required value — the field will always be visible.`,
+        message: `Field '${row.label}' has a parent field but no required value - the field will always be visible.`,
         severity: "warning",
       });
     }

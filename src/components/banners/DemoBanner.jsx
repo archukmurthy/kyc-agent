@@ -18,7 +18,7 @@ export function DemoBanner({ offsetTop = 0 }) {
       letterSpacing: "0.3px",
       fontFamily: "inherit",
     }}>
-      🧪 DEMO MODE — Sample data only. Not real company information.
+      🧪 DEMO MODE - Sample data only. Not real company information.
     </div>
   );
 }

@@ -107,7 +107,7 @@ export function FoundationalFactsGate({
 
   return (
     <div style={CARD} data-testid="foundational-facts-gate">
-      <h3 style={TITLE}>Before you continue — confirm the company we researched</h3>
+      <h3 style={TITLE}>Before you continue - confirm the company we researched</h3>
       <p style={SUMMARY}>
         These are the five facts we used to research your company. Leave a box ticked to confirm it,
         or untick anything that's wrong. We'll only show the rest of this page once all five are confirmed.
@@ -152,14 +152,14 @@ export function FoundationalFactsGate({
           <p style={PANEL_TITLE("danger")}>This restarts your application</p>
           <p style={PANEL_BODY("danger")}>
             You've marked one of the core company facts as wrong, so the research was based on the wrong
-            premise. We'll take you back to a fresh company lookup to start over — nothing will be pre-filled.
+            premise. We'll take you back to a fresh company lookup to start over - nothing will be pre-filled.
           </p>
           <div style={ROW_BTNS}>
             <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="facts-reset-confirm">
               Start a fresh lookup
             </button>
             <button type="button" style={BTN} onClick={onCancel} data-testid="facts-reset-cancel">
-              Cancel — keep my answers
+              Cancel - keep my answers
             </button>
           </div>
         </div>
@@ -170,7 +170,7 @@ export function FoundationalFactsGate({
             <p style={PANEL_BODY("warn")}>
               We've recorded that your ownership type genuinely changed
               {ownershipChangeFrom ? ` from "${ownershipChangeFrom}"` : ""}. Tell us what it changed
-              TO — we'll add the supporting documents to your checklist, then you can continue.
+              TO - we'll add the supporting documents to your checklist, then you can continue.
             </p>
             <select
               value={newOwnershipType}
@@ -198,7 +198,7 @@ export function FoundationalFactsGate({
                 Confirm change
               </button>
               <button type="button" style={BTN} onClick={onCancel} data-testid="ownership-changed-cancel">
-                Cancel — keep my answers
+                Cancel - keep my answers
               </button>
             </div>
           </div>
@@ -211,7 +211,7 @@ export function FoundationalFactsGate({
             </p>
             <div style={ROW_BTNS}>
               <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="ownership-misclassified">
-                You got it wrong — start over
+                You got it wrong - start over
               </button>
               <button type="button" style={BTN_WARN} onClick={onOwnershipChanged} data-testid="ownership-genuinely-changed">
                 It genuinely changed
@@ -228,7 +228,7 @@ export function FoundationalFactsGate({
             <p style={PANEL_TITLE("warn")}>What's the new registration / company number?</p>
             <p style={PANEL_BODY("warn")}>
               We've recorded that your registration / company number genuinely changed
-              {regNumberChangeFrom ? ` from "${regNumberChangeFrom}"` : ""}. Enter the new number — we'll
+              {regNumberChangeFrom ? ` from "${regNumberChangeFrom}"` : ""}. Enter the new number - we'll
               add the supporting document to your checklist, then you can continue.
             </p>
             <input
@@ -254,7 +254,7 @@ export function FoundationalFactsGate({
                 Confirm change
               </button>
               <button type="button" style={BTN} onClick={onCancel} data-testid="regnumber-changed-cancel">
-                Cancel — keep my answers
+                Cancel - keep my answers
               </button>
             </div>
           </div>
@@ -267,7 +267,7 @@ export function FoundationalFactsGate({
             </p>
             <div style={ROW_BTNS}>
               <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="regnumber-misclassified">
-                You got it wrong — start over
+                You got it wrong - start over
               </button>
               <button type="button" style={BTN_WARN} onClick={onRegNumberChanged} data-testid="regnumber-genuinely-changed">
                 It genuinely changed

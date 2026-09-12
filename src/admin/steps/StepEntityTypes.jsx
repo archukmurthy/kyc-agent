@@ -103,7 +103,7 @@ export default function StepEntityTypes({
           : e
       );
       pushEntities(nextEntities);
-      flash(`Schema needed for ${ent.label} × ${licenceId} — configure it in Step 4`);
+      flash(`Schema needed for ${ent.label} × ${licenceId} - configure it in Step 4`);
     }
   }
 
@@ -147,7 +147,7 @@ export default function StepEntityTypes({
     }
     const id = draft.id || slugId(draft.label);
     if (entityTypes.find((e) => e.id === id)) {
-      alert(`Entity type id "${id}" already exists — choose a different label.`);
+      alert(`Entity type id "${id}" already exists - choose a different label.`);
       return;
     }
     const next = [...entityTypes, { ...draft, id, sortOrder: entityTypes.length + 1 }];
@@ -155,7 +155,7 @@ export default function StepEntityTypes({
     setShowAddForm(false);
     setDraft(BLANK());
     const n = (draft.associatedLicenceIds || []).length;
-    flash(`✅ Entity type added${n ? ` — schemas needed for ${n} licence combination${n === 1 ? "" : "s"}` : ""}`);
+    flash(`✅ Entity type added${n ? ` - schemas needed for ${n} licence combination${n === 1 ? "" : "s"}` : ""}`);
   }
 
   // Compute schema gaps for the warning panel
@@ -203,7 +203,7 @@ export default function StepEntityTypes({
         ))}
         {!entityTypes.length && (
           <div style={{ padding: 16, border: `1px dashed ${adminColors.border}`, borderRadius: 10, color: adminColors.textMuted, fontSize: 13, textAlign: "center" }}>
-            No entity types yet — add one below.
+            No entity types yet - add one below.
           </div>
         )}
       </div>

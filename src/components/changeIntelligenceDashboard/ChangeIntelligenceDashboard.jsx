@@ -39,7 +39,7 @@ const sectionSub = { fontSize: 12, color: C.muted, margin: "0 0 14px" };
 function EarlyDataNote({ onboardings, threshold }) {
   return (
     <div style={{ display: "inline-block", background: C.warnBg, border: "1px solid #fcd9a8", color: C.warn, fontSize: 11.5, fontWeight: 600, padding: "4px 10px", borderRadius: 999 }}>
-      Early data — based on {onboardings} onboarding{onboardings === 1 ? "" : "s"}, not yet a stable trend
+      Early data - based on {onboardings} onboarding{onboardings === 1 ? "" : "s"}, not yet a stable trend
     </div>
   );
 }
@@ -111,7 +111,7 @@ export default function ChangeIntelligenceDashboard() {
         <div style={{ marginBottom: 18 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>Change Intelligence</h1>
           <p style={{ fontSize: 13, color: C.muted, margin: 0 }}>
-            How accurate the AI is, which fields get corrected, and what needed a human — drawn only from recorded changes.
+            How accurate the AI is, which fields get corrected, and what needed a human - drawn only from recorded changes.
           </p>
           <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 12, color: C.muted }}>{meta.totalEvents} change event{meta.totalEvents === 1 ? "" : "s"} · {meta.onboardings} onboarding{meta.onboardings === 1 ? "" : "s"}</span>
@@ -133,7 +133,7 @@ export default function ChangeIntelligenceDashboard() {
         {/* ── Headline strip ── */}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
           <Headline label="Corrections captured" value={headline.correctionsCaptured.value} sampleSize={headline.correctionsCaptured.sampleSize}
-            hint="Total current (non-superseded) corrections. change_events has no count of accepted fields, so this is a count — not an accuracy rate (see D1)." />
+            hint="Total current (non-superseded) corrections. change_events has no count of accepted fields, so this is a count - not an accuracy rate (see D1)." />
           <Headline label="AI-error corrections" value={headline.aiErrorCorrections.value} sampleSize={headline.aiErrorCorrections.sampleSize}
             hint="Corrections the customer marked as fixing the AI (intent = ai_correction), vs a genuine company change." />
           <Headline label="Back-and-forth pre-empted" value={headline.rfiPreempted.value} sampleSize={headline.rfiPreempted.sampleSize}
@@ -144,7 +144,7 @@ export default function ChangeIntelligenceDashboard() {
 
         {/* ── Detail ── */}
         <div style={card}>
-          <h2 style={h2}>AI accuracy by field — where research is weakest</h2>
+          <h2 style={h2}>AI accuracy by field - where research is weakest</h2>
           <p style={sectionSub}>Current corrections grouped by field, most-corrected first. Based on {meta.currentChanges} standing change{meta.currentChanges === 1 ? "" : "s"}.</p>
           <BarList rows={detail.byField.slice(0, 15).map((f) => ({ label: f.fieldId, sub: f.fieldClass, count: f.count }))} emptyText="No corrections recorded yet." />
         </div>
@@ -191,16 +191,16 @@ export default function ChangeIntelligenceDashboard() {
         </div>
 
         <div style={card}>
-          <h2 style={h2}>Source accuracy — which sources cause corrections</h2>
+          <h2 style={h2}>Source accuracy - which sources cause corrections</h2>
           <p style={sectionSub}>
             Corrections grouped by the source that supplied the original value.
-            {detail.sourceCoverage.sparse && <span style={{ color: C.warn }}> Note: source provenance is sparse ({detail.sourceCoverage.populated}/{detail.sourceCoverage.total} corrections carry a source) — read with caution.</span>}
+            {detail.sourceCoverage.sparse && <span style={{ color: C.warn }}> Note: source provenance is sparse ({detail.sourceCoverage.populated}/{detail.sourceCoverage.total} corrections carry a source) - read with caution.</span>}
           </p>
           <BarList rows={detail.bySource.map((s) => ({ label: s.sourceProvider, count: s.count }))} color={C.barAlt} emptyText="No corrections recorded yet." />
         </div>
 
         <div style={card}>
-          <h2 style={h2}>Escalations & failure-fallbacks — what needed a human and why</h2>
+          <h2 style={h2}>Escalations & failure-fallbacks - what needed a human and why</h2>
           <p style={sectionSub}>Standing escalations, plus re-research failures that dropped the customer to manual entry.</p>
           {detail.escalations.length === 0 && detail.failureFallbacks.length === 0 ? (
             <div style={{ fontSize: 12.5, color: C.muted }}>None recorded.</div>
@@ -219,7 +219,7 @@ export default function ChangeIntelligenceDashboard() {
                   <tr key={`e${i}`} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "6px 8px", color: C.danger, fontWeight: 600 }}>Escalation</td>
                     <td style={{ padding: "6px 8px" }}>{e.fieldId}</td>
-                    <td style={{ padding: "6px 8px" }}>{e.reason || "—"}</td>
+                    <td style={{ padding: "6px 8px" }}>{e.reason || "-"}</td>
                     <td style={{ padding: "6px 8px", color: C.muted }}>{fmtDate(e.createdAt)}</td>
                   </tr>
                 ))}
@@ -227,7 +227,7 @@ export default function ChangeIntelligenceDashboard() {
                   <tr key={`f${i}`} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: "6px 8px", color: C.warn, fontWeight: 600 }}>Re-research failed → manual</td>
                     <td style={{ padding: "6px 8px" }}>{f.fieldId}</td>
-                    <td style={{ padding: "6px 8px" }}>{f.reason || "—"}{f.stage ? ` (${f.stage})` : ""}</td>
+                    <td style={{ padding: "6px 8px" }}>{f.reason || "-"}{f.stage ? ` (${f.stage})` : ""}</td>
                     <td style={{ padding: "6px 8px", color: C.muted }}>{fmtDate(f.createdAt)}</td>
                   </tr>
                 ))}

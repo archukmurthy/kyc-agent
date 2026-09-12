@@ -34,7 +34,7 @@ export default function ReviewerCase({ caseData, onReveal }) {
 
       <h4>Band decisions</h4>
       {decisions.length === 0 ? <p>None recorded.</p> : (
-        <ul>{decisions.map((d, i) => <li key={i}>Band {d.band} — {d.outcome_type} ({d.resolved_by})</li>)}</ul>
+        <ul>{decisions.map((d, i) => <li key={i}>Band {d.band} - {d.outcome_type} ({d.resolved_by})</li>)}</ul>
       )}
 
       <h4>Identity fields</h4>
@@ -54,7 +54,7 @@ export default function ReviewerCase({ caseData, onReveal }) {
 
       <h4>Identity events</h4>
       {events.length === 0 ? <p>None.</p> : (
-        <ul>{events.map((e, i) => <li key={i}>{e.event_type}{e.attribute_concept ? ` — ${e.attribute_concept}` : ""} ({e.actor})</li>)}</ul>
+        <ul>{events.map((e, i) => <li key={i}>{e.event_type}{e.attribute_concept ? ` - ${e.attribute_concept}` : ""} ({e.actor})</li>)}</ul>
       )}
     </div>
   );

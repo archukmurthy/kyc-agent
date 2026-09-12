@@ -157,14 +157,14 @@ export function buildDemoSelfSourceResults(companyName) {
       { requirement: "Constitution", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/filing-history`, sourceUrl: CH, files: [{ type: "screenshot_focused" }, { type: "html_snapshot" }], retrievedAt: now },
       { requirement: "Business activity", selfSourceTier: "Supplementary self-source", status: "retrieved", extracted: { matchConfidence: "medium" }, sourceLabel: "Companies House", searchUrl: CH, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
       { requirement: "Ownership / control", selfSourceTier: "Preferred self-source", status: "retrieved", extracted: { matchConfidence: "high" }, sourceLabel: "Companies House", searchUrl: `${CH}/persons-with-significant-control`, sourceUrl: CH, files: [{ type: "screenshot_focused" }], retrievedAt: now },
-      { requirement: "Regulatory status", selfSourceTier: "Preferred self-source", status: "manual_retrieval_required", manualReviewFlag: true, manualReviewReason: "FCA register requires manual search — automated retrieval inconclusive", sourceLabel: "FCA Register", searchUrl: "https://register.fca.org.uk", sourceUrl: "https://register.fca.org.uk", files: [], retrievedAt: now },
+      { requirement: "Regulatory status", selfSourceTier: "Preferred self-source", status: "manual_retrieval_required", manualReviewFlag: true, manualReviewReason: "FCA register requires manual search - automated retrieval inconclusive", sourceLabel: "FCA Register", searchUrl: "https://register.fca.org.uk", sourceUrl: "https://register.fca.org.uk", files: [], retrievedAt: now },
     ],
   };
 }
 
 
 /* ═══════════════════════════════════════════
-   TEST DATA — fills empty gap fields with
+   TEST DATA - fills empty gap fields with
    plausible values for demos.
    ═══════════════════════════════════════════ */
 export const TEST_DATA = {
@@ -199,7 +199,7 @@ export const TEST_DATA = {
 };
 
 /* ═══════════════════════════════════════════
-   DUMMY RESEARCH VALUES — used by the
+   DUMMY RESEARCH VALUES - used by the
    "Dummy Research" button on Step 0 to simulate
    an API response without spending credits.
    ═══════════════════════════════════════════ */
@@ -272,7 +272,7 @@ export const DUMMY_RESEARCH_VALUES = {
   // "Yes" (or add a listed_exchange / listedExchange result with a real
   // exchange name). Detection lives in detectPubliclyListed().
   publicly_listed: "No",
-  listed_where: "—",
+  listed_where: "-",
   has_licence: "Yes",
   regulatory_authority: "FCA",
   licence_number: "FRN 123456",

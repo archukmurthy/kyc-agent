@@ -58,7 +58,7 @@ test('full scenario: current-state metrics, revert excluded, sample sizes presen
   // headline — the reverted ai_correction (e5) is NOT counted
   assert.equal(m.headline.correctionsCaptured.value, 6);
   assert.equal(m.headline.aiErrorCorrections.value, 2); // e1, e4 only (e5 superseded)
-  assert.equal(m.headline.rfiPreempted.value, 3); // e2, e6 (revert), fallback — all ops_review
+  assert.equal(m.headline.rfiPreempted.value, 3); // e2, e6 (revert), fallback - all ops_review
   assert.equal(m.headline.escalationsFlagged.value, 1); // e3
   // every headline carries a sample size
   for (const k of Object.keys(m.headline)) {

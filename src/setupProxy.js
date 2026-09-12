@@ -113,15 +113,15 @@ module.exports = function (app) {
           try {
             const cached = await cacheMod.getCachedResearch(companyName, jurisdiction, entityType);
             if (cached) {
-              console.log(`[research-cache] HIT for "${companyName}" — serving from DB`);
+              console.log(`[research-cache] HIT for "${companyName}" - serving from DB`);
               return res.status(200).json(cached);
             }
-            console.log(`[research-cache] MISS for "${companyName}" — calling Anthropic API`);
+            console.log(`[research-cache] MISS for "${companyName}" - calling Anthropic API`);
           } catch (err) {
             console.error("[research-cache] Cache lookup error, falling through:", err.message);
           }
         } else if (cacheMod && forceRefresh) {
-          console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
+          console.log(`[research-cache] FORCE REFRESH for "${companyName}" - bypassing cache`);
         }
 
         // ─── LAYER 1 — Companies House Officers API (deterministic) ───
@@ -533,7 +533,7 @@ module.exports = function (app) {
   const uploadDocument = esmHandler("upload-document.js");
   app.post("/api/upload-document", (req, res) => {
     if (process.env.DEV_FAKE_BLOB === "1" || !process.env.BLOB_READ_WRITE_TOKEN) {
-      console.warn("[upload-document] DEV STUB — file not stored to Vercel Blob");
+      console.warn("[upload-document] DEV STUB - file not stored to Vercel Blob");
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ blobUrl: "https://example.invalid/DEV-FAKE", filename: "dev-stub" }));

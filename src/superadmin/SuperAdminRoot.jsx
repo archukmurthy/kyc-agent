@@ -123,7 +123,7 @@ function PasswordGate({ onSuccess }) {
             textAlign: "center",
           }}
         >
-          ⚠ Internal use only — Zayzo personnel only
+          ⚠ Internal use only - Zayzo personnel only
         </div>
 
         <label style={adminStyles.label}>Password</label>

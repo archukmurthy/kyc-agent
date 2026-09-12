@@ -40,7 +40,7 @@ export default function StepCompany({ config, onChange, isStandalone = false }) 
   function handleLogoFile(file) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert("Logo too large — please upload a file under 2MB.");
+      alert("Logo too large - please upload a file under 2MB.");
       return;
     }
     const reader = new FileReader();

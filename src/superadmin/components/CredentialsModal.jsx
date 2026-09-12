@@ -84,7 +84,7 @@ export default function CredentialsModal({
             fontWeight: 600,
           }}
         >
-          ⚠ Save this password now — it cannot be recovered later. You can reset it but not view it again.
+          ⚠ Save this password now - it cannot be recovered later. You can reset it but not view it again.
         </div>
 
         <pre
@@ -121,7 +121,7 @@ export default function CredentialsModal({
         </button>
 
         <div style={{ fontSize: 11, color: adminColors.textMuted, textAlign: "center", marginTop: 10 }}>
-          Click Done to dismiss — this dialog will not close on its own.
+          Click Done to dismiss - this dialog will not close on its own.
         </div>
       </div>
     </div>

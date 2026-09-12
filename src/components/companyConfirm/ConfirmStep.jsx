@@ -88,13 +88,13 @@ export function ConfirmStep({
           <div>
             {/* The "is this the right company?" check now lives on the Applicant
                 page as the five-fact FoundationalFactsGate (slice 2), so there is
-                no gate here — avoids a double gate. */}
+                no gate here - avoids a double gate. */}
             <div style={card}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✅</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {/* The source breakdown is supporting detail, not headline
-                      copy — it now lives in a hover tooltip on the company name
+                      copy - it now lives in a hover tooltip on the company name
                       so the default view stays uncluttered. Same numbers, same
                       wording, floating (out of flow) so nothing reflows. */}
                   <h2 style={{ fontSize: 19, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>
@@ -135,26 +135,26 @@ export function ConfirmStep({
                     </div>
                   )}
                 </div>
-                {/* (The header's "N ITEMS NEED YOUR INPUT" pill was removed —
+                {/* (The header's "N ITEMS NEED YOUR INPUT" pill was removed -
                     the same count is already the Needs You tile below, and its
                     coaching copy is that tile's hover tooltip.) */}
               </div>
             </div>
 
             {/* (The single action banner that used to sit here is gone from the
-                page flow — its coaching copy is now the Needs You tile's hover
+                page flow - its coaching copy is now the Needs You tile's hover
                 tooltip. Same text, same shared predicate, just not permanent.) */}
 
-            {/* TEST-ONLY utility — treat the company as publicly listed, which
+            {/* TEST-ONLY utility - treat the company as publicly listed, which
                 skips the detailed stakeholder EDD forms on the next page. Sets
                 isPubliclyListedOverride (same state + downstream effectivelyListed
-                consumer as before — behaviour unchanged). Gated by SHOW_TEST_TOOLS
+                consumer as before - behaviour unchanged). Gated by SHOW_TEST_TOOLS
                 so real customers never see it; styled to match the dashed
                 "Fill with test data" test control, not a customer selection. */}
             {SHOW_TEST_TOOLS && (
               <div
                 onClick={() => setIsPubliclyListedOverride(v => !v)}
-                title="Testing only — treat this company as publicly listed to skip the detailed stakeholder forms on the next page"
+                title="Testing only - treat this company as publicly listed to skip the detailed stakeholder forms on the next page"
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 14px", marginBottom: 16,
@@ -177,8 +177,8 @@ export function ConfirmStep({
                   </div>
                   <div style={{ fontSize: 11, marginTop: 1, color: "#4a9e8e", opacity: 0.8 }}>
                     {isPubliclyListedOverride
-                      ? "On — detailed stakeholder forms will be skipped on the next page"
-                      : "Test aid only — not shown to customers"}
+                      ? "On - detailed stakeholder forms will be skipped on the next page"
+                      : "Test aid only - not shown to customers"}
                   </div>
                 </div>
                 {isPubliclyListedOverride && (
@@ -189,7 +189,7 @@ export function ConfirmStep({
               </div>
             )}
 
-            {/* Part 11 — low-data banner. Threshold is calibrated per ownership
+            {/* Part 11 - low-data banner. Threshold is calibrated per ownership
                 type (private companies expect lower fill rates than listed). */}
             {(() => {
               if (!coverage) return null;
@@ -209,7 +209,7 @@ export function ConfirmStep({
                   <p style={{ fontSize: 13, color: C.info, marginBottom: 12, lineHeight: 1.5 }}>
                     {coverage.populatedFields} of {coverage.totalResearchFields} fields were found from public sources.
                     {isPrivateish
-                      ? " Private companies have limited publicly available information — this is expected."
+                      ? " Private companies have limited publicly available information - this is expected."
                       : " You can improve coverage by uploading documents."}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -235,7 +235,7 @@ export function ConfirmStep({
                     {journeyType === "ai_only" && (
                       <div style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: `1px solid ${C.infoBorder}`, fontSize: 13, color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                         <span>
-                          <strong>Upload documents</strong> to pre-fill more fields — Certificate of Incorporation, Annual Report, or Wolfsberg questionnaire.
+                          <strong>Upload documents</strong> to pre-fill more fields - Certificate of Incorporation, Annual Report, or Wolfsberg questionnaire.
                         </span>
                         <button
                           onClick={() => { setJourneyType("ai_documents"); setJourneyOpen(false); setStep(stepsFor("ai_documents").documents); }}
@@ -246,15 +246,15 @@ export function ConfirmStep({
                       </div>
                     )}
                     <p style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", margin: 0 }}>
-                      Or continue below — you can complete the remaining fields manually on the next page.
+                      Or continue below - you can complete the remaining fields manually on the next page.
                     </p>
                   </div>
                 </div>
               );
             })()}
 
-            {/* The prototype's four tiles — Needs You / Confirmed / Corrected /
-                Docs Needed — replacing the old coverage-bar vocabulary
+            {/* The prototype's four tiles - Needs You / Confirmed / Corrected /
+                Docs Needed - replacing the old coverage-bar vocabulary
                 (Verified / To Confirm / Low Confidence / To Complete). Every
                 value is real state from the shared predicate, no invented
                 counters: Needs You and Confirmed are fully live; Corrected
@@ -273,15 +273,15 @@ export function ConfirmStep({
                   <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.text }}>
                     {allQuiet ? "✅ " : "👋 "}
                     {allQuiet
-                      ? "Everything is confirmed from official sources — just review and continue."
+                      ? "Everything is confirmed from official sources - just review and continue."
                       : `${needsInput} item${needsInput === 1 ? "" : "s"} need${needsInput === 1 ? "s" : ""} your input`}
                   </span>
                   <span style={{ display: "block", marginTop: 4 }}>
                     {allQuiet
                       ? "Every pre-filled field below came from your documents or official registries. Click any source to see when it was fetched."
-                      : "Everything else is confirmed — you don't need to touch it. Amber rows came from company or unverified sources; give each a quick check. Click any source to see when it was fetched."}
+                      : "Everything else is confirmed - you don't need to touch it. Amber rows came from company or unverified sources; give each a quick check. Click any source to see when it was fetched."}
                     {uncheckedCount > 0 && (
-                      <> You've marked {uncheckedCount} field{uncheckedCount === 1 ? "" : "s"} as wrong — you'll provide the correct value{uncheckedCount === 1 ? "" : "s"} on the next page.</>
+                      <> You've marked {uncheckedCount} field{uncheckedCount === 1 ? "" : "s"} as wrong - you'll provide the correct value{uncheckedCount === 1 ? "" : "s"} on the next page.</>
                     )}
                   </span>
                 </>
@@ -338,17 +338,17 @@ export function ConfirmStep({
                 {/* The "add a director or beneficial owner we missed" panel was
                     removed from this page. renderAddPerson is still accepted as
                     a prop and AddPersonPanel is untouched, so re-enabling it is
-                    one line — the capability was not deleted, only this
+                    one line - the capability was not deleted, only this
                     placement. */}
               </div>
             )}
 
             {regularFound.length > 0 && renderUnifiedFoundTable(regularFound, "Pre-filled Fields", "Documents → Official sources → Unverified web. Tier-2 rows carry an inline warning.")}
 
-            {/* (The old amber unchecked-count strip lived here — its message
+            {/* (The old amber unchecked-count strip lived here - its message
                 now lives in the single action banner at the top.) */}
 
-            {/* Pre-submit reassurance line — what you are about to submit, in a
+            {/* Pre-submit reassurance line - what you are about to submit, in a
                 sentence, from the same counts the tiles show. Live-updating. */}
             <div style={{
               padding: "12px 16px", marginBottom: 16,
@@ -370,7 +370,7 @@ export function ConfirmStep({
               )}
             </div>
 
-            {/* "Documents we'll need" — the prototype's dark summary panel.
+            {/* "Documents we'll need" - the prototype's dark summary panel.
                 Commit 4 owns the inline upload cards and the reconciliation
                 against GET /api/amendment-documents; this renders the real
                 doc_required outcomes already classified on this page, and is
@@ -406,7 +406,7 @@ export function ConfirmStep({
                       }}>
                         <span style={{ fontSize: 14, flexShrink: 0 }}>{done ? "✓" : "📄"}</span>
                         <div style={{ flex: 1, minWidth: 160 }}>
-                          {/* Person documents say WHOSE they are — two people
+                          {/* Person documents say WHOSE they are - two people
                               each owing a Proof of Identity are two separate
                               requests, and the customer must be able to tell
                               them apart. Per-field documents qualify the same
@@ -415,15 +415,15 @@ export function ConfirmStep({
                           <div style={{ fontSize: 13, fontWeight: 700 }}>
                             {d.docType}
                             {(d.personName || d.fieldLabel) && (
-                              <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.72)" }}> — {d.personName || d.fieldLabel}</span>
+                              <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.72)" }}> - {d.personName || d.fieldLabel}</span>
                             )}
                           </div>
                           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>
                             {done
-                              ? `Uploaded — ${up.name}`
+                              ? `Uploaded - ${up.name}`
                               : up && up.uploadFailed
-                              ? "Upload didn't store — please try again."
-                              : "Required by your correction — upload it here or on the row above."}
+                              ? "Upload didn't store - please try again."
+                              : "Required by your correction - upload it here or on the row above."}
                           </div>
                         </div>
                         {!done && (
@@ -458,10 +458,10 @@ export function ConfirmStep({
             </div>
 
             {/* Re-skin: sticky footer bar. Same two navigation handlers as
-                before — no gate in commit 2, both buttons always advance.
+                before - no gate in commit 2, both buttons always advance.
                 PR: Applicant now sits just before Confirm, so the backward
                 action is to return to the Applicant page (not restart). Plain
-                step navigation — preserves all field values, checks, applicant
+                step navigation - preserves all field values, checks, applicant
                 data and uploaded docs; no wipe, no confirmation. Both journeys. */}
             <div style={{
               position: "sticky", bottom: 0, zIndex: 5,
@@ -477,7 +477,7 @@ export function ConfirmStep({
                 ← Back
               </button>
               {/* What's blocking, in words, from the SAME list that blocks the
-                  button — never a silent grey-out. */}
+                  button - never a silent grey-out. */}
               <div style={{ flex: 1, textAlign: "right", paddingRight: 16, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: isBlocked ? C.warning : C.success }}>
                   {isBlocked ? blockerMessage : "Everything's ready"}

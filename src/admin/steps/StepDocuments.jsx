@@ -290,7 +290,7 @@ export default function StepDocuments({
         ))}
         {!visibleDocs.length && (
           <div style={{ padding: 16, color: adminColors.textMuted, fontSize: 13, textAlign: "center", gridColumn: "1 / -1" }}>
-            {showAllDocs ? "Document library is empty — add a custom document below." : "No suggested documents for this entity type. Switch to 'Show all documents' or add one below."}
+            {showAllDocs ? "Document library is empty - add a custom document below." : "No suggested documents for this entity type. Switch to 'Show all documents' or add one below."}
           </div>
         )}
       </div>
@@ -340,7 +340,7 @@ export default function StepDocuments({
             onChange={(e) => setCopyFromId(e.target.value)}
             style={{ ...adminStyles.input, flex: 1 }}
           >
-            <option value="">— Select entity type —</option>
+            <option value="">- Select entity type -</option>
             {entityTypes
               .filter((e) => e.id !== selectedEntityType)
               .map((e) => (

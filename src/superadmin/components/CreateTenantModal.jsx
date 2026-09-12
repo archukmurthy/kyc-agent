@@ -79,7 +79,7 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
         {tenantId && (
           <div style={{ marginTop: 8, fontSize: 11, color: adminColors.textMuted, fontFamily: "monospace", lineHeight: 1.6 }}>
             Saved as: <strong>{sanitised}</strong>{" "}
-            {isReserved && <span style={{ color: adminColors.danger }}>(reserved — pick another)</span>}
+            {isReserved && <span style={{ color: adminColors.danger }}>(reserved - pick another)</span>}
             <div>Admin: {origin}/admin?tenant={sanitised}</div>
             <div>Customer: {origin}/?tenant={sanitised}</div>
           </div>
@@ -96,7 +96,7 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
         />
       </Field>
 
-      <Field label="Admin Password *" helper="You will share this with the client. Store it securely — it is shown once after creation.">
+      <Field label="Admin Password *" helper="You will share this with the client. Store it securely - it is shown once after creation.">
         <div style={{ display: "flex", gap: 8 }}>
           <input
             type="text"

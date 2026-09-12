@@ -118,7 +118,7 @@ function classifyChangeCore(input) {
       workflow: 'escalation',
       escalation: true,
       escalationReason:
-        'PEP field changed — silent escalation regardless of direction, intent, registry status or verifiability.',
+        'PEP field changed - silent escalation regardless of direction, intent, registry status or verifiability.',
       silent: true,
       decided: true,
       matchedRule: 'PEP-SHORTCIRCUIT',

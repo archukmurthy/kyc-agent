@@ -62,7 +62,7 @@ test('the component import resolves to a real component, not the helper module',
   expect(AnalystSignalStrip({ show: true, signal: type1 })).not.toBeNull();
 });
 
-describe('AnalystSignalStrip — silence-later', () => {
+describe('AnalystSignalStrip - silence-later', () => {
   it('renders NOTHING when the test-tools flag is off (type 1)', async () => {
     await render(<AnalystSignalStrip show={false} signal={type1} fieldId="addressLine1" />);
     expect(container.textContent).toBe('');
@@ -86,7 +86,7 @@ describe('AnalystSignalStrip — silence-later', () => {
   });
 });
 
-describe('AnalystSignalStrip — visible now', () => {
+describe('AnalystSignalStrip - visible now', () => {
   it('shows the registry mismatch, document and rule for a type-1 outcome', async () => {
     await render(<AnalystSignalStrip show signal={type1} fieldId="addressLine1" />);
     const text = container.textContent;

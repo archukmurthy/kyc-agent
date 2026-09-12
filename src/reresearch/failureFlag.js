@@ -34,7 +34,7 @@ function buildReresearchFailureEvent({
     changeType: "changed",
     beforeValue: null,
     afterValue: { fellBackTo: "manual", stage, reason },
-    workflow: "ops_review", // neutral data point — NOT an analyst escalation
+    workflow: "ops_review", // neutral data point - NOT an analyst escalation
     escalation: false,
     decided: true,
     matchedRule: RERESEARCH_FALLBACK_RULE,

@@ -110,23 +110,23 @@ test('structural is exempt from the verifiability guard (decided even on a docum
     { workflow: 'restart', decided: true });
 });
 
-test('SAFEGUARD — verifiability guard: director add on a document source → analyst_review + accept_silent, NOT doc_required', () => {
+test('SAFEGUARD - verifiability guard: director add on a document source → analyst_review + accept_silent, NOT doc_required', () => {
   const r = classifyChange({ fieldClass: 'director', changeType: 'add', intent: 'genuine_update', registryStatus: 'not_reflected', verifiability: 'document', jurisdiction: 'GB' });
   matches(r, { workflow: 'analyst_review', silent: true, decided: true, matchedRule: 'VERIFIABILITY-GUARD' });
   assert.notEqual(r.workflow, 'doc_required');
 });
 
-test('SAFEGUARD — verifiability guard also fires for an unverified source', () => {
+test('SAFEGUARD - verifiability guard also fires for an unverified source', () => {
   matches(classifyChange({ fieldClass: 'ubo', changeType: 'add', intent: 'genuine_update', registryStatus: 'not_reflected', verifiability: 'unverified', jurisdiction: 'SG' }),
     { workflow: 'analyst_review', silent: true, decided: true });
 });
 
-test('SAFEGUARD — PEP short-circuit: pep / correct / ai_correction / reflected → escalation, silent', () => {
+test('SAFEGUARD - PEP short-circuit: pep / correct / ai_correction / reflected → escalation, silent', () => {
   matches(classifyChange({ fieldClass: 'pep', changeType: 'correct', intent: 'ai_correction', registryStatus: 'reflected', verifiability: 'structured_registry', jurisdiction: 'GB' }),
     { workflow: 'escalation', escalation: true, silent: true, decided: true, matchedRule: 'PEP-SHORTCIRCUIT' });
 });
 
-test('SAFEGUARD — PEP short-circuit fires regardless of verifiability (even a document source)', () => {
+test('SAFEGUARD - PEP short-circuit fires regardless of verifiability (even a document source)', () => {
   matches(classifyChange({ fieldClass: 'pep', changeType: 'remove', intent: 'genuine_update', registryStatus: 'unknown', verifiability: 'document', jurisdiction: 'SG' }),
     { workflow: 'escalation', escalation: true, silent: true, decided: true });
 });

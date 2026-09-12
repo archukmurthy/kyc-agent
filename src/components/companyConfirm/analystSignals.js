@@ -100,43 +100,43 @@ export function signalLines(signal) {
 
   if (signal.type === "type2") {
     lines.push(
-      `No automated consequence for this field class (${signal.fieldClass} → ${signal.workflow}, no document). This is expected — surfaced for testing.`
+      `No automated consequence for this field class (${signal.fieldClass} → ${signal.workflow}, no document). This is expected - surfaced for testing.`
     );
     // A type-2 outcome is still a recorded decision the customer never sees —
     // say so explicitly, naming the rule that fired (GENERIC,
     // VERIFIABILITY-GUARD, or none at all when the engine didn't decide).
     if (signal.silent) {
       lines.push(
-        `Silent outcome: ${signal.workflow} (customer sees nothing)${signal.matchedRule ? ` — rule ${signal.matchedRule}` : ""}.`
+        `Silent outcome: ${signal.workflow} (customer sees nothing)${signal.matchedRule ? ` - rule ${signal.matchedRule}` : ""}.`
       );
     } else if (signal.matchedRule) {
       lines.push(`Rule: ${signal.matchedRule}`);
     }
     if (signal.registryMismatch) {
-      lines.push("Customer value differs from registry — recorded, but nothing automated follows for this class.");
+      lines.push("Customer value differs from registry - recorded, but nothing automated follows for this class.");
     }
-    if (!signal.decided) lines.push("Engine did not decide (UNDECIDED) — analyst-bound.");
+    if (!signal.decided) lines.push("Engine did not decide (UNDECIDED) - analyst-bound.");
     return lines;
   }
 
   if (signal.registryMismatch) {
-    lines.push("Customer value differs from registry — flagged for analyst review.");
+    lines.push("Customer value differs from registry - flagged for analyst review.");
   }
   if (signal.docType) {
     lines.push(`Document required: ${signal.docType}`);
   }
   if (signal.escalation) {
-    lines.push(`Escalation raised${signal.escalationReason ? ` — ${signal.escalationReason}` : ""} (never shown to the customer).`);
+    lines.push(`Escalation raised${signal.escalationReason ? ` - ${signal.escalationReason}` : ""} (never shown to the customer).`);
   }
   if (signal.eddFlag) lines.push("EDD flag set.");
   if (signal.silent) {
     lines.push(
-      `Silent outcome: ${signal.workflow} (customer sees nothing)${signal.matchedRule ? ` — rule ${signal.matchedRule}` : ""}.`
+      `Silent outcome: ${signal.workflow} (customer sees nothing)${signal.matchedRule ? ` - rule ${signal.matchedRule}` : ""}.`
     );
   } else if (signal.matchedRule) {
     lines.push(`Rule: ${signal.matchedRule}`);
   }
-  if (!signal.decided) lines.push("Engine did not decide (UNDECIDED) — analyst-bound.");
+  if (!signal.decided) lines.push("Engine did not decide (UNDECIDED) - analyst-bound.");
   return lines;
 }
 

@@ -28,5 +28,5 @@ export const DOC_LOADER_MSGS = [
   "Searching for Wolfsberg Questionnaire and Annual Report...",
   "Checking Companies House registry...",
   "Extracting company details...",
-  "Almost done — compiling results...",
+  "Almost done - compiling results...",
 ];

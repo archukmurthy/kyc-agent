@@ -92,9 +92,9 @@ export default function VersionHistory({ token, tenantId, currentVersion, onRoll
               return (
                 <tr key={v.version} style={{ borderTop: `1px solid ${adminColors.border}` }}>
                   <td style={cell}>v{v.version}</td>
-                  <td style={cell}>{v.publishedAt ? new Date(v.publishedAt).toLocaleString() : "—"}</td>
+                  <td style={cell}>{v.publishedAt ? new Date(v.publishedAt).toLocaleString() : "-"}</td>
                   <td style={cell}>
-                    {v.entityTypeCount ?? "—"} ET · {v.licenceCount ?? "—"} lic · {v.schemaCount ?? "—"} schemas
+                    {v.entityTypeCount ?? "-"} ET · {v.licenceCount ?? "-"} lic · {v.schemaCount ?? "-"} schemas
                   </td>
                   <td style={cell}>
                     {isCurrent ? (
@@ -105,7 +105,7 @@ export default function VersionHistory({ token, tenantId, currentVersion, onRoll
                   </td>
                   <td style={{ ...cell, textAlign: "right" }}>
                     {isCurrent ? (
-                      <span style={{ color: adminColors.textMuted, fontSize: 11 }}>—</span>
+                      <span style={{ color: adminColors.textMuted, fontSize: 11 }}>-</span>
                     ) : (
                       <button
                         type="button"

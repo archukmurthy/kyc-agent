@@ -104,7 +104,7 @@ export function DossierView({
     if (allFields.length === 0 && qs.length === 0) {
       return (
         <div style={{ padding: "16px", background: C.successBg, border: `1px solid ${C.successBorder}`, borderRadius: 10, marginBottom: 16, fontSize: 13, color: C.success, fontWeight: 600 }}>
-          ✅ No fields to request — all information was collected automatically.
+          ✅ No fields to request - all information was collected automatically.
         </div>
       );
     }
@@ -182,7 +182,7 @@ export function DossierView({
               </button>
             </div>
           ))}
-          {/* Ask for more — inline in dossier. Section "customer_request" is the
+          {/* Ask for more - inline in dossier. Section "customer_request" is the
               bucket for all questions added from the dossier view. */}
           <div style={{ marginTop: 12 }}>
             {renderAskMoreButton("customer_request")}
@@ -342,7 +342,7 @@ export function DossierView({
                 {dossierId && `ID: ${String(dossierId).slice(0, 8)}…`}
               </div>
             </div>
-            {/* Save state — the dossier auto-saves on research complete, so by
+            {/* Save state - the dossier auto-saves on research complete, so by
                 the time the analyst lands here it is normally already saved.
                 After adjusting exclusions / questions, "Update" re-saves with
                 the current state. */}
@@ -421,7 +421,7 @@ export function DossierView({
                 // loadDossierAndStartOnboarding handles agentType/step/navigation.
                 if (!dossierId) {
                   // eslint-disable-next-line no-console
-                  console.warn("[Preview] No dossierId — cannot load from DB");
+                  console.warn("[Preview] No dossierId - cannot load from DB");
                   return;
                 }
                 await loadDossierAndStartOnboarding(dossierId, tenantId);

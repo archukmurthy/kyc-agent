@@ -61,7 +61,7 @@ function expectedGapLabel(c) {
   }
   if (c.fieldClass === 'director' && c.changeType === 'update'
       && c.intent === 'genuine_update' && c.registryStatus === 'not_reflected') {
-    return 'KNOWN · director name legitimately changed (genuine_update, not_reflected) — doc or ops?';
+    return 'KNOWN · director name legitimately changed (genuine_update, not_reflected) - doc or ops?';
   }
   return null;
 }
@@ -126,7 +126,7 @@ function renderGroup(title, list) {
 before(() => {
   console.log([
     '\n══════════════════════════════════════════════════════════════════════',
-    ' CHANGE CLASSIFICATION ENGINE — COMPLETENESS SWEEP',
+    ' CHANGE CLASSIFICATION ENGINE - COMPLETENESS SWEEP',
     '══════════════════════════════════════════════════════════════════════',
     ` total combinations : ${total}`,
     ` decided            : ${decidedCount}  (${coveragePct}% coverage)`,
@@ -134,10 +134,10 @@ before(() => {
     `   ├─ impossible input (caller cannot emit) : ${buckets.incoherent.length}`,
     `   ├─ expected design gaps (O1 / KNOWN)     : ${buckets.expected.length}`,
     `   └─ DECISIONS OWED (newly-discovered)     : ${buckets.owed.length}`,
-    ` EDD ever fired     : ${everFiredEdd}  (open question O2 — should be false until decided)`,
-    renderGroup('DECISIONS OWED — handed back to compliance', buckets.owed),
+    ` EDD ever fired     : ${everFiredEdd}  (open question O2 - should be false until decided)`,
+    renderGroup('DECISIONS OWED - handed back to compliance', buckets.owed),
     renderGroup('EXPECTED DESIGN GAPS', buckets.expected),
-    `\n  (impossible-input combos omitted from the detail list — ${buckets.incoherent.length} total)`,
+    `\n  (impossible-input combos omitted from the detail list - ${buckets.incoherent.length} total)`,
     '══════════════════════════════════════════════════════════════════════\n',
   ].join('\n'));
 });

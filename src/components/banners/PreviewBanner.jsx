@@ -20,7 +20,7 @@ export function PreviewBanner({ missing, timestamp }) {
   };
   let capturedAt = "";
   if (timestamp) {
-    try { capturedAt = ` — captured at ${new Date(timestamp).toLocaleTimeString()}`; }
+    try { capturedAt = ` - captured at ${new Date(timestamp).toLocaleTimeString()}`; }
     catch (_) { capturedAt = ""; }
   }
   return (
@@ -39,7 +39,7 @@ export function PreviewBanner({ missing, timestamp }) {
         }}>PREVIEW</span>
         <span>
           {missing
-            ? "No preview config found — showing published version instead."
+            ? "No preview config found - showing published version instead."
             : `Previewing unpublished changes${capturedAt}`}
         </span>
       </div>

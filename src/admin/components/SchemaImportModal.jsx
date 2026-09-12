@@ -277,19 +277,19 @@ function PreviewStage({ parseResult, validation, importedSchema, tab, setTab, on
       <Header
         title="Review imported fields"
         subtitle={`${parseResult.totalRows} field${parseResult.totalRows === 1 ? "" : "s"} found in your file${
-          parseResult.isTemplateFormat ? "." : " — header names matched via auto-mapper."
+          parseResult.isTemplateFormat ? "." : " - header names matched via auto-mapper."
         }`}
       />
 
       {errors.length > 0 && (
         <Banner tone="error">
-          <strong>{errors.length} error{errors.length === 1 ? "" : "s"} found</strong> — these must be fixed before importing.
+          <strong>{errors.length} error{errors.length === 1 ? "" : "s"} found</strong> - these must be fixed before importing.
           <ValidationList items={errors} />
         </Banner>
       )}
       {errors.length === 0 && warnings.length > 0 && (
         <Banner tone="warn">
-          <strong>{warnings.length} warning{warnings.length === 1 ? "" : "s"}</strong> — review before importing.
+          <strong>{warnings.length} warning{warnings.length === 1 ? "" : "s"}</strong> - review before importing.
           <ValidationList items={warnings} collapsible />
         </Banner>
       )}
@@ -364,7 +364,7 @@ function FieldTable({ rows, parseResultRows, errorRows, warnRows }) {
                 <td style={{ padding: "6px 8px" }}>{f.inputType}</td>
                 <td style={{ padding: "6px 8px" }}>{f.required ? "Yes" : "No"}</td>
                 <td style={{ padding: "6px 8px", fontSize: 11, color: adminColors.textMuted }}>
-                  {f.options ? `${f.options.length} option${f.options.length === 1 ? "" : "s"}` : "—"}
+                  {f.options ? `${f.options.length} option${f.options.length === 1 ? "" : "s"}` : "-"}
                 </td>
               </tr>
             );
