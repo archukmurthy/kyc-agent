@@ -99,6 +99,7 @@ test("10: completely different person -> Band C, escalation, LOA route, identity
 test("15: sanctions/PEP/adverse hit -> auto-pass blocked -> routed to review", async () => {
   const { r, tasks } = await run({ officerSnapshot: officer("SMITH, John", "1985-05"), identity: { first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24" }, screeningHit: true });
   assert.strictEqual(r.outcomeType, "unresolved_to_review");
+  assert.strictEqual(r.requiresReview, true);
   assert.ok(tasks.some((t) => t.taskType === "review"));
 });
 

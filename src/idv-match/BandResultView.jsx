@@ -54,7 +54,7 @@ export default function BandResultView({ result, uploadPrompt, onSubmitExplanati
   // screening hit) is a HARD STOP: show the neutral review copy only. No confirm,
   // no continue, no letter-of-authorization flow — the applicant cannot proceed
   // past a flagged case (back-office review takes over).
-  if (result.requiresReview === true) {
+  if (result.requiresReview === true || result.outcomeType === "unresolved_to_review") {
     return <View title={view.title} body={view.body} />;
   }
 

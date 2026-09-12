@@ -42,7 +42,7 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
     supersedes: decision.supersedes || null,
   });
 
-  const result = { decisionId, tasks: [], escalated: false, route: null, applicantView: viewFor(decision) };
+  const result = { decisionId, tasks: [], escalated: false, route: null, applicantView: viewFor(decision), requiresReview: decision.requiresReview === true };
   const reason = (decision.reasons || []).join(",") || null;
 
   // Publish a references-only Evidence envelope to the append-only outbox for

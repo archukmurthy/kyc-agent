@@ -160,3 +160,18 @@ test("requiresReview HARD STOPS the applicant on a matched-hit outcome (band B)"
   expect(screen.queryByText(/confirm/i)).toBeNull();
   expect(screen.queryByText(/continue/i)).toBeNull();
 });
+
+test("outcomeType unresolved_to_review HARD STOPS even without a requiresReview field (defense in depth)", () => {
+  const onConfirm = jest.fn();
+  const onProceed = jest.fn();
+  const result = {
+    enabled: true, band: "B", outcomeType: "unresolved_to_review",
+    // requiresReview deliberately omitted — the outcomeType alone must still hard-stop.
+    applicantView: { title: "We're completing our checks", body: "Your application has been saved. We'll be in touch if we need anything further." },
+    verifiedFields: { firstName: "Bob" },
+  };
+  render(<BandResultView result={result} onConfirm={onConfirm} onProceed={onProceed} />);
+  expect(screen.getByText("We're completing our checks")).toBeInTheDocument();
+  expect(screen.queryByText(/confirm/i)).toBeNull();
+  expect(screen.queryByText(/continue/i)).toBeNull();
+});
