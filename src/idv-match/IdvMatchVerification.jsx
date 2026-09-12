@@ -169,7 +169,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
           <p style={{ wordBreak: "break-all" }}>
             <a href={hostedUrl} target="_blank" rel="noreferrer">{hostedUrl}</a>
           </p>
-          <Button type="button" disabled={busy} onClick={check}>{busy ? "Checking…" : "I've completed verification"}</Button>
+          <Button type="button" disabled={busy} onClick={check}>{busy ? "Checking…" : "I have completed the verification"}</Button>
           <p style={{ fontSize: 12, color: "#1a3a4a80", marginTop: 8 }}>
             This updates on its own once you finish — or click the button to check now.
           </p>

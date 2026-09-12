@@ -4581,42 +4581,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
           <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 0" }}>{agentType === "preboarding" ? "Intelligence-led due diligence — build the entity dossier and customer request before contact" : "AI-powered multi-jurisdiction company research and data collection"}</p>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 24, flexWrap: "wrap" }}>
-          {(() => {
-            const pb = agentType === "preboarding";
-            // Pre-boarding is a 3-screen flow: Company → Research → Dossier.
-            // Active step maps: input(step 0)→Company, research(step 1)→Research,
-            // showDossierView→Dossier (covers the confirm-step window while the
-            // dossier auto-saves).
-            const pbActive = showDossierView ? 2 : (step >= 1 ? 1 : 0);
-            let names = pb ? ["Company", "Research", "Dossier"] : stepNames;
-            let activeIdx = pb ? pbActive : step;
-            // Dossier/invite journey: the customer landed via link, so Company &
-            // Research (and Documents, on that journey) were done before they
-            // arrived. Hide every pre-Applicant pill and renumber the rest 1–N.
-            // DISPLAY ONLY — `step`/STEPS routing is untouched; we just slice the
-            // labels and re-base the active index by the same offset so Applicant
-            // reads as 1 of 5 here while staying 3 of 7 on the KYC/lookup journey.
-            // Skipped for preboarding (analyst flow) and once a dispute reset
-            // clears landedViaLink (→ back to the full 7).
-            if (!pb && landedViaLink && step >= STEPS.applicant) {
-              const hidden = STEPS.applicant; // count of pre-Applicant steps
-              names = stepNames.slice(hidden);
-              activeIdx = step - hidden;
-            }
-            const doneBg = pb ? "#7C3AED" : "#4a9e8e";
-            const activeBg = pb ? "#6D28D9" : "#1a3a4a";
-            const ring = pb ? "0 0 0 3px rgba(124,58,237,0.2)" : "0 0 0 3px rgba(74,158,142,0.2)";
-            return names.map((s, i, arr) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: i < activeIdx ? doneBg : i === activeIdx ? activeBg : "#e0e4e8", color: i <= activeIdx ? "#fff" : "#999", boxShadow: i === activeIdx ? ring : "none" }}>{i + 1}</div>
-                <span style={{ fontSize: 11, fontWeight: i === activeIdx ? 700 : 400, color: i <= activeIdx ? "#1a3a4a" : "#aaa" }}>{s}</span>
-                {i < arr.length - 1 && <div style={{ width: 14, height: 2, background: i < activeIdx ? doneBg : "#e0e4e8" }} />}
-              </div>
-            ));
-          })()}
-        </div>
-
         {step === STEPS.input && !journeyOpen && (
           <CompanyLookupPage
             companyName={companyName}

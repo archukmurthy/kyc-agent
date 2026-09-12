@@ -153,11 +153,12 @@ describe("journey gating", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a Documents pill in the stepper on this journey", async () => {
+  it("renders the Documents step content on this journey", async () => {
+    // The pill stepper (which used to show "Documents"/"Required Docs" as
+    // step labels) was removed from the UI entirely. journeyType routing is
+    // now only observable via the actual step content that renders.
     await driveToDocuments();
-    // ai_documents inserts Documents between Company and Research.
     expect(bodyText()).toMatch(/Documents/);
-    expect(bodyText()).toMatch(/Required Docs/); // the LATER, separate DRS step
   });
 
   it("does NOT render the Documents step on the ai_only journey (card B)", async () => {

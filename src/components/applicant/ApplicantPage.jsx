@@ -446,6 +446,10 @@ export function ApplicantPage({
     const personChosen = !!applicantSelectedPerson || applicantNotListed;
     const showApplicantBody = !idvBandsEnabled || personChosen || autoMatchActive;
 
+    // QR/verification flow showing but not yet resolved — drives the dynamic
+    // title/subtitle below (Change 3/4).
+    const scanning = (autoMatchActive || unlistedVerifyActive) && !idvResult;
+
     // Shared "proceed to Confirm" used by both the manual Continue button and the
     // bands success path. Skips the signatory check when the flag is on.
     const proceedToConfirm = () => {
@@ -502,11 +506,12 @@ export function ApplicantPage({
             <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
               <div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
-                  Tell us about yourself
+                  {scanning ? "Scan the code for verification" : "Tell us about yourself"}
                 </h2>
                 <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
-                  As the person completing this application, we need a few details about you.
-                  We have pre-filled what we already know.
+                  {scanning
+                    ? "Scan the QR code with your phone to verify your identity."
+                    : "As the person completing this application, we need a few details about you. We have pre-filled what we already know."}
                 </p>
               </div>
               {SHOW_TEST_TOOLS && (
@@ -527,13 +532,17 @@ export function ApplicantPage({
               )}
             </div>
 
-            <div style={card}>
-              {/* Auto-match (bands ON, candidates found): no dropdown — go straight
-                  to Didit; the fields appear as the fetched cells after. The manual
-                  path (flag OFF / no candidates) still shows the selector + fields. */}
-              {!autoMatchActive && renderApplicantPersonSelector()}
-              {showApplicantBody && !autoMatchActive && renderApplicantFields()}
-            </div>
+            {/* Auto-match (bands ON, candidates found): no dropdown — go straight
+                to Didit; the fields appear as the fetched cells after. The manual
+                path (flag OFF / no candidates) still shows the selector + fields.
+                In the auto-match flow both children below are false, so the card
+                is skipped entirely rather than rendering empty. */}
+            {!autoMatchActive && (
+              <div style={card}>
+                {renderApplicantPersonSelector()}
+                {showApplicantBody && renderApplicantFields()}
+              </div>
+            )}
 
             {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
                 shown (every applicant), directly below the applicant fields and

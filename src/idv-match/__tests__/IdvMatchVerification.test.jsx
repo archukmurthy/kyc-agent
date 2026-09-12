@@ -25,7 +25,7 @@ test("start -> QR/link -> completed -> resolve renders the Band A success", asyn
   // Auto-start shows the QR/link with no click.
   await screen.findByText("https://verify.didit.me/s/x");
 
-  fireEvent.click(screen.getByText("I've completed verification"));
+  fireEvent.click(screen.getByText("I have completed the verification"));
   await screen.findByText("Identity verified");
   expect(screen.getByText("Your identity has been matched to the selected company officer.")).toBeInTheDocument();
   // reports the outcome reference up (attempt id + band + outcome; no PII)
@@ -45,7 +45,7 @@ test("Band B dialogue -> submit same_spelling -> explain resolves to success", a
 
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "LOVELACE, Ada" }} />);
   await screen.findByText("https://verify.didit.me/s/y");
-  fireEvent.click(screen.getByText("I've completed verification"));
+  fireEvent.click(screen.getByText("I have completed the verification"));
 
   await screen.findByText("Help us confirm your details");
   fireEvent.click(screen.getByLabelText(/Same name, different spelling/));
@@ -124,7 +124,7 @@ test("resolve completing calls onResultCache with the terminal result", async ()
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResultCache={onResultCache} />);
   await screen.findByText("https://verify.didit.me/s/cache");
 
-  fireEvent.click(screen.getByText("I've completed verification"));
+  fireEvent.click(screen.getByText("I have completed the verification"));
   await screen.findByText("Identity verified");
 
   expect(onResultCache).toHaveBeenCalledWith(terminal);
