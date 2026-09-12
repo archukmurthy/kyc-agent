@@ -620,13 +620,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
         : { input: 0, research: 1, applicant: 2, confirm: 3, fillGaps: 4, documentRequirements: 5, declare: 6 });
   const isAiDocs = journeyType === "ai_documents";
   const STEPS = stepsFor(journeyType);
-  const stepNames = isAiDocs
-    ? (idvSpike
-        ? ["Company", "Documents", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
-        : ["Company", "Documents", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"])
-    : (idvSpike
-        ? ["Company", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
-        : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]);
 
   // Loader messages — four modes: Nium API lookup, no docs (existing),
   // doc-extraction phase, web phase. The Nium journey swaps in registry-specific

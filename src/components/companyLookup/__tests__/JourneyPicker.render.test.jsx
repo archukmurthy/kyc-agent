@@ -159,16 +159,6 @@ const continueBtn = () => screen.getByRole("button", { name: /^Continue/ });
 const backBtn = () => screen.getByRole("button", { name: /Back/ });
 
 /**
- * The step-indicator pill labels. The pill stepper itself was removed from
- * the UI, so this now always returns []; kept only so the surviving
- * `.not.toContain(...)` assertions below still read naturally.
- */
-const stepPills = () =>
-  Array.from(document.querySelectorAll("span"))
-    .map((s) => s.textContent.trim())
-    .filter((t) => ["Company", "Documents", "Research", "Applicant"].includes(t));
-
-/**
  * The journeys the research kickoff actually fired with, read off the
  * /api/track-event POST bodies. trackEvent("research_started", …) carries
  * eventData.journeyType, so this reads the routing decision itself rather than
@@ -318,7 +308,7 @@ describe("routing — card A (documents + AI)", () => {
   it("sets journeyType ai_documents, which routes to the Documents step", async () => {
     // The step-pill stepper was removed from the UI (no more visual step
     // indicator), so journeyType routing is now observed via the actual step
-    // content rendered, not a pill label. See stepPills() note above.
+    // content rendered, not a pill label.
     await driveToPicker();
     expect(
       screen.queryByRole("heading", { level: 2, name: "Upload your documents" })
@@ -367,7 +357,6 @@ describe("routing — card B (AI research only)", () => {
         name: /How would you like to complete your application\?/,
       })
     ).not.toBeInTheDocument();
-    expect(stepPills()).not.toContain("Documents");
   });
 
   it("falls back to Company Lookup with the failure message when the call fails", async () => {
@@ -443,7 +432,9 @@ describe("routing — card E (max prefill)", () => {
     fireEvent.click(continueBtn());
     await settle(0);
 
-    expect(stepPills()).not.toContain("Documents");
+    expect(
+      screen.queryByRole("heading", { level: 2, name: "Upload your documents" })
+    ).toBeNull();
   });
 });
 
