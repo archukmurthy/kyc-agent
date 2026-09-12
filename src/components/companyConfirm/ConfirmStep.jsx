@@ -487,7 +487,7 @@ export function ConfirmStep({
                   onClick={onConfirmAll}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "#4a9e8e"; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "#4a9e8e"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.border; }}
-                  style={{ padding: "11px 22px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.text, border: `1.5px solid ${C.border}`, transition: "background 0.15s, color 0.15s, border-color 0.15s" }}
+                  style={{ marginLeft: 12, padding: "11px 22px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.text, border: `1.5px solid ${C.border}`, transition: "background 0.15s, color 0.15s, border-color 0.15s" }}
                 >
                   ✓ Confirm All
                 </button>
