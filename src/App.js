@@ -5090,9 +5090,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 );
               })()}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.fillGaps)}>← Back to Fill Gaps</Btn>
-              <Btn variant="primary" onClick={() => drsContinueRef.current && drsContinueRef.current()}>Continue →</Btn>
+              <Btn variant="green" onClick={() => drsContinueRef.current && drsContinueRef.current()}>Continue →</Btn>
             </div>
           </div>
         )}
