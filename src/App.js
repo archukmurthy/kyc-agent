@@ -2953,6 +2953,59 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setDone(true);
   };
 
+  // Re-check = the customer UNDID their change → retract its amendment-document
+  // request. Append a compensating REVERT event (workflow 'accept_silent'); the
+  // original change event is NEVER deleted or mutated (append-only store).
+  // deriveAmendmentDocuments reads the latest event per field, so this later
+  // non-doc event nets the document to "not owed" — the Fill Gaps card drops and
+  // the Confirm notice clears (the dialogue isn't rendered once re-checked).
+  // Only write a revert when a change was actually emitted for this field.
+  // Same submissionId keying as the change write, so it works in both journeys.
+  //
+  // NOTE: the change AND this revert both remain in the append-only audit store
+  // on purpose (a future rule may care that e.g. a UBO was changed then put
+  // back). Materiality / which fields matter / MLRO-surfacing are pending Danny
+  // (CD-register) — do NOT infer materiality or surface anything here.
+  //
+  // Extracted so both the individual ✓ undo (toggleCheck) and the "Confirm All"
+  // shortcut (confirmAll, for the disputed rows it re-ticks) retract a stale
+  // dialogue identically — confirmAll batches its OWN setChecks/setFieldMetadata
+  // around this rather than calling toggleCheck N times, so this helper only
+  // does the per-field dialogue/gap cleanup, not the checkbox/metadata state.
+  const retractFieldChange = (item) => {
+    const snap = dialogueStateRef.current[item.field];
+    if (snap && snap.emitted) {
+      const revertEvent = buildChangeEvent({
+        field: { fieldId: item.field, fieldClass: classifyFieldClass(item.field) },
+        jurisdiction: countryCode || "GB",
+        submissionId: dossierId || onboardingSubmissionId,
+        dossierId,
+        storedChangeType: "changed",
+        intent: null,
+        registryStatus: null,
+        engineResult: { workflow: "accept_silent", docType: null, decided: true },
+      });
+      if (typeof fetch === "function") {
+        fetch("/api/change-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(revertEvent),
+        }).catch((err) => console.warn("[retractFieldChange] revert persist failed:", err));
+      }
+    }
+    // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
+    // that emits a new change event (R6: toggling re-adds the document each time).
+    delete dialogueStateRef.current[item.field];
+    // Inline capture (commit 3): a re-check is an undo — drop the inline
+    // corrected value too. gapRef entries always win over accepted AI values
+    // in submitApplication, so a stale correction left behind here would
+    // silently override the value the customer just re-accepted.
+    if (gapRef.current["corrected_" + item.field] !== undefined) {
+      delete gapRef.current["corrected_" + item.field];
+      setFormVersion(v => v + 1);
+    }
+  };
+
   // Toggle a Confirm-page checkbox AND record the action in metadata.
   const toggleCheck = (idx) => {
     const item = (research && research.found) ? research.found[idx] : null;
@@ -2965,51 +3018,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
       m.fieldId === item.field ? { ...m, customerAction: nowChecked ? "accepted" : "rejected", customerActionAt: at } : m
     ));
 
-    // Re-check = the customer UNDID their change → retract its amendment-document
-    // request. Append a compensating REVERT event (workflow 'accept_silent'); the
-    // original change event is NEVER deleted or mutated (append-only store).
-    // deriveAmendmentDocuments reads the latest event per field, so this later
-    // non-doc event nets the document to "not owed" — the Fill Gaps card drops and
-    // the Confirm notice clears (the dialogue isn't rendered once re-checked).
-    // Only write a revert when a change was actually emitted for this field.
-    // Same submissionId keying as the change write, so it works in both journeys.
-    //
-    // NOTE: the change AND this revert both remain in the append-only audit store
-    // on purpose (a future rule may care that e.g. a UBO was changed then put
-    // back). Materiality / which fields matter / MLRO-surfacing are pending Danny
-    // (CD-register) — do NOT infer materiality or surface anything here.
     if (nowChecked) {
-      const snap = dialogueStateRef.current[item.field];
-      if (snap && snap.emitted) {
-        const revertEvent = buildChangeEvent({
-          field: { fieldId: item.field, fieldClass: classifyFieldClass(item.field) },
-          jurisdiction: countryCode || "GB",
-          submissionId: dossierId || onboardingSubmissionId,
-          dossierId,
-          storedChangeType: "changed",
-          intent: null,
-          registryStatus: null,
-          engineResult: { workflow: "accept_silent", docType: null, decided: true },
-        });
-        if (typeof fetch === "function") {
-          fetch("/api/change-events", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(revertEvent),
-          }).catch((err) => console.warn("[toggleCheck] revert persist failed:", err));
-        }
-      }
-      // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
-      // that emits a new change event (R6: toggling re-adds the document each time).
-      delete dialogueStateRef.current[item.field];
-      // Inline capture (commit 3): a re-check is an undo — drop the inline
-      // corrected value too. gapRef entries always win over accepted AI values
-      // in submitApplication, so a stale correction left behind here would
-      // silently override the value the customer just re-accepted.
-      if (gapRef.current["corrected_" + item.field] !== undefined) {
-        delete gapRef.current["corrected_" + item.field];
-        setFormVersion(v => v + 1);
-      }
+      retractFieldChange(item);
     }
   };
 
@@ -3956,6 +3966,25 @@ export default function KYCAgent({ previewMode = false } = {}) {
         needsYouRows.forEach(({ item }) => { next[item.field] = true; });
         return next;
       });
+      // The DISPUTED subset (checks[idx] === false) is being RE-TICKED here —
+      // the same undo toggleCheck performs one row at a time. Replicate its
+      // cleanup for these fields so a stale doc_required dialogue doesn't
+      // survive the re-tick: without it, docsNeededFrom(dialogueStateRef) keeps
+      // feeding submitBlockers a MISSING_DOCUMENT blocker for a row that now
+      // renders confirmed, and fieldMetadata would still say "rejected" under a
+      // row the UI shows accepted. Batched into ONE setFieldMetadata (mirrors
+      // toggleCheck's per-field stamp) instead of N; the dialogue/gap cleanup
+      // and its best-effort revert POST are per-field via retractFieldChange
+      // (not awaited — same fire-and-forget discipline as toggleCheck).
+      const disputedRows = needsYouRows.filter(({ idx }) => checks[idx] === false);
+      if (disputedRows.length > 0) {
+        const at = new Date().toISOString();
+        const disputedFieldIds = new Set(disputedRows.map(({ item }) => item.field));
+        setFieldMetadata(prevMeta => prevMeta.map(m =>
+          disputedFieldIds.has(m.fieldId) ? { ...m, customerAction: "accepted", customerActionAt: at } : m
+        ));
+        disputedRows.forEach(({ item }) => retractFieldChange(item));
+      }
     }
     // Every person's outstanding attributes, same loop personConfirmItems
     // uses to enumerate them.
