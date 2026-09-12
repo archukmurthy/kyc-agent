@@ -292,6 +292,49 @@ describe("the submit gate", () => {
   });
 });
 
+describe("the Confirm All button", () => {
+  it("renders between Back and the status text when items need attention", () => {
+    renderConfirm({
+      confirmCounts: { needsYou: 4, confirmed: 17, corrected: 0, docsNeeded: 0 },
+      blockers: [{ kind: "attention_row", fieldId: "leiNumber", label: "LEI Number" }],
+      blockerMessage: "1 item needs your input",
+    });
+    const back = screen.getByRole("button", { name: "← Back" });
+    const confirmAll = screen.getByRole("button", { name: "✓ Confirm All" });
+    const status = screen.getByText("Resolve these to continue");
+    // DOM order inside the sticky footer: Back, Confirm All, status.
+    // eslint-disable-next-line no-bitwise
+    expect(back.compareDocumentPosition(confirmAll) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(confirmAll.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("calls onConfirmAll when clicked", () => {
+    const onConfirmAll = jest.fn();
+    renderConfirm({
+      confirmCounts: { needsYou: 4, confirmed: 17, corrected: 0, docsNeeded: 0 },
+      onConfirmAll,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "✓ Confirm All" }));
+    expect(onConfirmAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render once nothing needs the customer's input", () => {
+    renderConfirm({ confirmCounts: { needsYou: 0, confirmed: 21, corrected: 0, docsNeeded: 0 } });
+    expect(screen.queryByRole("button", { name: "✓ Confirm All" })).not.toBeInTheDocument();
+  });
+
+  it("leaves individual and group confirmation controls untouched", () => {
+    const { props } = renderConfirm({
+      confirmCounts: { needsYou: 4, confirmed: 17, corrected: 0, docsNeeded: 0 },
+      stakeholderFound: [{ item: { field: "directors" }, idx: 0 }],
+    });
+    expect(screen.getByText("People Found")).toBeInTheDocument();
+    expect(props.renderStakeholderConfirmSection).toHaveBeenCalled();
+    expect(screen.getByText("FOUND TABLE")).toBeInTheDocument();
+  });
+});
+
 describe("the cache badge", () => {
   it("appears only when the research was served from cache", () => {
     renderConfirm();

@@ -27,7 +27,7 @@
  * Styling uses the app's inline palette (Nium navy + teal), matching App.js.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDocumentRequirements } from '../hooks/useDocumentRequirements';
 
 const C = {
@@ -266,15 +266,35 @@ function LoadingState() {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function Step2DynamicForm({ step1Data, onComplete, docSearchResults, selfSourceResults }) {
+export default function Step2DynamicForm({
+  step1Data, onComplete, docSearchResults, selfSourceResults,
+  // Lifts upload state to the parent (App.js) so it survives this component
+  // unmounting on navigation. initialUploads seeds the cards as uploaded;
+  // onUploadsChange fires on every upload/remove, not only on Continue.
+  initialUploads, onUploadsChange,
+  // Continue is normally rendered inside the footer here. When the parent
+  // renders its own Continue button outside the card (renderOwnContinue =
+  // false), this component hides its internal button and instead exposes the
+  // latest handleContinue to the parent via onExposeContinue.
+  renderOwnContinue = true, onExposeContinue,
+}) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
   const { checklist, flags, onboardingCountry, loading, error } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
-  const [uploads, setUploads] = useState({});
-  const handleUpload = (key, file) => setUploads(prev => ({ ...prev, [key]: file }));
-  const handleRemove = (key) => setUploads(prev => { const n = { ...prev }; delete n[key]; return n; });
+  const [uploads, setUploads] = useState(initialUploads || {});
+  const handleUpload = (key, file) => {
+    const next = { ...uploads, [key]: file };
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
+  };
+  const handleRemove = (key) => {
+    const next = { ...uploads };
+    delete next[key];
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
+  };
 
   // Partition the FULL checklist — nothing is dropped.
   const selfSourced = checklist.filter(isSelfSourced);
@@ -302,17 +322,16 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
   const handleUploadAll = () => {
     const targets = [...provide];
     if (flags.showWolfsberg) targets.push({ requirement: 'Wolfsberg CBDDQ' });
-    setUploads(prev => {
-      const next = { ...prev };
-      targets.forEach(i => {
-        if (!next[i.requirement]) {
-          const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
-          try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
-          catch { next[i.requirement] = { name: fname, size: 13 }; }
-        }
-      });
-      return next;
+    const next = { ...uploads };
+    targets.forEach(i => {
+      if (!next[i.requirement]) {
+        const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
+        try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
+        catch { next[i.requirement] = { name: fname, size: 13 }; }
+      }
     });
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
   };
 
   // Progress = mandatory, client-provided items the customer must upload.
@@ -336,6 +355,13 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
     ];
     onComplete({ uploads, submittedRequirements, checklist, flags });
   };
+
+  // When the parent renders Continue outside the card, it needs a live
+  // reference to trigger it. Runs every render (no deps) so it's always the
+  // current closure over `uploads` - a ref write, not state, so it can't loop.
+  useEffect(() => {
+    onExposeContinue && onExposeContinue(handleContinue);
+  });
 
   if (loading) return <LoadingState />;
   if (error) return <div style={styles.errorState}>Could not load document requirements: {error}</div>;
@@ -475,7 +501,9 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
             ? 'All required documents provided - you can continue.'
             : `${requiredTotal - requiredDone} required item${requiredTotal - requiredDone > 1 ? 's' : ''} still needed. You can continue and complete them before declaration.`}
         </p>
-        <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>
+        {renderOwnContinue && (
+          <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>
+        )}
       </div>
     </div>
   );

@@ -43,6 +43,9 @@ import {
   isCompanyWideDocType,
   canonicalDocType,
   prefillBreakdown,
+  rowState,
+  rowContext,
+  ROW_STATE,
 } from "./components/companyConfirm/confirmState";
 // The pre-filled-fields table moved out of this file; App now only wires it up.
 // humaniseSection/safeRenderValue moved with it and used to be imported back
@@ -432,6 +435,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // pre-declaration gap gate (Step5Recompute).
   const [drsSubmitted, setDrsSubmitted] = useState([]);   // submittedRequirements[]
   const [drsFlags, setDrsFlags] = useState({});           // feature flags from Step 2
+  // Required-Docs upload state, lifted out of Step2DynamicForm so it survives
+  // that component unmounting on navigation (Continue / Back both unmount it).
+  // Keyed by checklist requirement string, same shape Step2DynamicForm uses.
+  const [drsUploads, setDrsUploads] = useState({});
+  // Step2DynamicForm writes its latest handleContinue here (onExposeContinue)
+  // so the Continue button rendered outside the card can trigger it. A ref,
+  // not state - it's fired directly from a click handler, never rendered.
+  const drsContinueRef = useRef(null);
   const [idvBandsEnabled, setIdvBandsEnabled] = useState(false); // IDV discrepancy-bands feature flag (server-owned)
   const [idvVerification, setIdvVerification] = useState(null); // { attemptId, band, outcomeType } when the bands flow resolved (no PII)
   const [idvVerifiedFields, setIdvVerifiedFields] = useState(null); // applicant-confirmed verified ID fields (incl. doc extras)
@@ -730,7 +741,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setFieldMetadata([]);
     setLoaderPhase(0);
     setCoverage(null); setGapRecoveryRan(false); setResearchStatus("");
-    setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false);
+    setDrsSubmitted([]); setDrsFlags({}); setDrsGapsCleared(false); setDrsUploads({});
     setIdvVerification(null); setIdvVerifiedFields(null); setIdvResult(null);
     setDocSearchResults(null); setDocSearchLoading(false); setDocSearchError(null); setHasRunRealAgent(false); setSelfSourceDiag(null); setAcceptedDocTypes(new Set());
     setCostTracker({ docSearch: null, researchPass1: null, researchPass2: null, docExtraction: null });
@@ -3917,6 +3928,50 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const confirmBlockerMessage = blockerSummary(confirmBlockers);
 
   /**
+   * "Confirm All" — the footer-level shortcut. Settles every confirmable
+   * datapoint on the page in one click: every NEEDS_YOU vital row, plus every
+   * stakeholder's outstanding attributes (via confirmAllPersonAttributes, the
+   * exact function the per-person "✓ Confirm all" button already calls).
+   * Missing-document blockers are left alone — there's no confirm affordance
+   * for a file upload.
+   *
+   * Rows are batched into ONE setChecks + ONE setAffirmedFields, the same
+   * discipline confirmAllPersonAttributes already uses, rather than N
+   * toggleCheck/affirmRow calls (each of which fires its own side-effect
+   * fetch on undo).
+   */
+  const confirmAll = () => {
+    const needsYouRows = regularFound.filter(({ item, idx }) =>
+      rowState(item, rowContext(item, idx, { checks, affirmed: affirmedFields, corrections: gapRef.current }))
+        === ROW_STATE.NEEDS_YOU
+    );
+    if (needsYouRows.length > 0) {
+      setChecks(prev => {
+        const next = { ...prev };
+        needsYouRows.forEach(({ idx }) => { next[idx] = true; });
+        return next;
+      });
+      setAffirmedFields(prev => {
+        const next = { ...prev };
+        needsYouRows.forEach(({ item }) => { next[item.field] = true; });
+        return next;
+      });
+    }
+    // Every person's outstanding attributes, same loop personConfirmItems
+    // uses to enumerate them.
+    stakeholderFound.forEach(({ item }) => {
+      const ubo = isUboLikeField(item.field);
+      (item.stakeholders || [])
+        .filter((s) => !isRegistryExemptionNotice(s))
+        .map((s) => personWithEdits(item.field, s))
+        .forEach((s) => {
+          if (isStakeholderRejected(item.field, s.id)) return;
+          confirmAllPersonAttributes(item, s, ubo, isPersonLowConfidence(s, item));
+        });
+    });
+  };
+
+  /**
    * The per-attribute trail for every person, built where the UI's own
    * predicates live so what is stored is exactly what was shown.
    *
@@ -4886,6 +4941,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             onAmendmentRemove={handleAmendmentRemove}
             blockers={confirmBlockers}
             blockerMessage={confirmBlockerMessage}
+            onConfirmAll={confirmAll}
             isPubliclyListedOverride={isPubliclyListedOverride}
             setIsPubliclyListedOverride={setIsPubliclyListedOverride}
             sortedFound={sortedFound}
@@ -4991,6 +5047,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
                     researchData={research}
                     docSearchResults={docSearchResults}
                     selfSourceResults={selfSourceResults}
+                    initialUploads={drsUploads}
+                    onUploadsChange={setDrsUploads}
+                    renderOwnContinue={false}
+                    onExposeContinue={(fn) => { drsContinueRef.current = fn; }}
                     onComplete={(data) => {
                       setDrsSubmitted(data.submittedRequirements || []);
                       setDrsFlags(data.flags || {});
@@ -5001,8 +5061,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 );
               })()}
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.fillGaps)}>← Back to Fill Gaps</Btn>
+              <Btn variant="primary" onClick={() => drsContinueRef.current && drsContinueRef.current()}>Continue →</Btn>
             </div>
           </div>
         )}
@@ -5092,7 +5153,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.fillGaps)}>← Back</Btn>
+              <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back</Btn>
               <Btn
                 variant="green"
                 onClick={inPreview ? undefined : submitApplication}

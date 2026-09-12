@@ -202,3 +202,20 @@ describe("the submit gate on real data", () => {
     expect(cta).toBeDisabled();
   });
 });
+
+describe("Confirm All (real data)", () => {
+  it("settles every outstanding row and person attribute in one click, unblocking the gate", async () => {
+    await driveToConfirm();
+    const footer = screen.getByRole("button", { name: /← Back/ }).parentElement;
+    expect(within(footer).getByText(/Resolve these to continue/)).toBeInTheDocument();
+    expect(within(footer).getAllByRole("button").pop()).toBeDisabled();
+
+    fireEvent.click(within(footer).getByRole("button", { name: "✓ Confirm All" }));
+    await settle(0);
+
+    expect(within(footer).getByText("Everything's ready")).toBeInTheDocument();
+    const cta = within(footer).getAllByRole("button").pop();
+    expect(cta).toHaveTextContent("Confirm and Continue");
+    expect(cta).toBeEnabled();
+  });
+});

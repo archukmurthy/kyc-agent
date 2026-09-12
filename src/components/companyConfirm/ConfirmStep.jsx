@@ -36,6 +36,7 @@ export function ConfirmStep({
   onAmendmentRemove,
   blockers,
   blockerMessage,
+  onConfirmAll,
   isPubliclyListedOverride,
   setIsPubliclyListedOverride,
   sortedFound,
@@ -476,6 +477,19 @@ export function ConfirmStep({
               >
                 ← Back
               </button>
+              {/* One-click shortcut for kind (a) + (b) blockers - settles every
+                  vital row and every person's outstanding attributes at once.
+                  Missing-document blockers have no confirm affordance, so they
+                  never disappear from this action - only rendered while there
+                  is something it can actually settle. */}
+              {counts.needsYou > 0 && (
+                <button
+                  onClick={onConfirmAll}
+                  style={{ padding: "11px 22px", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.text, border: `1.5px solid ${C.border}` }}
+                >
+                  ✓ Confirm All
+                </button>
+              )}
               {/* What's blocking, in words, from the SAME list that blocks the
                   button - never a silent grey-out. */}
               <div style={{ flex: 1, textAlign: "right", paddingRight: 16, minWidth: 0 }}>
