@@ -103,6 +103,13 @@ test("15: sanctions/PEP/adverse hit -> auto-pass blocked -> routed to review", a
   assert.ok(tasks.some((t) => t.taskType === "review"));
 });
 
+test("15b: name-variant matched officer + screening hit -> Band B, requiresReview propagates through the pipeline", async () => {
+  const { r } = await run({ officerSnapshot: officer("MURTHY, Ada", "1990-05"), identity: { first_name: "Ada", last_name: "Moorthy", date_of_birth: "1990-05-10" }, screeningHit: true });
+  assert.strictEqual(r.band, "B");
+  assert.strictEqual(r.outcomeType, "unresolved_to_review");
+  assert.strictEqual(r.requiresReview, true);
+});
+
 test("retry: missing required data is never a match, no decision row", async () => {
   const { r, decisions } = await run({ officerSnapshot: officer("SMITH, John", "1985-05"), identity: { first_name: "John", last_name: "Smith" } });
   assert.strictEqual(r.needsRetry, true);
