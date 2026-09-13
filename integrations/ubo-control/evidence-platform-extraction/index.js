@@ -80,6 +80,17 @@ const ATTRIBUTE_RELATIONSHIPS = new Set([
   "OTHER",
 ]);
 
+const ORDINARY_FACT_ATTRIBUTE_MAP = Object.freeze({
+  CERTIFICATION_SIGNER_NAME: "source_certification_signer_name",
+  CERTIFICATION_SIGNER_POSTNOMINAL: "source_certification_signer_postnominal",
+  CERTIFICATION_SIGNER_CAPACITY: "source_certification_signer_capacity",
+  CERTIFICATION_PROFESSIONAL_REFERENCE: "source_certification_professional_reference",
+  CERTIFICATION_DATE: "source_certification_date",
+  CERTIFICATION_DECLARATION: "source_certification_declaration",
+  CERTIFICATION_SCOPE: "source_certification_scope",
+  CERTIFICATION_SIGNATURE_PRESENCE: "source_certification_signature_presence",
+});
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -276,6 +287,9 @@ function operationEvidenceReferences(interpretation, artifactById) {
 }
 
 function relationshipQualifiers(relationship, fact) {
+  const economicConcept = (relationship.qualifications || []).includes("economic_interest_concept:SHARE_OWNERSHIP")
+    ? "SHARE_OWNERSHIP"
+    : null;
   return {
     ...temporalQualifiers(relationship.temporal),
     evidenceRelationshipType: relationship.relationshipType,
@@ -286,12 +300,13 @@ function relationshipQualifiers(relationship, fact) {
     evidenceRequestRelation: fact.requestRelation || null,
     evidenceGroundingType: fact.groundingType || null,
     evidenceSupportState: fact.supportState || null,
+    ...(economicConcept ? { economicInterestConcept: economicConcept } : {}),
   };
 }
 
 function mapTypedFact(fact, interpretation, artifactById, factScope) {
   const relationship = fact.typedRelationship;
-  if (!relationship || !fact.factId) {
+  if (!fact.factId) {
     return { mapped: null, issue: issue("EVIDENCE_FACT_NOT_TYPED", { evidenceFactId: fact.factId || null, factScope }) };
   }
   const evidenceReferences = factEvidenceReferences(fact, interpretation, artifactById);
@@ -299,6 +314,36 @@ function mapTypedFact(fact, interpretation, artifactById, factScope) {
     return {
       mapped: null,
       issue: issue("EVIDENCE_FACT_HAS_NO_DURABLE_ARTIFACT_SUPPORT", { evidenceFactId: fact.factId, factScope }),
+    };
+  }
+  if (!relationship) {
+    const attribute = ORDINARY_FACT_ATTRIBUTE_MAP[normalizeToken(fact.semanticConceptId)];
+    const subject = fact.value?.subject;
+    if (!attribute || !subject || typeof subject !== "object") {
+      return {
+        mapped: null,
+        issue: issue("EVIDENCE_FACT_NOT_TYPED", {
+          evidenceFactId: fact.factId,
+          semanticConceptId: fact.semanticConceptId || null,
+          factScope,
+        }),
+      };
+    }
+    return {
+      mapped: {
+        factId: fact.factId,
+        type: CANDIDATE_FACT_TYPE.ENTITY_ATTRIBUTE,
+        subject: candidateParty(subject),
+        attribute,
+        value: {
+          ...clone(fact.value),
+          sourceSemanticConceptId: fact.semanticConceptId,
+          evidenceRequestRelation: fact.requestRelation || null,
+          evidenceGroundingType: fact.groundingType || null,
+          evidenceSupportState: fact.supportState || null,
+        },
+        evidenceReferences,
+      },
     };
   }
   const subject = candidateParty(relationship.subject);

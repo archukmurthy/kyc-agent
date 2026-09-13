@@ -136,7 +136,7 @@ test("confirmed information with no decision targets re-evaluates against the cu
   assert.equal(r08.status, "SUFFICIENT");
   assert.equal(current(session).journey.customerInputComplete, true);
   assert.equal(current(session).plan.state, "INTERNAL_REVIEW");
-  assert.equal(current(session).plan.planId, "ubo-resolution-plan-v2:cf5f5e9c1ab62077f77feee00210ac2d");
+  assert.equal(current(session).plan.planId, "ubo-resolution-plan-v2:d781267b7302371bd166cf52b4848545");
   assert.equal(current(session).journey.finalCaseComplete, false);
   assert.equal(current(session).journey.customerWorkBundles.length, 0);
   assert.equal(current(session).snapshot.decisionContent.informationNeedsV2

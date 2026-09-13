@@ -7,6 +7,7 @@ This UBO-owned adapter implements the existing `ExtractionService` seam for revi
 - The only Evidence import is the frozen public entry point at `evidence/consumer/v1/index.js`.
 - The composition root must inject both an `evidenceConsumer` and a separate `trustedAuthorizationProvider`. Authorization is never inferred from a UBO request or an Artifact reference.
 - One Artifact may support several distinct CandidateFacts. Those facts retain separate locators, but they still represent one independent source; fact count must not be treated as source count.
+- Recognised ordinary certification Facts are preserved as `ENTITY_ATTRIBUTE` candidates with their public DTO value, Artifact reference and source locator. The adapter does not infer certification, authority, currentness or ownership from them; it transports the source statement for later assessment.
 - CandidateFacts are source-backed candidates only. The adapter does not mutate the ownership graph, adjudicate claims, calculate effective interests, apply policy thresholds, or identify qualifying people.
 
 ## Outcome semantics
@@ -20,6 +21,10 @@ The adapter distinguishes facts responsive to requested UBO concepts from supple
 | Either | General Evidence, authorization, integrity, completeness, or contract failure | Fails or degrades according to the frozen consumer/ExtractionService contracts |
 
 `OFFICER_OF` is deliberately mapped only to bounded `officer_relationship` entity-attribute metadata. It is not economic ownership, voting rights, formal control, or evidence of qualification. If officer information is explicitly requested and cannot be mapped, it blocks completeness like any other requested concept.
+
+An Evidence relationship may carry the explicit public qualification `economic_interest_concept:SHARE_OWNERSHIP`. The adapter preserves that exact source qualification as the UBO `economicInterestConcept`; it does not infer company shares from a generic economic relationship or alter percentage arithmetic.
+
+The source-backed Bettercomms review exercises the public DTO with eight ordinary concepts: signer name, postnominal, stated capacity, professional reference, certification date, declaration wording, reviewed scope and signature-mark presence. Their status remains manually reviewed and unauthenticated. The certification date is not converted to a relationship effective/as-at date.
 
 ## Deliberately unimplemented
 

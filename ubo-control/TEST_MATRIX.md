@@ -401,6 +401,8 @@ These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B s
 | Invariant | Protection |
 |---|---|
 | Decision Application v3 has exactly four operations, is schema-1.3/LAB-only, returns Snapshot v2 and its exact pinned Plan v2, and leaves v1/v2 unchanged | `wave11aContracts.nodetest.js`; review/public architecture tests |
+| Wave 11B2A existing-Artifact cycle creates an actual ExternalEvidenceHandoff, six candidates/one source, explicit decisions, linked Snapshot B, four-edge graph, Mitchell 75% satisfied and Lee 25% not satisfied | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js` |
+| Wave 11B2A preserves candidate-before-conclusion, exact source-occurrence identity decisions, officer metadata isolation, idempotent same-session replay, typed failures, sealed browser restore and no-upload/deep-import boundaries | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js`; G4.1 actual-façade tests |
 | JourneyProjection v2 accepts only a verified Snapshot v2 plus its exact identity-matched schema-1.3 Policy Pack, is deterministic/immutable, and creates one customer bundle per pinned customer plan bundle/action | `wave11aContracts.nodetest.js` |
 | System, customer, internal review, specialist review, blockers, policy content and final completion remain distinct; affected paths are not customer task counts | Wave 11A projection tests over V2-LAB-07/08/09/10 |
 | CustomerAction v2 authenticates case revision, snapshot/plan hashes, bundle/group/action, needs, requirements, subject/frontier, policy and submission contract | Wave 11A negative contract tests |
@@ -442,6 +444,7 @@ Wave 11A makes the versioned application/customer boundary executable in review 
 | Adapter imports only `evidence/consumer/v1/index.js`, receives an already-constructed consumer and obtains trusted authorization from a separate injected provider | `evidencePlatformExtractionAdapter.nodetest.js`; architecture/import-boundary scans |
 | Existing Artifact references are correlated to UBO needs without accepting bytes, Blob URLs, filesystem paths or fabricated Artifact IDs | adapter contract and rejection tests |
 | One Artifact may ground six separately located CandidateFacts while remaining one independent source | frozen Bettercomms fixture characterization |
+| Recognised source-certification Facts cross the frozen public DTO as source-located entity attributes; their date is not converted to relationship currentness and supplemental certification does not degrade completed requested ownership | source-backed Bettercomms adapter and Lab regressions |
 | Exact, range, unknown and qualitative values preserve typed relationship and temporal semantics without UBO conclusions | adapter value/temporal matrix |
 | Unsupported requested facts and incomplete requested concepts produce `PARTIAL`; unsupported supplemental discovered facts remain retained as `DISCOVERED` issues without overriding an otherwise `COMPLETE` requested result | actual-facade requested-versus-discovered outcome regression |
 | `OFFICER_OF` maps only to bounded `officer_relationship` entity-attribute metadata and never ownership, voting, control or qualification | Bettercomms fixture and outcome-scope regression |

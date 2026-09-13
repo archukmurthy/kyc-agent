@@ -192,6 +192,68 @@ test("frozen Bettercomms fixture maps one Artifact to six distinct CandidateFact
   assert.equal(harness.calls.provider, 1);
 });
 
+test("public Evidence ordinary certification facts remain typed, source-located CandidateFacts without degrading complete requested ownership", async () => {
+  const certification = [
+    ["certification_signer_name", "Alex Palmer"],
+    ["certification_signer_postnominal", "ACA"],
+    ["certification_signer_capacity", "Management Accountant"],
+    ["certification_professional_reference", "ACA No: 5246593"],
+    ["certification_date", "05/05/2026"],
+    ["certification_declaration", "I hereby certify that the company structure chart is true, correct and accurate"],
+    ["certification_scope", "Depicted company structure chart"],
+    ["certification_signature_presence", "Visible signature-like mark"],
+  ];
+  const harness = consumerHarness({ mutate(serviceResult) {
+    const supplementalRelationships = serviceResult.responsiveFacts.slice(4);
+    serviceResult.responsiveFacts = serviceResult.responsiveFacts.slice(0, 4);
+    serviceResult.discoveredFacts = [
+      ...supplementalRelationships,
+      ...certification.map(([semanticConceptId, text], index) => {
+        const fact = structuredClone(serviceResult.responsiveFacts[0]);
+        fact.id = `95000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+        fact.semanticConceptId = semanticConceptId;
+        fact.value = {
+          statementType: "SOURCE_CERTIFICATION_METADATA",
+          subject: {
+            partyType: "legal_entity",
+            name: "Better Comms VOIP Ltd",
+            jurisdiction: "GB",
+            identifiers: [],
+          },
+          attribute: semanticConceptId,
+          text,
+          authenticationState: "NOT_VERIFIED",
+        };
+        fact.requestRelation = "supplemental_discovery";
+        fact.supportState = "supported_with_limitations";
+        fact.supportLocators[0].id = `96000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+        fact.supportLocators[0].description = `Certification block: ${semanticConceptId}`;
+        delete fact.typedRelationship;
+        return fact;
+      }),
+    ];
+    serviceResult.requestedConceptOutcomes = [{ concept: "economic_ownership", status: "found" }];
+    return serviceResult;
+  } });
+  const mapped = await adapter(harness).extract(request({
+    informationNeeds: [{ informationNeedId: "need-economic", concepts: ["ECONOMIC_OWNERSHIP"] }],
+  }));
+
+  assert.equal(mapped.outcome.state, CAPABILITY_OUTCOME_STATE.COMPLETE);
+  assert.equal(mapped.candidateFacts.length, 14);
+  const attributes = mapped.candidateFacts.filter(({ attribute }) => attribute?.startsWith("source_certification_"));
+  assert.equal(attributes.length, 8);
+  assert.deepEqual(attributes.map(({ value }) => value.text).sort(), certification.map(([, text]) => text).sort());
+  assert.ok(attributes.every(({ type, subject, value, evidenceReferences }) =>
+    type === CANDIDATE_FACT_TYPE.ENTITY_ATTRIBUTE
+      && subject.name === "Better Comms VOIP Ltd"
+      && value.authenticationState === "NOT_VERIFIED"
+      && value.evidenceRequestRelation === "supplemental_discovery"
+      && evidenceReferences[0].referenceId === IDS.artifact
+      && evidenceReferences[0].locator.locators.length === 1));
+  assert.equal(mapped.issues.filter(({ code }) => code === "EVIDENCE_FACT_NOT_TYPED").length, 0);
+});
+
 test("exact, range, unknown and qualitative values preserve percentage-point and endpoint semantics", async () => {
   const harness = consumerHarness({ mutate(serviceResult) {
     serviceResult.responsiveFacts[0].typedRelationship.value = {

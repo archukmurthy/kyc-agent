@@ -63,6 +63,22 @@ Applicant-facing checkpoint and re-evaluation controls have been removed. For de
 
 The durable design principle is: domain operations remain explicit and auditable, while the host automatically orchestrates non-judgmental steps so the applicant performs only genuine customer actions. Lab browser-local resumability is a demo/testing convenience and is not production case persistence.
 
+## Wave 11B2A pre-ingested Bettercomms demonstration
+
+Choose `BETTERCOMMS EVIDENCE DEMO` in the top-level Lab selector. The fixture starts with Snapshot A and a real plan-derived `ExternalEvidenceHandoff v1`. `Use pre-ingested Bettercomms ownership chart` passes the accepted existing Artifact reference through an `EvidenceConsumerV1` constructed from `evidence/consumer/v1/index.js`, the merged UBO Evidence extraction adapter, and the existing ExtractionService seam. Trusted fixture authority is supplied only by the server composition root.
+
+The candidate review displays fourteen source-backed facts from one reviewed source document and stays explicitly non-operative: four economic relationships, two officer-role attributes and eight ordinary certification statements. Those certification Facts cross the frozen public Evidence DTO and the merged adapter as source-located `ENTITY_ATTRIBUTE` candidates. The fixture-only Compliance helper then applies exact source-occurrence identity decisions and claim decisions through Decision Application v3. Snapshot B retains Snapshot A and four economic graph relationships, while officer and certification attributes remain non-control metadata.
+
+The recovered source visibly states Alex Palmer, ACA, Management Accountant, 05/05/2026, ACA No 5246593 and the declaration that the company structure chart is true, correct and accurate; it also contains a signature-like mark. The fixture records that transcription and its original-pixel review windows without embedding the private source image. Signer identity, authority, professional status and the signature remain unverified. Most importantly, 05/05/2026 is a certification date, not an explicit ownership effective/as-at date. All relationship DTOs therefore retain `UNKNOWN` temporal state. The source percentages remain inspectable—Mitchell's nominal path is 75% × 100% and Lee's is 25% × 100%—but current qualification is `INDETERMINATE` and deterministic calculations remain `UNRESOLVED` for `UNKNOWN_TEMPORAL_STATE`. R08 Evidence sufficiency stays separate and unresolved.
+
+The default graph applies presentation-only reverse reachability to Better Comms VOIP Ltd: it contains Mitchell Fortescue, Lee Taylor, Better Holdco and the regulated subject with the three relationships on paths to that subject. `Show all relationships from source document` restores the unchanged five-node/four-relationship source view, including Better Network Services as Better Holdco's sibling subsidiary. Both views retain the same Snapshot reference, reasoning, InformationNeeds and canonical graph.
+
+Completed demo state is sealed locally under `ubo-control-lab-preingested-evidence-cache-v1` at `ubo-control-lab.preingested-evidence-sessions.v1`, then re-verified by the server on restore. The cache contains public references and immutable UBO records only—no document bytes, raw provider payload, credentials, access tokens, Blob URLs, filesystem paths, or Evidence internal objects. The Lab is explicitly labelled `REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE`, `Historical Evidence-store linkage not yet revalidated` and `No fresh automated interpretation performed in this demonstration`.
+
+The supplied historical Evidence identifiers are retained only as reported lookup leads. The available historical screen is scoped to a different case (`TESCO PLC — evidence_lab`), so authorised Bettercomms tenant/context access was not established and the actual records were not reopened. No historical Artifact, operation, run, locator or capture time is fabricated or reused by this fixture.
+
+Wave 11B2A proves the existing-Artifact Evidence-to-UBO decision cycle. It does not provide a production private-upload front door. Trusted private ingestion remains a separate production-readiness programme.
+
 AJV2-13 uses the actual ASDA system-coverage plan and exposes no customer form. AJV2-14 uses the actual exhausted profile and renders exactly its three pinned bundles, including blocked residual content and external Evidence handoff only where planned. No action in this tab calls Discovery or Evidence merely by being viewed.
 
 ## Wave 10 deployed manual acceptance

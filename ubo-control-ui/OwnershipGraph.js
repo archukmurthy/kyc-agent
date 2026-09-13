@@ -237,6 +237,9 @@
     nodes.forEach(({ entityId }) => depthFor(entityId));
     const connectedMax = Math.max(0, ...depth.values());
     nodes.forEach((node) => { if (!depth.has(node.entityId)) depth.set(node.entityId, connectedMax + 1); });
+    Object.entries(projection.presentationView?.layoutDepthOverrides || {}).forEach(([entityId, value]) => {
+      if (depth.has(entityId) && Number.isInteger(value) && value >= 0) depth.set(entityId, value);
+    });
     const maxDepth = Math.max(0, ...depth.values());
     const layers = new Map();
     nodes.forEach((node) => {

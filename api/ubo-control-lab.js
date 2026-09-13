@@ -30,6 +30,12 @@ const {
   submitApplicantActionAndAdvance,
   validateSession: validateApplicantSession,
 } = require("../ubo-control-lab/server/applicantJourneyLab");
+const {
+  applyPreconfiguredFixtureDecisions,
+  startPreingestedEvidenceDemo,
+  usePreingestedBettercommsArtifact,
+  validateSession: validatePreingestedEvidenceSession,
+} = require("../ubo-control-lab/server/preingestedEvidenceDemo");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -53,6 +59,10 @@ const OPERATIONS = Object.freeze({
   RESUME_APPLICANT_ADVANCE: "RESUME_APPLICANT_ADVANCE",
   COMPLETE_APPLICANT_FIXTURE_REVIEW: "COMPLETE_APPLICANT_FIXTURE_REVIEW",
   VALIDATE_APPLICANT_SESSION: "VALIDATE_APPLICANT_SESSION",
+  START_PREINGESTED_EVIDENCE_DEMO: "START_PREINGESTED_EVIDENCE_DEMO",
+  USE_PREINGESTED_BETTERCOMMS_ARTIFACT: "USE_PREINGESTED_BETTERCOMMS_ARTIFACT",
+  APPLY_PREINGESTED_FIXTURE_DECISIONS: "APPLY_PREINGESTED_FIXTURE_DECISIONS",
+  VALIDATE_PREINGESTED_EVIDENCE_SESSION: "VALIDATE_PREINGESTED_EVIDENCE_SESSION",
 });
 
 function explicitlyReviewBaseline(session) {
@@ -126,7 +136,16 @@ function send(res, status, payload) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method === "GET") return send(res, 200, { ...fixtureCatalogue(), review: reviewCatalogue(), applicant: applicantCatalogue() });
+  if (req.method === "GET") return send(res, 200, {
+    ...fixtureCatalogue(),
+    review: reviewCatalogue(),
+    applicant: applicantCatalogue(),
+    preingestedEvidence: {
+      fixtureId: "AJV2-EVIDENCE-01",
+      label: "BETTERCOMMS — PRE-INGESTED OWNERSHIP CHART",
+      productionAuthorized: false,
+    },
+  });
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
     const input = req.body || {};
@@ -190,6 +209,14 @@ module.exports = async function handler(req, res) {
         return send(res, 200, completeApplicantFixtureReviewAndAdvance(input.payload));
       case OPERATIONS.VALIDATE_APPLICANT_SESSION:
         return send(res, 200, validateApplicantSession(input.payload?.session));
+      case OPERATIONS.START_PREINGESTED_EVIDENCE_DEMO:
+        return send(res, 200, startPreingestedEvidenceDemo(input.payload));
+      case OPERATIONS.USE_PREINGESTED_BETTERCOMMS_ARTIFACT:
+        return send(res, 200, await usePreingestedBettercommsArtifact(input.payload));
+      case OPERATIONS.APPLY_PREINGESTED_FIXTURE_DECISIONS:
+        return send(res, 200, applyPreconfiguredFixtureDecisions(input.payload));
+      case OPERATIONS.VALIDATE_PREINGESTED_EVIDENCE_SESSION:
+        return send(res, 200, validatePreingestedEvidenceSession(input.payload?.session));
       default:
         return send(res, 400, { error: "Unsupported Lab operation" });
     }
