@@ -56,3 +56,36 @@ test("returns 400 when submissionId is missing", async () => {
   await handler(req, res);
   assert.strictEqual(res.statusCode, 400);
 });
+
+test("returns status:queued when DATABASE_URL is unset (no DB configured)", async () => {
+  const handler = require("../submit");
+  const prevUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    handler.__setDeps({ enqueue: async () => ({}), finalizeSubmission: async () => ({}), markDone: async()=>{}, markFailed: async()=>{} });
+    const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+    const res = fakeRes();
+    await handler(req, res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.body.status, "queued");
+  } finally {
+    if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl;
+  }
+});
+
+test("returns 503 capture_failed when enqueue throws (finalize never called)", async () => {
+  const handler = require("../submit");
+  let finalizeCalled = false;
+  handler.__setDeps({
+    enqueue: async () => { throw new Error("db down"); },
+    finalizeSubmission: async () => { finalizeCalled = true; return {}; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.statusCode, 503);
+  assert.strictEqual(res.body.status, "capture_failed");
+  assert.strictEqual(finalizeCalled, false);
+});
