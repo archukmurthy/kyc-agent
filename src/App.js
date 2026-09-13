@@ -105,6 +105,7 @@ import {
   buildPrompt,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
+import { saveDraft, loadDraft, clearDraft } from "./utils/submissionDraft";
 import { C } from "./constants/theme";
 import {
   SHOW_NIUM_REG_PANEL,
@@ -532,6 +533,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [, setFormVersion] = useState(0);
   const [declared, setDeclared] = useState(false);
   const [done, setDone] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(""); // "" | "saved" | "queued" | "retrying"
+  const submissionIdRef = useRef(null);
+  const lastPayloadRef = useRef(null); // kept for the Retry button (Task 8-not-needed: reuse)
+  const getSubmissionId = () => {
+    if (!submissionIdRef.current) submissionIdRef.current = genUUID();
+    return submissionIdRef.current;
+  };
   const [device, setDevice] = useState({});
   const [loaderIdx, setLoaderIdx] = useState(0);
   const [loaderPhase, setLoaderPhase] = useState(0); // 0 = no Wolfsberg, 1 = extraction, 2 = web research
@@ -787,6 +795,113 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setNiumSearchLoading(false);
   };
 
+  // Persist a resumable draft whenever meaningful wizard state changes. Debounced
+  // so typing does not thrash localStorage. Skipped once the app is done.
+  // KEEP IN SYNC with resetAll() — every data-bearing atom resetAll clears must
+  // be saved here AND restored in applyResume(). Intentionally NOT saved:
+  // agentType (self-heals from the ?preboarding URL param, see resetAll),
+  // landedViaLink (display-only step-bar flag), authorityToActFile/
+  // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
+  // JSON.stringify/localStorage; durable upload storage is PR-034), the
+  // preboarding password gate (access gate over a hardcoded client constant,
+  // not user data), newQuestion (in-progress "ask more" compose draft), and
+  // pure UI toggles (expanded/open/hover/reveal state, transient loading and
+  // error strings) that are harmless to lose and default back safely.
+  useEffect(() => {
+    if (done) return;
+    const t = setTimeout(() => {
+      saveDraft({
+        companyName, countryCode, entityType, ownershipType,
+        research, activeSchema, checks,
+        gap: gapRef.current, stakeholders: stakeholdersRef.current,
+        fieldMetadata,
+        drsSubmitted, drsFlags, drsGapsCleared, drsUploads,
+        factChecks, ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared,
+        submissionId: submissionIdRef.current, step,
+        journeyType, regNumber, regNumberSource,
+        idvVerification, idvVerifiedFields, idvResult,
+        stakeholderFieldChecks,
+        applicantSelectedPerson, applicantAgentValues, applicantOverrides,
+        excludedGapFields: Array.from(excludedGapFields),
+        customQuestions, dossierId, onboardingSubmissionId, declared,
+        rejectedStakeholders: Object.fromEntries(
+          Object.entries(rejectedStakeholders).map(([k, v]) => [k, Array.from(v || [])])
+        ),
+        isPubliclyListedOverride, affirmedFields,
+        dialogueState: dialogueStateRef.current,
+        coverage, gapRecoveryRan, researchTimestamp,
+        docSearchResults,
+        acceptedDocTypes: Array.from(acceptedDocTypes),
+        applicantNotListed, amendmentUploads,
+        niumRegNumber, niumSearchResults, dossierStakeholders,
+      });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [companyName, countryCode, entityType, ownershipType, research, activeSchema, checks,
+      fieldMetadata, drsSubmitted, drsFlags, drsGapsCleared, drsUploads, factChecks,
+      ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step, done,
+      journeyType, regNumber, regNumberSource, idvVerification, idvVerifiedFields, idvResult,
+      stakeholderFieldChecks, applicantSelectedPerson, applicantAgentValues, applicantOverrides,
+      excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
+      rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
+      researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
+      niumRegNumber, niumSearchResults, dossierStakeholders]);
+
+  // Offer to resume an unfinished application found in localStorage (Task 9 —
+  // browser draft is the pre-capture backstop). Checked once on mount.
+  const [resumeOffer, setResumeOffer] = useState(null); // the loaded draft, or null
+  useEffect(() => {
+    const d = loadDraft();
+    if (d && d.state && (d.state.companyName || d.state.research)) setResumeOffer(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const applyResume = () => {
+    const s = resumeOffer.state;
+    setCompanyName(s.companyName || ""); setCountryCode(s.countryCode || "");
+    setEntityType(s.entityType || ""); setOwnershipType(s.ownershipType || "");
+    setResearch(s.research || null); setActiveSchema(s.activeSchema || null);
+    setChecks(s.checks || {}); setFieldMetadata(s.fieldMetadata || []);
+    gapRef.current = s.gap || {}; stakeholdersRef.current = s.stakeholders || {};
+    setDrsSubmitted(s.drsSubmitted || []); setDrsFlags(s.drsFlags || {});
+    setDrsGapsCleared(!!s.drsGapsCleared); setDrsUploads(s.drsUploads || {});
+    setFactChecks(s.factChecks || {});
+    setOwnershipFork(s.ownershipFork || null); setOwnershipChangeDeclared(s.ownershipChangeDeclared || null);
+    setRegNumberFork(s.regNumberFork || null); setRegNumberChangeDeclared(s.regNumberChangeDeclared || null);
+    submissionIdRef.current = s.submissionId || null;
+    setJourneyType(s.journeyType || ""); setRegNumber(s.regNumber || "");
+    setRegNumberSource(s.regNumberSource || null);
+    setIdvVerification(s.idvVerification || null); setIdvVerifiedFields(s.idvVerifiedFields || null);
+    setIdvResult(s.idvResult || null);
+    setStakeholderFieldChecks(s.stakeholderFieldChecks || {});
+    setApplicantSelectedPerson(s.applicantSelectedPerson || null);
+    setApplicantAgentValues(s.applicantAgentValues || {});
+    setApplicantOverrides(s.applicantOverrides || []);
+    setExcludedGapFields(new Set(s.excludedGapFields || []));
+    setCustomQuestions(s.customQuestions || []);
+    setDossierId(s.dossierId || null); setOnboardingSubmissionId(s.onboardingSubmissionId || null);
+    setDeclared(!!s.declared);
+    setRejectedStakeholders(
+      Object.fromEntries(
+        Object.entries(s.rejectedStakeholders || {}).map(([k, v]) => [k, new Set(v || [])])
+      )
+    );
+    setIsPubliclyListedOverride(!!s.isPubliclyListedOverride);
+    setAffirmedFields(s.affirmedFields || {});
+    dialogueStateRef.current = s.dialogueState || {};
+    setCoverage(s.coverage || null); setGapRecoveryRan(!!s.gapRecoveryRan);
+    setResearchTimestamp(s.researchTimestamp || "");
+    setDocSearchResults(s.docSearchResults || null);
+    setAcceptedDocTypes(new Set(s.acceptedDocTypes || []));
+    setApplicantNotListed(!!s.applicantNotListed);
+    setAmendmentUploads(s.amendmentUploads || {});
+    setNiumRegNumber(s.niumRegNumber || ""); setNiumSearchResults(s.niumSearchResults || null);
+    setDossierStakeholders(s.dossierStakeholders || null);
+    setStep(s.step || 0);
+    setResumeOffer(null);
+  };
+  const dismissResume = () => { clearDraft(); setResumeOffer(null); };
+
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
   // blocks the UI. Failures are swallowed (tracking must never break the flow).
   function trackEvent(eventType, eventData = {}) {
@@ -850,7 +965,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
       research?.found?.length > 0 &&
       !showDossierView &&
       !dossierSaving &&
-      !dossierSaved
+      !dossierSaved &&
+      // A restored (resumed) dossierId means a dossier already exists for this
+      // session. saveDossier() now UPSERTS (updates in place when dossierId is
+      // set), so re-firing no longer duplicates — but auto-saving on every
+      // resume-at-confirm is still needless churn (a redundant UPDATE), and the
+      // dossierSaved guard resets to false on resume so it can't suppress it.
+      // A non-null dossierId blocks the redundant auto-save; the explicit
+      // Save/Update buttons and applyReDerive still upsert intentionally.
+      !dossierId
     ) {
       // Small delay to ensure all state is settled after research.
       const timer = setTimeout(() => {
@@ -859,7 +982,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, preboardingUnlocked, step, journeyType, research?.found]);
+  }, [agentType, preboardingUnlocked, step, journeyType, research?.found, dossierId, dossierSaved]);
 
   // Customer invite landing. When the app is opened via an invite link
   // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
@@ -2790,7 +2913,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     };
 
     const payload = {
-      submissionId: genUUID(),
+      submissionId: getSubmissionId(),
       submittedAt,
       applicant,
       applicantProvenance,
@@ -2899,11 +3022,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     // Persist to Neon via /api/submit. Best-effort: a DB failure must never
     // block the customer from reaching the success screen.
+    lastPayloadRef.current = payload;
     try {
       const resp = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // The idempotency key the ENTIRE pipeline is keyed on. Omitting it
+          // makes /api/submit 400 every submission (missing required field) —
+          // it must be the stable getSubmissionId() value carried on the payload
+          // so a retry re-POSTs the SAME id and dedupes.
+          submissionId: payload.submissionId,
           tenantId,
           company: submitCompany,
           entityType,
@@ -2916,6 +3045,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // record the AI/registry original alongside the customer's value.
           fieldMetadata: payload.fieldMetadata,
           stakeholders: stakeholderPayload,
+          // finalizeSubmission reads these three; the body used to omit them, so
+          // per-attribute stakeholder provenance, the amendment-document rows,
+          // and the confirm-tile metrics were silently never persisted.
+          stakeholderAttributes: payload.stakeholderAttributes,
+          amendmentDocuments: payload.amendmentDocuments,
+          confirmMetrics: payload.confirmMetrics,
           documents: docSearchResults?.documents || [],
           costSummary,
           coverage: coverage || null,
@@ -2927,30 +3062,47 @@ export default function KYCAgent({ previewMode = false } = {}) {
           submittedAt,
         }),
       });
-      const result = await resp.json();
-      if (result.sessionId) {
+      const result = await resp.json().catch(() => ({}));
+      // Durable capture = HTTP 200 AND the server acknowledged saved|queued
+      // (both mean the bundle is safely in submission_inbox). Anything else —
+      // 503 capture_failed, a non-2xx status, or a malformed body — means the
+      // bundle is NOT captured: we must NOT show a success screen and must NOT
+      // clear the browser draft (the only remaining copy of their data).
+      const captured = resp.ok && (result.status === "saved" || result.status === "queued");
+      if (captured) {
+        setError("");
+        if (result.status === "saved") {
+          setSubmitStatus("saved");
+          trackEvent("application_submitted", {
+            companyName: submitCompany.name, sessionId: result.sessionId,
+            totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
+            totalTokens: costSummary?.totals?.totalTokens ?? null,
+            fillRate: coverage?.fillRate ?? null,
+            agentType: agentType || "onboarding", submittedAt: new Date().toISOString(),
+          });
+        } else {
+          setSubmitStatus("queued");
+        }
+        setDone(true);
+        clearDraft();
+      } else {
+        // Not durably captured — keep the draft, do NOT advance to the success
+        // screen. The stable submissionId means clicking Submit again re-POSTs
+        // the SAME id (idempotent), so a retry is safe and never duplicates.
         // eslint-disable-next-line no-console
-        console.log(`[Submit] ✅ Saved - session: ${result.sessionId}`);
-        trackEvent("application_submitted", {
-          companyName: submitCompany.name,
-          sessionId: result.sessionId,
-          totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
-          totalTokens: costSummary?.totals?.totalTokens ?? null,
-          fillRate: coverage?.fillRate ?? null,
-          agentType: agentType || "onboarding",
-          submittedAt: new Date().toISOString(),
-        });
-      }
-      if (result.warning) {
-        // eslint-disable-next-line no-console
-        console.warn(`[Submit] ⚠ ${result.warning}`);
+        console.warn("[Submit] not durably captured:", resp.status, result);
+        setSubmitStatus("retrying");
+        setError("We couldn't submit your application just now — your details are saved on this device. Please click Submit again.");
       }
     } catch (err) {
+      // The POST never reached a definite answer — the bundle is NOT confirmed
+      // captured. Keep the draft and let the customer retry (or resume on next
+      // load); never wipe the only copy of their data on an unknown outcome.
       // eslint-disable-next-line no-console
-      console.error("[Submit] ❌ Failed:", err);
+      console.error("[Submit] network error:", err);
+      setSubmitStatus("retrying");
+      setError("We couldn't reach the server — your details are saved on this device. Please check your connection and click Submit again.");
     }
-
-    setDone(true);
   };
 
   // Re-check = the customer UNDID their change → retract its amendment-document
@@ -4438,6 +4590,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       trimmedRegNumber && regNumberSource === "customer" ? "customer" : null;
 
     return {
+      // Upsert key: a dossier that already exists must be UPDATEd in place
+      // (api/save-dossier.js), never re-inserted — a blind insert would
+      // duplicate the row and orphan any invite link already built on this id.
+      dossierId,
       tenantId,
       company: dossierCompany(),
       entityType,
@@ -4721,6 +4877,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
             ));
           })()}
         </div>
+
+        {resumeOffer && !done && (
+          <div style={{ ...card, borderLeft: "4px solid #c99a2e", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ fontSize: 13 }}>
+              Found an unfinished application from {resumeOffer.savedAt.replace("T", " ").slice(0, 16)} UTC. Resume where you left off?
+            </span>
+            <span style={{ display: "flex", gap: 8 }}>
+              <Btn variant="primary" onClick={applyResume}>Resume</Btn>
+              <Btn variant="secondary" onClick={dismissResume}>Start fresh</Btn>
+            </span>
+          </div>
+        )}
 
         {step === STEPS.input && !journeyOpen && (
           <CompanyLookupPage
@@ -5181,6 +5349,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <span>Submission is disabled in preview mode. Publish your configuration to enable the live form.</span>
               </div>
             )}
+            {error && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                borderRadius: 8,
+                fontSize: 13, color: "#B91C1C",
+                marginBottom: 16,
+                display: "flex", gap: 8, alignItems: "flex-start",
+              }}>
+                <span>⚠</span>
+                <span>{error}</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back</Btn>
               <Btn
@@ -5188,7 +5370,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 onClick={inPreview ? undefined : submitApplication}
                 disabled={!declared || inPreview}
               >
-                ✓ Submit Application
+                {submitStatus === "retrying" ? "↻ Retry Submission" : "✓ Submit Application"}
               </Btn>
             </div>
           </div>
@@ -5196,9 +5378,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {done && (
           <div style={{ ...card, textAlign: "center", padding: "44px 28px" }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 18px", boxShadow: "0 6px 20px rgba(74,158,142,0.3)" }}>✓</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>Application Submitted {jurisdictionBadge}{entityBadge}</h2>
-            <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</p>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: submitStatus === "saved" ? "linear-gradient(135deg,#4a9e8e,#3a8e7e)" : "linear-gradient(135deg,#c99a2e,#b7891f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 18px", boxShadow: "0 6px 20px rgba(74,158,142,0.3)" }}>{submitStatus === "saved" ? "✓" : "⏳"}</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>
+              {submitStatus === "saved" ? "Application Submitted" : "Application Received"} {jurisdictionBadge}{entityBadge}
+            </h2>
+            <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>
+              {submitStatus === "saved"
+                ? <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</>
+                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received — we're saving it now and it will be finalized shortly.</>}
+            </p>
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>
               {(() => {
@@ -5229,7 +5417,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 ));
               })()}
             </div>
-            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
+            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType(""); setDone(false); setSubmitTs(""); submissionIdRef.current = null; setSubmitStatus(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
 

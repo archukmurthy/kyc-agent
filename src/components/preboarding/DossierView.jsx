@@ -360,8 +360,11 @@ export function DossierView({
                   </span>
                   <button
                     onClick={() => {
+                      // Re-save must UPDATE this same row (saveDossier now
+                      // sends the existing dossierId) — clearing it first
+                      // would force a fresh INSERT and orphan this id if an
+                      // invite link already embeds it.
                       setDossierSaved(false);
-                      setDossierId(null);
                       saveDossier();
                     }}
                     disabled={dossierSaving}

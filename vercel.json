@@ -6,8 +6,12 @@
   "functions": {
     "api/doc-search.js": { "maxDuration": 60 },
     "api/self-source.js": { "maxDuration": 60 },
-    "api/generate-policy.js": { "maxDuration": 300 }
+    "api/generate-policy.js": { "maxDuration": 300 },
+    "api/finalize-submissions.js": { "maxDuration": 60 }
   },
+  "crons": [
+    { "path": "/api/finalize-submissions", "schedule": "* * * * *" }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/super-admin/(.*)", "destination": "/index.html" },

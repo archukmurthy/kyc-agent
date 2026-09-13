@@ -1,0 +1,128 @@
+const { test, before, after } = require("node:test");
+const assert = require("node:assert");
+
+// The handler's DATABASE_URL gate runs before deps are consulted (matches
+// production: refuse to even try when no DB is configured). Set a fake value
+// for these tests so the mocked enqueue/finalizeSubmission path is exercised
+// — mirrors the save/restore pattern in get-dossier.nodetest.js.
+let prevUrl;
+before(() => { prevUrl = process.env.DATABASE_URL; process.env.DATABASE_URL = "postgres://test"; });
+after(() => { if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl; });
+
+function fakeRes() {
+  return {
+    statusCode: null, body: null,
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.body = b; return this; },
+  };
+}
+
+test("returns status:saved when finalize succeeds", async () => {
+  const handler = require("../submit");
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    finalizeSubmission: async () => ({ sessionId: "s1", clientId: "c1", journeyId: "j1" }),
+    markProcessing: async () => {},
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.status, "saved");
+  assert.strictEqual(res.body.sessionId, "s1");
+});
+
+test("saved path calls markProcessing (claiming the row) before finalizeSubmission", async () => {
+  const handler = require("../submit");
+  const order = [];
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async (id) => { order.push(["markProcessing", id]); },
+    finalizeSubmission: async () => { order.push(["finalizeSubmission"]); return { sessionId: "s1" }; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.body.status, "saved");
+  assert.deepStrictEqual(order, [["markProcessing", "sub-1"], ["finalizeSubmission"]]);
+});
+
+test("a markProcessing throw does not block finalize — still returns saved", async () => {
+  const handler = require("../submit");
+  let finalizeCalled = false;
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async () => { throw new Error("claim failed"); },
+    finalizeSubmission: async () => { finalizeCalled = true; return { sessionId: "s1" }; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(finalizeCalled, true);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.status, "saved");
+});
+
+test("returns status:queued when finalize throws (never blocks)", async () => {
+  const handler = require("../submit");
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    finalizeSubmission: async () => { throw new Error("db down"); },
+    markProcessing: async () => {},
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.status, "queued");
+});
+
+test("returns 400 when submissionId is missing", async () => {
+  const handler = require("../submit");
+  handler.__setDeps({ enqueue: async () => ({}), finalizeSubmission: async () => ({}), markDone: async()=>{}, markFailed: async()=>{} });
+  const req = { method: "POST", body: { tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.statusCode, 400);
+});
+
+test("returns status:queued when DATABASE_URL is unset (no DB configured)", async () => {
+  const handler = require("../submit");
+  const prevUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    handler.__setDeps({ enqueue: async () => ({}), finalizeSubmission: async () => ({}), markDone: async()=>{}, markFailed: async()=>{} });
+    const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+    const res = fakeRes();
+    await handler(req, res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.body.status, "queued");
+  } finally {
+    if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl;
+  }
+});
+
+test("returns 503 capture_failed when enqueue throws (finalize never called)", async () => {
+  const handler = require("../submit");
+  let finalizeCalled = false;
+  handler.__setDeps({
+    enqueue: async () => { throw new Error("db down"); },
+    finalizeSubmission: async () => { finalizeCalled = true; return {}; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.statusCode, 503);
+  assert.strictEqual(res.body.status, "capture_failed");
+  assert.strictEqual(finalizeCalled, false);
+});
