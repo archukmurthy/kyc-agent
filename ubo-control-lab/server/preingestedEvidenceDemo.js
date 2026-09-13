@@ -12,6 +12,10 @@ const {
   CUSTOMER_ACTION_TYPE_V2,
   CUSTOMER_ACTION_V2,
   DECISION_APPLICATION_CONTRACT_VERSION_V3,
+  TEMPORAL_SUPPORT_DATE_BASIS,
+  TEMPORAL_SUPPORT_DATE_PRECISION,
+  TEMPORAL_SUPPORT_REVIEW_DISPOSITION,
+  TEMPORAL_SUPPORT_REVIEW_V1,
   createUboDecisionApplication,
 } = require("../../ubo-control/index.js");
 const { CASE_STATE_INTERNALS } = require("../../ubo-control/application/createUboDecisionApplication.js");
@@ -57,6 +61,8 @@ const MATERIAL_OWNERSHIP_FACT_IDS = Object.freeze([
   FACT_IDS.commsOwnership,
   FACT_IDS.networkOwnership,
 ]);
+const DATED_REVIEW_AT = "2026-09-13T21:40:00.000Z";
+const DATED_EVALUATION_AT = "2026-09-13T21:41:00.000Z";
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function stableId(prefix, value) {
@@ -100,6 +106,7 @@ function evaluate(application, state, context, options = {}) {
     caseState: state.caseState,
     caseContext: context,
     evaluationTime: options.evaluationTime || AT,
+    ...(options.assessmentDate ? { assessmentDate: options.assessmentDate } : {}),
     checkpoint: options.checkpoint || "CASE_EVENT",
     checkpointReference: { referenceId: options.referenceId || `${FIXTURE_ID}:evaluation` },
     resolutionInputs: options.resolutionInputs || {},
@@ -589,6 +596,106 @@ function applyPreconfiguredFixtureDecisions({ session } = {}) {
     ],
   });
 }
+
+function applyDatedCertificationReview({ session } = {}) {
+  const verified = validateSession(session);
+  if (verified.stage === "DATED_REVIEW_APPLIED") return verified;
+  if (verified.stage !== "SNAPSHOT_B") throw new TypeError("Dated certification review requires Snapshot B");
+  const application = app();
+  const source = verified.snapshots.at(-1);
+  const raw = CASE_STATE_INTERNALS.decodeCaseState(verified.caseState, DECISION_APPLICATION_CONTRACT_VERSION_V3);
+  const certificationClaims = raw.candidateClaims
+    .filter(({ claimType, attribute, status }) => claimType === "ENTITY_ATTRIBUTE"
+      && attribute?.startsWith("source_certification_") && status === "OPERATIVE");
+  const byAttribute = new Map(certificationClaims.map((claim) => [claim.attribute, claim]));
+  const required = (attribute) => {
+    const claim = byAttribute.get(attribute);
+    if (!claim) throw new TypeError(`Fixture is missing ${attribute}`);
+    return claim.claimId;
+  };
+  const review = {
+    contractVersion: TEMPORAL_SUPPORT_REVIEW_V1,
+    reviewId: `${FIXTURE_ID}:temporal-review:1`,
+    operationKey: `${FIXTURE_ID}:temporal-review-operation:1`,
+    reviewActor: {
+      actorId: "fixture-compliance-reviewer",
+      capacity: "COMPLIANCE_ANALYST",
+      trustBasis: "UBO_CONTROL_AUTHORISED_REVIEWER",
+    },
+    decidedAt: DATED_REVIEW_AT,
+    disposition: TEMPORAL_SUPPORT_REVIEW_DISPOSITION.ACCEPT_DATED_SUPPORT,
+    sourceStatementClaimIds: certificationClaims.map(({ claimId }) => claimId).sort(),
+    sourceDateClaimId: required("source_certification_date"),
+    sourceWordingClaimId: required("source_certification_declaration"),
+    sourceScopeClaimId: required("source_certification_scope"),
+    coveredRelationshipIds: source.graph.relationships.map(({ relationshipId }) => relationshipId).sort(),
+    temporalScope: {
+      supportedDate: CERTIFICATION_DATE,
+      precision: TEMPORAL_SUPPORT_DATE_PRECISION.DAY,
+      basis: TEMPORAL_SUPPORT_DATE_BASIS.CERTIFICATION_DATE_INTERPRETED_AS_DATED_SUPPORT,
+      explicitSourceEffectiveDateClaimId: null,
+    },
+    rationale: "I accept this dated certification as support for the depicted relationships on 5 May 2026. This is my recorded interpretation of the certification, not an explicit ownership-effective date quoted from the source, and not proof that the structure remained unchanged afterward.",
+    limitations: [
+      "SOURCE_SIGNER_IDENTITY_NOT_AUTHENTICATED",
+      "SOURCE_SIGNER_AUTHORITY_NOT_VERIFIED",
+      "SIGNATURE_MARK_NOT_AUTHENTICATED",
+      "NO_CONTINUITY_AFTER_2026_05_05",
+      "REVIEW_ONLY_NOT_PRODUCTION_AUTHORISED",
+    ],
+    signerAuthorityStatus: "UNRESOLVED",
+  };
+  const decided = application.applyDecisions({
+    contractVersion: DECISION_APPLICATION_CONTRACT_VERSION_V3,
+    caseState: verified.caseState,
+    entityRegistrations: [],
+    identityDecisions: [],
+    claimAdjudications: [],
+    sourceDecisionSnapshot: source.snapshot,
+    temporalSupportReviews: [review],
+  });
+  const resolutionInputs = {
+    ...clone(verified.resolutionInputs),
+    evidenceClassifications: [evidenceClassification(decided.caseState)],
+  };
+  const evaluated = evaluate(application, decided, verified.caseContext, {
+    evaluationTime: DATED_EVALUATION_AT,
+    assessmentDate: CERTIFICATION_DATE,
+    checkpoint: "CASE_EVENT",
+    referenceId: `${FIXTURE_ID}:snapshot-c-dated-review`,
+    resolutionInputs,
+    decisionHistory: verified.decisionHistory,
+    expectedHeadSnapshotId: source.snapshot.snapshotId,
+    supersessionReason: "REVIEW_DECISION",
+  });
+  const assessment = evaluated.decisionSnapshot.decisionContent.temporalSupportAssessment;
+  return clone({
+    ...verified,
+    stage: "DATED_REVIEW_APPLIED",
+    caseState: evaluated.caseState,
+    resolutionInputs,
+    decisionHistory: evaluated.decisionHistory,
+    snapshots: [...verified.snapshots, entry(3, "SNAPSHOT_C_DATED_CERTIFICATION_REVIEW", evaluated)],
+    decisionTargets: evaluated.decisionTargets,
+    temporalReview: {
+      contractVersion: TEMPORAL_SUPPORT_REVIEW_V1,
+      reviewId: review.reviewId,
+      disposition: review.disposition,
+      actor: review.reviewActor,
+      decidedAt: review.decidedAt,
+      assessmentDate: CERTIFICATION_DATE,
+      sourceSnapshotId: source.snapshot.snapshotId,
+      rationale: review.rationale,
+      limitations: review.limitations,
+      assessment,
+    },
+    decisionAudit: [
+      ...verified.decisionAudit,
+      { event: "TEMPORAL_SUPPORT_REVIEW_RECORDED", reviewId: review.reviewId, decidedAt: review.decidedAt, disposition: review.disposition },
+      { event: "SNAPSHOT_C_CREATED", snapshotId: evaluated.decisionSnapshot.snapshotId, recordedAt: DATED_EVALUATION_AT, assessmentDate: CERTIFICATION_DATE },
+    ],
+  });
+}
 function assertSafeSession(value, path = "session") {
   if (Array.isArray(value)) return value.forEach((item, index) => assertSafeSession(item, `${path}[${index}]`));
   if (!value || typeof value !== "object") return;
@@ -603,7 +710,7 @@ function validateSession(value) {
   }
   assertSafeSession(value);
   value.snapshots.forEach(({ snapshot }) => verifyDecisionSnapshotV2(snapshot));
-  if (["SOURCE_FACTS_EXTRACTED", "SNAPSHOT_B"].includes(value.stage)
+  if (["SOURCE_FACTS_EXTRACTED", "SNAPSHOT_B", "DATED_REVIEW_APPLIED"].includes(value.stage)
     && (value.sourceAttestation?.case !== "CASE_B" || value.sourceAttestation.relationshipCurrentness !== "UNKNOWN")) {
     throw new TypeError("Pre-ingested Artifact attestation assessment is missing or inconsistent");
   }
@@ -624,6 +731,7 @@ module.exports = Object.freeze({
   FIXTURE_ID,
   SESSION_VERSION,
   applyPreconfiguredFixtureDecisions,
+  applyDatedCertificationReview,
   extractionRequest,
   resetRuntimeForTest,
   runtimeMetrics,

@@ -174,6 +174,7 @@ function createUboReviewApplication({ policyPack } = {}) {
         caseState: validated.caseState,
         caseContext: request.caseContext,
         evaluationTime: request.evaluationTime,
+        ...(request.assessmentDate === undefined ? {} : { assessmentDate: request.assessmentDate }),
         checkpoint: request.checkpoint,
         checkpointReference: request.checkpointReference,
         predecessorSnapshot,

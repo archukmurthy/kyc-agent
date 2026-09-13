@@ -29,6 +29,7 @@ const {
   validateCanonicalEntityRecord,
 } = require("./canonicalEntity");
 const { createCandidateClaim, validateCandidateClaim } = require("./candidateClaim");
+const { validateTemporalSupportReviewRecord } = require("../contracts/temporalSupportReview");
 
 const CASE_EVENT_TYPE = Object.freeze({
   CASE_CREATED: "CASE_CREATED",
@@ -37,6 +38,7 @@ const CASE_EVENT_TYPE = Object.freeze({
   IDENTITY_DECISION_RECORDED: "IDENTITY_DECISION_RECORDED",
   CLAIM_ADJUDICATED: "CLAIM_ADJUDICATED",
   CUSTOMER_INPUT_APPLIED: "CUSTOMER_INPUT_APPLIED",
+  TEMPORAL_SUPPORT_REVIEW_RECORDED: "TEMPORAL_SUPPORT_REVIEW_RECORDED",
 });
 
 const GRAPH_ELIGIBILITY_STATUS = Object.freeze({
@@ -257,6 +259,16 @@ function validateOwnershipCase(caseState) {
   assertArray(externalHandoffs, "ownershipCase.externalHandoffs");
   externalHandoffs.forEach((handoff, index) => validateExternalHandoff(handoff, `ownershipCase.externalHandoffs[${index}]`));
   assertUniqueStrings(externalHandoffs.map(({ handoffId }) => handoffId), "ownershipCase external handoff IDs");
+  const temporalSupportReviews = caseState.temporalSupportReviews || [];
+  assertArray(temporalSupportReviews, "ownershipCase.temporalSupportReviews");
+  temporalSupportReviews.forEach((review, index) => {
+    validateTemporalSupportReviewRecord(review, `ownershipCase.temporalSupportReviews[${index}]`);
+    if (review.recordedInRevision > caseState.revision) {
+      fail(`ownershipCase.temporalSupportReviews[${index}].recordedInRevision must identify an existing revision`);
+    }
+  });
+  assertUniqueStrings(temporalSupportReviews.map(({ reviewId }) => reviewId), "ownershipCase temporal support review IDs");
+  assertUniqueStrings(temporalSupportReviews.map(({ operationKey }) => operationKey), "ownershipCase temporal support operation keys");
   assertArray(caseState.events, "ownershipCase.events");
   if (caseState.events.length !== caseState.revision) fail("ownershipCase events must cover every revision");
   caseState.events.forEach((event, index) => {
@@ -460,6 +472,33 @@ function applyCustomerInputRecord(caseState, record, candidateFacts, canonicalEn
   });
 }
 
+function recordTemporalSupportReview(caseState, record) {
+  validateOwnershipCase(caseState);
+  if ((caseState.temporalSupportReviews || []).some(({ reviewId }) => reviewId === record.reviewId)) {
+    fail(`temporal support review ${record.reviewId} already exists in case`);
+  }
+  if ((caseState.temporalSupportReviews || []).some(({ operationKey }) => operationKey === record.operationKey)) {
+    fail(`temporal support operation ${record.operationKey} already exists in case`);
+  }
+  return nextRevision(
+    caseState,
+    CASE_EVENT_TYPE.TEMPORAL_SUPPORT_REVIEW_RECORDED,
+    record.decidedAt,
+    {
+      reviewId: record.reviewId,
+      operationKey: record.operationKey,
+      disposition: record.disposition,
+      coveredRelationshipIds: record.coveredRelationships.map(({ relationshipId }) => relationshipId),
+      sourceSnapshotId: record.sourceSnapshotReference.snapshotId,
+      predecessorReviewId: record.predecessorReviewId,
+    },
+    (draft, revision) => {
+      if (!draft.temporalSupportReviews) draft.temporalSupportReviews = [];
+      draft.temporalSupportReviews.push({ ...cloneData(record), recordedInRevision: revision });
+    },
+  );
+}
+
 function endpointForKey(caseState, candidatePartyKey) {
   for (const claim of caseState.candidateClaims) {
     if (claim.subject.candidatePartyKey === candidatePartyKey) return claim.subject;
@@ -634,5 +673,6 @@ module.exports = {
   graphEligibilityForClaim,
   intakeCapabilityResult,
   recordIdentityResolutionDecision,
+  recordTemporalSupportReview,
   validateOwnershipCase,
 };

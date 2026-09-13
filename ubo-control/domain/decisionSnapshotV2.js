@@ -78,6 +78,11 @@ function createDecisionSnapshotV2({ loadedPolicyPack, caseState, targetEntityId,
     versionDirection: { futureApplicationBoundary: "ubo-decision-application-v3", publicExposure: wave9 ? "REVIEW_ENTRY_ONLY_WAVE_10" : "DEFERRED_UNTIL_WAVES_8_AND_9" },
     phaseArtifacts: phaseArtifacts.map(cloneData),
     graphDerivedContext: cloneData(decisionOutputs.graphDerivedContext),
+    ...(decisionOutputs.temporalSupportAssessment ? {
+      assessmentDate: decisionOutputs.temporalSupportAssessment.requestedAssessmentDate,
+      sourceOwnershipGraph: cloneData(decisionOutputs.sourceOwnershipGraph),
+      temporalSupportAssessment: cloneData(decisionOutputs.temporalSupportAssessment),
+    } : {}),
     effectiveInterestCalculations: cloneData(decisionOutputs.effectiveInterestCalculations),
     qualificationBasisRecords: cloneData(decisionOutputs.qualificationBasisRecords),
     companyAttributionAssessments: cloneData(decisionOutputs.companyAttributionAssessments),
@@ -206,6 +211,35 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
     || !same(phase4.personQualificationAssessments, content.personQualificationAssessments)
     || !same(phase5, content.derivedRequirementApplicability)
     || !same(phase6.evidenceSufficiency, content.evidenceSufficiency)) fail("DecisionSnapshot v2 duplicated decision output does not match its producing phase");
+  if (content.temporalSupportAssessment !== undefined) {
+    const assessment = content.temporalSupportAssessment;
+    const { assessmentId, assessmentHash, ...assessmentSemantic } = assessment;
+    const calculatedAssessmentHash = hashArtifact(assessmentSemantic);
+    const sourceById = new Map(content.sourceOwnershipGraph.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+    const derivedById = new Map(phase2.graph.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+    const internallyConsistent = assessment.relationshipAssessments.every((item) => {
+      const source = sourceById.get(item.relationshipId);
+      const derived = derivedById.get(item.relationshipId);
+      return source && derived
+        && source.temporalState === item.sourceTemporalState
+        && derived.temporalState === item.derivedTemporalState;
+    });
+    if (!same(phase2.sourceGraph, content.sourceOwnershipGraph)
+      || !same(phase2.temporalSupportAssessment, content.temporalSupportAssessment)
+      || content.assessmentDate !== content.temporalSupportAssessment.requestedAssessmentDate
+      || content.algorithmManifest.temporalSupportAssessment !== content.temporalSupportAssessment.contractVersion
+      || assessmentHash !== calculatedAssessmentHash
+      || assessmentId !== `${assessment.contractVersion}:${assessmentHash.slice(7, 39)}`
+      || assessment.sourceGraphVersion !== content.sourceOwnershipGraph.graphVersion
+      || assessment.sourceFactsMutated !== false
+      || sourceById.size !== assessment.relationshipAssessments.length
+      || derivedById.size !== sourceById.size
+      || !internallyConsistent) {
+      fail("DecisionSnapshot v2 temporal support assessment does not match its producing phase");
+    }
+  } else if (phase2.sourceGraph !== undefined || phase2.temporalSupportAssessment !== undefined || content.assessmentDate !== undefined) {
+    fail("DecisionSnapshot v2 contains an unpinned temporal support field");
+  }
   if (wave8 || wave9) {
     const resolution = phase7.requirementResolution;
     if (content.requirementStageVersion !== "ubo-requirement-resolution-v2"
@@ -289,6 +323,7 @@ function verifyDecisionSnapshotV2(snapshot, { previousSnapshot = undefined, load
   })) fail("DecisionSnapshot v2 policy pin does not match readiness output");
   const expectedAlgorithms = {
     graph: "ubo-graph-v1",
+    ...(content.temporalSupportAssessment ? { temporalSupportAssessment: content.temporalSupportAssessment.contractVersion } : {}),
     personQualification: "ubo-person-qualification-assessment-v2", derivedRequirementApplicability: "ubo-derived-requirement-applicability-v1",
     requirementResolution: phase7Algorithm, resolutionPlan: wave9 ? RESOLUTION_PLAN_V2 : "ubo-resolution-plan-v1-compat",
     phasedEvaluation: "ubo-phased-evaluation-v1", snapshotConstruction: DECISION_SNAPSHOT_CONSTRUCTION_V2,

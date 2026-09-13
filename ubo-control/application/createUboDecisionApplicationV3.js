@@ -28,6 +28,8 @@ const {
 const { loadPolicyPack } = require("../policy/policyPack");
 const { validateResolutionPlanV2 } = require("../planning/resolutionPlanV2");
 const { projectUboJourneyV2 } = require("../projection/uboJourneyProjectionV2");
+const { applyTemporalSupportReviews } = require("./applyTemporalSupportReview");
+const { TEMPORAL_SUPPORT_REVIEW_RESULT_V1 } = require("../contracts/temporalSupportReview");
 
 const DECISION_APPLICATION_CONTRACT_VERSION_V3 = "ubo-decision-application-v3";
 
@@ -120,10 +122,26 @@ function createUboDecisionApplicationV3({ policyPack } = {}) {
       requireContract(request, "applyDecisionsRequestV3");
       assertAllowedKeys(request, [
         "contractVersion", "caseState", "entityRegistrations", "identityDecisions", "claimAdjudications",
+        "sourceDecisionSnapshot", "temporalSupportReviews",
       ], "applyDecisionsRequestV3");
       assertArray(request.entityRegistrations, "applyDecisionsRequestV3.entityRegistrations");
       assertArray(request.identityDecisions, "applyDecisionsRequestV3.identityDecisions");
       assertArray(request.claimAdjudications, "applyDecisionsRequestV3.claimAdjudications");
+      const temporalSupportReviews = request.temporalSupportReviews || [];
+      assertArray(temporalSupportReviews, "applyDecisionsRequestV3.temporalSupportReviews");
+      if (temporalSupportReviews.length > 0
+        && (request.entityRegistrations.length > 0 || request.identityDecisions.length > 0 || request.claimAdjudications.length > 0)) {
+        throw applicationError(
+          DECISION_APPLICATION_ERROR_CODE.INVALID_EXPLICIT_DECISION,
+          "temporal support review must be a separate explicit applyDecisions operation",
+        );
+      }
+      if ((temporalSupportReviews.length > 0) !== (request.sourceDecisionSnapshot !== undefined)) {
+        throw applicationError(
+          DECISION_APPLICATION_ERROR_CODE.INVALID_EXPLICIT_DECISION,
+          "sourceDecisionSnapshot is required only with temporalSupportReviews",
+        );
+      }
       const result = review.applyDecisions({
         contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION,
         caseState: toV2State(request.caseState),
@@ -132,7 +150,27 @@ function createUboDecisionApplicationV3({ policyPack } = {}) {
         claimAdjudications: request.claimAdjudications,
       });
       const converted = fromV2State(result.caseState);
-      return applicationState(converted.raw, converted.envelope);
+      if (temporalSupportReviews.length === 0) return applicationState(converted.raw, converted.envelope);
+      const next = applyTemporalSupportReviews({
+        caseState: converted.raw,
+        caseStateEnvelope: converted.envelope,
+        sourceDecisionSnapshot: request.sourceDecisionSnapshot,
+        reviews: temporalSupportReviews,
+        loadedPolicyPack: loaded,
+      });
+      const envelope = CASE_STATE_INTERNALS.encodeCaseState(next, DECISION_APPLICATION_CONTRACT_VERSION_V3);
+      return applicationState(next, envelope, {
+        temporalSupportReviewResult: {
+          contractVersion: TEMPORAL_SUPPORT_REVIEW_RESULT_V1,
+          appliedReviewIds: temporalSupportReviews.map(({ reviewId }) => reviewId),
+          sourceSnapshotReference: {
+            snapshotSchemaVersion: request.sourceDecisionSnapshot.snapshotSchemaVersion,
+            snapshotId: request.sourceDecisionSnapshot.snapshotId,
+            decisionContentHash: request.sourceDecisionSnapshot.decisionContentHash,
+          },
+          newSealedCaseState: envelope,
+        },
+      });
     });
   }
 
@@ -178,7 +216,7 @@ function createUboDecisionApplicationV3({ policyPack } = {}) {
       assertAllowedKeys(request, [
         "contractVersion", "runtimeMode", "caseState", "caseContext", "evaluationTime", "checkpoint",
         "checkpointReference", "resolutionInputs", "decisionHistory", "expectedHeadSnapshotId",
-        "supersessionReason",
+        "supersessionReason", "assessmentDate",
       ], "evaluateRequestV3");
       if (request.runtimeMode !== "LAB") {
         throw applicationError(
@@ -199,6 +237,7 @@ function createUboDecisionApplicationV3({ policyPack } = {}) {
         ...(request.decisionHistory === undefined ? {} : { decisionHistory: request.decisionHistory }),
         ...(request.expectedHeadSnapshotId === undefined ? {} : { expectedHeadSnapshotId: request.expectedHeadSnapshotId }),
         ...(request.supersessionReason === undefined ? {} : { supersessionReason: request.supersessionReason }),
+        ...(request.assessmentDate === undefined ? {} : { assessmentDate: request.assessmentDate }),
       });
       validateResolutionPlanV2(result.resolutionPlan);
       if (result.resolutionPlan.planId !== result.decisionSnapshot.decisionContent.pinnedResolutionPlan.planId

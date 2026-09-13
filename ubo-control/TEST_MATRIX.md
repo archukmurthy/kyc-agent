@@ -452,3 +452,17 @@ Wave 11A makes the versioned application/customer boundary executable in review 
 | Adapter output enters Decision Application v3 only through the existing ExtractionService seam; adjudication and evaluation remain separate | actual-facade Decision Application integration tests |
 
 G4.1 is fixture/contract tested and review-only. No live provider is called. Private trusted Artifact ingestion, Evidence execution/composition, Evidence-backed Discovery, Wave 11B2, onboarding, persistence and production authorization remain deferred.
+
+## Governed dated-evidence review v1
+
+| Invariant | Protection |
+|---|---|
+| V3 retains exactly four operations; valid review enters only through public `applyDecisions` and returns a sealed review result | `temporalSupportReview.nodetest.js` |
+| Case/snapshot/policy/source Artifact/Fact/claim/relationship pins, actor, actual decision time, wording, date, scope, rationale and limitations are retained | temporal-support record assertions |
+| Original UNKNOWN claims remain unchanged; only the separately pinned dated assessment affects normal evaluation | dated evaluation and raw-state assertions |
+| Exact-date acceptance can satisfy a fully covered route; partial scope, audit note, later date, conflict and withdrawal cannot | dated, partial, later-date and conflict matrix |
+| Stale/tampered/foreign references, unsupported scope, future dates, caller-supplied CURRENT and rewritten quotations fail closed | adversarial application tests |
+| Operation replay is idempotent; conflicting reuse fails; predecessor and supersession records remain reconstructable | idempotency/supersession tests |
+| R08, signer authority, customer completion, final completion and production authorization stay independent | Bettercomms dated-review Lab regression |
+| Existing Snapshot B verifies and reconstructs without running the new evaluator | historical compatibility regression |
+| Compliance-only Lab action produces linked Snapshot C and browser-local restore preserves it without bytes | pre-ingested Evidence Lab/API/cache tests |

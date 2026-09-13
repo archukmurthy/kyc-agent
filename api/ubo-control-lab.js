@@ -31,6 +31,7 @@ const {
   validateSession: validateApplicantSession,
 } = require("../ubo-control-lab/server/applicantJourneyLab");
 const {
+  applyDatedCertificationReview,
   applyPreconfiguredFixtureDecisions,
   startPreingestedEvidenceDemo,
   usePreingestedBettercommsArtifact,
@@ -62,6 +63,7 @@ const OPERATIONS = Object.freeze({
   START_PREINGESTED_EVIDENCE_DEMO: "START_PREINGESTED_EVIDENCE_DEMO",
   USE_PREINGESTED_BETTERCOMMS_ARTIFACT: "USE_PREINGESTED_BETTERCOMMS_ARTIFACT",
   APPLY_PREINGESTED_FIXTURE_DECISIONS: "APPLY_PREINGESTED_FIXTURE_DECISIONS",
+  APPLY_DATED_CERTIFICATION_REVIEW: "APPLY_DATED_CERTIFICATION_REVIEW",
   VALIDATE_PREINGESTED_EVIDENCE_SESSION: "VALIDATE_PREINGESTED_EVIDENCE_SESSION",
 });
 
@@ -215,6 +217,8 @@ module.exports = async function handler(req, res) {
         return send(res, 200, await usePreingestedBettercommsArtifact(input.payload));
       case OPERATIONS.APPLY_PREINGESTED_FIXTURE_DECISIONS:
         return send(res, 200, applyPreconfiguredFixtureDecisions(input.payload));
+      case OPERATIONS.APPLY_DATED_CERTIFICATION_REVIEW:
+        return send(res, 200, applyDatedCertificationReview(input.payload));
       case OPERATIONS.VALIDATE_PREINGESTED_EVIDENCE_SESSION:
         return send(res, 200, validatePreingestedEvidenceSession(input.payload?.session));
       default:
