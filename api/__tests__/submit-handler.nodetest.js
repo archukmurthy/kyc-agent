@@ -85,6 +85,40 @@ test("returns status:queued when finalize throws (never blocks)", async () => {
   assert.strictEqual(res.body.status, "queued");
 });
 
+test("markProcessing succeeds, finalize throws → markFailed called with incrementAttempt:false (already counted by markProcessing)", async () => {
+  const handler = require("../submit");
+  let markFailedArgs;
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async () => {},
+    finalizeSubmission: async () => { throw new Error("db down"); },
+    markDone: async () => {},
+    markFailed: async (id, msg, opts) => { markFailedArgs = [id, msg, opts]; },
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.body.status, "queued");
+  assert.deepStrictEqual(markFailedArgs, ["sub-1", "db down", { incrementAttempt: false }]);
+});
+
+test("markProcessing throws, finalize then throws → markFailed called with incrementAttempt:true (attempt never counted)", async () => {
+  const handler = require("../submit");
+  let markFailedArgs;
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async () => { throw new Error("claim failed"); },
+    finalizeSubmission: async () => { throw new Error("db down"); },
+    markDone: async () => {},
+    markFailed: async (id, msg, opts) => { markFailedArgs = [id, msg, opts]; },
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.body.status, "queued");
+  assert.deepStrictEqual(markFailedArgs, ["sub-1", "db down", { incrementAttempt: true }]);
+});
+
 test("returns 400 when submissionId is missing", async () => {
   const handler = require("../submit");
   handler.__setDeps({ enqueue: async () => ({}), finalizeSubmission: async () => ({}), markDone: async()=>{}, markFailed: async()=>{} });
