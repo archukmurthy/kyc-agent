@@ -9,6 +9,13 @@
 // endpoint still succeeds but reports { sent: false, simulated: true } so the
 // analyst-facing flow degrades gracefully instead of erroring.
 //
+// THE LINK: this endpoint only ever emails a dossier-backed link
+// (?dossierId=<id>&journey=customer), which the customer's mount resolves via
+// api/get-dossier — that works cross-device. The legacy ?ref=<token> link only
+// ever hydrated from the analyst's own browser localStorage, so it's no longer
+// generated here. A dossierId is therefore REQUIRED (see the 400 below); the
+// client (InviteScreen.jsx) gates the Send action on having one.
+//
 // Env vars:
 //   RESEND_API_KEY    — Resend API key. Without it, email is simulated.
 //   INVITE_FROM_EMAIL — From header, e.g. "Nium Onboarding <onboarding@nium.com>".
@@ -18,6 +25,63 @@ const crypto = require("crypto");
 const store = require("../lib/storage.js");
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+// Real Resend call, isolated behind the deps seam below so tests can
+// substitute a fake sender without touching the network.
+async function sendEmail({ apiKey, from, to, subject, text }) {
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ from, to: [to], subject, text }),
+  });
+  const data = await r.json();
+  return { ok: r.ok, data };
+}
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+let _deps = { store, sendEmail };
+
+// Resolve the server's own origin from request headers — NOT from the request
+// body. body.origin is attacker-controlled (any value the caller's JS sets);
+// the Host header (and x-forwarded-*, which Vercel's edge sets from the real
+// incoming request) is what the server was actually reached on, so it's the
+// only trustworthy anchor for the same-origin check below.
+function resolveOrigin(req, bodyOrigin) {
+  const headers = req.headers || {};
+  const host = headers["x-forwarded-host"] || headers.host;
+  if (host) {
+    const proto = String(headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+    return `${proto}://${host}`.replace(/\/+$/, "");
+  }
+  // No Host header at all (shouldn't happen over real HTTP) — fall back to
+  // whatever the client claims, else the known prod default.
+  return (bodyOrigin || "").replace(/\/+$/, "") || "https://kyc-agent-deploy.vercel.app";
+}
+
+// Does `link` point at our own origin and carry this EXACT dossierId + tenant
+// (not just a substring match — a prefix-colliding id like
+// "dossierId=dossier-1337" would pass an `includes()` check against
+// "dossier-1"). Used to decide whether the client-built link is safe to embed
+// in the outbound email, or whether to fall back to the server-reconstructed
+// link instead. A malformed `link` (not a parseable URL) is treated as
+// invalid, same as any other mismatch.
+function isValidDossierLink(link, baseOrigin, dossierId, tenantId) {
+  if (typeof link !== "string" || !link) return false;
+  let url;
+  try {
+    url = new URL(link);
+  } catch {
+    return false;
+  }
+  return (
+    url.origin === baseOrigin &&
+    url.searchParams.get("dossierId") === String(dossierId) &&
+    url.searchParams.get("tenant") === String(tenantId)
+  );
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -29,24 +93,48 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { email, contactName, companyName, origin } = req.body || {};
+  const { email, contactName, companyName, origin, dossierId, tenantId, link: clientLink } =
+    req.body || {};
 
   if (!email || !contactName) {
     return res.status(400).json({ error: "Missing email or contactName" });
   }
+  // No saved dossier → no working link to email. The client gates Send on
+  // this too, but the server never trusts the client alone.
+  if (!dossierId || !tenantId) {
+    return res
+      .status(400)
+      .json({ error: "Missing dossierId or tenantId — save the dossier before inviting" });
+  }
 
-  // Unique, unguessable invite token. Persisted so a future onboarding route
-  // (PR-029) can resolve ?ref=<token> back to this company/contact.
+  // Unique, unguessable invite record key. Persisted so a future onboarding
+  // route can resolve the invite back to this company/contact/dossier.
   const token = crypto.randomBytes(18).toString("base64url");
-  const baseOrigin =
-    (origin || "").replace(/\/+$/, "") || "https://kyc-agent-deploy.vercel.app";
-  const link = `${baseOrigin}/?ref=${token}`;
+  const baseOrigin = resolveOrigin(req, origin);
+  const serverLink = `${baseOrigin}/?tenant=${encodeURIComponent(tenantId)}&dossierId=${encodeURIComponent(dossierId)}&journey=customer`;
+
+  // Prefer the client-built link — it's what's already shown on screen, so
+  // keeping it avoids drift — but never trust it blindly. It must resolve to
+  // our own origin and carry this dossierId, or we fall back to the
+  // server-reconstructed link instead of embedding an attacker-controlled URL.
+  let link = serverLink;
+  if (clientLink !== undefined && clientLink !== serverLink) {
+    if (isValidDossierLink(clientLink, baseOrigin, dossierId, tenantId)) {
+      link = clientLink;
+    } else {
+      console.warn(
+        "[invite] rejected client-supplied link (origin/dossierId mismatch); using server-reconstructed link"
+      );
+    }
+  }
 
   const inviteRecord = {
     token,
     email,
     contactName,
     companyName: companyName || null,
+    dossierId,
+    tenantId,
     link,
     createdAt: new Date().toISOString(),
     status: "invited",
@@ -55,7 +143,7 @@ module.exports = async function handler(req, res) {
   // Persist the invite. A storage failure must not block the email or the
   // analyst flow — log and continue (mirrors save-dossier's "always succeed").
   try {
-    await store.set(`invite:${token}`, inviteRecord, { ttlSeconds: TOKEN_TTL_SECONDS });
+    await _deps.store.set(`invite:${token}`, inviteRecord, { ttlSeconds: TOKEN_TTL_SECONDS });
   } catch (e) {
     console.warn("invite persist failed:", e && e.message);
   }
@@ -87,27 +175,21 @@ Nium Onboarding Team`;
       simulated: true,
       reason: "RESEND_API_KEY not configured",
       token,
+      dossierId,
       link,
     });
   }
 
   try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ from, to: [email], subject, text }),
-    });
-    const data = await r.json();
-    if (!r.ok) {
+    const { ok, data } = await _deps.sendEmail({ apiKey, from, to: email, subject, text });
+    if (!ok) {
       return res.status(502).json({
         sent: false,
         simulated: false,
         error: "Email provider error",
         details: data,
         token,
+        dossierId,
         link,
       });
     }
@@ -116,6 +198,7 @@ Nium Onboarding Team`;
       simulated: false,
       providerId: data && data.id,
       token,
+      dossierId,
       link,
     });
   } catch (err) {
@@ -125,7 +208,11 @@ Nium Onboarding Team`;
       error: "Email send failed",
       message: err.message,
       token,
+      dossierId,
       link,
     });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
