@@ -967,11 +967,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
       !dossierSaving &&
       !dossierSaved &&
       // A restored (resumed) dossierId means a dossier already exists for this
-      // session; saveDossier() is a plain INSERT with no upsert, so re-firing
-      // would create a DUPLICATE entity_dossiers row and reassign dossierId,
-      // orphaning the original (which may already be embedded in a sent invite
-      // link). A non-null dossierId alone must block the auto-save — the
-      // dossierSaved guard resets to false on resume, so it cannot carry this.
+      // session. saveDossier() now UPSERTS (updates in place when dossierId is
+      // set), so re-firing no longer duplicates — but auto-saving on every
+      // resume-at-confirm is still needless churn (a redundant UPDATE), and the
+      // dossierSaved guard resets to false on resume so it can't suppress it.
+      // A non-null dossierId blocks the redundant auto-save; the explicit
+      // Save/Update buttons and applyReDerive still upsert intentionally.
       !dossierId
     ) {
       // Small delay to ensure all state is settled after research.
