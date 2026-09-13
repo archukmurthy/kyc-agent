@@ -72,19 +72,36 @@ async function finalizeSubmission(payload, deps = {}) {
 
     // 2. Upsert client record (no updated_at column on this table)
     //    — port api/submit.js:431-453
-    const clientResult = await client.query(
-      `INSERT INTO clients (
-        tenant_id, legal_name, country_code, entity_type, ownership_type
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (tenant_id, legal_name, country_code)
-      DO UPDATE SET
-        entity_type = EXCLUDED.entity_type,
-        ownership_type = EXCLUDED.ownership_type
-      RETURNING id`,
-      [tenantId, company.name, company.code || null, entityType || null, ownershipType || null]
+    // country_code can be NULL; a plain ON CONFLICT (tenant_id, legal_name,
+    // country_code) never fires for NULL (NULL <> NULL), so a retry with no
+    // country would insert a DUPLICATE client. Dedupe with IS NOT DISTINCT FROM
+    // (treats NULL = NULL), correct for both null and non-null country.
+    // ponytail: rare race — two concurrent finalizes for the SAME
+    //   (tenant, name, null-country) could both insert. The submission_id anchor
+    //   keeps sessions single regardless; add a partial unique index only if
+    //   orphan client rows ever actually appear in practice.
+    let clientId;
+    const existingClient = await client.query(
+      `SELECT id FROM clients
+       WHERE tenant_id = $1 AND legal_name = $2
+         AND country_code IS NOT DISTINCT FROM $3
+       LIMIT 1`,
+      [tenantId, company.name, company.code || null]
     );
-    const clientId = clientResult.rows[0].id;
+    if (existingClient.rows.length > 0) {
+      clientId = existingClient.rows[0].id;
+      await client.query(
+        `UPDATE clients SET entity_type = $2, ownership_type = $3 WHERE id = $1`,
+        [clientId, entityType || null, ownershipType || null]
+      );
+    } else {
+      const inserted = await client.query(
+        `INSERT INTO clients (tenant_id, legal_name, country_code, entity_type, ownership_type)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [tenantId, company.name, company.code || null, entityType || null, ownershipType || null]
+      );
+      clientId = inserted.rows[0].id;
+    }
 
     // 3. Create onboarding session with full cost breakdown, keyed idempotently
     //    on submission_id — port api/submit.js:459-564 (+ submission_id column

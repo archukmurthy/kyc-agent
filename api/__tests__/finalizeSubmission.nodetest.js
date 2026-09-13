@@ -62,3 +62,19 @@ test("finalize rolls back when a write throws (no partial commit)", async () => 
   assert.strictEqual(rolledBack, true);
   assert.ok(!client.queries.includes("COMMIT"), "must not COMMIT after a failed write");
 });
+
+test("finalize dedupes an existing client (UPDATE, not a duplicate INSERT)", async () => {
+  const client = fakeClient();
+  const orig = client.query.bind(client);
+  client.query = (text, params) => {
+    if (/SELECT id FROM clients/i.test(String(text))) {
+      return Promise.resolve({ rows: [{ id: "existing-client" }] });
+    }
+    return orig(text, params);
+  };
+  const pool = { connect: () => Promise.resolve(client) };
+  const r = await finalizeSubmission(basePayload, { pool });
+  assert.ok(client.queries.some((q) => /^UPDATE clients/i.test(q)), "expected an UPDATE clients");
+  assert.ok(!client.queries.some((q) => /^INSERT INTO clients/i.test(q)), "must not INSERT a duplicate client");
+  assert.strictEqual(r.clientId, "existing-client");
+});
