@@ -25,9 +25,10 @@
  *
  * ONE STUB, DELIBERATELY. /api/save-dossier is stubbed to resolve with a
  * dossierId for the populated-invite tests. Without it dossierId stays null and
- * generateLink() takes its legacy `?ref=` fallback — a real path, covered
- * separately. Both branches are live user paths, so both are pinned. Same shape
- * as the AI-Documents net's /api/self-source stub.
+ * Send invite is disabled — a saved dossier is required to produce a working,
+ * cross-device link (the legacy `?ref=` localStorage-snapshot link is no longer
+ * generated or emailed). Same shape as the AI-Documents net's /api/self-source
+ * stub.
  *
  * CHARACTERISATION, not specification: these assert what the surface does TODAY.
  * After B's move this file must stay green UNCHANGED — with ONE deliberate
@@ -323,15 +324,24 @@ describe("invite screen", () => {
     expect(bodyText()).not.toMatch(/📄 Documents Sourced/);
   });
 
-  // ── FALLBACK branch: no stub, save fails, dossierId stays null ──
-  it("FALLBACK - with no saved dossier the link falls back to a ?ref= token", async () => {
+  // ── UNSAVED branch: no stub, save fails, dossierId stays null ──
+  it("UNSAVED - with no saved dossier, Send invite is disabled and no invite is sent", async () => {
     await driveToInvite();
-    await sendInvite();
 
-    const text = bodyText();
-    expect(text).toMatch(/Onboarding link/i);
-    expect(text).toContain("?ref=");
-    expect(text).not.toContain("dossierId=");
+    const { name, email } = inviteForm();
+    fireEvent.change(name, { target: { value: "Sarah Chen" } });
+    fireEvent.change(email, { target: { value: "sarah@company.com" } });
+    await settle(0);
+
+    const sendButton = buttonsWithText(/Send invite/i)[0];
+    expect(sendButton).toBeDisabled();
+    expect(bodyText()).toMatch(/Save the dossier before inviting the customer/i);
+
+    fireEvent.click(sendButton);
+    await settle(0);
+
+    // Nothing was sent — still on the compose screen, not the success screen.
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
   });
 
   // ── POPULATED branch: /api/save-dossier stubbed so dossierId is real ──
