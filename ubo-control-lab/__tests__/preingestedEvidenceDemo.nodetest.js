@@ -475,6 +475,8 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   assert.match(browser, /Historical Evidence-store linkage not yet revalidated/);
   assert.match(browser, /No fresh automated interpretation performed/);
   assert.match(browser, /Current qualification is indeterminate/);
+  assert.match(browser, /Review dated certification/);
+  assert.match(browser, /The source Facts remain UNKNOWN\. Date-scoped applicability comes only from the separately recorded reviewer decision/);
   assert.match(browser, /Show all relationships from source document/);
   assert.match(browser, /preingestedEvidenceCache\?\.hasSaved\(\).*PREINGESTED_EVIDENCE/);
   assert.doesNotMatch(browser, /type:\s*["']file["']/);

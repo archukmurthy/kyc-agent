@@ -777,7 +777,9 @@
         h("p", { className: "notice" }, datedReviewApplied
           ? "Certification date, accepted support date, actual review/evaluation times and Evidence freshness remain distinct. Covered relationships are applicable only to the 5 May 2026 dated assessment; no present-day continuity is inferred."
           : "Certification date 5 May 2026, source capture time, fixture review time, requested assessment date and Evidence freshness remain distinct. Historical capture time is not revalidated; no relationship is made CURRENT."),
-        h("p", { className: "notice" }, demo.sourceAttestation.reviewInterpretation.limitation),
+        h("p", { className: "notice" }, datedReviewApplied
+          ? "The source Facts remain UNKNOWN. Date-scoped applicability comes only from the separately recorded reviewer decision and derived temporal assessment."
+          : demo.sourceAttestation.reviewInterpretation.limitation),
         h("details", null, h("summary", null, "Inspect the separate currentness assessment"), h("pre", { className: "json" }, pretty(demo.sourceAttestation))),
         demo.stage === "SNAPSHOT_B" && h("div", { className: "section" },
           h("h3", null, "Compliance decision"),
