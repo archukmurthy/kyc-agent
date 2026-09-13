@@ -3,8 +3,17 @@
 // CommonJS (module.exports), not `export default`, so src/setupProxy.js can
 // require() it for local `npm start` (mirrors api/submit.js, api/track-event.js).
 // Always returns 200 — a save failure must never block the analyst.
+//
+// Upsert-by-id: a caller that already has a dossierId (a re-research / an
+// analyst "Update" re-save) must refresh THAT row, never insert a second one —
+// an invite link may already embed the original id, and a blind INSERT would
+// orphan it. `dossierId` is optional and additive; a caller that omits it (the
+// original contract) still gets a plain INSERT.
 
 const { neon } = require("@neondatabase/serverless");
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+let _deps = { neon };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,6 +21,7 @@ module.exports = async function handler(req, res) {
   }
 
   const {
+    dossierId,
     tenantId,
     company,
     entityType,
@@ -49,7 +59,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = _deps.neon(process.env.DATABASE_URL);
 
     // Ensure tenant exists (slug is NOT NULL on this table).
     await sql`
@@ -58,7 +68,57 @@ module.exports = async function handler(req, res) {
       ON CONFLICT (id) DO NOTHING
     `;
 
-    const rows = await sql`
+    let rows = [];
+    if (dossierId) {
+      // Update-in-place, scoped to this tenant so one tenant can never
+      // overwrite another's row by guessing/replaying an id.
+      rows = await sql`
+        UPDATE entity_dossiers
+        SET
+          company_name = ${company.name},
+          country_code = ${company.code || null},
+          country_name = ${company.countryName || null},
+          entity_type = ${entityType || null},
+          ownership_type = ${ownershipType || null},
+
+          total_fields = ${coverage?.totalResearchFields || null},
+          verified_fields = ${coverage?.verifiedFields || null},
+          probable_fields = ${coverage?.probableFields || null},
+          indicative_fields = ${coverage?.indicativeFields || null},
+          missing_fields = ${coverage?.missingFieldCount || null},
+          fill_rate = ${coverage?.fillRate != null ? Math.round(coverage.fillRate * 100) : null},
+          verified_fill_rate = ${coverage?.verifiedFillRate != null ? Math.round(coverage.verifiedFillRate * 100) : null},
+
+          included_fields = ${JSON.stringify(includedFields || [])},
+          excluded_fields = ${JSON.stringify(excludedFields || [])},
+          custom_questions = ${JSON.stringify(customQuestions || [])},
+
+          verified_data = ${JSON.stringify(verifiedData || [])},
+          probable_data = ${JSON.stringify(probableData || [])},
+          indicative_data = ${JSON.stringify(indicativeData || [])},
+          stakeholders = ${JSON.stringify(stakeholders || {})},
+          required_documents = ${JSON.stringify(requiredDocuments || [])},
+
+          research_cost_usd = ${costSummary?.totals?.totalCostUsd ?? null},
+          research_tokens = ${costSummary?.totals?.totalTokens ?? null},
+          research_model = ${costSummary?.model || null},
+          raw_research = ${JSON.stringify(rawResearch || {})},
+
+          seeded_by = ${seededByValue},
+          search_attempts = ${searchAttemptsValue},
+
+          status = 'ready',
+          saved_at = NOW()
+        WHERE id = ${dossierId} AND tenant_id = ${tenantId}
+        RETURNING id
+      `;
+    }
+
+    if (!dossierId || rows.length === 0) {
+      // Either the caller has no id yet (first save), or the id it sent
+      // didn't match a row for this tenant (stale/foreign id) — insert fresh
+      // rather than silently dropping the save.
+      rows = await sql`
       INSERT INTO entity_dossiers (
         tenant_id,
         company_name,
@@ -134,14 +194,18 @@ module.exports = async function handler(req, res) {
         NOW()
       )
       RETURNING id
-    `;
+      `;
+    }
 
-    const dossierId = rows[0].id;
-    console.log(`[save-dossier] ✅ Dossier ${dossierId} saved for ${company.name} (${tenantId})`);
+    const savedId = rows[0].id;
+    console.log(`[save-dossier] ✅ Dossier ${savedId} saved for ${company.name} (${tenantId})`);
 
-    return res.status(200).json({ success: true, dossierId });
+    return res.status(200).json({ success: true, dossierId: savedId });
   } catch (err) {
     console.error("[save-dossier] ❌", err.message);
     return res.status(200).json({ success: false, dossierId: null, warning: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };

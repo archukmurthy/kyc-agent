@@ -4589,6 +4589,10 @@ export default function KYCAgent({ previewMode = false } = {}) {
       trimmedRegNumber && regNumberSource === "customer" ? "customer" : null;
 
     return {
+      // Upsert key: a dossier that already exists must be UPDATEd in place
+      // (api/save-dossier.js), never re-inserted — a blind insert would
+      // duplicate the row and orphan any invite link already built on this id.
+      dossierId,
       tenantId,
       company: dossierCompany(),
       entityType,
