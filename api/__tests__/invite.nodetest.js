@@ -1,5 +1,18 @@
-const { test } = require("node:test");
+const { test, afterEach } = require("node:test");
 const assert = require("node:assert");
+
+// Reset the module-level `_deps` seam after every test so a store/sendEmail
+// fake wired by one test (e.g. the custom sendEmail below) can never leak
+// into a later test that doesn't expect it — tests must be order-independent.
+afterEach(() => {
+  const handler = require("../invite");
+  handler.__setDeps({
+    store: fakeStore(),
+    sendEmail: async () => {
+      throw new Error("sendEmail called without a test-provided fake");
+    },
+  });
+});
 
 function fakeRes() {
   return {
@@ -187,6 +200,92 @@ test("client-supplied link with a mismatched dossierId is rejected even when sam
     assert.strictEqual(res.statusCode, 200);
     assert.match(res.body.link, /dossierId=dossier-1/);
     assert.doesNotMatch(res.body.link, /some-other-dossier/);
+  } finally {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+  }
+});
+
+test("client-supplied link whose dossierId is a prefix-superstring of the real one is rejected (exact match, not substring)", async () => {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  const store = fakeStore();
+  handler.__setDeps({ store });
+  try {
+    const res = fakeRes();
+    await handler(
+      reqWith(
+        {
+          ...basePayload,
+          // "dossier-1" is a prefix of "dossier-1337..." — an unanchored
+          // `includes()` check would wrongly accept this as a match.
+          link: "https://kyc-agent-deploy.vercel.app/?tenant=nium&dossierId=dossier-1337-evil&journey=customer",
+        },
+        { host: "kyc-agent-deploy.vercel.app" }
+      ),
+      res
+    );
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.match(res.body.link, /^https:\/\/kyc-agent-deploy\.vercel\.app\//);
+    assert.match(res.body.link, /dossierId=dossier-1(&|$)/);
+    assert.doesNotMatch(res.body.link, /dossier-1337-evil/);
+  } finally {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+  }
+});
+
+test("client-supplied link with a mismatched tenant is rejected even when same-origin and dossierId matches", async () => {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  const store = fakeStore();
+  handler.__setDeps({ store });
+  try {
+    const res = fakeRes();
+    await handler(
+      reqWith(
+        {
+          ...basePayload,
+          link: "https://kyc-agent-deploy.vercel.app/?tenant=other-tenant&dossierId=dossier-1&journey=customer",
+        },
+        { host: "kyc-agent-deploy.vercel.app" }
+      ),
+      res
+    );
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.match(res.body.link, /tenant=nium/);
+    assert.doesNotMatch(res.body.link, /other-tenant/);
+    assert.match(res.body.link, /dossierId=dossier-1(&|$)/);
+  } finally {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+  }
+});
+
+test("malformed (non-URL) client-supplied link does not throw and is rejected", async () => {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  const store = fakeStore();
+  handler.__setDeps({ store });
+  try {
+    const res = fakeRes();
+    await handler(
+      reqWith(
+        { ...basePayload, link: "not a url at all :: dossierId=dossier-1" },
+        { host: "kyc-agent-deploy.vercel.app" }
+      ),
+      res
+    );
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.match(res.body.link, /^https:\/\/kyc-agent-deploy\.vercel\.app\//);
+    assert.match(res.body.link, /tenant=nium/);
+    assert.match(res.body.link, /dossierId=dossier-1(&|$)/);
   } finally {
     if (prevKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = prevKey;

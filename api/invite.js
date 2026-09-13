@@ -61,15 +61,26 @@ function resolveOrigin(req, bodyOrigin) {
   return (bodyOrigin || "").replace(/\/+$/, "") || "https://kyc-agent-deploy.vercel.app";
 }
 
-// Does `link` point at our own origin and carry this exact dossierId? Used to
-// decide whether the client-built link is safe to embed in the outbound
-// email, or whether to fall back to the server-reconstructed link instead.
-function isValidDossierLink(link, baseOrigin, dossierId) {
+// Does `link` point at our own origin and carry this EXACT dossierId + tenant
+// (not just a substring match — a prefix-colliding id like
+// "dossierId=dossier-1337" would pass an `includes()` check against
+// "dossier-1"). Used to decide whether the client-built link is safe to embed
+// in the outbound email, or whether to fall back to the server-reconstructed
+// link instead. A malformed `link` (not a parseable URL) is treated as
+// invalid, same as any other mismatch.
+function isValidDossierLink(link, baseOrigin, dossierId, tenantId) {
   if (typeof link !== "string" || !link) return false;
-  const sameOrigin =
-    link === baseOrigin || link.startsWith(`${baseOrigin}/`) || link.startsWith(`${baseOrigin}?`);
-  const carriesDossierId = link.includes(`dossierId=${encodeURIComponent(dossierId)}`);
-  return sameOrigin && carriesDossierId;
+  let url;
+  try {
+    url = new URL(link);
+  } catch {
+    return false;
+  }
+  return (
+    url.origin === baseOrigin &&
+    url.searchParams.get("dossierId") === String(dossierId) &&
+    url.searchParams.get("tenant") === String(tenantId)
+  );
 }
 
 module.exports = async function handler(req, res) {
@@ -108,7 +119,7 @@ module.exports = async function handler(req, res) {
   // server-reconstructed link instead of embedding an attacker-controlled URL.
   let link = serverLink;
   if (clientLink !== undefined && clientLink !== serverLink) {
-    if (isValidDossierLink(clientLink, baseOrigin, dossierId)) {
+    if (isValidDossierLink(clientLink, baseOrigin, dossierId, tenantId)) {
       link = clientLink;
     } else {
       console.warn(

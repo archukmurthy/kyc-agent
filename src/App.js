@@ -4729,14 +4729,6 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <InviteScreen
         research={research}
         companyName={companyName}
-        countryCode={countryCode}
-        entityType={entityType}
-        ownershipType={ownershipType}
-        activeSchema={activeSchema}
-        coverage={coverage}
-        fieldMetadata={fieldMetadata}
-        checks={checks}
-        journeyType={journeyType}
         tenantId={tenantId}
         dossierId={dossierId}
         inviteEmail={inviteEmail}
