@@ -965,7 +965,14 @@ export default function KYCAgent({ previewMode = false } = {}) {
       research?.found?.length > 0 &&
       !showDossierView &&
       !dossierSaving &&
-      !dossierSaved
+      !dossierSaved &&
+      // A restored (resumed) dossierId means a dossier already exists for this
+      // session; saveDossier() is a plain INSERT with no upsert, so re-firing
+      // would create a DUPLICATE entity_dossiers row and reassign dossierId,
+      // orphaning the original (which may already be embedded in a sent invite
+      // link). A non-null dossierId alone must block the auto-save — the
+      // dossierSaved guard resets to false on resume, so it cannot carry this.
+      !dossierId
     ) {
       // Small delay to ensure all state is settled after research.
       const timer = setTimeout(() => {
@@ -974,7 +981,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, preboardingUnlocked, step, journeyType, research?.found]);
+  }, [agentType, preboardingUnlocked, step, journeyType, research?.found, dossierId, dossierSaved]);
 
   // Customer invite landing. When the app is opened via an invite link
   // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
