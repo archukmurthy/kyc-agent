@@ -13,7 +13,12 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession,
 } = require("../server/preingestedEvidenceDemo.js");
-const { AT, DIGEST, IDS } = require("../fixtures/bettercomms-preingested.js");
+const { DIGEST, IDS } = require("../fixtures/bettercomms-preingested.js");
+const { assessSignedOwnershipAttestation } = require("../fixtures/sourceAttestation.js");
+const {
+  createFullSourceGraphView,
+  createTargetRelevantGraphView,
+} = require("../browser/preingestedEvidenceGraphViews.js");
 const {
   CONTRACT_VERSION: CACHE_CONTRACT,
   STORAGE_KEY,
@@ -66,7 +71,7 @@ test("Wave 11B2A uses a real handoff then keeps six source facts candidate-befor
   const ownershipFacts = session.extraction.capabilityResult.candidateFacts.filter(({ type }) => type === "RELATIONSHIP");
   const officerFacts = session.extraction.capabilityResult.candidateFacts.filter(({ type }) => type === "ENTITY_ATTRIBUTE");
   assert.ok(ownershipFacts.every(({ qualifiers }) => qualifiers.economicInterestConcept === "SHARE_OWNERSHIP"));
-  assert.ok(ownershipFacts.every(({ qualifiers }) => qualifiers.currentState === "CURRENT" && qualifiers.sourceEffectiveDate === AT));
+  assert.ok(ownershipFacts.every(({ qualifiers }) => qualifiers.currentState === "UNKNOWN" && qualifiers.sourceEffectiveDate === null));
   assert.ok(officerFacts.every(({ value }) => value.temporal.state === "unknown"));
   assert.ok(session.extraction.capabilityResult.candidateFacts.every(({ evidenceReferences }) => evidenceReferences.length === 1 && evidenceReferences[0].locator.locators.length === 1));
   assert.equal(session.decisionTargets.candidateParties.length, 10);
@@ -84,7 +89,7 @@ test("Wave 11B2A uses a real handoff then keeps six source facts candidate-befor
   assert.ok(session.extraction.capabilityResult.issues.filter(({ code }) => code === "RELATIONSHIP_PRESERVED_AS_ENTITY_ATTRIBUTE").every(({ factScope }) => factScope === "DISCOVERED"));
 });
 
-test("explicit fixture decisions create Snapshot B and exact 75/25 fresh-engine results", async () => {
+test("explicit fixture decisions keep source arithmetic but current qualification indeterminate", async () => {
   resetRuntimeForTest();
   let session = startPreingestedEvidenceDemo({ sessionId: "qualification" });
   session = await usePreingestedBettercommsArtifact({ session });
@@ -100,12 +105,12 @@ test("explicit fixture decisions create Snapshot B and exact 75/25 fresh-engine 
   assert.ok(current(session).graph.relationships.every(({ relationshipType, dimension }) => relationshipType === "ECONOMIC_OWNERSHIP" && dimension === "ECONOMIC"));
 
   const mitchell = basis(session, ENTITY_IDS.mitchell);
-  assert.equal(mitchell.assessment.routeStatus, "ROUTE_SATISFIED");
-  assert.equal(mitchell.basis.assessmentState, "SATISFIED");
-  assert.deepEqual(mitchell.basis.recordedCalculation.value, { type: "EXACT", value: "75" });
+  assert.equal(mitchell.assessment.routeStatus, "INDETERMINATE");
+  assert.equal(mitchell.basis.assessmentState, "INDETERMINATE");
+  assert.equal(mitchell.basis.recordedCalculation.status, "UNRESOLVED");
+  assert.deepEqual(mitchell.basis.orderedPathReferences[0].reasons, ["UNKNOWN_TEMPORAL_STATE"]);
   assert.equal(mitchell.basis.threshold.comparator, ">");
   assert.equal(mitchell.basis.threshold.value, 25);
-  assert.equal(mitchell.basis.recordedCalculation.status, "COMPLETE");
   assert.equal(mitchell.basis.relationshipReferences.length, 2);
   assert.ok(mitchell.basis.relationshipReferences.every(({ supportingClaimIds, evidenceReferences }) => supportingClaimIds.length === 1 && evidenceReferences.length === 1));
   assert.equal(mitchell.basis.operativeClaimReferences.length, 2);
@@ -113,11 +118,105 @@ test("explicit fixture decisions create Snapshot B and exact 75/25 fresh-engine 
   assert.ok(current(session).graph.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferences.length === 1));
 
   const lee = basis(session, ENTITY_IDS.lee);
-  assert.equal(lee.basis.assessmentState, "NOT_SATISFIED");
-  assert.deepEqual(lee.basis.recordedCalculation.value, { type: "EXACT", value: "25" });
-  assert.equal(lee.basis.reasonCode, "COMPLETE_RECORDED_VALUE_DOES_NOT_SATISFY_THRESHOLD");
-  assert.notEqual(lee.assessment.routeStatus, "ROUTE_SATISFIED");
+  assert.equal(lee.basis.assessmentState, "INDETERMINATE");
+  assert.equal(lee.basis.recordedCalculation.status, "UNRESOLVED");
+  assert.deepEqual(lee.basis.orderedPathReferences[0].reasons, ["UNKNOWN_TEMPORAL_STATE"]);
+  assert.equal(lee.assessment.routeStatus, "INDETERMINATE");
+  assert.deepEqual(current(session).graph.relationships.map(({ measurement }) => measurement.value).sort((a, b) => a - b), [25, 75, 100, 100]);
+  assert.ok(current(session).snapshot.decisionContent.informationNeedsV2.some(({ concept, status }) => concept === "RELATIONSHIP_CURRENTNESS" && status === "OPEN"));
+  const r08 = current(session).snapshot.decisionContent.evidenceSufficiency.find(({ requirementId }) => requirementId === "UBO-R08");
+  assert.equal(r08.status, "INSUFFICIENT");
+  assert.deepEqual(r08.distinctIndependentSourceIds, []);
+  assert.equal(session.sourceAttestation.sourceCountContribution, 0);
   assert.equal(current(session).journey.customerWorkBundles.some(({ evidenceHandoff }) => evidenceHandoff), false);
+});
+
+test("explicit signed scoped as-at attestation establishes a separate currentness assertion", () => {
+  const factIds = ["fact-owner-holdco", "fact-holdco-target"];
+  const ownershipFacts = factIds.map((factId) => ({ factId, relationship: "ECONOMIC_OWNERSHIP", currentState: "UNKNOWN" }));
+  const result = assessSignedOwnershipAttestation({
+    artifactId: "artifact-chart",
+    materialFactIds: factIds,
+    attestation: {
+      signatureText: "Signed: A. Reviewer",
+      signerName: "A. Reviewer",
+      signerCapacity: "Director",
+      signedDate: "2026-09-07",
+      asAtDate: "2026-09-07",
+      declarationText: "I confirm that the ownership structure shown is accurate as at 7 September 2026.",
+      scope: { coveredFactIds: factIds, description: "All ownership relationships shown on this chart" },
+      locator: { artifactId: "artifact-chart", pageStart: 1, region: { label: "signature-block" } },
+    },
+  });
+  assert.equal(result.case, "CASE_A");
+  assert.equal(result.relationshipCurrentness, "CURRENT");
+  assert.deepEqual(result.currentnessAssertion.signer, { name: "A. Reviewer", capacity: "Director" });
+  assert.equal(result.currentnessAssertion.asAtDate, "2026-09-07");
+  assert.deepEqual(result.currentnessAssertion.coveredFactIds, [...factIds].sort());
+  assert.equal(result.currentnessAssertion.evidenceReference.locator.region.label, "signature-block");
+  assert.equal(result.sourceCountContribution, 0);
+  assert.ok(result.currentnessAssertion.assertionId.startsWith("source-currentness:"));
+  assert.ok(ownershipFacts.every(({ currentState }) => currentState === "UNKNOWN"));
+});
+
+test("signature date without attestation scope never establishes currentness", () => {
+  const result = assessSignedOwnershipAttestation({
+    artifactId: "artifact-chart",
+    materialFactIds: ["fact-1"],
+    attestation: { signatureText: "Signed", signerName: "A. Reviewer", signerCapacity: "Director", signedDate: "2026-09-07", asAtDate: "2026-09-07", declarationText: null, scope: null, locator: { pageStart: 1 } },
+  });
+  assert.equal(result.case, "CASE_B");
+  assert.equal(result.relationshipCurrentness, "UNKNOWN");
+  assert.equal(result.currentnessAssertion, null);
+  assert.ok(result.missingFields.includes("declarationText"));
+  assert.deepEqual(result.uncoveredFactIds, ["fact-1"]);
+});
+
+test("attestation must cover every material path edge", () => {
+  const result = assessSignedOwnershipAttestation({
+    artifactId: "artifact-chart",
+    materialFactIds: ["fact-owner-holdco", "fact-holdco-target"],
+    attestation: { signatureText: "Signed", signerName: "A. Reviewer", signerCapacity: "Director", signedDate: "2026-09-07", asAtDate: "2026-09-07", declarationText: "Ownership shown is accurate as at this date.", scope: { coveredFactIds: ["fact-owner-holdco"] }, locator: { pageStart: 1 } },
+  });
+  assert.equal(result.relationshipCurrentness, "UNKNOWN");
+  assert.deepEqual(result.uncoveredFactIds, ["fact-holdco-target"]);
+});
+
+test("actual Bettercomms fixture has no attestation text or locator and fails closed as Case B", async () => {
+  let session = startPreingestedEvidenceDemo({ sessionId: "attestation-case-b" });
+  session = await usePreingestedBettercommsArtifact({ session });
+  assert.equal(session.sourceAttestation.case, "CASE_B");
+  assert.deepEqual(session.sourceAttestation.metadata, { signatureText: null, signerName: null, signerCapacity: null, signedDate: null, asAtDate: null, declarationText: null, scope: null, locator: null });
+  assert.equal(session.sourceAttestation.currentnessAssertion, null);
+  assert.equal(session.sourceAttestation.relationshipCurrentness, "UNKNOWN");
+  assert.equal(session.extraction.sourceCount, 1);
+});
+
+test("target graph uses reverse reachability while full source view retains the sibling", async () => {
+  let session = startPreingestedEvidenceDemo({ sessionId: "graph-views" });
+  session = applyPreconfiguredFixtureDecisions({ session: await usePreingestedBettercommsArtifact({ session }) });
+  const canonical = current(session).graph;
+  const canonicalBefore = JSON.stringify(canonical);
+  const target = createTargetRelevantGraphView(canonical, session.entityDirectory);
+  const full = createFullSourceGraphView(canonical, session.entityDirectory);
+  assert.deepEqual(target.nodes.map(({ entityId }) => entityId).sort(), ["better-comms-voip-ltd", "better-holdco", "lee-taylor", "mitchell-fortescue"]);
+  assert.equal(target.nodes.some(({ entityId }) => entityId === "better-network-services"), false);
+  assert.equal(target.relationships.length, 3);
+  assert.ok(target.relationships.some(({ subjectEntityId, objectEntityId }) => subjectEntityId === "mitchell-fortescue" && objectEntityId === "better-holdco"));
+  assert.ok(target.relationships.some(({ subjectEntityId, objectEntityId }) => subjectEntityId === "better-holdco" && objectEntityId === "better-comms-voip-ltd"));
+  assert.equal(full.nodes.length, 5);
+  assert.equal(new Set(full.nodes.map(({ entityId }) => entityId)).size, 5);
+  assert.equal(full.relationships.length, 4);
+  assert.ok(full.relationships.some(({ subjectEntityId, objectEntityId, presentationLabel }) => subjectEntityId === "better-holdco" && objectEntityId === "better-comms-voip-ltd" && presentationLabel === "Better Holdco owns 100% of Better Comms VOIP Ltd"));
+  assert.ok(full.relationships.some(({ subjectEntityId, objectEntityId, presentationLabel }) => subjectEntityId === "better-holdco" && objectEntityId === "better-network-services" && presentationLabel === "Better Holdco owns 100% of Better Network Services"));
+  assert.deepEqual(target.snapshotReference, canonical.snapshotReference);
+  assert.deepEqual(full.snapshotReference, canonical.snapshotReference);
+  assert.deepEqual(target.informationNeeds, canonical.informationNeeds);
+  assert.deepEqual(full.informationNeeds, canonical.informationNeeds);
+  assert.equal(target.presentationView.sourceProjectionHash, canonical.projectionHash);
+  assert.equal(full.presentationView.sourceProjectionHash, canonical.projectionHash);
+  assert.equal("projectionHash" in target, false);
+  assert.equal(JSON.stringify(canonical), canonicalBefore);
 });
 
 test("officer metadata is operative source metadata but never a graph/control/qualification relationship", async () => {
@@ -209,7 +308,8 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   const browser = fs.readFileSync(path.join(root, "ubo-control-lab/browser/lab.js"), "utf8");
   const server = fs.readFileSync(path.join(root, "ubo-control-lab/server/preingestedEvidenceDemo.js"), "utf8");
   assert.match(browser, /Use pre-ingested Bettercomms ownership chart/);
-  assert.match(browser, /Qualifying person found/);
+  assert.match(browser, /Current qualification is indeterminate/);
+  assert.match(browser, /Show all relationships from source document/);
   assert.match(browser, /preingestedEvidenceCache\?\.hasSaved\(\).*PREINGESTED_EVIDENCE/);
   assert.doesNotMatch(browser, /type:\s*["']file["']/);
   assert.match(server, /evidence\/consumer\/v1\/index\.js/);

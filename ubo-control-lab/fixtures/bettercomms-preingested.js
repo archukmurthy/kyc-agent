@@ -55,10 +55,10 @@ function fact(index, concept, subject, relationshipType, object, value) {
       object,
       value,
       temporal: {
-        state: relationshipType === "ECONOMIC_OWNERSHIP" ? "current" : "unknown",
+        state: "unknown",
         effectiveFrom: null,
         effectiveTo: null,
-        sourceEffectiveDate: relationshipType === "ECONOMIC_OWNERSHIP" ? AT : null,
+        sourceEffectiveDate: null,
         precision: {},
       },
       qualifications: relationshipType === "OFFICER_OF"

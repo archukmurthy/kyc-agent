@@ -30,6 +30,7 @@ const {
   artifact,
   buildBettercommsServiceResult,
 } = require("../fixtures/bettercomms-preingested.js");
+const { assessSignedOwnershipAttestation } = require("../fixtures/sourceAttestation.js");
 
 const SESSION_VERSION = "ubo-control-lab-preingested-evidence-session-v1";
 const FIXTURE_ID = "AJV2-EVIDENCE-01";
@@ -44,6 +45,8 @@ const ENTITY_IDS = Object.freeze({
 const FORBIDDEN_SESSION_KEYS = /(?:password|credential|accessToken|providerSecret|rawProviderPayload|documentContents|evidenceBytes|blobUrl|filePath|storageKey)/i;
 const runtimeOperations = new Map();
 const runtimeCounters = { providerCalls: 0 };
+const MATERIAL_OWNERSHIP_FACT_IDS = Object.freeze([1, 2, 3, 4]
+  .map((index) => `30000000-0000-4000-8000-00000000000${index}`));
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function stableId(prefix, value) {
@@ -267,7 +270,23 @@ function extractionRequest(session, overrides = {}) {
   };
 }
 function publicArtifactRecord() {
-  return { label: ARTIFACT_LABEL, artifactId: IDS.artifact, digest: DIGEST, digestAlgorithm: "sha256", mediaType: "image/png", sizeBytes: 4096, sourceCount: 1 };
+  return { label: ARTIFACT_LABEL, artifactId: IDS.artifact, digest: DIGEST, digestAlgorithm: "sha256", mediaType: "image/png", sizeBytes: 4096, capturedAt: AT, sourceCount: 1 };
+}
+function sourceAttestationAssessment() {
+  return assessSignedOwnershipAttestation({
+    artifactId: IDS.artifact,
+    materialFactIds: MATERIAL_OWNERSHIP_FACT_IDS,
+    attestation: {
+      signatureText: null,
+      signerName: null,
+      signerCapacity: null,
+      signedDate: null,
+      asAtDate: null,
+      declarationText: null,
+      scope: null,
+      locator: null,
+    },
+  });
 }
 function startPreingestedEvidenceDemo({ sessionId } = {}) {
   const application = app();
@@ -313,6 +332,7 @@ function startPreingestedEvidenceDemo({ sessionId } = {}) {
     evidenceOperationKey: `${FIXTURE_ID}:${stableId("operation", state.caseState.caseReference)}`,
     externalEvidenceHandoff: null,
     artifactCorrelation: null,
+    sourceAttestation: null,
     extraction: null,
     decisionTargets: { candidateParties: [], candidateClaims: [] },
     decisionAudit: [],
@@ -367,6 +387,7 @@ async function usePreingestedBettercommsArtifact({ session, fault = null } = {})
       informationAsAtDate: action.informationAsAtDate,
       artifactReference: publicArtifactRecord(),
     },
+    sourceAttestation: sourceAttestationAssessment(),
     extraction: {
       consumerContractVersion: CONSUMER_CONTRACT_VERSION,
       adapterContractVersion: adapterFor().contractVersion,
@@ -407,7 +428,6 @@ function evidenceClassification(caseState) {
       evidenceCatalogueKey: "ownership_chart",
       sourceOrigin: "INDEPENDENT_OF_APPLICANT",
       capturedAt: AT,
-      sourceEffectiveAt: AT,
       currentState: "UNKNOWN",
       classificationBasis: { origin: "WAVE_11B2A_PREINGESTED_ACCEPTED_FIXTURE" },
       supports: [{
@@ -510,6 +530,13 @@ function validateSession(value) {
   }
   assertSafeSession(value);
   value.snapshots.forEach(({ snapshot }) => verifyDecisionSnapshotV2(snapshot));
+  if (["SOURCE_FACTS_EXTRACTED", "SNAPSHOT_B"].includes(value.stage)
+    && (value.sourceAttestation?.case !== "CASE_B" || value.sourceAttestation.relationshipCurrentness !== "UNKNOWN")) {
+    throw new TypeError("Pre-ingested Artifact attestation assessment is missing or inconsistent");
+  }
+  if (value.stage === "SNAPSHOT_B" && value.snapshots.at(-1).graph.relationships.some(({ temporalState }) => temporalState !== "UNKNOWN")) {
+    throw new TypeError("Pre-ingested Artifact relationship currentness is inconsistent with the source");
+  }
   if (value.artifactCorrelation) {
     const reference = value.artifactCorrelation.artifactReference;
     if (reference.artifactId !== IDS.artifact || reference.digest !== DIGEST) throw new TypeError("Pre-ingested Artifact reference integrity check failed");

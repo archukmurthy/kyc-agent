@@ -3,6 +3,7 @@
 
   const h = React.createElement;
   const { OwnershipGraph, UboJourney, UboApplicantJourneyV2, DETAIL_LEVEL } = UboControlUI;
+  const preingestedGraphViews = UboLabPreingestedEvidenceGraphViews;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
   const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_JOURNEY_V2", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
@@ -661,6 +662,7 @@
     const [error, setError] = React.useState("");
     const [notice, setNotice] = React.useState("");
     const [restored, setRestored] = React.useState(false);
+    const [showAllRelationships, setShowAllRelationships] = React.useState(false);
     React.useEffect(() => {
       if (!preingestedEvidenceCache) { setRestored(true); return; }
       preingestedEvidenceCache.restore().then(async ({ record, error: cacheError }) => {
@@ -697,6 +699,13 @@
     const effectiveBasis = (id) => assessmentFor(id)?.basisRecords.find(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
     const mitchell = effectiveBasis("mitchell-fortescue");
     const lee = effectiveBasis("lee-taylor");
+    const displayGraph = finalContent && (showAllRelationships
+      ? preingestedGraphViews.createFullSourceGraphView(current.graph, demo.entityDirectory)
+      : preingestedGraphViews.createTargetRelevantGraphView(current.graph, demo.entityDirectory));
+    const ownershipStatements = displayGraph?.relationships
+      .filter(({ relationshipType }) => relationshipType === "ECONOMIC_OWNERSHIP")
+      .map(({ relationshipId, presentationLabel }) => h("li", { key: relationshipId }, presentationLabel));
+    const r08 = finalContent?.evidenceSufficiency?.find(({ requirementId }) => requirementId === "UBO-R08");
     const evidenceNeedCount = current?.snapshot?.decisionContent?.informationNeedsV2?.filter(({ status, requiredByRequirementIds }) => status === "OPEN" && requiredByRequirementIds.some((id) => ["UBO-R01", "UBO-R08"].includes(id))).length || 0;
     if (!demo) return h("main", { className: "shell preingested-demo" },
       h("section", { className: "panel demo-hero" },
@@ -739,20 +748,39 @@
           h("p", null, `Fact ${fact.factId} · temporal ${human(fact.qualifiers?.currentState || fact.value?.temporal?.state)}`),
           h("details", null, h("summary", null, "Proof locator and source reference"), h("pre", { className: "json" }, pretty(fact.evidenceReferences)))))),
         h("details", { className: "section" }, h("summary", null, `Typed adapter limitations · ${extracted.issues.length}`), h("pre", { className: "json" }, pretty(extracted.issues)))),
+      demo.sourceAttestation && h("section", { className: "panel section attestation-panel" },
+        h("p", { className: "source-label" }, "SOURCE ATTESTATION CHECK · CASE B"),
+        h("h2", null, "Ownership currentness is not established"),
+        h("p", null, demo.sourceAttestation.reason),
+        h("div", { className: "grid-3 section" },
+          h(Metric, { label: "Signature text", value: demo.sourceAttestation.metadata.signatureText || "Not present in fixture" }),
+          h(Metric, { label: "Signer / capacity", value: demo.sourceAttestation.metadata.signerName ? `${demo.sourceAttestation.metadata.signerName} · ${demo.sourceAttestation.metadata.signerCapacity || "capacity absent"}` : "Not present in fixture" }),
+          h(Metric, { label: "Signed / as-at date", value: demo.sourceAttestation.metadata.asAtDate || demo.sourceAttestation.metadata.signedDate || "Not present in fixture" }),
+          h(Metric, { label: "Declaration wording", value: demo.sourceAttestation.metadata.declarationText || "Not present in fixture" }),
+          h(Metric, { label: "Attestation scope", value: demo.sourceAttestation.metadata.scope ? `${demo.sourceAttestation.coveredFactIds.length} covered facts` : "Not present in fixture" }),
+          h(Metric, { label: "Artifact locator", value: demo.sourceAttestation.metadata.locator ? "Preserved" : "No attestation locator" })),
+        h("p", { className: "notice" }, `Artifact captured ${demo.extraction?.artifact?.capturedAt || "at an unverified time"}. This is ingestion metadata only—not a signed/as-at ownership assertion—and does not make any relationship CURRENT.`),
+        h("details", null, h("summary", null, "Inspect the separate currentness assessment"), h("pre", { className: "json" }, pretty(demo.sourceAttestation)))),
       finalContent && h(React.Fragment, null,
         h("section", { className: "panel section result-panel" },
-          h("p", { className: "source-label" }, "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, "Qualifying person found"),
-          h("article", { className: "positive-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Statutory effective-interest route · 75% effective economic interest"), h("p", null, "75% × 100% = 75%"), h("p", null, `Threshold ${mitchell?.threshold?.comparator || ">"}${mitchell?.threshold?.value || 25}% · ${mitchell?.assessmentState || "SATISFIED"}`)),
-          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor — route-specific boundary result"), h("strong", null, "25% × 100% = 25%"), h("p", null, `The >25% effective-economic route is ${lee?.assessmentState || "NOT_SATISFIED"}: exactly 25% is not greater than 25%. Other routes are not collapsed into a conclusive non-UBO statement.`)),
+          h("p", { className: "source-label" }, "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, "Current qualification is indeterminate"),
+          h("article", { className: "boundary-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Source-stated arithmetic · 75% × 100% = nominal 75%"), h("p", null, `Current statutory effective-interest route · ${mitchell?.assessmentState || "INDETERMINATE"}. The engine records the path as ${mitchell?.recordedCalculation?.status || "UNRESOLVED"} because both material edges have UNKNOWN currentness.`)),
+          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor"), h("strong", null, "Source-stated arithmetic · 25% × 100% = nominal 25%"), h("p", null, `Current statutory effective-interest route · ${lee?.assessmentState || "INDETERMINATE"}. The source percentage can be inspected, but the engine cannot treat the path as current without scoped attestation.`)),
+          h("p", null, `R08 Evidence sufficiency remains separate · ${r08?.status || "INSUFFICIENT"}. The attestation assessment contributes no additional independent source.`),
           h("p", null, "Officer roles remain source-backed entity metadata only; they create no control edge, appointment/removal right or qualification basis."),
           h("details", null, h("summary", null, "Pinned route, calculation, path and Evidence references"), h("pre", { className: "json" }, pretty({ mitchell, lee, policy: finalContent.policy.identity, productionAuthorized: false })))),
-        h("section", { className: "panel section review-graph-panel" }, h("h2", null, "Ownership graph"), h("p", null, "Four economic relationships; officer metadata is intentionally absent from the graph."), h(OwnershipGraph, { projection: current.graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })),
+        h("section", { className: "panel section review-graph-panel" },
+          h("div", { className: "panel-heading" }, h("div", null, h("h2", null, "Ownership graph"), h("p", null, showAllRelationships ? "Full source-document view. The regulated subject remains highlighted." : "Target-specific reverse-reachability view for Better Comms VOIP Ltd.")),
+            h("label", { className: "source-graph-toggle" }, h("input", { type: "checkbox", checked: showAllRelationships, onChange: (event) => setShowAllRelationships(event.target.checked) }), " Show all relationships from source document")),
+          h("p", null, showAllRelationships ? "Both subsidiaries are shown beneath their owner, Better Holdco." : "Off-path sibling Better Network Services is retained in the case and source view, but excluded here because it is not on a path to the regulated target."),
+          h("ul", { className: "ownership-statements" }, ownershipStatements),
+          h(OwnershipGraph, { projection: displayGraph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })),
         h("section", { className: "panel section" }, h("h2", null, "Applicant journey after re-evaluation"), h("div", { className: "grid-3" }, h(Metric, { label: "Ownership document", value: "REVIEWED" }), h(Metric, { label: "Ownership structure", value: "UPDATED" }), h(Metric, { label: "Statutory qualifying people", value: assessmentFor("mitchell-fortescue")?.routeStatus === "ROUTE_SATISFIED" ? 1 : 0 }), h(Metric, { label: "Customer bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Internal review pending", value: current.journey.finishLine.internalReviewPending }), h(Metric, { label: "Final case complete", value: String(current.journey.finalCaseComplete) })), current.journey.customerWorkBundles.length ? h("pre", { className: "json section" }, pretty(current.journey.customerWorkBundles)) : h("p", { className: "notice" }, "The original ownership-document request is no longer present in the pinned plan."))),
       h("section", { className: "panel section history" },
         h("div", { className: "history-list" }, demo.snapshots.map((item) => h("article", { className: "history-item", key: item.snapshot.snapshotId }, h("strong", null, `${item.sequence}. ${human(item.reason)}`), h("span", null, `#${shortHash(item.snapshot.snapshotId)}`), h("span", null, item.snapshot.decisionContent.history.supersessionReason || "GENESIS")))),
         h("div", null, h("h2", null, "Immutable Decision History"), h("p", null, "Snapshot A remains reconstructable. Snapshot B is linked with NEW_FACTS and pins the graph, calculations, qualifications, Evidence references, needs and plan."), h("details", null, h("summary", null, "Evidence handoff correlation and decision audit"), h("pre", { className: "json" }, pretty({ externalEvidenceHandoff: demo.externalEvidenceHandoff, artifactCorrelation: demo.artifactCorrelation, decisionAudit: demo.decisionAudit }))))),
       h("section", { className: "panel section" }, h("h2", null, "Presenter guide"), h("ol", null,
-        h("li", null, "Show Snapshot A’s unresolved ownership need and planned Evidence request."), h("li", null, "Use the pre-ingested Bettercomms ownership chart."), h("li", null, "Inspect six source-backed CandidateFacts and one Artifact."), h("li", null, "Apply the fixture-only explicit identity and claim decisions."), h("li", null, "Show Snapshot B, the graph, Mitchell’s 75% route, Lee’s exact-25% boundary, officer isolation and history."))),
+        h("li", null, "Show Snapshot A’s unresolved ownership need and planned Evidence request."), h("li", null, "Use the pre-ingested Bettercomms ownership chart."), h("li", null, "Inspect six source-backed CandidateFacts and one Artifact."), h("li", null, "Apply the fixture-only explicit identity and claim decisions."), h("li", null, "Show the Case B attestation check and why current qualification is indeterminate."), h("li", null, "Compare the target-specific graph with the optional full source-document view."))),
       readiness && h("p", { className: "field-help" }, `Policy ${readiness.policyIdentity?.version || "1.6-RC"} remains REVIEW ONLY and not production approved.`));
   }
 

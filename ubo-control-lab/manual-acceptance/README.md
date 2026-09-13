@@ -121,7 +121,9 @@ Every screenshot retains the review-policy watermark and production-not-authoriz
 
 ## Wave 11B2A pre-ingested Evidence demo
 
-Capture the deployed `BETTERCOMMS EVIDENCE DEMO` flow in this order: Snapshot A unresolved ownership need; pinned structure-Evidence request; pre-ingested Artifact control; interpretation progress; six CandidateFacts; Artifact ID/digest and six locators; ten identity plus six claim targets; fixture-only review helper; Snapshot B; five-node/four-edge graph; Mitchell 75% calculation and statutory route; Lee exact-25% boundary; officer metadata isolation; updated applicant journey; linked Decision History; hard-refresh restoration; persistent review-policy watermark.
+Capture the deployed `BETTERCOMMS EVIDENCE DEMO` flow in this order: Snapshot A unresolved ownership need; pinned structure-Evidence request; pre-ingested Artifact control; interpretation progress; six CandidateFacts; Artifact ID/digest and six locators; ten identity plus six claim targets; fixture-only review helper; Snapshot B; Case B attestation trace; target-specific four-node/three-edge graph; full-source five-node/four-edge graph; Mitchell and Lee source-stated arithmetic with `INDETERMINATE` current qualification; officer metadata isolation; R08 separation; linked Decision History; hard-refresh restoration; persistent review-policy watermark.
+
+The default screenshot must exclude off-path Better Network Services. The full-source screenshot must show Better Comms VOIP Ltd and Better Network Services as sibling subsidiaries, with explicit owner-to-owned statements. It must not present Artifact capture time as a signed/as-at assertion or describe either person as a currently qualifying UBO.
 
 Acceptance fails if any view implies customer upload, production ingestion, automatic real-case adjudication, production policy approval, live/paid interpretation, or production persistence. The expected visible labels are `PRE-INGESTED DEMO ARTIFACT`, `REVIEW LAB — NOT PRODUCTION UPLOAD`, and `SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH`.
 
