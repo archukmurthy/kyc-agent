@@ -13,6 +13,7 @@ async function runWorker(deps = {}) {
   const finalize = deps.finalizeSubmission || finalizeSubmission;
   const markDone = deps.markDone || store.markDone;
   const markFailed = deps.markFailed || store.markFailed;
+  const countDeadLettered = deps.countDeadLettered || store.countDeadLettered;
 
   const rows = await claimPending({ limit: 20 });
   let done = 0, failed = 0;
@@ -26,7 +27,15 @@ async function runWorker(deps = {}) {
       failed++;
     }
   }
-  return { claimed: rows.length, done, failed };
+
+  const deadLettered = await countDeadLettered();
+  if (deadLettered > 0) {
+    console.error(
+      `[finalize-submissions] ${deadLettered} submission(s) dead-lettered (attempts >= ${store.MAX_ATTEMPTS}) — manual triage required`
+    );
+  }
+
+  return { claimed: rows.length, done, failed, deadLettered };
 }
 
 module.exports = async function handler(req, res) {

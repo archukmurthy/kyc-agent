@@ -22,6 +22,7 @@ test("returns status:saved when finalize succeeds", async () => {
   handler.__setDeps({
     enqueue: async () => ({ id: "sub-1", inserted: true }),
     finalizeSubmission: async () => ({ sessionId: "s1", clientId: "c1", journeyId: "j1" }),
+    markProcessing: async () => {},
     markDone: async () => {},
     markFailed: async () => {},
   });
@@ -33,11 +34,47 @@ test("returns status:saved when finalize succeeds", async () => {
   assert.strictEqual(res.body.sessionId, "s1");
 });
 
+test("saved path calls markProcessing (claiming the row) before finalizeSubmission", async () => {
+  const handler = require("../submit");
+  const order = [];
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async (id) => { order.push(["markProcessing", id]); },
+    finalizeSubmission: async () => { order.push(["finalizeSubmission"]); return { sessionId: "s1" }; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(res.body.status, "saved");
+  assert.deepStrictEqual(order, [["markProcessing", "sub-1"], ["finalizeSubmission"]]);
+});
+
+test("a markProcessing throw does not block finalize — still returns saved", async () => {
+  const handler = require("../submit");
+  let finalizeCalled = false;
+  handler.__setDeps({
+    enqueue: async () => ({ id: "sub-1", inserted: true }),
+    markProcessing: async () => { throw new Error("claim failed"); },
+    finalizeSubmission: async () => { finalizeCalled = true; return { sessionId: "s1" }; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  });
+  const req = { method: "POST", body: { submissionId: "sub-1", tenantId: "nium", company: { name: "Acme" } } };
+  const res = fakeRes();
+  await handler(req, res);
+  assert.strictEqual(finalizeCalled, true);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.status, "saved");
+});
+
 test("returns status:queued when finalize throws (never blocks)", async () => {
   const handler = require("../submit");
   handler.__setDeps({
     enqueue: async () => ({ id: "sub-1", inserted: true }),
     finalizeSubmission: async () => { throw new Error("db down"); },
+    markProcessing: async () => {},
     markDone: async () => {},
     markFailed: async () => {},
   });

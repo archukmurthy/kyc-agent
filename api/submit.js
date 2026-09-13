@@ -8,11 +8,11 @@
 // whose failure produces a non-200 response.
 "use strict";
 
-const { enqueue, markDone, markFailed } = require("./lib/submissionInboxStore");
+const { enqueue, markProcessing, markDone, markFailed } = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
 
 // Injected deps (overridable in tests via __setDeps).
-let _deps = { enqueue, finalizeSubmission, markDone, markFailed };
+let _deps = { enqueue, finalizeSubmission, markProcessing, markDone, markFailed };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -38,6 +38,15 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     console.error("[api/submit] enqueue failed:", err.message);
     return res.status(503).json({ status: "capture_failed", submissionId, error: err.message });
+  }
+
+  // Claim the row before the inline finalize attempt so a concurrent cron tick can't
+  // also finalize it (double-finalize window). Best-effort: a crash here is covered
+  // by claimPending's stale-processing reclaim, so don't fail the submit over it.
+  try {
+    await _deps.markProcessing(submissionId);
+  } catch (err) {
+    console.error("[api/submit] markProcessing failed (best-effort):", err.message);
   }
 
   // Phase 2: try the real save once, inline. Success → saved; failure → queued for
