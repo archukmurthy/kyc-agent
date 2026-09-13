@@ -135,10 +135,22 @@ test("markFailed below the attempts cap does NOT log a DEAD-LETTER console.error
   assert.strictEqual(calls.length, 0);
 });
 
-test("countDeadLettered issues an attempts >= MAX_ATTEMPTS count query", async () => {
+test("countDeadLettered issues an attempts >= MAX_ATTEMPTS count query including capped 'processing' rows", async () => {
   const sql = fakeSql([{ n: 3 }]);
   const r = await store.countDeadLettered({ sql });
   assert.strictEqual(r, 3);
-  assert.match(sql.calls[0].text, /status = 'failed'/);
   assert.match(sql.calls[0].text, /attempts >= /);
+  assert.match(sql.calls[0].text, /status IN \('failed', 'processing'\)/);
+});
+
+test("markFailed with incrementAttempt:true includes attempts = attempts + 1 in the UPDATE", async () => {
+  const sql = fakeSql([{ attempts: 2 }]);
+  await store.markFailed("id1", "boom", { sql, incrementAttempt: true });
+  assert.match(sql.calls[0].text, /attempts = attempts \+ 1/);
+});
+
+test("markFailed with incrementAttempt:false (or omitted) does NOT increment attempts", async () => {
+  const sql = fakeSql([{ attempts: 2 }]);
+  await store.markFailed("id1", "boom", { sql });
+  assert.doesNotMatch(sql.calls[0].text, /attempts = attempts \+ 1/);
 });

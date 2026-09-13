@@ -75,15 +75,27 @@ async function markDone(id, sessionId, deps = {}) {
   `;
 }
 
-async function markFailed(id, errorMessage, deps = {}) {
-  const sql = deps.sql || defaultSql();
-  const rows = await sql`
-    UPDATE submission_inbox
-    SET status = 'failed',
-        last_error = ${String(errorMessage || "").slice(0, 2000)}, updated_at = now()
-    WHERE id = ${id}
-    RETURNING attempts
-  `;
+// `incrementAttempt` counts this attempt when the caller's earlier claim/markProcessing
+// step didn't already count it (see api/submit.js's markProcessing-throw fallback path).
+// The worker (finalize-submissions.js) never passes it — claimPending already counted.
+async function markFailed(id, errorMessage, { incrementAttempt = false, sql: sqlDep } = {}) {
+  const sql = sqlDep || defaultSql();
+  const rows = incrementAttempt
+    ? await sql`
+        UPDATE submission_inbox
+        SET status = 'failed',
+            last_error = ${String(errorMessage || "").slice(0, 2000)}, updated_at = now(),
+            attempts = attempts + 1
+        WHERE id = ${id}
+        RETURNING attempts
+      `
+    : await sql`
+        UPDATE submission_inbox
+        SET status = 'failed',
+            last_error = ${String(errorMessage || "").slice(0, 2000)}, updated_at = now()
+        WHERE id = ${id}
+        RETURNING attempts
+      `;
   const currentAttempts = rows[0] && rows[0].attempts;
   if (currentAttempts >= MAX_ATTEMPTS) {
     console.error(
@@ -93,11 +105,14 @@ async function markFailed(id, errorMessage, deps = {}) {
 }
 
 // Count rows that have exhausted their retry budget and are no longer claimed by
-// claimPending — i.e. silently abandoned unless someone looks.
+// claimPending — i.e. silently abandoned unless someone looks. Includes rows stuck in
+// 'processing' at the cap (a hard crash on every attempt never reaches markFailed, so
+// 'failed' alone would miss them).
 async function countDeadLettered(deps = {}) {
   const sql = deps.sql || defaultSql();
   const rows = await sql`
-    SELECT count(*)::int AS n FROM submission_inbox WHERE status = 'failed' AND attempts >= ${MAX_ATTEMPTS}
+    SELECT count(*)::int AS n FROM submission_inbox
+    WHERE attempts >= ${MAX_ATTEMPTS} AND status IN ('failed', 'processing')
   `;
   return rows[0].n;
 }

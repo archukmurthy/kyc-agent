@@ -43,8 +43,10 @@ module.exports = async function handler(req, res) {
   // Claim the row before the inline finalize attempt so a concurrent cron tick can't
   // also finalize it (double-finalize window). Best-effort: a crash here is covered
   // by claimPending's stale-processing reclaim, so don't fail the submit over it.
+  let claimed = false;
   try {
     await _deps.markProcessing(submissionId);
+    claimed = true;
   } catch (err) {
     console.error("[api/submit] markProcessing failed (best-effort):", err.message);
   }
@@ -57,7 +59,9 @@ module.exports = async function handler(req, res) {
     console.log(`[api/submit] saved inline — session ${r.sessionId}`);
     return res.status(200).json({ status: "saved", ...r });
   } catch (err) {
-    await _deps.markFailed(submissionId, err.message).catch(() => {});
+    // Count this attempt here only if markProcessing didn't already count it above —
+    // never double-counts, never zero-counts.
+    await _deps.markFailed(submissionId, err.message, { incrementAttempt: !claimed }).catch(() => {});
     console.warn(`[api/submit] finalize deferred to worker (${submissionId}):`, err.message);
     return res.status(200).json({ status: "queued", submissionId });
   }

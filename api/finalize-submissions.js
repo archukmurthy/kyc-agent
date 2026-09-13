@@ -11,10 +11,10 @@
 const store = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
 
-// Parses a positive-integer env override, falling back to `def` on missing/NaN.
+// Parses a positive-integer env override, falling back to `def` on missing/NaN/non-positive.
 function parseIntEnv(raw, def) {
   const n = parseInt(raw, 10);
-  return Number.isFinite(n) ? n : def;
+  return Number.isFinite(n) && n > 0 ? n : def;
 }
 
 async function runWorker(deps = {}) {

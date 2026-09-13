@@ -71,6 +71,48 @@ test("passes limit=20/staleSeconds=300 defaults to claimPending when env is unse
   assert.deepStrictEqual(captured, { limit: 20, staleSeconds: 300 });
 });
 
+test("falls back to defaults when env values are negative", async () => {
+  const prevLimit = process.env.FINALIZE_BATCH_LIMIT;
+  const prevStale = process.env.FINALIZE_STALE_SECONDS;
+  process.env.FINALIZE_BATCH_LIMIT = "-5";
+  process.env.FINALIZE_STALE_SECONDS = "-60";
+  let captured;
+  try {
+    await runWorker({
+      claimPending: async (opts) => { captured = opts; return []; },
+      finalizeSubmission: async () => ({}),
+      markDone: async () => {},
+      markFailed: async () => {},
+      countDeadLettered: async () => 0,
+    });
+  } finally {
+    if (prevLimit === undefined) delete process.env.FINALIZE_BATCH_LIMIT; else process.env.FINALIZE_BATCH_LIMIT = prevLimit;
+    if (prevStale === undefined) delete process.env.FINALIZE_STALE_SECONDS; else process.env.FINALIZE_STALE_SECONDS = prevStale;
+  }
+  assert.deepStrictEqual(captured, { limit: 20, staleSeconds: 300 });
+});
+
+test("falls back to defaults when env values are zero", async () => {
+  const prevLimit = process.env.FINALIZE_BATCH_LIMIT;
+  const prevStale = process.env.FINALIZE_STALE_SECONDS;
+  process.env.FINALIZE_BATCH_LIMIT = "0";
+  process.env.FINALIZE_STALE_SECONDS = "0";
+  let captured;
+  try {
+    await runWorker({
+      claimPending: async (opts) => { captured = opts; return []; },
+      finalizeSubmission: async () => ({}),
+      markDone: async () => {},
+      markFailed: async () => {},
+      countDeadLettered: async () => 0,
+    });
+  } finally {
+    if (prevLimit === undefined) delete process.env.FINALIZE_BATCH_LIMIT; else process.env.FINALIZE_BATCH_LIMIT = prevLimit;
+    if (prevStale === undefined) delete process.env.FINALIZE_STALE_SECONDS; else process.env.FINALIZE_STALE_SECONDS = prevStale;
+  }
+  assert.deepStrictEqual(captured, { limit: 20, staleSeconds: 300 });
+});
+
 test("honors FINALIZE_BATCH_LIMIT / FINALIZE_STALE_SECONDS env overrides", async () => {
   const prevLimit = process.env.FINALIZE_BATCH_LIMIT;
   const prevStale = process.env.FINALIZE_STALE_SECONDS;
