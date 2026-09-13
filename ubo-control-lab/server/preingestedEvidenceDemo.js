@@ -24,12 +24,18 @@ const {
 } = require("../../integrations/ubo-control/evidence-platform-extraction/index.js");
 const {
   ARTIFACT_LABEL,
-  AT,
+  CERTIFICATION_DATE,
   DIGEST,
+  DIMENSIONS,
+  FACT_IDS,
+  HISTORICAL_LEADS,
   IDS,
+  REVIEW_RECORDED_AT: AT,
+  SIZE_BYTES,
   artifact,
   buildBettercommsServiceResult,
-} = require("../fixtures/bettercomms-preingested.js");
+  sourceCertification,
+} = require("../fixtures/bettercomms-source-reviewed.js");
 const { assessSignedOwnershipAttestation } = require("../fixtures/sourceAttestation.js");
 
 const SESSION_VERSION = "ubo-control-lab-preingested-evidence-session-v1";
@@ -44,9 +50,13 @@ const ENTITY_IDS = Object.freeze({
 });
 const FORBIDDEN_SESSION_KEYS = /(?:password|credential|accessToken|providerSecret|rawProviderPayload|documentContents|evidenceBytes|blobUrl|filePath|storageKey)/i;
 const runtimeOperations = new Map();
-const runtimeCounters = { providerCalls: 0 };
-const MATERIAL_OWNERSHIP_FACT_IDS = Object.freeze([1, 2, 3, 4]
-  .map((index) => `30000000-0000-4000-8000-00000000000${index}`));
+const runtimeCounters = { providerCalls: 0, reviewedFixtureRuns: 0 };
+const MATERIAL_OWNERSHIP_FACT_IDS = Object.freeze([
+  FACT_IDS.mitchellOwnership,
+  FACT_IDS.leeOwnership,
+  FACT_IDS.commsOwnership,
+  FACT_IDS.networkOwnership,
+]);
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function stableId(prefix, value) {
@@ -60,7 +70,7 @@ function entity(entityId, primaryName, category = "LEGAL_ENTITY") {
     aliases: [],
     externalIdentifiers: [],
     jurisdiction: "GB",
-    entityTypeMetadata: category === "NATURAL_PERSON" ? {} : { entityProfile: "COMPANY" },
+    entityTypeMetadata: category === "LEGAL_ENTITY" ? { entityProfile: "COMPANY" } : {},
     recordedAt: AT,
   };
 }
@@ -223,7 +233,7 @@ function createFixtureConsumer(fault = null) {
       const existing = runtimeOperations.get(request.operationKey);
       if (existing && existing.fingerprint !== fingerprint) throw Object.assign(new Error("conflict"), { code: "idempotency_conflict" });
       if (existing) return { ...clone(existing.result), replayed: true, providerCalled: false };
-      runtimeCounters.providerCalls += 1;
+      runtimeCounters.reviewedFixtureRuns += 1;
       let result = buildBettercommsServiceResult(request);
       if (fault === "PARTIAL") result.completeness.extraction = { state: "partial", limitations: ["fixture-partial"] };
       if (fault === "MALFORMED") result.correlation.requestId = "wrong-request";
@@ -270,22 +280,75 @@ function extractionRequest(session, overrides = {}) {
   };
 }
 function publicArtifactRecord() {
-  return { label: ARTIFACT_LABEL, artifactId: IDS.artifact, digest: DIGEST, digestAlgorithm: "sha256", mediaType: "image/png", sizeBytes: 4096, capturedAt: AT, sourceCount: 1 };
+  return {
+    label: ARTIFACT_LABEL,
+    artifactId: IDS.artifact,
+    digest: DIGEST,
+    digestAlgorithm: "sha256",
+    mediaType: "image/png",
+    sizeBytes: SIZE_BYTES,
+    dimensions: DIMENSIONS,
+    capturedAt: null,
+    certificationDate: CERTIFICATION_DATE,
+    sourceCount: 1,
+    provenance: "SOURCE_BACKED_MANUALLY_REVIEWED_FIXTURE",
+    historicalEvidenceStoreLinkage: "NOT_REVALIDATED",
+  };
 }
 function sourceAttestationAssessment() {
-  return assessSignedOwnershipAttestation({
+  const certification = sourceCertification();
+  const assessment = assessSignedOwnershipAttestation({
     artifactId: IDS.artifact,
     materialFactIds: MATERIAL_OWNERSHIP_FACT_IDS,
     attestation: {
-      signatureText: null,
-      signerName: null,
-      signerCapacity: null,
-      signedDate: null,
+      signatureText: certification.signatureMark.characterization,
+      signatureAuthenticated: certification.signatureMark.authenticated,
+      signerName: certification.signerName,
+      signerPostnominal: certification.signerPostnominal,
+      signerCapacity: certification.signerCapacity,
+      professionalReference: certification.professionalReference,
+      signedDate: certification.certificationDate,
       asAtDate: null,
-      declarationText: null,
-      scope: null,
-      locator: null,
+      declarationText: certification.declarationText,
+      scope: {
+        description: certification.declarationScope,
+        coveredFactIds: certification.coveredFactIds,
+        sourceExplicitOwnershipAsAtDate: null,
+      },
+      locator: {
+        artifactId: IDS.artifact,
+        kind: "image",
+        region: { x: 15, y: 443, width: 510, height: 152, coordinateSystem: "original_pixels" },
+        metadata: {
+          qualification: "NEW_MANUAL_REVIEW_ANNOTATION_NOT_HISTORICAL_R3_LOCATOR",
+          originalDimensions: DIMENSIONS,
+        },
+      },
     },
+  });
+  return clone({
+    ...assessment,
+    sourceCertification: certification,
+    sourceDateSemantics: {
+      certificationDate: CERTIFICATION_DATE,
+      explicitOwnershipAsAtDate: null,
+      historicalCapturedAt: null,
+      fixtureReviewRecordedAt: AT,
+      requestedAssessmentDate: AT.slice(0, 10),
+      freshnessState: "NOT_ESTABLISHED",
+    },
+    reviewInterpretation: {
+      status: "RECORDED_NOT_APPLIED_TO_RELATIONSHIP_CURRENTNESS",
+      actor: { type: "LAB_FIXTURE_REVIEWER", referenceId: "control-room-source-review-fixture" },
+      decidedAt: AT,
+      statement: "The dated certification is being treated as a declaration that the depicted structure was accurate on 5 May 2026.",
+      limitation: "The current UBO application contract has no analyst operation that separately applies this reviewed date interpretation to existing UNKNOWN relationship Facts; no CURRENT relationship or historical snapshot was fabricated.",
+      sourceFactIds: Object.values(FACT_IDS).filter((id) => id.startsWith("92000000")),
+      coveredRelationshipFactIds: MATERIAL_OWNERSHIP_FACT_IDS,
+      unresolved: ["SIGNER_IDENTITY_NOT_VERIFIED", "SIGNER_AUTHORITY_NOT_VERIFIED", "NO_EXPLICIT_OWNERSHIP_AS_AT_DATE", "FRESHNESS_NOT_ESTABLISHED"],
+    },
+    historicalEvidenceLookup: HISTORICAL_LEADS,
+    reason: "The source contains a dated chart certification and signature-like mark, but no explicit ownership-effective/as-at date; signer identity and authority are unverified, so relationship currentness remains UNKNOWN.",
   });
 }
 function startPreingestedEvidenceDemo({ sessionId } = {}) {
@@ -317,9 +380,14 @@ function startPreingestedEvidenceDemo({ sessionId } = {}) {
     contractVersion: SESSION_VERSION,
     sessionId: sessionId || `bettercomms-preingested:${randomUUID()}`,
     sourceMode: "FIXTURE",
-    sourceIdentity: { fixtureId: FIXTURE_ID, sourceFixtureId: "V2-LAB-01" },
+    sourceIdentity: {
+      fixtureId: FIXTURE_ID,
+      sourceFixtureId: "PR60-RECOVERED-SOURCE-REVIEW-V1",
+      sourceDigest: DIGEST,
+      persistedHistoricalIdentity: false,
+    },
     fixtureId: FIXTURE_ID,
-    fixtureLabel: "BETTERCOMMS — PRE-INGESTED OWNERSHIP CHART",
+    fixtureLabel: "BETTERCOMMS — SOURCE-BACKED REVIEWED OWNERSHIP CHART",
     sessionOnly: true,
     productionAuthorized: false,
     stage: "EVIDENCE_REQUIRED",
@@ -337,7 +405,11 @@ function startPreingestedEvidenceDemo({ sessionId } = {}) {
     decisionTargets: { candidateParties: [], candidateClaims: [] },
     decisionAudit: [],
     entityDirectory: [entity(SUBJECT_ID, "Better Comms VOIP Ltd")],
-    labels: ["PRE-INGESTED DEMO ARTIFACT", "REVIEW LAB — NOT PRODUCTION UPLOAD"],
+    labels: [
+      "REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE",
+      "Historical Evidence-store linkage not yet revalidated",
+      "No fresh automated interpretation performed in this demonstration",
+    ],
   });
 }
 async function usePreingestedBettercommsArtifact({ session, fault = null } = {}) {
@@ -403,14 +475,14 @@ async function usePreingestedBettercommsArtifact({ session, fault = null } = {})
   });
 }
 function decisionMap() {
-  const fact = (index) => `30000000-0000-4000-8000-00000000000${index}`;
   return new Map([
-    [`${fact(1)}:subject`, ENTITY_IDS.mitchell], [`${fact(1)}:object`, ENTITY_IDS.holdco],
-    [`${fact(2)}:subject`, ENTITY_IDS.lee], [`${fact(2)}:object`, ENTITY_IDS.holdco],
-    [`${fact(3)}:subject`, ENTITY_IDS.holdco], [`${fact(3)}:object`, ENTITY_IDS.comms],
-    [`${fact(4)}:subject`, ENTITY_IDS.holdco], [`${fact(4)}:object`, ENTITY_IDS.network],
-    [`${fact(5)}:subject`, ENTITY_IDS.mitchell], [`${fact(5)}:object`, ENTITY_IDS.holdco],
-    [`${fact(6)}:subject`, ENTITY_IDS.lee], [`${fact(6)}:object`, ENTITY_IDS.holdco],
+    [`${FACT_IDS.mitchellOwnership}:subject`, ENTITY_IDS.mitchell], [`${FACT_IDS.mitchellOwnership}:object`, ENTITY_IDS.holdco],
+    [`${FACT_IDS.leeOwnership}:subject`, ENTITY_IDS.lee], [`${FACT_IDS.leeOwnership}:object`, ENTITY_IDS.holdco],
+    [`${FACT_IDS.commsOwnership}:subject`, ENTITY_IDS.holdco], [`${FACT_IDS.commsOwnership}:object`, ENTITY_IDS.comms],
+    [`${FACT_IDS.networkOwnership}:subject`, ENTITY_IDS.holdco], [`${FACT_IDS.networkOwnership}:object`, ENTITY_IDS.network],
+    [`${FACT_IDS.mitchellOfficer}:subject`, ENTITY_IDS.mitchell], [`${FACT_IDS.mitchellOfficer}:object`, ENTITY_IDS.holdco],
+    [`${FACT_IDS.leeOfficer}:subject`, ENTITY_IDS.lee], [`${FACT_IDS.leeOfficer}:object`, ENTITY_IDS.holdco],
+    ...Object.values(FACT_IDS).filter((id) => id.startsWith("92000000")).map((id) => [`${id}:subject`, ENTITY_IDS.comms]),
   ]);
 }
 function exactFixtureEntityId(candidatePartyKey, identities) {
@@ -512,7 +584,8 @@ function applyPreconfiguredFixtureDecisions({ session } = {}) {
       ...verified.decisionAudit,
       ...identityDecisions.map((decision) => ({ event: "IDENTITY_DECISION", ...decision })),
       ...claimAdjudications.map((decision) => ({ event: "CLAIM_DECISION", ...decision })),
-      { event: "SNAPSHOT_B_CREATED", snapshotId: evaluated.decisionSnapshot.snapshotId, recordedAt: "2026-09-08T10:01:00.000Z" },
+      { event: "SNAPSHOT_B_CREATED", snapshotId: evaluated.decisionSnapshot.snapshotId, recordedAt: AT },
+      { event: "SOURCE_CERTIFICATION_REVIEW_RECORDED", ...clone(verified.sourceAttestation.reviewInterpretation) },
     ],
   });
 }
@@ -544,7 +617,7 @@ function validateSession(value) {
   return clone(value);
 }
 function runtimeMetrics() { return clone(runtimeCounters); }
-function resetRuntimeForTest() { runtimeOperations.clear(); runtimeCounters.providerCalls = 0; }
+function resetRuntimeForTest() { runtimeOperations.clear(); runtimeCounters.providerCalls = 0; runtimeCounters.reviewedFixtureRuns = 0; }
 
 module.exports = Object.freeze({
   ENTITY_IDS,

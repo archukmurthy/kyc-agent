@@ -26,8 +26,11 @@ function assessSignedOwnershipAttestation({ artifactId, attestation, materialFac
   const sufficient = missingFields.length === 0 && uncoveredFactIds.length === 0 && facts.length > 0;
   const metadata = {
     signatureText: source.signatureText || null,
+    signatureAuthenticated: source.signatureAuthenticated === true,
     signerName: source.signerName || null,
+    signerPostnominal: source.signerPostnominal || null,
     signerCapacity: source.signerCapacity || null,
+    professionalReference: source.professionalReference || null,
     signedDate: source.signedDate || null,
     asAtDate: source.asAtDate || null,
     declarationText: source.declarationText || null,

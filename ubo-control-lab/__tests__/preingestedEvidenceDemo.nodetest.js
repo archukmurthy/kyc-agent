@@ -13,7 +13,19 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession,
 } = require("../server/preingestedEvidenceDemo.js");
-const { DIGEST, IDS } = require("../fixtures/bettercomms-preingested.js");
+const syntheticFixture = require("../fixtures/bettercomms-preingested.js");
+const {
+  CERTIFICATION_DATE,
+  DIGEST,
+  DIMENSIONS,
+  FACT_IDS,
+  HISTORICAL_LEADS,
+  IDS,
+  SIZE_BYTES,
+  WINDOWS,
+  buildBettercommsServiceResult,
+  sourceCertification,
+} = require("../fixtures/bettercomms-source-reviewed.js");
 const { assessSignedOwnershipAttestation } = require("../fixtures/sourceAttestation.js");
 const {
   createFullSourceGraphView,
@@ -52,7 +64,58 @@ function invokeApi(operation, payload) {
   });
 }
 
-test("Wave 11B2A uses a real handoff then keeps six source facts candidate-before-conclusion", async () => {
+test("recovered source manifest preserves exact bytes identity and bounded original-coordinate review annotations", () => {
+  assert.equal(DIGEST, "37ec3f984451c0a0bf1ac0024e9790070d7cb3a90dc25696052e0f1583fa2f6f");
+  assert.equal(SIZE_BYTES, 582094);
+  assert.deepEqual(DIMENSIONS, { width: 841, height: 595 });
+  Object.values(WINDOWS).forEach(({ x, y, width, height }) => {
+    assert.ok(x >= 0 && y >= 0 && width > 0 && height > 0);
+    assert.ok(x + width <= DIMENSIONS.width);
+    assert.ok(y + height <= DIMENSIONS.height);
+  });
+  const result = buildBettercommsServiceResult({ operationKey: "source-manifest", correlation: { requestId: "source-manifest" } });
+  assert.equal(result.evidence.artifacts[0].sizeBytes, SIZE_BYTES);
+  assert.equal(result.evidence.integrity.artifacts[0].calculatedSha256, DIGEST);
+  assert.equal(result.evidence.artifacts[0].capturedAt, undefined);
+  assert.equal(result.providerCalled, false);
+  assert.equal(result.responsiveFacts.length + result.discoveredFacts.length, 14);
+  assert.ok(result.discoveredFacts.every((fact) => fact.supportingArtifactIds.length === 1 && fact.supportingArtifactIds[0] === IDS.artifact));
+});
+
+test("manual source reading preserves certification wording and limitations without inventing authority or an as-at date", () => {
+  const certification = sourceCertification();
+  assert.equal(certification.signerName, "Alex Palmer");
+  assert.equal(certification.signerPostnominal, "ACA");
+  assert.equal(certification.signerCapacity, "Management Accountant");
+  assert.deepEqual(certification.professionalReference, { label: "ACA No", value: "5246593" });
+  assert.equal(certification.certificationDate, "2026-05-05");
+  assert.equal(certification.declarationText, "I hereby certify that the company structure chart is true, correct and accurate");
+  assert.equal(certification.declarationScope, "Depicted company structure chart");
+  assert.equal(certification.signatureMark.present, true);
+  assert.equal(certification.signatureMark.authenticated, false);
+  assert.equal(certification.signerIdentityVerified, false);
+  assert.equal(certification.signerAuthorityVerified, false);
+  assert.equal(certification.professionalStatusVerification, "NOT_VERIFIED");
+  assert.equal(certification.explicitOwnershipAsAtDate, null);
+  assert.doesNotMatch(certification.declarationText, /complete|current today|as at/i);
+});
+
+test("source-reviewed provenance never masquerades as the synthetic regression or reported historical Evidence records", () => {
+  const syntheticRequest = { operationKey: "synthetic-contract", correlation: { requestId: "synthetic-contract" } };
+  const frozenBefore = JSON.stringify(syntheticFixture.buildBettercommsServiceResult(syntheticRequest));
+  const reviewed = buildBettercommsServiceResult({ operationKey: "provenance", correlation: { requestId: "provenance" } });
+  assert.notEqual(IDS.artifact, syntheticFixture.IDS.artifact);
+  assert.notEqual(DIGEST, syntheticFixture.DIGEST);
+  assert.notEqual(IDS.artifact, HISTORICAL_LEADS.artifactId);
+  assert.notEqual(IDS.operation, HISTORICAL_LEADS.laterOperationId);
+  assert.equal(HISTORICAL_LEADS.status, "REPORTED_NOT_REVALIDATED");
+  assert.match(HISTORICAL_LEADS.contextIssue, /TESCO PLC.*Bettercomms tenant\/context authority is not established/);
+  assert.equal(JSON.stringify(syntheticFixture.buildBettercommsServiceResult(syntheticRequest)), frozenBefore);
+  assert.equal(reviewed.extractionRun.provider, "manual-review-fixture");
+  assert.equal(reviewed.providerCalled, false);
+});
+
+test("source-backed reviewed fixture uses a real handoff then keeps fourteen source facts candidate-before-conclusion", async () => {
   resetRuntimeForTest();
   let session = startPreingestedEvidenceDemo({ sessionId: "candidate-stage" });
   assert.equal(session.stage, "EVIDENCE_REQUIRED");
@@ -67,16 +130,20 @@ test("Wave 11B2A uses a real handoff then keeps six source facts candidate-befor
   assert.equal(session.extraction.consumerContractVersion, "evidence-consumer-v1");
   assert.match(session.extraction.adapterContractVersion, /^ubo-evidence-platform-extraction-adapter-v1/);
   assert.equal(session.extraction.capabilityResult.outcome.state, "COMPLETE");
-  assert.equal(session.extraction.capabilityResult.candidateFacts.length, 6);
-  assert.equal(new Set(session.extraction.capabilityResult.candidateFacts.map(({ factId }) => factId)).size, 6);
+  assert.equal(session.extraction.capabilityResult.candidateFacts.length, 14);
+  assert.equal(new Set(session.extraction.capabilityResult.candidateFacts.map(({ factId }) => factId)).size, 14);
   const ownershipFacts = session.extraction.capabilityResult.candidateFacts.filter(({ type }) => type === "RELATIONSHIP");
-  const officerFacts = session.extraction.capabilityResult.candidateFacts.filter(({ type }) => type === "ENTITY_ATTRIBUTE");
+  const officerFacts = session.extraction.capabilityResult.candidateFacts.filter(({ attribute }) => attribute === "officer_relationship");
+  const certificationFacts = session.extraction.capabilityResult.candidateFacts.filter(({ attribute }) => attribute?.startsWith("source_certification_"));
+  assert.equal(ownershipFacts.length, 4);
+  assert.equal(officerFacts.length, 2);
+  assert.equal(certificationFacts.length, 8);
   assert.ok(ownershipFacts.every(({ qualifiers }) => qualifiers.economicInterestConcept === "SHARE_OWNERSHIP"));
   assert.ok(ownershipFacts.every(({ qualifiers }) => qualifiers.currentState === "UNKNOWN" && qualifiers.sourceEffectiveDate === null));
   assert.ok(officerFacts.every(({ value }) => value.temporal.state === "unknown"));
   assert.ok(session.extraction.capabilityResult.candidateFacts.every(({ evidenceReferences }) => evidenceReferences.length === 1 && evidenceReferences[0].locator.locators.length === 1));
-  assert.equal(session.decisionTargets.candidateParties.length, 10);
-  assert.equal(session.decisionTargets.candidateClaims.length, 6);
+  assert.equal(session.decisionTargets.candidateParties.length, 18);
+  assert.equal(session.decisionTargets.candidateClaims.length, 14);
   assert.equal(session.snapshots.length, 1);
   assert.equal(current(session).graph.relationships.length, 0);
   assert.equal(current(session).journey.finalCaseComplete, false);
@@ -84,7 +151,10 @@ test("Wave 11B2A uses a real handoff then keeps six source facts candidate-befor
   assert.equal(session.extraction.sourceCount, 1);
   assert.equal(session.extraction.artifact.artifactId, IDS.artifact);
   assert.equal(session.extraction.artifact.digest, DIGEST);
+  assert.equal(session.extraction.artifact.sizeBytes, SIZE_BYTES);
+  assert.equal(session.extraction.artifact.capturedAt, null);
   assert.equal(session.artifactCorrelation.artifactReference.artifactId, IDS.artifact);
+  assert.equal(session.extraction.capabilityResult.operationEvidenceReferences[0].integrity.digest, DIGEST);
   assert.equal("artifactId" in session.externalEvidenceHandoff, false);
   assert.equal(session.extraction.capabilityResult.issues.filter(({ code }) => code === "RELATIONSHIP_PRESERVED_AS_ENTITY_ATTRIBUTE").length, 2);
   assert.ok(session.extraction.capabilityResult.issues.filter(({ code }) => code === "RELATIONSHIP_PRESERVED_AS_ENTITY_ATTRIBUTE").every(({ factScope }) => factScope === "DISCOVERED"));
@@ -129,6 +199,14 @@ test("explicit fixture decisions keep source arithmetic but current qualificatio
   assert.equal(r08.status, "INSUFFICIENT");
   assert.deepEqual(r08.distinctIndependentSourceIds, []);
   assert.equal(session.sourceAttestation.sourceCountContribution, 0);
+  assert.ok(current(session).graph.relationships.every(({ temporalState }) => temporalState === "UNKNOWN"));
+  assert.equal(session.sourceAttestation.sourceDateSemantics.certificationDate, "2026-05-05");
+  assert.equal(session.sourceAttestation.sourceDateSemantics.explicitOwnershipAsAtDate, null);
+  assert.equal(session.sourceAttestation.sourceDateSemantics.historicalCapturedAt, null);
+  assert.notEqual(session.sourceAttestation.sourceDateSemantics.fixtureReviewRecordedAt.slice(0, 10), "2026-05-05");
+  assert.equal(session.sourceAttestation.sourceDateSemantics.freshnessState, "NOT_ESTABLISHED");
+  assert.ok(session.decisionAudit.some(({ event, status }) => event === "SOURCE_CERTIFICATION_REVIEW_RECORDED" && status === "RECORDED_NOT_APPLIED_TO_RELATIONSHIP_CURRENTNESS"));
+  assert.equal(current(session).journey.finalCaseComplete, false);
   assert.equal(current(session).journey.customerWorkBundles.some(({ evidenceHandoff }) => evidenceHandoff), false);
 });
 
@@ -183,13 +261,26 @@ test("attestation must cover every material path edge", () => {
   assert.deepEqual(result.uncoveredFactIds, ["fact-holdco-target"]);
 });
 
-test("actual Bettercomms fixture has no attestation text or locator and fails closed as Case B", async () => {
+test("recovered source certification reaches UBO separately and remains fail-closed without an explicit ownership as-at date", async () => {
   let session = startPreingestedEvidenceDemo({ sessionId: "attestation-case-b" });
   session = await usePreingestedBettercommsArtifact({ session });
   assert.equal(session.sourceAttestation.case, "CASE_B");
-  assert.deepEqual(session.sourceAttestation.metadata, { signatureText: null, signerName: null, signerCapacity: null, signedDate: null, asAtDate: null, declarationText: null, scope: null, locator: null });
+  assert.equal(session.sourceAttestation.metadata.signatureText, "Visible signature-like mark");
+  assert.equal(session.sourceAttestation.metadata.signatureAuthenticated, false);
+  assert.equal(session.sourceAttestation.metadata.signerName, "Alex Palmer");
+  assert.equal(session.sourceAttestation.metadata.signerPostnominal, "ACA");
+  assert.equal(session.sourceAttestation.metadata.signerCapacity, "Management Accountant");
+  assert.deepEqual(session.sourceAttestation.metadata.professionalReference, { label: "ACA No", value: "5246593" });
+  assert.equal(session.sourceAttestation.metadata.signedDate, CERTIFICATION_DATE);
+  assert.equal(session.sourceAttestation.metadata.asAtDate, null);
+  assert.equal(session.sourceAttestation.metadata.declarationText, "I hereby certify that the company structure chart is true, correct and accurate");
+  assert.equal(session.sourceAttestation.metadata.locator.metadata.qualification, "NEW_MANUAL_REVIEW_ANNOTATION_NOT_HISTORICAL_R3_LOCATOR");
   assert.equal(session.sourceAttestation.currentnessAssertion, null);
   assert.equal(session.sourceAttestation.relationshipCurrentness, "UNKNOWN");
+  assert.equal(session.sourceAttestation.reviewInterpretation.status, "RECORDED_NOT_APPLIED_TO_RELATIONSHIP_CURRENTNESS");
+  assert.deepEqual(session.sourceAttestation.reviewInterpretation.coveredRelationshipFactIds, [FACT_IDS.mitchellOwnership, FACT_IDS.leeOwnership, FACT_IDS.commsOwnership, FACT_IDS.networkOwnership]);
+  assert.ok(session.sourceAttestation.reviewInterpretation.unresolved.includes("SIGNER_AUTHORITY_NOT_VERIFIED"));
+  assert.equal(session.sourceAttestation.sourceDateSemantics.freshnessState, "NOT_ESTABLISHED");
   assert.equal(session.extraction.sourceCount, 1);
 });
 
@@ -233,11 +324,11 @@ test("officer metadata is operative source metadata but never a graph/control/qu
   resetRuntimeForTest();
   let session = startPreingestedEvidenceDemo({ sessionId: "officer-isolation" });
   session = await usePreingestedBettercommsArtifact({ session });
-  const officerFacts = session.extraction.capabilityResult.candidateFacts.filter(({ type }) => type === "ENTITY_ATTRIBUTE");
+  const officerFacts = session.extraction.capabilityResult.candidateFacts.filter(({ attribute }) => attribute === "officer_relationship");
   assert.deepEqual(officerFacts.map(({ value }) => value.relationshipValue.qualitative).sort(), ["Commercial Director", "Managing Director"]);
   session = applyPreconfiguredFixtureDecisions({ session });
-  const officerDecisions = session.decisionAudit.filter(({ reasonBasisCode }) => reasonBasisCode === "SOURCE_BACKED_NON_OWNERSHIP_METADATA");
-  assert.equal(officerDecisions.length, 2);
+  const metadataDecisions = session.decisionAudit.filter(({ reasonBasisCode }) => reasonBasisCode === "SOURCE_BACKED_NON_OWNERSHIP_METADATA");
+  assert.equal(metadataDecisions.length, 10);
   assert.equal(current(session).graph.relationships.some(({ dimension }) => dimension === "CONTROL" || dimension === "VOTING"), false);
   assert.equal(current(session).snapshot.decisionContent.qualificationBasisRecords.some(({ targetRightReferences }) => targetRightReferences?.some((id) => id.includes("000000000005") || id.includes("000000000006"))), false);
 });
@@ -249,21 +340,22 @@ test("identity review is keyed by exact fact occurrence and does not merge same-
   const mitchellTargets = session.decisionTargets.candidateParties.filter(({ party }) => party.name === "Mitchell Fortescue");
   assert.equal(mitchellTargets.length, 2);
   assert.notEqual(mitchellTargets[0].candidatePartyKey, mitchellTargets[1].candidatePartyKey);
-  assert.ok(mitchellTargets.every(({ candidatePartyKey }) => /30000000-0000-4000-8000-00000000000[15]:subject$/.test(candidatePartyKey)));
+  assert.ok(mitchellTargets.every(({ candidatePartyKey }) => /91000000-0000-4000-8000-00000000000[15]:subject$/.test(candidatePartyKey)));
   session = applyPreconfiguredFixtureDecisions({ session });
   const decisions = session.decisionAudit.filter(({ event, entityId }) => event === "IDENTITY_DECISION" && entityId === ENTITY_IDS.mitchell);
   assert.equal(decisions.length, 2);
   assert.ok(decisions.every(({ basisReasonCodes }) => basisReasonCodes.includes("EXACT_ACCEPTED_FIXTURE_SOURCE_OCCURRENCE")));
 });
 
-test("same-session replay creates no extra provider call, candidate fact, or graph relationship", async () => {
+test("same-session replay creates no provider call, duplicate reviewed fact, or graph relationship", async () => {
   resetRuntimeForTest();
   let session = startPreingestedEvidenceDemo({ sessionId: "idempotency" });
   session = await usePreingestedBettercommsArtifact({ session });
   const repeated = await usePreingestedBettercommsArtifact({ session });
-  assert.equal(runtimeMetrics().providerCalls, 1);
+  assert.equal(runtimeMetrics().providerCalls, 0);
+  assert.equal(runtimeMetrics().reviewedFixtureRuns, 1);
   assert.deepEqual(repeated, session);
-  assert.equal(new Set(repeated.extraction.capabilityResult.candidateFacts.map(({ factId }) => factId)).size, 6);
+  assert.equal(new Set(repeated.extraction.capabilityResult.candidateFacts.map(({ factId }) => factId)).size, 14);
   const completed = applyPreconfiguredFixtureDecisions({ session: repeated });
   const repeatedReview = applyPreconfiguredFixtureDecisions({ session: completed });
   assert.deepEqual(repeatedReview, completed);
@@ -302,6 +394,9 @@ test("browser-local cache restores Snapshot B and rejects tampering or forbidden
   assert.equal(restored.record.session.stage, "SNAPSHOT_B");
   assert.equal(restored.record.activeSnapshotId, current(session).snapshot.snapshotId);
   assert.equal(restored.record.session.extraction.artifact.digest, DIGEST);
+  assert.equal(restored.record.session.sourceIdentity.sourceFixtureId, "PR60-RECOVERED-SOURCE-REVIEW-V1");
+  assert.equal(restored.record.session.sourceIdentity.persistedHistoricalIdentity, false);
+  assert.equal(restored.record.session.sourceAttestation.sourceDateSemantics.freshnessState, "NOT_ESTABLISHED");
   assert.equal(CACHE_CONTRACT, "ubo-control-lab-preingested-evidence-cache-v1");
   assert.equal(STORAGE_KEY, "ubo-control-lab.preingested-evidence-sessions.v1");
   const tampered = JSON.parse(storage.getItem(STORAGE_KEY));
@@ -311,13 +406,17 @@ test("browser-local cache restores Snapshot B and rejects tampering or forbidden
   await assert.rejects(() => cache.save({ ...session, evidenceBytes: "AAEC" }), /Unsafe Lab cache field/);
   assert.doesNotThrow(() => validateSession(session));
   assert.throws(() => validateSession({ ...session, artifactCorrelation: { ...session.artifactCorrelation, artifactReference: { ...session.artifactCorrelation.artifactReference, digest: "0".repeat(64) } } }), /integrity/i);
+  assert.throws(() => validateSession({ ...session, artifactCorrelation: { ...session.artifactCorrelation, artifactReference: { ...session.artifactCorrelation.artifactReference, artifactId: HISTORICAL_LEADS.artifactId, digest: DIGEST } } }), /integrity/i);
 });
 
 test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence import", () => {
   const root = path.resolve(__dirname, "../..");
   const browser = fs.readFileSync(path.join(root, "ubo-control-lab/browser/lab.js"), "utf8");
   const server = fs.readFileSync(path.join(root, "ubo-control-lab/server/preingestedEvidenceDemo.js"), "utf8");
-  assert.match(browser, /Use pre-ingested Bettercomms ownership chart/);
+  assert.match(browser, /Use source-backed reviewed Bettercomms fixture/);
+  assert.match(browser, /REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE/);
+  assert.match(browser, /Historical Evidence-store linkage not yet revalidated/);
+  assert.match(browser, /No fresh automated interpretation performed/);
   assert.match(browser, /Current qualification is indeterminate/);
   assert.match(browser, /Show all relationships from source document/);
   assert.match(browser, /preingestedEvidenceCache\?\.hasSaved\(\).*PREINGESTED_EVIDENCE/);
@@ -327,6 +426,7 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   assert.doesNotMatch(server, /src\/App\.js|onboarding/i);
   const serializedSession = JSON.stringify(startPreingestedEvidenceDemo({ sessionId: "boundary" }));
   assert.doesNotMatch(serializedSession, /documentContents|evidenceBytes|blobUrl|storageKey/i);
+  assert.doesNotMatch(serializedSession, /iVBORw0KGgo/);
 });
 
 test("Lab API exposes the bounded start, interpret, review, and restore operations", async () => {

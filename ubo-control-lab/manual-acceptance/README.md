@@ -119,13 +119,15 @@ The original Wave 11B1 set was captured through the staged production Lab and re
 
 Every screenshot retains the review-policy watermark and production-not-authorized Lab chrome. None implies that Evidence upload, private ingestion, Artifact creation, delegation delivery, onboarding, persistence or production activation is connected.
 
-## Wave 11B2A pre-ingested Evidence demo
+## Wave 11B2A source-backed reviewed Evidence demo
 
-Capture the deployed `BETTERCOMMS EVIDENCE DEMO` flow in this order: Snapshot A unresolved ownership need; pinned structure-Evidence request; pre-ingested Artifact control; interpretation progress; six CandidateFacts; Artifact ID/digest and six locators; ten identity plus six claim targets; fixture-only review helper; Snapshot B; Case B attestation trace; target-specific four-node/three-edge graph; full-source five-node/four-edge graph; Mitchell and Lee source-stated arithmetic with `INDETERMINATE` current qualification; officer metadata isolation; R08 separation; linked Decision History; hard-refresh restoration; persistent review-policy watermark.
+Capture the deployed `BETTERCOMMS EVIDENCE DEMO` flow in this order: Snapshot A unresolved ownership need; pinned structure-Evidence request; source-backed reviewed-fixture control; interpretation progress with zero provider calls; fourteen CandidateFacts; source digest/size/dimensions and separate locators; source certification readings and limitations; exact fixture identity/claim decisions; Snapshot B; Case B currentness trace; target-specific four-node/three-edge graph; full-source five-node/four-edge graph; Mitchell and Lee source-stated arithmetic with `INDETERMINATE` current qualification; officer/certification metadata isolation; R08 separation; linked Decision History; hard-refresh restoration; persistent review-policy watermark.
 
 The default screenshot must exclude off-path Better Network Services. The full-source screenshot must show Better Comms VOIP Ltd and Better Network Services as sibling subsidiaries, with explicit owner-to-owned statements. It must not present Artifact capture time as a signed/as-at assertion or describe either person as a currently qualifying UBO.
 
-Acceptance fails if any view implies customer upload, production ingestion, automatic real-case adjudication, production policy approval, live/paid interpretation, or production persistence. The expected visible labels are `PRE-INGESTED DEMO ARTIFACT`, `REVIEW LAB — NOT PRODUCTION UPLOAD`, and `SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH`.
+Acceptance fails if any view implies customer upload, production ingestion, automatic real-case adjudication, production policy approval, live/paid interpretation, production persistence, authenticated signer authority or that the certification date is an ownership as-at date. The required visible labels are `REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE`, `Historical Evidence-store linkage not yet revalidated` and `No fresh automated interpretation performed in this demonstration`.
+
+The private source image is not a repository or browser artifact. The manually reviewed fixture records only bounded source readings, the verified SHA-256 `37ec3f984451c0a0bf1ac0024e9790070d7cb3a90dc25696052e0f1583fa2f6f`, size `582094`, dimensions `841 × 595`, and review annotations in original-pixel coordinates. Historical Evidence identities are listed only as unverified lookup leads and must never be substituted for the fixture IDs.
 
 ### Seamless-orchestration remediation evidence
 
