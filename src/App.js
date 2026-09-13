@@ -328,6 +328,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
+  // Set on a failed/offline save so DossierView can show a retry banner
+  // instead of silently opening as if the save succeeded (dossierId stays
+  // null on failure, which otherwise silently blocks the invite button later
+  // with no explanation). Cleared on the next successful save.
+  const [dossierSaveError, setDossierSaveError] = useState("");
 
   // Self-serve re-research (front-door "wrong company / wrong type") state.
   //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
@@ -4646,22 +4651,33 @@ export default function KYCAgent({ previewMode = false } = {}) {
         body: JSON.stringify(payload),
       });
       const result = await response.json();
-      if (result.dossierId) {
+      if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
         setDossierId(result.dossierId);
         setDossierSaved(true);
+        setDossierSaveError("");
         // eslint-disable-next-line no-console
         console.log(`[Dossier] ✅ Saved: ${result.dossierId}`);
       } else {
+        // api/save-dossier.js always returns 200, even on failure (best-effort
+        // by design) — dossierId stays null here, so the analyst must be told
+        // explicitly rather than seeing what looks like a normal saved dossier.
+        setDossierSaveError(
+          result.warning
+            ? `Save failed: ${result.warning}`
+            : "Save failed. Your research wasn't stored."
+        );
         // eslint-disable-next-line no-console
         console.warn("[Dossier] ⚠ Save failed:", result.warning);
       }
     } catch (err) {
+      setDossierSaveError("Couldn't reach the server to save. Check your connection and retry.");
       // eslint-disable-next-line no-console
       console.error("[Dossier] ❌", err);
+    } finally {
+      setDossierSaving(false);
     }
 
-    setDossierSaving(false);
     setShowDossierView(true);
 
     trackEvent("dossier_generated", {
@@ -4756,6 +4772,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         dossierId={dossierId}
         dossierSaved={dossierSaved}
         dossierSaving={dossierSaving}
+        dossierSaveError={dossierSaveError}
         companyName={companyName}
         entityType={entityType}
         ownershipType={ownershipType}
@@ -4785,6 +4802,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         newQuestion={newQuestion}
         setNewQuestion={setNewQuestion}
         saveDossier={saveDossier}
+        onRetrySave={saveDossier}
         getFieldLabel={getFieldLabel}
         dossierCompany={dossierCompany}
         includedGapFieldObjs={includedGapFieldObjs}

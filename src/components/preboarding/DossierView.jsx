@@ -45,6 +45,7 @@ export function DossierView({
   dossierId,
   dossierSaved,
   dossierSaving,
+  dossierSaveError,
   companyName,
   entityType,
   ownershipType,
@@ -74,6 +75,7 @@ export function DossierView({
   newQuestion,
   setNewQuestion,
   saveDossier,
+  onRetrySave,
   getFieldLabel,
   dossierCompany,
   includedGapFieldObjs,
@@ -324,6 +326,25 @@ export function DossierView({
 
     return (
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 20px 60px", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: C.text }}>
+        {/* Save-failure banner — api/save-dossier.js always returns 200, so a
+            failed save otherwise looks identical to a successful one. Without
+            this, the analyst has no idea the dossier only exists on this
+            device, and the invite button being disabled below looks broken
+            rather than explained. */}
+        {dossierSaveError && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#B91C1C", fontWeight: 600, flex: 1, minWidth: 220 }}>
+              ⚠ This dossier hasn't been saved — {dossierSaveError} Your work is only on this device until it saves.
+            </span>
+            <button
+              onClick={() => onRetrySave && onRetrySave()}
+              disabled={dossierSaving}
+              style={{ padding: "6px 14px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: dossierSaving ? "default" : "pointer", opacity: dossierSaving ? 0.6 : 1, flexShrink: 0 }}
+            >
+              {dossierSaving ? "Retrying…" : "Retry save"}
+            </button>
+          </div>
+        )}
         {/* Header */}
         <div style={{ padding: "20px 24px", background: "#F3F0FF", border: "1px solid #DDD6FE", borderRadius: 12, marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -457,24 +478,32 @@ export function DossierView({
               See exactly what your customer will see
             </div>
           </div>
-          <button
-            onClick={() => setShowInviteScreen(true)}
-            style={{
-              padding: '10px 20px',
-              background: '#1a3a4a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            ✉ Invite Customer to Onboard
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+            <button
+              onClick={() => setShowInviteScreen(true)}
+              disabled={!dossierId}
+              style={{
+                padding: '10px 20px',
+                background: dossierId ? '#1a3a4a' : '#94a3b8',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: dossierId ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              ✉ Invite Customer to Onboard
+            </button>
+            {!dossierId && (
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                Save the dossier before inviting.
+              </div>
+            )}
+          </div>
           <button
             onClick={() => {
               // Start a genuinely fresh dossier. Clearing research is essential:

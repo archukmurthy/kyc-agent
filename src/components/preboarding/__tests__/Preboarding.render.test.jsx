@@ -272,6 +272,40 @@ describe("dossier view", () => {
     await driveToDossier();
     expect(buttonsWithText(/Invite Customer to Onboard/i).length).toBe(1);
   });
+
+  /* ── save-failure banner (this fix) ── */
+  it("shows a save-failure banner with a Retry save button when the offline save fails", async () => {
+    // No /api/save-dossier stub is registered, so the fetch mock rejects
+    // ("offline test") and saveDossier's catch sets dossierSaveError.
+    await driveToDossier();
+    expect(bodyText()).toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(1);
+  });
+
+  it("disables Invite Customer to Onboard with a hint while unsaved (dossierId is null)", async () => {
+    await driveToDossier();
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+    expect(bodyText()).toMatch(/Save the dossier before inviting\./i);
+  });
+
+  it("Retry save clears the banner and enables Invite once the save succeeds", async () => {
+    await driveToDossier();
+    expect(buttonsWithText(/Retry save/i).length).toBe(1);
+
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true, dossierId: "dossier_retry123" }),
+      });
+
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(0);
+    expect(buttonsWithText(/Invite Customer to Onboard/i)[0]).not.toBeDisabled();
+  });
 });
 
 /* ═══════════════════════════════════════════
@@ -317,6 +351,15 @@ describe("invite screen", () => {
   }
 
   it("the dossier's invite control opens the invite screen", async () => {
+    // Reaching the invite screen now requires a saved dossier (this fix
+    // disables the DossierView Invite button until dossierId is set), so
+    // stub the save to succeed before driving through it.
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }),
+      });
+
     await driveToInvite();
     expect(inviteForm().name).toBeInTheDocument();
     expect(inviteForm().email).toBeInTheDocument();
@@ -324,24 +367,23 @@ describe("invite screen", () => {
     expect(bodyText()).not.toMatch(/📄 Documents Sourced/);
   });
 
-  // ── UNSAVED branch: no stub, save fails, dossierId stays null ──
-  it("UNSAVED - with no saved dossier, Send invite is disabled and no invite is sent", async () => {
-    await driveToInvite();
+  // ── UNSAVED branch: no stub, save fails, dossierId stays null. This fix
+  // moves the gate earlier — the DossierView Invite button is now disabled,
+  // so the invite screen is never reached at all (InviteScreen's own
+  // dossierId-gated Send button, asserted separately, is defense-in-depth
+  // for the unlikely case dossierId is cleared after this screen opens). ──
+  it("UNSAVED - with no saved dossier, the invite screen is never reached", async () => {
+    await driveToDossier();
 
-    const { name, email } = inviteForm();
-    fireEvent.change(name, { target: { value: "Sarah Chen" } });
-    fireEvent.change(email, { target: { value: "sarah@company.com" } });
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+
+    fireEvent.click(inviteButton);
     await settle(0);
 
-    const sendButton = buttonsWithText(/Send invite/i)[0];
-    expect(sendButton).toBeDisabled();
-    expect(bodyText()).toMatch(/Save the dossier before inviting the customer/i);
-
-    fireEvent.click(sendButton);
-    await settle(0);
-
-    // Nothing was sent — still on the compose screen, not the success screen.
-    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    // Still on the dossier — clicking a disabled button does not navigate.
+    expect(bodyText()).toMatch(/Intelligence Dossier/i);
+    expect(screen.queryByPlaceholderText(/Sarah Chen/i)).not.toBeInTheDocument();
   });
 
   // ── POPULATED branch: /api/save-dossier stubbed so dossierId is real ──
