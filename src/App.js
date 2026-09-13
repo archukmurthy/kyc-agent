@@ -532,6 +532,13 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [, setFormVersion] = useState(0);
   const [declared, setDeclared] = useState(false);
   const [done, setDone] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(""); // "" | "saved" | "queued" | "retrying"
+  const submissionIdRef = useRef(null);
+  const lastPayloadRef = useRef(null); // kept for the Retry button (Task 8-not-needed: reuse)
+  const getSubmissionId = () => {
+    if (!submissionIdRef.current) submissionIdRef.current = genUUID();
+    return submissionIdRef.current;
+  };
   const [device, setDevice] = useState({});
   const [loaderIdx, setLoaderIdx] = useState(0);
   const [loaderPhase, setLoaderPhase] = useState(0); // 0 = no Wolfsberg, 1 = extraction, 2 = web research
@@ -2790,7 +2797,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     };
 
     const payload = {
-      submissionId: genUUID(),
+      submissionId: getSubmissionId(),
       submittedAt,
       applicant,
       applicantProvenance,
@@ -2927,27 +2934,27 @@ export default function KYCAgent({ previewMode = false } = {}) {
           submittedAt,
         }),
       });
-      const result = await resp.json();
-      if (result.sessionId) {
-        // eslint-disable-next-line no-console
-        console.log(`[Submit] ✅ Saved - session: ${result.sessionId}`);
+      const result = await resp.json().catch(() => ({}));
+      lastPayloadRef.current = payload;
+      if (result.status === "saved") {
+        setSubmitStatus("saved");
         trackEvent("application_submitted", {
-          companyName: submitCompany.name,
-          sessionId: result.sessionId,
+          companyName: submitCompany.name, sessionId: result.sessionId,
           totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
           totalTokens: costSummary?.totals?.totalTokens ?? null,
           fillRate: coverage?.fillRate ?? null,
-          agentType: agentType || "onboarding",
-          submittedAt: new Date().toISOString(),
+          agentType: agentType || "onboarding", submittedAt: new Date().toISOString(),
         });
-      }
-      if (result.warning) {
-        // eslint-disable-next-line no-console
-        console.warn(`[Submit] ⚠ ${result.warning}`);
+      } else {
+        // queued or capture_failed — durable capture will finalize later.
+        setSubmitStatus("queued");
       }
     } catch (err) {
+      // The POST itself never reached a definite answer — treat as queued; the
+      // browser draft (Task 9) is the backstop and can resubmit on next load.
       // eslint-disable-next-line no-console
-      console.error("[Submit] ❌ Failed:", err);
+      console.error("[Submit] network error:", err);
+      setSubmitStatus("queued");
     }
 
     setDone(true);
@@ -5196,9 +5203,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
         {done && (
           <div style={{ ...card, textAlign: "center", padding: "44px 28px" }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,#4a9e8e,#3a8e7e)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 18px", boxShadow: "0 6px 20px rgba(74,158,142,0.3)" }}>✓</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>Application Submitted {jurisdictionBadge}{entityBadge}</h2>
-            <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</p>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: submitStatus === "saved" ? "linear-gradient(135deg,#4a9e8e,#3a8e7e)" : "linear-gradient(135deg,#c99a2e,#b7891f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 18px", boxShadow: "0 6px 20px rgba(74,158,142,0.3)" }}>{submitStatus === "saved" ? "✓" : "⏳"}</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>
+              {submitStatus === "saved" ? "Application Submitted" : "Application Received"} {jurisdictionBadge}{entityBadge}
+            </h2>
+            <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>
+              {submitStatus === "saved"
+                ? <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</>
+                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received — we're saving it now and it will be finalized shortly.</>}
+            </p>
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>
               {(() => {
@@ -5229,7 +5242,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 ));
               })()}
             </div>
-            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType(""); setDone(false); setSubmitTs(""); resetAll(); }}>Start New Application</Btn>
+            <Btn variant="secondary" onClick={() => { setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType(""); setDone(false); setSubmitTs(""); submissionIdRef.current = null; setSubmitStatus(""); resetAll(); }}>Start New Application</Btn>
           </div>
         )}
 
