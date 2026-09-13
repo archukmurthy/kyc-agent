@@ -40,7 +40,7 @@ async function claimPending(
 ) {
   const sql = deps.sql || defaultSql();
   const rows = await sql`
-    UPDATE submission_inbox SET status = 'processing', updated_at = now()
+    UPDATE submission_inbox SET status = 'processing', updated_at = now(), attempts = attempts + 1
     WHERE id IN (
       SELECT id FROM submission_inbox
       WHERE ((status IN ('pending','failed') AND attempts < ${maxAttempts})
@@ -61,7 +61,7 @@ async function claimPending(
 async function markProcessing(id, deps = {}) {
   const sql = deps.sql || defaultSql();
   await sql`
-    UPDATE submission_inbox SET status = 'processing', updated_at = now() WHERE id = ${id}
+    UPDATE submission_inbox SET status = 'processing', updated_at = now(), attempts = attempts + 1 WHERE id = ${id}
   `;
 }
 
@@ -79,15 +79,15 @@ async function markFailed(id, errorMessage, deps = {}) {
   const sql = deps.sql || defaultSql();
   const rows = await sql`
     UPDATE submission_inbox
-    SET status = 'failed', attempts = attempts + 1,
+    SET status = 'failed',
         last_error = ${String(errorMessage || "").slice(0, 2000)}, updated_at = now()
     WHERE id = ${id}
     RETURNING attempts
   `;
-  const newAttempts = rows[0] && rows[0].attempts;
-  if (newAttempts >= MAX_ATTEMPTS) {
+  const currentAttempts = rows[0] && rows[0].attempts;
+  if (currentAttempts >= MAX_ATTEMPTS) {
     console.error(
-      `[submission_inbox] DEAD-LETTER: submission ${id} failed ${newAttempts} times — finalize abandoned, manual triage required`
+      `[submission_inbox] DEAD-LETTER: submission ${id} failed ${currentAttempts} times — finalize abandoned, manual triage required`
     );
   }
 }

@@ -58,6 +58,12 @@ test("claimPending claims a batch atomically and returns rows with lock", async 
   assert.match(sql.calls[0].text, /FOR UPDATE SKIP LOCKED/);
 });
 
+test("claimPending's UPDATE also increments attempts (counted on start, not only on failure)", async () => {
+  const sql = fakeSql([]);
+  await store.claimPending({ limit: 5 }, { sql });
+  assert.match(sql.calls[0].text, /UPDATE submission_inbox SET status = 'processing', updated_at = now\(\), attempts = attempts \+ 1/);
+});
+
 test("claimPending's WHERE clause also reclaims stale 'processing' rows", async () => {
   const sql = fakeSql([]);
   await store.claimPending({ limit: 5 }, { sql });
@@ -76,6 +82,12 @@ test("markProcessing issues a status='processing' UPDATE on the given id", async
   assert.deepStrictEqual(sql.calls[0].values, ["sub-1"]);
 });
 
+test("markProcessing also increments attempts (counted on start, not only on failure)", async () => {
+  const sql = fakeSql([]);
+  await store.markProcessing("sub-1", { sql });
+  assert.match(sql.calls[0].text, /attempts = attempts \+ 1/);
+});
+
 test("markDone sets status to done with session_id, clears error, and timestamps", async () => {
   const sql = fakeSql([]);
   await store.markDone("id1", "sess1", { sql });
@@ -84,12 +96,13 @@ test("markDone sets status to done with session_id, clears error, and timestamps
   assert.match(sql.calls[0].text, /last_error = NULL/);
 });
 
-test("markFailed increments attempts and truncates error to 2000 chars", async () => {
+test("markFailed no longer increments attempts, truncates error to 2000 chars, and reads back current attempts", async () => {
   const longError = "E".repeat(3000);
   const sql = fakeSql([{ attempts: 1 }]);
   await store.markFailed("id1", longError, { sql });
   assert.match(sql.calls[0].text, /status = 'failed'/);
-  assert.match(sql.calls[0].text, /attempts = attempts \+ 1/);
+  assert.doesNotMatch(sql.calls[0].text, /attempts = attempts \+ 1/);
+  assert.match(sql.calls[0].text, /RETURNING attempts/);
   const truncatedError = sql.calls[0].values.find(v => typeof v === "string" && v.length === 2000);
   assert.strictEqual(truncatedError.length, 2000);
 });

@@ -2,11 +2,20 @@
 
 // Background retry worker for the submission inbox. Claims pending/failed rows and
 // runs the all-or-nothing finalize for each. Invoked by Vercel Cron on a schedule;
-// also runnable locally via scripts/run-finalize-worker.js. A row that fails is
-// marked failed (attempts++) and retried on the next tick until it succeeds or hits
-// the attempts ceiling — the submission is never lost.
+// also runnable locally via scripts/run-finalize-worker.js. attempts is incremented
+// by claimPending on claim (start of attempt, not on failure) so a hard-crashing
+// process still counts toward the retry ceiling via stale-processing reclaim. A row
+// that fails is marked failed and retried on the next tick until it succeeds or hits
+// the attempts ceiling — the submission is never lost (or, past the ceiling,
+// abandoned and dead-lettered for manual triage).
 const store = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
+
+// Parses a positive-integer env override, falling back to `def` on missing/NaN.
+function parseIntEnv(raw, def) {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : def;
+}
 
 async function runWorker(deps = {}) {
   const claimPending = deps.claimPending || store.claimPending;
@@ -15,7 +24,9 @@ async function runWorker(deps = {}) {
   const markFailed = deps.markFailed || store.markFailed;
   const countDeadLettered = deps.countDeadLettered || store.countDeadLettered;
 
-  const rows = await claimPending({ limit: 20 });
+  const limit = parseIntEnv(process.env.FINALIZE_BATCH_LIMIT, 20);
+  const staleSeconds = parseIntEnv(process.env.FINALIZE_STALE_SECONDS, 300);
+  const rows = await claimPending({ limit, staleSeconds });
   let done = 0, failed = 0;
   for (const row of rows) {
     try {
