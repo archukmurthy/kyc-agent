@@ -797,6 +797,16 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
   // Persist a resumable draft whenever meaningful wizard state changes. Debounced
   // so typing does not thrash localStorage. Skipped once the app is done.
+  // KEEP IN SYNC with resetAll() — every data-bearing atom resetAll clears must
+  // be saved here AND restored in applyResume(). Intentionally NOT saved:
+  // agentType (self-heals from the ?preboarding URL param, see resetAll),
+  // landedViaLink (display-only step-bar flag), authorityToActFile/
+  // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
+  // JSON.stringify/localStorage; durable upload storage is PR-034), the
+  // preboarding password gate (access gate over a hardcoded client constant,
+  // not user data), newQuestion (in-progress "ask more" compose draft), and
+  // pure UI toggles (expanded/open/hover/reveal state, transient loading and
+  // error strings) that are harmless to lose and default back safely.
   useEffect(() => {
     if (done) return;
     const t = setTimeout(() => {
@@ -808,12 +818,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
         drsSubmitted, drsFlags, drsGapsCleared, drsUploads,
         factChecks, ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared,
         submissionId: submissionIdRef.current, step,
+        journeyType, regNumber, regNumberSource,
+        idvVerification, idvVerifiedFields, idvResult,
+        stakeholderFieldChecks,
+        applicantSelectedPerson, applicantAgentValues, applicantOverrides,
+        excludedGapFields: Array.from(excludedGapFields),
+        customQuestions, dossierId, onboardingSubmissionId, declared,
+        rejectedStakeholders: Object.fromEntries(
+          Object.entries(rejectedStakeholders).map(([k, v]) => [k, Array.from(v || [])])
+        ),
+        isPubliclyListedOverride, affirmedFields,
+        dialogueState: dialogueStateRef.current,
+        coverage, gapRecoveryRan, researchTimestamp,
+        docSearchResults,
+        acceptedDocTypes: Array.from(acceptedDocTypes),
+        applicantNotListed, amendmentUploads,
+        niumRegNumber, niumSearchResults, dossierStakeholders,
       });
     }, 800);
     return () => clearTimeout(t);
   }, [companyName, countryCode, entityType, ownershipType, research, activeSchema, checks,
       fieldMetadata, drsSubmitted, drsFlags, drsGapsCleared, drsUploads, factChecks,
-      ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step, done]);
+      ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step, done,
+      journeyType, regNumber, regNumberSource, idvVerification, idvVerifiedFields, idvResult,
+      stakeholderFieldChecks, applicantSelectedPerson, applicantAgentValues, applicantOverrides,
+      excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
+      rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
+      researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
+      niumRegNumber, niumSearchResults, dossierStakeholders]);
 
   // Offer to resume an unfinished application found in localStorage (Task 9 —
   // browser draft is the pre-capture backstop). Checked once on mount.
@@ -837,6 +869,34 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setOwnershipFork(s.ownershipFork || null); setOwnershipChangeDeclared(s.ownershipChangeDeclared || null);
     setRegNumberFork(s.regNumberFork || null); setRegNumberChangeDeclared(s.regNumberChangeDeclared || null);
     submissionIdRef.current = s.submissionId || null;
+    setJourneyType(s.journeyType || ""); setRegNumber(s.regNumber || "");
+    setRegNumberSource(s.regNumberSource || null);
+    setIdvVerification(s.idvVerification || null); setIdvVerifiedFields(s.idvVerifiedFields || null);
+    setIdvResult(s.idvResult || null);
+    setStakeholderFieldChecks(s.stakeholderFieldChecks || {});
+    setApplicantSelectedPerson(s.applicantSelectedPerson || null);
+    setApplicantAgentValues(s.applicantAgentValues || {});
+    setApplicantOverrides(s.applicantOverrides || []);
+    setExcludedGapFields(new Set(s.excludedGapFields || []));
+    setCustomQuestions(s.customQuestions || []);
+    setDossierId(s.dossierId || null); setOnboardingSubmissionId(s.onboardingSubmissionId || null);
+    setDeclared(!!s.declared);
+    setRejectedStakeholders(
+      Object.fromEntries(
+        Object.entries(s.rejectedStakeholders || {}).map(([k, v]) => [k, new Set(v || [])])
+      )
+    );
+    setIsPubliclyListedOverride(!!s.isPubliclyListedOverride);
+    setAffirmedFields(s.affirmedFields || {});
+    dialogueStateRef.current = s.dialogueState || {};
+    setCoverage(s.coverage || null); setGapRecoveryRan(!!s.gapRecoveryRan);
+    setResearchTimestamp(s.researchTimestamp || "");
+    setDocSearchResults(s.docSearchResults || null);
+    setAcceptedDocTypes(new Set(s.acceptedDocTypes || []));
+    setApplicantNotListed(!!s.applicantNotListed);
+    setAmendmentUploads(s.amendmentUploads || {});
+    setNiumRegNumber(s.niumRegNumber || ""); setNiumSearchResults(s.niumSearchResults || null);
+    setDossierStakeholders(s.dossierStakeholders || null);
     setStep(s.step || 0);
     setResumeOffer(null);
   };
