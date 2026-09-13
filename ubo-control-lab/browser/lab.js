@@ -730,14 +730,20 @@
         h("div", { className: "notice" }, "Historical Evidence-store linkage not yet revalidated · No fresh automated interpretation performed · No source bytes are published or stored in this browser."),
         notice && h("div", { className: "notice", role: "status" }, notice),
         error && h("div", { className: "error", role: "alert" }, error),
-        h("button", { className: "primary", disabled: busy, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, busy ? "Starting…" : "Open source-backed Bettercomms demo")));
+        h("button", { className: "primary", disabled: busy || !restored, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, !restored ? "Restoring saved demo…" : busy ? "Starting…" : "Open source-backed Bettercomms demo")));
     return h("main", { className: "shell preingested-demo" },
       h("header", { className: "workspace-header" },
         h("div", null, demo.labels.map((label) => h("p", { className: "source-label", key: label }, label)), h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
         h("button", { className: "secondary", disabled: busy, onClick: reset }, "Reset demo")),
       notice && h("div", { className: "notice", role: "status" }, notice),
       error && h("div", { className: "error", role: "alert" }, error),
-      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED" ? "Passing the manually reviewed fixture through EvidenceConsumerV1…" : "Applying explicit fixture decisions and creating Snapshot B…"),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED"
+        ? "Passing the manually reviewed fixture through EvidenceConsumerV1…"
+        : demo.stage === "SOURCE_FACTS_EXTRACTED"
+          ? "Applying explicit fixture decisions and creating Snapshot B…"
+          : demo.stage === "SNAPSHOT_B"
+            ? "Recording dated support review and creating Snapshot C…"
+            : "Verifying the reviewed demo state…"),
       h("section", { className: "panel" },
         h("div", { className: "grid-3" },
           h(Metric, { label: "Stage", value: human(demo.stage) }), h(Metric, { label: "Active snapshot", value: `#${shortHash(current.snapshot.snapshotId)}` }), h(Metric, { label: "Open ownership/evidence needs", value: evidenceNeedCount }),
