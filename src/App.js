@@ -105,6 +105,7 @@ import {
   buildPrompt,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
+import { saveDraft, loadDraft, clearDraft } from "./utils/submissionDraft";
 import { C } from "./constants/theme";
 import {
   SHOW_NIUM_REG_PANEL,
@@ -793,6 +794,53 @@ export default function KYCAgent({ previewMode = false } = {}) {
     setNiumSearchError("");
     setNiumSearchLoading(false);
   };
+
+  // Persist a resumable draft whenever meaningful wizard state changes. Debounced
+  // so typing does not thrash localStorage. Skipped once the app is done.
+  useEffect(() => {
+    if (done) return;
+    const t = setTimeout(() => {
+      saveDraft({
+        companyName, countryCode, entityType, ownershipType,
+        research, activeSchema, checks,
+        gap: gapRef.current, stakeholders: stakeholdersRef.current,
+        fieldMetadata,
+        drsSubmitted, drsFlags, drsGapsCleared, drsUploads,
+        factChecks, ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared,
+        submissionId: submissionIdRef.current, step,
+      });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [companyName, countryCode, entityType, ownershipType, research, activeSchema, checks,
+      fieldMetadata, drsSubmitted, drsFlags, drsGapsCleared, drsUploads, factChecks,
+      ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step, done]);
+
+  // Offer to resume an unfinished application found in localStorage (Task 9 —
+  // browser draft is the pre-capture backstop). Checked once on mount.
+  const [resumeOffer, setResumeOffer] = useState(null); // the loaded draft, or null
+  useEffect(() => {
+    const d = loadDraft();
+    if (d && d.state && (d.state.companyName || d.state.research)) setResumeOffer(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const applyResume = () => {
+    const s = resumeOffer.state;
+    setCompanyName(s.companyName || ""); setCountryCode(s.countryCode || "");
+    setEntityType(s.entityType || ""); setOwnershipType(s.ownershipType || "");
+    setResearch(s.research || null); setActiveSchema(s.activeSchema || null);
+    setChecks(s.checks || {}); setFieldMetadata(s.fieldMetadata || []);
+    gapRef.current = s.gap || {}; stakeholdersRef.current = s.stakeholders || {};
+    setDrsSubmitted(s.drsSubmitted || []); setDrsFlags(s.drsFlags || {});
+    setDrsGapsCleared(!!s.drsGapsCleared); setDrsUploads(s.drsUploads || {});
+    setFactChecks(s.factChecks || {});
+    setOwnershipFork(s.ownershipFork || null); setOwnershipChangeDeclared(s.ownershipChangeDeclared || null);
+    setRegNumberFork(s.regNumberFork || null); setRegNumberChangeDeclared(s.regNumberChangeDeclared || null);
+    submissionIdRef.current = s.submissionId || null;
+    setStep(s.step || 0);
+    setResumeOffer(null);
+  };
+  const dismissResume = () => { clearDraft(); setResumeOffer(null); };
 
   // Fire-and-forget event tracking → /api/track-event. Never awaited, never
   // blocks the UI. Failures are swallowed (tracking must never break the flow).
@@ -2958,6 +3006,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
 
     setDone(true);
+    clearDraft();
   };
 
   // Re-check = the customer UNDID their change → retract its amendment-document
@@ -4728,6 +4777,18 @@ export default function KYCAgent({ previewMode = false } = {}) {
             ));
           })()}
         </div>
+
+        {resumeOffer && !done && (
+          <div style={{ ...card, borderLeft: "4px solid #c99a2e", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ fontSize: 13 }}>
+              Found an unfinished application from {resumeOffer.savedAt.replace("T", " ").slice(0, 16)} UTC. Resume where you left off?
+            </span>
+            <span style={{ display: "flex", gap: 8 }}>
+              <Btn variant="primary" onClick={applyResume}>Resume</Btn>
+              <Btn variant="secondary" onClick={dismissResume}>Start fresh</Btn>
+            </span>
+          </div>
+        )}
 
         {step === STEPS.input && !journeyOpen && (
           <CompanyLookupPage
