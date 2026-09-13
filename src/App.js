@@ -3021,11 +3021,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
 
     // Persist to Neon via /api/submit. Best-effort: a DB failure must never
     // block the customer from reaching the success screen.
+    lastPayloadRef.current = payload;
     try {
       const resp = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // The idempotency key the ENTIRE pipeline is keyed on. Omitting it
+          // makes /api/submit 400 every submission (missing required field) —
+          // it must be the stable getSubmissionId() value carried on the payload
+          // so a retry re-POSTs the SAME id and dedupes.
+          submissionId: payload.submissionId,
           tenantId,
           company: submitCompany,
           entityType,
@@ -3038,6 +3044,12 @@ export default function KYCAgent({ previewMode = false } = {}) {
           // record the AI/registry original alongside the customer's value.
           fieldMetadata: payload.fieldMetadata,
           stakeholders: stakeholderPayload,
+          // finalizeSubmission reads these three; the body used to omit them, so
+          // per-attribute stakeholder provenance, the amendment-document rows,
+          // and the confirm-tile metrics were silently never persisted.
+          stakeholderAttributes: payload.stakeholderAttributes,
+          amendmentDocuments: payload.amendmentDocuments,
+          confirmMetrics: payload.confirmMetrics,
           documents: docSearchResults?.documents || [],
           costSummary,
           coverage: coverage || null,
@@ -3050,30 +3062,46 @@ export default function KYCAgent({ previewMode = false } = {}) {
         }),
       });
       const result = await resp.json().catch(() => ({}));
-      lastPayloadRef.current = payload;
-      if (result.status === "saved") {
-        setSubmitStatus("saved");
-        trackEvent("application_submitted", {
-          companyName: submitCompany.name, sessionId: result.sessionId,
-          totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
-          totalTokens: costSummary?.totals?.totalTokens ?? null,
-          fillRate: coverage?.fillRate ?? null,
-          agentType: agentType || "onboarding", submittedAt: new Date().toISOString(),
-        });
+      // Durable capture = HTTP 200 AND the server acknowledged saved|queued
+      // (both mean the bundle is safely in submission_inbox). Anything else —
+      // 503 capture_failed, a non-2xx status, or a malformed body — means the
+      // bundle is NOT captured: we must NOT show a success screen and must NOT
+      // clear the browser draft (the only remaining copy of their data).
+      const captured = resp.ok && (result.status === "saved" || result.status === "queued");
+      if (captured) {
+        setError("");
+        if (result.status === "saved") {
+          setSubmitStatus("saved");
+          trackEvent("application_submitted", {
+            companyName: submitCompany.name, sessionId: result.sessionId,
+            totalCostUsd: costSummary?.totals?.totalCostUsd ?? null,
+            totalTokens: costSummary?.totals?.totalTokens ?? null,
+            fillRate: coverage?.fillRate ?? null,
+            agentType: agentType || "onboarding", submittedAt: new Date().toISOString(),
+          });
+        } else {
+          setSubmitStatus("queued");
+        }
+        setDone(true);
+        clearDraft();
       } else {
-        // queued or capture_failed — durable capture will finalize later.
-        setSubmitStatus("queued");
+        // Not durably captured — keep the draft, do NOT advance to the success
+        // screen. The stable submissionId means clicking Submit again re-POSTs
+        // the SAME id (idempotent), so a retry is safe and never duplicates.
+        // eslint-disable-next-line no-console
+        console.warn("[Submit] not durably captured:", resp.status, result);
+        setSubmitStatus("retrying");
+        setError("We couldn't submit your application just now — your details are saved on this device. Please click Submit again.");
       }
     } catch (err) {
-      // The POST itself never reached a definite answer — treat as queued; the
-      // browser draft (Task 9) is the backstop and can resubmit on next load.
+      // The POST never reached a definite answer — the bundle is NOT confirmed
+      // captured. Keep the draft and let the customer retry (or resume on next
+      // load); never wipe the only copy of their data on an unknown outcome.
       // eslint-disable-next-line no-console
       console.error("[Submit] network error:", err);
-      setSubmitStatus("queued");
+      setSubmitStatus("retrying");
+      setError("We couldn't reach the server — your details are saved on this device. Please check your connection and click Submit again.");
     }
-
-    setDone(true);
-    clearDraft();
   };
 
   // Re-check = the customer UNDID their change → retract its amendment-document
@@ -5316,6 +5344,20 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 <span>Submission is disabled in preview mode. Publish your configuration to enable the live form.</span>
               </div>
             )}
+            {error && (
+              <div style={{
+                padding: "12px 16px",
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                borderRadius: 8,
+                fontSize: 13, color: "#B91C1C",
+                marginBottom: 16,
+                display: "flex", gap: 8, alignItems: "flex-start",
+              }}>
+                <span>⚠</span>
+                <span>{error}</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back</Btn>
               <Btn
@@ -5323,7 +5365,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 onClick={inPreview ? undefined : submitApplication}
                 disabled={!declared || inPreview}
               >
-                ✓ Submit Application
+                {submitStatus === "retrying" ? "↻ Retry Submission" : "✓ Submit Application"}
               </Btn>
             </div>
           </div>
