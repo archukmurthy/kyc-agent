@@ -19,6 +19,7 @@ const {
   createFullSourceGraphView,
   createTargetRelevantGraphView,
 } = require("../browser/preingestedEvidenceGraphViews.js");
+const { computeLayout } = require("../../ubo-control-ui/OwnershipGraph.js");
 const {
   CONTRACT_VERSION: CACHE_CONTRACT,
   STORAGE_KEY,
@@ -209,6 +210,15 @@ test("target graph uses reverse reachability while full source view retains the 
   assert.equal(full.relationships.length, 4);
   assert.ok(full.relationships.some(({ subjectEntityId, objectEntityId, presentationLabel }) => subjectEntityId === "better-holdco" && objectEntityId === "better-comms-voip-ltd" && presentationLabel === "Better Holdco owns 100% of Better Comms VOIP Ltd"));
   assert.ok(full.relationships.some(({ subjectEntityId, objectEntityId, presentationLabel }) => subjectEntityId === "better-holdco" && objectEntityId === "better-network-services" && presentationLabel === "Better Holdco owns 100% of Better Network Services"));
+  assert.equal(full.presentationView.layoutDepthOverrides["better-network-services"], 0);
+  const normalizedFull = {
+    ...full,
+    subject: full.nodes.find(({ entityId }) => entityId === full.subjectEntityId),
+    relationships: full.relationships.map((relationship) => ({ ...relationship, sourceEntityId: relationship.subjectEntityId, targetEntityId: relationship.objectEntityId })),
+  };
+  const layout = computeLayout(normalizedFull);
+  assert.equal(layout.depths.get("better-network-services"), layout.depths.get("better-comms-voip-ltd"));
+  assert.equal(layout.depths.get("better-holdco"), 1);
   assert.deepEqual(target.snapshotReference, canonical.snapshotReference);
   assert.deepEqual(full.snapshotReference, canonical.snapshotReference);
   assert.deepEqual(target.informationNeeds, canonical.informationNeeds);

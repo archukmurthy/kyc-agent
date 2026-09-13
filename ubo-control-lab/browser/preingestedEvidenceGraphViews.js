@@ -28,7 +28,7 @@
     }));
     return copy;
   }
-  function annotate(projection, mode, sourceProjection) {
+  function annotate(projection, mode, sourceProjection, layoutDepthOverrides = {}) {
     delete projection.projectionId;
     delete projection.projectionHash;
     projection.presentationView = {
@@ -36,11 +36,29 @@
       presentationOnly: true,
       sourceProjectionId: sourceProjection.projectionId,
       sourceProjectionHash: sourceProjection.projectionHash,
+      layoutDepthOverrides,
     };
     return projection;
   }
   function createFullSourceGraphView(projection, entityDirectory) {
-    return annotate(enrich(projection, entityDirectory), "FULL_SOURCE_DOCUMENT", projection);
+    const view = enrich(projection, entityDirectory);
+    const targetDepths = new Map([[view.subjectEntityId, 0]]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      view.relationships.forEach((relationship) => {
+        if (!targetDepths.has(relationship.objectEntityId) || targetDepths.has(relationship.subjectEntityId)) return;
+        targetDepths.set(relationship.subjectEntityId, targetDepths.get(relationship.objectEntityId) + 1);
+        changed = true;
+      });
+    }
+    const layoutDepthOverrides = {};
+    view.relationships.forEach((relationship) => {
+      if (targetDepths.has(relationship.subjectEntityId) && !targetDepths.has(relationship.objectEntityId)) {
+        layoutDepthOverrides[relationship.objectEntityId] = Math.max(0, targetDepths.get(relationship.subjectEntityId) - 1);
+      }
+    });
+    return annotate(view, "FULL_SOURCE_DOCUMENT", projection, layoutDepthOverrides);
   }
   function createTargetRelevantGraphView(projection, entityDirectory) {
     const view = enrich(projection, entityDirectory);
