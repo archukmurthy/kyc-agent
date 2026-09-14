@@ -89,7 +89,9 @@ test("hybrid structured answer stays in one case and the real engine calculates 
   assert.deepEqual(calculation.aggregateKnownValue, { type: "EXACT", value: "28" });
   assert.deepEqual(calculation.knownPaths.map(({ contribution }) => contribution.value).sort(), ["10", "18"]);
   assert.equal(final.sourceRecords[0].capabilityResult.candidateFacts.length, 2, "original researched facts survive");
-  assert.notEqual(final.adaptiveView.currentTask?.canonicalSubject.entityId, "uaj-overseas-holdco", "the exact named gap does not reopen");
+  assert.equal(final.adaptiveView.currentTask, null, "the resolved HoldCo percentage form does not reopen for a different concept");
+  assert.equal(final.adaptiveView.path, "WAIT_REVIEW");
+  assert.deepEqual(final.adaptiveView.reasonCodes, ["NO_SAFE_UAJ_01_INPUT_FORM_FOR_CURRENT_CONCEPT"]);
 });
 
 test("existing source-reviewed Artifact uses the frozen Evidence facade and reaches the same 28% result without bytes", async () => {

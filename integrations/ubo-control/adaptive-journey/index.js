@@ -129,8 +129,10 @@ function adaptiveView(entry, session) {
   const bundle = choosePrimaryBundle(entry, session);
   const actions = bundle?.permittedSemanticActions.filter(({ executable }) => executable) || [];
   const hasConfirm = actions.some(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.CONFIRM_ESTABLISHED_INFORMATION);
-  const hasStructured = actions.some(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.SUBMIT_STRUCTURED_RELATIONSHIP);
+  const hasStructuredContract = actions.some(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.SUBMIT_STRUCTURED_RELATIONSHIP);
+  const hasStructured = hasStructuredContract && bundle.missingInformation.some(({ requiredFact }) => requiredFact?.type === "CURRENT_UPSTREAM_HOLDER_SET");
   const hasEvidence = actions.some(({ actionType }) => actionType === CUSTOMER_ACTION_TYPE_V2.REQUEST_EXTERNAL_EVIDENCE);
+  const displayBundle = hasConfirm || hasStructured || hasEvidence ? bundle : null;
   let path = ADAPTIVE_PATH.WAIT_REVIEW;
   let headline = "The case is progressing without a customer task";
   const reasons = [];
@@ -151,21 +153,23 @@ function adaptiveView(entry, session) {
     headline = "Ownership review complete";
     reasons.push("FINAL_CASE_COMPLETE");
   } else {
-    reasons.push(entry.plan.currentPlanningWave?.actor === "SYSTEM" ? "BOUNDED_SYSTEM_WORK_PENDING" : "INTERNAL_OR_SPECIALIST_REVIEW_PENDING");
+    reasons.push(hasStructuredContract && !hasStructured
+      ? "NO_SAFE_UAJ_01_INPUT_FORM_FOR_CURRENT_CONCEPT"
+      : entry.plan.currentPlanningWave?.actor === "SYSTEM" ? "BOUNDED_SYSTEM_WORK_PENDING" : "INTERNAL_OR_SPECIALIST_REVIEW_PENDING");
   }
   return {
     path,
     headline,
     reasonCodes: reasons,
-    currentTask: bundle ? {
-      bundleId: bundle.bundleId,
-      canonicalSubject: clone(bundle.canonicalSubject),
-      informationNeedIds: clone(bundle.informationNeedIds),
-      requirementIds: clone(bundle.requirementIds),
-      knownInformation: clone(bundle.knownInformation),
-      missingInformation: clone(bundle.missingInformation),
+    currentTask: displayBundle ? {
+      bundleId: displayBundle.bundleId,
+      canonicalSubject: clone(displayBundle.canonicalSubject),
+      informationNeedIds: clone(displayBundle.informationNeedIds),
+      requirementIds: clone(displayBundle.requirementIds),
+      knownInformation: clone(displayBundle.knownInformation),
+      missingInformation: clone(displayBundle.missingInformation),
       permittedSemanticActions: clone(actions),
-      evidenceHandoff: clone(bundle.evidenceHandoff || null),
+      evidenceHandoff: clone(displayBundle.evidenceHandoff || null),
     } : null,
     confirmationStatement: hasConfirm ? confirmationStatement(entry, bundle) : null,
     issueClasses: classifyIssues(entry, session),
