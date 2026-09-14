@@ -24,6 +24,32 @@ test("Lab API exposes the fixture catalogue without cacheable state", async () =
   assert.equal(result.headers["cache-control"], "no-store");
   assert.equal(result.payload.fixtures.length, 19);
   assert.equal(result.payload.review.fixtures.length, 10);
+  assert.equal(result.payload.adaptiveJourney.fixtures.length, 5);
+});
+
+test("Lab API exposes the connected UAJ-01 same-case journey and explicit review boundary", async () => {
+  const started = await invoke("POST", {
+    operation: "START_ADAPTIVE_JOURNEY",
+    payload: {
+      scenarioId: "UAJ-01-HYBRID-ANSWER",
+      company: { name: "API Adaptive Ltd", country: "GB", registrationNumber: "UAJAPI01" },
+    },
+  });
+  assert.equal(started.statusCode, 200);
+  assert.equal(started.payload.phase, "EXPLICIT_REVIEW_REQUIRED");
+  assert.equal(started.payload.snapshots.length, 0);
+
+  const reviewed = await invoke("POST", { operation: "APPLY_ADAPTIVE_FIXTURE_REVIEW", payload: { session: started.payload } });
+  assert.equal(reviewed.statusCode, 200);
+  assert.equal(reviewed.payload.adaptiveView.path, "NAMED_GAP");
+  assert.equal(reviewed.payload.caseId, started.payload.caseId);
+  assert.equal(reviewed.payload.shadowAutoEligibility.adjudicationPerformed, false);
+
+  const delegated = await invoke("POST", { operation: "PREPARE_ADAPTIVE_DELEGATION", payload: { session: reviewed.payload } });
+  assert.equal(delegated.statusCode, 200);
+  assert.equal(delegated.payload.phase, "DELEGATION_HANDOFF_PENDING");
+  assert.equal(delegated.payload.delegationHandoffs[0].authorizationGranted, false);
+  assert.equal(delegated.payload.delegationHandoffs[0].workCompleted, false);
 });
 
 test("Lab API starts a deterministic fixture through the real engine", async () => {

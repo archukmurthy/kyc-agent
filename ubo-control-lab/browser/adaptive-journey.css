@@ -1,0 +1,33 @@
+.adaptive-shell { display: grid; gap: 18px; }
+.adaptive-hero { background: linear-gradient(135deg, #0d4a43, #167257); color: #fff; border-radius: 22px; padding: 30px; }
+.adaptive-hero h2 { max-width: 760px; margin: 8px 0; font-size: clamp(30px, 4vw, 52px); line-height: 1.05; }
+.adaptive-hero p { max-width: 760px; }
+.adaptive-progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 22px; }
+.adaptive-progress span { border: 1px solid rgba(255,255,255,.32); border-radius: 999px; padding: 8px 12px; font-size: 12px; }
+.adaptive-progress .done { background: #fff; color: #0d4a43; font-weight: 700; }
+.adaptive-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, .8fr); gap: 18px; align-items: start; }
+.adaptive-card { background: #fff; border: 1px solid #d8e5e2; border-radius: 18px; padding: 24px; box-shadow: 0 8px 28px rgba(13,74,67,.07); }
+.adaptive-card h3 { margin-top: 5px; }
+.adaptive-primary-task { border-top: 5px solid #1a8d6a; }
+.adaptive-known { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 10px; }
+.adaptive-known article { padding: 13px; border-radius: 12px; background: #eff7f5; }
+.adaptive-review { border-left: 5px solid #d18b19; }
+.adaptive-result { border-left: 5px solid #16895e; }
+.adaptive-provenance { font-size: 12px; letter-spacing: .04em; font-weight: 700; color: #42645d; }
+.adaptive-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.adaptive-actions button { min-height: 44px; }
+.adaptive-field { display: grid; gap: 6px; margin-top: 12px; }
+.adaptive-field input, .adaptive-field select { padding: 11px; border: 1px solid #abc2bc; border-radius: 8px; }
+.adaptive-history { display: grid; gap: 8px; }
+.adaptive-history article { border-left: 3px solid #b7d6ce; padding: 8px 12px; }
+.adaptive-source-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adaptive-source-table th, .adaptive-source-table td { text-align: left; vertical-align: top; border-bottom: 1px solid #dce7e4; padding: 9px 7px; }
+.adaptive-warning { background: #fff5de; border: 1px solid #e0bb67; border-radius: 12px; padding: 13px; }
+.adaptive-inline-metric { display: flex; gap: 16px; flex-wrap: wrap; }
+.adaptive-inline-metric strong { display: block; font-size: 20px; }
+.adaptive-diagnostics { max-height: 420px; overflow: auto; }
+
+@media (max-width: 900px) {
+  .adaptive-layout { grid-template-columns: 1fr; }
+  .adaptive-progress { grid-template-columns: 1fr 1fr; }
+}
