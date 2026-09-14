@@ -14,6 +14,8 @@
   try { applicantSessionCache = UboLabApplicantSessions.createApplicantSessionCache(window.localStorage); } catch (_error) { applicantSessionCache = null; }
   let preingestedEvidenceCache = null;
   try { preingestedEvidenceCache = UboLabPreingestedEvidenceSessions.createCache(window.localStorage); } catch (_error) { preingestedEvidenceCache = null; }
+  let adaptiveJourneyCache = null;
+  try { adaptiveJourneyCache = UboLabAdaptiveJourneySessions.createAdaptiveJourneyCache(window.localStorage); } catch (_error) { adaptiveJourneyCache = null; }
 
   async function request(operation, payload) {
     const response = await fetch(API, {
@@ -818,6 +820,133 @@
       readiness && h("p", { className: "field-help" }, `Policy ${readiness.policyIdentity?.version || "1.6-RC"} remains REVIEW ONLY and not production approved.`));
   }
 
+  function AdaptiveJourneyWorkspace({ catalogue, session, setSession, busy, setBusy, error, setError }) {
+    const fixtures = catalogue?.fixtures || [];
+    const [scenarioId, setScenarioId] = React.useState("UAJ-01-HYBRID-ANSWER");
+    const selected = fixtures.find((item) => item.scenarioId === scenarioId) || fixtures[0];
+    const [company, setCompany] = React.useState({ name: "Adaptive Customer Limited", country: "GB", registrationNumber: "UAJ00001" });
+    const [tab, setTab] = React.useState("APPLICANT");
+    const [percentage, setPercentage] = React.useState("60");
+    const [cacheNotice, setCacheNotice] = React.useState("");
+    const restored = React.useRef(false);
+    const current = session?.snapshots?.at(-1);
+
+    React.useEffect(() => {
+      if (restored.current || session || !adaptiveJourneyCache) return;
+      restored.current = true;
+      adaptiveJourneyCache.restore().then(async ({ record, error: restoreError }) => {
+        if (restoreError) { setCacheNotice(restoreError); return; }
+        if (!record) return;
+        try {
+          const verified = await request("VALIDATE_ADAPTIVE_JOURNEY_SESSION", { session: record.session });
+          setSession(verified);
+          setCacheNotice("Restored this browser-local review journey. No research call was made.");
+        } catch (_cause) { setCacheNotice("The saved journey did not pass server-side contract validation."); }
+      });
+    }, [session]);
+    React.useEffect(() => {
+      if (!session || !adaptiveJourneyCache) return;
+      adaptiveJourneyCache.save(session).then(() => setCacheNotice("Saved in this browser for Lab review.")).catch(() => setCacheNotice("This Lab journey could not be saved locally."));
+    }, [session]);
+
+    const run = async (operation, payload) => {
+      setBusy(true); setError("");
+      try { const next = await request(operation, payload); setSession(next); return next; }
+      catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); throw cause; }
+      finally { setBusy(false); }
+    };
+    const changeScenario = (value) => {
+      setScenarioId(value);
+      const fixture = fixtures.find((item) => item.scenarioId === value);
+      if (fixture) setCompany({ name: fixture.company.name, country: fixture.company.jurisdiction || "GB", registrationNumber: fixture.company.registrationNumber || "" });
+    };
+    const newCase = () => { setSession(null); setTab("APPLICANT"); setError(""); };
+    const clearSaved = () => { adaptiveJourneyCache?.clear(); setCacheNotice("Saved Lab journey removed from this browser."); };
+
+    if (!session) return h("main", { className: "shell adaptive-shell" },
+      h("section", { className: "adaptive-hero" }, h("p", { className: "source-label" }, "UAJ-01 · REVIEW-ONLY SHADOW MODE"), h("h2", null, "One company. One evolving ownership case."), h("p", null, "Start early research, then let the current supported facts choose confirmation, one named gap, or a structure request. Opening this page does not call a provider."),
+        h("div", { className: "adaptive-progress" }, ["Company", "Research", "Ownership step", "Review"].map((label, index) => h("span", { key: label, className: index === 0 ? "done" : "" }, label)))),
+      h("section", { className: "adaptive-card" },
+        h("p", { className: "adaptive-provenance" }, "SOURCE-REVIEWED FIXTURES · NO PRODUCTION UPLOAD · POTENTIAL PROVIDER COST: 0"),
+        h("h3", null, "Start or reuse an ownership case"),
+        h("div", { className: "grid-2" },
+          h("label", { className: "adaptive-field" }, "Scenario", h("select", { value: scenarioId, onChange: (event) => changeScenario(event.target.value) }, fixtures.map((fixture) => h("option", { key: fixture.scenarioId, value: fixture.scenarioId }, fixture.label)))),
+          h("label", { className: "adaptive-field" }, "Company name", h("input", { value: company.name, onChange: (event) => setCompany({ ...company, name: event.target.value }) })),
+          h("label", { className: "adaptive-field" }, "Country", h("select", { value: company.country, onChange: (event) => setCompany({ ...company, country: event.target.value }) }, h("option", { value: "GB" }, "United Kingdom"))),
+          h("label", { className: "adaptive-field" }, "Registration number (optional)", h("input", { value: company.registrationNumber, onChange: (event) => setCompany({ ...company, registrationNumber: event.target.value }) }))),
+        h("p", { className: "field-help" }, selected?.description || ""),
+        error && h("div", { className: "error", role: "alert" }, error),
+        cacheNotice && h("p", { className: "notice" }, cacheNotice),
+        h("div", { className: "adaptive-actions" }, h("button", { className: "primary", disabled: busy || !company.name, onClick: () => run("START_ADAPTIVE_JOURNEY", { scenarioId, company }) }, busy ? "Running authorised fixture research…" : "Start ownership review"), h("button", { className: "secondary", onClick: clearSaved }, "Clear saved Lab journey"))));
+
+    const path = session.adaptiveView?.path || "WAIT_REVIEW";
+    const task = session.adaptiveView?.currentTask;
+    const aliceCalculation = current?.graph?.calculations?.find(({ subjectEntityId }) => subjectEntityId === "uaj-alice" && current.graph.nodes.some(({ entityId, subjectRole }) => entityId === subjectEntityId && subjectRole !== "TARGET"));
+    const snapshotCount = session.snapshots.length;
+    const reviewCount = session.pendingDecisionTargets.candidateParties.length + session.pendingDecisionTargets.candidateClaims.length;
+    const permittedSystemActionCount = current?.plan?.systemActions?.filter(({ attemptEligibility }) => attemptEligibility?.eligible !== false).length || 0;
+    const canDelegate = task?.permittedSemanticActions?.some(({ actionType, executable }) => actionType === "DELEGATE_CUSTOMER_WORK" && executable);
+    const latestDelegation = session.delegationHandoffs?.at(-1);
+    const applicantPanel = h(React.Fragment, null,
+      session.phase === "EXPLICIT_REVIEW_REQUIRED" && h("section", { className: "adaptive-card adaptive-review" },
+        h("p", { className: "adaptive-provenance" }, "NO APPLICANT TASK WHILE A DECISION IS REQUIRED"),
+        h("h3", null, session.contradictionReview ? "A source difference needs scoped review" : "We are checking the information already received"),
+        h("p", null, session.contradictionReview?.instruction || "Research or a response produced candidate assertions. An explicit reviewer decision is required before those assertions can affect the graph or qualification."),
+        h("p", null, "You do not need to operate an evaluation checkpoint. The host refreshes the journey after review.")),
+      session.phase === "DELEGATION_HANDOFF_PENDING" && latestDelegation && h("section", { className: "adaptive-card adaptive-review" },
+        h("p", { className: "adaptive-provenance" }, "DATA-ONLY HOST HANDOFF · NO INVITATION SENT"),
+        h("h3", null, "Waiting for the scoped delegated response"),
+        h("p", null, "Requester: UAJ fixture applicant"),
+        h("p", null, "Delegate: Group company secretary"),
+        h("p", null, `Scope: ${latestDelegation.requestedWorkScope}`),
+        h("p", null, "This handoff grants no account access or signing authority, and it does not mark the work complete.")),
+      permittedSystemActionCount > 0 && h("section", { className: "adaptive-card adaptive-review" },
+        h("p", { className: "adaptive-provenance" }, "BOUNDED SYSTEM WORK · NO CUSTOMER INPUT NEEDED"),
+        h("h3", null, "We can research the newly revealed company"),
+        h("p", null, "The pinned plan permits one follow-up operation for Overseas HoldCo. Its result will return as candidate information for explicit review.")),
+      session.phase !== "EXPLICIT_REVIEW_REQUIRED" && task && h("section", { className: "adaptive-card adaptive-primary-task" },
+        h("p", { className: "adaptive-provenance" }, `${path.replaceAll("_", " ")} · ONE PRIMARY TASK`),
+        h("h3", null, session.adaptiveView.headline),
+        path === "NAMED_GAP" && h("p", null, "We know Overseas HoldCo owns 30% of the company. We need the current owner and percentage for that HoldCo."),
+        path === "STRUCTURE" && h("p", null, "The known structure is not yet sufficient. Provide the specific ownership information currently permitted by the case."),
+        path === "CONFIRM" && h("p", null, "Review the supported structure below and confirm only the scope shown. This is not professional certification."),
+        path === "CONFIRM" && session.adaptiveView.confirmationStatement && h("p", { className: "adaptive-warning" }, "Durable Confirmed Ownership Statement contract: pending. This read-only view records the exact snapshot and material scope only."),
+        task.knownInformation?.relationships?.length > 0 && h("div", { className: "adaptive-known" }, task.knownInformation.relationships.map((relationship) => h("article", { key: relationship.relationshipId }, h("strong", null, `${session.entityLabels[relationship.subjectEntityId] || relationship.subjectEntityId} → ${session.entityLabels[relationship.objectEntityId] || relationship.objectEntityId}`), h("p", null, `${human(relationship.relationshipType)} · ${relationship.measurement?.type === "EXACT" ? `${relationship.measurement.value}%` : human(relationship.measurement?.type)}`)))),
+        session.scenario.responseMode === "STRUCTURED_ANSWER" && h("label", { className: "adaptive-field" }, "Alice's current ownership of Overseas HoldCo (%)", h("input", { type: "number", min: "0", max: "100", value: percentage, onChange: (event) => setPercentage(event.target.value) })),
+        h("div", { className: "adaptive-actions" },
+          session.scenario.responseMode === "STRUCTURED_ANSWER" && h("button", { className: "primary", disabled: busy, onClick: () => run("SUBMIT_ADAPTIVE_OWNERSHIP_ANSWER", { session, percentage: Number(percentage) }) }, "Submit this ownership answer"),
+          ["EXISTING_ARTIFACT", "CONTRADICTORY_ARTIFACT"].includes(session.scenario.responseMode) && h("button", { className: "primary", disabled: busy, onClick: () => run("USE_ADAPTIVE_SOURCE_REVIEWED_ARTIFACT", { session }) }, "Use the existing source-reviewed document"),
+          session.scenario.responseMode === "CONFIRMATION" && h("button", { className: "primary", disabled: busy, onClick: () => run("CONFIRM_ADAPTIVE_STRUCTURE", { session }) }, "Confirm the information shown"),
+          canDelegate && h("button", { className: "secondary", disabled: busy, onClick: () => run("PREPARE_ADAPTIVE_DELEGATION", { session }) }, "Ask the group secretary for this"))),
+      session.customerActivity.length > 0 && h("section", { className: "adaptive-card" }, h("h3", null, "Submitted activity"), session.customerActivity.map((activity) => h("p", { key: activity.operationId }, `${human(activity.actionType)} · ${human(activity.status)} · ${activity.submittedAt}`))),
+      aliceCalculation?.aggregateKnownValue && h("section", { className: "adaptive-card adaptive-result" },
+        h("p", { className: "adaptive-provenance" }, "DETERMINISTIC ENGINE RESULT · REVIEW ONLY"), h("h3", null, `Alice's effective interest: ${aliceCalculation.aggregateKnownValue.value}%`),
+        h("p", null, aliceCalculation.knownPaths.length > 1 ? "Two distinct contributing paths are preserved: 10% direct plus 60% × 30% indirect = 28%." : "The current result contains one established path."),
+        h("div", { className: "adaptive-known" }, aliceCalculation.knownPaths.map((knownPath, index) => h("article", { key: knownPath.pathId }, h("strong", null, `Path ${index + 1}`), h("p", null, `${knownPath.contribution.value}% contribution`))))),
+      current?.graph && h("section", { className: "adaptive-card" }, h("details", null, h("summary", null, "Optional ownership explainer"), h(OwnershipGraph, { projection: current.graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 620 }))));
+
+    const analystPanel = h("div", { className: "adaptive-layout" },
+      h("section", { className: "adaptive-card" }, h("p", { className: "adaptive-provenance" }, "ANALYST · SEPARATE FROM APPLICANT TASKS"), h("h3", null, `${reviewCount} explicit decision item(s)`),
+        h("p", null, session.contradictionReview ? "The conflicting assertions are deliberately still candidates. No source silently wins." : "Fixture decisions invoke the public applyDecisions boundary with a fixture-only human-review identity."),
+        reviewCount > 0 && !session.contradictionReview && h("button", { className: "primary", disabled: busy, onClick: () => run("APPLY_ADAPTIVE_FIXTURE_REVIEW", { session }) }, "Apply explicit fixture reviewer decisions"),
+        permittedSystemActionCount > 0 && h("button", { className: "primary", disabled: busy, onClick: () => run("RUN_ADAPTIVE_PERMITTED_RESEARCH", { session }) }, "Run permitted bounded research"),
+        session.contradictionReview && h("div", { className: "adaptive-warning" }, "Scoped decision remains open for Control Room inspection; UAJ-01 performs no automatic adjudication."),
+        h("details", { className: "section" }, h("summary", null, "Decision targets"), h("pre", { className: "json" }, pretty(session.pendingDecisionTargets)))),
+      h("aside", { className: "adaptive-card" }, h("p", { className: "adaptive-provenance" }, "SHADOW AUTO ELIGIBILITY"), h("h3", null, session.shadowAutoEligibility?.eligible ? "Eligible in shadow only" : "Not eligible"), h("p", null, "This report cannot create operative claims and is not counted as zero-analyst-touch."), h("ul", null, (session.shadowAutoEligibility?.prerequisites || []).map((item) => h("li", { key: item.prerequisite }, `${item.passed ? "Pass" : "Blocked"} · ${human(item.prerequisite)}`)))));
+
+    const historyPanel = h("div", { className: "adaptive-layout" },
+      h("section", { className: "adaptive-card" }, h("h3", null, "Immutable case history"), h("div", { className: "adaptive-history" }, session.snapshots.map((entry) => h("article", { key: entry.snapshot.snapshotId }, h("strong", null, `Snapshot ${entry.sequence} · ${human(entry.reason)}`), h("p", null, `#${shortHash(entry.snapshot.snapshotId)} · predecessor ${entry.predecessorSnapshotId ? `#${shortHash(entry.predecessorSnapshotId)}` : "genesis"}`))))),
+      h("section", { className: "adaptive-card" }, h("h3", null, "Source lineage"), h("table", { className: "adaptive-source-table" }, h("thead", null, h("tr", null, h("th", null, "Source"), h("th", null, "Outcome"), h("th", null, "Facts"))), h("tbody", null, session.sourceRecords.map((source) => h("tr", { key: source.sourceRecordId }, h("td", null, human(source.capability)), h("td", null, human(source.capabilityResult.outcome.state)), h("td", null, source.capabilityResult.candidateFacts.length))))), session.sourceComparison.some(({ result }) => result === "CONTRADICTION") && h("div", { className: "adaptive-warning section" }, "Contradictory researched and document assertions remain separately addressable.")));
+
+    return h("main", { className: "shell adaptive-shell" },
+      h("section", { className: "adaptive-hero" }, h("p", { className: "source-label" }, "UAJ-01 · CONNECTED REVIEW JOURNEY"), h("h2", null, session.company.name), h("p", null, `${session.provenanceLabel} · ${snapshotCount} immutable snapshot(s)`), h("div", { className: "adaptive-progress" }, ["Company", "Research", "Ownership step", "Review"].map((label, index) => h("span", { key: label, className: index <= (snapshotCount ? 2 : 1) ? "done" : "" }, label)))),
+      h("div", { className: "adaptive-inline-metric" }, h(Metric, { label: "Journey path", value: human(path) }), h(Metric, { label: "Source records", value: session.sourceRecords.length }), h(Metric, { label: "Snapshots", value: snapshotCount }), h(Metric, { label: "Calls used / limit", value: `${session.executionBudget.usedCalls} / ${session.executionBudget.maxCalls}` })),
+      h("div", { className: "tabs", role: "tablist", "aria-label": "Adaptive journey views" }, ["APPLICANT", "ANALYST", "HISTORY", "ADVANCED_DIAGNOSTICS"].map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name)))),
+      error && h("div", { className: "error", role: "alert" }, error), busy && h("div", { className: "notice", role: "status" }, "Applying the explicit operation to this same ownership case…"), cacheNotice && h("p", { className: "notice" }, cacheNotice),
+      tab === "APPLICANT" ? applicantPanel : tab === "ANALYST" ? analystPanel : tab === "HISTORY" ? historyPanel : h("section", { className: "adaptive-card adaptive-diagnostics" }, h("h3", null, "Advanced diagnostics"), h("pre", { className: "json" }, pretty({ operationTrace: session.operationTrace, adaptiveView: session.adaptiveView, exceptionRounds: session.exceptionRounds, evidenceHandoffs: session.evidenceHandoffs, decisionAudit: session.decisionAudit, policy: session.policyLabel }))),
+      h("div", { className: "adaptive-actions" }, h("button", { className: "secondary", onClick: newCase }, "Start a different company")));
+  }
+
   function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue, applicantCatalogue }) {
     const [tab, setTab] = React.useState("CASE_SUMMARY");
     const [graphFilter, setGraphFilter] = React.useState(session.uiState?.graphFilter || "OWNERSHIP");
@@ -955,7 +1084,8 @@
 
   function App() {
     const [catalogue, setCatalogue] = React.useState(null);
-    const [doctrine, setDoctrine] = React.useState(() => preingestedEvidenceCache?.hasSaved() ? "PREINGESTED_EVIDENCE" : "BASELINE");
+    const [doctrine, setDoctrine] = React.useState(() => new URLSearchParams(window.location.search).get("journey") === "unified"
+      ? "UNIFIED_JOURNEY" : preingestedEvidenceCache?.hasSaved() ? "PREINGESTED_EVIDENCE" : "BASELINE");
     const [mode, setMode] = React.useState("FIXTURE");
     const [session, setSession] = React.useState(null);
     const [busy, setBusy] = React.useState(false);
@@ -965,7 +1095,7 @@
     const attemptedApplicantRestore = React.useRef(false);
     React.useEffect(() => { fetch(API).then((response) => response.json()).then(setCatalogue).catch(() => setError("Fixture catalogue could not be loaded.")); }, []);
     React.useEffect(() => {
-      if (!applicantSessionCache || attemptedApplicantRestore.current || preingestedEvidenceCache?.hasSaved()
+      if (doctrine === "UNIFIED_JOURNEY" || !applicantSessionCache || attemptedApplicantRestore.current || preingestedEvidenceCache?.hasSaved()
         || new URLSearchParams(window.location.search).has("newCase")) return;
       attemptedApplicantRestore.current = true;
       applicantSessionCache.restoreLast().then(async ({ record }) => {
@@ -1013,20 +1143,25 @@
       catch (_cause) { setStorageError("Browser-local replay storage could not be cleared."); }
     };
     const evidenceDemo = doctrine === "PREINGESTED_EVIDENCE";
-    const successor = doctrine !== "BASELINE";
+    const adaptiveJourney = doctrine === "UNIFIED_JOURNEY";
+    const successor = doctrine === "SUCCESSOR_REVIEW";
+    const reviewEra = doctrine !== "BASELINE";
     const currentView = session?.snapshots?.at(-1)?.view;
     const reviewPolicy = catalogue?.review?.policy;
     const setupReviewReadiness = reviewPolicy ? { watermarkRequired: true, policyIdentity: { policyPackId: reviewPolicy.policyPackId, version: reviewPolicy.version }, readiness: reviewPolicy.readiness, blockingReasons: [{ code: "POLICY_NOT_PRODUCTION_APPROVED" }], unresolvedSignoffs: Array.from({ length: reviewPolicy.blockingSignoffCount }, (_, index) => ({ signoffId: `REVIEW_SIGNOFF_${index + 1}` })) } : null;
-    const readiness = session?.policyReadiness || currentView?.policyReadiness || (successor ? setupReviewReadiness : catalogue?.policyReadiness);
+    const readiness = session?.policyReadiness || currentView?.policyReadiness || (reviewEra ? setupReviewReadiness : catalogue?.policyReadiness);
     const selectDoctrine = (value) => { setDoctrine(value); setSession(null); setError(""); setMode("FIXTURE"); };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, reviewEra ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, adaptiveJourney ? "Adaptive coordinator · Decision App v3" : evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
       h(PolicyReadinessWatermark, { readiness }),
       h("nav", { className: "doctrine-selector with-evidence-demo", "aria-label": "Policy and engine version" },
-        h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
+        h("button", { className: doctrine === "BASELINE" ? "active" : "", "aria-pressed": doctrine === "BASELINE", onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
         h("button", { className: doctrine === "SUCCESSOR_REVIEW" ? "active" : "", "aria-pressed": doctrine === "SUCCESSOR_REVIEW", onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved")),
+        h("button", { className: adaptiveJourney ? "active" : "", "aria-pressed": adaptiveJourney, onClick: () => selectDoctrine("UNIFIED_JOURNEY") }, h("strong", null, "UNIFIED JOURNEY — UAJ-01"), h("span", null, "Research → least-burdensome ownership step")),
         h("button", { className: evidenceDemo ? "active" : "", "aria-pressed": evidenceDemo, onClick: () => selectDoctrine("PREINGESTED_EVIDENCE") }, h("strong", null, "BETTERCOMMS EVIDENCE DEMO"), h("span", null, "Pre-ingested Artifact · No upload"))),
-      evidenceDemo
+      adaptiveJourney
+        ? h(AdaptiveJourneyWorkspace, { catalogue: catalogue?.adaptiveJourney, session, setSession, busy, setBusy, error, setError })
+        : evidenceDemo
         ? h(PreingestedEvidenceWorkspace, { readiness })
         : session
         ? successor

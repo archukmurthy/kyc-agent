@@ -37,6 +37,17 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
+const {
+  applyAdaptiveFixtureReview,
+  catalogue: adaptiveJourneyCatalogue,
+  confirmAdaptiveStructure,
+  prepareAdaptiveDelegation,
+  runAdaptivePermittedResearch,
+  startAdaptiveJourney,
+  submitAdaptiveOwnershipAnswer,
+  useAdaptiveSourceReviewedArtifact,
+  validateAdaptiveJourneySession,
+} = require("../ubo-control-lab/server/adaptiveJourneyLab");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -65,6 +76,14 @@ const OPERATIONS = Object.freeze({
   APPLY_PREINGESTED_FIXTURE_DECISIONS: "APPLY_PREINGESTED_FIXTURE_DECISIONS",
   APPLY_DATED_CERTIFICATION_REVIEW: "APPLY_DATED_CERTIFICATION_REVIEW",
   VALIDATE_PREINGESTED_EVIDENCE_SESSION: "VALIDATE_PREINGESTED_EVIDENCE_SESSION",
+  START_ADAPTIVE_JOURNEY: "START_ADAPTIVE_JOURNEY",
+  APPLY_ADAPTIVE_FIXTURE_REVIEW: "APPLY_ADAPTIVE_FIXTURE_REVIEW",
+  SUBMIT_ADAPTIVE_OWNERSHIP_ANSWER: "SUBMIT_ADAPTIVE_OWNERSHIP_ANSWER",
+  CONFIRM_ADAPTIVE_STRUCTURE: "CONFIRM_ADAPTIVE_STRUCTURE",
+  PREPARE_ADAPTIVE_DELEGATION: "PREPARE_ADAPTIVE_DELEGATION",
+  RUN_ADAPTIVE_PERMITTED_RESEARCH: "RUN_ADAPTIVE_PERMITTED_RESEARCH",
+  USE_ADAPTIVE_SOURCE_REVIEWED_ARTIFACT: "USE_ADAPTIVE_SOURCE_REVIEWED_ARTIFACT",
+  VALIDATE_ADAPTIVE_JOURNEY_SESSION: "VALIDATE_ADAPTIVE_JOURNEY_SESSION",
 });
 
 function explicitlyReviewBaseline(session) {
@@ -147,6 +166,7 @@ module.exports = async function handler(req, res) {
       label: "BETTERCOMMS — PRE-INGESTED OWNERSHIP CHART",
       productionAuthorized: false,
     },
+    adaptiveJourney: adaptiveJourneyCatalogue(),
   });
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
@@ -221,6 +241,22 @@ module.exports = async function handler(req, res) {
         return send(res, 200, applyDatedCertificationReview(input.payload));
       case OPERATIONS.VALIDATE_PREINGESTED_EVIDENCE_SESSION:
         return send(res, 200, validatePreingestedEvidenceSession(input.payload?.session));
+      case OPERATIONS.START_ADAPTIVE_JOURNEY:
+        return send(res, 200, await startAdaptiveJourney(input.payload));
+      case OPERATIONS.APPLY_ADAPTIVE_FIXTURE_REVIEW:
+        return send(res, 200, applyAdaptiveFixtureReview(input.payload));
+      case OPERATIONS.SUBMIT_ADAPTIVE_OWNERSHIP_ANSWER:
+        return send(res, 200, submitAdaptiveOwnershipAnswer(input.payload));
+      case OPERATIONS.CONFIRM_ADAPTIVE_STRUCTURE:
+        return send(res, 200, confirmAdaptiveStructure(input.payload));
+      case OPERATIONS.PREPARE_ADAPTIVE_DELEGATION:
+        return send(res, 200, prepareAdaptiveDelegation(input.payload));
+      case OPERATIONS.RUN_ADAPTIVE_PERMITTED_RESEARCH:
+        return send(res, 200, await runAdaptivePermittedResearch(input.payload));
+      case OPERATIONS.USE_ADAPTIVE_SOURCE_REVIEWED_ARTIFACT:
+        return send(res, 200, await useAdaptiveSourceReviewedArtifact(input.payload));
+      case OPERATIONS.VALIDATE_ADAPTIVE_JOURNEY_SESSION:
+        return send(res, 200, validateAdaptiveJourneySession(input.payload));
       default:
         return send(res, 400, { error: "Unsupported Lab operation" });
     }

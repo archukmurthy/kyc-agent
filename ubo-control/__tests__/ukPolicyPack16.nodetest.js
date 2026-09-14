@@ -207,6 +207,7 @@ test("stable Decision Applications and baseline Lab remain pinned to v1.5 while 
   const selectors = runtimeFiles.filter((file) => fs.readFileSync(file, "utf8").includes("1.6-rc"));
   assert.deepEqual(selectors.map((file) => path.relative(ROOT, file).replaceAll("\\", "/")), [
     "ubo-control/review/index.js",
+    "ubo-control-lab/server/adaptiveJourneyLab.js",
     "ubo-control-lab/server/applicantJourneyLab.js",
     "ubo-control-lab/server/preingestedEvidenceDemo.js",
   ]);
