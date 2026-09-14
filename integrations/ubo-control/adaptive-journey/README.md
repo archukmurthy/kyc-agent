@@ -17,6 +17,8 @@ The coordinator owns explicit operation sequencing and a data-only `ubo-adaptive
 
 Opening, rendering or validating a session performs no acquisition call. Stable operation/request identities make retries idempotent at the public product boundaries. Source bytes, credentials, Blob URLs and filesystem paths are not accepted into the browser-local Lab cache.
 
+The review Lab stores its integrity-sealed resume envelope under `ubo-control-lab.adaptive-journey.v2`. The pre-merge v2 key deliberately prevents a corrected build from reusing presentation state written by the superseded initial preview.
+
 ## Decision and automation boundary
 
 UAJ-01 supports explicit reviewer decisions and emits `ubo-shadow-auto-eligibility-v1`. The shadow report cannot create operative claims and is never counted as zero-analyst-touch. A-03 and a versioned automatic-decision authority remain failed prerequisites.

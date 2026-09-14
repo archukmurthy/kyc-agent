@@ -6,8 +6,8 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const CONTRACT_VERSION = "ubo-adaptive-journey-browser-cache-v1";
-  const STORAGE_KEY = "ubo-control-lab.adaptive-journey.v1";
+  const CONTRACT_VERSION = "ubo-adaptive-journey-browser-cache-v2";
+  const STORAGE_KEY = "ubo-control-lab.adaptive-journey.v2";
   const FORBIDDEN_KEYS = /(?:password|credential|accessToken|providerSecret|rawProviderPayload|documentContents|evidenceBytes|blobUrl|filePath|storageKey)/i;
   const FORBIDDEN_VALUES = /(?:^blob:|[A-Za-z]:\\(?:Users|Windows|Program Files)\\)/i;
 

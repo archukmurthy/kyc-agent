@@ -32,6 +32,13 @@ test("UAJ-01 browser cache resumes the sealed same-case session without bytes or
   assert.doesNotMatch(storage.raw(STORAGE_KEY), /credential|accessToken|evidenceBytes|blob:|filePath/i);
 });
 
+test("UAJ-01 cache ignores the superseded pre-fix preview key", async () => {
+  const storage = memoryStorage();
+  storage.setItem("ubo-control-lab.adaptive-journey.v1", JSON.stringify({ obsolete: true }));
+  const cache = createAdaptiveJourneyCache(storage);
+  assert.deepEqual(await cache.restore(), { record: null, error: null });
+});
+
 test("UAJ-01 browser cache fails closed on tampering and can be cleared", async () => {
   const storage = memoryStorage();
   const cache = createAdaptiveJourneyCache(storage);
