@@ -79,6 +79,8 @@ The supplied historical Evidence identifiers are retained only as reported looku
 
 Wave 11B2A proves the existing-Artifact Evidence-to-UBO decision cycle. It does not provide a production private-upload front door. Trusted private ingestion remains a separate production-readiness programme.
 
+The dated-review successor adds one Compliance-only `Review dated certification` action after Snapshot B. It calls Decision Application v3 `applyDecisions` with `ubo-temporal-support-review-v1`, then performs an ordinary evaluation for the explicit assessment date `2026-05-05`. Snapshot C records the real later review/evaluation timestamps, the unchanged UNKNOWN source graph, the date-scoped temporal assessment and the derived graph. Mitchell's 75% route is satisfied only for that review-only dated assessment; Lee's exact 25% route does not exceed `>25%`. R08 remains insufficient, source-signer authority remains unresolved, later-date continuity is not inferred, and production remains unauthorized. Browser-local restore retains the exact reviewed Snapshot C without source bytes.
+
 AJV2-13 uses the actual ASDA system-coverage plan and exposes no customer form. AJV2-14 uses the actual exhausted profile and renders exactly its three pinned bundles, including blocked residual content and external Evidence handoff only where planned. No action in this tab calls Discovery or Evidence merely by being viewed.
 
 ## Wave 10 deployed manual acceptance

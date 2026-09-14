@@ -16,6 +16,10 @@ The application is stateless. It retains immutable Policy Pack configuration but
 
 `applyDecisions` accepts current `caseState` and three explicit arrays: `entityRegistrations`, `identityDecisions`, and `claimAdjudications`. Entity registrations are instructions from which UBO Control creates canonical records; callers cannot replace canonical state wholesale. Every identity and claim outcome remains explicit.
 
+In v3 only, `applyDecisions` also accepts an optional `temporalSupportReviews` array plus the exact `sourceDecisionSnapshot`. Each `ubo-temporal-support-review-v1` input identifies existing source-statement claims and pinned canonical relationships; it cannot submit replacement quotations, `CURRENT` states or qualification results. The application verifies the sealed case head, Snapshot v2/hash, schema-1.3 policy/hash, source Fact membership, Artifact/digest overlap, source-declared scope, relationship membership, date-only precision, actor capacity, operation idempotency and explicit supersession before recording a new immutable case revision. Temporal review is deliberately separate from identity/claim decisions in the same call.
+
+The returned `ubo-temporal-support-review-result-v1` identifies the recorded review and new sealed state. The opaque case payload retains the full source-resolved record: actual decision time; trusted UBO reviewer identity/capacity; source Snapshot, policy, Artifact, CandidateClaim and canonical-relationship references; certification wording/date/scope; accepted date semantics; rationale, limitations and unresolved source-signer authority; and predecessor/supersession references. Original source claims are never rewritten.
+
 `applyCustomerInput` exists in v2 and v3 with version-specific action contracts. V2 retains `ubo-customer-action-v1` unchanged. V3 accepts one `ubo-customer-action-v2` pinned to the case revision, DecisionSnapshot v2/hash, ResolutionPlan v2/hash, customer bundle, ResolutionGroup, ResolutionAction, causal InformationNeeds, requirements, subject/frontier, policy identity, semantic action and submission contract. Unknown, fabricated, unauthorized, blocked or stale actions fail before state changes.
 
 V3 supports confirmation, correction, structured company-share ownership, configured identity attributes, external Evidence requests and data-only delegation. Structured facts remain candidate claims until ordinary explicit identity and adjudication decisions. External Evidence and delegation return typed handoff data only; neither operation executes host work. Applying input never evaluates or directly changes the graph.
@@ -30,7 +34,7 @@ A confirmation records `confirmationDoesNotReplaceIndependentEvidence: true` and
 
 `EVIDENCE_ACTION_REQUESTED` records no fact. It returns a correlated external handoff containing semantic evidence types and case/bundle/action/need/requirement/subject references—never a file, Blob URL, bytes or invented Artifact ID.
 
-`evaluate` accepts current state, host-neutral case context, explicit evaluation time, checkpoint/reference, and approved Gate 2 `resolutionInputs`. V2 merges recorded customer answers and preparatory data as authoritative application inputs. Evaluation rejects undecided candidate parties or claims, privately restores the case, builds the graph, derives calculations, runs the fresh reasoning pipeline, and returns only:
+`evaluate` accepts current state, host-neutral case context, explicit evaluation time, checkpoint/reference, and approved Gate 2 `resolutionInputs`. V3 additionally accepts an optional date-only `assessmentDate`; evaluation time remains the actual evaluation/snapshot time. A recorded accepted review affects only covered relationships when its supported date exactly matches the requested assessment date. A later date never inherits continuity automatically. V2 merges recorded customer answers and preparatory data as authoritative application inputs. Evaluation rejects undecided candidate parties or claims, privately restores the case, builds the graph, derives calculations, runs the fresh reasoning pipeline, and returns only:
 
 ```json
 {
@@ -49,3 +53,5 @@ The façade consumes only public data contracts. It has no React, Discovery exec
 # Successor boundary note
 
 Freeze Wave 11A deliberately exposes the review-only v3 application and customer/projection v2 contracts now that successor InformationNeed v2, ResolutionPlan v2 and DecisionSnapshot v2 are accepted. Wave 11B UI, Evidence execution, persistence and onboarding remain deferred.
+
+The dated-evidence review extension preserves the same four v3 operations. Its public root adds six constants (`TEMPORAL_SUPPORT_REVIEW_V1`, `TEMPORAL_SUPPORT_REVIEW_RESULT_V1`, `TEMPORAL_SUPPORT_REVIEW_DISPOSITION`, `TEMPORAL_SUPPORT_DATE_BASIS`, `TEMPORAL_SUPPORT_DATE_PRECISION`, and `TEMPORAL_SUPPORT_ASSESSMENT_V1`), taking the deliberate public export count from 76 to 82. Constructors and evaluation helpers remain private.

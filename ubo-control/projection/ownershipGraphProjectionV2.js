@@ -70,6 +70,10 @@ function projectOwnershipGraphV2({ decisionSnapshot }) {
     snapshotReference: { snapshotId: decisionSnapshot.snapshotId, snapshotHash: decisionSnapshot.decisionContentHash },
     policyIdentity: cloneData(content.policy.identity),
     algorithmIdentity: cloneData(content.algorithmManifest),
+    ...(content.temporalSupportAssessment ? {
+      assessmentDate: content.assessmentDate,
+      temporalSupportAssessment: cloneData(content.temporalSupportAssessment),
+    } : {}),
     subjectEntityId: content.targetEntityId,
     nodes,
     relationships,

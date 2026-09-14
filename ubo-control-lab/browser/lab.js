@@ -693,7 +693,8 @@
     };
     const current = demo?.snapshots?.at(-1);
     const extracted = demo?.extraction?.capabilityResult;
-    const finalContent = demo?.stage === "SNAPSHOT_B" ? current.snapshot.decisionContent : null;
+    const finalContent = ["SNAPSHOT_B", "DATED_REVIEW_APPLIED"].includes(demo?.stage) ? current.snapshot.decisionContent : null;
+    const datedReviewApplied = demo?.stage === "DATED_REVIEW_APPLIED";
     const assessments = finalContent?.personQualificationAssessments || [];
     const assessmentFor = (id) => assessments.find(({ personEntityId }) => personEntityId === id);
     const effectiveBasis = (id) => assessmentFor(id)?.basisRecords.find(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
@@ -729,14 +730,20 @@
         h("div", { className: "notice" }, "Historical Evidence-store linkage not yet revalidated · No fresh automated interpretation performed · No source bytes are published or stored in this browser."),
         notice && h("div", { className: "notice", role: "status" }, notice),
         error && h("div", { className: "error", role: "alert" }, error),
-        h("button", { className: "primary", disabled: busy, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, busy ? "Starting…" : "Open source-backed Bettercomms demo")));
+        h("button", { className: "primary", disabled: busy || !restored, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, !restored ? "Restoring saved demo…" : busy ? "Starting…" : "Open source-backed Bettercomms demo")));
     return h("main", { className: "shell preingested-demo" },
       h("header", { className: "workspace-header" },
         h("div", null, demo.labels.map((label) => h("p", { className: "source-label", key: label }, label)), h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
         h("button", { className: "secondary", disabled: busy, onClick: reset }, "Reset demo")),
       notice && h("div", { className: "notice", role: "status" }, notice),
       error && h("div", { className: "error", role: "alert" }, error),
-      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED" ? "Passing the manually reviewed fixture through EvidenceConsumerV1…" : "Applying explicit fixture decisions and creating Snapshot B…"),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED"
+        ? "Passing the manually reviewed fixture through EvidenceConsumerV1…"
+        : demo.stage === "SOURCE_FACTS_EXTRACTED"
+          ? "Applying explicit fixture decisions and creating Snapshot B…"
+          : demo.stage === "SNAPSHOT_B"
+            ? "Recording dated support review and creating Snapshot C…"
+            : "Verifying the reviewed demo state…"),
       h("section", { className: "panel" },
         h("div", { className: "grid-3" },
           h(Metric, { label: "Stage", value: human(demo.stage) }), h(Metric, { label: "Active snapshot", value: `#${shortHash(current.snapshot.snapshotId)}` }), h(Metric, { label: "Open ownership/evidence needs", value: evidenceNeedCount }),
@@ -773,14 +780,26 @@
           h(Metric, { label: "Certification date", value: `${demo.sourceAttestation.metadata.signedDate} · ownership as-at date not stated` }),
           h(Metric, { label: "Declaration", value: demo.sourceAttestation.metadata.declarationText }),
           h(Metric, { label: "Reviewed scope", value: `${demo.sourceAttestation.coveredFactIds.length} economic facts · manual annotation` })),
-        h("p", { className: "notice" }, "Certification date 5 May 2026, source capture time, fixture review time, requested assessment date and Evidence freshness remain distinct. Historical capture time is not revalidated; no relationship is made CURRENT."),
-        h("p", { className: "notice" }, demo.sourceAttestation.reviewInterpretation.limitation),
-        h("details", null, h("summary", null, "Inspect the separate currentness assessment"), h("pre", { className: "json" }, pretty(demo.sourceAttestation)))),
+        h("p", { className: "notice" }, datedReviewApplied
+          ? "Certification date, accepted support date, actual review/evaluation times and Evidence freshness remain distinct. Covered relationships are applicable only to the 5 May 2026 dated assessment; no present-day continuity is inferred."
+          : "Certification date 5 May 2026, source capture time, fixture review time, requested assessment date and Evidence freshness remain distinct. Historical capture time is not revalidated; no relationship is made CURRENT."),
+        h("p", { className: "notice" }, datedReviewApplied
+          ? "The source Facts remain UNKNOWN. Date-scoped applicability comes only from the separately recorded reviewer decision and derived temporal assessment."
+          : demo.sourceAttestation.reviewInterpretation.limitation),
+        h("details", null, h("summary", null, "Inspect the separate currentness assessment"), h("pre", { className: "json" }, pretty(demo.sourceAttestation))),
+        demo.stage === "SNAPSHOT_B" && h("div", { className: "section" },
+          h("h3", null, "Compliance decision"),
+          h("p", null, "Review the exact source wording and four covered economic relationships. This records dated support for 5 May 2026 only; it does not make the structure current today, verify the source signer or approve a UBO."),
+          h("button", { className: "primary", disabled: busy, onClick: () => run("APPLY_DATED_CERTIFICATION_REVIEW", { session: demo }) }, "Review dated certification")),
+        datedReviewApplied && h("div", { className: "notice section", role: "status" },
+          h("strong", null, "Dated support review recorded"),
+          h("p", null, `Assessment date ${demo.temporalReview.assessmentDate} · decision recorded ${demo.temporalReview.decidedAt} · signer authority remains unresolved.`),
+          h("details", null, h("summary", null, "Review record and temporal assessment"), h("pre", { className: "json" }, pretty(demo.temporalReview))))),
       finalContent && h(React.Fragment, null,
         h("section", { className: "panel section result-panel" },
-          h("p", { className: "source-label" }, "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, "Current qualification is indeterminate"),
-          h("article", { className: "boundary-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Source-stated arithmetic · 75% × 100% = nominal 75%"), h("p", null, `Current statutory effective-interest route · ${mitchell?.assessmentState || "INDETERMINATE"}. The engine records the path as ${mitchell?.recordedCalculation?.status || "UNRESOLVED"} because both material edges have UNKNOWN currentness.`)),
-          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor"), h("strong", null, "Source-stated arithmetic · 25% × 100% = nominal 25%"), h("p", null, `Current statutory effective-interest route · ${lee?.assessmentState || "INDETERMINATE"}. The source percentage can be inspected, but the engine cannot treat the path as current without scoped attestation.`)),
+          h("p", { className: "source-label" }, datedReviewApplied ? "SNAPSHOT C · DATED REVIEW ASSESSMENT" : "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, datedReviewApplied ? "Review-only assessment as of 5 May 2026" : "Current qualification is indeterminate"),
+          h("article", { className: "boundary-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Source-stated arithmetic · 75% × 100% = nominal 75%"), h("p", null, `${datedReviewApplied ? "Dated" : "Current"} statutory effective-interest route · ${mitchell?.assessmentState || "INDETERMINATE"}. The engine records the path as ${mitchell?.recordedCalculation?.status || "UNRESOLVED"}${datedReviewApplied ? " for the explicitly reviewed 5 May 2026 assessment date only." : " because both material edges have UNKNOWN currentness."}`)),
+          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor"), h("strong", null, "Source-stated arithmetic · 25% × 100% = nominal 25%"), h("p", null, `${datedReviewApplied ? "Dated" : "Current"} statutory effective-interest route · ${lee?.assessmentState || "INDETERMINATE"}. ${datedReviewApplied ? "Exactly 25% does not exceed the active >25% economic threshold; separate unassessed routes remain distinct." : "The source percentage can be inspected, but the engine cannot treat the path as current without scoped review."}`)),
           h("p", null, `R08 Evidence sufficiency remains separate · ${r08?.status || "INSUFFICIENT"}. The attestation assessment contributes no additional independent source.`),
           h("p", null, "Officer roles remain source-backed entity metadata only; they create no control edge, appointment/removal right or qualification basis."),
           h("details", null, h("summary", null, "Pinned route, calculation, path and Evidence references"), h("pre", { className: "json" }, pretty({ mitchell, lee, policy: finalContent.policy.identity, productionAuthorized: false })))),
@@ -790,10 +809,10 @@
           h("p", null, showAllRelationships ? "Both subsidiaries are shown beneath their owner, Better Holdco." : "Off-path sibling Better Network Services is retained in the case and source view, but excluded here because it is not on a path to the regulated target."),
           h("ul", { className: "ownership-statements" }, ownershipStatements),
           h(OwnershipGraph, { projection: displayGraph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })),
-        h("section", { className: "panel section" }, h("h2", null, "Applicant journey after re-evaluation"), h("div", { className: "grid-3" }, h(Metric, { label: "Ownership document", value: "SOURCE-REVIEWED FIXTURE" }), h(Metric, { label: "Ownership structure", value: "UPDATED · CURRENTNESS OPEN" }), h(Metric, { label: "Statutory qualifying people", value: assessmentFor("mitchell-fortescue")?.routeStatus === "ROUTE_SATISFIED" ? 1 : 0 }), h(Metric, { label: "Customer bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Internal review pending", value: current.journey.finishLine.internalReviewPending }), h(Metric, { label: "Final case complete", value: String(current.journey.finalCaseComplete) })), current.journey.customerWorkBundles.length ? h("pre", { className: "json section" }, pretty(current.journey.customerWorkBundles)) : h("p", { className: "notice" }, "The ownership document was reviewed, but relationship currentness/freshness remains unresolved in the deterministic case."))),
+        h("section", { className: "panel section" }, h("h2", null, "Applicant journey after re-evaluation"), h("div", { className: "grid-3" }, h(Metric, { label: "Ownership document", value: "SOURCE-REVIEWED FIXTURE" }), h(Metric, { label: "Ownership structure", value: datedReviewApplied ? "DATED SUPPORT · 5 MAY 2026" : "UPDATED · CURRENTNESS OPEN" }), h(Metric, { label: "Statutory qualifying people", value: assessmentFor("mitchell-fortescue")?.routeStatus === "ROUTE_SATISFIED" ? 1 : 0 }), h(Metric, { label: "Customer bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Internal review pending", value: current.journey.finishLine.internalReviewPending }), h(Metric, { label: "Final case complete", value: String(current.journey.finalCaseComplete) })), current.journey.customerWorkBundles.length ? h("pre", { className: "json section" }, pretty(current.journey.customerWorkBundles)) : h("p", { className: "notice" }, datedReviewApplied ? "The dated relationship assessment is recorded, while R08, signer authority, later-date continuity and production approval remain separate." : "The ownership document was reviewed, but relationship currentness/freshness remains unresolved in the deterministic case."))),
       h("section", { className: "panel section history" },
         h("div", { className: "history-list" }, demo.snapshots.map((item) => h("article", { className: "history-item", key: item.snapshot.snapshotId }, h("strong", null, `${item.sequence}. ${human(item.reason)}`), h("span", null, `#${shortHash(item.snapshot.snapshotId)}`), h("span", null, item.snapshot.decisionContent.history.supersessionReason || "GENESIS")))),
-        h("div", null, h("h2", null, "Immutable Decision History"), h("p", null, "Snapshot A remains reconstructable. Snapshot B is linked with NEW_FACTS and pins the graph, calculations, qualifications, Evidence references, needs and plan."), h("details", null, h("summary", null, "Evidence handoff correlation and decision audit"), h("pre", { className: "json" }, pretty({ externalEvidenceHandoff: demo.externalEvidenceHandoff, artifactCorrelation: demo.artifactCorrelation, decisionAudit: demo.decisionAudit }))))),
+        h("div", null, h("h2", null, "Immutable Decision History"), h("p", null, datedReviewApplied ? "Snapshots A and B remain reconstructable. Snapshot C is linked with REVIEW_DECISION and pins the dated temporal assessment without rewriting either predecessor." : "Snapshot A remains reconstructable. Snapshot B is linked with NEW_FACTS and pins the graph, calculations, qualifications, Evidence references, needs and plan."), h("details", null, h("summary", null, "Evidence handoff correlation and decision audit"), h("pre", { className: "json" }, pretty({ externalEvidenceHandoff: demo.externalEvidenceHandoff, artifactCorrelation: demo.artifactCorrelation, decisionAudit: demo.decisionAudit }))))),
       h("section", { className: "panel section" }, h("h2", null, "Presenter guide"), h("ol", null,
         h("li", null, "Show Snapshot A’s unresolved ownership need and planned Evidence request."), h("li", null, "Use the source-backed manually reviewed fixture; no new provider call occurs."), h("li", null, "Inspect six relationship facts plus eight ordinary certification statements from one source document."), h("li", null, "Apply the visibly fixture-only identity and claim decisions."), h("li", null, "Show the dated certification, unverified authority and why current qualification remains indeterminate."), h("li", null, "Compare the target-specific graph with the optional full source-document view."))),
       readiness && h("p", { className: "field-help" }, `Policy ${readiness.policyIdentity?.version || "1.6-RC"} remains REVIEW ONLY and not production approved.`));

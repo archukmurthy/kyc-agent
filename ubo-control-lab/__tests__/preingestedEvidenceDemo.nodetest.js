@@ -6,6 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   ENTITY_IDS,
+  applyDatedCertificationReview,
   applyPreconfiguredFixtureDecisions,
   resetRuntimeForTest,
   runtimeMetrics,
@@ -208,6 +209,62 @@ test("explicit fixture decisions keep source arithmetic but current qualificatio
   assert.ok(session.decisionAudit.some(({ event, status }) => event === "SOURCE_CERTIFICATION_REVIEW_RECORDED" && status === "RECORDED_NOT_APPLIED_TO_RELATIONSHIP_CURRENTNESS"));
   assert.equal(current(session).journey.finalCaseComplete, false);
   assert.equal(current(session).journey.customerWorkBundles.some(({ evidenceHandoff }) => evidenceHandoff), false);
+});
+
+test("explicit Compliance review records dated support through Decision Application v3 without rewriting source Facts", async () => {
+  resetRuntimeForTest();
+  let session = startPreingestedEvidenceDemo({ sessionId: "dated-review" });
+  session = applyPreconfiguredFixtureDecisions({ session: await usePreingestedBettercommsArtifact({ session }) });
+  const snapshotB = current(session).snapshot;
+  const sourceState = JSON.parse(Buffer.from(session.caseState.statePayload, "base64url").toString("utf8"));
+  const sourceClaims = sourceState.candidateClaims.filter(({ claimType }) => claimType === "RELATIONSHIP");
+  assert.ok(sourceClaims.every(({ qualifiers }) => qualifiers.currentState === "UNKNOWN"));
+
+  session = applyDatedCertificationReview({ session });
+  assert.equal(session.stage, "DATED_REVIEW_APPLIED");
+  assert.equal(session.snapshots.length, 3);
+  assert.equal(session.decisionHistory.snapshots.length, 3);
+  assert.equal(current(session).snapshot.decisionContent.history.previousSnapshot.snapshotId, snapshotB.snapshotId);
+  assert.equal(current(session).snapshot.decisionContent.history.supersessionReason, "REVIEW_DECISION");
+  assert.equal(session.temporalReview.assessmentDate, "2026-05-05");
+  assert.notEqual(session.temporalReview.decidedAt.slice(0, 10), session.temporalReview.assessmentDate);
+  assert.equal(session.temporalReview.assessment.contractVersion, "ubo-temporal-support-assessment-v1");
+  assert.equal(session.temporalReview.assessment.stateCounts.SUPPORTED_FOR_ASSESSMENT_DATE, 4);
+  assert.ok(current(session).graph.relationships.every(({ temporalState }) => temporalState === "CURRENT"));
+
+  const reviewedState = JSON.parse(Buffer.from(session.caseState.statePayload, "base64url").toString("utf8"));
+  assert.equal(reviewedState.temporalSupportReviews.length, 1);
+  assert.equal(reviewedState.temporalSupportReviews[0].sourceWording.text, "I hereby certify that the company structure chart is true, correct and accurate");
+  assert.equal(reviewedState.temporalSupportReviews[0].sourceDate.explicitlyStatesRelationshipEffectiveDate, false);
+  assert.equal(reviewedState.temporalSupportReviews[0].signerAuthorityStatus, "UNRESOLVED");
+  assert.ok(reviewedState.candidateClaims.filter(({ claimType }) => claimType === "RELATIONSHIP")
+    .every(({ qualifiers }) => qualifiers.currentState === "UNKNOWN"));
+
+  const mitchell = basis(session, ENTITY_IDS.mitchell);
+  const lee = basis(session, ENTITY_IDS.lee);
+  assert.equal(mitchell.basis.recordedCalculation.status, "COMPLETE");
+  assert.equal(mitchell.basis.assessmentState, "SATISFIED");
+  assert.equal(lee.basis.recordedCalculation.status, "COMPLETE");
+  assert.equal(lee.basis.assessmentState, "NOT_SATISFIED");
+  assert.equal(current(session).snapshot.decisionContent.evidenceSufficiency.find(({ requirementId }) => requirementId === "UBO-R08").status, "INSUFFICIENT");
+  assert.equal(current(session).journey.finalCaseComplete, false);
+  assert.equal(current(session).snapshot.decisionContent.productionAuthorized, false);
+  assert.equal(current(session).journey.customerWorkBundles.length, 0);
+  assert.equal(current(session).journey.finishLine.systemActionsRemaining > 0, true);
+  const target = createTargetRelevantGraphView(current(session).graph, session.entityDirectory);
+  const full = createFullSourceGraphView(current(session).graph, session.entityDirectory);
+  assert.equal(target.nodes.length, 4);
+  assert.equal(target.relationships.length, 3);
+  assert.equal(full.nodes.length, 5);
+  assert.equal(full.relationships.length, 4);
+  const cache = createCache(memoryStorage());
+  await cache.save(session);
+  const restored = await cache.restore();
+  assert.equal(restored.record.session.stage, "DATED_REVIEW_APPLIED");
+  assert.equal(restored.record.activeSnapshotId, current(session).snapshot.snapshotId);
+  assert.equal(restored.record.session.temporalReview.reviewId, session.temporalReview.reviewId);
+  assert.deepEqual(applyDatedCertificationReview({ session }), session);
+  assert.doesNotThrow(() => validateSession(session));
 });
 
 test("explicit signed scoped as-at attestation establishes a separate currentness assertion", () => {
@@ -418,6 +475,11 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   assert.match(browser, /Historical Evidence-store linkage not yet revalidated/);
   assert.match(browser, /No fresh automated interpretation performed/);
   assert.match(browser, /Current qualification is indeterminate/);
+  assert.match(browser, /Review dated certification/);
+  assert.match(browser, /The source Facts remain UNKNOWN\. Date-scoped applicability comes only from the separately recorded reviewer decision/);
+  assert.match(browser, /disabled:\s*busy \|\| !restored/);
+  assert.match(browser, /Restoring saved demo/);
+  assert.match(browser, /Recording dated support review and creating Snapshot C/);
   assert.match(browser, /Show all relationships from source document/);
   assert.match(browser, /preingestedEvidenceCache\?\.hasSaved\(\).*PREINGESTED_EVIDENCE/);
   assert.doesNotMatch(browser, /type:\s*["']file["']/);
@@ -440,7 +502,10 @@ test("Lab API exposes the bounded start, interpret, review, and restore operatio
   response = await invokeApi("APPLY_PREINGESTED_FIXTURE_DECISIONS", { session: response.body });
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.stage, "SNAPSHOT_B");
+  response = await invokeApi("APPLY_DATED_CERTIFICATION_REVIEW", { session: response.body });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.stage, "DATED_REVIEW_APPLIED");
   response = await invokeApi("VALIDATE_PREINGESTED_EVIDENCE_SESSION", { session: response.body });
   assert.equal(response.statusCode, 200);
-  assert.equal(response.body.snapshots.length, 2);
+  assert.equal(response.body.snapshots.length, 3);
 });
