@@ -19,7 +19,7 @@ function corporate(name, registrationNumber, legalForm, nature) {
     kind: "corporate-entity-person-with-significant-control",
     name,
     identification: { registration_number: registrationNumber, country_registered: "United Kingdom", legal_form: legalForm },
-    natures_of_control: [nature],
+    natures_of_control: Array.isArray(nature) ? nature : [nature],
   };
 }
 
@@ -34,8 +34,16 @@ const PSC = Object.freeze({
     corporate("TDR CAPITAL NOMINEES 2021 LIMITED", "13578722", "Private Limited Company", "right-to-share-surplus-assets-75-to-100-percent-limited-liability-partnership"),
   ],
   OC302604: [person("MR GARY LINDSAY"), person("MR THOMAS ANDREW MITCHELL"), person("MANJIT DALE")],
-  SC707592: [corporate("TDR CAPITAL LLP", "OC302604", "Limited Liability Partnership", "significant-influence-or-control")],
-  13578722: [corporate("TDR CAPITAL LLP", "oc302604", "Limited Liability Partnership", "significant-influence-or-control")],
+  SC707592: [corporate("TDR CAPITAL LLP", "OC302604", "Limited Liability Partnership", [
+    "ownership-of-shares-75-to-100-percent",
+    "voting-rights-75-to-100-percent",
+    "right-to-appoint-and-remove-directors",
+  ])],
+  13578722: [corporate("TDR CAPITAL LLP", "oc302604", "Limited Liability Partnership", [
+    "ownership-of-shares-75-to-100-percent",
+    "voting-rights-75-to-100-percent",
+    "right-to-appoint-and-remove-directors",
+  ])],
 });
 
 function response(body, status = 200) {
@@ -105,10 +113,11 @@ test("OC302604 expands identically as a root and as a recursively discovered con
   const childOcNodes = childRun.result.ownershipGraph.nodes.filter(({ registrationNumber }) => registrationNumber === "OC302604");
   assert.equal(childOcNodes.length, 1);
   assert.equal(childRun.result.ownershipGraph.nodes.length, 7);
-  assert.equal(childRun.result.ownershipGraph.edges.length, 8);
+  assert.equal(childRun.result.ownershipGraph.edges.length, 10);
 
   const childCandidates = await translate(childRun.result, "SL035224", "TDR CAPITAL GENERAL PARTNER V L.P.");
   const rootCandidates = await translate(rootRun.result, "OC302604", "TDR CAPITAL LLP");
+  assert.equal(childCandidates.candidateFacts.length, 12, "each distinct source nature is translated once even when legacy edges share one evidence record");
   const votingFrom = (result) => result.candidateFacts.filter((fact) => fact.relationship === RELATIONSHIP_TYPE.VOTING_RIGHTS && fact.object.externalIdentifiers.some(({ value }) => value === "OC302604"));
   assert.equal(votingFrom(childCandidates).length, 3);
   assert.equal(votingFrom(rootCandidates).length, 3);

@@ -317,6 +317,7 @@ function translateLegacyResponse(request, body) {
   const nodeById = new Map(body.ownershipGraph.nodes.filter(isPlainObject).map((node) => [String(node.id), node]));
   const evidenceById = new Map((body.evidence || []).filter(isPlainObject).filter((item) => item.id).map((item) => [String(item.id), item]));
   const candidateFacts = [];
+  const candidateFactSignatures = new Set();
   let candidateLikeAssertions = 0;
 
   body.ownershipGraph.edges.forEach((edge, sourceIndex) => {
@@ -374,6 +375,16 @@ function translateLegacyResponse(request, body) {
         },
       };
       if (descriptor.measurement !== undefined) fact.measurement = descriptor.measurement;
+      const signature = JSON.stringify({
+        subject: fact.subject,
+        relationship: fact.relationship,
+        object: fact.object,
+        measurement: fact.measurement,
+        evidenceReferences: fact.evidenceReferences,
+        qualifiers: fact.qualifiers,
+      });
+      if (candidateFactSignatures.has(signature)) return;
+      candidateFactSignatures.add(signature);
       candidateFacts.push(fact);
     });
   });
