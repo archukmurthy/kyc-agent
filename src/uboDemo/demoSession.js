@@ -2,6 +2,7 @@ import { COUNTRIES } from "../constants/appConstants";
 
 export const DEMO_SESSION_CONTRACT = "ubo-demo-browser-session-v1";
 export const DEMO_SESSION_KEY = "ubo-demo.case.v1";
+export const LAB_REPLAY_KEY = "ubo-control-lab.discovery-replays.v1";
 
 export const OWNERSHIP_TYPES = Object.freeze([
   { code: "PRIVATE_LIMITED", label: "Private limited company (Ltd)" },
@@ -22,6 +23,8 @@ export function emptyDemoDraft() {
     countryCode: "GB",
     ownershipType: "PRIVATE_LIMITED",
     referenceCaseId: "",
+    sourceMode: "LIVE",
+    replayId: "",
   };
 }
 
@@ -65,19 +68,35 @@ export function readDemoSession(storage = window.localStorage) {
   try {
     const parsed = JSON.parse(storage.getItem(DEMO_SESSION_KEY));
     if (parsed?.contractVersion !== DEMO_SESSION_CONTRACT || !parsed.draft) return null;
-    return { draft: { ...emptyDemoDraft(), ...parsed.draft }, demoCase: parsed.demoCase || null };
+    return { draft: { ...emptyDemoDraft(), ...parsed.draft }, demoCase: parsed.demoCase || null, researchResult: parsed.researchResult || null };
   } catch (_) {
     return null;
   }
 }
 
-export function writeDemoSession({ draft, demoCase }, storage = window.localStorage) {
+export function writeDemoSession({ draft, demoCase, researchResult }, storage = window.localStorage) {
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     savedAt: new Date().toISOString(),
     draft,
     demoCase,
+    researchResult,
   }));
+}
+
+export function readLabReplays(storage = window.localStorage) {
+  try {
+    const records = JSON.parse(storage.getItem(LAB_REPLAY_KEY) || "[]");
+    return Array.isArray(records) ? records : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function saveLabReplay(record, storage = window.localStorage) {
+  if (!record?.replayId) return;
+  const records = [record, ...readLabReplays(storage).filter(({ replayId }) => replayId !== record.replayId)].slice(0, 6);
+  storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
 }
 
 export function clearDemoSession(storage = window.localStorage) {
