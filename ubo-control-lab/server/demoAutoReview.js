@@ -51,6 +51,10 @@ function sourceBacked(fact) {
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
+function prepareDemoLiveDiscoveryBody(body) {
+  return { ...clone(body), forceRefresh: true };
+}
+
 function sameRegisteredSubject(party, subject) {
   if (!party || !subject) return false;
   if (party.entityId && subject.entityId && party.entityId === subject.entityId) return true;
@@ -181,4 +185,4 @@ function autoReviewDemoSession(session, recordedAt = new Date().toISOString()) {
   return reviewed;
 }
 
-module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan, prepareDemoReplayRecord });
+module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });

@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { autoReviewDemoSession, buildPlan, prepareDemoReplayRecord } = require("../server/demoAutoReview");
+const { autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
 const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
 const tdrPscFixture = require("../fixtures/tdr-psc.json");
 
@@ -19,6 +19,12 @@ function replaySession(fixtureId) {
   session.sourceLabel = `Live Discovery · ${session.companyContext.legalEntityName}`;
   return session;
 }
+
+test("demo LIVE research bypasses a pre-fix investigation cache without mutating the translated request", () => {
+  const body = { entityName: "TDR CAPITAL GENERAL PARTNER V L.P.", registrationNumber: "SL035224", jurisdiction: "GB" };
+  assert.deepEqual(prepareDemoLiveDiscoveryBody(body), { ...body, forceRefresh: true });
+  assert.equal(body.forceRefresh, undefined);
+});
 
 test("demo-only review makes source-backed voting ranges operative without changing their dimension or endpoints", () => {
   const result = autoReviewDemoSession(replaySession("V2-LAB-06"), "2026-09-15T08:01:00.000Z");

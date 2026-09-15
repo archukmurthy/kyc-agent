@@ -37,7 +37,7 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
-const { autoReviewDemoSession, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
+const { autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -139,10 +139,10 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
-async function startSuccessorLive(payload, { demoProfileReconciliation = false } = {}) {
+async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body } = {}) {
   const baseline = await startLive({
     ...payload,
-    transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
+    transport: { invoke: ({ body }) => invokeLegacyDiscovery(prepareDiscoveryBody(body)) },
   });
   const prepared = demoProfileReconciliation
     ? prepareDemoReplayRecord(baseline.replayCapture)
@@ -195,7 +195,10 @@ module.exports = async function handler(req, res) {
         return send(res, 200, await startSuccessorLive(input.payload));
       }
       case OPERATIONS.START_DEMO_REVIEW_LIVE:
-        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, { demoProfileReconciliation: true })));
+        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, {
+          demoProfileReconciliation: true,
+          prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
+        })));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:
         return send(res, 200, applyReviewDecisions(input.payload));
       case OPERATIONS.CHANGE_REVIEW_PROFILE:
