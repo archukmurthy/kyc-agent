@@ -88,6 +88,7 @@ test("Lab API demo replay applies provisional review without composing the live 
   const result = await invoke("POST", { operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord } });
   assert.equal(result.statusCode, 200);
   assert.equal(result.payload.sourceState, "REPLAY");
+  assert.deepEqual(result.payload.companyContext, companyContext);
   assert.equal(result.payload.candidateSources.every(({ sourceState }) => sourceState === "REPLAY"), true);
   assert.equal(result.payload.snapshots.length, 1);
   assert.match(result.payload.sourceLabel, /Saved live replay.*no provider call/);
