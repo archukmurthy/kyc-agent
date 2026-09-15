@@ -3,6 +3,11 @@
 const { NODE_TYPES, EDGE_TYPES } = require("./constants");
 
 function stableKey(entity) {
+  if (entity.registrationNumber) {
+    const jurisdiction = String(entity.jurisdiction || "unknown").trim().toUpperCase();
+    const registrationNumber = String(entity.registrationNumber).trim().toUpperCase();
+    return `${jurisdiction}:registry:${registrationNumber}`;
+  }
   if (entity.id) return String(entity.id);
   const name = String(entity.name || "Unknown").trim().toLowerCase();
   return [entity.type || NODE_TYPES.UNKNOWN, name, entity.registrationNumber || "", entity.jurisdiction || ""].join(":");
@@ -13,7 +18,7 @@ function normaliseNode(entity = {}) {
     id: stableKey(entity),
     name: entity.name || "Unknown entity",
     type: Object.values(NODE_TYPES).includes(entity.type) ? entity.type : NODE_TYPES.UNKNOWN,
-    registrationNumber: entity.registrationNumber || null,
+    registrationNumber: entity.registrationNumber ? String(entity.registrationNumber).trim().toUpperCase() : null,
     jurisdiction: entity.jurisdiction || null,
     metadata: entity.metadata || {},
   };

@@ -61,6 +61,13 @@ function sameRegisteredSubject(party, subject) {
 function prepareDemoReplayRecord(replayRecord) {
   const prepared = clone(replayRecord);
   const requestedProfile = normalize(prepared?.companyContext?.entityProfile) || "COMPANY";
+  const targetFacts = (prepared?.discoveryResult?.candidateFacts || []).filter((fact) =>
+    fact.type === "RELATIONSHIP" && sameRegisteredSubject(fact.object, prepared.subject));
+  const registryLegalForm = targetFacts.map((fact) => fact.qualifiers?.objectRegistryLegalForm).find(Boolean) || null;
+  const registryCompanyType = targetFacts.map((fact) => fact.qualifiers?.objectRegistryCompanyType).find(Boolean) || null;
+  const registryEntityProfile = registryLegalForm || registryCompanyType
+    ? targetFacts.map((fact) => normalize(fact.object?.entityType)).find((value) => ["COMPANY", "LLP", "PARTNERSHIP"].includes(value))
+    : null;
   const supportingFacts = (prepared?.discoveryResult?.candidateFacts || []).filter((fact) =>
     fact.type === "RELATIONSHIP"
       && fact.relationship === "ECONOMIC_OWNERSHIP"
@@ -68,7 +75,9 @@ function prepareDemoReplayRecord(replayRecord) {
       && fact.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
       && sameRegisteredSubject(fact.object, prepared.subject)
       && sourceBacked(fact));
-  const effectiveProfile = supportingFacts.length ? "LLP" : requestedProfile;
+  const effectiveProfile = ["LLP", "PARTNERSHIP"].includes(registryEntityProfile)
+    ? "LLP"
+    : supportingFacts.length ? "LLP" : requestedProfile;
   if (effectiveProfile !== requestedProfile) {
     prepared.companyContext.entityProfile = effectiveProfile;
     prepared.subject.entityType = effectiveProfile;
@@ -81,7 +90,10 @@ function prepareDemoReplayRecord(replayRecord) {
       requestedProfile,
       effectiveProfile,
       changed: effectiveProfile !== requestedProfile,
-      basis: supportingFacts.length ? "SOURCE_BACKED_LLP_SURPLUS_ASSET_RELATIONSHIP" : "DEMO_INPUT_PROFILE_RETAINED",
+      basis: registryEntityProfile ? "SOURCE_BACKED_REGISTRY_PROFILE" : supportingFacts.length ? "SOURCE_BACKED_LLP_SURPLUS_ASSET_RELATIONSHIP" : "DEMO_INPUT_PROFILE_RETAINED",
+      registryEntityProfile: registryEntityProfile || null,
+      registryLegalForm,
+      registryCompanyType,
       sourceCandidateFactIds: supportingFacts.map(({ factId }) => factId).filter(Boolean).sort(),
     },
   };

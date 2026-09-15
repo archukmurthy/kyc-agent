@@ -62,6 +62,7 @@ export function compactResearchResult(session, sourceMode) {
     completedAt: new Date().toISOString(),
     replayCapture,
     demoAutoReview: session?.demoAutoReview || null,
+    canonicalCompanyTypeLabel: session?.demoAutoReview?.profileReconciliation?.registryLegalForm || null,
     entityLabels,
   };
 }

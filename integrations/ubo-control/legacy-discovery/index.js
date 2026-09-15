@@ -92,7 +92,10 @@ function translateRequest(request) {
   return body;
 }
 
-function entityTypeFromLegacy(type) {
+function entityTypeFromLegacy(type, metadata = {}) {
+  const registryProfile = String(metadata.registryEntityProfile || "").toUpperCase();
+  if (["LLP", "PARTNERSHIP"].includes(registryProfile)) return "LLP";
+  if (registryProfile === "COMPANY") return "COMPANY";
   const normalized = String(type || "").toLowerCase();
   if (["individual", "person", "natural_person"].includes(normalized)) return "NATURAL_PERSON";
   if (["company", "public_company", "corporate"].includes(normalized)) return "COMPANY";
@@ -103,17 +106,22 @@ function entityTypeFromLegacy(type) {
 }
 
 function partyFromLegacy(node, request, rootEntityId) {
-  if (String(node.id) === String(rootEntityId)) return cloneData(request.subject);
+  if (String(node.id) === String(rootEntityId)) {
+    const party = cloneData(request.subject);
+    const entityType = entityTypeFromLegacy(node.type, node.metadata);
+    if (entityType) party.entityType = entityType;
+    return party;
+  }
   const party = { externalIdentifiers: [] };
   if (node.name) party.name = String(node.name);
   if (node.registrationNumber) {
     const jurisdiction = String(node.jurisdiction || "UNKNOWN").toUpperCase();
     party.externalIdentifiers.push({
       namespace: "legacy-company-register:" + jurisdiction,
-      value: String(node.registrationNumber),
+      value: String(node.registrationNumber).trim().toUpperCase(),
     });
   }
-  const entityType = entityTypeFromLegacy(node.type);
+  const entityType = entityTypeFromLegacy(node.type, node.metadata);
   if (entityType) party.entityType = entityType;
   if (node.jurisdiction) party.jurisdiction = String(node.jurisdiction).toUpperCase();
   return party;
@@ -359,6 +367,10 @@ function translateLegacyResponse(request, body) {
         qualifiers: {
           adapter: "legacy-discovery-anti-corruption-v1",
           ...(descriptor.qualifiers || {}),
+          ...(subjectNode.metadata?.registryLegalForm ? { subjectRegistryLegalForm: subjectNode.metadata.registryLegalForm } : {}),
+          ...(subjectNode.metadata?.registryCompanyType ? { subjectRegistryCompanyType: subjectNode.metadata.registryCompanyType } : {}),
+          ...(objectNode.metadata?.registryLegalForm ? { objectRegistryLegalForm: objectNode.metadata.registryLegalForm } : {}),
+          ...(objectNode.metadata?.registryCompanyType ? { objectRegistryCompanyType: objectNode.metadata.registryCompanyType } : {}),
         },
       };
       if (descriptor.measurement !== undefined) fact.measurement = descriptor.measurement;

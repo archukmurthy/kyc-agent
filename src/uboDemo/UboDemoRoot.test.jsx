@@ -82,6 +82,19 @@ test("compact demo result retains customer-readable entity labels separately fro
   expect(compact.view.graph).toBe(projection);
 });
 
+test("Screen 2 uses the source-backed registry legal form instead of the Screen 1 context", async () => {
+  const draft = { ...emptyDemoDraft(), legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604", ownershipType: "PRIVATE_LIMITED" };
+  writeDemoSession({
+    draft,
+    demoCase: { demoCaseId: "demo-tdr", referenceCaseId: "", company: { legalName: draft.legalName, registrationNumber: draft.registrationNumber, countryCode: "GB", countryName: "United Kingdom", ownershipType: draft.ownershipType } },
+    researchResult: { status: "COMPLETE", sourceMode: "LIVE", sourceLabel: "Live Discovery", canonicalCompanyTypeLabel: "Limited liability partnership", candidateSources: [], decisionTargets: { candidateParties: [], candidateClaims: [] }, view: null, entityLabels: {} },
+  });
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  render(<UboDemoRoot />);
+  expect(await screen.findByText(/Limited liability partnership/)).toBeInTheDocument();
+  expect(screen.queryByText(/Private limited company \(Ltd\)/)).not.toBeInTheDocument();
+});
+
 test("saved draft survives refresh", () => {
   const draft = { ...emptyDemoDraft(), legalName: "Restored Limited", registrationNumber: "00001234" };
   writeDemoSession({ draft, demoCase: null, researchResult: null }); renderStart();

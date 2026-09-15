@@ -126,3 +126,29 @@ test("TDR limited-partnership surplus-asset evidence selects the existing LLP re
   assert.equal(result.demoAutoReview.unresolvedClaims, 1, "combined appointment/removal remains unresolved for explicit interpretation");
   assert.equal(result.demoAutoReview.profileReconciliation.effectiveProfile, "LLP");
 });
+
+test("demo reconciliation prefers the source-backed registry legal form over Screen 1 context", () => {
+  const subject = { entityId: "target", name: "TDR CAPITAL GENERAL PARTNER V L.P.", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "SL035224" }] };
+  const fact = {
+    factId: "registry-profile-source",
+    type: "RELATIONSHIP",
+    subject: { name: "TDR CAPITAL LLP", entityType: "LLP", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "OC302604" }] },
+    relationship: "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+    object: { ...subject, entityType: "LLP" },
+    qualifiers: { objectRegistryCompanyType: "limited-partnership", objectRegistryLegalForm: "Limited partnership / PFLP", currentState: "CURRENT" },
+    evidenceReferences: [{ referenceId: "companies-house:SL035224:psc:0" }],
+  };
+  const original = {
+    replayId: "registry-profile-replay",
+    subject,
+    companyContext: { legalEntityName: subject.name, registrationNumber: "SL035224", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    discoveryResult: { contractVersion: "ubo-capability-result-v1", requestId: "registry-profile-request", outcome: { state: "PARTIAL" }, candidateFacts: [fact], operationEvidenceReferences: [], issues: [] },
+    savedAt: "2026-09-15T08:00:00.000Z",
+  };
+  const prepared = prepareDemoReplayRecord(original);
+  assert.equal(prepared.replayRecord.companyContext.entityProfile, "LLP");
+  assert.equal(prepared.replayRecord.subject.entityType, "LLP");
+  assert.equal(prepared.reconciliation.basis, "SOURCE_BACKED_REGISTRY_PROFILE");
+  assert.equal(prepared.reconciliation.registryLegalForm, "Limited partnership / PFLP");
+  assert.equal(original.companyContext.entityProfile, "COMPANY");
+});
