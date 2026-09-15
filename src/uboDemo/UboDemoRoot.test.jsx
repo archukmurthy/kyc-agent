@@ -34,7 +34,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); });
+beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -131,11 +131,34 @@ test("Alice example uses one fixture operation and presents the recorded 10 plus
   expect(screen.getByText("10% = 10%")).toBeInTheDocument();
   expect(screen.getByText("60% × 30% = 18%")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Recorded result 28%/ })).toBeInTheDocument();
+  const graph = screen.getByTitle("Ownership structure");
+  const postMessage = jest.spyOn(graph.contentWindow, "postMessage");
+  fireEvent.click(screen.getByText("10% = 10%").closest("button"));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection).toEqual({ kind: "path", id: "direct", relationshipIds: ["direct-10"] }));
+  fireEvent.click(screen.getByText("60% × 30% = 18%").closest("button"));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection).toEqual({ kind: "path", id: "indirect", relationshipIds: ["alice-holdco", "holdco-target"] }));
+  fireEvent.click(screen.getByRole("button", { name: /Recorded result 28%/ }));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection.relationshipIds.sort()).toEqual(["alice-holdco", "direct-10", "holdco-target"]));
   fireEvent.click(screen.getByLabelText(/Control attribution/));
   expect(screen.getByText(/This assessment route is not supported/)).toBeInTheDocument();
   expect(screen.getByText("At least one policy route is satisfied")).toBeInTheDocument();
   expect(window.fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("Alice direct and indirect rights survive Relevant/Full scope and Ownership/All filters by relationship ID", () => {
+  const graph = aliceSession.snapshots[0].view.graph;
+  const expected = ["alice-holdco", "direct-10", "holdco-target"];
+  [DEMO_GRAPH_SCOPES.RELEVANT, DEMO_GRAPH_SCOPES.FULL].forEach((scope) => {
+    [DEMO_GRAPH_DIMENSIONS.OWNERSHIP, DEMO_GRAPH_DIMENSIONS.ALL].forEach((dimension) => {
+      const visible = projectDemoGraph(graph, { scope, dimension });
+      expect(visible.nodes.map(({ entityId }) => entityId).sort()).toEqual(["alice", "holdco", "target"]);
+      expect(visible.relationships.map(({ relationshipId }) => relationshipId).sort()).toEqual(expected);
+    });
+  });
+  expect(projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.VOTING }).relationships).toEqual([]);
+  expect(projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL }).relationships).toEqual([]);
+  expect(window.fetch).not.toHaveBeenCalled();
 });
 
 test("method presentation preserves recorded 24 percent effective and 40 percent attribution results", () => {

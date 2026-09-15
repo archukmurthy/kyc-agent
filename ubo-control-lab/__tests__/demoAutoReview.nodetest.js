@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
+const { createDiscoveryReplayRecord, validateDiscoveryReplayRecord } = require("../server/labEngine");
 const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
 const tdrPscFixture = require("../fixtures/tdr-psc.json");
 
@@ -18,6 +19,33 @@ function replaySession(fixtureId) {
   session.sourceState = "LIVE";
   session.sourceLabel = `Live Discovery · ${session.companyContext.legalEntityName}`;
   return session;
+}
+
+function threeEdgeNormalizedResult() {
+  const baseline = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const target = { entityId: "synthetic-target", name: "SYNTHETIC ROUTE CUSTOMER LTD", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "TEST0026" }] };
+  const person = { entityId: "synthetic-person", name: "Morgan Test", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [{ namespace: "SYNTHETIC_TEST_PERSON", value: "MORGAN-1" }] };
+  const holdco = { entityId: "synthetic-holdco", name: "SYNTHETIC HOLDCO LTD", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "TESTHOLD" }] };
+  const fact = (factId, subject, object, value) => ({
+    factId, type: "RELATIONSHIP", subject, object, relationship: "ECONOMIC_OWNERSHIP",
+    measurement: { type: "EXACT", value },
+    qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "synthetic-test-source", referenceType: "SANITIZED_TEST_ASSERTION", referenceId: `synthetic:${factId}` }],
+  });
+  return {
+    companyContext: { legalEntityName: target.name, registrationNumber: "TEST0026", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    subject: target,
+    result: {
+      ...baseline.result,
+      requestId: "synthetic-three-edge-request", outcome: { state: "COMPLETE" },
+      candidateFacts: [
+        fact("synthetic-direct-12", person, target, 12),
+        fact("synthetic-person-holdco-35", person, holdco, 35),
+        fact("synthetic-holdco-target-40", holdco, target, 40),
+      ],
+      operationEvidenceReferences: [], issues: [],
+    },
+  };
 }
 
 test("demo LIVE research bypasses a pre-fix investigation cache without mutating the translated request", () => {
@@ -90,8 +118,47 @@ test("live and saved acquisition share the same post-acquisition demo evaluation
   };
   assert.deepEqual(semantics(replayResult), semantics(liveResult));
   assert.equal(providerCalls, 0);
-  assert.equal(replayResult.discovery.replay.transportCalls, 0);
+  assert.equal(replayResult.replay.transportCalls, 0);
   assert.equal(replayResult.sourceState, "REPLAY");
+});
+
+test("generic live-shaped and saved-replay intake share the successor engine for 12 plus 35 times 40 equals 26", () => {
+  const normalized = threeEdgeNormalizedResult();
+  const capture = createDiscoveryReplayRecord({ ...normalized, savedAt: "2026-09-15T08:00:00.000Z" });
+  const roundTripped = validateDiscoveryReplayRecord(JSON.parse(JSON.stringify(capture)), normalized.companyContext);
+  const live = startReviewReplay({ replayRecord: roundTripped });
+  live.sourceState = "LIVE";
+  const replay = startReviewReplay({ replayRecord: roundTripped });
+  let providerCalls = 0;
+  replay.provider = { invoke() { providerCalls += 1; throw new Error("Saved replay must not call a provider"); } };
+  const liveResult = autoReviewDemoSession(live, "2026-09-15T08:01:00.000Z");
+  const replayResult = autoReviewDemoReplaySession(replay, "2026-09-15T08:01:00.000Z");
+  const resultSummary = (session) => {
+    const view = session.snapshots.at(-1).view;
+    const basis = view.qualificationBases.find(({ personEntityId, route }) => personEntityId === "synthetic-person" && route === "EFFECTIVE_INTEREST");
+    const calculation = view.graph.calculations.find(({ subjectEntityId, dimension }) => subjectEntityId === "synthetic-person" && dimension === "ECONOMIC");
+    return {
+      relationshipCount: view.graph.relationships.length,
+      contributions: calculation.knownPaths.map(({ contribution }) => contribution.value).sort((a, b) => Number(a) - Number(b)),
+      aggregate: calculation.aggregateKnownValue,
+      basisResult: basis.recordedCalculation.value,
+      assessmentState: basis.assessmentState,
+      routeStatus: view.qualifications.find(({ personEntityId }) => personEntityId === "synthetic-person").routeStatus,
+    };
+  };
+  assert.deepEqual(resultSummary(liveResult), {
+    relationshipCount: 3,
+    contributions: ["12", "14"],
+    aggregate: { type: "EXACT", value: "26" },
+    basisResult: { type: "EXACT", value: "26" },
+    assessmentState: "SATISFIED",
+    routeStatus: "ROUTE_SATISFIED",
+  });
+  assert.deepEqual(resultSummary(replayResult), resultSummary(liveResult));
+  assert.equal(replayResult.replay.transportCalls, 0);
+  assert.equal(providerCalls, 0);
+  assert.equal(roundTripped.subject.name, normalized.subject.name);
+  assert.equal(roundTripped.discoveryResult.candidateFacts.length, 3);
 });
 
 test("a truthful live no-data result still evaluates to a subject-centred unresolved graph", () => {

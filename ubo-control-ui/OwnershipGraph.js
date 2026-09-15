@@ -14,6 +14,9 @@
   const HG = 64;
   const VG = 154;
   const PAD = 72;
+  const BYPASS_LANE_GAP = 74;
+  const BYPASS_LABEL_HALF_WIDTH = 110;
+  const BYPASS_NODE_GAP = 48;
 
   const RELATIONSHIP_LABELS = Object.freeze({
     ECONOMIC_OWNERSHIP: "Economic ownership",
@@ -282,18 +285,78 @@
       layerNodes.forEach((node, index) => order.set(node.entityId, index));
     });
     const widest = Math.max(1, ...[...layers.values()].map((items) => items.length));
-    const width = Math.max(920, (PAD * 2) + (widest * NW) + ((widest - 1) * HG));
+    const nodeAreaWidth = Math.max(920, (PAD * 2) + (widest * NW) + ((widest - 1) * HG));
+    const bypassRelationships = relationships.filter((relationship) => {
+      const sourceDepth = depth.get(relationship.sourceEntityId);
+      const targetDepth = depth.get(relationship.targetEntityId);
+      return Number.isInteger(sourceDepth) && Number.isInteger(targetDepth) && Math.abs(sourceDepth - targetDepth) > 1;
+    });
+    const rightLaneCount = Math.ceil(bypassRelationships.length / 2);
+    const leftLaneCount = Math.floor(bypassRelationships.length / 2);
+    const laneSpace = (count) => count
+      ? BYPASS_LABEL_HALF_WIDTH + BYPASS_NODE_GAP + ((count - 1) * BYPASS_LANE_GAP)
+      : 0;
+    const leftLaneSpace = laneSpace(leftLaneCount);
+    const rightLaneSpace = laneSpace(rightLaneCount);
+    const width = nodeAreaWidth + leftLaneSpace + rightLaneSpace;
     const height = (PAD * 2) + NH + (maxDepth * VG);
     const positions = new Map();
     [...layers.entries()].forEach(([layer, layerNodes]) => {
       const layerWidth = (layerNodes.length * NW) + ((layerNodes.length - 1) * HG);
-      const startX = (width - layerWidth) / 2;
+      const startX = leftLaneSpace + ((nodeAreaWidth - layerWidth) / 2);
       layerNodes.forEach((node, index) => positions.set(node.entityId, {
         x: startX + (index * (NW + HG)),
         y: PAD + ((maxDepth - layer) * VG),
       }));
     });
-    return { width, height, positions, relationships, nodes, depths: depth };
+    const bypassLanes = new Map();
+    bypassRelationships.forEach((relationship, index) => {
+      const laneIndex = Math.floor(index / 2);
+      const right = index % 2 === 0;
+      bypassLanes.set(relationship.relationshipId, {
+        side: right ? "RIGHT" : "LEFT",
+        x: right
+          ? leftLaneSpace + nodeAreaWidth + BYPASS_NODE_GAP + (laneIndex * BYPASS_LANE_GAP)
+          : leftLaneSpace - BYPASS_NODE_GAP - (laneIndex * BYPASS_LANE_GAP),
+      });
+    });
+    return { width, height, positions, relationships, nodes, depths: depth, bypassLanes };
+  }
+
+  function relationshipEdgeGeometry(relationship, layout) {
+    const source = layout.positions.get(relationship.sourceEntityId);
+    const target = layout.positions.get(relationship.targetEntityId);
+    if (!source || !target) return null;
+    const bypassLane = layout.bypassLanes?.get(relationship.relationshipId);
+    if (bypassLane) {
+      const x1 = source.x + (NW / 2);
+      const y1 = source.y + NH;
+      const x2 = target.x + (NW / 2);
+      const y2 = target.y;
+      const direction = y2 >= y1 ? 1 : -1;
+      const elbow = Math.min(82, Math.max(42, (Math.abs(y2 - y1) - 24) / 3));
+      const firstY = y1 + (direction * elbow);
+      const lastY = y2 - (direction * elbow);
+      return {
+        kind: "BYPASS",
+        path: `M ${x1} ${y1} C ${x1} ${firstY}, ${bypassLane.x} ${firstY}, ${bypassLane.x} ${firstY} L ${bypassLane.x} ${lastY} C ${bypassLane.x} ${lastY}, ${x2} ${lastY}, ${x2} ${y2}`,
+        labelX: bypassLane.x,
+        labelY: (y1 + y2) / 2,
+        lane: bypassLane,
+      };
+    }
+    const parallelOffset = parallelRelationshipOffset(relationship, layout.relationships);
+    const x1 = source.x + (NW / 2) + parallelOffset;
+    const y1 = source.y + NH;
+    const x2 = target.x + (NW / 2) + parallelOffset;
+    const y2 = target.y;
+    const midY = y1 + ((y2 - y1) / 2);
+    return {
+      kind: "STANDARD",
+      path: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`,
+      labelX: ((x1 + x2) / 2) + (parallelOffset * 2),
+      labelY: midY,
+    };
   }
 
   function fitScale(layout, viewportWidth, viewportHeight) {
@@ -782,17 +845,9 @@
       return activeOrder || left.relationshipId.localeCompare(right.relationshipId);
     });
     const edges = renderRelationships.map((relationship) => {
-      const source = layout.positions.get(relationship.sourceEntityId);
-      const target = layout.positions.get(relationship.targetEntityId);
-      if (!source || !target) return null;
-      const parallelOffset = parallelRelationshipOffset(relationship, layout.relationships);
-      const x1 = source.x + (NW / 2) + parallelOffset;
-      const y1 = source.y + NH;
-      const x2 = target.x + (NW / 2) + parallelOffset;
-      const y2 = target.y;
-      const midY = y1 + ((y2 - y1) / 2);
-      const labelX = ((x1 + x2) / 2) + (parallelOffset * 2);
-      const labelY = midY;
+      const geometry = relationshipEdgeGeometry(relationship, layout);
+      if (!geometry) return null;
+      const { labelX, labelY } = geometry;
       const edgeLabel = relationshipEdgeLabel(relationship);
       const labelWidth = Math.max(58, Math.min(220, 26 + (edgeLabel.length * 7)));
       const active = activeIds.has(relationship.relationshipId);
@@ -800,8 +855,8 @@
         || journeyEntityIds.has(relationship.sourceEntityId) || journeyEntityIds.has(relationship.targetEntityId);
       const css = ["ug-edge", `type-${relationship.relationshipType.toLowerCase().replaceAll("_", "-")}`, active ? "active" : "", journeyLinked ? "journey-linked" : "", activeIds.size && !active ? "muted" : "", relationship.indicators?.includes("CONFLICT") ? "conflict" : "", relationship.indicators?.includes("REVIEW_REQUIRED") ? "review" : ""].filter(Boolean).join(" ");
       const activate = () => select({ kind: "relationship", id: relationship.relationshipId });
-      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "data-relationship-id": relationship.relationshipId, "aria-label": `${relationshipBasis(relationship)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${relationshipValue(relationship)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
-        h("path", { d: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`, markerEnd: `url(#${markerId})` }),
+      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "data-relationship-id": relationship.relationshipId, "data-edge-route": geometry.kind, "aria-label": `${relationshipBasis(relationship)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${relationshipValue(relationship)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
+        h("path", { d: geometry.path, markerEnd: `url(#${markerId})` }),
         h("rect", { className: "ug-edge-label-bg", x: labelX - (labelWidth / 2), y: labelY - 14, width: labelWidth, height: 28, rx: 14 }),
         h("text", { className: "ug-edge-label", x: labelX, y: labelY + 4, textAnchor: "middle" }, edgeLabel));
     });

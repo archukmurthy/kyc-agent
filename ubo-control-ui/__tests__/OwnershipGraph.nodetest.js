@@ -3,7 +3,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const React = require("react");
-const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement } = require("../OwnershipGraph");
+const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection } = require("../OwnershipGraph");
+const { startDemoCalculationFixture } = require("../../ubo-control-lab/server/reviewLabEngine");
 const { fixtures, projection, renderGraph } = require("./testHarness");
 
 function graphProjection(entityIds, relationshipDefinitions) {
@@ -298,6 +299,55 @@ test("dense genuine rights use separate lanes, semantic labels, front-most selec
     assert.match(details, /legacy-ubo-discoveryPSC_REGISTER · companies-house:01777777:psc:1/);
     assert.doesNotMatch(details, /Value not established|Direct relationship valueUnknown/);
   } finally { rendered.cleanup(); }
+});
+
+test("Alice direct and indirect ownership paths render together with the long direct right in a bounded outside lane", () => {
+  const view = startDemoCalculationFixture({ fixtureId: "DEMO-ALICE-28" }).snapshots.at(-1).view;
+  const supplied = normalizeReviewProjection(view.graph);
+  const layout = computeLayout(supplied);
+  const byRoute = (from, to) => supplied.relationships.find(({ sourceEntityId, targetEntityId }) => sourceEntityId === from && targetEntityId === to);
+  const direct = byRoute("demo-alice", "demo-alice-target");
+  const aliceToHoldco = byRoute("demo-alice", "demo-alice-holdco");
+  const holdcoToTarget = byRoute("demo-alice-holdco", "demo-alice-target");
+  const holdco = layout.positions.get("demo-alice-holdco");
+  assert.equal(supplied.nodes.length, 3);
+  assert.equal(supplied.relationships.length, 3);
+
+  const rendered = renderGraph(view.graph, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    const directEdge = rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`);
+    const indirectEdges = [
+      rendered.container.querySelector(`[data-relationship-id='${aliceToHoldco.relationshipId}']`),
+      rendered.container.querySelector(`[data-relationship-id='${holdcoToTarget.relationshipId}']`),
+    ];
+    assert.equal(rendered.container.querySelectorAll(".ug-node").length, 3);
+    assert.equal(rendered.container.querySelectorAll(".ug-edge").length, 3);
+    assert.equal(directEdge.getAttribute("data-edge-route"), "BYPASS");
+    assert.equal(directEdge.querySelector(".ug-edge-label").textContent, "10%");
+    const directLabel = directEdge.querySelector(".ug-edge-label-bg");
+    assert.ok(Number(directLabel.getAttribute("x")) > holdco.x + 196, "the direct label must sit outside the intermediate node");
+    assert.ok(Number(directLabel.getAttribute("x")) + Number(directLabel.getAttribute("width")) <= layout.width, "the direct label and outside lane must remain inside content bounds");
+    assert.match(directEdge.querySelector("path").getAttribute("marker-end"), /^url\(#ug-arrow-/);
+    assert.deepEqual(indirectEdges.map((edge) => edge.querySelector(".ug-edge-label").textContent), ["60%", "30%"]);
+    assert.equal(new Set([directEdge, ...indirectEdges].map((edge) => edge.querySelector("path").getAttribute("d"))).size, 3);
+
+    rendered.click(directEdge);
+    assert.deepEqual([...rendered.container.querySelectorAll(".ug-edge.active")].map((edge) => edge.dataset.relationshipId), [direct.relationshipId]);
+    rendered.click(rendered.container.querySelector("[aria-label='Fit entire graph']"));
+    assert.ok(rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`));
+    rendered.click(rendered.container.querySelector("[aria-label='Fit graph width']"));
+    assert.ok(rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`));
+  } finally { rendered.cleanup(); }
+
+  const indirectIds = [aliceToHoldco.relationshipId, holdcoToTarget.relationshipId];
+  const indirect = renderGraph(view.graph, { externalSelection: { kind: "path", id: "indirect", relationshipIds: indirectIds } });
+  try {
+    assert.deepEqual([...indirect.container.querySelectorAll(".ug-edge.active")].map((edge) => edge.dataset.relationshipId).sort(), [...indirectIds].sort());
+  } finally { indirect.cleanup(); }
+  const aggregate = renderGraph(view.graph, { externalSelection: { kind: "path", id: "aggregate", relationshipIds: [direct.relationshipId, ...indirectIds] } });
+  try {
+    assert.equal(aggregate.container.querySelectorAll(".ug-edge.active").length, 3);
+  } finally { aggregate.cleanup(); }
 });
 
 test("generic non-percentage control does not invent director semantics", () => {
