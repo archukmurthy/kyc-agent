@@ -70,6 +70,7 @@ test("method presentation preserves recorded 24 percent effective and 40 percent
   const view = { graph: { nodes: [{ entityId: "alice", primaryName: "Alice" }, { entityId: "holdco", primaryName: "HoldCo" }, { entityId: "target", primaryName: "Customer" }], relationships: [relationship("economic-60", "alice", "holdco", "ECONOMIC_OWNERSHIP", 60), relationship("voting-60", "alice", "holdco", "VOTING_RIGHTS", 60), relationship("target-40", "holdco", "target", "ECONOMIC_OWNERSHIP", 40)] }, qualificationBases: [effective, attributed], qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"] }] };
   expect(demoCalculationPeople(view, "EFFECTIVE_INTEREST")[0].selectedBases[0].aggregate.value).toBe("24");
   expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].aggregate.value).toBe("40");
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].effectivePaths).toEqual([]);
   expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].attributionChains[0].majoritySteps[0]).toEqual(expect.objectContaining({ relationshipType: "VOTING_RIGHTS", measurement: "60%" }));
 });
 

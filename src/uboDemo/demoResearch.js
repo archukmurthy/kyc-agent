@@ -199,7 +199,9 @@ function calculationRoute(path, relationshipById, entityName) {
 }
 
 function basisPresentation(basis, relationshipById, entityName) {
-  const effectivePaths = (basis.orderedPathReferences || []).map((path) => calculationRoute(path, relationshipById, entityName));
+  const effectivePaths = basis.route === "EFFECTIVE_INTEREST"
+    ? (basis.orderedPathReferences || []).map((path) => calculationRoute(path, relationshipById, entityName))
+    : [];
   const attributionChains = (basis.attributionChains || []).map((chain) => {
     const route = calculationRoute(chain, relationshipById, entityName);
     return {
