@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
+const { autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
 const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
 const tdrPscFixture = require("../fixtures/tdr-psc.json");
 
@@ -46,6 +46,17 @@ test("ordinary successor live/replay intake still waits for explicit decisions",
   assert.equal(session.snapshots.length, 0);
   assert.equal(session.lastOperation, "EXPLICIT_DECISIONS_REQUIRED");
   assert.equal(session.demoAutoReview, undefined);
+});
+
+test("saved live replay can run the same provisional demo review with zero provider calls", () => {
+  const session = replaySession("V2-LAB-01");
+  session.sourceState = "REPLAY";
+  session.discovery = { replay: { replayId: "saved-live", transportCalls: 0 } };
+  const result = autoReviewDemoReplaySession(session, "2026-09-15T08:01:00.000Z");
+  assert.equal(result.sourceState, "REPLAY");
+  assert.equal(result.discovery.replay.transportCalls, 0);
+  assert.equal(result.snapshots.length, 1);
+  assert.match(result.sourceLabel, /Saved live replay.*no provider call/);
 });
 
 test("a truthful live no-data result still evaluates to a subject-centred unresolved graph", () => {

@@ -38,7 +38,7 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
-const { autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
+const { autoReviewDemoReplaySession, autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -51,6 +51,7 @@ const OPERATIONS = Object.freeze({
   START_REVIEW_FIXTURE: "START_REVIEW_FIXTURE",
   START_REVIEW_LIVE: "START_REVIEW_LIVE",
   START_DEMO_REVIEW_LIVE: "START_DEMO_REVIEW_LIVE",
+  START_DEMO_REVIEW_REPLAY: "START_DEMO_REVIEW_REPLAY",
   START_DEMO_CALCULATION_FIXTURE: "START_DEMO_CALCULATION_FIXTURE",
   START_REVIEW_REPLAY: "START_REVIEW_REPLAY",
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
@@ -193,6 +194,12 @@ module.exports = async function handler(req, res) {
         return send(res, 200, startReviewFixture(input.payload));
       case OPERATIONS.START_REVIEW_REPLAY:
         return send(res, 200, startReviewReplay(input.payload));
+      case OPERATIONS.START_DEMO_REVIEW_REPLAY: {
+        const prepared = prepareDemoReplayRecord(input.payload?.replayRecord);
+        const replay = startReviewReplay({ ...input.payload, replayRecord: prepared.replayRecord });
+        replay.demoProfileReconciliation = prepared.reconciliation;
+        return send(res, 200, autoReviewDemoReplaySession(replay));
+      }
       case OPERATIONS.START_REVIEW_LIVE: {
         return send(res, 200, await startSuccessorLive(input.payload));
       }

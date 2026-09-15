@@ -112,7 +112,7 @@ test("pure boundaries preserve ranges and filter raw blocked work", () => {
   expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
   expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_DEMO_REVIEW_LIVE");
   expect(buildResearchRequest({ demoCase: { company: { legalName: "TDR GP V LP", registrationNumber: "SL035224", countryCode: "GB", ownershipType: "PARTNERSHIP" } }, sourceMode: "LIVE" }).payload.companyContext.entityProfile).toBe("LLP");
-  expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
+  expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
 });
 
 test("compact demo result retains customer-readable entity labels separately from the signed graph projection", () => {

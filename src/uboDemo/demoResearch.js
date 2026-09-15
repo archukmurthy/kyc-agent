@@ -14,7 +14,7 @@ export function buildResearchRequest({ demoCase, sourceMode, replayRecord, demoF
     return { operation: "START_REVIEW_FIXTURE", payload: { fixtureId: REVIEWED_FIXTURE_ID } };
   }
   if (sourceMode === DEMO_SOURCE_MODES.REPLAY) {
-    return { operation: "START_REVIEW_REPLAY", payload: { replayRecord, profileId: "NOT_PROVIDED" } };
+    return { operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord, profileId: "NOT_PROVIDED" } };
   }
   return {
     operation: "START_DEMO_REVIEW_LIVE",

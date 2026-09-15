@@ -228,15 +228,26 @@ function buildPlan(session) {
   };
 }
 
+function reviewDemoSession(session, recordedAt, sourceLabel) {
+  const plan = buildPlan(session);
+  const reviewed = applyDemoAutoReviewDecisions({ session, identityDecisions: plan.identityDecisions, claimDecisions: plan.claimDecisions, recordedAt });
+  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true, ...(session.demoProfileReconciliation ? { profileReconciliation: clone(session.demoProfileReconciliation) } : {}) };
+  reviewed.sourceLabel = sourceLabel(reviewed);
+  return reviewed;
+}
+
 function autoReviewDemoSession(session, recordedAt = new Date().toISOString()) {
   if (!session || session.sourceState !== "LIVE" || session.mode !== "SUCCESSOR_REVIEW") {
     throw new TypeError("Demo automatic review requires a live successor-review session");
   }
-  const plan = buildPlan(session);
-  const reviewed = applyDemoAutoReviewDecisions({ session, identityDecisions: plan.identityDecisions, claimDecisions: plan.claimDecisions, recordedAt });
-  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true, ...(session.demoProfileReconciliation ? { profileReconciliation: clone(session.demoProfileReconciliation) } : {}) };
-  reviewed.sourceLabel = `Live Discovery · ${reviewed.companyContext.legalEntityName} · provisional demo result`;
-  return reviewed;
+  return reviewDemoSession(session, recordedAt, (reviewed) => `Live Discovery · ${reviewed.companyContext.legalEntityName} · provisional demo result`);
 }
 
-module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });
+function autoReviewDemoReplaySession(session, recordedAt = new Date().toISOString()) {
+  if (!session || session.sourceState !== "REPLAY" || session.mode !== "SUCCESSOR_REVIEW") {
+    throw new TypeError("Demo replay review requires a zero-provider-call successor replay session");
+  }
+  return reviewDemoSession(session, recordedAt, (reviewed) => `Saved live replay · ${reviewed.companyContext.legalEntityName} · provisional demo result · no provider call`);
+}
+
+module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });
