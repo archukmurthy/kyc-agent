@@ -220,12 +220,12 @@
 .ubo-demo-result-heading p { margin: 0; color: var(--ubo-demo-muted); }
 .ubo-demo-source-badge { max-width: 280px; padding: 9px 12px; border-radius: 999px; background: #e8f4f0; color: var(--ubo-demo-green-dark); font-size: 11px; font-weight: 800; text-align: center; }
 .ubo-demo-source-badge.fixture { background: #fff0c7; color: #70550a; }
-.ubo-demo-workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 22px; align-items: start; }
+.ubo-demo-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
 .ubo-demo-graph-card, .ubo-demo-questions, .ubo-demo-review-wait { overflow: hidden; border: 1px solid var(--ubo-demo-border); border-radius: 18px; background: white; box-shadow: 0 12px 34px rgba(27,64,70,.06); }
 .ubo-demo-section-heading { padding: 20px 22px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ubo-demo-border); }
 .ubo-demo-section-heading h2, .ubo-demo-questions h2 { margin: 5px 0 0; font-size: 22px; }
 .ubo-demo-section-heading > span { color: var(--ubo-demo-muted); font-size: 11px; }
-.ubo-demo-graph-frame { width: 100%; height: 640px; display: block; border: 0; background: white; }
+.ubo-demo-graph-frame { width: 100%; height: calc(clamp(600px, 68vh, 820px) + 242px); display: block; border: 0; background: white; }
 .ubo-demo-assertions { border-top: 1px solid var(--ubo-demo-border); }
 .ubo-demo-assertions summary { padding: 20px 22px; display: flex; justify-content: space-between; gap: 16px; cursor: pointer; font-size: 13px; }
 .ubo-demo-assertions summary span { color: var(--ubo-demo-muted); font-size: 11px; }
@@ -234,7 +234,7 @@
 .ubo-demo-assertion-list p { margin: 5px 0; font-size: 12px; line-height: 1.45; }
 .ubo-demo-assertion-list small { color: var(--ubo-demo-muted); font-size: 10px; }
 .ubo-demo-kind { display: inline-block; padding: 4px 7px; border-radius: 999px; background: var(--ubo-demo-mint); color: var(--ubo-demo-green-dark); font-size: 9px; font-weight: 850; text-transform: uppercase; }
-.ubo-demo-questions { padding: 24px; position: sticky; top: 20px; }
+.ubo-demo-questions { padding: 24px; }
 .ubo-demo-questions > section { margin-top: 16px; padding: 16px; border-radius: 12px; background: var(--ubo-demo-mint); }
 .ubo-demo-questions h3 { margin: 0 0 8px; font-size: 14px; }
 .ubo-demo-questions section p { margin: 6px 0; font-size: 12px; }
@@ -265,9 +265,7 @@
   .ubo-demo-summary { grid-template-columns: 1fr; }
   .ubo-demo-results { width: calc(100% - 28px); }
   .ubo-demo-result-heading { align-items: start; flex-direction: column; }
-  .ubo-demo-workspace { grid-template-columns: 1fr; }
-  .ubo-demo-questions { position: static; }
-  .ubo-demo-graph-frame { height: 520px; }
+  .ubo-demo-graph-frame { height: 760px; }
   .ubo-demo-assertions summary { flex-direction: column; }
 }
 

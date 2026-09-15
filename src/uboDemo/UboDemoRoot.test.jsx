@@ -45,6 +45,9 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   expect(screen.getByText(/Provide the missing ownership information/)).toBeInTheDocument();
   expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
+  const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
+  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
+  expect(graphCard.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("a response without an evaluated snapshot exposes no invented graph or questions", async () => {

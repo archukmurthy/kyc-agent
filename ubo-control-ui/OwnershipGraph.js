@@ -604,7 +604,7 @@
       content || h(EmptyDetails, { projection, onSelect }));
   }
 
-  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [] }) {
+  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [], collapseIdleInspector = false, fixedViewportHeight = false, boundedViewportNavigation = false }) {
     const projection = React.useMemo(() => assertProjection(supplied), [supplied]);
     if (!Object.values(DETAIL_LEVEL).includes(detailLevel)) throw new TypeError("detailLevel must be CUSTOMER or EXPLAIN");
     if (!Object.values(VIEW_MODE).includes(initialView)) throw new TypeError("initialView must be FIT_WIDTH or OVERVIEW");
@@ -674,21 +674,34 @@
 
     const zoomBy = (delta) => { fitMode.current = null; setViewMode(null); setZoom((current) => Math.min(1.8, Math.max(0.2, Number((current + delta).toFixed(2))))); };
     const onWheel = (event) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
-      else { fitMode.current = null; setViewMode(null); setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY })); }
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      } else if (!boundedViewportNavigation) {
+        event.preventDefault();
+        fitMode.current = null;
+        setViewMode(null);
+        setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY }));
+      }
     };
     const onPointerDown = (event) => {
       if (event.target.closest?.("[data-graph-selectable='true']")) return;
       fitMode.current = null;
       setViewMode(null);
-      drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, pan, moved: false };
+      const viewport = canvasScrollRef.current;
+      drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: viewport?.scrollLeft || 0, scrollTop: viewport?.scrollTop || 0, pan, moved: false };
       event.currentTarget.setPointerCapture?.(event.pointerId);
     };
     const onPointerMove = (event) => {
       if (!drag.current || drag.current.id !== event.pointerId) return;
       drag.current.moved = drag.current.moved || Math.abs(event.clientX - drag.current.x) > 3 || Math.abs(event.clientY - drag.current.y) > 3;
-      setPan({ x: drag.current.pan.x + event.clientX - drag.current.x, y: drag.current.pan.y + event.clientY - drag.current.y });
+      const viewport = canvasScrollRef.current;
+      if (boundedViewportNavigation && viewport) {
+        viewport.scrollLeft = drag.current.scrollLeft - (event.clientX - drag.current.x);
+        viewport.scrollTop = drag.current.scrollTop - (event.clientY - drag.current.y);
+      } else {
+        setPan({ x: drag.current.pan.x + event.clientX - drag.current.x, y: drag.current.pan.y + event.clientY - drag.current.y });
+      }
     };
     const stopDrag = () => { drag.current = null; };
     const clearFromCanvas = (event) => {
@@ -751,15 +764,15 @@
       h("header", { className: "ug-header" }, h("div", null, h("p", { className: "ug-kicker" }, "UBO CONTROL · OWNERSHIP EXPLAINER"), h("h2", null, projection.subject.displayName), h("p", { className: "ug-subtitle" }, "Follow relationships downward toward the customer under review.")),
         detailLevel === DETAIL_LEVEL.EXPLAIN && h("div", { className: "ug-snapshot" }, h("span", null, `${projection.decision.checkpoint?.type || "Snapshot"} · ${projection.decision.evaluationTime || "Time unavailable"}`), h("strong", null, snapshot ? `#${snapshot}` : "Snapshot identity unavailable"), h("span", null, projection.decision.terminalOutcome || projection.decision.orchestrationState || "IN PROGRESS"))),
       h(Summary, { projection, onSelect: select }),
-      h("div", { className: "ug-workspace" },
+      h("div", { className: `ug-workspace ${collapseIdleInspector && !selection ? "details-collapsed" : ""}`.trim() },
         h("div", { className: "ug-canvas-card" },
           h("div", { className: "ug-toolbar", role: "toolbar", "aria-label": "Graph navigation controls" }, h("button", { type: "button", onClick: () => zoomBy(0.1), "aria-label": "Zoom in" }, "+"), h("button", { type: "button", onClick: () => zoomBy(-0.1), "aria-label": "Zoom out" }, "−"), h("button", { type: "button", className: viewMode === VIEW_MODE.FIT_WIDTH ? "active" : "", onClick: fitWidth, "aria-label": "Fit graph width", "aria-pressed": viewMode === VIEW_MODE.FIT_WIDTH }, "Fit width"), h("button", { type: "button", className: viewMode === VIEW_MODE.OVERVIEW ? "active" : "", onClick: overview, "aria-label": "Fit entire graph", "aria-pressed": viewMode === VIEW_MODE.OVERVIEW }, "Overview"), h("span", { "aria-live": "polite" }, `${Math.round(zoom * 100)}%`)),
-          h("div", { className: "ug-canvas-scroll", ref: canvasScrollRef, style: { maxHeight: `${height || 680}px` } }, h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { width: `${layout.width * zoom}px`, height: `${layout.height * zoom}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag, onClick: clearFromCanvas },
+          h("div", { className: "ug-canvas-scroll", ref: canvasScrollRef, style: fixedViewportHeight ? { height: `${height || 680}px` } : { maxHeight: `${height || 680}px` } }, h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { width: `${layout.width * zoom}px`, height: `${layout.height * zoom}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag, onClick: clearFromCanvas },
             h("title", null, graphName), h("desc", null, `${projection.nodes.length} entities, ${projection.relationships.length} relationships, ${projection.qualifications.length} qualifying people, ${projection.unresolved.length} unresolved items.`),
-            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: `translate(${pan.x} ${pan.y})` }, edges, nodes))),
+            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: boundedViewportNavigation ? undefined : `translate(${pan.x} ${pan.y})` }, edges, nodes))),
           projection.relationships.length === 0 && h("div", { className: "ug-empty-overlay", role: "status" }, h("strong", null, "Ownership/control unresolved"), h("span", null, "No safe relationship is established yet; the customer subject remains visible.")),
           stateButtons.length > 0 && h("div", { className: "ug-state-strip", "aria-label": "Conflict and review states" }, stateButtons.map((item) => h("button", { type: "button", key: `${item.kind}:${item.id}`, className: item.css, onClick: () => select({ kind: item.kind, id: item.id }) }, item.label)))),
-        h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
+        (!collapseIdleInspector || selection) && h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
       h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipLabel(relationship.relationshipType)}, ${formatMeasurement(relationship.measurement, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 

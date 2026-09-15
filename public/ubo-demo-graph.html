@@ -25,8 +25,11 @@
         root.render(React.createElement(UboControlUI.OwnershipGraph, {
           projection: projection,
           detailLevel: "CUSTOMER",
-          height: 610,
-          initialView: "FIT_WIDTH"
+          height: event.data.viewportHeight || 600,
+          initialView: "FIT_WIDTH",
+          collapseIdleInspector: true,
+          fixedViewportHeight: true,
+          boundedViewportNavigation: true
         }));
       });
     }());

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { COUNTRIES } from "../constants/appConstants";
 import {
   clearDemoSession, createDemoCase, emptyDemoDraft, OWNERSHIP_TYPES, ownershipLabelFor,
@@ -50,8 +50,17 @@ function ResearchProgress({ company }) {
 
 function GraphFrame({ projection, entityLabels }) {
   const frame = useRef(null);
-  const send = () => frame.current?.contentWindow?.postMessage({ type: "ubo-demo-graph-projection-v1", projection, entityLabels }, window.location.origin);
-  useEffect(send, [projection, entityLabels]);
+  const send = useCallback(() => frame.current?.contentWindow?.postMessage({
+    type: "ubo-demo-graph-projection-v1",
+    projection,
+    entityLabels,
+    viewportHeight: Math.max(600, Math.min(820, Math.round(window.innerHeight * 0.68))),
+  }, window.location.origin), [projection, entityLabels]);
+  useEffect(() => {
+    send();
+    window.addEventListener("resize", send);
+    return () => window.removeEventListener("resize", send);
+  }, [send]);
   return <iframe ref={frame} onLoad={send} className="ubo-demo-graph-frame" title="Ownership structure" src="/ubo-demo-graph.html" />;
 }
 
