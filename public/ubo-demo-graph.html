@@ -16,8 +16,14 @@
       var root = ReactDOM.createRoot(document.getElementById("root"));
       window.addEventListener("message", function (event) {
         if (event.origin !== window.location.origin || !event.data || event.data.type !== "ubo-demo-graph-projection-v1") return;
+        var labels = event.data.entityLabels || {};
+        var projection = Object.assign({}, event.data.projection, {
+          nodes: event.data.projection.nodes.map(function (node) {
+            return labels[node.entityId] ? Object.assign({}, node, { primaryName: labels[node.entityId] }) : node;
+          })
+        });
         root.render(React.createElement(UboControlUI.OwnershipGraph, {
-          projection: event.data.projection,
+          projection: projection,
           detailLevel: "CUSTOMER",
           height: 610,
           initialView: "FIT_WIDTH"

@@ -49,6 +49,9 @@ export function latestReviewView(session) {
 
 export function compactResearchResult(session, sourceMode) {
   const replayCapture = session?.replayCapture || null;
+  const entityLabels = Object.fromEntries((session?.entityDirectory || [])
+    .filter(({ entityId, party }) => entityId && party?.name)
+    .map(({ entityId, party }) => [entityId, party.name]));
   return {
     status: "COMPLETE",
     sourceMode,
@@ -59,6 +62,7 @@ export function compactResearchResult(session, sourceMode) {
     completedAt: new Date().toISOString(),
     replayCapture,
     demoAutoReview: session?.demoAutoReview || null,
+    entityLabels,
   };
 }
 

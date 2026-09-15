@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { buildResearchRequest, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
+import { buildResearchRequest, compactResearchResult, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -67,6 +67,18 @@ test("pure boundaries preserve ranges and filter raw blocked work", () => {
   expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
   expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_DEMO_REVIEW_LIVE");
   expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
+});
+
+test("compact demo result retains customer-readable entity labels separately from the signed graph projection", () => {
+  const compact = compactResearchResult({
+    ...evaluatedSession,
+    entityDirectory: [
+      { entityId: "owner", party: { name: "Owner Ltd" } },
+      { entityId: "target", party: { name: "Target Ltd" } },
+    ],
+  }, "LIVE");
+  expect(compact.entityLabels).toEqual({ owner: "Owner Ltd", target: "Target Ltd" });
+  expect(compact.view.graph).toBe(projection);
 });
 
 test("saved draft survives refresh", () => {
