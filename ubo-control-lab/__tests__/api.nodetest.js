@@ -91,6 +91,11 @@ test("Lab API demo replay applies provisional review without composing the live 
   assert.equal(result.payload.candidateSources.every(({ sourceState }) => sourceState === "REPLAY"), true);
   assert.equal(result.payload.snapshots.length, 1);
   assert.match(result.payload.sourceLabel, /Saved live replay.*no provider call/);
+  const corrupted = structuredClone(replayRecord);
+  corrupted.companyContext.legalEntityName = "Example Trading Ltd";
+  const rejected = await invoke("POST", { operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord: corrupted } });
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.payload.message, /integrity check/);
 });
 
 test("Lab API runs the demo-only Alice calculation fixture without Discovery", async () => {

@@ -69,8 +69,72 @@ export function createDemoCase(draft) {
       countryName: countryNameFor(draft.countryCode),
       ownershipType: draft.ownershipType,
     },
-    analysisContext: { calculationMethod: draft.calculationMethod, ...(draft.demoFixtureId ? { demoFixtureId: draft.demoFixtureId } : {}) },
+    analysisContext: {
+      calculationMethod: draft.calculationMethod,
+      sourceMode: draft.sourceMode,
+      ...(draft.replayId ? { replayId: draft.replayId } : {}),
+      ...(draft.replaySavedAt ? { replaySavedAt: draft.replaySavedAt } : {}),
+      ...(draft.demoFixtureId ? { demoFixtureId: draft.demoFixtureId } : {}),
+    },
   };
+}
+
+function normalized(value) { return String(value || "").trim().toUpperCase(); }
+
+export function replaySubject(record) {
+  if (!record?.replayId) throw new TypeError("The selected saved research record has no stable record ID.");
+  const context = record.companyContext;
+  if (!context?.legalEntityName || !context?.registrationNumber || !context?.jurisdiction) {
+    throw new TypeError("The selected saved research record does not contain a complete researched-company identity.");
+  }
+  if (!record.subject?.entityId) throw new TypeError("The selected saved research record does not contain its captured subject identity.");
+  const registrationNumber = String(context.registrationNumber).trim();
+  const registrations = (record.subject.externalIdentifiers || [])
+    .filter(({ namespace, system, identifierType }) => /COMPANIES_HOUSE|COMPANY_NUMBER|COMPANY_REGISTER/i.test(namespace || system || identifierType || ""))
+    .map(({ value }) => normalized(value));
+  if (registrations.length && !registrations.includes(normalized(registrationNumber))) {
+    throw new TypeError("The selected saved research subject does not match its captured registration number.");
+  }
+  return {
+    legalName: String(context.legalEntityName).trim(),
+    registrationNumber,
+    countryCode: String(context.jurisdiction).trim().toUpperCase(),
+    savedAt: record.savedAt || null,
+    replayId: record.replayId,
+  };
+}
+
+export function bindDraftToReplay(draft, record) {
+  const subject = replaySubject(record);
+  return {
+    ...draft,
+    legalName: subject.legalName,
+    registrationNumber: subject.registrationNumber,
+    countryCode: subject.countryCode,
+    sourceMode: "REPLAY",
+    replayId: subject.replayId,
+    replaySavedAt: subject.savedAt,
+    demoFixtureId: "",
+  };
+}
+
+export function findReplayById(records, replayId) {
+  return (records || []).find((record) => record?.replayId === replayId) || null;
+}
+
+function replaySavedLabel(savedAt) {
+  if (!savedAt || Number.isNaN(Date.parse(savedAt))) return "save time unavailable";
+  return `saved ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(savedAt))} UTC`;
+}
+
+export function replayOptionLabel(record, duplicateNameCount = 1) {
+  try {
+    const subject = replaySubject(record);
+    const suffix = duplicateNameCount > 1 ? ` · ${String(record.replayId).slice(-8)}` : "";
+    return `${subject.legalName} · ${subject.registrationNumber} · ${replaySavedLabel(subject.savedAt)}${suffix}`;
+  } catch (_) {
+    return `Unavailable saved capture · ${String(record?.replayId || "missing ID").slice(-8)}`;
+  }
 }
 
 export function readDemoSession(storage = window.localStorage) {
@@ -96,7 +160,14 @@ export function writeDemoSession({ draft, demoCase, researchResult }, storage = 
 export function readLabReplays(storage = window.localStorage) {
   try {
     const records = JSON.parse(storage.getItem(LAB_REPLAY_KEY) || "[]");
-    return Array.isArray(records) ? records : [];
+    return Array.isArray(records) ? records.map((record, index) => ({ record, index })).sort((left, right) => {
+      const leftTime = Date.parse(left.record?.savedAt || "");
+      const rightTime = Date.parse(right.record?.savedAt || "");
+      if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) return left.index - right.index;
+      if (Number.isNaN(leftTime)) return 1;
+      if (Number.isNaN(rightTime)) return -1;
+      return rightTime - leftTime || left.index - right.index;
+    }).map(({ record }) => record) : [];
   } catch (_) {
     return [];
   }

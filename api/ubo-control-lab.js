@@ -10,6 +10,7 @@ const {
   startFixture,
   startLive,
   startReplay,
+  validateDiscoveryReplayRecord,
 } = require("../ubo-control-lab/server/labEngine");
 const {
   applyReviewDecisions,
@@ -195,7 +196,8 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_REVIEW_REPLAY:
         return send(res, 200, startReviewReplay(input.payload));
       case OPERATIONS.START_DEMO_REVIEW_REPLAY: {
-        const prepared = prepareDemoReplayRecord(input.payload?.replayRecord);
+        const validated = validateDiscoveryReplayRecord(input.payload?.replayRecord);
+        const prepared = prepareDemoReplayRecord(validated);
         const replay = startReviewReplay({ ...input.payload, replayRecord: prepared.replayRecord });
         replay.demoProfileReconciliation = prepared.reconciliation;
         return send(res, 200, autoReviewDemoReplaySession(replay));

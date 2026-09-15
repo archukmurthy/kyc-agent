@@ -99,7 +99,6 @@ function prepareDemoReplayRecord(replayRecord) {
   if (effectiveProfile !== requestedProfile) {
     prepared.companyContext.entityProfile = effectiveProfile;
     prepared.subject.entityType = effectiveProfile;
-    prepared.replayId = `${prepared.replayId}:demo-profile:${effectiveProfile}`;
   }
   return {
     replayRecord: prepared,

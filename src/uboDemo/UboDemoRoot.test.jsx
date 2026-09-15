@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
 import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
-import { CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
+import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, readLabReplays, replayOptionLabel, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
 const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
@@ -15,6 +15,24 @@ const aliceSession = { sourceLabel: "Alice fixture", selectedFixtureId: "DEMO-AL
 function okJson(value) { return Promise.resolve({ ok: true, json: () => Promise.resolve(value) }); }
 function renderStart() { window.history.replaceState({}, "", DEMO_START_PATH); return render(<UboDemoRoot />); }
 function completeRequiredFields({ name = "Acme Holdings Limited", number = "00445790" } = {}) { fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: name } }); fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: number } }); }
+function britishAirwaysReplay(replayId = "ubo-lab:discovery-replay:ba-sanitized-01", savedAt = "2026-09-15T08:00:00.000Z") {
+  return {
+    contractVersion: "ubo-control-lab-discovery-replay-v1", replayId, contentHash: `sanitized-${replayId}`, savedAt,
+    companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    subject: { entityId: "ba-subject", name: "BRITISH AIRWAYS PLC", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] },
+    discoveryResult: { contractVersion: "1.0.0", requestId: `request-${replayId}`, outcome: { state: "PARTIAL" }, candidateFacts: [fact], operationEvidenceReferences: [], issues: [] },
+  };
+}
+function britishAirwaysSession(replayId) {
+  return {
+    ...evaluatedSession,
+    sourceState: "REPLAY", sourceLabel: "Saved live replay · BRITISH AIRWAYS PLC · provisional demo result · no provider call",
+    companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY" },
+    replay: { replayId, originalSavedAt: "2026-09-15T08:00:00.000Z", replayedAt: "2026-09-15T09:00:00.000Z", transportCalls: 0 },
+    entityDirectory: [{ entityId: "ba-subject", party: { name: "BRITISH AIRWAYS PLC", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] } }],
+    snapshots: [{ view: { ...evaluatedSession.snapshots[0].view, graph: { ...projection, subjectEntityId: "ba-subject", nodes: [{ entityId: "ba-subject", primaryName: "BRITISH AIRWAYS PLC" }], relationships: [] } } }],
+  };
+}
 
 beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); });
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
@@ -33,6 +51,62 @@ test("Start research invokes the existing live Lab composition and preserves a l
   expect(JSON.stringify(body)).not.toContain("calculationMethod");
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
+});
+
+test("saved replay binds the selected record identity, reaches the graph, and restores it without a provider operation", async () => {
+  const record = britishAirwaysReplay();
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
+  window.fetch = jest.fn(() => okJson(britishAirwaysSession(record.replayId)));
+  const first = renderStart();
+  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
+  fireEvent.click(screen.getByLabelText(/Saved live replay/));
+  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: record.replayId } });
+  expect(screen.getByLabelText(/Company name/)).toHaveValue("BRITISH AIRWAYS PLC");
+  expect(screen.getByLabelText(/Company name/)).toHaveAttribute("readonly");
+  expect(screen.getByLabelText(/Registration number/)).toHaveValue("01777777");
+  expect(screen.getByText("Selected saved company")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Replay saved research — no provider call/ }));
+  expect(await screen.findByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
+  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  const request = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(request.operation).toBe("START_DEMO_REVIEW_REPLAY");
+  expect(request.payload.replayRecord.replayId).toBe(record.replayId);
+  expect(JSON.stringify(request)).not.toContain("START_DEMO_REVIEW_LIVE");
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(saved.demoCase.company).toEqual(expect.objectContaining({ legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }));
+  expect(saved.demoCase.analysisContext.replayId).toBe(record.replayId);
+  expect(saved.researchResult.replay).toEqual(expect.objectContaining({ replayId: record.replayId, transportCalls: 0 }));
+
+  first.unmount();
+  window.fetch.mockClear();
+  render(<UboDemoRoot />);
+  expect(screen.getByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
+  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))).toHaveLength(1);
+});
+
+test("repeated saved company names remain independently selectable by stable ID and sort by actual save time", () => {
+  const older = britishAirwaysReplay("capture-british-airways-older", "2026-09-14T08:00:00.000Z");
+  const newer = britishAirwaysReplay("capture-british-airways-newer", "2026-09-15T08:00:00.000Z");
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([older, newer]));
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual([newer.replayId, older.replayId]);
+  expect(replayOptionLabel(newer, 2)).toMatch(/BRITISH AIRWAYS PLC · 01777777 · saved 15 Sept 2026, 08:00 UTC · ys-newer$/);
+  expect(bindDraftToReplay({ ...emptyDemoDraft(), calculationMethod: "PSC_CONDITION_ATTRIBUTION" }, older)).toEqual(expect.objectContaining({ replayId: older.replayId, legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", calculationMethod: "PSC_CONDITION_ATTRIBUTION" }));
+});
+
+test("a missing or corrupt saved subject fails locally without a live fallback or deleting the capture", () => {
+  const corrupt = { ...britishAirwaysReplay("corrupt-capture"), subject: null };
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([corrupt]));
+  renderStart();
+  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
+  fireEvent.click(screen.getByLabelText(/Saved live replay/));
+  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: corrupt.replayId } });
+  fireEvent.click(screen.getByRole("button", { name: /Replay saved research/ }));
+  expect(screen.getByText(/does not contain its captured subject identity/)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
 });
 
 test("old sessions default to all policy routes and selector state survives refresh", () => {

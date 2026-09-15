@@ -77,6 +77,7 @@ export function compactResearchResult(session, sourceMode, calculationMethod = "
     view: latestReviewView(session),
     completedAt: new Date().toISOString(),
     replayCapture,
+    replay: session?.replay || null,
     demoAutoReview: session?.demoAutoReview || null,
     canonicalCompanyTypeLabel: session?.demoAutoReview?.profileReconciliation?.registryLegalForm || null,
     selectedFixtureId: session?.selectedFixtureId || null,

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COUNTRIES } from "../constants/appConstants";
 import {
-  CALCULATION_METHODS, clearDemoSession, createDemoCase, emptyDemoDraft, OWNERSHIP_TYPES, ownershipLabelFor,
-  readDemoSession, readLabReplays, saveLabReplay, validateDemoDraft, writeDemoSession,
+  bindDraftToReplay, CALCULATION_METHODS, clearDemoSession, createDemoCase, emptyDemoDraft, findReplayById, OWNERSHIP_TYPES, ownershipLabelFor,
+  readDemoSession, readLabReplays, replayOptionLabel, replaySubject, saveLabReplay, validateDemoDraft, writeDemoSession,
 } from "./demoSession";
 import {
   accountOpenItems, allCandidateFacts, assertionSourceState, compactResearchResult, DEMO_CALCULATION_FIXTURES, demoCalculationPeople, demoOpenQuestions, demoReviewPresentations,
@@ -26,15 +26,24 @@ function CalculationMethodSelector({ value, onChange, compact = false }) {
   return <fieldset className={`ubo-demo-method ${compact ? "compact" : "ubo-demo-wide"}`}><legend>Calculation method</legend><p>Choose which calculation or control assessment to inspect.</p><div>{CALCULATION_METHODS.map((method) => <label key={method.code}><input type="radio" name={compact ? "resultCalculationMethod" : "calculationMethod"} value={method.code} checked={value === method.code} onChange={() => onChange(method.code)} /><span><strong>{method.label}</strong><small>{method.explanation}</small></span></label>)}</div></fieldset>;
 }
 
-function CompanyStart({ draft, errors, replays, onChange, onSubmit, onLoadExample }) {
+function CompanyStart({ draft, errors, replays, onChange, onReplaySelect, onSubmit, onLoadExample }) {
+  const replayMode = draft.sourceMode === "REPLAY";
+  const selectedReplay = findReplayById(replays, draft.replayId);
+  const duplicateNames = replays.reduce((counts, record) => {
+    const name = String(record?.companyContext?.legalEntityName || "").trim().toUpperCase();
+    counts[name] = (counts[name] || 0) + 1;
+    return counts;
+  }, {});
+  let selectedSubject = null;
+  try { if (selectedReplay) selectedSubject = replaySubject(selectedReplay); } catch (_) { /* Error is shown on submission. */ }
   return <main className="ubo-demo-main">
     <div className="ubo-demo-intro"><span className="ubo-demo-eyebrow">Ownership review</span><h1>Let&rsquo;s research your company</h1><p>Tell us which company you&rsquo;re reviewing. We&rsquo;ll use these details to start its ownership journey.</p></div>
     <form className="ubo-demo-card" onSubmit={onSubmit} noValidate>
       <div className="ubo-demo-card-heading"><span>Company details</span><small>Fields marked * are required</small></div>
       <div className="ubo-demo-fields">
-        <label className="ubo-demo-field ubo-demo-wide"><span>Company name *</span><input autoComplete="organization" aria-invalid={Boolean(errors.legalName)} value={draft.legalName} onChange={(e) => onChange("legalName", e.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <FieldError id="legal-name-error">{errors.legalName}</FieldError>}</label>
-        <label className="ubo-demo-field"><span>Registration number *</span><input autoComplete="off" inputMode="text" aria-invalid={Boolean(errors.registrationNumber)} value={draft.registrationNumber} onChange={(e) => onChange("registrationNumber", e.target.value)} placeholder="For example, 00445790" /><small>Letters and leading zeros are preserved.</small>{errors.registrationNumber && <FieldError id="registration-error">{errors.registrationNumber}</FieldError>}</label>
-        <label className="ubo-demo-field"><span>Country of registration *</span><select value={draft.countryCode} onChange={(e) => onChange("countryCode", e.target.value)}>{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
+        <label className="ubo-demo-field ubo-demo-wide"><span>Company name *</span><input autoComplete="organization" readOnly={replayMode} aria-invalid={Boolean(errors.legalName)} value={draft.legalName} onChange={(e) => onChange("legalName", e.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <FieldError id="legal-name-error">{errors.legalName}</FieldError>}</label>
+        <label className="ubo-demo-field"><span>Registration number *</span><input autoComplete="off" inputMode="text" readOnly={replayMode} aria-invalid={Boolean(errors.registrationNumber)} value={draft.registrationNumber} onChange={(e) => onChange("registrationNumber", e.target.value)} placeholder="For example, 00445790" /><small>Letters and leading zeros are preserved.</small>{errors.registrationNumber && <FieldError id="registration-error">{errors.registrationNumber}</FieldError>}</label>
+        <label className="ubo-demo-field"><span>Country of registration *</span><select disabled={replayMode} value={draft.countryCode} onChange={(e) => onChange("countryCode", e.target.value)}>{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
         <label className="ubo-demo-field"><span>Ownership type *</span><select value={draft.ownershipType} onChange={(e) => onChange("ownershipType", e.target.value)}>{OWNERSHIP_TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select><small>Context only; it does not change policy.</small></label>
         <CalculationMethodSelector value={draft.calculationMethod} onChange={(value) => onChange("calculationMethod", value)} />
         <label className="ubo-demo-field"><span>Case ID / reference <em>Optional</em></span><input autoComplete="off" value={draft.referenceCaseId} onChange={(e) => onChange("referenceCaseId", e.target.value)} placeholder="Your internal reference" /></label>
@@ -42,11 +51,11 @@ function CompanyStart({ draft, errors, replays, onChange, onSubmit, onLoadExampl
           <label><input type="radio" name="sourceMode" value="LIVE" checked={draft.sourceMode === "LIVE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Live Lab research</label>
           <label><input type="radio" name="sourceMode" value="FIXTURE" checked={draft.sourceMode === "FIXTURE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Reviewed ASDA fixture <small>no provider call</small></label>
           <label><input type="radio" name="sourceMode" value="REPLAY" disabled={!replays.length} checked={draft.sourceMode === "REPLAY"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Saved live replay <small>no provider call</small></label>
-          {draft.sourceMode === "REPLAY" && <select aria-label="Saved research result" value={draft.replayId} onChange={(e) => onChange("replayId", e.target.value)}><option value="">Choose saved research</option>{replays.map((r) => <option key={r.replayId} value={r.replayId}>{r.companyContext?.legalEntityName || r.replayId}</option>)}</select>}
+          {replayMode && <><select aria-label="Saved research result" aria-invalid={Boolean(errors.replayId)} value={draft.replayId} onChange={(e) => onReplaySelect(e.target.value)}><option value="">Choose saved research</option>{replays.map((record) => { const name = String(record?.companyContext?.legalEntityName || "").trim().toUpperCase(); return <option key={record.replayId} value={record.replayId}>{replayOptionLabel(record, duplicateNames[name] || 1)}</option>; })}</select>{errors.replayId && <FieldError id="replay-error">{errors.replayId}</FieldError>}{selectedSubject && <div className="ubo-demo-replay-summary"><strong>Selected saved company</strong><span>{selectedSubject.legalName}</span><small>{selectedSubject.registrationNumber} · {selectedSubject.countryCode} · original capture retained</small></div>}</>}
         </fieldset>
       </div>
       <div className="ubo-demo-examples"><span>Instant engine examples</span><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.ALICE_28)}>Load Alice example — no provider call</button><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.METHOD_60_40)}>Load 60/40 method comparison — no provider call</button></div>
-      <div className="ubo-demo-actions"><p>Saved in this browser for this demo only.</p><button className="ubo-demo-primary" type="submit">Start research <span>→</span></button></div>
+      <div className="ubo-demo-actions"><p>Saved in this browser for this demo only.</p><button className="ubo-demo-primary" type="submit">{replayMode ? "Replay saved research — no provider call" : "Start research"} <span>→</span></button></div>
     </form>
   </main>;
 }
@@ -201,17 +210,64 @@ export default function UboDemoRoot() {
   useEffect(() => {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
     let active = true;
-    const replayRecord = replays.find((record) => record.replayId === draft.replayId) || replays[0];
-    runDemoResearch({ demoCase, sourceMode: draft.sourceMode, replayRecord, demoFixtureId: demoCase.analysisContext?.demoFixtureId }).then((session) => {
+    const sourceMode = demoCase.analysisContext?.sourceMode || draft.sourceMode;
+    const replayId = demoCase.analysisContext?.replayId || draft.replayId;
+    const replayRecord = sourceMode === "REPLAY" ? findReplayById(replays, replayId) : null;
+    if (sourceMode === "REPLAY" && !replayRecord) {
+      setResearchError("The selected saved research record is not available on this browser origin. No live search was started.");
+      setResearchResult(null);
+      return undefined;
+    }
+    runDemoResearch({ demoCase, sourceMode, replayRecord, demoFixtureId: demoCase.analysisContext?.demoFixtureId }).then((session) => {
       if (!active) return;
+      if (sourceMode === "REPLAY") {
+        const returned = session?.companyContext || {};
+        if (String(returned.registrationNumber || "").trim().toUpperCase() !== demoCase.company.registrationNumber.trim().toUpperCase()
+          || String(returned.legalEntityName || "").trim().toUpperCase() !== demoCase.company.legalName.trim().toUpperCase()) {
+          throw new TypeError("The saved replay result does not match the selected researched company.");
+        }
+      }
       if (session.replayCapture) saveLabReplay(session.replayCapture);
-      setResearchResult(compactResearchResult(session, draft.sourceMode, demoCase.analysisContext?.calculationMethod));
+      setResearchResult(compactResearchResult(session, sourceMode, demoCase.analysisContext?.calculationMethod));
     }).catch((cause) => { if (active) { setResearchError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); setResearchResult(null); } });
     return () => { active = false; };
   }, [pathname, demoCase, researchResult?.status, runToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const updateDraft = (field, value) => { setDraft((d) => ({ ...d, [field]: value })); setErrors((e) => ({ ...e, [field]: undefined })); };
-  const startResearch = (event) => { event.preventDefault(); const cleanDraft = { ...draft, demoFixtureId: "" }; const next = validateDemoDraft(cleanDraft); if (cleanDraft.sourceMode === "REPLAY" && !cleanDraft.replayId && !replays.length) next.replayId = "Choose a saved research result."; setErrors(next); if (Object.keys(next).length) return; setDraft(cleanDraft); const nextCase = createDemoCase(cleanDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH); };
+  const updateDraft = (field, value) => {
+    if (field === "sourceMode" && value === "REPLAY") {
+      const record = findReplayById(replays, draft.replayId);
+      if (record) {
+        try { setDraft(bindDraftToReplay(draft, record)); setErrors((current) => ({ ...current, sourceMode: undefined, replayId: undefined })); return; }
+        catch (_) { /* Preserve the selected capture and show the precise error on replay. */ }
+      }
+    }
+    setDraft((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined }));
+  };
+  const selectReplay = (replayId) => {
+    const record = findReplayById(replays, replayId);
+    if (!record) { setDraft((current) => ({ ...current, replayId })); setErrors((current) => ({ ...current, replayId: "Choose an available saved research result." })); return; }
+    try { const nextDraft = bindDraftToReplay(draft, record); setDraft(nextDraft); setErrors((current) => ({ ...current, replayId: undefined, legalName: undefined, registrationNumber: undefined, countryCode: undefined })); }
+    catch (cause) { setDraft((current) => ({ ...current, replayId })); setErrors((current) => ({ ...current, replayId: cause.message })); }
+  };
+  const startResearch = (event) => {
+    event.preventDefault();
+    let cleanDraft = { ...draft, demoFixtureId: "" };
+    const next = {};
+    if (cleanDraft.sourceMode === "REPLAY") {
+      const record = findReplayById(replays, cleanDraft.replayId);
+      if (!record) next.replayId = "Choose an available saved research result. No live search will be used.";
+      else {
+        try { cleanDraft = bindDraftToReplay(cleanDraft, record); }
+        catch (cause) { next.replayId = cause.message; }
+      }
+    }
+    Object.assign(next, validateDemoDraft(cleanDraft));
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    setDraft(cleanDraft);
+    const nextCase = createDemoCase(cleanDraft);
+    setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH);
+  };
   const loadCalculationExample = (fixtureId) => {
     const alice = fixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28;
     const nextDraft = { ...draft, legalName: alice ? "Example Trading Ltd" : "V2 Review Customer Limited", registrationNumber: alice ? "DEMO0028" : "DEMO6040", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", sourceMode: "FIXTURE", replayId: "", calculationMethod: alice ? "EFFECTIVE_INTEREST" : "POLICY_ALL_ROUTES", demoFixtureId: fixtureId };
@@ -222,13 +278,24 @@ export default function UboDemoRoot() {
     setDemoCase((current) => current ? ({ ...current, analysisContext: { ...(current.analysisContext || {}), calculationMethod } }) : current);
     setResearchResult((current) => current ? ({ ...current, analysisContext: { ...(current.analysisContext || {}), calculationMethod } }) : current);
   };
-  const runAgain = (mode = draft.sourceMode) => { setDraft((d) => ({ ...d, sourceMode: mode, replayId: mode === "REPLAY" ? (d.replayId || readLabReplays()[0]?.replayId || "") : d.replayId })); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1); };
+  const runAgain = (mode = draft.sourceMode) => {
+    let nextDraft = { ...draft, sourceMode: mode };
+    if (mode === "REPLAY") {
+      const available = readLabReplays();
+      const record = findReplayById(available, nextDraft.replayId) || available[0] || null;
+      if (!record) { setResearchError("The selected saved research record is not available on this browser origin. No live search was started."); setResearchResult(null); return; }
+      try { nextDraft = bindDraftToReplay(nextDraft, record); }
+      catch (cause) { setResearchError(`${cause.message} No live search was started.`); setResearchResult(null); return; }
+    }
+    const nextCase = createDemoCase(nextDraft);
+    setDraft(nextDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
+  };
   const startNewCase = () => { skipNextSave.current = true; clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
   const edit = () => navigateDemo(DEMO_START_PATH);
   const research = isDemoResearchPath(pathname);
 
   let content;
-  if (!research) content = <CompanyStart draft={draft} errors={errors} replays={replays} onChange={updateDraft} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
+  if (!research) content = <CompanyStart draft={draft} errors={errors} replays={replays} onChange={updateDraft} onReplaySelect={selectReplay} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} />;
   else if (researchError) content = <ResearchError error={researchError} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;

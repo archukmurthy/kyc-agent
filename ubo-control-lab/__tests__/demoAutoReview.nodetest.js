@@ -59,6 +59,41 @@ test("saved live replay can run the same provisional demo review with zero provi
   assert.match(result.sourceLabel, /Saved live replay.*no provider call/);
 });
 
+test("live and saved acquisition share the same post-acquisition demo evaluation semantics", () => {
+  const normalized = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const record = { replayId: "saved-parity-record", subject: normalized.subject, companyContext: normalized.companyContext, discoveryResult: normalized.result, savedAt: "2026-09-15T08:00:00.000Z" };
+  const live = startReviewReplay({ replayRecord: record });
+  live.sourceState = "LIVE";
+  const replay = startReviewReplay({ replayRecord: record });
+  replay.discovery = { replay: { replayId: record.replayId, transportCalls: 0 } };
+  let providerCalls = 0;
+  replay.provider = { invoke() { providerCalls += 1; throw new Error("Saved replay must not call a provider"); } };
+  const liveResult = autoReviewDemoSession(live, "2026-09-15T08:01:00.000Z");
+  const replayResult = autoReviewDemoReplaySession(replay, "2026-09-15T08:01:00.000Z");
+  const sorted = (items) => items.map((item) => JSON.stringify(item)).sort();
+  const semantics = (result) => {
+    const view = result.snapshots.at(-1).view;
+    const names = new Map(view.graph.nodes.map(({ entityId, primaryName }) => [entityId, primaryName]));
+    return {
+      subject: result.companyContext,
+      facts: sorted(result.candidateSources.flatMap(({ candidateFacts }) => candidateFacts)),
+      relationships: sorted(view.graph.relationships.map((relationship) => ({
+        from: names.get(relationship.subjectEntityId), to: names.get(relationship.objectEntityId),
+        type: relationship.relationshipType, dimension: relationship.dimension,
+        measurement: relationship.measurement || null, qualifiers: relationship.qualifiers || null,
+      }))),
+      calculations: sorted(view.graph.calculations.map(({ dimension, state, aggregateKnownValue, unknownPathCount }) => ({ dimension, state, aggregateKnownValue, unknownPathCount }))),
+      needs: sorted(view.informationNeeds.map(({ concept, status, reasonCode, targetKind, requiredByRequirementIds }) => ({ concept, status, reasonCode, targetKind, requiredByRequirementIds }))),
+      planState: view.plan.state,
+      customerBundles: sorted(view.journeyProjection.customerWorkBundles.map(({ state, permittedSemanticActions }) => ({ state, permittedSemanticActions }))),
+    };
+  };
+  assert.deepEqual(semantics(replayResult), semantics(liveResult));
+  assert.equal(providerCalls, 0);
+  assert.equal(replayResult.discovery.replay.transportCalls, 0);
+  assert.equal(replayResult.sourceState, "REPLAY");
+});
+
 test("a truthful live no-data result still evaluates to a subject-centred unresolved graph", () => {
   const result = autoReviewDemoSession(replaySession("V2-LAB-09"), "2026-09-15T08:01:00.000Z");
   assert.equal(result.snapshots.length, 1);
@@ -217,6 +252,7 @@ test("TDR limited-partnership surplus-asset evidence selects the existing LLP re
   const prepared = prepareDemoReplayRecord(original);
   assert.equal(original.companyContext.entityProfile, "COMPANY", "the captured live replay remains unchanged");
   assert.equal(prepared.replayRecord.companyContext.entityProfile, "LLP");
+  assert.equal(prepared.replayRecord.replayId, original.replayId, "demo reconciliation retains the original saved-record provenance ID");
   assert.equal(prepared.reconciliation.basis, "SOURCE_BACKED_LLP_SURPLUS_ASSET_RELATIONSHIP");
   const session = startReviewReplay({ replayRecord: prepared.replayRecord });
   session.sourceState = "LIVE";
