@@ -129,6 +129,12 @@ export function allCandidateFacts(result) {
     (source.candidateFacts || []).map((fact) => ({ fact, source })));
 }
 
+export function assertionSourceState(result, source) {
+  return result?.sourceMode === DEMO_SOURCE_MODES.LIVE
+    ? "LIVE"
+    : source?.sourceState || source?.capability || "Source";
+}
+
 export function relationshipCategory(relationship = "") {
   if (/ECONOMIC|OWNERSHIP|SURPLUS_ASSET/.test(relationship)) return "Ownership";
   if (/VOT/.test(relationship)) return "Voting";

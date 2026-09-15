@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { buildResearchRequest, compactResearchResult, demoOpenQuestions, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
+import { assertionSourceState, buildResearchRequest, compactResearchResult, demoOpenQuestions, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -132,6 +132,11 @@ test("compact result projects source-backed foreign and PSC-exempt registry cont
   expect(compact.registryContexts["law-id"]).toEqual(expect.objectContaining({ pscStatus: "EXEMPT", pscExemptionEffectiveFrom: "2021-05-25" }));
   expect(compact.registryContexts["law-id"].badges.map(({ label }) => label)).toEqual(["PLC", "PSC exempt"]);
   expect(compact.view.graph).toBe(projection);
+});
+
+test("live assertions retain their actual live-operation label after replay-safe review hydration", () => {
+  expect(assertionSourceState({ sourceMode: "LIVE" }, { sourceState: "REPLAY" })).toBe("LIVE");
+  expect(assertionSourceState({ sourceMode: "REPLAY" }, { sourceState: "REPLAY" })).toBe("REPLAY");
 });
 
 test("Screen 2 uses the source-backed registry legal form instead of the Screen 1 context", async () => {
