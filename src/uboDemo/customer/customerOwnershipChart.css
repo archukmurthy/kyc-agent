@@ -36,6 +36,17 @@
 .ubo-customer-intro h1 { margin: 9px 0 11px; font-size: clamp(31px, 5vw, 46px); line-height: 1.06; letter-spacing: -.035em; }
 .ubo-customer-intro p { margin: 0 auto; max-width: 640px; color: var(--ubo-customer-muted); font-size: 15px; line-height: 1.6; }
 .ubo-customer-card { overflow: hidden; border: 1px solid var(--ubo-customer-border); border-radius: 18px; background: white; box-shadow: 0 13px 38px rgba(29,68,72,.07); }
+.ubo-customer-company-main { width: min(780px, calc(100% - 48px)); }
+.ubo-customer-company-form { padding: clamp(24px, 5vw, 42px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.ubo-customer-company-form label { display: grid; gap: 7px; color: var(--ubo-customer-ink); font-size: 11px; font-weight: 800; }
+.ubo-customer-company-form label.wide { grid-column: 1 / -1; }
+.ubo-customer-company-form label > span { display: flex; justify-content: space-between; }
+.ubo-customer-company-form label em { color: var(--ubo-customer-muted); font-size: 9px; font-style: normal; font-weight: 600; }
+.ubo-customer-company-form input, .ubo-customer-company-form select { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid #b9cbc7; border-radius: 9px; outline: none; background: white; color: var(--ubo-customer-ink); font: inherit; font-weight: 600; }
+.ubo-customer-company-form input:focus, .ubo-customer-company-form select:focus { border-color: var(--ubo-customer-green); box-shadow: 0 0 0 3px rgba(13,105,88,.1); }
+.ubo-customer-field-error { color: #aa2f2f !important; font-weight: 700 !important; letter-spacing: 0 !important; text-transform: none !important; }
+.ubo-customer-company-actions { grid-column: 1 / -1; margin-top: 4px; padding-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--ubo-customer-border); }
+.ubo-customer-company-actions > small { color: var(--ubo-customer-muted); font-size: 9px; }
 .ubo-customer-upload-card { padding: clamp(24px, 5vw, 42px); }
 .ubo-customer-card-title { display: flex; align-items: center; gap: 14px; }
 .ubo-customer-card-title h2, .ubo-customer-result-card h2 { margin: 4px 0 0; font-size: 21px; }
@@ -116,6 +127,9 @@
   .ubo-customer-context { align-items: start; flex-direction: column; }
   .ubo-customer-context dl { justify-content: flex-start; }
   .ubo-customer-intro { margin-top: 32px; text-align: left; }
+  .ubo-customer-company-form { grid-template-columns: 1fr; }
+  .ubo-customer-company-form label.wide, .ubo-customer-company-actions { grid-column: auto; }
+  .ubo-customer-company-actions { align-items: stretch; flex-direction: column; }
   .ubo-customer-cert-grid, .ubo-customer-owner-grid { grid-template-columns: 1fr; }
   .ubo-customer-upload-actions { align-items: stretch; flex-direction: column; }
   .ubo-customer-primary { width: 100%; }

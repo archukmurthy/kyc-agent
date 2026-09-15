@@ -2,7 +2,8 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { analyseCustomerOwnershipChart, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { analyseCustomerOwnershipChart, selectSemanticProvider, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
@@ -75,6 +76,17 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
 
 test("invalid bytes and unsupported media fail before provider interpretation", () => {
   assert.throws(() => validateRequest(input({ file: { originalFilename: "chart.txt", declaredMediaType: "text/plain", sizeBytes: 3, contentBase64: Buffer.from("bad").toString("base64") } })), /PDF, PNG or JPEG/);
+});
+
+test("the exact reviewed Bettercomms digest selects the local source-backed interpretation", () => {
+  const selected = selectSemanticProvider(REVIEWED_BETTERCOMMS_DIGEST);
+  assert.deepEqual(selected.configuration(), {
+    provider: "source-reviewed-bettercomms-fixture",
+    model: "none",
+    instructionReference: "pr60-recovered-source-review-v1",
+  });
+  const injected = provider({});
+  assert.equal(selectSemanticProvider(REVIEWED_BETTERCOMMS_DIGEST, injected), injected);
 });
 
 test("API handler is POST-only and returns a bounded customer error", async () => {
