@@ -129,17 +129,56 @@ test("ASDA-style mutually impossible current PSC percentage bands stay disputed 
   assert.equal(result.candidateSources.flatMap(({ candidateFacts }) => candidateFacts).length, 4, "all source assertions remain inspectable");
 });
 
-test("an officer role cannot be promoted to control and interpretive formal control remains unresolved", () => {
+test("an officer role stays unresolved while an exact source-backed combined director right becomes operative without splitting", () => {
   const subject = { name: "Alice", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
   const object = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
   const facts = [
     { factId: "officer", type: "RELATIONSHIP", subject, object, relationship: "OFFICER_OF", evidenceReferences: [{ referenceId: "officer-source" }] },
-    { factId: "combined", type: "RELATIONSHIP", subject: { ...subject, name: "Bob" }, object, relationship: "FORMAL_CONTROL_RIGHT", qualifiers: { requiresInterpretation: true }, evidenceReferences: [{ referenceId: "control-source" }] },
+    { factId: "combined", type: "RELATIONSHIP", subject: { ...subject, name: "Bob" }, object, relationship: "FORMAL_CONTROL_RIGHT", qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors", requiresInterpretation: true }, evidenceReferences: [{ referenceId: "companies-house:target:psc:combined" }] },
+    { factId: "generic", type: "RELATIONSHIP", subject: { ...subject, name: "Carol" }, object, relationship: "FORMAL_CONTROL_RIGHT", qualifiers: { requiresInterpretation: true }, evidenceReferences: [{ referenceId: "control-source-generic" }] },
   ];
   const claims = facts.map((fact) => ({ claimId: `claim-${fact.factId}`, currentState: "CANDIDATE", originatingCandidateFact: { candidateFactId: fact.factId }, relationship: fact.relationship }));
   const parties = facts.map((fact, index) => ({ candidatePartyKey: `party-${index}`, claimId: claims[index].claimId, party: fact.subject }));
   const plan = buildPlan({ caseId: "demo", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: object }] });
-  assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "DISPUTED"]);
+  assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "OPERATIVE", "DISPUTED"]);
+});
+
+test("IAG to British Airways and Law Debenture to LDC retain two direct combined control rights through demo review and projection", () => {
+  const normalized = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const company = (entityId, name, number) => ({ entityId, name, entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: number }] });
+  const ba = company("ba", "BRITISH AIRWAYS PLC", "01777777");
+  const iag = company("iag", "INTERNATIONAL CONSOLIDATED AIRLINES GROUP S.A.", "M-492,129");
+  const ldc = company("ldc", "LAW DEBENTURE CORPORATE SERVICES LIMITED", "07384180");
+  const law = company("law", "THE LAW DEBENTURE CORPORATION P.L.C.", "00030397");
+  const evidence = (id) => [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: `companies-house:${id}:psc`, locator: { source: "companies-house" } }];
+  const control = (factId, subject, object) => ({
+    factId, type: "RELATIONSHIP", subject, object, relationship: "FORMAL_CONTROL_RIGHT",
+    qualifiers: { currentState: "CURRENT", controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors", requiresInterpretation: true },
+    evidenceReferences: evidence(factId),
+  });
+  const facts = [
+    { factId: "ldc-ba-economic", type: "RELATIONSHIP", subject: ldc, object: ba, relationship: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value: 10 }, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" }, evidenceReferences: evidence("ldc-ba-economic") },
+    control("iag-ba-directors", iag, ba),
+    control("law-ldc-directors", law, ldc),
+  ];
+  const session = startReviewReplay({ replayRecord: {
+    replayId: "director-control-two-chain", subject: ba,
+    companyContext: { ...normalized.companyContext, legalEntityName: ba.name, registrationNumber: "01777777" },
+    discoveryResult: { ...normalized.result, candidateFacts: facts }, savedAt: "2026-09-15T08:00:00.000Z",
+  } });
+  session.sourceState = "LIVE";
+  const result = autoReviewDemoSession(session, "2026-09-15T08:01:00.000Z");
+  const graph = result.snapshots[0].view.graph;
+  const controls = graph.relationships.filter(({ relationshipType }) => relationshipType === "FORMAL_CONTROL_RIGHT");
+  const names = new Map(result.entityDirectory.map(({ entityId, party }) => [entityId, party.name]));
+  assert.deepEqual(controls.map((relationship) => `${names.get(relationship.subjectEntityId)}>${names.get(relationship.objectEntityId)}`).sort(), [
+    "INTERNATIONAL CONSOLIDATED AIRLINES GROUP S.A.>BRITISH AIRWAYS PLC",
+    "THE LAW DEBENTURE CORPORATION P.L.C.>LAW DEBENTURE CORPORATE SERVICES LIMITED",
+  ]);
+  assert.equal(controls.every((relationship) => relationship.measurement === undefined), true);
+  assert.equal(controls.every((relationship) => relationship.qualifiers.sourceStatementMode === "COMBINED_ALTERNATIVE"), true);
+  assert.equal(controls.every((relationship) => relationship.support.claimCount === 1), true, "each source assertion remains one claim and one edge");
+  assert.equal(result.snapshots[0].view.qualifications.length, 0, "director rights do not create percentage or majority qualification");
 });
 
 test("an unqualified legacy ownership label cannot be auto-reviewed as company shares", () => {
@@ -173,11 +212,14 @@ test("TDR limited-partnership surplus-asset evidence selects the existing LLP re
   session.demoProfileReconciliation = prepared.reconciliation;
   const result = autoReviewDemoSession(session, "2026-09-15T08:01:00.000Z");
   const relationships = result.snapshots[0].view.graph.relationships;
-  assert.deepEqual(relationships.map(({ relationshipType }) => relationshipType).sort(), ["ECONOMIC_OWNERSHIP", "SIGNIFICANT_INFLUENCE_OR_CONTROL"]);
+  assert.deepEqual(relationships.map(({ relationshipType }) => relationshipType).sort(), ["ECONOMIC_OWNERSHIP", "FORMAL_CONTROL_RIGHT", "SIGNIFICANT_INFLUENCE_OR_CONTROL"]);
   assert.deepEqual(relationships.find(({ relationshipType }) => relationshipType === "ECONOMIC_OWNERSHIP").measurement, {
     type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true,
   });
-  assert.equal(result.demoAutoReview.unresolvedClaims, 1, "combined appointment/removal remains unresolved for explicit interpretation");
+  const combined = relationships.find(({ relationshipType }) => relationshipType === "FORMAL_CONTROL_RIGHT");
+  assert.equal(combined.measurement, undefined, "a non-percentage right must not manufacture a value");
+  assert.equal(combined.qualifiers.sourceStatementMode, "COMBINED_ALTERNATIVE", "one combined source assertion stays combined");
+  assert.equal(result.demoAutoReview.unresolvedClaims, 0, "the recorded right is operative while its policy scope remains separately reviewable");
   assert.equal(result.demoAutoReview.profileReconciliation.effectiveProfile, "LLP");
 });
 

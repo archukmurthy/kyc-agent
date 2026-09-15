@@ -123,6 +123,26 @@ test("demo registry context preserves IAG source identity without changing its t
   }
 });
 
+test("Companies House preserves the single Law Debenture appoint-or-remove-directors assertion into LDC", async () => {
+  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
+  process.env.COMPANIES_HOUSE_API_KEY = "offline-test-key";
+  const psc = corporate("THE LAW DEBENTURE CORPORATION P.L.C.", "00030397", "Public Limited Company", "right-to-appoint-and-remove-directors");
+  const fetchImpl = async (url) => response(String(url).endsWith("/persons-with-significant-control")
+    ? { items: [psc] }
+    : { company_name: "LAW DEBENTURE CORPORATE SERVICES LIMITED", type: "ltd", jurisdiction: "england-wales", registered_office_address: { country: "United Kingdom" } });
+  try {
+    const result = await companiesHouseOwnershipAdapter({ entity: { name: "LAW DEBENTURE CORPORATE SERVICES LIMITED", type: "company", jurisdiction: "GB", registrationNumber: "07384180" }, tenantConfig: { demoRegistryContext: true }, fetchImpl });
+    assert.equal(result.statements.length, 1);
+    assert.equal(result.statements[0].owner.registrationNumber, "00030397");
+    assert.equal(result.statements[0].ownedEntity.registrationNumber, "07384180");
+    assert.equal(result.statements[0].metadata.relationshipConcept, "APPOINT_OR_REMOVE_PERSONS");
+    assert.deepEqual(result.statements[0].metadata.naturesOfControl, ["right-to-appoint-and-remove-directors"]);
+  } finally {
+    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
+  }
+});
+
 test("demo registry context preserves Law Debenture active PSC exemption as a source fact without creating an owner", async () => {
   const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
   process.env.COMPANIES_HOUSE_API_KEY = "offline-test-key";

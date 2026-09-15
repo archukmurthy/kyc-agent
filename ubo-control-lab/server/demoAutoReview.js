@@ -54,6 +54,15 @@ function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
 
+function isSourceBackedCombinedControlRight(fact) {
+  const sourceNature = String(fact?.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+  return fact?.relationship === "FORMAL_CONTROL_RIGHT"
+    && fact.measurement === undefined
+    && fact.qualifiers?.controlConcept === "APPOINT_OR_REMOVE_PERSONS"
+    && fact.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE"
+    && /right-to-appoint-and-remove-(directors|persons?)\b/.test(sourceNature);
+}
+
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
 function prepareDemoLiveDiscoveryBody(body) {
@@ -177,7 +186,8 @@ function buildPlan(session) {
     const safeRegistryContext = fact?.type === "ENTITY_ATTRIBUTE" && fact.attribute === "REGISTRY_CONTEXT"
       && fact.value && typeof fact.value === "object" && !Array.isArray(fact.value) && sourceBacked(fact);
     const safe = (safeRegistryContext || (fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
-      && sourceBacked(fact) && validMeasurement(fact) && validRelationshipBasis(fact) && fact.qualifiers?.requiresInterpretation !== true
+      && sourceBacked(fact) && validMeasurement(fact) && validRelationshipBasis(fact)
+      && (fact.qualifiers?.requiresInterpretation !== true || isSourceBackedCombinedControlRight(fact))
       && !conflictingFactIds.has(fact.factId))) && endpointsSafe;
     return [target.claimId, safe];
   }));

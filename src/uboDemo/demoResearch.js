@@ -172,6 +172,36 @@ export function formatMeasurement(measurement) {
   return measurement.value == null ? measurement.type : `${measurement.value}%`;
 }
 
+function combinedControlRightLabel(fact) {
+  const sourceNature = String(fact?.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+  if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Right to appoint or remove directors";
+  if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Right to appoint or remove persons";
+  return null;
+}
+
+export function relationshipAssertionPresentation(fact) {
+  const specificControlRight = fact?.relationship === "FORMAL_CONTROL_RIGHT"
+    ? combinedControlRightLabel(fact)
+    : null;
+  const description = specificControlRight
+    || (fact?.relationship === "FORMAL_CONTROL_RIGHT"
+      ? "Formal control right reported — details not available in this result"
+      : String(fact?.relationship || fact?.type || "Source assertion").replaceAll("_", " "));
+  const evidence = fact?.evidenceReferences?.[0];
+  const sourceText = [evidence?.system, evidence?.referenceId, evidence?.locator?.source, evidence?.locator?.sourceUrl]
+    .filter(Boolean).join(" ").toLowerCase();
+  return {
+    category: relationshipCategory(fact?.relationship),
+    description,
+    measurement: fact?.relationship === "FORMAL_CONTROL_RIGHT" && !fact?.measurement
+      ? null
+      : formatMeasurement(fact?.measurement),
+    sourceDescription: sourceText.includes("companies-house") || sourceText.includes("companies house")
+      ? "Recorded in Companies House PSC information"
+      : null,
+  };
+}
+
 function recordedStateCopy(state, route) {
   if (state === "SATISFIED" || state === "ROUTE_SATISFIED") return route === "EFFECTIVE_INTEREST"
     ? "Threshold satisfied under effective ownership"

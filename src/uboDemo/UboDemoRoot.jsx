@@ -7,7 +7,7 @@ import {
 import {
   accountOpenItems, allCandidateFacts, assertionSourceState, compactResearchResult, DEMO_CALCULATION_FIXTURES, demoCalculationPeople, demoOpenQuestions, demoReviewPresentations,
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
-  demoSourceRelevantEntityIds, projectDemoGraph, relationshipCategory, runDemoResearch,
+  demoSourceRelevantEntityIds, projectDemoGraph, relationshipAssertionPresentation, runDemoResearch,
 } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
 import "./uboDemo.css";
@@ -84,7 +84,11 @@ function GraphFrame({ projection, entityLabels, registryContexts, reviewPresenta
 
 function Assertions({ result }) {
   const rows = allCandidateFacts(result);
-  return <details className="ubo-demo-assertions"><summary><strong>Research assertions and source facts</strong><span>{rows.length} assertions · click to inspect</span></summary><div className="ubo-demo-assertion-list">{rows.map(({ fact, source }, index) => fact.type === "ENTITY_ATTRIBUTE" ? <article key={fact.factId || index}><span className="ubo-demo-kind">Registry context</span><p><strong>{fact.subject?.name || "Registry entity"}</strong></p><p>{Object.entries(fact.value || {}).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value}`).join(" · ")}</p><small>{assertionSourceState(result, source)} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article> : <article key={fact.factId || index}><span className="ubo-demo-kind">{relationshipCategory(fact.relationship)}</span><p><strong>{fact.subject?.name || "Source party"}</strong> → <strong>{fact.object?.name || "Target party"}</strong></p><p>{String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ")} · {formatMeasurement(fact.measurement)}</p><small>{fact.qualifiers?.currentState || "Currentness not supplied"} · {assertionSourceState(result, source)} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>)}</div></details>;
+  return <details className="ubo-demo-assertions"><summary><strong>Research assertions and source facts</strong><span>{rows.length} assertions · click to inspect</span></summary><div className="ubo-demo-assertion-list">{rows.map(({ fact, source }, index) => {
+    if (fact.type === "ENTITY_ATTRIBUTE") return <article key={fact.factId || index}><span className="ubo-demo-kind">Registry context</span><p><strong>{fact.subject?.name || "Registry entity"}</strong></p><p>{Object.entries(fact.value || {}).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value}`).join(" · ")}</p><small>{assertionSourceState(result, source)} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>;
+    const presentation = relationshipAssertionPresentation(fact);
+    return <article key={fact.factId || index}><span className="ubo-demo-kind">{presentation.category}</span><p><strong>{fact.subject?.name || "Source party"}</strong> → <strong>{fact.object?.name || "Target party"}</strong></p><p>{presentation.description}{presentation.measurement ? ` · ${presentation.measurement}` : ""}</p>{presentation.sourceDescription && <p>{presentation.sourceDescription}</p>}<small>{fact.qualifiers?.currentState || "Currentness not supplied"} · {assertionSourceState(result, source)} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>;
+  })}</div></details>;
 }
 
 function Identity({ entity }) {

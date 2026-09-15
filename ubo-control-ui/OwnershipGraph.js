@@ -188,12 +188,27 @@
 
   function relationshipBasis(relationship) {
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return "LLP surplus asset rights";
-    if (relationship.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE") return "Combined appoint-or-remove right";
+    const sourceNature = String(relationship.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+    if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Right to appoint or remove directors";
+    if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Right to appoint or remove persons";
+    if (relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement) return "Formal control right reported — details not available in this result";
     return relationshipLabel(relationship.relationshipType);
+  }
+
+  function isNonPercentageControlRight(relationship) {
+    return relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement;
+  }
+
+  function isCompaniesHouseSupported(relationship) {
+    return (relationship.support?.evidenceReferences || []).some((reference) => [
+      reference.system, reference.referenceId, reference.locator?.source, reference.locator?.sourceUrl,
+    ].filter(Boolean).join(" ").toLowerCase().includes("companies-house")
+      || [reference.locator?.source].filter(Boolean).join(" ").toLowerCase().includes("companies house"));
   }
 
   function relationshipValue(relationship, detailed = false) {
     const measurement = relationship.measurement;
+    if (isNonPercentageControlRight(relationship)) return "Not applicable to this type of right";
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
       && measurement?.type === "RANGE" && measurement.lowerInclusive && measurement.upperBound === 100) {
       return detailed ? `≥${measurement.lowerBound}% · ${formatMeasurement(measurement, true)}` : `≥${measurement.lowerBound}%`;
@@ -204,6 +219,12 @@
   function relationshipEdgeLabel(relationship) {
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return `Surplus asset rights ${relationshipValue(relationship)}`;
     if (relationship.dimension === "VOTING") return `Vote · ${relationshipValue(relationship)}`;
+    if (isNonPercentageControlRight(relationship)) {
+      const sourceNature = String(relationship.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+      if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Appoint/remove directors";
+      if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Appoint/remove persons";
+      return "Formal control right";
+    }
     return relationship.measurement ? relationshipValue(relationship) : short(relationshipBasis(relationship), 32);
   }
 
@@ -498,7 +519,7 @@
         h("p", null, "A natural-person source fact is present, but no G2.3 qualification basis is recorded for this person."),
         directRelationships.length > 0 && h("div", { className: "ug-candidate-facts" }, directRelationships.map((relationship) => h("div", { className: "ug-state-detail", key: relationship.relationshipId },
           h("strong", null, relationshipLabel(relationship.relationshipType)),
-          h("span", null, `Direct fact: ${formatMeasurement(relationship.measurement, true)}`),
+          h("span", null, `Direct fact: ${relationshipValue(relationship, true)}`),
           unresolvedDirectRelationships.some(({ relationshipId }) => relationshipId === relationship.relationshipId) && h("span", null, "The subject-centred path remains unresolved.")))),
         h("p", { className: "ug-audit-line" }, calculations.length ? "Recorded calculations do not establish a qualifying threshold." : "No determinative effective-interest calculation is recorded.")),
       calculations.length > 0 && !qualification && h("section", { className: "ug-detail-section" }, h("h4", null, "Recorded effective interests"), calculations.map((calculation) => h("div", { className: "ug-basis", key: calculation.calculationId }, h("strong", null, `${calculation.dimension === "VOTING" ? "Voting" : "Economic"}: ${formatMeasurement(calculation.result, true)}`), (calculation.paths || []).map((path) => h(PathCard, { path, projection, onSelect, key: path.pathId }))))),
@@ -520,7 +541,7 @@
     return h(React.Fragment, null,
       h("p", { className: "ug-selection-context" }, "Showing this relationship"),
       h("p", { className: "ug-eyebrow" }, relationshipBasis(relationship)), h("h3", null, `${source?.displayName || relationship.sourceEntityId} → ${target?.displayName || relationship.targetEntityId}`),
-      h("div", { className: "ug-direct-value" }, h("span", null, "Direct relationship value"), h("strong", null, relationshipValue(relationship, true))),
+      h("div", { className: "ug-direct-value" }, h("span", null, isNonPercentageControlRight(relationship) ? "Percentage" : "Direct relationship value"), h("strong", null, relationshipValue(relationship, true))),
       h("dl", { className: "ug-definition-list" },
         h("dt", null, "From entity"), h("dd", null, source?.displayName || relationship.sourceEntityId),
         h("dt", null, "To entity"), h("dd", null, target?.displayName || relationship.targetEntityId),
@@ -530,6 +551,7 @@
         h("dt", null, "Temporal / currentness state"), h("dd", null, relationship.temporalState || "Unknown"),
         h("dt", null, "Relationship / claim state"), h("dd", null, relationship.resolutionStatus || relationship.claimState || "Unknown"),
         h("dt", null, "Evidence / support state"), h("dd", null, relationship.evidenceStatus || "UNKNOWN"),
+        isCompaniesHouseSupported(relationship) && h(React.Fragment, null, h("dt", null, "Registry source"), h("dd", null, "Recorded in Companies House PSC information")),
         sourceNature && h(React.Fragment, null, h("dt", null, "Source assertion"), h("dd", null, sourceNature)),
         interpretation && h(React.Fragment, null, h("dt", null, "Control / policy interpretation"), h("dd", null, interpretation)),
         h("dt", null, "Supporting claims"), h("dd", null, String(relationship.support?.claimCount || 0))),
@@ -819,7 +841,7 @@
           projection.relationships.length === 0 && h("div", { className: "ug-empty-overlay", role: "status" }, h("strong", null, "Ownership/control unresolved"), h("span", null, "No safe relationship is established yet; the customer subject remains visible.")),
           stateButtons.length > 0 && h("div", { className: "ug-state-strip", "aria-label": "Conflict and review states" }, stateButtons.map((item) => h("button", { type: "button", key: `${item.kind}:${item.id}`, className: item.css, onClick: () => select({ kind: item.kind, id: item.id }) }, item.label)))),
         (!collapseIdleInspector || selection) && h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
-      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipLabel(relationship.relationshipType)}, ${formatMeasurement(relationship.measurement, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
+      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipBasis(relationship)}, ${relationshipValue(relationship, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 
   return Object.freeze({ CONTRACT_VERSION, REVIEW_CONTRACT_VERSION, DETAIL_LEVEL, VIEW_MODE, OwnershipGraph, assertProjection, basisLabel, computeLayout, entityRelationshipContext, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });

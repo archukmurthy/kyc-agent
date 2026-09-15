@@ -255,7 +255,7 @@ test("parallel economic and voting edges reuse nodes while remaining separately 
 });
 
 test("dense genuine rights use separate lanes, semantic labels, front-most selection and complete details", () => {
-  const evidence = { system: "companies-house", referenceType: "PSC_REGISTER", referenceId: "sanitized-psc-source" };
+  const evidence = { system: "legacy-ubo-discovery", referenceType: "PSC_REGISTER", referenceId: "companies-house:01777777:psc:1", locator: { source: "companies-house" } };
   const supplied = graphProjection(["customer", "owner-a"], [
     {
       id: "surplus", source: "owner-a", target: "customer", type: "ECONOMIC_OWNERSHIP",
@@ -265,7 +265,7 @@ test("dense genuine rights use separate lanes, semantic labels, front-most selec
     },
     {
       id: "appoint-or-remove", source: "owner-a", target: "customer", type: "FORMAL_CONTROL_RIGHT", omitMeasurement: true,
-      qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-person", requiresInterpretation: true },
+      qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors", requiresInterpretation: true },
       support: { claimCount: 1, claimIds: ["claim-control"], evidenceReferenceCount: 1, evidenceReferences: [evidence] },
     },
     {
@@ -283,16 +283,35 @@ test("dense genuine rights use separate lanes, semantic labels, front-most selec
     assert.equal(new Set(edges.map((edge) => edge.querySelector(".ug-edge-label-bg").getAttribute("x"))).size, 3, "each label requires an independent lane");
     assert.equal(new Set(edges.map((edge) => edge.getAttribute("data-relationship-id"))).size, 3, "each label remains independently addressable");
     assert.match(rendered.container.textContent, /Surplus asset rights ≥75%/);
+    assert.match(rendered.container.querySelector("[data-relationship-id='appoint-or-remove'] .ug-edge-label").textContent, /Appoint\/remove directors/);
     rendered.click(rendered.container.querySelector("[data-relationship-id='appoint-or-remove']"));
     const orderedAfterSelection = [...rendered.container.querySelectorAll(".ug-edge")];
     assert.equal(orderedAfterSelection.at(-1).getAttribute("data-relationship-id"), "appoint-or-remove", "selected relationship renders visually last/front-most");
     const details = rendered.container.querySelector(".ug-detail-panel").textContent;
     assert.match(details, /From entityowner-a/);
     assert.match(details, /To entitycustomer/);
-    assert.match(details, /Relationship basisCombined appoint-or-remove right/);
-    assert.match(details, /Source assertionright-to-appoint-and-remove-person/);
+    assert.match(details, /Relationship basisRight to appoint or remove directors/);
+    assert.match(details, /PercentageNot applicable to this type of right/);
+    assert.match(details, /Registry sourceRecorded in Companies House PSC information/);
+    assert.match(details, /Source assertionright-to-appoint-and-remove-directors/);
     assert.match(details, /No separate appointment or removal right is inferred/);
-    assert.match(details, /companies-housePSC_REGISTER · sanitized-psc-source/);
+    assert.match(details, /legacy-ubo-discoveryPSC_REGISTER · companies-house:01777777:psc:1/);
+    assert.doesNotMatch(details, /Value not established|Direct relationship valueUnknown/);
+  } finally { rendered.cleanup(); }
+});
+
+test("generic non-percentage control does not invent director semantics", () => {
+  const supplied = graphProjection(["customer", "owner-a"], [{
+    id: "generic-control", source: "owner-a", target: "customer", type: "FORMAL_CONTROL_RIGHT", omitMeasurement: true,
+    qualifiers: { requiresInterpretation: true },
+  }]);
+  const rendered = renderGraph(supplied, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    assert.equal(rendered.container.querySelector(".ug-edge-label").textContent, "Formal control right");
+    rendered.click(rendered.container.querySelector("[data-relationship-id='generic-control']"));
+    const details = rendered.container.querySelector(".ug-detail-panel").textContent;
+    assert.match(details, /Formal control right reported — details not available in this result/);
+    assert.doesNotMatch(details, /appoint or remove directors/i);
   } finally { rendered.cleanup(); }
 });
 

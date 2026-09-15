@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
+import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -144,6 +144,49 @@ test("scope and relationship controls filter a projection independently without 
   expect(fullControl.nodes).toHaveLength(4);
   expect(fullControl.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["disconnected-control"]);
   expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("IAG and Law Debenture director rights remain two exact control edges in Control and All views", () => {
+  const graph = {
+    contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "ba",
+    nodes: ["ba", "iag", "ldc", "law"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "iag-ba-owner", subjectEntityId: "iag", objectEntityId: "ba", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "iag-ba-directors", subjectEntityId: "iag", objectEntityId: "ba", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL", qualifiers: { sourceNatureOfControl: "right-to-appoint-and-remove-directors" } },
+      { relationshipId: "ldc-ba-owner", subjectEntityId: "ldc", objectEntityId: "ba", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "law-ldc-directors", subjectEntityId: "law", objectEntityId: "ldc", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL", qualifiers: { sourceNatureOfControl: "right-to-appoint-and-remove-directors" } },
+    ],
+  };
+  const control = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL });
+  const all = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.ALL });
+  const voting = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.VOTING });
+  expect(control.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["iag-ba-directors", "law-ldc-directors"]);
+  expect(all.relationships).toHaveLength(4);
+  expect(voting.relationships).toHaveLength(0);
+  expect(control.relationships).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ subjectEntityId: "law", objectEntityId: "ba" }),
+    expect.objectContaining({ subjectEntityId: "ldc", objectEntityId: "ba", relationshipType: "FORMAL_CONTROL_RIGHT" }),
+  ]));
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("source-backed director-control assertions use right wording and no percentage-unknown label", () => {
+  const controlFact = {
+    relationship: "FORMAL_CONTROL_RIGHT",
+    qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors" },
+    evidenceReferences: [{ system: "legacy-ubo-discovery", referenceId: "companies-house:01777777:psc:1", locator: { source: "companies-house" } }],
+  };
+  expect(relationshipAssertionPresentation(controlFact)).toEqual({
+    category: "Control",
+    description: "Right to appoint or remove directors",
+    measurement: null,
+    sourceDescription: "Recorded in Companies House PSC information",
+  });
+  expect(relationshipAssertionPresentation({ relationship: "FORMAL_CONTROL_RIGHT", evidenceReferences: [] })).toEqual(expect.objectContaining({
+    description: "Formal control right reported — details not available in this result",
+    measurement: null,
+  }));
+  expect(formatMeasurement({ type: "UNKNOWN" })).toBe("Value not established", "economic/voting unknown semantics stay unchanged");
 });
 
 test("a source-backed unresolved control assertion retains its canonical branch without manufacturing an edge", () => {
