@@ -94,6 +94,41 @@ test("unsafe live assertions do not block a safely sourced remainder from reachi
   assert.equal(result.snapshots[0].view.graph.relationships[0].relationshipType, "ECONOMIC_OWNERSHIP");
 });
 
+test("ASDA-style mutually impossible current PSC percentage bands stay disputed without blocking the demo evaluation", () => {
+  const normalized = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const template = normalized.result.candidateFacts[0];
+  const impossible = ["TDR GP V", "TDR GP III", "TDR GP I"].map((name, index) => ({
+    ...template,
+    factId: `bellis-75-to-100-${index}`,
+    subject: { entityId: `bellis-owner-${index}`, name, entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] },
+    measurement: { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: false, upperInclusive: true },
+    evidenceReferences: [{ system: "registry", referenceType: "SOURCE_REFERENCE", referenceId: `companies-house:bellis:psc:${index}` }],
+  }));
+  const safeVoting = {
+    ...template,
+    factId: "bellis-safe-voting",
+    subject: { entityId: "bellis-voter", name: "Registry Voter", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] },
+    relationship: "VOTING_RIGHTS",
+    measurement: { type: "EXACT", value: 10 },
+    evidenceReferences: [{ system: "registry", referenceType: "SOURCE_REFERENCE", referenceId: "companies-house:bellis:voting" }],
+  };
+  const session = startReviewReplay({ replayRecord: {
+    replayId: "asda-impossible-minimum-live",
+    subject: normalized.subject,
+    companyContext: normalized.companyContext,
+    discoveryResult: { ...normalized.result, candidateFacts: [...impossible, safeVoting] },
+    savedAt: "2026-09-15T08:00:00.000Z",
+  } });
+  session.sourceState = "LIVE";
+
+  const result = autoReviewDemoSession(session, "2026-09-15T08:01:00.000Z");
+  assert.equal(result.snapshots.length, 1);
+  assert.equal(result.demoAutoReview.operativeClaims, 1);
+  assert.equal(result.demoAutoReview.unresolvedClaims, 3);
+  assert.deepEqual(result.snapshots[0].view.graph.relationships.map(({ relationshipType }) => relationshipType), ["VOTING_RIGHTS"]);
+  assert.equal(result.candidateSources.flatMap(({ candidateFacts }) => candidateFacts).length, 4, "all source assertions remain inspectable");
+});
+
 test("an officer role cannot be promoted to control and interpretive formal control remains unresolved", () => {
   const subject = { name: "Alice", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
   const object = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };

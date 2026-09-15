@@ -107,6 +107,19 @@ function comparableFact(fact) {
   return JSON.stringify({ measurement: fact.measurement || null, qualifiers: fact.qualifiers || null });
 }
 
+function isCurrentFact(fact) {
+  const qualifiers = fact.qualifiers || {};
+  const currentState = normalize(qualifiers.currentState);
+  const current = ["CURRENT", "ACTIVE"].includes(currentState) || qualifiers.isCurrent === true;
+  const ceased = ["CEASED", "HISTORICAL"].includes(currentState) || qualifiers.isCurrent === false
+    || qualifiers.ceased === true || qualifiers.historical === true || Boolean(qualifiers.ceasedAt);
+  return current && !ceased;
+}
+
+function measurementMinimum(measurement) {
+  return measurement.type === "EXACT" ? measurement.value : measurement.lowerBound;
+}
+
 function buildPlan(session) {
   const facts = (session.candidateSources || []).flatMap((source) => source.candidateFacts || []);
   const factById = new Map(facts.map((fact) => [fact.factId, fact]));
@@ -153,12 +166,36 @@ function buildPlan(session) {
   });
   const identityDecisionByPartyKey = new Map(identityDecisions.map((decision) => [decision.candidatePartyKey, decision]));
 
-  const claimDecisions = claimTargets.map((target) => {
+  const otherwiseSafeByClaim = new Map(claimTargets.map((target) => {
     const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
     const endpointsSafe = (targetsByClaim.get(target.claimId) || []).every((partyTarget) => identityDecisionByPartyKey.get(partyTarget.candidatePartyKey)?.action !== "LEAVE_UNRESOLVED");
     const safe = fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
       && sourceBacked(fact) && validMeasurement(fact) && fact.qualifiers?.requiresInterpretation !== true
       && !conflictingFactIds.has(fact.factId) && endpointsSafe;
+    return [target.claimId, safe];
+  }));
+
+  const percentageGroups = new Map();
+  for (const target of claimTargets) {
+    const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
+    if (!otherwiseSafeByClaim.get(target.claimId) || !PERCENTAGE_RELATIONSHIPS.has(fact.relationship) || !isCurrentFact(fact)) continue;
+    const groupKey = `${fact.relationship}:${partyKey(fact.object)}`;
+    if (!percentageGroups.has(groupKey)) percentageGroups.set(groupKey, new Map());
+    const slotKey = `${partyKey(fact.subject)}>${partyKey(fact.object)}:${fact.relationship}:${comparableFact(fact)}`;
+    if (!percentageGroups.get(groupKey).has(slotKey)) percentageGroups.get(groupKey).set(slotKey, []);
+    percentageGroups.get(groupKey).get(slotKey).push(fact);
+  }
+  const impossibleMinimumFactIds = new Set();
+  for (const slots of percentageGroups.values()) {
+    const minimum = [...slots.values()].reduce((total, factsForSlot) => total + measurementMinimum(factsForSlot[0].measurement), 0);
+    if (minimum > 100) {
+      for (const factsForSlot of slots.values()) factsForSlot.forEach((fact) => impossibleMinimumFactIds.add(fact.factId));
+    }
+  }
+
+  const claimDecisions = claimTargets.map((target) => {
+    const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
+    const safe = otherwiseSafeByClaim.get(target.claimId) && !impossibleMinimumFactIds.has(fact.factId);
     return { claimId: target.claimId, resultingState: safe ? "OPERATIVE" : "DISPUTED" };
   });
 
