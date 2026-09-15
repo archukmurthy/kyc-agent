@@ -67,6 +67,7 @@ test("saved replay binds the selected record identity, reaches the graph, and re
   expect(screen.getByText("Selected saved company")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Replay saved research — no provider call/ }));
   expect(await screen.findByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
+  expect(screen.getByText("Saved live replay — provisional demo result")).toBeInTheDocument();
   expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
   expect(window.fetch).toHaveBeenCalledTimes(1);
   const request = JSON.parse(window.fetch.mock.calls[0][1].body);
