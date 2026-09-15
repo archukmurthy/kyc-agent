@@ -66,6 +66,7 @@ test("pure boundaries preserve ranges and filter raw blocked work", () => {
   expect([relationshipCategory("ECONOMIC_OWNERSHIP"), relationshipCategory("VOTING_RIGHTS"), relationshipCategory("SIGNIFICANT_INFLUENCE_OR_CONTROL")]).toEqual(["Ownership", "Voting", "Control"]);
   expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
   expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_DEMO_REVIEW_LIVE");
+  expect(buildResearchRequest({ demoCase: { company: { legalName: "TDR GP V LP", registrationNumber: "SL035224", countryCode: "GB", ownershipType: "PARTNERSHIP" } }, sourceMode: "LIVE" }).payload.companyContext.entityProfile).toBe("LLP");
   expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
 });
 

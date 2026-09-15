@@ -49,6 +49,44 @@ function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
 
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+function sameRegisteredSubject(party, subject) {
+  if (!party || !subject) return false;
+  if (party.entityId && subject.entityId && party.entityId === subject.entityId) return true;
+  const subjectIds = new Set((subject.externalIdentifiers || []).map(({ value }) => normalize(value)).filter(Boolean));
+  return (party.externalIdentifiers || []).some(({ value }) => subjectIds.has(normalize(value)));
+}
+
+function prepareDemoReplayRecord(replayRecord) {
+  const prepared = clone(replayRecord);
+  const requestedProfile = normalize(prepared?.companyContext?.entityProfile) || "COMPANY";
+  const supportingFacts = (prepared?.discoveryResult?.candidateFacts || []).filter((fact) =>
+    fact.type === "RELATIONSHIP"
+      && fact.relationship === "ECONOMIC_OWNERSHIP"
+      && fact.qualifiers?.entityProfile === "LLP"
+      && fact.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
+      && sameRegisteredSubject(fact.object, prepared.subject)
+      && sourceBacked(fact));
+  const effectiveProfile = supportingFacts.length ? "LLP" : requestedProfile;
+  if (effectiveProfile !== requestedProfile) {
+    prepared.companyContext.entityProfile = effectiveProfile;
+    prepared.subject.entityType = effectiveProfile;
+    prepared.replayId = `${prepared.replayId}:demo-profile:${effectiveProfile}`;
+  }
+  return {
+    replayRecord: prepared,
+    reconciliation: {
+      contractVersion: "ubo-demo-target-profile-reconciliation-v1",
+      requestedProfile,
+      effectiveProfile,
+      changed: effectiveProfile !== requestedProfile,
+      basis: supportingFacts.length ? "SOURCE_BACKED_LLP_SURPLUS_ASSET_RELATIONSHIP" : "DEMO_INPUT_PROFILE_RETAINED",
+      sourceCandidateFactIds: supportingFacts.map(({ factId }) => factId).filter(Boolean).sort(),
+    },
+  };
+}
+
 function comparableFact(fact) {
   return JSON.stringify({ measurement: fact.measurement || null, qualifiers: fact.qualifiers || null });
 }
@@ -126,9 +164,9 @@ function autoReviewDemoSession(session, recordedAt = new Date().toISOString()) {
   }
   const plan = buildPlan(session);
   const reviewed = applyDemoAutoReviewDecisions({ session, identityDecisions: plan.identityDecisions, claimDecisions: plan.claimDecisions, recordedAt });
-  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true };
+  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true, ...(session.demoProfileReconciliation ? { profileReconciliation: clone(session.demoProfileReconciliation) } : {}) };
   reviewed.sourceLabel = `Live Discovery · ${reviewed.companyContext.legalEntityName} · provisional demo result`;
   return reviewed;
 }
 
-module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan });
+module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan, prepareDemoReplayRecord });

@@ -2,7 +2,7 @@ export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 
 function entityProfile(ownershipType) {
-  return ownershipType === "LLP" ? "LLP" : "COMPANY";
+  return ["LLP", "PARTNERSHIP"].includes(ownershipType) ? "LLP" : "COMPANY";
 }
 
 export function buildResearchRequest({ demoCase, sourceMode, replayRecord }) {

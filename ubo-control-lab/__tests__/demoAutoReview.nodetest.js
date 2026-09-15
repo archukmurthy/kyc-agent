@@ -2,8 +2,9 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { autoReviewDemoSession, buildPlan } = require("../server/demoAutoReview");
+const { autoReviewDemoSession, buildPlan, prepareDemoReplayRecord } = require("../server/demoAutoReview");
 const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
+const tdrPscFixture = require("../fixtures/tdr-psc.json");
 
 function replaySession(fixtureId) {
   const normalized = normalizedFixtureInput({ fixtureId });
@@ -98,4 +99,30 @@ test("an officer role cannot be promoted to control and interpretive formal cont
   const parties = facts.map((fact, index) => ({ candidatePartyKey: `party-${index}`, claimId: claims[index].claimId, party: fact.subject }));
   const plan = buildPlan({ caseId: "demo", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: object }] });
   assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "DISPUTED"]);
+});
+
+test("TDR limited-partnership surplus-asset evidence selects the existing LLP review path without changing source semantics", () => {
+  const subject = tdrPscFixture.scenario.context.customer;
+  const original = {
+    replayId: "tdr-live-company-default",
+    subject: { ...subject, entityType: "COMPANY" },
+    companyContext: { legalEntityName: subject.name, registrationNumber: "SL035224", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    discoveryResult: tdrPscFixture.scenario.steps[0].response,
+    savedAt: "2026-09-15T08:00:00.000Z",
+  };
+  const prepared = prepareDemoReplayRecord(original);
+  assert.equal(original.companyContext.entityProfile, "COMPANY", "the captured live replay remains unchanged");
+  assert.equal(prepared.replayRecord.companyContext.entityProfile, "LLP");
+  assert.equal(prepared.reconciliation.basis, "SOURCE_BACKED_LLP_SURPLUS_ASSET_RELATIONSHIP");
+  const session = startReviewReplay({ replayRecord: prepared.replayRecord });
+  session.sourceState = "LIVE";
+  session.demoProfileReconciliation = prepared.reconciliation;
+  const result = autoReviewDemoSession(session, "2026-09-15T08:01:00.000Z");
+  const relationships = result.snapshots[0].view.graph.relationships;
+  assert.deepEqual(relationships.map(({ relationshipType }) => relationshipType).sort(), ["ECONOMIC_OWNERSHIP", "SIGNIFICANT_INFLUENCE_OR_CONTROL"]);
+  assert.deepEqual(relationships.find(({ relationshipType }) => relationshipType === "ECONOMIC_OWNERSHIP").measurement, {
+    type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true,
+  });
+  assert.equal(result.demoAutoReview.unresolvedClaims, 1, "combined appointment/removal remains unresolved for explicit interpretation");
+  assert.equal(result.demoAutoReview.profileReconciliation.effectiveProfile, "LLP");
 });

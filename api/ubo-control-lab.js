@@ -37,7 +37,7 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
-const { autoReviewDemoSession } = require("../ubo-control-lab/server/demoAutoReview");
+const { autoReviewDemoSession, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -139,15 +139,19 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
-async function startSuccessorLive(payload) {
+async function startSuccessorLive(payload, { demoProfileReconciliation = false } = {}) {
   const baseline = await startLive({
     ...payload,
     transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
   });
-  const successor = startReviewReplay({ replayRecord: baseline.replayCapture, profileId: payload?.profileId || "NOT_PROVIDED" });
+  const prepared = demoProfileReconciliation
+    ? prepareDemoReplayRecord(baseline.replayCapture)
+    : { replayRecord: baseline.replayCapture, reconciliation: null };
+  const successor = startReviewReplay({ replayRecord: prepared.replayRecord, profileId: payload?.profileId || "NOT_PROVIDED" });
   successor.sourceState = "LIVE";
   successor.sourceLabel = `Live Discovery · ${successor.companyContext.legalEntityName}`;
   successor.replayCapture = baseline.replayCapture;
+  if (prepared.reconciliation) successor.demoProfileReconciliation = prepared.reconciliation;
   return successor;
 }
 
@@ -191,7 +195,7 @@ module.exports = async function handler(req, res) {
         return send(res, 200, await startSuccessorLive(input.payload));
       }
       case OPERATIONS.START_DEMO_REVIEW_LIVE:
-        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload)));
+        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, { demoProfileReconciliation: true })));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:
         return send(res, 200, applyReviewDecisions(input.payload));
       case OPERATIONS.CHANGE_REVIEW_PROFILE:
