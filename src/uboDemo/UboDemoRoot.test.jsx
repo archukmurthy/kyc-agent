@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoOpenQuestions, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
+import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -102,6 +102,17 @@ test("scope and relationship controls filter a projection independently without 
   expect(fullControl.nodes).toHaveLength(4);
   expect(fullControl.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["disconnected-control"]);
   expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("a source-backed unresolved control assertion retains its canonical branch without manufacturing an edge", () => {
+  const graph = { subjectEntityId: "subject", nodes: [{ entityId: "subject", primaryName: "Target LP" }, { entityId: "llp", primaryName: "TDR Capital LLP" }, { entityId: "gp", primaryName: "GP V Limited" }], relationships: [{ relationshipId: "llp-gp", subjectEntityId: "llp", objectEntityId: "gp", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" }] };
+  const result = { entityLabels: { subject: "Target LP", llp: "TDR Capital LLP", gp: "GP V Limited" }, entityContexts: { subject: { entityId: "subject", legalName: "Target LP", registrationNumber: "SL1" }, llp: { entityId: "llp", legalName: "TDR Capital LLP", registrationNumber: "OC1" }, gp: { entityId: "gp", legalName: "GP V Limited", registrationNumber: "SC1" } }, candidateSources: [{ candidateFacts: [{ type: "RELATIONSHIP", relationship: "FORMAL_CONTROL_RIGHT", subject: { name: "GP V Limited", externalIdentifiers: [{ value: "SC1" }] }, object: { name: "Target LP", externalIdentifiers: [{ value: "SL1" }] } }] }] };
+  const relevant = demoSourceRelevantEntityIds(graph, result);
+  const visible = projectDemoGraph(graph, { additionalRelevantEntityIds: relevant });
+  expect(relevant).toEqual(["gp"]);
+  expect(visible.nodes.map(({ entityId }) => entityId).sort()).toEqual(["gp", "llp", "subject"]);
+  expect(visible.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["llp-gp"]);
+  expect(visible.relationships).not.toEqual(expect.arrayContaining([expect.objectContaining({ relationshipType: "FORMAL_CONTROL_RIGHT" })]));
 });
 
 test("open-item accounting presents every cause while preserving the no-customer-action planner outcome", () => {

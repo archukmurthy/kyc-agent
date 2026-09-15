@@ -7,7 +7,7 @@ import {
 import {
   accountOpenItems, allCandidateFacts, assertionSourceState, compactResearchResult, demoOpenQuestions, demoReviewPresentations,
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
-  projectDemoGraph, relationshipCategory, runDemoResearch,
+  demoSourceRelevantEntityIds, projectDemoGraph, relationshipCategory, runDemoResearch,
 } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
 import "./uboDemo.css";
@@ -120,7 +120,8 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onDisplayChange }) 
   const scope = result.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT;
   const dimension = result.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL;
   const [selectionCommand, setSelectionCommand] = useState(null);
-  const filteredGraph = useMemo(() => projectDemoGraph(view?.graph, { scope, dimension }), [view?.graph, scope, dimension]);
+  const sourceRelevantIds = useMemo(() => demoSourceRelevantEntityIds(view?.graph, result), [view?.graph, result]);
+  const filteredGraph = useMemo(() => projectDemoGraph(view?.graph, { scope, dimension, additionalRelevantEntityIds: sourceRelevantIds }), [view?.graph, scope, dimension, sourceRelevantIds]);
   const reviewPresentations = useMemo(() => demoReviewPresentations(view, result), [view, result]);
   const showOnMap = (selection, needId) => {
     if (!selection) return;

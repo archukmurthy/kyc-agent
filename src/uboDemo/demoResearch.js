@@ -253,11 +253,26 @@ function graphRelationshipDimension(relationship) {
   return DEMO_GRAPH_DIMENSIONS.CONTROL;
 }
 
-export function projectDemoGraph(graph, { scope = DEMO_GRAPH_SCOPES.RELEVANT, dimension = DEMO_GRAPH_DIMENSIONS.ALL } = {}) {
+export function demoSourceRelevantEntityIds(graph, result = {}) {
+  if (!graph) return [];
+  const entities = Object.fromEntries(unique([...Object.keys(result.entityLabels || {}), ...Object.keys(result.registryContexts || {}), ...Object.keys(result.entityContexts || {})]).map((entityId) => [entityId, {
+    entityId,
+    legalName: result.entityContexts?.[entityId]?.legalName || result.entityLabels?.[entityId] || result.registryContexts?.[entityId]?.legalName,
+    registrationNumber: result.entityContexts?.[entityId]?.registrationNumber || result.registryContexts?.[entityId]?.registrationNumber,
+  }]));
+  const subject = entities[graph.subjectEntityId] || { legalName: result.entityLabels?.[graph.subjectEntityId] || graph.nodes?.find(({ entityId }) => entityId === graph.subjectEntityId)?.primaryName };
+  const partyRegistration = (party) => (party?.externalIdentifiers || []).map(({ value }) => normalized(value)).find(Boolean);
+  const matchesContext = (party, context) => party && context && (normalized(party.name) === normalized(context.legalName)
+    || (partyRegistration(party) && partyRegistration(party) === normalized(context.registrationNumber)));
+  return unique(allCandidateFacts(result).filter(({ fact }) => fact.type === "RELATIONSHIP" && matchesContext(fact.object, subject)).flatMap(({ fact }) =>
+    Object.values(entities).filter((context) => matchesContext(fact.subject, context)).map(({ entityId }) => entityId)));
+}
+
+export function projectDemoGraph(graph, { scope = DEMO_GRAPH_SCOPES.RELEVANT, dimension = DEMO_GRAPH_DIMENSIONS.ALL, additionalRelevantEntityIds = [] } = {}) {
   if (!graph) return graph;
   const relationships = graph.relationships || [];
-  const relevantIds = new Set([graph.subjectEntityId]);
-  const pending = [graph.subjectEntityId];
+  const relevantIds = new Set([graph.subjectEntityId, ...additionalRelevantEntityIds]);
+  const pending = [...relevantIds];
   while (pending.length) {
     const targetId = pending.shift();
     relationships.filter(({ objectEntityId }) => objectEntityId === targetId).forEach(({ subjectEntityId }) => {
