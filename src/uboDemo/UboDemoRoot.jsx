@@ -5,7 +5,7 @@ import {
   readDemoSession, readLabReplays, saveLabReplay, validateDemoDraft, writeDemoSession,
 } from "./demoSession";
 import {
-  allCandidateFacts, compactResearchResult, executableCustomerBundles, formatMeasurement,
+  allCandidateFacts, compactResearchResult, demoOpenQuestions, formatMeasurement,
   internalReviewCount, relationshipCategory, runDemoResearch,
 } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
@@ -48,14 +48,15 @@ function ResearchProgress({ company }) {
   return <main className="ubo-demo-main"><section className="ubo-demo-research-card" aria-live="polite"><div className="ubo-demo-spinner" /><span className="ubo-demo-eyebrow">Research in progress</span><h1>Researching {company.legalName}</h1><ul className="ubo-demo-stage-list"><li>Researching company records</li><li>Following ownership and control relationships</li><li>Building ownership structure</li><li>Checking what is still unresolved</li></ul><p>These labels describe the operation in progress; they do not claim a stage has completed.</p></section></main>;
 }
 
-function GraphFrame({ projection, entityLabels }) {
+function GraphFrame({ projection, entityLabels, registryContexts }) {
   const frame = useRef(null);
   const send = useCallback(() => frame.current?.contentWindow?.postMessage({
     type: "ubo-demo-graph-projection-v1",
     projection,
     entityLabels,
+    registryContexts,
     viewportHeight: Math.max(600, Math.min(820, Math.round(window.innerHeight * 0.68))),
-  }, window.location.origin), [projection, entityLabels]);
+  }, window.location.origin), [projection, entityLabels, registryContexts]);
   useEffect(() => {
     send();
     window.addEventListener("resize", send);
@@ -66,15 +67,13 @@ function GraphFrame({ projection, entityLabels }) {
 
 function Assertions({ result }) {
   const rows = allCandidateFacts(result);
-  return <details className="ubo-demo-assertions"><summary><strong>Research assertions and source facts</strong><span>{rows.length} assertions · click to inspect</span></summary><div className="ubo-demo-assertion-list">{rows.map(({ fact, source }, index) => <article key={fact.factId || index}><span className="ubo-demo-kind">{relationshipCategory(fact.relationship)}</span><p><strong>{fact.subject?.name || "Source party"}</strong> → <strong>{fact.object?.name || "Target party"}</strong></p><p>{String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ")} · {formatMeasurement(fact.measurement)}</p><small>{fact.qualifiers?.currentState || "Currentness not supplied"} · {source.sourceState || source.capability || "Source"} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>)}</div></details>;
+  return <details className="ubo-demo-assertions"><summary><strong>Research assertions and source facts</strong><span>{rows.length} assertions · click to inspect</span></summary><div className="ubo-demo-assertion-list">{rows.map(({ fact, source }, index) => fact.type === "ENTITY_ATTRIBUTE" ? <article key={fact.factId || index}><span className="ubo-demo-kind">Registry context</span><p><strong>{fact.subject?.name || "Registry entity"}</strong></p><p>{Object.entries(fact.value || {}).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value}`).join(" · ")}</p><small>{source.sourceState || source.capability || "Source"} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article> : <article key={fact.factId || index}><span className="ubo-demo-kind">{relationshipCategory(fact.relationship)}</span><p><strong>{fact.subject?.name || "Source party"}</strong> → <strong>{fact.object?.name || "Target party"}</strong></p><p>{String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ")} · {formatMeasurement(fact.measurement)}</p><small>{fact.qualifiers?.currentState || "Currentness not supplied"} · {source.sourceState || source.capability || "Source"} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>)}</div></details>;
 }
 
-function humanAction(type) { return ({ REQUEST_EXTERNAL_EVIDENCE: "Provide supporting ownership evidence", DELEGATE_CUSTOMER_WORK: "Ask an authorised colleague to help", PROVIDE_STRUCTURED_INFORMATION: "Provide the missing ownership information", CONFIRM_INFORMATION: "Confirm the ownership information" })[type] || String(type || "Customer action").replaceAll("_", " "); }
-
 function OpenQuestions({ view }) {
-  const bundles = executableCustomerBundles(view);
+  const questions = demoOpenQuestions(view);
   const reviewCount = internalReviewCount(view);
-  return <aside className="ubo-demo-questions"><span className="ubo-demo-eyebrow">Your next step</span><h2>Open questions</h2>{bundles.length ? bundles.map((bundle) => <section key={bundle.bundleId}><h3>{bundle.canonicalSubject?.displayName || bundle.canonicalSubject?.name || "Ownership information"}</h3>{(bundle.permittedSemanticActions || []).filter((a) => a.executable).map((a) => <p key={a.sourceResolutionActionId || a.actionType}>{humanAction(a.actionType)}</p>)}</section>) : <div className="ubo-demo-no-questions"><strong>No questions for you right now.</strong><p>The current plan has no executable customer work.</p></div>}{reviewCount > 0 && <p className="ubo-demo-internal">Internal review is still in progress ({reviewCount}). This is not a customer question.</p>}</aside>;
+  return <aside className="ubo-demo-questions"><span className="ubo-demo-eyebrow">Your next step</span><h2>Open questions</h2>{questions.length ? questions.map((question) => <section key={`${question.kind}:${question.informationNeedIds.join(":")}`} data-information-need-ids={question.informationNeedIds.join(",")}><span className="ubo-demo-question-kind">{question.kind === "EVIDENCE_REQUEST" ? "Evidence request" : "Question"}</span><h3>{question.title}</h3><p>{question.body}</p>{question.state === "DEFERRED_SYSTEM_FIRST" && <small>Shown for transparency. Current system research runs first.</small>}{!question.contentApproved && <small>Demo wording only · production customer copy is not approved.</small>}</section>) : <div className="ubo-demo-no-questions"><strong>Nothing needed from you right now.</strong><p>We are still reviewing parts of the ownership structure.</p></div>}{reviewCount > 0 && <p className="ubo-demo-internal">Internal review is still in progress ({reviewCount}). This is not a customer question.</p>}</aside>;
 }
 
 function ResearchResult({ demoCase, result, onEdit, onRetry }) {
@@ -82,7 +81,7 @@ function ResearchResult({ demoCase, result, onEdit, onRetry }) {
   const pending = (result.decisionTargets?.candidateParties?.length || 0) + (result.decisionTargets?.candidateClaims?.length || 0);
   return <main className="ubo-demo-results">
     <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay" : "LIVE RESEARCH — PROVISIONAL DEMO RESULT"}</span></header>
-    {view ? <div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><span>Ownership · Voting · Control</span></div><GraphFrame projection={view.graph} entityLabels={result.entityLabels} /><Assertions result={result} /></section><OpenQuestions view={view} /></div> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><OpenQuestions view={null} /></div></>}
+    {view ? <div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><span>Ownership · Voting · Control</span></div><GraphFrame projection={view.graph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} /><Assertions result={result} /></section><OpenQuestions view={view} /></div> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><OpenQuestions view={null} /></div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button></div>
   </main>;
 }

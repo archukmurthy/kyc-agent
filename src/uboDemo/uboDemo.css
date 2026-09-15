@@ -238,6 +238,8 @@
 .ubo-demo-questions > section { margin-top: 16px; padding: 16px; border-radius: 12px; background: var(--ubo-demo-mint); }
 .ubo-demo-questions h3 { margin: 0 0 8px; font-size: 14px; }
 .ubo-demo-questions section p { margin: 6px 0; font-size: 12px; }
+.ubo-demo-question-kind { display: inline-flex; margin-bottom: 6px; padding: 4px 8px; border-radius: 999px; background: #e5f1ee; color: var(--ubo-demo-green); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.ubo-demo-questions section small { display: block; margin-top: 9px; color: #6d7774; }
 .ubo-demo-no-questions { margin-top: 18px; padding: 18px; border-radius: 12px; background: #f3f6f5; }
 .ubo-demo-no-questions p, .ubo-demo-internal { margin: 7px 0 0; color: var(--ubo-demo-muted); font-size: 11px; line-height: 1.5; }
 .ubo-demo-internal { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ubo-demo-border); }

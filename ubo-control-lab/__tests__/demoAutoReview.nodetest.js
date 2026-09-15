@@ -22,7 +22,7 @@ function replaySession(fixtureId) {
 
 test("demo LIVE research bypasses a pre-fix investigation cache without mutating the translated request", () => {
   const body = { entityName: "TDR CAPITAL GENERAL PARTNER V L.P.", registrationNumber: "SL035224", jurisdiction: "GB" };
-  assert.deepEqual(prepareDemoLiveDiscoveryBody(body), { ...body, forceRefresh: true });
+  assert.deepEqual(prepareDemoLiveDiscoveryBody(body), { ...body, forceRefresh: true, demoRegistryContext: true });
   assert.equal(body.forceRefresh, undefined);
 });
 
@@ -140,6 +140,19 @@ test("an officer role cannot be promoted to control and interpretive formal cont
   const parties = facts.map((fact, index) => ({ candidatePartyKey: `party-${index}`, claimId: claims[index].claimId, party: fact.subject }));
   const plan = buildPlan({ caseId: "demo", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: object }] });
   assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "DISPUTED"]);
+});
+
+test("an unqualified legacy ownership label cannot be auto-reviewed as company shares", () => {
+  const subject = { name: "Source article holder", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const object = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const fact = { factId: "unqualified-ownership", type: "RELATIONSHIP", subject, object, relationship: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value: 5.7 }, evidenceReferences: [{ referenceId: "web-source" }] };
+  const plan = buildPlan({
+    caseId: "demo",
+    candidateSources: [{ candidateFacts: [fact] }],
+    decisionTargets: { candidateParties: [{ candidatePartyKey: "party", claimId: "claim", party: subject }], candidateClaims: [{ claimId: "claim", originatingCandidateFact: { candidateFactId: fact.factId } }] },
+    entityDirectory: [{ entityId: "target", party: object }],
+  });
+  assert.equal(plan.claimDecisions[0].resultingState, "DISPUTED");
 });
 
 test("TDR limited-partnership surplus-asset evidence selects the existing LLP review path without changing source semantics", () => {

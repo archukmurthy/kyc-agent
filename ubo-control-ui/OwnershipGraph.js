@@ -363,7 +363,7 @@
   }
 
   function badgesFor(node, projection) {
-    const output = [];
+    const output = [...(node.registryContext?.badges || [])];
     const add = (semantic, label, css) => { if ((node.semantics || []).includes(semantic)) output.push({ semantic, label, css }); };
     add("SUBJECT", "Customer", "subject");
     add("QUALIFYING_PERSON", "Qualifying", "qualifying");
@@ -426,6 +426,39 @@
       h("span", null, `${relationshipBasis(relationship)} · ${relationshipValue(relationship, true)}`)))));
   }
 
+  function DefinitionRows({ rows }) {
+    return rows.filter(([, value]) => value).map(([label, value]) => h(React.Fragment, { key: label }, h("dt", null, label), h("dd", null, value)));
+  }
+
+  function RegistryDetails({ registry, node }) {
+    if (!registry) return null;
+    const sources = registry.sources || [];
+    const effectiveDate = registry.pscExemptionEffectiveFrom
+      ? new Date(`${registry.pscExemptionEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+      : null;
+    return h(React.Fragment, null,
+      h("section", { className: "ug-detail-section ug-registry-context" },
+        h("h4", null, "Registry / legal form"),
+        h("dl", { className: "ug-definition-list" }, h(DefinitionRows, { rows: [
+          ["Legal name", registry.legalName || node.displayName],
+          ["Registration number", registry.registrationNumber],
+          ["Legal form", registry.legalForm],
+          ["Governing law", registry.governingLaw],
+          ["Registry", registry.registryName],
+          ["Place registered", registry.placeRegistered !== registry.registryName ? registry.placeRegistered : null],
+        ] })),
+        sources.length > 0 && h("ul", { className: "ug-reference-list" }, sources.map((source) => h("li", { key: `${source.system}:${source.referenceId}` }, h("strong", null, source.locator?.source || source.system), h("span", null, `${source.referenceType} · ${source.referenceId}`))))),
+      h("section", { className: "ug-detail-section" }, h("h4", null, "Jurisdiction"), h("p", null, registry.incorporatedIn || registry.jurisdiction || node.jurisdiction || "Not supplied")),
+      registry.pscStatus && h("section", { className: "ug-detail-section ug-registry-status" },
+        h("h4", null, "Special registry status"),
+        h("dl", { className: "ug-definition-list" }, h(DefinitionRows, { rows: [
+          ["PSC status", registry.pscStatus === "EXEMPT" ? "Exempt from PSC information requirement" : registry.pscStatus],
+          ["Reason", registry.pscExemptionReason],
+          ["Effective from", effectiveDate],
+        ] }))),
+      registry.researchCoverage && h("section", { className: "ug-detail-section" }, h("h4", null, "Research coverage"), h("p", null, registry.researchCoverage.reason), h("p", { className: "ug-audit-line" }, registry.researchCoverage.state)));
+  }
+
   function EntityDetails({ node, projection, detailLevel, onSelect }) {
     const qualification = projection.qualifications.find((item) => item.entityId === node.entityId);
     const calculations = projection.calculations.filter((item) => item.subjectEntityId === node.entityId);
@@ -438,6 +471,7 @@
     const conflicts = projection.conflicts.filter((item) => (item.affectedEntityIds || []).includes(node.entityId));
     const reviews = projection.reviews.filter((item) => (item.entityIds || []).includes(node.entityId));
     const category = CATEGORIES[node.category] || CATEGORIES.UNKNOWN;
+    const registry = node.registryContext || null;
     return h(React.Fragment, null,
       h("p", { className: "ug-selection-context" }, node.entityId === projection.subject.entityId
         ? "Customer under review — showing relationships that reach this entity"
@@ -445,6 +479,7 @@
       h("div", { className: "ug-detail-heading" }, h("span", { className: `ug-detail-icon ${category.css}` }, category.icon), h("div", null,
         h("p", { className: "ug-eyebrow" }, category.label), h("h3", null, node.displayName),
         h("p", { className: "ug-muted" }, [node.jurisdiction, node.entityTypeMetadata?.sourceEntityType].filter(Boolean).join(" · ")))),
+      h(RegistryDetails, { registry, node }),
       h(RelationshipContextList, { title: "Direct incoming relationships", relationships: relationshipContext.incoming, projection, onSelect }),
       h(RelationshipContextList, { title: "Direct outgoing relationships", relationships: relationshipContext.outgoing, projection, onSelect }),
       h(RelationshipContextList, { title: node.entityId === projection.subject.entityId ? "Subject-centred relationship network" : "Downstream route to customer", relationships: downstreamRelationships, projection, onSelect }),
@@ -745,6 +780,9 @@
       const position = layout.positions.get(node.entityId);
       const category = CATEGORIES[node.category] || CATEGORIES.UNKNOWN;
       const badges = badgesFor(node, projection);
+      const visibleBadges = node.registryContext
+        ? badges.slice(0, 3).map((badge, index) => ({ badge, x: 11 + (index * 61), width: 58, textX: 29, maxLength: 10 }))
+        : badges.slice(0, 2).map((badge, index) => ({ badge, x: 20 + (index * 84), width: 78, textX: 39, maxLength: 13 }));
       const selected = selection?.kind === "entity" && selection.id === node.entityId;
       const connected = selected || activeIds.size === 0 || layout.relationships.some((relationship) => activeIds.has(relationship.relationshipId) && (relationship.sourceEntityId === node.entityId || relationship.targetEntityId === node.entityId));
       const activate = () => select({ kind: "entity", id: node.entityId });
@@ -752,7 +790,7 @@
         h("rect", { className: "ug-node-shape", width: NW, height: NH, rx: node.category === "NATURAL_PERSON" ? 44 : 18 }),
         unresolvedEntities.has(node.entityId) && h("rect", { className: "ug-unresolved-outline", x: -7, y: -7, width: NW + 14, height: NH + 14, rx: node.category === "NATURAL_PERSON" ? 51 : 24 }),
         h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, category.label),
-        badges.slice(0, 2).map((badge, index) => h("g", { key: badge.semantic, className: `ug-svg-badge ${badge.css}`, transform: `translate(${20 + (index * 84)} 65)` }, h("rect", { width: 78, height: 19, rx: 9 }), h("text", { x: 39, y: 13, textAnchor: "middle" }, short(badge.label, 13)))));
+        visibleBadges.map(({ badge, x, width, textX, maxLength }) => h("g", { key: badge.semantic, className: `ug-svg-badge ${badge.css}`, transform: `translate(${x} 65)` }, h("rect", { width, height: 19, rx: 9 }), h("text", { x: textX, y: 13, textAnchor: "middle" }, short(badge.label, maxLength)))));
     });
 
     const stateButtons = [

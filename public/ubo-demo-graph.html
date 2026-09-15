@@ -17,9 +17,10 @@
       window.addEventListener("message", function (event) {
         if (event.origin !== window.location.origin || !event.data || event.data.type !== "ubo-demo-graph-projection-v1") return;
         var labels = event.data.entityLabels || {};
+        var registryContexts = event.data.registryContexts || {};
         var projection = Object.assign({}, event.data.projection, {
           nodes: event.data.projection.nodes.map(function (node) {
-            return labels[node.entityId] ? Object.assign({}, node, { primaryName: labels[node.entityId] }) : node;
+            return Object.assign({}, node, labels[node.entityId] ? { primaryName: labels[node.entityId] } : {}, registryContexts[node.entityId] ? { registryContext: registryContexts[node.entityId] } : {});
           })
         });
         root.render(React.createElement(UboControlUI.OwnershipGraph, {

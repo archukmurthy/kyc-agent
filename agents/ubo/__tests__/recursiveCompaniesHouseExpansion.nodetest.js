@@ -101,6 +101,48 @@ test("Companies House identifiers normalize prefixes while preserving leading ze
   assert.equal(normalizeCompaniesHouseNumber("00445790"), "00445790");
 });
 
+test("demo registry context preserves IAG source identity without changing its three relationship dimensions", async () => {
+  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
+  process.env.COMPANIES_HOUSE_API_KEY = "offline-test-key";
+  const psc = corporate("International Consolidated Airlines Group S.A", "M-492,129", "Spanish Public Company-Sociedad Anonima", [
+    "ownership-of-shares-75-to-100-percent", "voting-rights-25-to-50-percent", "right-to-appoint-and-remove-directors",
+  ]);
+  psc.identification = { ...psc.identification, legal_authority: "Law Of Spain", country_registered: "Spain", place_registered: "Madrid Mercantile Register" };
+  const fetchImpl = async (url) => response(String(url).endsWith("/persons-with-significant-control")
+    ? { items: [psc] }
+    : { company_name: "BRITISH AIRWAYS PLC", type: "plc", jurisdiction: "england-wales", registered_office_address: { country: "United Kingdom" } });
+  try {
+    const result = await companiesHouseOwnershipAdapter({ entity: { name: "BRITISH AIRWAYS PLC", type: "company", jurisdiction: "GB", registrationNumber: "01777777" }, tenantConfig: { demoRegistryContext: true }, fetchImpl });
+    assert.equal(result.statements[0].owner.jurisdiction, "ES");
+    assert.deepEqual(result.statements.map(({ metadata }) => metadata.relationshipConcept), ["ECONOMIC_OWNERSHIP", "VOTING_RIGHTS", "APPOINT_OR_REMOVE_PERSONS"]);
+    const context = result.evidence.find(({ registryContextAssertion }) => registryContextAssertion?.subject?.name === psc.name).registryContextAssertion.value;
+    assert.deepEqual(context, { legalName: psc.name, registrationNumber: "M-492,129", legalForm: "Spanish Public Company-Sociedad Anonima", governingLaw: "Law Of Spain", incorporatedIn: "Spain", placeRegistered: "Madrid Mercantile Register", registryName: "Madrid Mercantile Register" });
+  } finally {
+    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
+  }
+});
+
+test("demo registry context preserves Law Debenture active PSC exemption as a source fact without creating an owner", async () => {
+  const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
+  process.env.COMPANIES_HOUSE_API_KEY = "offline-test-key";
+  const fetchImpl = async (url) => {
+    if (String(url).endsWith("/exemptions")) return response({ exemptions: { psc_exempt_as_trading_on_eu_regulated_market: { exemption_type: "psc-exempt-as-trading-on-eu-regulated-market", items: [{ exempt_from: "2021-05-25" }] } } });
+    if (String(url).endsWith("/persons-with-significant-control")) return response({ items: [] });
+    return response({ company_name: "THE LAW DEBENTURE CORPORATION P.L.C.", type: "plc", jurisdiction: "england-wales", registered_office_address: { country: "United Kingdom" }, links: { exemptions: "/company/00030397/exemptions" } });
+  };
+  try {
+    const result = await companiesHouseOwnershipAdapter({ entity: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", type: "company", jurisdiction: "GB", registrationNumber: "00030397" }, tenantConfig: { demoRegistryContext: true }, fetchImpl });
+    assert.equal(result.statements.length, 0);
+    const exemption = result.evidence.find(({ id }) => id.endsWith(":exemptions"));
+    assert.deepEqual(exemption.registryContextAssertion.value, { pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25", pscExemptionType: "psc-exempt-as-trading-on-eu-regulated-market" });
+    assert.equal(exemption.apiPath, "/company/00030397/exemptions");
+  } finally {
+    if (previousKey === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousKey;
+  }
+});
+
 test("OC302604 expands identically as a root and as a recursively discovered control holder", async () => {
   const childRun = await runRoot("SL035224", "TDR CAPITAL GENERAL PARTNER V L.P.");
   const rootRun = await runRoot("OC302604", "TDR CAPITAL LLP");

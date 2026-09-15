@@ -154,6 +154,29 @@ test("accessible summary names the graph and describes its semantic state", () =
   } finally { rendered.cleanup(); }
 });
 
+test("source-backed registry context renders compact badges and ordered inspector details", () => {
+  const context = graphProjection(["customer"], []);
+  context.nodes[0].registryContext = {
+    legalName: "THE LAW DEBENTURE CORPORATION P.L.C.", registrationNumber: "00030397", legalForm: "Public limited company (PLC)", incorporatedIn: "United Kingdom",
+    pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25",
+    researchCoverage: { state: "TERMINAL_SOURCE_STATUS", reason: "Companies House records a current PSC-information exemption." },
+    badges: [{ semantic: "REGISTRY_PLC", label: "PLC", css: "registry" }, { semantic: "PSC_EXEMPT", label: "PSC exempt", css: "special" }],
+    sources: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "companies-house:00030397:exemptions" }],
+  };
+  const rendered = renderGraph(context, { detailLevel: DETAIL_LEVEL.CUSTOMER });
+  try {
+    const node = rendered.container.querySelector(".ug-node");
+    assert.match(node.getAttribute("aria-label"), /PLC.*PSC exempt/i);
+    rendered.click(node);
+    const text = rendered.container.textContent;
+    assert.ok(text.indexOf("Registry / legal form") < text.indexOf("Jurisdiction"));
+    assert.ok(text.indexOf("Jurisdiction") < text.indexOf("Special registry status"));
+    assert.ok(text.indexOf("Special registry status") < text.indexOf("Research coverage"));
+    assert.match(text, /25 May 2021/);
+    assert.match(text, /Voting shares admitted to trading on an EU regulated market/);
+  } finally { rendered.cleanup(); }
+});
+
 test("demo composition collapses the idle inspector and uses a fixed, bounded inspection viewport", () => {
   const rendered = renderGraph(projection("UI07"), { collapseIdleInspector: true, fixedViewportHeight: true, boundedViewportNavigation: true, height: 640 });
   try {

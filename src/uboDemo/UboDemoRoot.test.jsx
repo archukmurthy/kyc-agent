@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { buildResearchRequest, compactResearchResult, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
+import { buildResearchRequest, compactResearchResult, demoOpenQuestions, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -42,8 +42,7 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   expect(disclosure).not.toHaveAttribute("open");
   fireEvent.click(screen.getByText(/1 assertions · click to inspect/));
   expect(screen.getByText("Owner Ltd", { selector: "strong" })).toBeInTheDocument();
-  expect(screen.getByText(/Provide the missing ownership information/)).toBeInTheDocument();
-  expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
   const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
   const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
@@ -55,7 +54,8 @@ test("a response without an evaluated snapshot exposes no invented graph or ques
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: /Explicit review is required/ })).toBeInTheDocument();
   expect(screen.getByText(/2 candidate identity or claim decisions remain/)).toBeInTheDocument();
-  expect(screen.getByText("No questions for you right now.")).toBeInTheDocument();
+  expect(screen.getByText("Nothing needed from you right now.")).toBeInTheDocument();
+  expect(screen.getByText("We are still reviewing parts of the ownership structure.")).toBeInTheDocument();
 });
 
 test("refresh restores the normalized result and Start new case clears it", async () => {
@@ -82,6 +82,55 @@ test("compact demo result retains customer-readable entity labels separately fro
     ],
   }, "LIVE");
   expect(compact.entityLabels).toEqual({ owner: "Owner Ltd", target: "Target Ltd" });
+  expect(compact.view.graph).toBe(projection);
+});
+
+test("demo presenter preserves planner routes, keeps evidence as evidence and groups content-gated questions", () => {
+  const view = {
+    informationNeeds: [
+      { needId: "need-evidence", concept: "INDEPENDENT_CORROBORATION" },
+      { needId: "need-layer", concept: "LAYER_QUALIFIER" },
+      { needId: "need-current", concept: "RELATIONSHIP_CURRENTNESS" },
+      { needId: "need-trust", concept: "TRUST_STATUS" },
+      { needId: "need-internal", concept: "IDENTITY_AGGREGATION" },
+    ],
+    journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } },
+    plan: {
+      state: "SYSTEM_RESOLUTION",
+      customerActions: [{ actionId: "action-evidence", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", coveredInformationNeedIds: ["need-evidence"], coveredRequirementIds: ["UBO-R08"] }],
+    },
+    snapshot: { decisionContent: { resolutionOptionsV2: [
+      { optionId: "option-layer", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-layer", "need-current"], requirementIds: ["UBO-R01"], contentReadiness: "READY" },
+      { optionId: "option-trust", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-trust"], requirementIds: ["UBO-R11"], contentReadiness: "REQUIRES_POLICY_CONTENT" },
+      { optionId: "option-internal", actor: "INTERNAL", semanticActionType: "INTERNAL_REVIEW", informationNeedIds: ["need-internal"], requirementIds: ["UBO-R02"], contentReadiness: "NOT_REQUIRED" },
+    ] } },
+  };
+  const presented = demoOpenQuestions(view);
+  expect(presented.map(({ kind }) => kind)).toContain("EVIDENCE_REQUEST");
+  expect(presented.find(({ kind }) => kind === "EVIDENCE_REQUEST").informationNeedIds).toEqual(["need-evidence"]);
+  expect(presented.filter(({ title }) => title === "Remaining ownership structure")).toHaveLength(1);
+  expect(presented.find(({ title }) => title === "Trust involvement")).toEqual(expect.objectContaining({ state: "DEMO_CONTENT_FALLBACK", contentApproved: false, optionIds: ["option-trust"] }));
+  expect(presented.flatMap(({ informationNeedIds }) => informationNeedIds)).not.toContain("need-internal");
+});
+
+test("compact result projects source-backed foreign and PSC-exempt registry context without changing graph semantics", () => {
+  const registryFacts = [
+    { factId: "iag", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "IAG S.A.", jurisdiction: "ES", externalIdentifiers: [{ namespace: "legacy-company-register:ES", value: "M-492,129" }] }, value: { legalForm: "Spanish Public Company-Sociedad Anonima", governingLaw: "Law Of Spain", incorporatedIn: "Spain", placeRegistered: "Madrid Mercantile Register", registrationNumber: "M-492,129" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:ba:psc" }] },
+    { factId: "law-profile", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { legalForm: "Public limited company (PLC)", incorporatedIn: "United Kingdom", registrationNumber: "00030397" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:profile" }] },
+    { factId: "law-exemption", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:exemptions" }] },
+  ];
+  const compact = compactResearchResult({
+    ...evaluatedSession,
+    candidateSources: [{ sourceRecordId: "registry", candidateFacts: registryFacts }],
+    entityDirectory: [
+      { entityId: "iag-id", party: registryFacts[0].subject },
+      { entityId: "law-id", party: registryFacts[1].subject },
+    ],
+  }, "LIVE");
+  expect(compact.registryContexts["iag-id"]).toEqual(expect.objectContaining({ incorporatedIn: "Spain", researchCoverage: expect.objectContaining({ state: "UNSUPPORTED_JURISDICTION" }) }));
+  expect(compact.registryContexts["iag-id"].badges.map(({ label }) => label)).toEqual(["SPAIN", "Public company", "Research frontier"]);
+  expect(compact.registryContexts["law-id"]).toEqual(expect.objectContaining({ pscStatus: "EXEMPT", pscExemptionEffectiveFrom: "2021-05-25" }));
+  expect(compact.registryContexts["law-id"].badges.map(({ label }) => label)).toEqual(["PLC", "PSC exempt"]);
   expect(compact.view.graph).toBe(projection);
 });
 

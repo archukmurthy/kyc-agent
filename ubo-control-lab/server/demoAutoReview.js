@@ -45,6 +45,11 @@ function validMeasurement(fact) {
     && typeof measurement.lowerInclusive === "boolean" && typeof measurement.upperInclusive === "boolean";
 }
 
+function validRelationshipBasis(fact) {
+  if (fact.relationship !== "ECONOMIC_OWNERSHIP") return true;
+  return ["SHARE_OWNERSHIP", "SURPLUS_ASSET_RIGHTS"].includes(fact.qualifiers?.economicInterestConcept);
+}
+
 function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
@@ -52,7 +57,7 @@ function sourceBacked(fact) {
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
 function prepareDemoLiveDiscoveryBody(body) {
-  return { ...clone(body), forceRefresh: true };
+  return { ...clone(body), forceRefresh: true, demoRegistryContext: true };
 }
 
 function sameRegisteredSubject(party, subject) {
@@ -169,9 +174,11 @@ function buildPlan(session) {
   const otherwiseSafeByClaim = new Map(claimTargets.map((target) => {
     const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
     const endpointsSafe = (targetsByClaim.get(target.claimId) || []).every((partyTarget) => identityDecisionByPartyKey.get(partyTarget.candidatePartyKey)?.action !== "LEAVE_UNRESOLVED");
-    const safe = fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
-      && sourceBacked(fact) && validMeasurement(fact) && fact.qualifiers?.requiresInterpretation !== true
-      && !conflictingFactIds.has(fact.factId) && endpointsSafe;
+    const safeRegistryContext = fact?.type === "ENTITY_ATTRIBUTE" && fact.attribute === "REGISTRY_CONTEXT"
+      && fact.value && typeof fact.value === "object" && !Array.isArray(fact.value) && sourceBacked(fact);
+    const safe = (safeRegistryContext || (fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
+      && sourceBacked(fact) && validMeasurement(fact) && validRelationshipBasis(fact) && fact.qualifiers?.requiresInterpretation !== true
+      && !conflictingFactIds.has(fact.factId))) && endpointsSafe;
     return [target.claimId, safe];
   }));
 
