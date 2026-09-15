@@ -1,0 +1,101 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const { autoReviewDemoSession, buildPlan } = require("../server/demoAutoReview");
+const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
+
+function replaySession(fixtureId) {
+  const normalized = normalizedFixtureInput({ fixtureId });
+  const session = startReviewReplay({ replayRecord: {
+    replayId: `demo-${fixtureId}`,
+    subject: normalized.subject,
+    companyContext: normalized.companyContext,
+    discoveryResult: normalized.result,
+    savedAt: "2026-09-15T08:00:00.000Z",
+  } });
+  session.sourceState = "LIVE";
+  session.sourceLabel = `Live Discovery · ${session.companyContext.legalEntityName}`;
+  return session;
+}
+
+test("demo-only review makes source-backed voting ranges operative without changing their dimension or endpoints", () => {
+  const result = autoReviewDemoSession(replaySession("V2-LAB-06"), "2026-09-15T08:01:00.000Z");
+  assert.equal(result.snapshots.length, 1);
+  assert.equal(result.demoAutoReview.operativeClaims, 3);
+  assert.equal(result.demoAutoReview.unresolvedClaims, 0);
+  const relationships = result.snapshots[0].view.graph.relationships;
+  assert.equal(relationships.length, 3);
+  assert.equal(relationships.every(({ relationshipType }) => relationshipType === "VOTING_RIGHTS"), true);
+  assert.equal(relationships.every(({ measurement }) => measurement.type === "RANGE"
+    && measurement.lowerBound === 25 && measurement.upperBound === 50
+    && measurement.lowerInclusive === false && measurement.upperInclusive === true), true);
+  assert.equal(result.snapshots[0].reason, "DEMO_AUTOMATIC_REVIEW");
+  assert.match(result.sourceLabel, /provisional demo result/);
+});
+
+test("ordinary successor live/replay intake still waits for explicit decisions", () => {
+  const session = replaySession("V2-LAB-01");
+  assert.equal(session.snapshots.length, 0);
+  assert.equal(session.lastOperation, "EXPLICIT_DECISIONS_REQUIRED");
+  assert.equal(session.demoAutoReview, undefined);
+});
+
+test("a truthful live no-data result still evaluates to a subject-centred unresolved graph", () => {
+  const result = autoReviewDemoSession(replaySession("V2-LAB-09"), "2026-09-15T08:01:00.000Z");
+  assert.equal(result.snapshots.length, 1);
+  assert.equal(result.snapshots[0].view.graph.nodes.length, 1);
+  assert.equal(result.demoAutoReview.operativeClaims, 0);
+  assert.ok(result.snapshots[0].view.informationNeeds.length > 0);
+});
+
+test("conflicting relationships and same-name identities remain non-operative while safe facts can continue", () => {
+  const evidenceReferences = [{ system: "registry", referenceType: "SOURCE_REFERENCE", referenceId: "source-1" }];
+  const person = { name: "Same Name", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const company = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const facts = [40, 45].map((value, index) => ({ factId: `conflict-${index}`, type: "RELATIONSHIP", subject: person, object: company, relationship: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value }, evidenceReferences }));
+  const claims = facts.map((fact, index) => ({ targetType: "CANDIDATE_CLAIM", claimId: `claim-${index}`, currentState: "CANDIDATE", relationship: fact.relationship, originatingCandidateFact: { candidateFactId: fact.factId } }));
+  const parties = claims.map((claim) => ({ targetType: "CANDIDATE_PARTY", candidatePartyKey: `${claim.claimId}:subject`, claimId: claim.claimId, endpoint: "SUBJECT", party: person }));
+  const plan = buildPlan({ caseId: "demo", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: company }] });
+  assert.equal(plan.identityDecisions.every(({ action }) => action === "LEAVE_UNRESOLVED"), true);
+  assert.equal(plan.claimDecisions.every(({ resultingState }) => resultingState === "DISPUTED"), true);
+});
+
+test("unsafe live assertions do not block a safely sourced remainder from reaching the graph", () => {
+  const normalized = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const safe = normalized.result.candidateFacts[0];
+  const ambiguousParty = { name: "Duplicated Registry Name", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const ambiguous = [35, 45].map((value, index) => ({
+    ...safe,
+    factId: `ambiguous-${index}`,
+    subject: ambiguousParty,
+    measurement: { type: "EXACT", value },
+    evidenceReferences: [{ system: "registry", referenceType: "SOURCE_REFERENCE", referenceId: `ambiguous-source-${index}` }],
+  }));
+  const session = startReviewReplay({ replayRecord: {
+    replayId: "mixed-live",
+    subject: normalized.subject,
+    companyContext: normalized.companyContext,
+    discoveryResult: { ...normalized.result, candidateFacts: [safe, ...ambiguous] },
+    savedAt: "2026-09-15T08:00:00.000Z",
+  } });
+  session.sourceState = "LIVE";
+  const result = autoReviewDemoSession(session, "2026-09-15T08:01:00.000Z");
+  assert.equal(result.demoAutoReview.operativeClaims, 1);
+  assert.equal(result.demoAutoReview.unresolvedClaims, 2);
+  assert.equal(result.snapshots[0].view.graph.relationships.length, 1);
+  assert.equal(result.snapshots[0].view.graph.relationships[0].relationshipType, "ECONOMIC_OWNERSHIP");
+});
+
+test("an officer role cannot be promoted to control and interpretive formal control remains unresolved", () => {
+  const subject = { name: "Alice", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const object = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const facts = [
+    { factId: "officer", type: "RELATIONSHIP", subject, object, relationship: "OFFICER_OF", evidenceReferences: [{ referenceId: "officer-source" }] },
+    { factId: "combined", type: "RELATIONSHIP", subject: { ...subject, name: "Bob" }, object, relationship: "FORMAL_CONTROL_RIGHT", qualifiers: { requiresInterpretation: true }, evidenceReferences: [{ referenceId: "control-source" }] },
+  ];
+  const claims = facts.map((fact) => ({ claimId: `claim-${fact.factId}`, currentState: "CANDIDATE", originatingCandidateFact: { candidateFactId: fact.factId }, relationship: fact.relationship }));
+  const parties = facts.map((fact, index) => ({ candidatePartyKey: `party-${index}`, claimId: claims[index].claimId, party: fact.subject }));
+  const plan = buildPlan({ caseId: "demo", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: object }] });
+  assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "DISPUTED"]);
+});

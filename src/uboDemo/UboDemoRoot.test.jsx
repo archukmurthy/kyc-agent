@@ -27,7 +27,7 @@ test("Start research invokes the existing live Lab composition and preserves a l
   expect(window.location.pathname).toBe(DEMO_RESEARCH_PATH);
   await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
-  expect(body).toEqual(expect.objectContaining({ operation: "START_REVIEW_LIVE", payload: expect.objectContaining({ companyContext: expect.objectContaining({ legalEntityName: "Acme Holdings Limited", registrationNumber: "0012AB34", jurisdiction: "GB" }) }) }));
+  expect(body).toEqual(expect.objectContaining({ operation: "START_DEMO_REVIEW_LIVE", payload: expect.objectContaining({ companyContext: expect.objectContaining({ legalEntityName: "Acme Holdings Limited", registrationNumber: "0012AB34", jurisdiction: "GB" }) }) }));
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
 });
@@ -47,7 +47,7 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
 });
 
-test("live candidate assertions are not auto-adjudicated and expose no invented questions", async () => {
+test("a response without an evaluated snapshot exposes no invented graph or questions", async () => {
   window.fetch = jest.fn(() => okJson({ candidateSources: evaluatedSession.candidateSources, decisionTargets: { candidateParties: [{ candidatePartyKey: "p" }], candidateClaims: [{ claimId: "c" }] }, snapshots: [] }));
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: /Explicit review is required/ })).toBeInTheDocument();
@@ -65,7 +65,7 @@ test("pure boundaries preserve ranges and filter raw blocked work", () => {
   expect(formatMeasurement(fact.measurement)).toBe("(25%, 50%]");
   expect([relationshipCategory("ECONOMIC_OWNERSHIP"), relationshipCategory("VOTING_RIGHTS"), relationshipCategory("SIGNIFICANT_INFLUENCE_OR_CONTROL")]).toEqual(["Ownership", "Voting", "Control"]);
   expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
-  expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_REVIEW_LIVE");
+  expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_DEMO_REVIEW_LIVE");
   expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
 });
 

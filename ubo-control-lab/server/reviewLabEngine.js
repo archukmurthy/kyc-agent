@@ -367,7 +367,19 @@ function changeReviewProfile({ session: supplied, profileId, evaluationTime = "2
   return clone(session);
 }
 
-function applyReviewDecisions({ session: supplied, identityDecisions = [], claimDecisions = [], recordedAt = new Date().toISOString() } = {}) {
+function evaluateReviewedSession(session, recordedAt, context) {
+  const result = app().evaluate({ contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION, runtimeMode: "LAB", caseState: session.caseState, caseContext: session.caseContext, evaluationTime: recordedAt, checkpoint: "CASE_EVENT", checkpointReference: { referenceId: `${session.caseId}:post-decisions` }, resolutionInputs: { ...(profileById(session.selectedProfileId) ? { registryCapabilityProfile: profileById(session.selectedProfileId) } : {}) } });
+  session.decisionHistory = result.decisionHistory;
+  session.policyIdentity = clone(result.decisionSnapshot.decisionContent.policy.identity);
+  session.snapshotVersion = result.decisionSnapshot.snapshotSchemaVersion;
+  session.registryCapabilityProfileRef = clone(result.decisionSnapshot.decisionContent.registryCapabilityProfileRef);
+  session.evaluationTime = result.decisionSnapshot.decisionContent.checkpoint.evaluationTime;
+  session.snapshots.push({ historyEntryId: `${session.caseId}:snapshot:1`, reason: context.snapshotReason, predecessorSnapshotId: null, view: buildView(result) });
+  session.lastOperation = context.evaluatedOperation;
+  return clone(session);
+}
+
+function applyReviewDecisionsWithContext({ session: supplied, identityDecisions = [], claimDecisions = [], recordedAt = new Date().toISOString() } = {}, context) {
   const session = validateSession(supplied);
   const partyTargets = new Map(session.decisionTargets.candidateParties.map((target) => [target.candidatePartyKey, target]));
   const claimTargets = new Map(session.decisionTargets.candidateClaims.map((target) => [target.claimId, target]));
@@ -384,7 +396,7 @@ function applyReviewDecisions({ session: supplied, identityDecisions = [], claim
       if (!directory.has(entityId)) {
         const entity = { entityId, category: target.party.entityType === "NATURAL_PERSON" ? "NATURAL_PERSON" : "LEGAL_ENTITY", name: target.party.name || entityId, profile: target.party.entityType || "COMPANY" };
         registrations.push(registration(entity, recordedAt));
-        session.entityDirectory.push({ entityId, party: { ...clone(target.party), entityId }, source: "EXPLICIT_SUCCESSOR_REVIEW" });
+        session.entityDirectory.push({ entityId, party: { ...clone(target.party), entityId }, source: context.directorySource });
         directory.set(entityId, entity);
       }
       status = "RESOLVED";
@@ -395,29 +407,56 @@ function applyReviewDecisions({ session: supplied, identityDecisions = [], claim
     } else if (action === "LEAVE_UNRESOLVED") status = "UNRESOLVED";
     else if (action === "REJECT_MATCH") status = "REJECTED";
     else throw new TypeError("Unsupported successor identity action");
-    return { decisionId: `${session.caseId}:identity:${index + 1}:${recordedAt}`, candidatePartyKey: target.candidatePartyKey, status, ...(entityId ? { entityId } : {}), basisReasonCodes: [status === "RESOLVED" ? "EXPLICIT_SUCCESSOR_REVIEW" : "IDENTITY_NOT_ESTABLISHED"], evidenceReferences: [], decidedAt: recordedAt, decisionOrigin: "UBO_CONTROL_LAB_SUCCESSOR_REVIEW" };
+    return { decisionId: `${session.caseId}:identity:${index + 1}:${recordedAt}`, candidatePartyKey: target.candidatePartyKey, status, ...(entityId ? { entityId } : {}), basisReasonCodes: [status === "RESOLVED" ? context.resolvedIdentityReason : context.unresolvedIdentityReason], evidenceReferences: [], decidedAt: recordedAt, decisionOrigin: context.decisionOrigin };
   });
   const adjudications = claimDecisions.map((input, index) => {
     const target = claimTargets.get(input.claimId);
     if (!target) throw new TypeError("Claim decision references an unavailable successor target");
-    return { decisionId: `${session.caseId}:claim:${index + 1}:${recordedAt}`, claimId: target.claimId, previousState: target.currentState, resultingState: input.resultingState, reasonBasisCode: "EXPLICIT_SUCCESSOR_REVIEW", supportingEvidenceReferences: [], decisionOrigin: "UBO_CONTROL_LAB_SUCCESSOR_REVIEW", decidedAt: recordedAt, supersededByClaimIds: clone(input.supersededByClaimIds || []), adversarialClaimIds: clone(input.adversarialClaimIds || []) };
+    return { decisionId: `${session.caseId}:claim:${index + 1}:${recordedAt}`, claimId: target.claimId, previousState: target.currentState, resultingState: input.resultingState, reasonBasisCode: input.resultingState === "OPERATIVE" ? context.operativeClaimReason : context.unresolvedClaimReason, supportingEvidenceReferences: [], decisionOrigin: context.decisionOrigin, decidedAt: recordedAt, supersededByClaimIds: clone(input.supersededByClaimIds || []), adversarialClaimIds: clone(input.adversarialClaimIds || []) };
   });
   if (!identities.length && !adjudications.length) throw new TypeError("Select at least one successor review decision");
   const response = app().applyDecisions({ contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION, caseState: session.caseState, entityRegistrations: registrations, identityDecisions: identities, claimAdjudications: adjudications });
   session.caseState = response.caseState;
   session.decisionTargets = response.decisionTargets;
-  session.lastOperation = "EXPLICIT_SUCCESSOR_DECISIONS_APPLIED";
+  session.lastOperation = context.decisionsOperation;
   if (!response.decisionTargets.candidateParties.length && !response.decisionTargets.candidateClaims.length) {
-    const result = app().evaluate({ contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION, runtimeMode: "LAB", caseState: response.caseState, caseContext: session.caseContext, evaluationTime: recordedAt, checkpoint: "CASE_EVENT", checkpointReference: { referenceId: `${session.caseId}:post-decisions` }, resolutionInputs: { ...(profileById(session.selectedProfileId) ? { registryCapabilityProfile: profileById(session.selectedProfileId) } : {}) } });
-    session.decisionHistory = result.decisionHistory;
-    session.policyIdentity = clone(result.decisionSnapshot.decisionContent.policy.identity);
-    session.snapshotVersion = result.decisionSnapshot.snapshotSchemaVersion;
-    session.registryCapabilityProfileRef = clone(result.decisionSnapshot.decisionContent.registryCapabilityProfileRef);
-    session.evaluationTime = result.decisionSnapshot.decisionContent.checkpoint.evaluationTime;
-    session.snapshots.push({ historyEntryId: `${session.caseId}:snapshot:1`, reason: "EXPLICIT_REVIEW_DECISIONS", predecessorSnapshotId: null, view: buildView(result) });
-    session.lastOperation = "SUCCESSOR_REVIEW_EVALUATED";
+    return evaluateReviewedSession(session, recordedAt, context);
   }
   return clone(session);
+}
+
+function applyReviewDecisions(input) {
+  return applyReviewDecisionsWithContext(input, {
+    directorySource: "EXPLICIT_SUCCESSOR_REVIEW",
+    decisionOrigin: "UBO_CONTROL_LAB_SUCCESSOR_REVIEW",
+    resolvedIdentityReason: "EXPLICIT_SUCCESSOR_REVIEW",
+    unresolvedIdentityReason: "IDENTITY_NOT_ESTABLISHED",
+    operativeClaimReason: "EXPLICIT_SUCCESSOR_REVIEW",
+    unresolvedClaimReason: "EXPLICIT_SUCCESSOR_REVIEW",
+    decisionsOperation: "EXPLICIT_SUCCESSOR_DECISIONS_APPLIED",
+    snapshotReason: "EXPLICIT_REVIEW_DECISIONS",
+    evaluatedOperation: "SUCCESSOR_REVIEW_EVALUATED",
+  });
+}
+
+function applyDemoAutoReviewDecisions(input) {
+  const context = {
+    directorySource: "UBO_DEMO_AUTOMATIC_REVIEW",
+    decisionOrigin: "UBO_DEMO_AUTOMATIC_REVIEW",
+    resolvedIdentityReason: "DEMO_SOURCE_BACKED_IDENTITY",
+    unresolvedIdentityReason: "DEMO_IDENTITY_AMBIGUOUS",
+    operativeClaimReason: "DEMO_SOURCE_BACKED_CLAIM",
+    unresolvedClaimReason: "DEMO_CLAIM_NOT_SAFE_TO_AUTO_REVIEW",
+    decisionsOperation: "DEMO_AUTOMATIC_DECISIONS_APPLIED",
+    snapshotReason: "DEMO_AUTOMATIC_REVIEW",
+    evaluatedOperation: "DEMO_AUTOMATIC_REVIEW_EVALUATED",
+  };
+  const session = validateSession(input?.session);
+  if (!(input?.identityDecisions || []).length && !(input?.claimDecisions || []).length
+    && !session.decisionTargets.candidateParties.length && !session.decisionTargets.candidateClaims.length) {
+    return evaluateReviewedSession(session, input?.recordedAt || new Date().toISOString(), context);
+  }
+  return applyReviewDecisionsWithContext(input, context);
 }
 
 function normalizedFixtureInput({ fixtureId } = {}) {
@@ -472,6 +511,7 @@ module.exports = Object.freeze({
   REVIEW_FIXTURE_SET_VERSION,
   REVIEW_LAB_SESSION_VERSION,
   applicantFixtureSeed,
+  applyDemoAutoReviewDecisions,
   applyReviewDecisions,
   catalogue,
   changeReviewProfile,

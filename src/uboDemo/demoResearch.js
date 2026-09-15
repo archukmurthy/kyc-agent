@@ -13,7 +13,7 @@ export function buildResearchRequest({ demoCase, sourceMode, replayRecord }) {
     return { operation: "START_REVIEW_REPLAY", payload: { replayRecord, profileId: "NOT_PROVIDED" } };
   }
   return {
-    operation: "START_REVIEW_LIVE",
+    operation: "START_DEMO_REVIEW_LIVE",
     payload: {
       companyContext: {
         legalEntityName: demoCase.company.legalName,
@@ -58,6 +58,7 @@ export function compactResearchResult(session, sourceMode) {
     view: latestReviewView(session),
     completedAt: new Date().toISOString(),
     replayCapture,
+    demoAutoReview: session?.demoAutoReview || null,
   };
 }
 
