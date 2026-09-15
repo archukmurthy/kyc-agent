@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { assertionSourceState, buildResearchRequest, compactResearchResult, demoOpenQuestions, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
+import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoOpenQuestions, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -83,6 +83,42 @@ test("compact demo result retains customer-readable entity labels separately fro
   }, "LIVE");
   expect(compact.entityLabels).toEqual({ owner: "Owner Ltd", target: "Target Ltd" });
   expect(compact.view.graph).toBe(projection);
+});
+
+test("scope and relationship controls filter a projection independently without provider calls", () => {
+  const graph = {
+    contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "subject",
+    nodes: ["subject", "llp", "person", "disconnected"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "economic", subjectEntityId: "llp", objectEntityId: "subject", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "voting", subjectEntityId: "person", objectEntityId: "llp", relationshipType: "VOTING_RIGHTS", dimension: "VOTING" },
+      { relationshipId: "disconnected-control", subjectEntityId: "disconnected", objectEntityId: "disconnected", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL" },
+    ],
+  };
+  const relevantVoting = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.RELEVANT, dimension: DEMO_GRAPH_DIMENSIONS.VOTING });
+  expect(relevantVoting.nodes.map(({ entityId }) => entityId).sort()).toEqual(["llp", "person", "subject"]);
+  expect(relevantVoting.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["voting"]);
+  const fullControl = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL });
+  expect(fullControl.nodes).toHaveLength(4);
+  expect(fullControl.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["disconnected-control"]);
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("open-item accounting presents every cause while preserving the no-customer-action planner outcome", () => {
+  const concepts = ["CURRENT_OWNERSHIP_AND_CONTROL", "INDEPENDENT_CORROBORATION", "LAYER_QUALIFIER", "LLP_GOVERNANCE_CONTROL_BASIS", "NOMINEE_BEARER_STATUS", "TRUST_STATUS", "VOTING_CONTROL_STATUS"];
+  const needs = concepts.map((concept, index) => ({ needId: `need-${index}`, concept, status: "OPEN", reasonCode: `${concept}_INCOMPLETE`, requiredByRequirementIds: [`UBO-R${index + 1}`], targetReference: { entityId: concept === "CURRENT_OWNERSHIP_AND_CONTROL" ? "llp" : "subject", ...(concept === "LLP_GOVERNANCE_CONTROL_BASIS" ? { groupPersonIds: ["person-a", "person-b"] } : {}) }, affected: { relationshipIds: [] } }));
+  const currentSystem = ["CURRENT_OWNERSHIP_AND_CONTROL", "LAYER_QUALIFIER", "LLP_GOVERNANCE_CONTROL_BASIS", "VOTING_CONTROL_STATUS"].map((concept) => ({ actor: "SYSTEM", semanticActionType: "DISCOVER_INFORMATION", coveredInformationNeedIds: [needs.find((need) => need.concept === concept).needId] }));
+  const customerOptions = ["TRUST_STATUS", "NOMINEE_BEARER_STATUS", "VOTING_CONTROL_STATUS"].map((concept) => ({ optionId: `option-${concept}`, actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: [needs.find((need) => need.concept === concept).needId], contentReadiness: "REQUIRES_POLICY_CONTENT", requiredSignoffs: [] }));
+  customerOptions.push({ optionId: "option-evidence", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", informationNeedIds: [needs.find((need) => need.concept === "INDEPENDENT_CORROBORATION").needId], contentReadiness: "NOT_REQUIRED" });
+  const view = { informationNeeds: needs, graph: { subjectEntityId: "subject", reviewRequirements: [] }, plan: { state: "SYSTEM_RESOLUTION", recommendedActions: currentSystem, customerActions: [{ actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", coveredInformationNeedIds: [needs.find((need) => need.concept === "INDEPENDENT_CORROBORATION").needId] }] }, snapshot: { decisionContent: { resolutionOptionsV2: customerOptions } }, journeyProjection: { customerWorkBundles: [], internalReview: { requirements: [{ relatedInformationNeedIds: [needs.find((need) => need.concept === "LLP_GOVERNANCE_CONTROL_BASIS").needId] }] } } };
+  const result = { entityContexts: { subject: { entityId: "subject", legalName: "TDR CAPITAL GENERAL PARTNER V L.P.", registrationNumber: "SL035224" }, llp: { entityId: "llp", legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604" }, "person-a": { entityId: "person-a", legalName: "MR GARY LINDSAY" }, "person-b": { entityId: "person-b", legalName: "MANJIT DALE" } } };
+  const items = accountOpenItems(view, result);
+  expect(items).toHaveLength(7);
+  expect(items.find(({ concept }) => concept === "CURRENT_OWNERSHIP_AND_CONTROL").about[0]).toEqual(expect.objectContaining({ legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604" }));
+  expect(items.find(({ concept }) => concept === "LLP_GOVERNANCE_CONTROL_BASIS").targetChoices).toHaveLength(3);
+  expect(items.find(({ concept }) => concept === "LLP_GOVERNANCE_CONTROL_BASIS").disposition.code).toBe("INTERNAL_REVIEW");
+  expect(items.find(({ concept }) => concept === "TRUST_STATUS").disposition.code).toBe("QUESTION_NOT_ENABLED");
+  expect(items.find(({ concept }) => concept === "INDEPENDENT_CORROBORATION").disposition.code).toBe("POSSIBLE_LATER");
 });
 
 test("demo presenter preserves planner routes, keeps evidence as evidence and groups content-gated questions", () => {

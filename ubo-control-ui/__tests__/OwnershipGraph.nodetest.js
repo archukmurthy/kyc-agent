@@ -167,6 +167,7 @@ test("source-backed registry context renders compact badges and ordered inspecto
   try {
     const node = rendered.container.querySelector(".ug-node");
     assert.match(node.getAttribute("aria-label"), /PLC.*PSC exempt/i);
+    assert.match(node.textContent, /00030397/, "the registry identity remains visible when names are similar or truncated");
     rendered.click(node);
     const text = rendered.container.textContent;
     assert.ok(text.indexOf("Registry / legal form") < text.indexOf("Jurisdiction"));
@@ -174,6 +175,18 @@ test("source-backed registry context renders compact badges and ordered inspecto
     assert.ok(text.indexOf("Special registry status") < text.indexOf("Research coverage"));
     assert.match(text, /25 May 2021/);
     assert.match(text, /Voting shares admitted to trading on an EU regulated market/);
+  } finally { rendered.cleanup(); }
+});
+
+test("demo card can focus an exact graph item and demo review copy avoids developer-facing wording", () => {
+  const supplied = graphProjection(["customer", "owner-a"], [{ id: "economic", source: "owner-a", target: "customer" }]);
+  supplied.reviews = [{ reviewId: "review-llp", reviewType: "LLP_GOVERNANCE_REQUIRES_CONTROL_ROOM_REVIEW", state: "REVIEW_REQUIRED", entityIds: ["owner-a"], requirementIds: ["UBO-R01"], demoPresentation: { title: "LLP governance interpretation", summary: "The LLP agreement needs internal interpretation.", assumption: "A-06-WA-01", signoffs: ["A-06"] } }];
+  const rendered = renderGraph(supplied, { externalSelection: { kind: "review", id: "review-llp" } });
+  try {
+    assert.match(rendered.container.textContent, /LLP governance interpretation/);
+    assert.match(rendered.container.textContent, /A-06-WA-01/);
+    assert.match(rendered.container.textContent, /Required sign-off: A-06/);
+    assert.doesNotMatch(rendered.container.textContent, /Control Room/);
   } finally { rendered.cleanup(); }
 });
 

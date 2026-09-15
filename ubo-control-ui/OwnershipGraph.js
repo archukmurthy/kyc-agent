@@ -549,8 +549,11 @@
   }
 
   function ReviewDetails({ review, detailLevel }) {
-    return h(React.Fragment, null, h("p", { className: "ug-eyebrow review" }, "Deliberate internal review state"), h("h3", null, relationshipLabel(review.reviewType || "Review required")), h("p", null, "This branch or conclusion requires internal review; the graph is not broken."),
+    const demo = review.demoPresentation;
+    return h(React.Fragment, null, h("p", { className: "ug-eyebrow review" }, "Deliberate internal review state"), h("h3", null, demo?.title || relationshipLabel(review.reviewType || "Review required")), h("p", null, demo?.summary || "This branch or conclusion requires internal review; the graph is not broken."),
       h("dl", { className: "ug-definition-list" }, h("dt", null, "State"), h("dd", null, review.state || "REVIEW_REQUIRED"), h("dt", null, "Reason"), h("dd", null, review.reasonCode || "Recorded review requirement")),
+      demo?.assumption && h("p", { className: "ug-audit-line" }, `Review-only working assumption: ${demo.assumption}`),
+      demo?.signoffs?.length > 0 && h("p", { className: "ug-audit-line" }, `Required sign-off: ${demo.signoffs.join(", ")}`),
       detailLevel === DETAIL_LEVEL.EXPLAIN && review.requirementIds?.length > 0 ? h("p", { className: "ug-audit-line" }, `Requirements: ${review.requirementIds.join(", ")}`) : null);
   }
 
@@ -639,7 +642,7 @@
       content || h(EmptyDetails, { projection, onSelect }));
   }
 
-  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [], collapseIdleInspector = false, fixedViewportHeight = false, boundedViewportNavigation = false }) {
+  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, externalSelection, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [], collapseIdleInspector = false, fixedViewportHeight = false, boundedViewportNavigation = false }) {
     const projection = React.useMemo(() => assertProjection(supplied), [supplied]);
     if (!Object.values(DETAIL_LEVEL).includes(detailLevel)) throw new TypeError("detailLevel must be CUSTOMER or EXPLAIN");
     if (!Object.values(VIEW_MODE).includes(initialView)) throw new TypeError("initialView must be FIT_WIDTH or OVERVIEW");
@@ -699,6 +702,11 @@
       setSelection(null);
       applyFit(initialView);
     }, [projection, initialView, applyFit]);
+    React.useEffect(() => {
+      if (!externalSelection) return;
+      setSelection(externalSelection);
+      if (typeof onSelectionChange === "function") onSelectionChange(externalSelection);
+    }, [externalSelection, onSelectionChange]);
     React.useEffect(() => {
       const onResize = () => { if (fitMode.current) applyFit(fitMode.current); };
       window.addEventListener("resize", onResize);
@@ -789,13 +797,13 @@
       return h("g", { key: node.entityId, className: ["ug-node", category.css, selected ? "selected" : "", journeyEntityIds.has(node.entityId) ? "journey-linked" : "", connected ? "" : "muted"].filter(Boolean).join(" "), transform: `translate(${position.x} ${position.y})`, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-pressed": selected, "aria-label": `${node.displayName}, ${category.label}${badges.length ? `, ${badges.map((badge) => badge.label).join(", ")}` : ""}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
         h("rect", { className: "ug-node-shape", width: NW, height: NH, rx: node.category === "NATURAL_PERSON" ? 44 : 18 }),
         unresolvedEntities.has(node.entityId) && h("rect", { className: "ug-unresolved-outline", x: -7, y: -7, width: NW + 14, height: NH + 14, rx: node.category === "NATURAL_PERSON" ? 51 : 24 }),
-        h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, category.label),
+        h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, [category.label, node.registryContext?.registrationNumber && String(node.registryContext.registrationNumber).trim().toUpperCase()].filter(Boolean).join(" · ")),
         visibleBadges.map(({ badge, x, width, textX, maxLength }) => h("g", { key: badge.semantic, className: `ug-svg-badge ${badge.css}`, transform: `translate(${x} 65)` }, h("rect", { width, height: 19, rx: 9 }), h("text", { x: textX, y: 13, textAnchor: "middle" }, short(badge.label, maxLength)))));
     });
 
     const stateButtons = [
       ...projection.conflicts.map((item) => ({ kind: "conflict", id: item.conflictId, label: `Conflict · ${item.claimIds.length} claims`, css: "conflict" })),
-      ...projection.reviews.map((item) => ({ kind: "review", id: item.reviewId, label: `Review · ${relationshipLabel(item.reviewType)}`, css: "review" })),
+      ...projection.reviews.map((item) => ({ kind: "review", id: item.reviewId, label: `Review · ${item.demoPresentation?.title || relationshipLabel(item.reviewType)}`, css: "review" })),
     ];
 
     return h("section", { className: `ug-shell ${className}`.trim(), style: { "--ug-viewport-height": `${Number(height) || 680}px` }, "data-contract-version": projection.contractVersion, "data-view-mode": viewMode || "MANUAL" },
