@@ -31,6 +31,7 @@ const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
+const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
@@ -92,6 +93,16 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  app.post("/api/ubo-demo-customer-ownership-chart", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDemoCustomerOwnershipChartHandler)(req, res);
+    });
+  });
+
   // UK KYB Policy Simulator. Keep the Anthropic credential and prompt server-side.
   app.post("/api/generate-policy", (req, res) => {
     let raw = "";
