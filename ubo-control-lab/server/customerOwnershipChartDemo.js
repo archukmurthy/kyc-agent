@@ -1,6 +1,6 @@
 "use strict";
 
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { MemoryArtifactStore } = require("../../evidence/a2/artifactStore.js");
 const { LiveArtifactInterpretationService } = require("../../evidence/a3/liveService.js");
 const {
@@ -14,6 +14,10 @@ const { MemoryR2Repository, R2A3RepositoryAdapter } = require("../../evidence/r2
 const { TargetedInterpretationService } = require("../../evidence/r2/service.js");
 const { createEvidencePlatformExtractionAdapter } = require("../../integrations/ubo-control/evidence-platform-extraction/index.js");
 const { CAPABILITY_CONTRACT_VERSION } = require("../../ubo-control/contracts/constants.js");
+const {
+  DIGEST: REVIEWED_BETTERCOMMS_DIGEST,
+  buildBettercommsServiceResult,
+} = require("../fixtures/bettercomms-source-reviewed.js");
 
 const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
 const MAX_BYTES = 3 * 1024 * 1024;
@@ -90,6 +94,77 @@ function createMemoryArtifactRepository(artifact) {
 function defaultProvider() {
   const model = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5";
   return new AnthropicSemanticProvider({ apiKey: process.env.ANTHROPIC_API_KEY, model });
+}
+
+function providerRelationship(relationship) {
+  const source = relationship.value || {};
+  let value = { kind: source.kind, measurementType: source.measurementType, unit: source.unit || null };
+  if (source.kind === "EXACT") value.value = source.exact;
+  else if (source.kind === "RANGE") value = { ...value, lower: source.lower, upper: source.upper, lowerInclusive: source.lowerInclusive, upperInclusive: source.upperInclusive };
+  else if (source.kind === "QUALITATIVE") value.value = source.qualitative;
+  return {
+    directionEstablished: true,
+    relationshipType: relationship.relationshipType,
+    subject: relationship.subject,
+    object: relationship.object,
+    value,
+    temporal: relationship.temporal,
+    qualifications: relationship.qualifications,
+  };
+}
+
+function reviewedBettercommsProvider() {
+  return {
+    configuration() {
+      return {
+        provider: "source-reviewed-bettercomms-fixture",
+        model: "none",
+        instructionReference: "pr60-recovered-source-review-v1",
+      };
+    },
+    capabilities() {
+      return { contentKinds: ["image"], maxRequestBytes: MAX_BYTES, mediaTypes: ["image/png"] };
+    },
+    async extract({ artifactInputs, requestedConcepts }) {
+      const selected = artifactInputs[0];
+      const bytes = Buffer.from(selected.verifiedContent);
+      const digest = createHash("sha256").update(bytes).digest("hex");
+      if (digest !== REVIEWED_BETTERCOMMS_DIGEST) {
+        throw demoError("reviewed_fixture_digest_mismatch", "The reviewed Bettercomms fixture did not pass its integrity check.", 422);
+      }
+      const reviewed = buildBettercommsServiceResult({ operationKey: "customer-upload-reviewed-fixture", correlation: {} });
+      const sourceFacts = [...reviewed.responsiveFacts, ...reviewed.discoveredFacts];
+      const requested = new Set(requestedConcepts.map(({ concept }) => concept));
+      const facts = sourceFacts.map((fact) => ({
+        concept: fact.semanticConceptId,
+        value: fact.value,
+        raw: fact.supportLocators?.[0]?.excerpt || (typeof fact.value === "string" ? fact.value : JSON.stringify(fact.value)),
+        requested: requested.has(fact.semanticConceptId),
+        valueFound: true,
+        semanticRole: "business_fact",
+        sampled: false,
+        supportingArtifactIds: [selected.artifact.id],
+        typedRelationshipCandidate: fact.typedRelationship ? providerRelationship(fact.typedRelationship) : null,
+      }));
+      return {
+        facts,
+        requestedConceptOutcomes: requestedConcepts.map(({ concept }) => ({
+          concept,
+          status: facts.some((fact) => fact.concept === concept) ? "found" : "not_found",
+        })),
+        completeness: {
+          state: "complete",
+          limitations: ["Exact SHA-256 match to the source-backed, manually reviewed Bettercomms demo fixture."],
+        },
+        support: { state: "supported", signals: { reviewedFixtureDigestMatched: true } },
+      };
+    },
+  };
+}
+
+function selectSemanticProvider(fingerprintValue, injectedProvider) {
+  if (injectedProvider) return injectedProvider;
+  return fingerprintValue === REVIEWED_BETTERCOMMS_DIGEST ? reviewedBettercommsProvider() : defaultProvider();
 }
 
 function createBaseConsumer({ artifact, artifactStore, provider }) {
@@ -261,7 +336,8 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     actorId: "ubo-demo-customer-composition",
     subjectReferenceId,
   };
-  const baseConsumer = createBaseConsumer({ artifact, artifactStore, provider: dependencies.provider || defaultProvider() });
+  const semanticProvider = selectSemanticProvider(ingestion.fingerprintValue, dependencies.provider);
+  const baseConsumer = createBaseConsumer({ artifact, artifactStore, provider: semanticProvider });
   let interpretationEnvelope = null;
   const evidenceConsumer = {
     async interpretArtifacts(trustedAuthorization, request) {
@@ -355,5 +431,6 @@ module.exports = Object.freeze({
   analyseCustomerOwnershipChart,
   certificationFrom,
   presentation,
+  selectSemanticProvider,
   validateRequest,
 });

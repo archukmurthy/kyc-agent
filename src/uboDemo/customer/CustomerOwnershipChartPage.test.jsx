@@ -67,6 +67,8 @@ test("direct customer route renders from seeded company and case context", () =>
   expect(screen.getByText("00123456")).toBeInTheDocument();
   expect(screen.getByText("CASE-42")).toBeInTheDocument();
   expect(screen.getByText(/certified chart can make verification quicker/i)).toBeInTheDocument();
+  expect(screen.getByText("Ownership").closest("li")).toHaveClass("current");
+  expect(screen.queryByText("Research")).not.toBeInTheDocument();
 });
 
 test("direct route fails closed when demo context has not been seeded", () => {

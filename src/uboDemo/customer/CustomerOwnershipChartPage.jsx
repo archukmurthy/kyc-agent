@@ -6,6 +6,7 @@ import {
   readCustomerOwnershipChartSession,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
+import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import "./customerOwnershipChart.css";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -37,21 +38,6 @@ function relationshipValue(assertion) {
     return `${left}${measurement.lowerBound ?? 0}%, ${measurement.upperBound ?? 100}%${right}`;
   }
   return "Percentage not stated";
-}
-
-function DemoHeader() {
-  return <>
-    <header className="ubo-customer-header">
-      <a className="ubo-customer-brand" href="/ubo-demo/"><span>N</span><strong>Ownership review</strong></a>
-      <span className="ubo-customer-secure">Customer journey · Demo</span>
-    </header>
-    <ol className="ubo-customer-progress" aria-label="Customer journey progress">
-      <li className="complete"><span>1</span>Company</li>
-      <li className="complete"><span>2</span>Research</li>
-      <li className="current"><span>3</span>Ownership</li>
-      <li><span>4</span>Review</li>
-    </ol>
-  </>;
 }
 
 function CompanyContext({ context }) {
@@ -138,7 +124,7 @@ export default function CustomerOwnershipChartPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
 
-  if (!context) return <div className="ubo-customer-page"><DemoHeader /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/">Enter company details</a></main></div>;
+  if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={2} /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/">Enter company details</a></main></div>;
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
@@ -171,10 +157,10 @@ export default function CustomerOwnershipChartPage() {
   };
 
   return <div className="ubo-customer-page">
-    <DemoHeader />
+    <CustomerJourneyHeader currentStep={2} />
     <main className="ubo-customer-main">
       <CompanyContext context={context} />
-      <div className="ubo-customer-intro"><span>Step 3 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
+      <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
       {result ? <Results result={result} onReplace={replace} /> : <UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} />}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · No registry comparison</footer>

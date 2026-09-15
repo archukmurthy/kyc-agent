@@ -8,7 +8,8 @@ import PolicySimulator from "./policySimulator/PolicySimulator";
 import UboDemoRoot from "./uboDemo/UboDemoRoot";
 import { isUboDemoPath } from "./uboDemo/demoRoute";
 import CustomerOwnershipChartPage from "./uboDemo/customer/CustomerOwnershipChartPage";
-import { isCustomerOwnershipChartPath } from "./uboDemo/customer/customerRoute";
+import CustomerCompanyPage from "./uboDemo/customer/CustomerCompanyPage";
+import { isCustomerCompanyPath, isCustomerOwnershipChartPath } from "./uboDemo/customer/customerRoute";
 
 const path = window.location.pathname;
 // Pre-boarding agent vs. the plain customer onboarding flow is distinguished by
@@ -29,6 +30,9 @@ document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
 if (isCustomerOwnershipChartPath(path)) {
   tree = <CustomerOwnershipChartPage />;
   title = "Upload ownership chart | Ownership review demo";
+} else if (isCustomerCompanyPath(path)) {
+  tree = <CustomerCompanyPage />;
+  title = "Company details | Ownership review demo";
 } else if (isUboDemoPath(path)) {
   tree = <UboDemoRoot />;
   title = "Ownership review demo";
