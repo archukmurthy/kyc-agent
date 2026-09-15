@@ -2,13 +2,15 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
+import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
-import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
+import { CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
 const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
 const evaluatedSession = { sourceLabel: "Fixture", candidateSources: [{ sourceRecordId: "source-1", sourceState: "FIXTURE", candidateFacts: [fact] }], decisionTargets: { candidateParties: [], candidateClaims: [] }, snapshots: [{ view: { graph: projection, journeyProjection: { customerWorkBundles: [{ bundleId: "open", state: "OPEN", canonicalSubject: { name: "Owner Ltd" }, permittedSemanticActions: [{ actionType: "PROVIDE_STRUCTURED_INFORMATION", executable: true }] }, { bundleId: "blocked", state: "SIGNOFF_REQUIRED", permittedSemanticActions: [{ actionType: "REQUEST_EXTERNAL_EVIDENCE", executable: false }] }], internalReview: { actions: [], requirements: [{ reasonCode: "REVIEW" }] } } } }] };
+const aliceBasis = { basisId: "basis-alice-effective", personEntityId: "alice", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", method: "ubo-percentage-lookthrough-v1", threshold: { value: 25, comparator: ">", classification: "STATUTORY", dimension: "ECONOMIC" }, recordedCalculation: { value: { type: "EXACT", value: "28" }, cycles: [] }, orderedPathReferences: [{ pathId: "direct", state: "KNOWN", relationshipIds: ["direct-10"], contribution: { type: "EXACT", value: "10" } }, { pathId: "indirect", state: "KNOWN", relationshipIds: ["alice-holdco", "holdco-target"], contribution: { type: "EXACT", value: "18" } }] };
+const aliceSession = { sourceLabel: "Alice fixture", selectedFixtureId: "DEMO-ALICE-28", entityDirectory: [{ entityId: "alice", party: { name: "Alice Example" } }, { entityId: "holdco", party: { name: "Example Holdings Ltd" } }, { entityId: "target", party: { name: "Example Trading Ltd" } }], candidateSources: [], decisionTargets: { candidateParties: [], candidateClaims: [] }, snapshots: [{ view: { graph: { contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "target", nodes: [{ entityId: "alice", primaryName: "Alice Example" }, { entityId: "holdco", primaryName: "Example Holdings Ltd" }, { entityId: "target", primaryName: "Example Trading Ltd" }], relationships: [{ relationshipId: "direct-10", subjectEntityId: "alice", objectEntityId: "target", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 10 } }, { relationshipId: "alice-holdco", subjectEntityId: "alice", objectEntityId: "holdco", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 60 } }, { relationshipId: "holdco-target", subjectEntityId: "holdco", objectEntityId: "target", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 30 } }], informationNeeds: [], reviewRequirements: [], qualificationBasisRecords: [aliceBasis], personQualificationAssessments: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST"], unassessedRoutes: ["PSC_CONDITION_ATTRIBUTION"] }] }, qualificationBases: [aliceBasis], qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST"], unassessedRoutes: ["PSC_CONDITION_ATTRIBUTION"] }], informationNeeds: [], plan: { recommendedActions: [], customerActions: [] }, journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } }, snapshot: { decisionContent: { resolutionOptionsV2: [] } } } }] };
 
 function okJson(value) { return Promise.resolve({ ok: true, json: () => Promise.resolve(value) }); }
 function renderStart() { window.history.replaceState({}, "", DEMO_START_PATH); return render(<UboDemoRoot />); }
@@ -18,18 +20,57 @@ beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, 
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
-test("country and ownership type use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); });
+test("country, ownership type and calculation inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /All policy routes/ })).toBeChecked(); });
 test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });
-test("ownership options map to stable semantic codes", () => { expect(OWNERSHIP_TYPES.map(({ code }) => code)).toEqual(["PRIVATE_LIMITED", "PUBLIC_LIMITED", "PUBLICLY_LISTED", "LLP", "PARTNERSHIP", "CHARITY", "TRUST", "CIC", "OTHER"]); });
+test("ownership and calculation options map to stable semantic codes", () => { expect(OWNERSHIP_TYPES.map(({ code }) => code)).toEqual(["PRIVATE_LIMITED", "PUBLIC_LIMITED", "PUBLICLY_LISTED", "LLP", "PARTNERSHIP", "CHARITY", "TRUST", "CIC", "OTHER"]); expect(CALCULATION_METHODS.map(({ code }) => code)).toEqual(["POLICY_ALL_ROUTES", "EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"]); });
 
 test("Start research invokes the existing live Lab composition and preserves a leading zero", async () => {
-  renderStart(); completeRequiredFields({ number: "0012AB34" }); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  renderStart(); completeRequiredFields({ number: "0012AB34" }); fireEvent.click(screen.getByLabelText(/Effective ownership/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(window.location.pathname).toBe(DEMO_RESEARCH_PATH);
   await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
   expect(body).toEqual(expect.objectContaining({ operation: "START_DEMO_REVIEW_LIVE", payload: expect.objectContaining({ companyContext: expect.objectContaining({ legalEntityName: "Acme Holdings Limited", registrationNumber: "0012AB34", jurisdiction: "GB" }) }) }));
+  expect(JSON.stringify(body)).not.toContain("calculationMethod");
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
+});
+
+test("old sessions default to all policy routes and selector state survives refresh", () => {
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "" } }));
+  renderStart();
+  expect(screen.getByLabelText(/All policy routes/)).toBeChecked();
+  fireEvent.click(screen.getByLabelText(/Control attribution/));
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("Alice example uses one fixture operation and presents the recorded 10 plus 18 equals 28 engine result", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  await screen.findByRole("heading", { name: "How this result was calculated" });
+  const body = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(body).toEqual({ operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: DEMO_CALCULATION_FIXTURES.ALICE_28 } });
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(screen.getAllByText("Threshold satisfied under effective ownership")).toHaveLength(2);
+  expect(screen.getByText("10% = 10%")).toBeInTheDocument();
+  expect(screen.getByText("60% × 30% = 18%")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Recorded result 28%/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText(/Control attribution/));
+  expect(screen.getByText(/This assessment route is not supported/)).toBeInTheDocument();
+  expect(screen.getByText("At least one policy route is satisfied")).toBeInTheDocument();
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("method presentation preserves recorded 24 percent effective and 40 percent attribution results", () => {
+  const relationship = (id, from, to, type, value) => ({ relationshipId: id, subjectEntityId: from, objectEntityId: to, relationshipType: type, dimension: type === "VOTING_RIGHTS" ? "VOTING" : "ECONOMIC", measurement: { type: "EXACT", value } });
+  const effective = { basisId: "effective", personEntityId: "alice", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "NOT_SATISFIED", method: "ubo-percentage-lookthrough-v1", recordedCalculation: { value: { type: "EXACT", value: "24" }, cycles: [] }, orderedPathReferences: [{ pathId: "effective-path", relationshipIds: ["economic-60", "target-40"], contribution: { type: "EXACT", value: "24" } }] };
+  const attributed = { basisId: "attributed", personEntityId: "alice", route: "PSC_CONDITION_ATTRIBUTION", dimension: "ECONOMIC", assessmentState: "SATISFIED", method: "ubo-psc-attribution-v1", aggregatedTargetRightValue: { type: "EXACT", value: "40" }, attributionChains: [{ pathId: "control-path", relationshipIds: ["voting-60", "target-40"], majoritySteps: [{ relationshipId: "voting-60", fromEntityId: "alice", toEntityId: "holdco", relationshipType: "VOTING_RIGHTS", measurement: { type: "EXACT", value: 60 } }], state: "VALID" }] };
+  const view = { graph: { nodes: [{ entityId: "alice", primaryName: "Alice" }, { entityId: "holdco", primaryName: "HoldCo" }, { entityId: "target", primaryName: "Customer" }], relationships: [relationship("economic-60", "alice", "holdco", "ECONOMIC_OWNERSHIP", 60), relationship("voting-60", "alice", "holdco", "VOTING_RIGHTS", 60), relationship("target-40", "holdco", "target", "ECONOMIC_OWNERSHIP", 40)] }, qualificationBases: [effective, attributed], qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"] }] };
+  expect(demoCalculationPeople(view, "EFFECTIVE_INTEREST")[0].selectedBases[0].aggregate.value).toBe("24");
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].aggregate.value).toBe("40");
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].attributionChains[0].majoritySteps[0]).toEqual(expect.objectContaining({ relationshipType: "VOTING_RIGHTS", measurement: "60%" }));
 });
 
 test("reviewed fixture makes no provider call and renders graph, collapsed source assertions and only executable customer work", async () => {

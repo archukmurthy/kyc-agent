@@ -76,3 +76,12 @@ test("Lab API starts successor ASDA A and returns an exact baseline/successor co
   assert.equal(comparison.payload.successor.policyVersion, "1.6-RC");
   assert.equal(comparison.payload.definitionsDiffer, true);
 });
+
+test("Lab API runs the demo-only Alice calculation fixture without Discovery", async () => {
+  const result = await invoke("POST", { operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: "DEMO-ALICE-28" } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.sourceState, "FIXTURE");
+  assert.equal(result.payload.selectedFixtureId, "DEMO-ALICE-28");
+  const view = result.payload.snapshots.at(-1).view;
+  assert.equal(view.graph.calculations.find(({ subjectEntityId }) => subjectEntityId === "demo-alice").aggregateKnownValue.value, "28");
+});

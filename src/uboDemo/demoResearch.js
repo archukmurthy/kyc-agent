@@ -2,12 +2,14 @@ export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
 export const DEMO_GRAPH_DIMENSIONS = Object.freeze({ ALL: "ALL", OWNERSHIP: "OWNERSHIP", VOTING: "VOTING", CONTROL: "CONTROL" });
+export const DEMO_CALCULATION_FIXTURES = Object.freeze({ ALICE_28: "DEMO-ALICE-28", METHOD_60_40: "V2-LAB-02" });
 
 function entityProfile(ownershipType) {
   return ["LLP", "PARTNERSHIP"].includes(ownershipType) ? "LLP" : "COMPANY";
 }
 
-export function buildResearchRequest({ demoCase, sourceMode, replayRecord }) {
+export function buildResearchRequest({ demoCase, sourceMode, replayRecord, demoFixtureId }) {
+  if (demoFixtureId) return { operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: demoFixtureId } };
   if (sourceMode === DEMO_SOURCE_MODES.FIXTURE) {
     return { operation: "START_REVIEW_FIXTURE", payload: { fixtureId: REVIEWED_FIXTURE_ID } };
   }
@@ -49,7 +51,7 @@ export function latestReviewView(session) {
   return session?.snapshots?.[session.snapshots.length - 1]?.view || null;
 }
 
-export function compactResearchResult(session, sourceMode) {
+export function compactResearchResult(session, sourceMode, calculationMethod = "POLICY_ALL_ROUTES") {
   const replayCapture = session?.replayCapture || null;
   const entityLabels = Object.fromEntries((session?.entityDirectory || [])
     .filter(({ entityId, party }) => entityId && party?.name)
@@ -77,9 +79,11 @@ export function compactResearchResult(session, sourceMode) {
     replayCapture,
     demoAutoReview: session?.demoAutoReview || null,
     canonicalCompanyTypeLabel: session?.demoAutoReview?.profileReconciliation?.registryLegalForm || null,
+    selectedFixtureId: session?.selectedFixtureId || null,
     entityLabels,
     registryContexts,
     entityContexts,
+    analysisContext: { calculationMethod },
   };
 }
 
@@ -166,6 +170,96 @@ export function formatMeasurement(measurement) {
     return `${left}${measurement.lowerBound}%, ${measurement.upperBound}%${right}`;
   }
   return measurement.value == null ? measurement.type : `${measurement.value}%`;
+}
+
+function recordedStateCopy(state, route) {
+  if (state === "SATISFIED" || state === "ROUTE_SATISFIED") return route === "EFFECTIVE_INTEREST"
+    ? "Threshold satisfied under effective ownership"
+    : route === "PSC_CONDITION_ATTRIBUTION" ? "Control-attribution route satisfied" : "At least one policy route is satisfied";
+  if (state === "NOT_SATISFIED") return "This route does not meet the threshold";
+  if (state === "ROUTE_NOT_SATISFIED") return "No assessed policy route meets its threshold";
+  if (state === "INDETERMINATE" || state === "ROUTE_INDETERMINATE") return "Cannot determine from the available facts";
+  return "Not supported / review required";
+}
+
+function calculationRoute(path, relationshipById, entityName) {
+  const relationships = (path.relationshipIds || []).map((id) => relationshipById.get(id)).filter(Boolean);
+  const route = relationships.length
+    ? [entityName(relationships[0].subjectEntityId), ...relationships.map((item) => entityName(item.objectEntityId))].join(" → ")
+    : "Recorded route";
+  return {
+    pathId: path.pathId,
+    relationshipIds: path.relationshipIds || [],
+    route,
+    inputs: relationships.map(({ measurement }) => formatMeasurement(measurement)),
+    contribution: path.contribution ? formatMeasurement(path.contribution) : null,
+    state: path.state,
+    directness: relationships.length === 1 ? "Direct" : "Indirect",
+  };
+}
+
+function basisPresentation(basis, relationshipById, entityName) {
+  const effectivePaths = (basis.orderedPathReferences || []).map((path) => calculationRoute(path, relationshipById, entityName));
+  const attributionChains = (basis.attributionChains || []).map((chain) => {
+    const route = calculationRoute(chain, relationshipById, entityName);
+    return {
+      ...route,
+      state: chain.state,
+      majoritySteps: (chain.majoritySteps || []).map((step) => ({
+        relationshipId: step.relationshipId,
+        relationshipType: step.relationshipType,
+        measurement: formatMeasurement(step.measurement),
+        from: entityName(step.fromEntityId),
+        to: entityName(step.toEntityId),
+      })),
+    };
+  });
+  return {
+    basisId: basis.basisId,
+    route: basis.route,
+    condition: basis.condition || null,
+    dimension: basis.dimension,
+    assessmentState: basis.assessmentState,
+    resultLabel: recordedStateCopy(basis.assessmentState, basis.route),
+    threshold: basis.threshold || null,
+    aggregate: basis.recordedCalculation?.value || basis.aggregatedTargetRightValue || null,
+    effectivePaths,
+    attributionChains,
+    relationshipIds: unique([...(basis.orderedPathReferences || []).flatMap(({ relationshipIds }) => relationshipIds || []), ...(basis.attributionChains || []).flatMap(({ relationshipIds }) => relationshipIds || [])]),
+    limitations: unique([...(basis.reviewDependencies || []), ...(basis.governance?.requiredSignoffIds || []), ...((basis.recordedCalculation?.cycles || []).map(({ cycleId }) => cycleId || "Cycle recorded"))]),
+    method: basis.method,
+  };
+}
+
+export function demoCalculationPeople(view, calculationMethod = "POLICY_ALL_ROUTES", entityLabels = {}) {
+  if (!view?.graph) return [];
+  const nodes = new Map((view.graph.nodes || []).map((node) => [node.entityId, node.primaryName || node.name || node.entityId]));
+  const entityName = (entityId) => entityLabels[entityId] || nodes.get(entityId) || entityId;
+  const relationshipById = new Map((view.graph.relationships || []).map((relationship) => [relationship.relationshipId, relationship]));
+  const bases = view.qualificationBases || view.graph.qualificationBasisRecords || [];
+  return (view.qualifications || view.graph.personQualificationAssessments || []).map((assessment) => {
+    const personBases = bases.filter(({ personEntityId }) => personEntityId === assessment.personEntityId);
+    const selectedBases = calculationMethod === "POLICY_ALL_ROUTES"
+      ? personBases
+      : personBases.filter(({ route, dimension }) => route === calculationMethod && (route !== "EFFECTIVE_INTEREST" || dimension === "ECONOMIC"));
+    const presentations = selectedBases.map((basis) => basisPresentation(basis, relationshipById, entityName));
+    const selectedState = calculationMethod === "POLICY_ALL_ROUTES"
+      ? assessment.routeStatus
+      : presentations.some(({ assessmentState }) => assessmentState === "SATISFIED") ? "SATISFIED"
+        : presentations.some(({ assessmentState }) => assessmentState === "INDETERMINATE") ? "INDETERMINATE"
+          : presentations.length && presentations.every(({ assessmentState }) => assessmentState === "NOT_SATISFIED") ? "NOT_SATISFIED" : "REVIEW_REQUIRED";
+    return {
+      personEntityId: assessment.personEntityId,
+      personName: entityName(assessment.personEntityId),
+      overallPolicyState: assessment.routeStatus,
+      overallPolicyLabel: recordedStateCopy(assessment.routeStatus, "POLICY_ALL_ROUTES"),
+      selectedState,
+      selectedResultLabel: recordedStateCopy(selectedState, calculationMethod),
+      selectedBases: presentations,
+      assessedRoutes: assessment.assessedRoutes || [],
+      unassessedRoutes: assessment.unassessedRoutes || [],
+    };
+  });
 }
 
 export function executableCustomerBundles(view) {

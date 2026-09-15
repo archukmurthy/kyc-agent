@@ -16,6 +16,7 @@ const {
   catalogue: reviewCatalogue,
   changeReviewProfile,
   normalizedFixtureInput,
+  startDemoCalculationFixture,
   startReviewFixture,
   startReviewReplay,
 } = require("../ubo-control-lab/server/reviewLabEngine");
@@ -50,6 +51,7 @@ const OPERATIONS = Object.freeze({
   START_REVIEW_FIXTURE: "START_REVIEW_FIXTURE",
   START_REVIEW_LIVE: "START_REVIEW_LIVE",
   START_DEMO_REVIEW_LIVE: "START_DEMO_REVIEW_LIVE",
+  START_DEMO_CALCULATION_FIXTURE: "START_DEMO_CALCULATION_FIXTURE",
   START_REVIEW_REPLAY: "START_REVIEW_REPLAY",
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
   CHANGE_REVIEW_PROFILE: "CHANGE_REVIEW_PROFILE",
@@ -199,6 +201,8 @@ module.exports = async function handler(req, res) {
           demoProfileReconciliation: true,
           prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
         })));
+      case OPERATIONS.START_DEMO_CALCULATION_FIXTURE:
+        return send(res, 200, startDemoCalculationFixture(input.payload));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:
         return send(res, 200, applyReviewDecisions(input.payload));
       case OPERATIONS.CHANGE_REVIEW_PROFILE:

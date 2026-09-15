@@ -4,6 +4,12 @@ export const DEMO_SESSION_CONTRACT = "ubo-demo-browser-session-v1";
 export const DEMO_SESSION_KEY = "ubo-demo.case.v1";
 export const LAB_REPLAY_KEY = "ubo-control-lab.discovery-replays.v1";
 
+export const CALCULATION_METHODS = Object.freeze([
+  { code: "POLICY_ALL_ROUTES", label: "All policy routes", explanation: "Existing combined policy assessment." },
+  { code: "EFFECTIVE_INTEREST", label: "Effective ownership — multiply + add", explanation: "Multiply each chain, then add the same person's independent direct and indirect interests." },
+  { code: "PSC_CONDITION_ATTRIBUTION", label: "Control attribution", explanation: "Existing supported majority-control/PSC attribution assessment. Not an additive percentage formula." },
+]);
+
 export const OWNERSHIP_TYPES = Object.freeze([
   { code: "PRIVATE_LIMITED", label: "Private limited company (Ltd)" },
   { code: "PUBLIC_LIMITED", label: "Public limited company (PLC)" },
@@ -25,6 +31,7 @@ export function emptyDemoDraft() {
     referenceCaseId: "",
     sourceMode: "LIVE",
     replayId: "",
+    calculationMethod: "POLICY_ALL_ROUTES",
   };
 }
 
@@ -42,6 +49,7 @@ export function validateDemoDraft(draft) {
   if (!draft.registrationNumber.trim()) errors.registrationNumber = "Enter the company registration number.";
   if (!COUNTRIES.some(({ code }) => code === draft.countryCode)) errors.countryCode = "Choose a country of registration.";
   if (!OWNERSHIP_TYPES.some(({ code }) => code === draft.ownershipType)) errors.ownershipType = "Choose an ownership type.";
+  if (!CALCULATION_METHODS.some(({ code }) => code === draft.calculationMethod)) errors.calculationMethod = "Choose a calculation method.";
   return errors;
 }
 
@@ -61,6 +69,7 @@ export function createDemoCase(draft) {
       countryName: countryNameFor(draft.countryCode),
       ownershipType: draft.ownershipType,
     },
+    analysisContext: { calculationMethod: draft.calculationMethod, ...(draft.demoFixtureId ? { demoFixtureId: draft.demoFixtureId } : {}) },
   };
 }
 
