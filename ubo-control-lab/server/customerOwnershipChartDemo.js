@@ -37,6 +37,13 @@ function demoError(code, message, statusCode = 400) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
+function statusForEvidenceFailure(failure) {
+  if (["invalid_request", "unsupported_media", "unsupported_concept"].includes(failure?.code)) return 422;
+  if (failure?.code === "access_denied") return 403;
+  if (failure?.code === "not_found") return 404;
+  return 502;
+}
+
 function certificationConcept([concept, attribute, description], company) {
   return {
     concept,
@@ -372,13 +379,21 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
   });
   if (!interpretationEnvelope?.ok) {
     const failure = interpretationEnvelope?.error;
-    throw demoError(failure?.code || "evidence_interpretation_failed", failure?.message || "Evidence could not interpret this ownership chart.", 502);
+    throw demoError(
+      failure?.code || "evidence_interpretation_failed",
+      failure?.message || "Evidence could not interpret this ownership chart.",
+      statusForEvidenceFailure(failure),
+    );
   }
   if (interpretationEnvelope.result?.error
     || interpretationEnvelope.result?.operation?.status !== "completed"
     || interpretationEnvelope.result?.evidence?.integrityVerified !== true) {
     const failure = interpretationEnvelope.result?.error;
-    throw demoError(failure?.code || "evidence_interpretation_failed", failure?.message || "Evidence could not complete a verified interpretation of this ownership chart.", 502);
+    throw demoError(
+      failure?.code || "evidence_interpretation_failed",
+      failure?.message || "Evidence could not complete a verified interpretation of this ownership chart.",
+      statusForEvidenceFailure(failure),
+    );
   }
   if (!["COMPLETE", "PARTIAL", "NO_DATA", "INCONCLUSIVE"].includes(capabilityResult.outcome.state)) {
     throw demoError("ubo_candidate_mapping_failed", capabilityResult.outcome.message || "No UBO candidate facts could be mapped from this chart.", 422);
@@ -432,5 +447,6 @@ module.exports = Object.freeze({
   certificationFrom,
   presentation,
   selectSemanticProvider,
+  statusForEvidenceFailure,
   validateRequest,
 });

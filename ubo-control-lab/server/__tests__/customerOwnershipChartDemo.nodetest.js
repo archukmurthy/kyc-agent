@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { analyseCustomerOwnershipChart, selectSemanticProvider, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { analyseCustomerOwnershipChart, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -87,6 +87,12 @@ test("the exact reviewed Bettercomms digest selects the local source-backed inte
   });
   const injected = provider({});
   assert.equal(selectSemanticProvider(REVIEWED_BETTERCOMMS_DIGEST, injected), injected);
+});
+
+test("safe Evidence media failures remain actionable at the customer API boundary", () => {
+  assert.equal(statusForEvidenceFailure({ code: "unsupported_media" }), 422);
+  assert.equal(statusForEvidenceFailure({ code: "invalid_request" }), 422);
+  assert.equal(statusForEvidenceFailure({ code: "provider_timeout" }), 502);
 });
 
 test("API handler is POST-only and returns a bounded customer error", async () => {
