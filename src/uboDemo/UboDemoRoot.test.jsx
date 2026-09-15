@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { buildResearchRequest, executableCustomerBundles, formatMeasurement } from "./demoResearch";
+import { buildResearchRequest, executableCustomerBundles, formatMeasurement, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { DEMO_SESSION_KEY, OWNERSHIP_TYPES, emptyDemoDraft, writeDemoSession } from "./demoSession";
 
@@ -63,8 +63,10 @@ test("refresh restores the normalized result and Start new case clears it", asyn
 
 test("pure boundaries preserve ranges and filter raw blocked work", () => {
   expect(formatMeasurement(fact.measurement)).toBe("(25%, 50%]");
+  expect([relationshipCategory("ECONOMIC_OWNERSHIP"), relationshipCategory("VOTING_RIGHTS"), relationshipCategory("SIGNIFICANT_INFLUENCE_OR_CONTROL")]).toEqual(["Ownership", "Voting", "Control"]);
   expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
   expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_REVIEW_LIVE");
+  expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
 });
 
 test("saved draft survives refresh", () => {
