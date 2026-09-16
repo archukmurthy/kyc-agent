@@ -157,6 +157,23 @@ test("rolling back to a healthy version still works", async (t) => {
   assert.strictEqual(storage.data["config:acme"]._rolledBackFrom, 3);
 });
 
+test("versions handler with no resolvable tenant returns 400 tenant_required before auth", async (t) => {
+  const prevTenantId = process.env.TENANT_ID;
+  delete process.env.TENANT_ID;
+  t.after(() => {
+    if (prevTenantId !== undefined) process.env.TENANT_ID = prevTenantId;
+  });
+
+  // No query.tenant, no x-tenant-id header, no TENANT_ID env, and no auth
+  // header either — proves the tenant_required guard fires before the
+  // (would-be-401) auth check runs.
+  const { req, res } = fakeReqRes({ method: "POST", body: { version: 3 } });
+  await versionsHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 400);
+  assert.deepStrictEqual(res.body, { error: "tenant_required" });
+});
+
 test("self-heal archives the broken config before overwriting it", async (t) => {
   const storage = fakeStorage({
     "tenant-registry": [{ tenantId: "acme", isProtected: true }],
