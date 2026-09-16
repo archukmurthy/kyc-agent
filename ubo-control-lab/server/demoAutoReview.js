@@ -45,6 +45,16 @@ function validMeasurement(fact) {
     && typeof measurement.lowerInclusive === "boolean" && typeof measurement.upperInclusive === "boolean";
 }
 
+function explicitEconomicSemantics(fact) {
+  if (fact.relationship !== "ECONOMIC_OWNERSHIP") return true;
+  const concept = normalize(fact.qualifiers?.economicInterestConcept);
+  const targetProfile = normalize(fact.object?.entityType);
+  if (["LLP", "PARTNERSHIP"].includes(targetProfile)) {
+    return ["SURPLUS_ASSET_RIGHTS", "LLP_SURPLUS_ASSET_RIGHTS"].includes(concept);
+  }
+  return concept === "SHARE_OWNERSHIP";
+}
+
 function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
@@ -170,7 +180,8 @@ function buildPlan(session) {
     const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
     const endpointsSafe = (targetsByClaim.get(target.claimId) || []).every((partyTarget) => identityDecisionByPartyKey.get(partyTarget.candidatePartyKey)?.action !== "LEAVE_UNRESOLVED");
     const safe = fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
-      && sourceBacked(fact) && validMeasurement(fact) && fact.qualifiers?.requiresInterpretation !== true
+      && sourceBacked(fact) && validMeasurement(fact) && explicitEconomicSemantics(fact)
+      && fact.qualifiers?.requiresInterpretation !== true
       && !conflictingFactIds.has(fact.factId) && endpointsSafe;
     return [target.claimId, safe];
   }));

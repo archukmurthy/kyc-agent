@@ -142,6 +142,32 @@ test("an officer role cannot be promoted to control and interpretive formal cont
   assert.deepEqual(plan.claimDecisions.map(({ resultingState }) => resultingState), ["DISPUTED", "DISPUTED"]);
 });
 
+test("economic percentages without an explicit target-right concept remain provisional", () => {
+  const owner = { name: "Alice Morgan", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const company = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const fact = {
+    factId: "ownership-without-share-basis",
+    type: "RELATIONSHIP",
+    subject: owner,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: company,
+    measurement: { type: "EXACT", value: 30 },
+    qualifiers: { currentState: "CURRENT" },
+    evidenceReferences: [{ referenceId: "customer-chart:1" }],
+  };
+  const claim = { claimId: "claim-1", currentState: "CANDIDATE", originatingCandidateFact: { candidateFactId: fact.factId }, relationship: fact.relationship };
+  const plan = buildPlan({
+    caseId: "demo",
+    candidateSources: [{ candidateFacts: [fact] }],
+    decisionTargets: {
+      candidateParties: [{ candidatePartyKey: "party-1", claimId: claim.claimId, party: owner }],
+      candidateClaims: [claim],
+    },
+    entityDirectory: [{ entityId: "target", party: company }],
+  });
+  assert.equal(plan.claimDecisions[0].resultingState, "DISPUTED");
+});
+
 test("TDR limited-partnership surplus-asset evidence selects the existing LLP review path without changing source semantics", () => {
   const subject = tdrPscFixture.scenario.context.customer;
   const original = {
