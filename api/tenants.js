@@ -11,7 +11,8 @@
 // PUT    /api/tenants?action=toggle-preboarding&tenantId — toggle preboardingEnabled
 
 const storage = require("../lib/storage");
-const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
+const { buildBlankConfig } = require("../lib/seedConfig");
+const { buildTemplateConfig } = require("../lib/configTemplates");
 const { hashPassword } = require("../lib/auth");
 const { sanitiseTenantId } = require("../lib/tenant");
 const tenantRegistry = require("../lib/tenantRegistry");
@@ -164,11 +165,8 @@ module.exports = async function handler(req, res) {
 
       // Persist config
       let config;
-      if (startFrom === "nium-defaults") {
-        config = buildDefaultConfig(tenantId);
-        config._tenantId = tenantId;
-        config._isDefault = false;
-        config._isBlank = false;
+      if (startFrom === "nium-defaults" || startFrom === "nium-default") {
+        config = buildTemplateConfig("nium-default", tenantId);
       } else {
         config = buildBlankConfig(tenantId);
       }

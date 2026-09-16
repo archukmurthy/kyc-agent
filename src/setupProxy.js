@@ -14,6 +14,7 @@ const { pathToFileURL } = require("url");
 const configHandler = require(path.join(__dirname, "..", "api", "config.js"));
 const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.js"));
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
+const configTemplatesHandler = require(path.join(__dirname, "..", "api", "config-templates.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
 const niumConstantsHandler = require(path.join(__dirname, "..", "api", "nium", "constants.js"));
@@ -192,6 +193,7 @@ module.exports = function (app) {
 
   app.all("/api/config", adapt(configHandler));
   app.all("/api/config-versions", adapt(configVersionsHandler));
+  app.get("/api/config-templates", adapt(configTemplatesHandler));
   app.post("/api/admin-auth", adapt(adminAuthHandler));
   app.post("/api/super-admin-auth", adapt(superAdminAuthHandler));
   app.all("/api/tenants", adapt(tenantsHandler));
