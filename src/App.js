@@ -843,7 +843,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         acceptedDocTypes: Array.from(acceptedDocTypes),
         applicantNotListed, amendmentUploads,
         niumRegNumber, niumSearchResults, dossierStakeholders,
-      });
+      }, { tenantId, agentType });
     }, 800);
     return () => clearTimeout(t);
   }, [companyName, countryCode, entityType, ownershipType, research, activeSchema, checks,
@@ -854,16 +854,17 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
       rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
       researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
-      niumRegNumber, niumSearchResults, dossierStakeholders]);
+      niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
 
   // Offer to resume an unfinished application found in localStorage (Task 9 —
   // browser draft is the pre-capture backstop). Checked once on mount.
   const [resumeOffer, setResumeOffer] = useState(null); // the loaded draft, or null
   useEffect(() => {
-    const d = loadDraft();
+    if (!tenantId || !agentType) return;
+    const d = loadDraft({ tenantId, agentType });
     if (d && d.state && (d.state.companyName || d.state.research)) setResumeOffer(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tenantId, agentType]);
 
   const applyResume = () => {
     const s = resumeOffer.state;
