@@ -116,6 +116,45 @@
 .ubo-customer-assertions article > span { color: var(--ubo-customer-green); font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .ubo-customer-assertions article p { margin: 5px 0; font-size: 11px; line-height: 1.45; }
 .ubo-customer-assertions article small { color: var(--ubo-customer-muted); font-size: 8px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.ubo-customer-source-notice { margin: 0; padding: 0 24px 15px; color: var(--ubo-customer-muted); font-size: 10px; }
+.ubo-customer-assertion-detail { margin: 12px 0 0; padding-top: 10px; display: grid; grid-template-columns: minmax(100px, .25fr) 1fr; gap: 5px 12px; border-top: 1px solid var(--ubo-customer-border); font-size: 9px; }
+.ubo-customer-assertion-detail dt { color: var(--ubo-customer-muted); font-weight: 750; }
+.ubo-customer-assertion-detail dd { margin: 0; overflow-wrap: anywhere; }
+.ubo-customer-chart-analysis { display: grid; gap: 18px; }
+.ubo-customer-analysis-heading { padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #d8b75a; border-radius: 14px; background: #fff9e8; }
+.ubo-customer-analysis-heading small { color: #7b641c; }
+.ubo-customer-analysis-heading h2 { margin: 4px 0 0; font-size: 18px; }
+.ubo-customer-analysis-heading > span { color: #7b641c; font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.ubo-customer-source-map-note { margin: 0; padding: 13px 16px; border: 1px solid #d8b75a; border-radius: 10px; background: #fffdf4; color: #67551c; font-size: 10px; line-height: 1.5; }
+.ubo-customer-graph-controls { padding: 14px 18px; display: flex; justify-content: space-between; gap: 16px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; background: white; }
+.ubo-customer-graph-controls fieldset { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; border: 0; }
+.ubo-customer-graph-controls legend { width: 100%; margin-bottom: 4px; color: var(--ubo-customer-muted); font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.ubo-customer-graph-controls label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 750; }
+.ubo-customer-method-card { padding: 22px 24px; }
+.ubo-customer-method-card fieldset { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; border: 0; }
+.ubo-customer-method-card legend { width: 100%; margin-bottom: 8px; font-size: 13px; font-weight: 850; }
+.ubo-customer-method-card label { padding: 8px 11px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--ubo-customer-border); border-radius: 999px; font-size: 10px; font-weight: 750; }
+.ubo-customer-method-card > p { color: var(--ubo-customer-muted); font-size: 9px; }
+.ubo-customer-calculations { display: grid; gap: 12px; }
+.ubo-customer-calculations > article { padding: 16px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; }
+.ubo-customer-calculations article header { display: flex; justify-content: space-between; gap: 14px; }
+.ubo-customer-calculations h3 { margin: 3px 0; font-size: 15px; }
+.ubo-customer-calculations p { font-size: 10px; line-height: 1.5; }
+.ubo-customer-basis { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ubo-customer-border); }
+.ubo-customer-comparison { padding: 22px 24px; }
+.ubo-customer-comparison > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ubo-customer-comparison h2 { margin: 4px 0; font-size: 18px; }
+.ubo-customer-comparison button { padding: 9px 12px; border: 1px solid var(--ubo-customer-green); border-radius: 9px; background: white; color: var(--ubo-customer-green); font-weight: 800; cursor: pointer; }
+.ubo-customer-comparison > p, .ubo-customer-attention-filter { color: var(--ubo-customer-muted); font-size: 10px; }
+.ubo-customer-comparison-grid { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr .85fr; border: 1px solid var(--ubo-customer-border); border-radius: 10px; overflow: hidden; }
+.ubo-customer-comparison-grid > div { min-width: 0; padding: 12px; display: grid; align-content: start; gap: 5px; border-right: 1px solid var(--ubo-customer-border); border-bottom: 1px solid var(--ubo-customer-border); font-size: 10px; }
+.ubo-customer-comparison-grid > div:nth-child(3n) { border-right: 0; }
+.ubo-customer-comparison-grid .head { background: #f3f8f6; font-weight: 850; }
+.ubo-customer-comparison-grid small { overflow-wrap: anywhere; }
+.ubo-customer-comparison-missing { color: var(--ubo-customer-muted); font-style: italic; }
+.ubo-customer-comparison-status { margin-top: 5px; padding: 6px 8px; border-radius: 7px; background: #fff5d8; color: #725b16; line-height: 1.35; }
+.ubo-customer-comparison-status.values_match_unverified, .ubo-customer-comparison-status.range_consistent, .ubo-customer-comparison-status.ranges_overlap { background: #eaf7f2; color: var(--ubo-customer-green-dark); }
+.ubo-customer-comparison-status.discrepancy { background: #ffeded; color: #9b2929; }
 .ubo-customer-stop { padding: 16px 18px; border: 1px dashed #b9c9c6; border-radius: 12px; text-align: center; }
 .ubo-customer-stop strong { font-size: 11px; }
 .ubo-customer-stop p { margin: 4px 0 0; color: var(--ubo-customer-muted); font-size: 9px; }
@@ -144,4 +183,8 @@
   .ubo-customer-result-card > header { align-items: start; flex-direction: column; }
   .ubo-customer-graph-card > header { align-items: start; flex-direction: column; }
   .ubo-customer-graph-card iframe { min-height: 560px; }
+  .ubo-customer-analysis-heading, .ubo-customer-comparison > header { align-items: start; flex-direction: column; }
+  .ubo-customer-comparison-grid { grid-template-columns: 1fr; }
+  .ubo-customer-comparison-grid > div { border-right: 0; }
+  .ubo-customer-comparison-grid .head { display: none; }
 }

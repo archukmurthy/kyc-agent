@@ -49,12 +49,13 @@ export function writeCustomerDemoCase({ draft, demoCase }, storage = window.loca
   }));
 }
 
-export function writeCustomerOwnershipChartSession({ context, result }, storage = window.localStorage) {
+export function writeCustomerOwnershipChartSession({ context, result, calculationMethod = "POLICY_ALL_ROUTES" }, storage = window.localStorage) {
   storage.setItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY, JSON.stringify({
     contractVersion: CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
     savedAt: new Date().toISOString(),
     context,
     result,
+    calculationMethod,
   }));
 }
 

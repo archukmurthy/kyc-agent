@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { ownershipLabelFor } from "../demoSession";
 import { allCandidateFacts } from "../demoResearch";
+import AssertionDetails from "../AssertionDetails";
 import {
   clearCustomerOwnershipChartSession,
   readCustomerDemoContext,
@@ -8,7 +9,8 @@ import {
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
-import CustomerOwnershipGraph from "./CustomerOwnershipGraph";
+import ChartAnalysisPanel from "./ChartAnalysisPanel";
+import ChartResearchComparison from "./ChartResearchComparison";
 import "./customerOwnershipChart.css";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -118,37 +120,26 @@ function OwnersCard({ owners }) {
   </section>;
 }
 
-function AssertionsCard({ assertions }) {
-  return <details className="ubo-customer-card ubo-customer-assertions" open>
-    <summary><div><small>Evidence → UBO handoff</small><strong>Assertions extracted from your ownership chart</strong></div><span>{assertions.length} assertion{assertions.length === 1 ? "" : "s"}</span></summary>
-    <div>{assertions.map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · no registry comparison performed</small></article>)}</div>
-  </details>;
-}
-
 function ExistingResearchAssertions({ researchResult }) {
   const rows = allCandidateFacts(researchResult);
   if (!rows.length) return null;
-  return <details className="ubo-customer-card ubo-customer-assertions">
-    <summary><div><small>Existing case research</small><strong>Registry assertions already available</strong></div><span>{rows.length} assertion{rows.length === 1 ? "" : "s"}</span></summary>
-    <div>{rows.map(({ fact, source }, index) => {
-      const attribute = fact.type === "ENTITY_ATTRIBUTE";
-      const relationship = String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ").toLowerCase();
-      const statement = attribute
-        ? `${fact.subject?.name || "Registry entity"} · ${Object.entries(fact.value || {}).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value}`).join(" · ")}`
-        : `${fact.subject?.name || "Source party"} → ${relationship}${fact.measurement ? ` (${relationshipValue(fact)})` : ""} → ${fact.object?.name || "Target party"}`;
-      return <article key={fact.factId || index}><span>{attribute ? "Registry context" : relationship}</span><p>{statement}</p><small>{fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Source reference retained"} · Candidate/source assertion</small></article>;
-    })}</div>
-  </details>;
+  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." />;
 }
 
-function Results({ result, onReplace }) {
+function ChartAssertions({ result }) {
+  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact" } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." />;
+  return <details className="ubo-customer-card ubo-customer-assertions"><summary><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong></div><span>{result.assertions?.length || 0} reduced assertions</span></summary><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></details>;
+}
+
+function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace }) {
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
     <CertificationCard certification={result.certification} />
-    <CustomerOwnershipGraph projection={result.sourceGraph} />
+    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} />
     <OwnersCard owners={result.owners || []} />
-    <AssertionsCard assertions={result.assertions || []} />
-    <div className="ubo-customer-stop"><strong>This page stops after chart analysis.</strong><p>Registry comparison, open-question resolution and UBO determination are deliberately not performed in this increment.</p></div>
+    <ChartAssertions result={result} />
+    <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} />
+    <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
   </div>;
 }
 
@@ -159,6 +150,7 @@ export default function CustomerOwnershipChartPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
+  const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "POLICY_ALL_ROUTES");
 
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={2} /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/">Enter company details</a></main></div>;
 
@@ -191,6 +183,10 @@ export default function CustomerOwnershipChartPage() {
       setError(caught.message || "We could not analyse this ownership chart.");
     } finally { setBusy(false); }
   };
+  const changeCalculationMethod = (next) => {
+    setCalculationMethod(next);
+    if (result) writeCustomerOwnershipChartSession({ context, result, calculationMethod: next });
+  };
 
   return <div className="ubo-customer-page">
     <CustomerJourneyHeader currentStep={2} />
@@ -198,9 +194,9 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} onReplace={replace} /> : <UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} />}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} /> : <UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} />}
     </main>
-    <footer className="ubo-customer-footer">Demo experience · Browser-local result · No registry comparison</footer>
+    <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
   </div>;
 }
 

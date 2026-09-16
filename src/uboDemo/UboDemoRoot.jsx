@@ -5,9 +5,10 @@ import {
   readDemoSession, readLabReplays, saveLabReplay, validateDemoDraft, writeDemoSession,
 } from "./demoSession";
 import {
-  allCandidateFacts, compactResearchResult, executableCustomerBundles, formatMeasurement,
-  internalReviewCount, relationshipCategory, runDemoResearch,
+  allCandidateFacts, compactResearchResult, executableCustomerBundles,
+  internalReviewCount, runDemoResearch,
 } from "./demoResearch";
+import AssertionDetails from "./AssertionDetails";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
 import "./uboDemo.css";
 
@@ -66,7 +67,7 @@ function GraphFrame({ projection, entityLabels }) {
 
 function Assertions({ result }) {
   const rows = allCandidateFacts(result);
-  return <details className="ubo-demo-assertions"><summary><strong>Research assertions and source facts</strong><span>{rows.length} assertions · click to inspect</span></summary><div className="ubo-demo-assertion-list">{rows.map(({ fact, source }, index) => <article key={fact.factId || index}><span className="ubo-demo-kind">{relationshipCategory(fact.relationship)}</span><p><strong>{fact.subject?.name || "Source party"}</strong> → <strong>{fact.object?.name || "Target party"}</strong></p><p>{String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ")} · {formatMeasurement(fact.measurement)}</p><small>{fact.qualifiers?.currentState || "Currentness not supplied"} · {source.sourceState || source.capability || "Source"} · {fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Reference retained"} · Candidate/source assertion</small></article>)}</div></details>;
+  return <AssertionDetails entries={rows} title="Research assertions and source facts" sourceNotice="Candidate/source assertions are not approved conclusions." />;
 }
 
 function humanAction(type) { return ({ REQUEST_EXTERNAL_EVIDENCE: "Provide supporting ownership evidence", DELEGATE_CUSTOMER_WORK: "Ask an authorised colleague to help", PROVIDE_STRUCTURED_INFORMATION: "Provide the missing ownership information", CONFIRM_INFORMATION: "Confirm the ownership information" })[type] || String(type || "Customer action").replaceAll("_", " "); }
