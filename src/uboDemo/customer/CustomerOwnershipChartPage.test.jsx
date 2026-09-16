@@ -166,6 +166,9 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
   expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
   expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();
+  expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculations small" })).toBeInTheDocument();
+  expect(screen.getByText(/Mitchell Fortescue → Better Comms VOIP Ltd/)).toBeInTheDocument();
+  expect(calculationCard).not.toHaveTextContent(/person-1|chart-party:/i);
   expect(screen.getByText("Provisional chart assessment")).toBeInTheDocument();
   expect(screen.queryByText(/Source assertion map/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/Calculation scope/i)).not.toBeInTheDocument();

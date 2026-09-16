@@ -57,7 +57,7 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   const [scope, setScope] = useState("RELEVANT");
   const [dimension, setDimension] = useState("ALL");
   const [calculationExpanded, setCalculationExpanded] = useState(true);
-  const people = useMemo(() => calculationPeople(view, method), [view, method]);
+  const people = useMemo(() => calculationPeople(view, method, analysis?.entityLabels), [view, method, analysis?.entityLabels]);
   const ownershipSteps = useMemo(() => sourceOwnershipSteps(sourceProjection), [sourceProjection]);
   const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection), scope, dimension), [view?.graph, sourceProjection, scope, dimension]);
   if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}</section>;

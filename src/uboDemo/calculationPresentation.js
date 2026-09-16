@@ -17,9 +17,11 @@ function stateLabel(state, method) {
 
 function routePresentation(path, relationships, entityName) {
   const edges = (path.relationshipIds || []).map((id) => relationships.get(id)).filter(Boolean);
+  const sourceId = (edge) => edge.subjectEntityId || edge.sourceEntityId;
+  const targetId = (edge) => edge.objectEntityId || edge.targetEntityId;
   return {
     pathId: path.pathId,
-    route: edges.length ? [entityName(edges[0].subjectEntityId), ...edges.map((edge) => entityName(edge.objectEntityId))].join(" → ") : "Recorded route",
+    route: edges.length ? [entityName(sourceId(edges[0])), ...edges.map((edge) => entityName(targetId(edge)))].join(" → ") : "Recorded route",
     inputs: edges.map((edge) => formatAssertionMeasurement(edge.measurement)),
     contribution: path.contribution ? formatAssertionMeasurement(path.contribution) : null,
     relationshipIds: path.relationshipIds || [],
@@ -28,7 +30,7 @@ function routePresentation(path, relationships, entityName) {
 
 export function calculationPeople(view, method = "POLICY_ALL_ROUTES", labels = {}) {
   if (!view?.graph) return [];
-  const nodes = new Map((view.graph.nodes || []).map((node) => [node.entityId, node.primaryName || node.name || node.entityId]));
+  const nodes = new Map((view.graph.nodes || []).map((node) => [node.entityId, node.primaryName || node.displayName || node.name || node.entityId]));
   const entityName = (id) => labels[id] || nodes.get(id) || id;
   const relationships = new Map((view.graph.relationships || []).map((edge) => [edge.relationshipId, edge]));
   const bases = view.qualificationBases || view.graph.qualificationBasisRecords || [];
