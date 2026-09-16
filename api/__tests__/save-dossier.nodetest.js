@@ -94,6 +94,11 @@ test("an analyst updates its own analyst-owned dossier in place", async () => {
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.dossierId, "d-1");
   assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "update"]);
+  // The UPDATE itself must re-check ownership (TOCTOU guard) — not just the
+  // earlier permission SELECT. Removing this clause from the SQL must fail
+  // this test.
+  const update = sql.log.find((l) => l.kind === "update");
+  assert.match(update.text, /owned_by\s*<>\s*'customer'/);
 });
 
 test("an analyst cannot update a customer-owned dossier", async () => {

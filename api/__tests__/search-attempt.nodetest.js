@@ -97,6 +97,11 @@ test("TOCTOU: the row flips to customer-owned between the permission SELECT and 
   await handler({ method: "POST", body: { dossierId: "d-1" }, query: {}, headers: {} }, res);
   assert.strictEqual(res.statusCode, 403);
   assert.deepStrictEqual(res.body, { error: "dossier_locked" });
+  // The UPDATE itself must re-check ownership (TOCTOU guard) — not just the
+  // earlier permission SELECT. Removing this clause from the SQL must fail
+  // this test.
+  const update = sql.log.find((s) => /UPDATE entity_dossiers/i.test(s.text));
+  assert.match(update.text, /owned_by\s*<>\s*'customer'/);
 });
 
 test("an analyst cannot increment a customer-owned dossier's counter", async () => {
