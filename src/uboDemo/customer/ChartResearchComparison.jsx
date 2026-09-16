@@ -1,7 +1,20 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
 import { formatAssertionMeasurement } from "../assertionPresentation";
-import { buildChartResearchComparison, summarizeOwnershipComparison } from "./chartComparison";
+import { buildChartResearchComparison, buildChartResearchIdentityCandidates, summarizeOwnershipComparison } from "./chartComparison";
+
+const IDENTITY_CACHE_KEY = "ubo-control-demo.cross-source-party-resolution.v1";
+
+function readIdentityCache() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(IDENTITY_CACHE_KEY) || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch (_) { return []; }
+}
+
+function writeIdentityCache(matches) {
+  try { window.localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify(matches.slice(-100))); } catch (_) { /* Comparison remains usable without cache. */ }
+}
 
 function factReference(fact, source) {
   const reference = fact?.evidenceReferences?.[0];
@@ -24,22 +37,69 @@ function resultDetail(row) {
       <dt>Exact point independently stated by registry</dt><dd>No</dd>
     </dl>}
     {row.verificationBasis && <small>Verification basis: {row.verificationBasis}</small>}
+    {row.identityResolutions?.length > 0 && <details className="ubo-customer-identity-resolution">
+      <summary>How the parties were matched</summary>
+      {row.identityResolutions.map((resolution) => <dl key={resolution.role}>
+        <dt>Party role</dt><dd>{resolution.role === "OWNER" ? "Owner" : "Owned entity"}</dd>
+        <dt>Method</dt><dd>{resolution.identityResolutionMethod}</dd>
+        <dt>Confidence</dt><dd>{Math.round((resolution.confidence || 0) * 100)}%</dd>
+        <dt>Analyst / registry name</dt><dd>{resolution.sourcePartyA?.name || "Not stated"}</dd>
+        <dt>Customer-chart name</dt><dd>{resolution.sourcePartyB?.name || "Not stated"}</dd>
+        <dt>Reasons</dt><dd>{(resolution.reasons || []).join("; ") || "No reason recorded"}</dd>
+      </dl>)}
+    </details>}
   </div>;
 }
 
 export default function ChartResearchComparison({ researchResult, chartFacts }) {
   const [visible, setVisible] = useState(false);
   const [needsAttention, setNeedsAttention] = useState(false);
+  const [aiResolutions, setAiResolutions] = useState(readIdentityCache);
+  const [identityCheck, setIdentityCheck] = useState({ state: "IDLE", requestKey: null });
+  const attemptedIdentityChecks = useRef(new Set());
   const researchEntries = useMemo(() => allCandidateFacts(researchResult), [researchResult]);
   const chartEntries = useMemo(() => (chartFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), [chartFacts]);
-  const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries), [researchEntries, chartEntries]);
+  const identityCandidates = useMemo(() => buildChartResearchIdentityCandidates(researchEntries, chartEntries), [researchEntries, chartEntries]);
+  const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries, { aiResolutions }), [researchEntries, chartEntries, aiResolutions]);
   const summary = useMemo(() => summarizeOwnershipComparison(rows), [rows]);
+  useEffect(() => {
+    if (!visible || !identityCandidates.length) return;
+    const resolved = new Set(aiResolutions.map(({ candidateId }) => candidateId));
+    const pending = identityCandidates.filter(({ candidateId }) => !resolved.has(candidateId));
+    const requestKey = pending.map(({ candidateId }) => candidateId).sort().join("|");
+    if (!pending.length || attemptedIdentityChecks.current.has(requestKey)) return;
+    attemptedIdentityChecks.current.add(requestKey);
+    let active = true;
+    setIdentityCheck({ state: "CHECKING", requestKey });
+    fetch("/api/ubo-demo-entity-resolution", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidates: pending.slice(0, 20) }),
+    }).then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok || !payload.success || payload.result?.decisionScope !== "PARTY_IDENTITY_ONLY") throw new Error(payload.message || "Identity matching is unavailable");
+      if (!active) return;
+      setAiResolutions((current) => {
+        const byId = new Map(current.map((item) => [item.candidateId, item]));
+        payload.result.matches.forEach((item) => byId.set(item.candidateId, item));
+        const next = [...byId.values()];
+        writeIdentityCache(next);
+        return next;
+      });
+      setIdentityCheck({ state: "COMPLETE", requestKey });
+    }).catch(() => {
+      if (active) setIdentityCheck({ state: "UNAVAILABLE", requestKey });
+    });
+    return () => { active = false; };
+  }, [visible, identityCandidates, aiResolutions]);
   if (!researchEntries.length) return <section className="ubo-customer-card ubo-customer-comparison"><header><div><small>Read-only comparison</small><h2>No research result available to compare</h2></div></header><p>The uploaded chart remains a separate candidate source. No registry corroboration has been inferred.</p></section>;
   const displayed = needsAttention ? rows.filter((row) => row.status !== "INDEPENDENTLY_VERIFIED") : rows;
   return <section className="ubo-customer-card ubo-customer-comparison">
     <header><div><small>Separate source datasets</small><h2>Ownership assertions compared with saved research</h2></div><button type="button" onClick={() => setVisible((value) => !value)}>{visible ? "Hide comparison" : "Compare with research"}</button></header>
     <p>This read-only check compares economic ownership only. It does not merge facts, approve identities, treat certification as ownership evidence or replace independent review.</p>
     {visible && <>
+      {identityCheck.state === "CHECKING" && <p className="ubo-customer-identity-status" role="status">Checking unresolved party identities using the bounded identity-only matcher…</p>}
+      {identityCheck.state === "UNAVAILABLE" && <p className="ubo-customer-identity-status warning" role="status">AI-assisted identity matching is unavailable. Deterministic matches remain applied; unresolved identities still need confirmation.</p>}
       <div className="ubo-customer-comparison-summary">
         <div><strong>{summary.independentlyVerified}</strong><span>Independently verified</span></div>
         <div><strong>{summary.discrepancies}</strong><span>Discrepancies</span></div>

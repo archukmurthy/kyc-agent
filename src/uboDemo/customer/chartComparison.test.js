@@ -69,6 +69,43 @@ test("ambiguous repeated name-only relationship pairs are not automatically matc
   expect(rows.every((row) => row.status === "NEEDS_CONFIRMATION")).toBe(true);
 });
 
+test("Vodafone legal-name variants resolve into one comparison row without changing either source assertion", () => {
+  const registryParties = {
+    group: party("Vodafone Group Plc", "01833679"),
+    european: party("Vodafone European Investments"),
+    international: party("Vodafone International Operations Limited", "02797438"),
+    three: party("Vodafonethree Holdings Limited", "14903490"),
+    vodafone: party("Vodafone Limited", "01471587"),
+  };
+  const chartParties = {
+    group: party("VODAFONE GROUP PLC"),
+    european: party("Vodafone European Investments"),
+    international: party("Vodafone International Operations Ltd"),
+    three: party("Vodafone Three Holdings Ltd"),
+    vodafone: party("Vodafone Limited"),
+  };
+  const ownership = (prefix, parties, values, reference) => [
+    fact(`${prefix}-1`, parties.group, parties.european, values[0], "ECONOMIC_OWNERSHIP", `${reference}-1`),
+    fact(`${prefix}-2`, parties.european, parties.international, values[1], "ECONOMIC_OWNERSHIP", `${reference}-2`),
+    fact(`${prefix}-3`, parties.international, parties.three, values[2], "ECONOMIC_OWNERSHIP", `${reference}-3`),
+    fact(`${prefix}-4`, parties.three, parties.vodafone, values[3], "ECONOMIC_OWNERSHIP", `${reference}-4`),
+  ];
+  const ranges = Array.from({ length: 4 }, (_, index) => ({ type: "RANGE", lowerBound: index < 2 ? 75 : index === 2 ? 50 : 75, upperBound: index === 2 ? 75 : 100, lowerInclusive: false, upperInclusive: true }));
+  const exact = [100, 100, 80, 80].map((value) => ({ type: "EXACT", value }));
+  const registryFacts = ownership("registry", registryParties, ranges, "companies-house");
+  const chartFacts = ownership("chart", chartParties, exact, "customer-artifact");
+  const registryNames = registryFacts.flatMap(({ subject, object }) => [subject.name, object.name]);
+  const chartNames = chartFacts.flatMap(({ subject, object }) => [subject.name, object.name]);
+  const rows = buildChartResearchComparison(registryFacts.map((value) => entry(value, "registry-record")), chartFacts.map((value) => entry(value, "chart-artifact")));
+
+  expect(rows).toHaveLength(4);
+  expect(rows.every((row) => row.researchFact && row.chartFact)).toBe(true);
+  expect(rows.flatMap(({ identityResolutions }) => identityResolutions).some(({ identityResolutionMethod, sourcePartyA, sourcePartyB }) =>
+    identityResolutionMethod === "NORMALIZED_LEGAL_NAME" && sourcePartyA.name === "Vodafonethree Holdings Limited" && sourcePartyB.name === "Vodafone Three Holdings Ltd")).toBe(true);
+  expect(registryFacts.flatMap(({ subject, object }) => [subject.name, object.name])).toEqual(registryNames);
+  expect(chartFacts.flatMap(({ subject, object }) => [subject.name, object.name])).toEqual(chartNames);
+});
+
 test("comparison excludes voting, control and certification facts and summarizes only economic ownership", () => {
   const rows = buildChartResearchComparison([
     entry(fact("ownership-r", alice, target, { type: "EXACT", value: 80 }, "ECONOMIC_OWNERSHIP", "registry"), "registry"),

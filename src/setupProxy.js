@@ -32,6 +32,7 @@ const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
 const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
+const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
@@ -109,6 +110,16 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(uboDemoCustomerOwnershipChartHandler)(req, res);
+    });
+  });
+
+  app.post("/api/ubo-demo-entity-resolution", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDemoEntityResolutionHandler)(req, res);
     });
   });
 

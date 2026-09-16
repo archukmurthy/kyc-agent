@@ -1,30 +1,11 @@
+import {
+  buildAiPartyMatchCandidates,
+  buildPartyStructuralContexts,
+  partyFingerprint,
+  resolveCrossSourceParty,
+} from "./crossSourcePartyResolution";
+
 function normalized(value) { return String(value || "").trim().toUpperCase().replace(/\s+/g, " "); }
-
-function identifiers(party) {
-  return new Set((party?.externalIdentifiers || [])
-    .map((item) => `${normalized(item.namespace || item.system || item.identifierType)}:${normalized(item.value)}`)
-    .filter((item) => !item.endsWith(":")));
-}
-
-function sharesIdentifier(left, right) {
-  const rightIds = identifiers(right);
-  return [...identifiers(left)].some((id) => rightIds.has(id));
-}
-
-function compatiblePartyType(left, right) {
-  return !left?.entityType || !right?.entityType || normalized(left.entityType) === normalized(right.entityType);
-}
-
-function compatibleJurisdiction(left, right) {
-  return !left?.jurisdiction || !right?.jurisdiction || normalized(left.jurisdiction) === normalized(right.jurisdiction);
-}
-
-function identityState(left, right) {
-  if (sharesIdentifier(left, right)) return "IDENTIFIER_MATCH";
-  if (normalized(left?.name) && normalized(left?.name) === normalized(right?.name)
-    && compatiblePartyType(left, right) && compatibleJurisdiction(left, right)) return "NAME_MATCH_REVIEW_REQUIRED";
-  return "NO_MATCH";
-}
 
 function unwrap(entry) { return { fact: entry?.fact || entry, source: entry?.source || {} }; }
 function isEconomicOwnership(fact) { return fact?.type === "RELATIONSHIP" && fact.relationship === "ECONOMIC_OWNERSHIP"; }
@@ -105,16 +86,63 @@ function independentlySourced(researchEntry, chartEntry) {
     && ![...researchTokens].some((token) => chartTokens.has(token));
 }
 
-function pairNameKey(fact) { return `${normalized(fact?.subject?.name)}→${normalized(fact?.object?.name)}`; }
+function temporalScope(fact) {
+  const temporal = fact?.temporal || {};
+  const qualifiers = fact?.qualifiers || {};
+  const state = normalized(qualifiers.currentState || temporal.state || "UNSPECIFIED");
+  const from = normalized(temporal.effectiveFrom || qualifiers.effectiveFrom || "");
+  const to = normalized(temporal.effectiveTo || qualifiers.effectiveTo || "");
+  return { state, from, to, key: `${state}|${from}|${to}` };
+}
 
-function relationshipMatch(research, chart, researchPairCounts, chartPairCounts) {
-  if (!isEconomicOwnership(research) || !isEconomicOwnership(chart)) return false;
-  const subject = identityState(research.subject, chart.subject);
-  const object = identityState(research.object, chart.object);
-  if (subject === "NO_MATCH" || object === "NO_MATCH") return false;
-  if (subject === "IDENTIFIER_MATCH" && object === "IDENTIFIER_MATCH") return true;
-  const key = pairNameKey(research);
-  return key === pairNameKey(chart) && researchPairCounts.get(key) === 1 && chartPairCounts.get(key) === 1;
+function compatibleTemporalScope(left, right) {
+  const a = temporalScope(left);
+  const b = temporalScope(right);
+  const unspecified = new Set(["", "UNKNOWN", "UNSPECIFIED", "NOT_ESTABLISHED"]);
+  const stateCompatible = a.state === b.state || unspecified.has(a.state) || unspecified.has(b.state);
+  return stateCompatible && (!a.from || !b.from || a.from === b.from) && (!a.to || !b.to || a.to === b.to);
+}
+
+function comparisonTemporalScope(left, right) {
+  const a = temporalScope(left);
+  const b = temporalScope(right);
+  const state = !["", "UNKNOWN", "UNSPECIFIED", "NOT_ESTABLISHED"].includes(a.state) ? a.state : b.state;
+  return `${state || "UNSPECIFIED"}|${a.from || b.from}|${a.to || b.to}`;
+}
+
+function relationshipResolution(research, chart, researchContexts, chartContexts, aiResolutions) {
+  if (!isEconomicOwnership(research) || !isEconomicOwnership(chart) || !compatibleTemporalScope(research, chart)) return null;
+  const owner = resolveCrossSourceParty({
+    sourcePartyA: research.subject,
+    sourcePartyB: chart.subject,
+    structuralContextA: researchContexts.get(partyFingerprint(research.subject)),
+    structuralContextB: chartContexts.get(partyFingerprint(chart.subject)),
+    aiResolutions,
+  });
+  const ownedEntity = resolveCrossSourceParty({
+    sourcePartyA: research.object,
+    sourcePartyB: chart.object,
+    structuralContextA: researchContexts.get(partyFingerprint(research.object)),
+    structuralContextB: chartContexts.get(partyFingerprint(chart.object)),
+    aiResolutions,
+  });
+  const identityResolutions = [
+    { role: "OWNER", ...owner },
+    { role: "OWNED_ENTITY", ...ownedEntity },
+  ];
+  const autoLinked = owner.autoLinked && ownedEntity.autoLinked;
+  const reviewRequired = !autoLinked
+    && identityResolutions.every(({ classification, autoLinked: linked }) => linked || !["DIFFERENT_ENTITY"].includes(classification))
+    && identityResolutions.some(({ identityResolutionMethod }) => identityResolutionMethod === "AI_ASSISTED");
+  return {
+    autoLinked,
+    reviewRequired,
+    confidence: Math.min(owner.confidence, ownedEntity.confidence),
+    identityResolutions,
+    comparisonIdentity: autoLinked
+      ? `${owner.comparisonIdentity}|${ownedEntity.comparisonIdentity}|ECONOMIC_OWNERSHIP|${comparisonTemporalScope(research, chart)}`
+      : null,
+  };
 }
 
 function needsConfirmation(key, researchEntry, chartEntry, reason) {
@@ -131,14 +159,14 @@ function needsConfirmation(key, researchEntry, chartEntry, reason) {
   };
 }
 
-function assessedRow(key, researchEntry, chartEntry) {
+function assessedRow(key, researchEntry, chartEntry, identity = {}) {
   const researchFact = researchEntry.fact;
   const chartFact = chartEntry.fact;
   const scopeIssue = temporalOrScopeIssue(researchFact, chartFact);
-  if (scopeIssue) return needsConfirmation(key, researchEntry, chartEntry, scopeIssue);
+  if (scopeIssue) return { ...needsConfirmation(key, researchEntry, chartEntry, scopeIssue), ...identity };
   const comparison = compareMeasurements(researchFact.measurement, chartFact.measurement);
   const independent = independentlySourced(researchEntry, chartEntry);
-  if (comparison.status === "NOT_COMPARABLE") return needsConfirmation(key, researchEntry, chartEntry, "One side has no usable exact percentage or range.");
+  if (comparison.status === "NOT_COMPARABLE") return { ...needsConfirmation(key, researchEntry, chartEntry, "One side has no usable exact percentage or range."), ...identity };
   if (comparison.status === "CONFLICT") return {
     ...needsConfirmation(key, researchEntry, chartEntry, independent
       ? "The customer ownership value falls outside the independently sourced registry range or differs from the registry value."
@@ -146,8 +174,9 @@ function assessedRow(key, researchEntry, chartEntry) {
     status: "CONFLICT",
     label: "⚠ Discrepancy",
     verificationBasis: "CONFLICT",
+    ...identity,
   };
-  if (!independent) return needsConfirmation(key, researchEntry, chartEntry, "Comparable values are present, but genuinely independent source identities were not established.");
+  if (!independent) return { ...needsConfirmation(key, researchEntry, chartEntry, "Comparable values are present, but genuinely independent source identities were not established."), ...identity };
   if (comparison.status === "EXACT_MATCH") return {
     ...needsConfirmation(key, researchEntry, chartEntry),
     status: "INDEPENDENTLY_VERIFIED",
@@ -155,6 +184,7 @@ function assessedRow(key, researchEntry, chartEntry) {
     descriptor: "Exact independent match",
     detail: "The independently sourced registry assertion matches the customer ownership value exactly.",
     verificationBasis: comparison.verificationBasis,
+    ...identity,
   };
   if (comparison.status === "EXACT_IN_RANGE") return {
     ...needsConfirmation(key, researchEntry, chartEntry),
@@ -164,6 +194,7 @@ function assessedRow(key, researchEntry, chartEntry) {
     detail: "The independent registry supports this ownership claim. The customer exact value falls within the independently sourced registry range.",
     verificationBasis: comparison.verificationBasis,
     exactPointIndependentlyStated: false,
+    ...identity,
   };
   return {
     ...needsConfirmation(key, researchEntry, chartEntry),
@@ -172,27 +203,53 @@ function assessedRow(key, researchEntry, chartEntry) {
     descriptor: "Verified against overlapping independent ranges",
     detail: "The independently sourced ownership ranges are consistent.",
     verificationBasis: comparison.verificationBasis,
+    ...identity,
   };
 }
 
-export function buildChartResearchComparison(researchEntries = [], chartEntries = []) {
+export function buildChartResearchComparison(researchEntries = [], chartEntries = [], { aiResolutions = [] } = {}) {
   const research = researchEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
   const chart = chartEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
-  const countPairs = (entries) => entries.reduce((counts, entry) => counts.set(pairNameKey(entry.fact), (counts.get(pairNameKey(entry.fact)) || 0) + 1), new Map());
-  const researchPairCounts = countPairs(research);
-  const chartPairCounts = countPairs(chart);
+  const researchContexts = buildPartyStructuralContexts(research.map(({ fact }) => fact));
+  const chartContexts = buildPartyStructuralContexts(chart.map(({ fact }) => fact));
   const used = new Set();
   const rows = chart.map((chartEntry) => {
-    const foundIndex = research.findIndex((researchEntry, index) => !used.has(index) && relationshipMatch(researchEntry.fact, chartEntry.fact, researchPairCounts, chartPairCounts));
-    if (foundIndex < 0) return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Chart only — not independently corroborated by current research.");
+    const candidates = research.map((researchEntry, index) => ({
+      index,
+      researchEntry,
+      resolution: used.has(index) ? null : relationshipResolution(researchEntry.fact, chartEntry.fact, researchContexts, chartContexts, aiResolutions),
+    })).filter(({ resolution }) => resolution);
+    const automatic = candidates.filter(({ resolution }) => resolution.autoLinked).sort((left, right) => right.resolution.confidence - left.resolution.confidence);
+    const uniqueAutomatic = automatic.length === 1 || (automatic[0]?.resolution.confidence - automatic[1]?.resolution.confidence > 0.01) ? automatic[0] : null;
+    if (!uniqueAutomatic) {
+      const review = candidates.filter(({ resolution }) => resolution.reviewRequired);
+      if (review.length === 1) {
+        used.add(review[0].index);
+        return {
+          ...needsConfirmation(`${review[0].researchEntry.fact.factId}:${chartEntry.fact.factId}`, review[0].researchEntry, chartEntry, "The relationship is comparable, but one or more party identities still need confirmation."),
+          identityResolutions: review[0].resolution.identityResolutions,
+        };
+      }
+      return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Chart only — not independently corroborated by current research.");
+    }
+    const foundIndex = uniqueAutomatic.index;
     used.add(foundIndex);
     const researchEntry = research[foundIndex];
-    return assessedRow(`${researchEntry.fact.factId}:${chartEntry.fact.factId}`, researchEntry, chartEntry);
+    return assessedRow(uniqueAutomatic.resolution.comparisonIdentity, researchEntry, chartEntry, {
+      canonicalComparisonIdentity: uniqueAutomatic.resolution.comparisonIdentity,
+      identityResolutions: uniqueAutomatic.resolution.identityResolutions,
+    });
   });
   research.forEach((researchEntry, index) => {
     if (!used.has(index)) rows.push(needsConfirmation(`research:${researchEntry.fact.factId}`, researchEntry, null, "Research only — need confirmation from customer."));
   });
   return rows;
+}
+
+export function buildChartResearchIdentityCandidates(researchEntries = [], chartEntries = []) {
+  const researchFacts = researchEntries.map(unwrap).map(({ fact }) => fact).filter(isEconomicOwnership);
+  const chartFacts = chartEntries.map(unwrap).map(({ fact }) => fact).filter(isEconomicOwnership);
+  return buildAiPartyMatchCandidates(researchFacts, chartFacts);
 }
 
 export function summarizeOwnershipComparison(rows = []) {

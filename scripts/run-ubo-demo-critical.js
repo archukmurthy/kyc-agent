@@ -30,6 +30,7 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   "src/uboDemo/customerHandoff.test.js",
   "src/uboDemo/assertionPresentation.test.js",
   "src/uboDemo/customer/chartComparison.test.js",
+  "src/uboDemo/customer/crossSourcePartyResolution.test.js",
   "src/uboDemo/customer/CustomerCompanyPage.test.jsx",
   "src/uboDemo/customer/CustomerOwnershipChartPage.test.jsx",
   `--moduleNameMapper=${JSON.stringify({
@@ -46,6 +47,7 @@ run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence char
   "ubo-control-lab/__tests__/demoAutoReview.nodetest.js",
   "ubo-control-lab/__tests__/tdrDemoScreen2.nodetest.js",
   "ubo-control-lab/server/__tests__/customerOwnershipChartDemo.nodetest.js",
+  "ubo-control-lab/server/__tests__/demoEntityMatching.nodetest.js",
   "agents/ubo/__tests__/recursiveCompaniesHouseExpansion.nodetest.js",
   "integrations/ubo-control/legacy-discovery/__tests__/legacyDiscoveryAdapter.nodetest.js",
   "integrations/ubo-control/legacy-discovery/__tests__/liveComposition.e2e.nodetest.js",
