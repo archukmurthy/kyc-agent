@@ -259,11 +259,25 @@
       return value;
     };
     nodes.forEach(({ entityId }) => depthFor(entityId));
+    let assignedDescendant = true;
+    while (assignedDescendant) {
+      assignedDescendant = false;
+      nodes.forEach(({ entityId }) => {
+        if (depth.has(entityId)) return;
+        const parentDepths = relationships
+          .filter(({ targetEntityId, sourceEntityId }) => targetEntityId === entityId && depth.has(sourceEntityId))
+          .map(({ sourceEntityId }) => depth.get(sourceEntityId) - 1);
+        if (!parentDepths.length) return;
+        depth.set(entityId, Math.min(...parentDepths));
+        assignedDescendant = true;
+      });
+    }
     const connectedMax = Math.max(0, ...depth.values());
     nodes.forEach((node) => { if (!depth.has(node.entityId)) depth.set(node.entityId, connectedMax + 1); });
     Object.entries(projection.presentationView?.layoutDepthOverrides || {}).forEach(([entityId, value]) => {
       if (depth.has(entityId) && Number.isInteger(value) && value >= 0) depth.set(entityId, value);
     });
+    const minDepth = Math.min(0, ...depth.values());
     const maxDepth = Math.max(0, ...depth.values());
     const layers = new Map();
     nodes.forEach((node) => {
@@ -299,7 +313,7 @@
     const leftLaneSpace = laneSpace(leftLaneCount);
     const rightLaneSpace = laneSpace(rightLaneCount);
     const width = nodeAreaWidth + leftLaneSpace + rightLaneSpace;
-    const height = (PAD * 2) + NH + (maxDepth * VG);
+    const height = (PAD * 2) + NH + ((maxDepth - minDepth) * VG);
     const positions = new Map();
     [...layers.entries()].forEach(([layer, layerNodes]) => {
       const layerWidth = (layerNodes.length * NW) + ((layerNodes.length - 1) * HG);

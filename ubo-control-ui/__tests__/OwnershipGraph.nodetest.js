@@ -241,6 +241,47 @@ test("deterministic hierarchy anchors the customer below immediate owners, long 
   assert.notEqual(first.positions.get("holdco-a").x, first.positions.get("holdco-b").x);
 });
 
+test("full-source hierarchy keeps sibling subsidiaries on the same downstream rank", () => {
+  const supplied = graphProjection(
+    ["better-comms-voip", "better-holdco", "better-network-services", "lee-taylor", "mitchell-fortescue"],
+    [
+      { source: "lee-taylor", target: "better-holdco", measurement: { type: "EXACT", value: 25 } },
+      { source: "mitchell-fortescue", target: "better-holdco", measurement: { type: "EXACT", value: 75 } },
+      { source: "better-holdco", target: "better-comms-voip", measurement: { type: "EXACT", value: 100 } },
+      { source: "better-holdco", target: "better-network-services", measurement: { type: "EXACT", value: 100 } },
+    ],
+  );
+  supplied.subject = { ...supplied.subject, entityId: "better-comms-voip", displayName: "Better Comms (VOIP) Ltd" };
+
+  const layout = computeLayout(supplied);
+
+  assert.equal(layout.depths.get("better-holdco"), 1);
+  assert.equal(layout.depths.get("better-comms-voip"), 0);
+  assert.equal(layout.depths.get("better-network-services"), 0);
+  assert.equal(layout.positions.get("better-comms-voip").y, layout.positions.get("better-network-services").y);
+  assert.ok(layout.positions.get("better-holdco").y < layout.positions.get("better-network-services").y);
+  assert.notEqual(layout.positions.get("better-comms-voip").x, layout.positions.get("better-network-services").x);
+});
+
+test("full-source hierarchy places deeper downstream subsidiaries below their parent without clipping", () => {
+  const supplied = graphProjection(
+    ["customer", "holdco", "sibling", "sibling-subsidiary"],
+    [
+      { source: "holdco", target: "customer" },
+      { source: "holdco", target: "sibling" },
+      { source: "sibling", target: "sibling-subsidiary" },
+    ],
+  );
+
+  const layout = computeLayout(supplied);
+
+  assert.equal(layout.depths.get("customer"), 0);
+  assert.equal(layout.depths.get("sibling"), 0);
+  assert.equal(layout.depths.get("sibling-subsidiary"), -1);
+  assert.ok(layout.positions.get("sibling").y < layout.positions.get("sibling-subsidiary").y);
+  assert.ok(layout.positions.get("sibling-subsidiary").y + 104 <= layout.height);
+});
+
 test("parallel economic and voting edges reuse nodes while remaining separately traceable", () => {
   const supplied = graphProjection(["customer", "owner-a"], [
     { id: "economic", source: "owner-a", target: "customer", type: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value: 35 } },
