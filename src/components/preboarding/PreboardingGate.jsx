@@ -36,6 +36,11 @@ export function PreboardingGate({ tenantId, onUnlocked, trackEvent }) {
     return () => { cancelled = true; };
   }, [tenantId]);
 
+  // Guards setState/onUnlocked after unmount, mirroring the availability
+  // probe's `cancelled` flag above.
+  const unmountedRef = React.useRef(false);
+  React.useEffect(() => () => { unmountedRef.current = true; }, []);
+
   async function handlePasswordSubmit() {
     if (!password || submitting) return;
     setSubmitting(true);
@@ -47,6 +52,7 @@ export function PreboardingGate({ tenantId, onUnlocked, trackEvent }) {
         body: JSON.stringify({ password }),
       });
       const data = await r.json();
+      if (unmountedRef.current) return;
       if (!r.ok || !data.success) {
         trackEvent("preboarding_password_failed", { attemptedAt: new Date().toISOString() });
         setError("Incorrect access code. Please try again.");
@@ -57,6 +63,7 @@ export function PreboardingGate({ tenantId, onUnlocked, trackEvent }) {
       trackEvent("preboarding_password_correct", { unlockedAt: new Date().toISOString() });
       onUnlocked(data.token, data.tenantId);
     } catch (err) {
+      if (unmountedRef.current) return;
       setError("Couldn't reach the server. Check your connection and try again.");
       setSubmitting(false);
     }

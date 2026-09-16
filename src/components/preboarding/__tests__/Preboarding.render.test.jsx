@@ -155,6 +155,26 @@ describe("pre-boarding gate", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("REGRESSION (Finding 1): /preview with the legacy pre-boarding param stays on the gate, in preview mode, instead of falling through to the customer flow", async () => {
+    // Mirrors how index.js's /preview branch renders KYCAgent now that it
+    // passes the legacy-param-derived preboarding flag alongside previewMode.
+    // Before that fix the branch rendered `<KYCAgent previewMode />` with no
+    // preboarding prop, so `isPreboardingSurface` was false, the redirect
+    // effect's early-return guard never tripped, and the component fell
+    // through to the ordinary customer flow instead of the gate — discarding
+    // preview mode. See task-11-report.md for this test's failing run against
+    // the pre-fix call shape.
+    await act(async () => {
+      render(<KYCAgent previewMode preboarding />);
+    });
+    await settle(0);
+    expect(bodyText()).toMatch(/Pre-boarding Agent/i);
+    expect(codeInput()).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Company Lookup/i })
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the access-code prompt as a password field", async () => {
     await mountAtGate();
     expect(codeInput()).toHaveAttribute("type", "password");
@@ -193,6 +213,17 @@ describe("pre-boarding gate", () => {
     await mountAtGate();
     expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
     expect(bodyText()).toMatch(/not available/i);
+  });
+
+  it("a deactivated tenant is told so, not gated", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "tenant_inactive", companyName: "Acme" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/not active|deactivated/i);
   });
 
   it("an unknown tenant is told so, not gated", async () => {

@@ -45,14 +45,14 @@ if (isPolicySimulator) {
   // Preview mode loads the customer flow with the unsaved admin config
   // pulled from sessionStorage. The flag tells App to source config from
   // sessionStorage rather than /api/config and to render a banner.
-  tree = <KYCAgent previewMode />;
+  tree = <KYCAgent previewMode preboarding={isPreboarding} />;
   title = isPreboarding
     ? "KYC Onboarding Agent | Pre-boarding"
     : "KYC Onboarding Agent";
 } else {
-  // Customer-facing onboarding flow and the pre-boarding agent both live here.
-  // Pre-boarding (?preboarding=1) is labelled; the plain customer onboarding
-  // flow carries no separator.
+  // Customer-facing onboarding flow lives here; the legacy ?preboarding=1
+  // link also lands here just long enough for App.js's redirect effect to
+  // send it to /preboarding.
   tree = <KYCAgent />;
   title = isPreboarding
     ? "KYC Onboarding Agent | Pre-boarding"
