@@ -17,11 +17,12 @@
 .ubo-customer-progress { width: min(720px, calc(100% - 48px)); margin: 28px auto 0; padding: 0; display: flex; list-style: none; }
 .ubo-customer-progress li { flex: 1; position: relative; display: flex; align-items: center; gap: 8px; color: #829598; font-size: 11px; font-weight: 750; }
 .ubo-customer-progress li:not(:last-child)::after { content: ""; height: 2px; position: absolute; left: 31px; right: 8px; top: 14px; z-index: 0; background: var(--ubo-customer-border); }
-.ubo-customer-progress li > span { width: 29px; height: 29px; z-index: 1; display: grid; place-items: center; border: 1px solid var(--ubo-customer-border); border-radius: 50%; background: var(--ubo-customer-bg); font-size: 10px; }
-.ubo-customer-progress .complete > span { border-color: var(--ubo-customer-green); background: var(--ubo-customer-mint); color: var(--ubo-customer-green); }
+.ubo-customer-progress-number { width: 29px; height: 29px; flex: 0 0 29px; position: relative; z-index: 1; display: grid; place-items: center; border: 1px solid var(--ubo-customer-border); border-radius: 50%; background: var(--ubo-customer-bg); font-size: 10px; }
+.ubo-customer-progress-label { position: relative; z-index: 1; padding-right: 8px; background: var(--ubo-customer-bg); white-space: nowrap; }
+.ubo-customer-progress .complete > .ubo-customer-progress-number { border-color: var(--ubo-customer-green); background: var(--ubo-customer-mint); color: var(--ubo-customer-green); }
 .ubo-customer-progress .complete::after { background: var(--ubo-customer-green) !important; }
 .ubo-customer-progress .current { color: var(--ubo-customer-ink); }
-.ubo-customer-progress .current > span { border-color: var(--ubo-customer-green); background: var(--ubo-customer-green); color: white; }
+.ubo-customer-progress .current > .ubo-customer-progress-number { border-color: var(--ubo-customer-green); background: var(--ubo-customer-green); color: white; }
 .ubo-customer-main { width: min(980px, calc(100% - 48px)); margin: 30px auto 0; padding-bottom: 70px; }
 .ubo-customer-context { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 1px solid var(--ubo-customer-border); border-radius: 13px; background: rgba(255,255,255,.72); }
 .ubo-customer-context > div { display: grid; gap: 4px; min-width: 220px; }
@@ -102,6 +103,8 @@
 .ubo-customer-received strong { font-size: 12px; }
 .ubo-customer-received p { margin: 0; color: var(--ubo-customer-muted); font-size: 10px; }
 .ubo-customer-result-card > header { padding: 21px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ubo-customer-border); }
+.ubo-customer-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.ubo-customer-collapse-button { padding: 8px 12px; border: 1px solid var(--ubo-customer-border); border-radius: 8px; background: white; color: var(--ubo-customer-green); font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
 .ubo-customer-status { padding: 6px 9px; border-radius: 999px; font-size: 9px; font-weight: 850; text-transform: uppercase; }
 .ubo-customer-status.found { background: var(--ubo-customer-mint); color: var(--ubo-customer-green); }
 .ubo-customer-status.neutral { background: #eef2f1; color: #57706f; }
@@ -111,12 +114,12 @@
 .ubo-customer-result-card blockquote { margin: 0 24px 20px; padding: 14px 17px; border-left: 3px solid var(--ubo-customer-green); background: #f7faf9; color: #38565d; font-size: 12px; line-height: 1.55; }
 .ubo-customer-graph-card > header { padding: 21px 24px 14px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .ubo-customer-graph-card > header h2 { margin: 4px 0 0; font-size: 21px; }
-.ubo-customer-graph-card > header > span { color: var(--ubo-customer-green); font-size: 9px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.ubo-customer-graph-card .ubo-customer-heading-actions > span { color: var(--ubo-customer-green); font-size: 9px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
 .ubo-customer-graph-intro { margin: 0; padding: 0 24px 18px; color: var(--ubo-customer-muted); font-size: 11px; line-height: 1.55; }
 .ubo-customer-graph-card iframe { width: 100%; min-height: 620px; display: block; border: 0; border-top: 1px solid var(--ubo-customer-border); border-bottom: 1px solid var(--ubo-customer-border); background: white; }
 .ubo-customer-graph-note { margin: 0; padding: 14px 24px 17px; color: var(--ubo-customer-muted); font-size: 9px; line-height: 1.5; }
-.ubo-customer-verification-note { margin: 0 24px 24px; padding: 14px; display: flex; gap: 11px; border-radius: 10px; background: #fff6da; color: #6e570f; }
-.ubo-customer-verification-note > span { width: 22px; height: 22px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #cfa729; border-radius: 50%; font-weight: 900; }
+.ubo-customer-verification-note { margin: 0 24px 24px; padding: 14px; display: flex; gap: 11px; border-radius: 10px; background: #f1f6f5; color: var(--ubo-customer-muted); }
+.ubo-customer-verification-note > span { width: 22px; height: 22px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #91ada6; border-radius: 50%; color: var(--ubo-customer-green); font-weight: 900; }
 .ubo-customer-verification-note p { margin: 0; font-size: 10px; line-height: 1.55; }
 .ubo-customer-muted { margin: 0; padding: 24px; color: var(--ubo-customer-muted); font-size: 12px; line-height: 1.55; }
 .ubo-customer-owner-grid { padding: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 13px; }
@@ -130,7 +133,11 @@
 .ubo-customer-assertions summary div { display: grid; gap: 5px; }
 .ubo-customer-assertions summary strong { font-size: 16px; }
 .ubo-customer-assertions summary > span { color: var(--ubo-customer-muted); font-size: 10px; font-weight: 750; }
-.ubo-customer-assertions > div { padding: 0 24px 24px; display: grid; gap: 9px; }
+.ubo-customer-assertions > div:not(.ubo-demo-assertion-heading) { padding: 0 24px 24px; display: grid; gap: 9px; }
+.ubo-customer-assertions > .ubo-demo-assertion-heading { padding: 21px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.ubo-customer-assertions > .ubo-demo-assertion-heading > div { display: grid; gap: 5px; }
+.ubo-customer-assertions > .ubo-demo-assertion-heading strong { font-size: 16px; }
+.ubo-customer-assertions > .ubo-demo-assertion-heading span { color: var(--ubo-customer-muted); font-size: 10px; font-weight: 750; }
 .ubo-customer-assertions article { padding: 14px 15px; border: 1px solid var(--ubo-customer-border); border-radius: 10px; }
 .ubo-customer-assertions article > span { color: var(--ubo-customer-green); font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .ubo-customer-assertions article p { margin: 5px 0; font-size: 11px; line-height: 1.45; }
@@ -140,20 +147,25 @@
 .ubo-customer-assertion-detail dt { color: var(--ubo-customer-muted); font-weight: 750; }
 .ubo-customer-assertion-detail dd { margin: 0; overflow-wrap: anywhere; }
 .ubo-customer-chart-analysis { display: grid; gap: 18px; }
-.ubo-customer-analysis-heading { padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #d8b75a; border-radius: 14px; background: #fff9e8; }
-.ubo-customer-analysis-heading small { color: #7b641c; }
-.ubo-customer-analysis-heading h2 { margin: 4px 0 0; font-size: 18px; }
-.ubo-customer-analysis-heading > span { color: #7b641c; font-size: 9px; font-weight: 850; text-transform: uppercase; }
-.ubo-customer-source-map-note { margin: 0; padding: 13px 16px; border: 1px solid #d8b75a; border-radius: 10px; background: #fffdf4; color: #67551c; font-size: 10px; line-height: 1.5; }
+.ubo-customer-analysis-status { padding: 16px 18px; display: grid; grid-template-columns: minmax(190px, .45fr) 1fr; align-items: center; gap: 18px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; background: #f7faf9; }
+.ubo-customer-analysis-status > div { display: grid; gap: 4px; }
+.ubo-customer-analysis-status small { color: var(--ubo-customer-muted); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.ubo-customer-analysis-status strong { font-size: 14px; }
+.ubo-customer-analysis-status p { margin: 0; color: var(--ubo-customer-muted); font-size: 10px; line-height: 1.5; }
+.ubo-customer-analysis-status.warning { border-color: #dfc46f; background: #fff8e5; }
+.ubo-customer-analysis-status.warning strong, .ubo-customer-analysis-status.warning p { color: #725b16; }
 .ubo-customer-graph-controls { padding: 14px 18px; display: flex; justify-content: space-between; gap: 16px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; background: white; }
 .ubo-customer-graph-controls fieldset { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; border: 0; }
 .ubo-customer-graph-controls legend { width: 100%; margin-bottom: 4px; color: var(--ubo-customer-muted); font-size: 9px; font-weight: 850; text-transform: uppercase; }
 .ubo-customer-graph-controls label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 750; }
-.ubo-customer-method-card { padding: 22px 24px; }
+.ubo-customer-method-card { padding: 0; }
+.ubo-customer-method-card > header { padding: 21px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ubo-customer-border); }
+.ubo-customer-method-card > header h2 { margin: 4px 0 0; font-size: 18px; }
+.ubo-customer-method-card > div { padding: 22px 24px; }
 .ubo-customer-method-card fieldset { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; border: 0; }
 .ubo-customer-method-card legend { width: 100%; margin-bottom: 8px; font-size: 13px; font-weight: 850; }
 .ubo-customer-method-card label { padding: 8px 11px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--ubo-customer-border); border-radius: 999px; font-size: 10px; font-weight: 750; }
-.ubo-customer-method-card > p { color: var(--ubo-customer-muted); font-size: 9px; }
+.ubo-customer-method-card > div > p { color: var(--ubo-customer-muted); font-size: 9px; }
 .ubo-customer-calculations { display: grid; gap: 12px; }
 .ubo-customer-calculations > article { padding: 16px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; }
 .ubo-customer-calculations article header { display: flex; justify-content: space-between; gap: 14px; }
@@ -206,6 +218,7 @@
   .ubo-customer-secure { display: none; }
   .ubo-customer-progress { width: calc(100% - 32px); margin-top: 20px; }
   .ubo-customer-progress li { gap: 4px; font-size: 0; }
+  .ubo-customer-progress-label { padding-right: 0; }
   .ubo-customer-main { width: calc(100% - 28px); margin-top: 22px; }
   .ubo-customer-context { align-items: start; flex-direction: column; }
   .ubo-customer-context dl { justify-content: flex-start; }
@@ -217,9 +230,11 @@
   .ubo-customer-upload-actions { align-items: stretch; flex-direction: column; }
   .ubo-customer-primary { width: 100%; }
   .ubo-customer-result-card > header { align-items: start; flex-direction: column; }
-  .ubo-customer-graph-card > header { align-items: start; flex-direction: column; }
+  .ubo-customer-heading-actions { width: 100%; justify-content: space-between; }
+  .ubo-customer-graph-card > header, .ubo-customer-method-card > header, .ubo-customer-assertions > .ubo-demo-assertion-heading { align-items: start; flex-direction: column; }
   .ubo-customer-graph-card iframe { min-height: 560px; }
-  .ubo-customer-analysis-heading, .ubo-customer-comparison > header { align-items: start; flex-direction: column; }
+  .ubo-customer-analysis-status { grid-template-columns: 1fr; }
+  .ubo-customer-comparison > header { align-items: start; flex-direction: column; }
   .ubo-customer-comparison-grid { grid-template-columns: 1fr; }
   .ubo-customer-comparison-grid > div { border-right: 0; }
   .ubo-customer-comparison-grid .head { display: none; }

@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
 import { graphForChartPresentation, projectGraph, provisionalUboLabel } from "./ChartAnalysisPanel";
@@ -99,6 +99,9 @@ test("direct customer route renders from seeded company and case context", () =>
   expect(screen.getByText("CASE-42")).toBeInTheDocument();
   expect(screen.getByText(/certified chart can make verification quicker/i)).toBeInTheDocument();
   expect(screen.getByText("Ownership").closest("li")).toHaveClass("current");
+  expect(screen.getByText("Company")).toHaveClass("ubo-customer-progress-label");
+  expect(screen.getByText("Questions")).toHaveClass("ubo-customer-progress-label");
+  expect(screen.queryByText("Review")).not.toBeInTheDocument();
   expect(screen.queryByText("Research")).not.toBeInTheDocument();
 });
 
@@ -110,9 +113,10 @@ test("the customer ownership step can inspect every registry assertion handed ov
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: "Questions to help complete this review" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Trust status" })).toBeInTheDocument();
-  expect(screen.getByText(/Registry assertions already available/i)).toBeInTheDocument();
-  expect(screen.getByText(/2 assertions · click to inspect/)).toBeInTheDocument();
-  fireEvent.click(screen.getByText(/Registry assertions already available/i));
+  const registryAssertions = screen.getByText(/Registry assertions already available/i).closest("section");
+  expect(within(registryAssertions).getByText(/2 assertions/)).toBeInTheDocument();
+  expect(within(registryAssertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(registryAssertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Alice → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("10%")).toBeInTheDocument();
   expect(screen.getByText(/Bob → voting rights → Target Ltd/i)).toBeInTheDocument();
@@ -149,13 +153,29 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(screen.getByTitle("Visualised ownership structure")).toBeInTheDocument();
   expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText(/Candidate fact · not a UBO conclusion/i)).toBeInTheDocument();
+  const chartAssertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
+  fireEvent.click(within(chartAssertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
   expect(screen.getByText(/not analyst-approved or independently verified/i)).toBeInTheDocument();
   const certificationCard = screen.getByRole("heading", { name: "Certification found" }).closest("section");
   const graphCard = screen.getByRole("heading", { name: "How we understood your chart" }).closest("section");
+  const calculationCard = screen.getByRole("heading", { name: "Calculation view" }).closest("section");
   const ownersCard = screen.getByRole("heading", { name: "1 owner identified" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(graphCard.compareDocumentPosition(ownersCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
+  expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();
+  expect(screen.getByText("Provisional chart assessment")).toBeInTheDocument();
+  expect(screen.queryByText(/Source assertion map/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Calculation scope/i)).not.toBeInTheDocument();
+  [certificationCard, graphCard, calculationCard, ownersCard].forEach((card) => {
+    const collapse = within(card).getByRole("button", { name: "Collapse" });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(collapse);
+    expect(within(card).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  });
+  expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("status")).toHaveTextContent(/saved in this browser for future no-cost replay/i);
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
@@ -225,8 +245,11 @@ test("a disconnected Vodafone extraction remains inspectable but is explicitly m
   writeCustomerOwnershipChartSession({ context, result: incomplete });
 
   render(<CustomerOwnershipChartPage />);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
   expect(screen.getByRole("alert")).toHaveTextContent(/Incomplete ownership map/);
   expect(screen.getByRole("alert")).toHaveTextContent(/relationship chain does not reach Better Comms VOIP Ltd/i);
+  const assertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
 });
 

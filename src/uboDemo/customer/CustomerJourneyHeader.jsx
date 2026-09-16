@@ -1,6 +1,6 @@
 import React from "react";
 
-const STEPS = ["Company", "Ownership", "Review"];
+const STEPS = ["Company", "Ownership", "Questions"];
 
 export default function CustomerJourneyHeader({ currentStep }) {
   return <>
@@ -12,7 +12,7 @@ export default function CustomerJourneyHeader({ currentStep }) {
       {STEPS.map((label, index) => {
         const step = index + 1;
         const state = step < currentStep ? "complete" : step === currentStep ? "current" : "";
-        return <li className={state} key={label}><span>{step}</span>{label}</li>;
+        return <li className={state} key={label}><span className="ubo-customer-progress-number">{step}</span><span className="ubo-customer-progress-label">{label}</span></li>;
       })}
     </ol>
   </>;

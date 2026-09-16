@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { groupAssertionRows, presentCandidateFacts } from "./assertionPresentation";
 
 function AssertionCard({ row, index }) {
@@ -24,6 +24,7 @@ export default function AssertionDetails({ entries, eyebrow = "Source assertions
   const rows = presentCandidateFacts(entries);
   const groups = groupAssertionRows(entries, { variant });
   const [expanded, setExpanded] = useState(open);
+  const contentId = useId();
   const content = <>
     {sourceNotice && <p className="ubo-customer-source-notice">{sourceNotice}</p>}
     <div className="ubo-demo-assertion-groups">{groups.map((group) => <section key={group.label} className="ubo-demo-assertion-group">
@@ -32,8 +33,8 @@ export default function AssertionDetails({ entries, eyebrow = "Source assertions
     </section>)}</div>
   </>;
   if (collapseButton) return <section className="ubo-customer-card ubo-customer-assertions ubo-demo-assertions">
-    <div className="ubo-demo-assertion-heading"><div><small>{eyebrow}</small><strong>{title}</strong><span>{rows.length} assertions</span></div><button type="button" aria-expanded={expanded} aria-controls="demo-assertions-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>
-    {expanded && <div id="demo-assertions-content">{content}</div>}
+    <div className="ubo-demo-assertion-heading"><div><small>{eyebrow}</small><strong>{title}</strong><span>{rows.length} assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls={contentId} onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>
+    {expanded && <div id={contentId}>{content}</div>}
   </section>;
   return <details className="ubo-customer-card ubo-customer-assertions ubo-demo-assertions" open={open}>
     <summary><div><small>{eyebrow}</small><strong>{title}</strong></div><span>{rows.length} assertions · click to inspect</span></summary>

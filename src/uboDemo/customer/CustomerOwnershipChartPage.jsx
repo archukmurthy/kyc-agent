@@ -115,9 +115,10 @@ function SavedExtractionsPanel({ records, onUse }) {
 
 function CertificationCard({ certification }) {
   const found = certification?.status === "FOUND";
+  const [expanded, setExpanded] = useState(true);
   return <section className="ubo-customer-card ubo-customer-result-card">
-    <header><div><small>Certification assessment</small><h2>{found ? "Certification found" : "No certification found"}</h2></div><span className={found ? "ubo-customer-status found" : "ubo-customer-status neutral"}>{found ? "Found in chart" : "Regular chart"}</span></header>
-    {found ? <>
+    <header><div><small>Certification assessment</small><h2>{found ? "Certification found" : "No certification found"}</h2></div><div className="ubo-customer-heading-actions"><span className={found ? "ubo-customer-status found" : "ubo-customer-status neutral"}>{found ? "Found in chart" : "Regular chart"}</span><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-certification-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div></header>
+    {expanded && <div id="ubo-customer-certification-content">{found ? <>
       <div className="ubo-customer-cert-grid">
         <div><small>Signer</small><strong>{certification.signerName || "Name not stated"}</strong></div>
         <div><small>Qualification</small><strong>{certification.signerPostnominal || "Not stated"}</strong></div>
@@ -128,26 +129,28 @@ function CertificationCard({ certification }) {
       </div>
       {certification.declaration && <blockquote>“{certification.declaration}”</blockquote>}
       <div className="ubo-customer-verification-note"><span aria-hidden="true">!</span><p><strong>Verification of this certification is still required.</strong> We found source certification details, but have not independently verified the signer’s identity, credentials or authority.</p></div>
-    </> : <p className="ubo-customer-muted">That’s okay. We extracted the chart as provided. Additional evidence or questions may be needed in a later step.</p>}
+    </> : <p className="ubo-customer-muted">That’s okay. We extracted the chart as provided. Additional evidence or questions may be needed in a later step.</p>}</div>}
   </section>;
 }
 
 function OwnersCard({ owners }) {
+  const [expanded, setExpanded] = useState(true);
   return <section className="ubo-customer-card ubo-customer-result-card">
-    <header><div><small>What we found in your chart</small><h2>{owners.length ? `${owners.length} owner${owners.length === 1 ? "" : "s"} identified` : "No owners confidently identified"}</h2></div><span className="ubo-customer-status found">Source-backed facts</span></header>
-    {owners.length ? <div className="ubo-customer-owner-grid">{owners.map((owner, index) => <article key={`${owner.name}-${index}`}><span>{owner.partyType === "NATURAL_PERSON" ? "Person" : "Company"}</span><h3>{owner.name}</h3><p>{owner.relationshipLabel}</p><strong>{relationshipValue(owner)}</strong><small>Candidate fact · not a UBO conclusion</small></article>)}</div> : <p className="ubo-customer-muted">The document remains available as evidence, but no source-supported directed ownership relationship was extracted.</p>}
+    <header><div><small>What we found in your chart</small><h2>{owners.length ? `${owners.length} owner${owners.length === 1 ? "" : "s"} identified` : "No owners confidently identified"}</h2></div><div className="ubo-customer-heading-actions"><span className="ubo-customer-status found">Source-backed facts</span><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-owners-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div></header>
+    {expanded && <div id="ubo-customer-owners-content">{owners.length ? <div className="ubo-customer-owner-grid">{owners.map((owner, index) => <article key={`${owner.name}-${index}`}><span>{owner.partyType === "NATURAL_PERSON" ? "Person" : "Company"}</span><h3>{owner.name}</h3><p>{owner.relationshipLabel}</p><strong>{relationshipValue(owner)}</strong><small>Candidate fact · not a UBO conclusion</small></article>)}</div> : <p className="ubo-customer-muted">The document remains available as evidence, but no source-supported directed ownership relationship was extracted.</p>}</div>}
   </section>;
 }
 
 function ExistingResearchAssertions({ researchResult }) {
   const rows = allCandidateFacts(researchResult);
   if (!rows.length) return null;
-  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." variant="analyst" />;
+  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." variant="analyst" collapseButton />;
 }
 
 function ChartAssertions({ result }) {
-  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact", artifactId: result.artifact?.artifactId } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." variant="customer" />;
-  return <details className="ubo-customer-card ubo-customer-assertions"><summary><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong></div><span>{result.assertions?.length || 0} reduced assertions</span></summary><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></details>;
+  const [expanded, setExpanded] = useState(false);
+  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact", artifactId: result.artifact?.artifactId } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." variant="customer" collapseButton />;
+  return <section className="ubo-customer-card ubo-customer-assertions"><div className="ubo-demo-assertion-heading"><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong><span>{result.assertions?.length || 0} reduced assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-legacy-assertions" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>{expanded && <div id="ubo-customer-legacy-assertions"><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></div>}</section>;
 }
 
 function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice }) {
@@ -155,9 +158,8 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
-    {coverage.state === "REVIEW_REQUIRED" && <p className="ubo-customer-extraction-save warning" role="alert"><strong>Incomplete ownership map.</strong> The extracted relationship chain does not reach {result.company?.legalName || "the customer under review"}. The visible source facts are retained, but this result must not be treated as the complete chart.</p>}
     <CertificationCard certification={result.certification} />
-    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} />
+    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} />
     <OwnersCard owners={result.owners || []} />
     <ChartAssertions result={result} />
     <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
@@ -173,7 +175,7 @@ export default function CustomerOwnershipChartPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
-  const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST");
+  const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || "EFFECTIVE_INTEREST");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
   const reevaluationAttempts = useRef(new Set());
