@@ -46,13 +46,13 @@ export function chartSourceCoverage(result) {
   let changed = true;
   while (changed) {
     changed = false;
-    relationships.forEach((relationship) => {
+    for (const relationship of relationships) {
       const target = relationship.targetEntityId || relationship.objectEntityId;
       const source = relationship.sourceEntityId || relationship.subjectEntityId;
-      if (!connectedNodes.has(target)) return;
+      if (!connectedNodes.has(target)) continue;
       connectedRelationships.add(relationship.relationshipId);
       if (!connectedNodes.has(source)) { connectedNodes.add(source); changed = true; }
-    });
+    }
   }
   const disconnectedRelationshipIds = relationships.filter(({ relationshipId }) => !connectedRelationships.has(relationshipId)).map(({ relationshipId }) => relationshipId);
   return { state: disconnectedRelationshipIds.length ? "REVIEW_REQUIRED" : "CONNECTED", sourceRelationshipCount: relationships.length, subjectConnectedRelationshipCount: connectedRelationships.size, disconnectedRelationshipIds };
