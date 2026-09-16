@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { ownershipLabelFor } from "../demoSession";
+import { allCandidateFacts } from "../demoResearch";
 import {
   clearCustomerOwnershipChartSession,
   readCustomerDemoContext,
@@ -106,6 +107,22 @@ function AssertionsCard({ assertions }) {
   </details>;
 }
 
+function ExistingResearchAssertions({ researchResult }) {
+  const rows = allCandidateFacts(researchResult);
+  if (!rows.length) return null;
+  return <details className="ubo-customer-card ubo-customer-assertions">
+    <summary><div><small>Existing case research</small><strong>Registry assertions already available</strong></div><span>{rows.length} assertion{rows.length === 1 ? "" : "s"}</span></summary>
+    <div>{rows.map(({ fact, source }, index) => {
+      const attribute = fact.type === "ENTITY_ATTRIBUTE";
+      const relationship = String(fact.relationship || fact.type || "Source assertion").replaceAll("_", " ").toLowerCase();
+      const statement = attribute
+        ? `${fact.subject?.name || "Registry entity"} · ${Object.entries(fact.value || {}).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value}`).join(" · ")}`
+        : `${fact.subject?.name || "Source party"} → ${relationship}${fact.measurement ? ` (${relationshipValue(fact)})` : ""} → ${fact.object?.name || "Target party"}`;
+      return <article key={fact.factId || index}><span>{attribute ? "Registry context" : relationship}</span><p>{statement}</p><small>{fact.evidenceReferences?.[0]?.referenceId || source.requestId || "Source reference retained"} · Candidate/source assertion</small></article>;
+    })}</div>
+  </details>;
+}
+
 function Results({ result, onReplace }) {
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
@@ -160,6 +177,7 @@ export default function CustomerOwnershipChartPage() {
     <CustomerJourneyHeader currentStep={2} />
     <main className="ubo-customer-main">
       <CompanyContext context={context} />
+      <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
       {result ? <Results result={result} onReplace={replace} /> : <UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} />}
     </main>

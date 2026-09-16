@@ -25,6 +25,7 @@ export function readCustomerDemoContext(storage = window.localStorage) {
     referenceCaseId: demoCase.referenceCaseId || "",
     demoCaseId: demoCase.demoCaseId,
     opaqueResearchReference,
+    researchResult: session.researchResult || null,
   };
 }
 
@@ -43,7 +44,7 @@ export function writeCustomerDemoCase({ draft, demoCase }, storage = window.loca
     savedAt: new Date().toISOString(),
     draft,
     demoCase,
-    researchResult: null,
+    researchResult: current?.researchResult || null,
     ...opaqueReferences,
   }));
 }

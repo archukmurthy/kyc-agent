@@ -71,6 +71,21 @@ test("direct customer route renders from seeded company and case context", () =>
   expect(screen.queryByText("Research")).not.toBeInTheDocument();
 });
 
+test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
+  seed({ researchResult: { candidateSources: [{ requestId: "request-1", candidateFacts: [
+    { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Alice" }, object: { name: "Target Ltd" }, measurement: { type: "EXACT", value: 10 }, evidenceReferences: [{ referenceId: "ref-1" }] },
+    { factId: "fact-2", type: "RELATIONSHIP", relationship: "VOTING_RIGHTS", subject: { name: "Bob" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, evidenceReferences: [{ referenceId: "ref-2" }] },
+  ] }] } });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByText(/Registry assertions already available/i)).toBeInTheDocument();
+  expect(screen.getByText("2 assertions")).toBeInTheDocument();
+  fireEvent.click(screen.getByText(/Registry assertions already available/i));
+  expect(screen.getByText(/Alice → economic ownership \(10%\) → Target Ltd/i)).toBeInTheDocument();
+  expect(screen.getByText(/Bob → voting rights \(\(25%, 50%\]\) → Target Ltd/i)).toBeInTheDocument();
+  expect(screen.getByText(/ref-1/)).toBeInTheDocument();
+  expect(screen.getByText(/ref-2/)).toBeInTheDocument();
+});
+
 test("direct route fails closed when demo context has not been seeded", () => {
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: /Start with a demo company/i })).toBeInTheDocument();

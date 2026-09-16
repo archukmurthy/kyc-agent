@@ -32,6 +32,8 @@
 .ubo-customer-context dt { color: var(--ubo-customer-muted); font-size: 9px; text-transform: uppercase; }
 .ubo-customer-context dd { margin: 3px 0 0; font-size: 11px; font-weight: 750; }
 .ubo-customer-intro { max-width: 720px; margin: 42px auto 26px; text-align: center; }
+.ubo-customer-connected { max-width: 720px; margin: -8px auto 24px; padding: 14px 18px; border: 1px solid #9bc9bd; border-radius: 12px; background: #edf7f4; color: #164e43; text-align: center; }
+.ubo-customer-connected p { margin: 4px 0 0; }
 .ubo-customer-intro > span { color: var(--ubo-customer-green); font-size: 10px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
 .ubo-customer-intro h1 { margin: 9px 0 11px; font-size: clamp(31px, 5vw, 46px); line-height: 1.06; letter-spacing: -.035em; }
 .ubo-customer-intro p { margin: 0 auto; max-width: 640px; color: var(--ubo-customer-muted); font-size: 15px; line-height: 1.6; }

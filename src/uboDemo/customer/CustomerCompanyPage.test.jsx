@@ -41,3 +41,18 @@ test("customer company input preserves an existing opaque research reference", (
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResultReference)
     .toEqual({ contract: "future", token: "opaque-1" });
 });
+
+test("a connected analyst case keeps its case identity and every source assertion when customer ownership continues", () => {
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: "ubo-demo-browser-session-v1",
+    draft: { legalName: "ASDA Delivery Limited", registrationNumber: "01396513", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "CASE-63" },
+    demoCase: { demoCaseId: "analyst-case-63", referenceCaseId: "CASE-63", company: { legalName: "ASDA Delivery Limited", registrationNumber: "01396513", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: { candidateSources: [{ candidateFacts: [{ factId: "fact-1" }, { factId: "fact-2" }] }] },
+  }));
+  const { container } = render(<CustomerCompanyPage />);
+  expect(screen.getByText(/2 source assertions will continue/i)).toBeInTheDocument();
+  fireEvent.submit(container.querySelector("form"));
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(saved.demoCase.demoCaseId).toBe("analyst-case-63");
+  expect(saved.researchResult.candidateSources[0].candidateFacts.map(({ factId }) => factId)).toEqual(["fact-1", "fact-2"]);
+});
