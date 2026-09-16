@@ -35,11 +35,43 @@ function factValue(item) {
   catch (_) { throw Object.assign(new Error("Semantic provider returned an invalid encoded Fact value"), { code: "provider_malformed_output" }); }
 }
 
+const PERCENTAGE_POINT_UNIT_ALIASES = new Set([
+  "%",
+  "percent",
+  "percentage",
+  "percentage point",
+  "percentage points",
+  "percentage_point",
+  "percentage_points",
+]);
+
+function normalizeRelationshipUnit(measurementType, unit) {
+  const originalUnit = typeof unit === "string" ? unit.trim() : unit;
+  if (measurementType !== "percentage" || !originalUnit) return { unit: originalUnit || undefined, normalization: null };
+  const token = String(originalUnit).toLowerCase().replace(/\s+/g, " ");
+  if (!PERCENTAGE_POINT_UNIT_ALIASES.has(token)) return { unit: originalUnit, normalization: null };
+  return {
+    unit: "percentage_points",
+    normalization: token === "percentage_points" ? null : {
+      kind: "EXPLICIT_PERCENTAGE_UNIT_ALIAS",
+      originalUnit,
+      canonicalUnit: "percentage_points",
+    },
+  };
+}
+
+function metadataWithUnitNormalization(metadata, normalization) {
+  const result = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? { ...metadata } : {};
+  if (normalization) result.valueUnitNormalization = normalization;
+  return result;
+}
+
 function mapTypedRelationshipCandidate(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input || null;
   if (typeof input.subject_json === "string" && typeof input.object_json === "string") {
     const party = (prefix) => ({ partyType: input[`${prefix}_party_type`], ...parsedJson(input[`${prefix}_json`], {}) });
-    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: input.unit || undefined };
+    const normalizedUnit = normalizeRelationshipUnit(input.measurement_type, input.unit);
+    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: normalizedUnit.unit };
     if (input.value_kind === "EXACT" && input.measurement_type === "count_of_total") { value.numerator = input.numerator; value.denominator = input.denominator; }
     else if (input.value_kind === "EXACT") value.value = input.exact_value;
     else if (input.value_kind === "RANGE") { value.lower = input.range_lower; value.upper = input.range_upper; value.lowerInclusive = input.lower_inclusive; value.upperInclusive = input.upper_inclusive; }
@@ -49,7 +81,7 @@ function mapTypedRelationshipCandidate(input) {
       directionEstablished: input.direction_established, relationshipType: input.relationship_type,
       subject: party("subject"), object: party("object"), value,
       temporal: { state: input.temporal_state, effectiveFrom: temporalDetails.effective_from, effectiveTo: temporalDetails.effective_to, sourceEffectiveDate: temporalDetails.source_effective_date, precision: temporalDetails.precision || {} },
-      sourceSpecificMetadata: parsedJson(input.source_specific_metadata_json, {}), qualifications: parsedJson(input.qualifications_json, []),
+      sourceSpecificMetadata: metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), qualifications: parsedJson(input.qualifications_json, []),
     };
   }
   if (input.present === false) return null;
@@ -59,7 +91,8 @@ function mapTypedRelationshipCandidate(input) {
       jurisdiction: input[`${prefix}_jurisdiction`], identifiers: parsedJson(input[`${prefix}_identifiers_json`], []),
       qualifiers: parsedJson(input[`${prefix}_qualifiers_json`], {}),
     });
-    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: input.unit || undefined };
+    const normalizedUnit = normalizeRelationshipUnit(input.measurement_type, input.unit);
+    const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: normalizedUnit.unit };
     if (input.value_kind === "EXACT" && input.measurement_type === "count_of_total") { value.numerator = input.numerator; value.denominator = input.denominator; }
     else if (input.value_kind === "EXACT") value.value = input.exact_value;
     else if (input.value_kind === "RANGE") { value.lower = input.range_lower; value.upper = input.range_upper; value.lowerInclusive = input.lower_inclusive; value.upperInclusive = input.upper_inclusive; }
@@ -68,14 +101,16 @@ function mapTypedRelationshipCandidate(input) {
       directionEstablished: input.direction_established, relationshipType: input.relationship_type,
       subject: party("subject"), object: party("object"), value,
       temporal: { state: input.temporal_state, effectiveFrom: input.effective_from || undefined, effectiveTo: input.effective_to || undefined, sourceEffectiveDate: input.source_effective_date || undefined, precision: parsedJson(input.temporal_precision_json, {}) },
-      sourceSpecificMetadata: parsedJson(input.source_specific_metadata_json, {}), qualifications: input.qualifications,
+      sourceSpecificMetadata: metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), qualifications: input.qualifications,
     };
   }
   const party = (source) => source && typeof source === "object" ? { partyType: source.party_type, name: source.name, description: source.description, jurisdiction: source.jurisdiction, identifiers: source.identifiers, qualifiers: source.qualifiers ?? parsedJson(source.qualifiers_json, {}) } : source;
   const sourceValue = input.value;
   let value = sourceValue;
+  let normalizedUnit = { unit: sourceValue?.unit, normalization: null };
   if (sourceValue && typeof sourceValue === "object") {
-    value = { kind: sourceValue.kind, measurementType: sourceValue.measurement_type, unit: sourceValue.unit || undefined };
+    normalizedUnit = normalizeRelationshipUnit(sourceValue.measurement_type, sourceValue.unit);
+    value = { kind: sourceValue.kind, measurementType: sourceValue.measurement_type, unit: normalizedUnit.unit };
     if (sourceValue.kind === "EXACT" && sourceValue.measurement_type === "count_of_total") { value.numerator = sourceValue.numerator; value.denominator = sourceValue.denominator; }
     else if (sourceValue.kind === "EXACT") value.value = sourceValue.exact_value ?? sourceValue.value;
     else if (sourceValue.kind === "RANGE") { value.lower = sourceValue.range_lower ?? sourceValue.lower; value.upper = sourceValue.range_upper ?? sourceValue.upper; value.lowerInclusive = sourceValue.lower_inclusive; value.upperInclusive = sourceValue.upper_inclusive; }
@@ -83,7 +118,7 @@ function mapTypedRelationshipCandidate(input) {
   }
   const temporalSource = input.temporal;
   const temporal = temporalSource && typeof temporalSource === "object" ? { state: temporalSource.state, effectiveFrom: temporalSource.effective_from || undefined, effectiveTo: temporalSource.effective_to || undefined, sourceEffectiveDate: temporalSource.source_effective_date || undefined, precision: temporalSource.precision ?? parsedJson(temporalSource.precision_json, {}) } : temporalSource;
-  return { directionEstablished: input.direction_established, relationshipType: input.relationship_type, subject: party(input.subject), object: party(input.object), value, temporal, sourceSpecificMetadata: input.source_specific_metadata ?? parsedJson(input.source_specific_metadata_json, {}), qualifications: input.qualifications };
+  return { directionEstablished: input.direction_established, relationshipType: input.relationship_type, subject: party(input.subject), object: party(input.object), value, temporal, sourceSpecificMetadata: metadataWithUnitNormalization(input.source_specific_metadata ?? parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), qualifications: input.qualifications };
 }
 
 function mapSupportLocator(locator) {
@@ -226,4 +261,4 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
   }
 }
 
-module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, parseProviderJson };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson };

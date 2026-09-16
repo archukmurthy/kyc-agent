@@ -14,6 +14,8 @@ const { MemoryR2Repository, R2A3RepositoryAdapter } = require("../../evidence/r2
 const { TargetedInterpretationService } = require("../../evidence/r2/service.js");
 const { createEvidencePlatformExtractionAdapter } = require("../../integrations/ubo-control/evidence-platform-extraction/index.js");
 const { CAPABILITY_CONTRACT_VERSION } = require("../../ubo-control/contracts/constants.js");
+const { buildPlan } = require("./demoAutoReview.js");
+const { applyDemoAutoReviewDecisions, startReviewReplay } = require("./reviewLabEngine.js");
 const {
   DIGEST: REVIEWED_BETTERCOMMS_DIGEST,
   buildBettercommsServiceResult,
@@ -353,7 +355,92 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   };
 }
 
-function presentation(candidateFacts) {
+function chartEntityProfile(ownershipType) {
+  return ["LLP", "PARTNERSHIP"].includes(String(ownershipType || "").toUpperCase()) ? "LLP" : "COMPANY";
+}
+
+function normalizedPartyName(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {
+  const subjectName = normalizedPartyName(company.legalName);
+  const subjectParty = {
+    name: company.legalName,
+    entityType: entityProfile,
+    jurisdiction: company.countryCode,
+    externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: company.registrationNumber, jurisdiction: company.countryCode }],
+    sourcePartySnapshot: {},
+    entityId: subjectEntityId,
+  };
+  const mappedParty = (party) => normalizedPartyName(party?.name) === subjectName ? { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} } : party;
+  return candidateFacts.map((fact) => ({
+    ...structuredClone(fact),
+    ...(fact.subject ? { subject: mappedParty(structuredClone(fact.subject)) } : {}),
+    ...(fact.object ? { object: mappedParty(structuredClone(fact.object)) } : {}),
+  }));
+}
+
+function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }) {
+  const recordedAt = artifact.capturedAt;
+  const entityProfile = chartEntityProfile(company.ownershipType);
+  const subjectEntityId = `chart-subject:${createHash("sha256").update(`${company.countryCode}|${company.registrationNumber}`).digest("hex").slice(0, 20)}`;
+  const replayRecord = {
+    replayId: `chart-analysis:${artifact.artifactId}`,
+    savedAt: recordedAt,
+    companyContext: {
+      legalEntityName: company.legalName,
+      registrationNumber: company.registrationNumber,
+      jurisdiction: company.countryCode,
+      entityProfile,
+      riskLevel: "MEDIUM",
+    },
+    subject: {
+      entityId: subjectEntityId,
+      name: company.legalName,
+      entityType: entityProfile,
+      jurisdiction: company.countryCode,
+      externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: company.registrationNumber, jurisdiction: company.countryCode }],
+    },
+    discoveryResult: {
+      contractVersion: "1.0.0",
+      requestId,
+      outcome: { state: candidateFacts.length ? "COMPLETE" : "NO_DATA" },
+      candidateFacts: factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile),
+      operationEvidenceReferences: structuredClone(operationEvidenceReferences || []),
+      issues: structuredClone(issues || []),
+    },
+  };
+  const session = startReviewReplay({ replayRecord, profileId: "NOT_PROVIDED" });
+  const plan = buildPlan(session);
+  const reviewed = applyDemoAutoReviewDecisions({
+    session,
+    identityDecisions: plan.identityDecisions,
+    claimDecisions: plan.claimDecisions,
+    recordedAt,
+  });
+  const view = reviewed.snapshots.at(-1)?.view || null;
+  const entityLabels = Object.fromEntries((reviewed.entityDirectory || []).filter((item) => item.entityId && item.party?.name).map((item) => [item.entityId, item.party.name]));
+  return {
+    contractVersion: "ubo-demo-chart-analysis-v1",
+    sourceMode: "CUSTOMER_UPLOADED_DOCUMENT",
+    heading: "Based on your uploaded chart — not independently verified",
+    provisionalDecisions: {
+      decisionOrigin: "UBO_DEMO_AUTOMATIC_REVIEW",
+      humanApproval: false,
+      ...plan.summary,
+    },
+    state: view ? "EVALUATED" : "REVIEW_REQUIRED",
+    view,
+    entityLabels,
+    limitations: [
+      "Chart CandidateFacts were evaluated separately from saved research.",
+      "Provisional demo document analysis is not analyst approval or final case completion.",
+    ],
+  };
+}
+
+function presentation(candidateFacts, issues = []) {
   const relationshipFacts = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
   const owners = relationshipFacts.filter((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").map((fact) => ({
     factId: fact.factId,
@@ -362,22 +449,42 @@ function presentation(candidateFacts) {
     relationshipLabel: `${relationshipLabel(fact.relationship)} in ${fact.object?.name || "the depicted company"}`,
     measurement: measurementFrom(fact),
   }));
+  const issuesByFactId = new Map();
+  issues.forEach((item) => {
+    const factId = item.evidenceFactId || item.candidateFactId || null;
+    if (!factId) return;
+    if (!issuesByFactId.has(factId)) issuesByFactId.set(factId, []);
+    issuesByFactId.get(factId).push(structuredClone(item));
+  });
   const assertions = candidateFacts.map((fact) => {
     if (fact.type === "RELATIONSHIP") {
       const value = measurementFrom(fact);
-      const amount = value?.type === "EXACT" ? ` (${value.value}%)` : "";
       return {
         factId: fact.factId,
         category: relationshipLabel(fact.relationship),
-        statement: `${fact.subject?.name || "A source party"} → ${relationshipLabel(fact.relationship)}${amount} → ${fact.object?.name || "a target party"}`,
+        type: fact.type,
+        subject: structuredClone(fact.subject || null),
+        object: structuredClone(fact.object || null),
+        relationship: fact.relationship,
+        measurement: value,
+        qualifiers: structuredClone(fact.qualifiers || {}),
+        evidenceReferences: structuredClone(fact.evidenceReferences || []),
+        statement: `${fact.subject?.name || "A source party"} → ${relationshipLabel(fact.relationship)}: ${value?.type === "EXACT" ? `${value.value}%` : value?.type === "RANGE" ? `${value.lowerInclusive ? "[" : "("}${value.lowerBound}%, ${value.upperBound}%${value.upperInclusive ? "]" : ")"}` : value?.type === "UNKNOWN" ? "percentage not established" : "non-percentage right"} → ${fact.object?.name || "a target party"}`,
         supportStateLabel: String(fact.qualifiers?.evidenceSupportState || "source supported").replaceAll("_", " "),
+        issues: issuesByFactId.get(fact.factId) || [],
       };
     }
     return {
       factId: fact.factId,
       category: fact.attribute?.startsWith("source_certification_") ? "Certification detail" : "Chart detail",
+      type: fact.type,
+      subject: structuredClone(fact.subject || null),
+      attribute: fact.attribute,
+      value: structuredClone(fact.value),
+      evidenceReferences: structuredClone(fact.evidenceReferences || []),
       statement: `${String(fact.attribute || "Source statement").replaceAll("_", " ")}: ${sourceText(fact.value) || "Structured source detail retained"}`,
       supportStateLabel: String(fact.value?.evidenceSupportState || "source supported").replaceAll("_", " "),
+      issues: issuesByFactId.get(fact.factId) || [],
     };
   });
   return { owners, assertions };
@@ -496,12 +603,20 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
   if (!["COMPLETE", "PARTIAL", "NO_DATA", "INCONCLUSIVE"].includes(capabilityResult.outcome.state)) {
     throw demoError("ubo_candidate_mapping_failed", capabilityResult.outcome.message || "No UBO candidate facts could be mapped from this chart.", 422);
   }
-  const displayed = presentation(capabilityResult.candidateFacts);
+  const displayed = presentation(capabilityResult.candidateFacts, capabilityResult.issues);
   const sourceGraph = buildSourceGraph(capabilityResult.candidateFacts, input.demoContext.company, {
     artifactId: ingestion.artifactId,
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
   }, requestId);
+  const chartAnalysis = buildChartAnalysis({
+    candidateFacts: capabilityResult.candidateFacts,
+    operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
+    issues: capabilityResult.issues,
+    company: input.demoContext.company,
+    artifact: { artifactId: ingestion.artifactId, capturedAt: ingestion.capturedAt },
+    requestId,
+  });
   return {
     contractVersion: RESULT_VERSION,
     demoCaseId: input.demoContext.demoCaseId,
@@ -536,8 +651,10 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
       issues: capabilityResult.issues,
       downstreamDecision: "NOT_PERFORMED",
     },
+    candidateFacts: structuredClone(capabilityResult.candidateFacts),
     certification: certificationFrom(capabilityResult.candidateFacts),
     sourceGraph,
+    chartAnalysis,
     owners: displayed.owners,
     assertions: displayed.assertions,
     comparison: "NOT_PERFORMED",
@@ -549,6 +666,7 @@ module.exports = Object.freeze({
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,
+  buildChartAnalysis,
   buildSourceGraph,
   certificationFrom,
   presentation,

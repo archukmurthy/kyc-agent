@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildSourceGraph, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -75,7 +75,52 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.sourceGraph.subject.displayName, "Better Comms VOIP Ltd");
   assert.equal(result.sourceGraph.relationships.length, 1);
   assert.equal(result.sourceGraph.qualifications.length, 0);
+  assert.equal(result.chartAnalysis.contractVersion, "ubo-demo-chart-analysis-v1");
+  assert.equal(result.chartAnalysis.state, "EVALUATED");
+  assert.ok(result.chartAnalysis.view.graph.relationships.length >= 1);
+  assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").measurement.value, 75);
   assert.equal(result.comparison, "NOT_PERFORMED");
+});
+
+test("full assertion presentation preserves zero, registry ranges, unknown values and non-percentage rights", () => {
+  const relationship = (factId, relationshipType, measurement) => ({
+    factId, type: "RELATIONSHIP", relationship: relationshipType,
+    subject: { name: "Alice" }, object: { name: "Example Ltd" }, ...(measurement ? { measurement } : {}),
+    qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: `ref-${factId}` }],
+  });
+  const assertions = presentation([
+    relationship("zero", "ECONOMIC_OWNERSHIP", { type: "EXACT", value: 0 }),
+    relationship("range", "VOTING_RIGHTS", { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }),
+    relationship("unknown", "ECONOMIC_OWNERSHIP", { type: "UNKNOWN" }),
+    relationship("control", "BOARD_APPOINTMENT_RIGHT"),
+  ]).assertions;
+  assert.match(assertions[0].statement, /0%/);
+  assert.match(assertions[1].statement, /\(25%, 50%\]/);
+  assert.match(assertions[2].statement, /percentage not established/);
+  assert.match(assertions[3].statement, /non-percentage right/);
+  assert.equal(assertions[1].evidenceReferences[0].referenceId, "ref-range");
+});
+
+test("chart-only analysis uses the shared engine for direct plus indirect ownership paths", () => {
+  const party = (name, entityType, id) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [{ namespace: entityType === "NATURAL_PERSON" ? "DEMO_PERSON" : "COMPANIES_HOUSE_COMPANY_NUMBER", value: id, jurisdiction: "GB" }], sourcePartySnapshot: {} });
+  const alice = party("Alice Morgan", "NATURAL_PERSON", "ALICE-1");
+  const holdco = party("Overseas HoldCo", "LEGAL_ENTITY", "HOLDCO-1");
+  const subject = party("Example Trading Ltd", "LEGAL_ENTITY", "DEMO0028");
+  const relationship = (factId, from, to, value) => ({ factId, type: "RELATIONSHIP", subject: from, relationship: "ECONOMIC_OWNERSHIP", object: to, measurement: { type: "EXACT", value }, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" }, evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-alice" }] });
+  const analysis = buildChartAnalysis({
+    candidateFacts: [relationship("direct", alice, subject, 10), relationship("upper", alice, holdco, 60), relationship("lower", holdco, subject, 30)],
+    operationEvidenceReferences: [], issues: [],
+    company: { legalName: "Example Trading Ltd", registrationNumber: "DEMO0028", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-alice", capturedAt: "2026-09-16T10:00:00.000Z" }, requestId: "chart-alice",
+  });
+  assert.equal(analysis.state, "EVALUATED");
+  assert.equal(analysis.view.graph.relationships.length, 3);
+  const aliceAssessment = analysis.view.qualifications.find((item) => item.personEntityId !== analysis.view.graph.subjectEntityId);
+  assert.ok(aliceAssessment);
+  const effective = analysis.view.qualificationBases.find((item) => item.personEntityId === aliceAssessment.personEntityId && item.route === "EFFECTIVE_INTEREST");
+  assert.equal(effective.recordedCalculation.value.type, "EXACT");
+  assert.equal(effective.recordedCalculation.value.value, "28");
+  assert.equal(effective.orderedPathReferences.length, 2);
 });
 
 test("source visualization groups repeated chart names without inventing a UBO conclusion", () => {
