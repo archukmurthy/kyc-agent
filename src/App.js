@@ -2428,7 +2428,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     fetch("/api/self-source", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
       signal: controller.signal,
       body: JSON.stringify({
         companyName,
@@ -2440,7 +2440,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         tenantId,
       }),
     })
-      .then(r => r.json())
+      .then(r => r.json().then(data => (r.status === 429 ? { error: rateLimitMessage(data.retryAfterSeconds) } : data)))
       .then(data => {
         if (data.success) {
           setSelfSourceResults(data);
@@ -2515,7 +2515,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     fetch("/api/doc-search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
       signal: controller.signal,
       body: JSON.stringify({
         companyName,
@@ -2525,7 +2525,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         tenantId,
       }),
     })
-      .then(r => r.json())
+      .then(r => r.json().then(data => (r.status === 429 ? { error: rateLimitMessage(data.retryAfterSeconds) } : data)))
       .then(data => {
         if (data.success) {
           setDocSearchResults(data);

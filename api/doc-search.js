@@ -5,6 +5,8 @@
 // CommonJS (module.exports) rather than ESM so src/setupProxy.js can
 // require() it for local dev, mirroring api/config.js and friends.
 
+const { enforceRateLimit } = require("../lib/rateLimit");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -26,6 +28,8 @@ module.exports = async function handler(req, res) {
       error: "Missing required fields",
     });
   }
+
+  if (!(await enforceRateLimit(req, res, "doc-search"))) return undefined;
 
   try {
     // Lazy require: the agent instantiates the Anthropic SDK client at module

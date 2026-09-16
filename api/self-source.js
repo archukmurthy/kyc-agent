@@ -13,6 +13,8 @@
  * CommonJS — matches api/doc-search.js pattern.
  */
 
+const { enforceRateLimit } = require("../lib/rateLimit");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -33,6 +35,8 @@ module.exports = async function handler(req, res) {
       error: "Missing required fields: companyName, incorporationCountry, entityType, ownershipType",
     });
   }
+
+  if (!(await enforceRateLimit(req, res, "self-source"))) return undefined;
 
   try {
     // ── Lazy requires ──────────────────────────────────────────────────────

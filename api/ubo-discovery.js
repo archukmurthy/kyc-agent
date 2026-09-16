@@ -6,6 +6,7 @@ const { companiesHouseOwnershipAdapter } = require("../agents/ubo/companiesHouse
 const { getFresh, resultKey, cacheResult, appendAudit, identity } = require("../agents/ubo/uboPersistence");
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
 const { randomUUID } = require("crypto");
+const { enforceRateLimit } = require("../lib/rateLimit");
 
 function forReviewer(result) {
   return {
@@ -29,6 +30,7 @@ module.exports = async function handler(req, res) {
   const discovery = Number(discoveryThreshold || 5);
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) return res.status(400).json({ error: "uboThreshold must be a number from 0 to 100" });
   if (!Number.isFinite(discovery) || discovery <= 0 || discovery > 100) return res.status(400).json({ error: "discoveryThreshold must be a number from 0 to 100" });
+  if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
   const streaming = String(req.headers?.accept || "").includes("text/event-stream");
   const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify(event)}\n\n`); };
   const finish = (payload) => {
