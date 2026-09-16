@@ -75,16 +75,18 @@ module.exports = async function handler(req, res) {
   // A fresh application (no dossier) is unchanged — backlog PLAT-7.
 
   try {
-    const row = await _deps.writeEvent(sql, event);
-
     if (dossier && actor && actor.kind === "customer") {
       // The customer changed something: from now on the analyst may only read.
+      // Lock the dossier BEFORE writing the record so if the lock fails,
+      // no change record exists (safe). A record without a lock is not.
       await sql`
         UPDATE entity_dossiers
         SET owned_by = 'customer', last_customer_action_at = NOW()
         WHERE id = ${dossier.id} AND tenant_id = ${dossier.tenant_id}
       `;
     }
+
+    const row = await _deps.writeEvent(sql, event);
 
     console.log(`[change-events] ✅ event ${row.id} (${row.field_id} / ${row.workflow})`);
     return res.status(200).json({ success: true, id: row.id });

@@ -10,12 +10,16 @@ function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
 }
 
-function fakeSql(dossierRow) {
+function fakeSql(dossierRow, updateThrows = false) {
   const log = [];
   const sql = (strings, ...values) => {
     const text = strings.join(" ");
     log.push({ text, values });
     if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) return Promise.resolve(dossierRow ? [dossierRow] : []);
+    if (/UPDATE entity_dossiers/i.test(text)) {
+      if (updateThrows) return Promise.reject(new Error("ownership_update_failed"));
+      return Promise.resolve([]);
+    }
     return Promise.resolve([]);
   };
   sql.log = log;
@@ -82,6 +86,17 @@ test("a customer's record is written and transfers ownership of the dossier", as
   assert.ok(flip, "expected an ownership update");
   assert.match(flip.text, /owned_by/);
   assert.ok(flip.values.includes("d-1"));
+});
+
+test("a customer's ownership UPDATE throws → no change record is written", async () => {
+  let wrote = false;
+  const sql = fakeSql(ROW, true); // updateThrows = true
+  handler.__setDeps(deps(sql, CUSTOMER, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.success, false);
+  assert.strictEqual(wrote, false, "expected no event written when ownership update fails");
 });
 
 test("a customer cannot add records to another dossier", async () => {
