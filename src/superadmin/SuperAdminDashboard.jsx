@@ -95,6 +95,27 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
     }
   }
 
+  async function handleTogglePreboarding(tenant) {
+    const next = !tenant.preboardingEnabled;
+    const verb = next ? "Enable" : "Disable";
+    if (!window.confirm(`${verb} pre-boarding for ${tenant.companyName || tenant.tenantId}?`)) return;
+    try {
+      const r = await fetch(
+        `/api/tenants?action=toggle-preboarding&tenantId=${encodeURIComponent(tenant.tenantId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ preboardingEnabled: next }),
+        }
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      loadTenants();
+    } catch (err) {
+      alert("Could not update pre-boarding: " + err.message);
+    }
+  }
+
   return (
     <div style={adminStyles.pageWrapper}>
       <TopBar onSignOut={onSignOut} />
@@ -144,6 +165,7 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
               tenant={t}
               onResetPassword={(tenant) => setShowReset({ tenantId: tenant.tenantId, companyName: tenant.companyName })}
               onToggleStatus={handleToggleStatus}
+              onTogglePreboarding={handleTogglePreboarding}
             />
           ))}
           {!sortedTenants.length && !loading && (

@@ -1,5 +1,6 @@
 const { test, afterEach } = require("node:test");
 const assert = require("node:assert");
+const { readConfigForTenant } = require("../config");
 
 // Reset the module-level `_deps` seam after every test so a store/sendEmail
 // fake wired by one test (e.g. the custom sendEmail below) can never leak
@@ -11,6 +12,7 @@ afterEach(() => {
     sendEmail: async () => {
       throw new Error("sendEmail called without a test-provided fake");
     },
+    readConfigForTenant,
   });
 });
 
@@ -286,6 +288,45 @@ test("malformed (non-URL) client-supplied link does not throw and is rejected", 
     assert.match(res.body.link, /^https:\/\/kyc-agent-deploy\.vercel\.app\//);
     assert.match(res.body.link, /tenant=nium/);
     assert.match(res.body.link, /dossierId=dossier-1(&|$)/);
+  } finally {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+  }
+});
+
+test("the email uses the tenant's own company name, not a hardcoded brand", async (t) => {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  const store = fakeStore();
+  handler.__setDeps({
+    store,
+    readConfigForTenant: async () => ({ company: { name: "Acme Payments" } }),
+  });
+  try {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload, tenantId: "acme" }), res);
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.match(res.body.subject, /Acme Payments/);
+    assert.doesNotMatch(res.body.subject, /Nium/i);
+    assert.doesNotMatch(res.body.body, /Nium/i);
+  } finally {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = prevKey;
+  }
+});
+
+test("a tenant with no configured company name falls back to its tenant id", async (t) => {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  delete process.env.RESEND_API_KEY;
+  handler.__setDeps({ store: fakeStore(), readConfigForTenant: async () => ({ company: {} }) });
+  try {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload, tenantId: "acme" }), res);
+    assert.match(res.body.subject, /acme/);
+    assert.doesNotMatch(res.body.subject, /Nium/i);
   } finally {
     if (prevKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = prevKey;

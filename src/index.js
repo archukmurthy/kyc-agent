@@ -7,10 +7,12 @@ import ChangeIntelligenceRoot from "./components/changeIntelligenceDashboard/Cha
 import PolicySimulator from "./policySimulator/PolicySimulator";
 
 const path = window.location.pathname;
-// Pre-boarding agent vs. the plain customer onboarding flow is distinguished by
-// the ?preboarding=1 query param, not the path — both render <KYCAgent/>.
-const isPreboarding =
-  new URLSearchParams(window.location.search).get("preboarding") === "1";
+const search = new URLSearchParams(window.location.search);
+// Pre-boarding has its own path (/preboarding?tenant=<id>), mirroring /admin.
+// The legacy ?preboarding=1 param is still recognised so old bookmarks work;
+// App.js redirects those to the new path.
+const isPreboardingPath = path === "/preboarding" || path.startsWith("/preboarding/");
+const isPreboarding = isPreboardingPath || search.get("preboarding") === "1";
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 // Tab title reflects which surface is open. Tenant Admin never carries the
@@ -36,18 +38,21 @@ if (isPolicySimulator) {
 } else if (path === "/admin" || path.startsWith("/admin/")) {
   tree = <AdminRoot />;
   title = "KYC Onboarding Agent | Tenant Admin";
+} else if (isPreboardingPath) {
+  tree = <KYCAgent preboarding />;
+  title = "KYC Onboarding Agent | Pre-boarding";
 } else if (path === "/preview" || path.startsWith("/preview/")) {
   // Preview mode loads the customer flow with the unsaved admin config
   // pulled from sessionStorage. The flag tells App to source config from
   // sessionStorage rather than /api/config and to render a banner.
-  tree = <KYCAgent previewMode />;
+  tree = <KYCAgent previewMode preboarding={isPreboarding} />;
   title = isPreboarding
     ? "KYC Onboarding Agent | Pre-boarding"
     : "KYC Onboarding Agent";
 } else {
-  // Customer-facing onboarding flow and the pre-boarding agent both live here.
-  // Pre-boarding (?preboarding=1) is labelled; the plain customer onboarding
-  // flow carries no separator.
+  // Customer-facing onboarding flow lives here; the legacy ?preboarding=1
+  // link also lands here just long enough for App.js's redirect effect to
+  // send it to /preboarding.
   tree = <KYCAgent />;
   title = isPreboarding
     ? "KYC Onboarding Agent | Pre-boarding"

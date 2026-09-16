@@ -19,6 +19,8 @@
     { "source": "/admin/(.*)", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/preview", "destination": "/index.html" },
+    { "source": "/preboarding", "destination": "/index.html" },
+    { "source": "/preboarding/(.*)", "destination": "/index.html" },
     { "source": "/policy-simulator", "destination": "/index.html" },
     { "source": "/policy-simulator/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }

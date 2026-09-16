@@ -18,6 +18,7 @@ export default function CredentialsModal({
   const origin = typeof window !== "undefined" ? window.location.origin : "yourdomain.com";
   const fullAdminUrl = origin + (adminUrl || `/admin?tenant=${tenantId}`);
   const fullCustomerUrl = origin + (customerUrl || `/?tenant=${tenantId}`);
+  const preboardingUrl = `${origin}/preboarding?tenant=${tenantId}`;
 
   const formatted = [
     `Company:      ${companyName || tenantId}`,
@@ -27,6 +28,7 @@ export default function CredentialsModal({
     `Password:     ${password}`,
     ``,
     `Customer URL: ${fullCustomerUrl}`,
+    `Pre-boarding URL: ${preboardingUrl}`,
   ].join("\n");
 
   async function copyAll() {

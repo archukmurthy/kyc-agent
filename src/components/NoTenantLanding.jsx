@@ -5,9 +5,14 @@ import React from "react";
 // tenant, so a bare URL must show this neutral explainer instead of silently
 // falling back to any one customer's branding. Deliberately lists no tenant
 // names — this is a public, unauthenticated surface.
-export default function NoTenantLanding() {
+export default function NoTenantLanding({ surface = "onboarding" }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const exampleUrl = `${origin}/?tenant=acme`;
+  const isPreboarding = surface === "preboarding";
+  const exampleUrl = isPreboarding ? `${origin}/preboarding?tenant=acme` : `${origin}/?tenant=acme`;
+  const heading = "No tenant selected";
+  const explainer = isPreboarding
+    ? "Pre-boarding runs per organization, each with its own configuration. A tenant must be specified in the URL before the analyst flow can start."
+    : "This page serves multiple organizations, each with its own configuration. A tenant must be specified in the URL before onboarding can start.";
 
   return (
     <div
@@ -53,10 +58,9 @@ export default function NoTenantLanding() {
         >
           🏢
         </div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 10px" }}>No tenant selected</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 10px" }}>{heading}</h1>
         <p style={{ fontSize: 14, color: "#1a3a4a99", lineHeight: 1.6, margin: "0 0 22px" }}>
-          This page serves multiple organizations, each with its own configuration. A tenant must
-          be specified in the URL before onboarding can start.
+          {explainer}
         </p>
         <div
           style={{

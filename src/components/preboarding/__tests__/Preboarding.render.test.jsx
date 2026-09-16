@@ -46,17 +46,23 @@ let fetchRoutes = {};
 
 beforeEach(() => {
   fetchRoutes = {};
+  fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve(
+          opts && opts.method === "POST"
+            ? { success: true, token: "ARCH", tenantId: "nium", companyName: "Nium" }
+            : { available: true, reason: null, companyName: "Nium" }
+        ),
+    });
   global.fetch = jest.fn((url, opts) => {
     const key = Object.keys(fetchRoutes).find((k) => String(url).includes(k));
     if (key) return fetchRoutes[key](url, opts);
     return Promise.reject(new Error("offline test"));
   });
   jest.useFakeTimers();
-  // The entry mechanism: the param is read during render, so it must be set
-  // BEFORE the first render for the early-return branch to fire. Carries
-  // ?tenant= too — this pushState runs after setupTests.js's default one and
-  // would otherwise wipe it out, landing on NoTenantLanding instead of gate.
-  window.history.pushState({}, "", "/?preboarding=1&tenant=nium");
+  window.history.pushState({}, "", "/preboarding?tenant=nium");
 });
 
 afterEach(() => {
@@ -91,14 +97,14 @@ const codeInput = () => screen.getByPlaceholderText(/Enter access code/i);
 /** Step 1 — pushState is already done in beforeEach; this just mounts. */
 async function mountAtGate() {
   await act(async () => {
-    render(<KYCAgent />);
+    render(<KYCAgent preboarding />);
   });
   await settle(0);
 }
 
-/** Step 2 — ARCH is the PREBOARDING_PASSWORD constant in App.js. */
-async function unlock() {
-  fireEvent.change(codeInput(), { target: { value: "ARCH" } });
+/** Step 2 — the password is checked by /api/preboarding-auth, not the bundle. */
+async function unlock(code = "ARCH") {
+  fireEvent.change(codeInput(), { target: { value: code } });
   fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
   await settle(0);
 }
@@ -149,18 +155,49 @@ describe("pre-boarding gate", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("REGRESSION (Finding 1): /preview with the legacy pre-boarding param stays on the gate, in preview mode, instead of falling through to the customer flow", async () => {
+    // Mirrors how index.js's /preview branch renders KYCAgent now that it
+    // passes the legacy-param-derived preboarding flag alongside previewMode.
+    // Before that fix the branch rendered `<KYCAgent previewMode />` with no
+    // preboarding prop, so `isPreboardingSurface` was false, the redirect
+    // effect's early-return guard never tripped, and the component fell
+    // through to the ordinary customer flow instead of the gate — discarding
+    // preview mode. See task-11-report.md for this test's failing run against
+    // the pre-fix call shape.
+    //
+    // LIMIT OF THIS TEST: it renders `<KYCAgent previewMode preboarding />`
+    // directly, proving the COMPONENT's contract for that prop combination.
+    // It does not — and under jsdom cannot — execute src/index.js itself, so
+    // it cannot catch a regression in index.js's /preview branch (e.g. a
+    // revert back to `<KYCAgent previewMode />` with the preboarding prop
+    // dropped). That branch has no test of its own; a future reader should
+    // not mistake this test for end-to-end coverage of it.
+    await act(async () => {
+      render(<KYCAgent previewMode preboarding />);
+    });
+    await settle(0);
+    expect(bodyText()).toMatch(/Pre-boarding Agent/i);
+    expect(codeInput()).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Company Lookup/i })
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the access-code prompt as a password field", async () => {
     await mountAtGate();
     expect(codeInput()).toHaveAttribute("type", "password");
     expect(buttonsWithText(/Access Pre-boarding Agent/i).length).toBe(1);
   });
 
-  it("a wrong code does NOT unlock", async () => {
+  it("a wrong code does NOT unlock — the server rejects it", async () => {
     await mountAtGate();
-    fireEvent.change(codeInput(), { target: { value: "WRONG" } });
-    fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
-    await settle(0);
-    // Still gated.
+    fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
+      Promise.resolve(
+        opts && opts.method === "POST"
+          ? { ok: false, status: 401, json: () => Promise.resolve({ error: "invalid_password" }) }
+          : { ok: true, json: () => Promise.resolve({ available: true, reason: null, companyName: "Nium" }) }
+      );
+    await unlock("WRONG");
     expect(screen.getByPlaceholderText(/Enter access code/i)).toBeInTheDocument();
   });
 
@@ -173,6 +210,59 @@ describe("pre-boarding gate", () => {
     // Purple pre-boarding chrome, not the onboarding header.
     expect(bodyText()).toMatch(/Pre-boarding/i);
     expect(screen.getByPlaceholderText(/Tesco PLC/i)).toBeInTheDocument();
+  });
+
+  it("a tenant with pre-boarding switched off never shows the password form", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "preboarding_disabled", companyName: "Acme" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/not available/i);
+  });
+
+  it("a deactivated tenant is told so, not gated", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "tenant_inactive", companyName: "Acme" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/not active|deactivated/i);
+  });
+
+  it("an unknown tenant is told so, not gated", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "tenant_not_found", companyName: "" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);
+  });
+
+  it("the availability probe rejecting (offline/server error) degrades to the unavailable screen, not a crash or a password box", async () => {
+    // PreboardingGate's probe effect has a `catch` fallback for a rejected
+    // fetch (network down, server 500 before it can even answer) that no
+    // other test exercises — it always resolves. Force that branch: the GET
+    // probe rejects outright rather than resolving with an `available` body.
+    fetchRoutes["/api/preboarding-auth"] = () => Promise.reject(new Error("network down"));
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);
+  });
+
+  it("/preboarding with no tenant explains what to add instead of gating", async () => {
+    window.history.pushState({}, "", "/preboarding");
+    await act(async () => { render(<KYCAgent preboarding />); });
+    await settle(0);
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/No tenant selected/i);
+    expect(bodyText()).toMatch(/analyst flow/i);
   });
 });
 

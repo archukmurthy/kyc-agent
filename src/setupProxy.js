@@ -4,7 +4,9 @@
 // endpoints work locally as on Vercel in production. This file is NOT
 // bundled into the React app — it only runs in the dev server process.
 //
-// Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
+// Requires ANTHROPIC_API_KEY and ADMIN_PASSWORD in .env.local. There is no
+// TENANT_ID: tenant resolution is strict, so every local URL carries its own
+// ?tenant= just as it does in production.
 
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -13,7 +15,9 @@ const { pathToFileURL } = require("url");
 // locations so dev and production run the exact same code paths.
 const configHandler = require(path.join(__dirname, "..", "api", "config.js"));
 const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.js"));
+const preboardingAuthHandler = require(path.join(__dirname, "..", "api", "preboarding-auth.js"));
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
+const configTemplatesHandler = require(path.join(__dirname, "..", "api", "config-templates.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
 const niumConstantsHandler = require(path.join(__dirname, "..", "api", "nium", "constants.js"));
@@ -192,7 +196,18 @@ module.exports = function (app) {
 
   app.all("/api/config", adapt(configHandler));
   app.all("/api/config-versions", adapt(configVersionsHandler));
+  app.get("/api/config-templates", adapt(configTemplatesHandler));
   app.post("/api/admin-auth", adapt(adminAuthHandler));
+  app.get("/api/preboarding-auth", adapt(preboardingAuthHandler));
+  app.post("/api/preboarding-auth", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(preboardingAuthHandler)(req, res);
+    });
+  });
   app.post("/api/super-admin-auth", adapt(superAdminAuthHandler));
   app.all("/api/tenants", adapt(tenantsHandler));
 

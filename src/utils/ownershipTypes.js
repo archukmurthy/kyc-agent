@@ -2,9 +2,8 @@
 // Ownership-type library + research-strategy definitions.
 //
 // Single source of truth for the customer flow (src/App.js) and the admin
-// (src/admin/steps/StepEntityTypes.jsx, src/admin/defaultConfig.js). Defined
-// once here and imported wherever needed so the 21-item list never drifts
-// between the two surfaces.
+// (src/admin/steps/StepEntityTypes.jsx). Defined once here and imported
+// wherever needed so the 21-item list never drifts between the two surfaces.
 //
 // Each ownership type maps to a `researchStrategy` key in RESEARCH_STRATEGIES,
 // which Phase 0 of the research pipeline uses to set search flags and tune the

@@ -114,7 +114,6 @@ import {
   OWNERSHIP_ID_TO_DRS,
   // TEST_FLAG went with the journey picker — it gated that screen's DemoToggle.
   SHOW_TEST_TOOLS,
-  MANUAL_FORM_URL,
   COUNTRIES,
 } from "./constants/appConstants";
 import {
@@ -164,7 +163,7 @@ if (SHOW_TEST_TOOLS && typeof window !== "undefined") {
   window.__setHighRiskCountries = setHighRiskCountries;
 }
 
-export default function KYCAgent({ previewMode = false } = {}) {
+export default function KYCAgent({ previewMode = false, preboarding = false } = {}) {
   // Tenant config — loaded from /api/config on mount, or from sessionStorage
   // when running in preview mode (the admin "Preview" button stages the
   // current unsaved config under the "preview_config" key).
@@ -174,8 +173,31 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Preview mode is either triggered by the /preview route (index.js sets
   // previewMode prop) or by ?preview=true in the URL.
   const [tenantId] = useState(() => getTenantId());
+
+  // Pre-boarding entry. The path (/preboarding) is the real entry; the legacy
+  // ?preboarding=1 param is redirected to it once, on mount, so old bookmarks
+  // and emailed links keep working. Read in ONE place — this used to be parsed
+  // separately here and inside resetAll.
+  const isPreboardingSurface = preboarding;
+  useEffect(() => {
+    if (typeof window === "undefined" || preboarding) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("preboarding") !== "1") return;
+    params.delete("preboarding");
+    const qs = params.toString();
+    window.location.replace(`/preboarding${qs ? `?${qs}` : ""}`);
+  }, [preboarding]);
+
+  // The tenant the SERVER verified at the pre-boarding gate. Dossier saves and
+  // invite links use this, never the raw URL value.
+  const [preboardingTenantId, setPreboardingTenantId] = useState("");
+  const [preboardingToken, setPreboardingToken] = useState("");
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
+  // The server answered 404 tenant_not_found: this tenant does not exist.
+  // Renders the same no-tenant surface as a bare URL (see the early return
+  // near the end of this component) instead of the offline fallback config.
+  const [tenantUnknown, setTenantUnknown] = useState(false);
   const inPreview = previewMode || isPreviewMode();
   // Timestamp the staged preview config was captured (admin click time). Shown
   // in the preview banner so the admin can tell whether the tab is stale.
@@ -267,8 +289,19 @@ export default function KYCAgent({ previewMode = false } = {}) {
     }
     const url = `/api/config?tenant=${encodeURIComponent(tenantId)}`;
     fetch(url, { cache: "no-store" })
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((cfg) => { if (!cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
+      .then((r) => {
+        // 404 is the server ANSWERING "no such tenant", not failing. Falling
+        // through to the offline fallback here would render a complete working
+        // wizard for a typo'd tenant, branded with the typo'd id, and attribute
+        // a submission to it. Only a genuine transport failure (below) keeps
+        // the offline fallback, so a customer mid-application survives a blip.
+        if (r.status === 404) {
+          if (!cancelled) { setTenantUnknown(true); setConfigLoading(false); }
+          return null;
+        }
+        return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+      })
+      .then((cfg) => { if (cfg && !cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.warn("Falling back to local default config:", err.message);
@@ -283,15 +316,11 @@ export default function KYCAgent({ previewMode = false } = {}) {
   const [step, setStep] = useState(0);
 
   // ─── Landing page / agent selection ───
-  // The correct pre-boarding access code (kept as a constant, not inlined).
-  const PREBOARDING_PASSWORD = "ARCH";
   // Which agent the user selected.
   //   null = on landing page · "onboarding" = existing flow · "preboarding" = pre-boarding agent
   const [agentType, setAgentType] = useState(null);
-  // Pre-boarding password gate state.
+  // Pre-boarding gate state.
   const [preboardingUnlocked, setPreboardingUnlocked] = useState(false);
-  const [preboardingPassword, setPreboardingPassword] = useState("");
-  const [preboardingPasswordError, setPreboardingPasswordError] = useState(false);
   // Pre-boarding: gap fields the analyst excluded from the customer request.
   const [excludedGapFields, setExcludedGapFields] = useState(new Set());
   // Pre-boarding: analyst-authored custom questions (see shape in renderAskMorePanel).
@@ -768,18 +797,8 @@ export default function KYCAgent({ previewMode = false } = {}) {
     // Landing page hidden for stakeholder review weekend — instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
-    const preboardingParam =
-      new URLSearchParams(
-        window.location.search
-      ).get("preboarding");
-    setAgentType(
-      preboardingParam === "1"
-        ? "preboarding"
-        : "onboarding"
-    );
+    setAgentType(isPreboardingSurface ? "preboarding" : "onboarding");
     setPreboardingUnlocked(false);
-    setPreboardingPassword("");
-    setPreboardingPasswordError(false);
     setExcludedGapFields(new Set());
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
@@ -839,7 +858,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         acceptedDocTypes: Array.from(acceptedDocTypes),
         applicantNotListed, amendmentUploads,
         niumRegNumber, niumSearchResults, dossierStakeholders,
-      });
+      }, { tenantId, agentType });
     }, 800);
     return () => clearTimeout(t);
   }, [companyName, countryCode, entityType, ownershipType, research, activeSchema, checks,
@@ -850,16 +869,17 @@ export default function KYCAgent({ previewMode = false } = {}) {
       excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
       rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
       researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
-      niumRegNumber, niumSearchResults, dossierStakeholders]);
+      niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
 
   // Offer to resume an unfinished application found in localStorage (Task 9 —
   // browser draft is the pre-capture backstop). Checked once on mount.
   const [resumeOffer, setResumeOffer] = useState(null); // the loaded draft, or null
   useEffect(() => {
-    const d = loadDraft();
+    if (!tenantId || !agentType) return;
+    const d = loadDraft({ tenantId, agentType });
     if (d && d.state && (d.state.companyName || d.state.research)) setResumeOffer(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tenantId, agentType]);
 
   const applyResume = () => {
     const s = resumeOffer.state;
@@ -4289,13 +4309,15 @@ export default function KYCAgent({ previewMode = false } = {}) {
     })
   );
 
-  // 3-strict: no ?tenant= means no tenant. This must come after every hook
-  // above (React rules-of-hooks — the last hook call in this component is
-  // ~3000 lines up, well before this point) but before any of the normal
-  // header/flow renders below. No fetch happened for this case either (see
-  // the config-loading effect's own !tenantId guard).
-  if (!tenantId) {
-    return <NoTenantLanding />;
+  // 3-strict: no ?tenant= means no tenant, and a tenant the server does not
+  // know (404 tenant_not_found) is no tenant either — the browser must not
+  // contradict the server by rendering a working flow for an id it rejected.
+  // This must come after every hook above (React rules-of-hooks — the last
+  // hook call in this component is ~3000 lines up, well before this point) but
+  // before any of the normal header/flow renders below. In the !tenantId case
+  // no fetch happened at all (see the config-loading effect's own guard).
+  if (!tenantId || tenantUnknown) {
+    return <NoTenantLanding surface={isPreboardingSurface ? "preboarding" : "onboarding"} />;
   }
 
   // Resolved values from tenant config with safe fallbacks. Keep these on the
@@ -4303,7 +4325,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Fallback is the tenant's own id, never another tenant's brand name.
   const companyName_ = tenantConfig?.company?.name || tenantId;
   const companyLogo_ = tenantConfig?.company?.logo || null;
-  const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
+  const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || "";
   const activeEntityTypes = (tenantConfig?.entityTypes || [])
     .filter(e => e.active !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -4599,7 +4621,9 @@ export default function KYCAgent({ previewMode = false } = {}) {
       // (api/save-dossier.js), never re-inserted — a blind insert would
       // duplicate the row and orphan any invite link already built on this id.
       dossierId,
-      tenantId,
+      // Pre-boarding uses the tenant the server verified at the gate; the
+      // customer flow has no gate, so it uses the URL-resolved tenant.
+      tenantId: preboardingTenantId || tenantId,
       company: dossierCompany(),
       entityType,
       ownershipType,
@@ -4695,45 +4719,21 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
 
-  // Check URL for preboarding param
-  const preboardingParam =
-    new URLSearchParams(
-      window.location.search
-    ).get("preboarding");
-
-  // Hidden for stakeholder review weekend
-  // Restore by re-adding:
-  // if (agentType === null) {
-  //   return renderLandingPage();
-  // }
   if (agentType === null) {
-    if (preboardingParam === "1") {
-      // Pre-boarding accessed via
-      // hidden URL — set agent type
-      // and show password gate
-      // Do this once on mount
-      setAgentType("preboarding");
-      return null;
-    } else {
-      // Everyone else goes straight
-      // to onboarding — no landing page
-      setAgentType("onboarding");
-      return null;
-    }
+    setAgentType(isPreboardingSurface ? "preboarding" : "onboarding");
+    return null;
   }
   if (agentType === "preboarding" && !preboardingUnlocked) {
     return (
       <PreboardingGate
-        PREBOARDING_PASSWORD={PREBOARDING_PASSWORD}
-        preboardingPassword={preboardingPassword}
-        setPreboardingPassword={setPreboardingPassword}
-        preboardingPasswordError={preboardingPasswordError}
-        setPreboardingPasswordError={setPreboardingPasswordError}
-        setPreboardingUnlocked={setPreboardingUnlocked}
-        setStep={setStep}
-        setError={setError}
-        agentType={agentType}
-        setAgentType={setAgentType}
+        tenantId={tenantId}
+        onUnlocked={(token, resolvedTenantId) => {
+          setPreboardingToken(token);
+          setPreboardingTenantId(resolvedTenantId || tenantId);
+          setPreboardingUnlocked(true);
+          setStep(0);
+          setError("");
+        }}
         trackEvent={trackEvent}
       />
     );
@@ -4745,6 +4745,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
       <InviteScreen
         research={research}
         companyName={companyName}
+        brandName={companyName_}
         tenantId={tenantId}
         dossierId={dossierId}
         inviteEmail={inviteEmail}
@@ -4825,6 +4826,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
         <PreviewBanner
           missing={previewMissing}
           timestamp={previewTimestamp}
+          tenantId={tenantId}
         />
       )}
       {demoMode && <DemoBanner offsetTop={inPreview ? 40 : 0} />}
@@ -4947,6 +4949,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             manualOpened={manualOpened}
             setManualOpened={setManualOpened}
             proceedFromJourney={proceedFromJourney}
+            manualFormUrl={manualFormUrl_}
             companyName={companyName}
             countryCode={countryCode}
             niumRegNumber={niumRegNumber}
@@ -5122,6 +5125,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
             onIdvVerifiedFields={setIdvVerifiedFields}
             idvResult={idvResult}
             onIdvResultCache={setIdvResult}
+            brandName={companyName_}
           />
         )}
 
@@ -5251,6 +5255,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
                 return (
                   <Step2DynamicForm
                     step1Data={drsStep1Data}
+                    brandName={companyName_}
                     researchData={research}
                     docSearchResults={docSearchResults}
                     selfSourceResults={selfSourceResults}

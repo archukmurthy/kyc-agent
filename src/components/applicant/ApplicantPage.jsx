@@ -112,6 +112,7 @@ export function ApplicantPage({
   onIdvVerifiedFields,
   idvResult = null,
   onIdvResultCache,
+  brandName,
 }) {
   const card = cardStyle;
 
@@ -564,6 +565,7 @@ export function ApplicantPage({
                 onUpload={(_req, file) => handleSignatoryIdUpload(file)}
                 onRemove={() => setSignatoryIdFile(null)}
                 autoSourcedResult={null}
+                brandName={brandName}
               />
             </div>
             )}
@@ -584,6 +586,7 @@ export function ApplicantPage({
                   onUpload={(_req, file) => handleAuthorityToActUpload(file)}
                   onRemove={() => setAuthorityToActFile(null)}
                   autoSourcedResult={null}
+                  brandName={brandName}
                 />
               </div>
             )}
@@ -617,6 +620,7 @@ export function ApplicantPage({
                         onUpload={(_req, file) => handleAuthorityToActUpload(file)}
                         onRemove={() => setAuthorityToActFile(null)}
                         autoSourcedResult={null}
+                        brandName={brandName}
                       />
                     </div>
                   }

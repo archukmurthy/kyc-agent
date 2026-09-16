@@ -81,6 +81,11 @@ export function JourneyPicker({
   manualOpened,
   setManualOpened,
   proceedFromJourney,
+  // ── the tenant's own manual application form URL; Card C ("I'll complete
+  //     the form myself") only renders when this is configured — there is no
+  //     platform-wide fallback, a link to another company's form is worse
+  //     than no card at all ──
+  manualFormUrl,
   // ── read-only lookup facts, owned by the Company Lookup screen ──
   companyName,
   countryCode,
@@ -180,8 +185,10 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card C */}
-        {(() => {
+        {/* Card C — only when the tenant configured its own manual application
+            form. There is no platform-wide fallback: a link to someone else's
+            form is worse than no card at all. */}
+        {manualFormUrl ? (() => {
           const sel = selectedJourneyCard === "C";
           return (
             <div
@@ -199,7 +206,7 @@ export function JourneyPicker({
               <div style={{ fontSize: 11, fontWeight: 600, color: "#1a3a4a90" }}>Full control · No AI · ~15 minutes</div>
             </div>
           );
-        })()}
+        })() : null}
 
         {/* Card D - Nium API Lookup. TEST MODE ONLY: visible when demoMode
             is on OR ?test=1 is in the URL. Pulls verified registry data

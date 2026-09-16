@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AdminDashboard from "./AdminDashboard";
 import { adminColors, adminStyles } from "./adminDesign";
-import buildDefaultConfig, { buildBlankConfig } from "./defaultConfig";
+import { buildLocalDefaultConfig } from "../config/localDefaultConfig";
 import { getTenantId } from "../utils/tenant";
 
 const TOKEN_KEY = "admin_token";
@@ -39,8 +39,11 @@ export default function AdminRoot() {
       // eslint-disable-next-line no-console
       console.error("Admin config load failed, falling back to client default:", err);
       setConfigError(err.message);
-      // Offline fallback: Nium gets the defaults, other tenants get a blank.
-      setTenantConfig(tenantId === "nium" ? buildDefaultConfig(tenantId) : buildBlankConfig(tenantId));
+      // Offline fallback: a neutral local config so the admin UI still renders.
+      // No tenant is special-cased — the live config is the only source of a
+      // tenant's real settings, and "Apply default settings" (Step 5) is how a
+      // template is pulled in deliberately.
+      setTenantConfig({ ...buildLocalDefaultConfig(), _tenantId: tenantId, _isBlank: true });
     } finally {
       setConfigLoading(false);
     }
@@ -76,8 +79,10 @@ export default function AdminRoot() {
 
   // First-login wizard fires for brand-new blank tenants (created via
   // /super-admin) and for any tenant that has zero licences configured.
-  // The Nium tenant is excluded because it ships with default seed config —
-  // pushing it into the wizard on every fresh session would be annoying.
+  // No tenant is excluded by id: the platform tenant ships with default seed
+  // config, so it has licences and doesn't reach the wizard on its own. The
+  // one exception is the offline fallback above, which marks every tenant
+  // _isBlank — an API-unreachable admin session shows the wizard regardless.
   const firstLogin =
     tenantConfig._isBlank === true ||
     ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "nium");

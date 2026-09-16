@@ -18,11 +18,13 @@
 //
 // Env vars:
 //   RESEND_API_KEY    — Resend API key. Without it, email is simulated.
-//   INVITE_FROM_EMAIL — From header, e.g. "Nium Onboarding <onboarding@nium.com>".
-//                       Defaults to Resend's shared test sender.
+//   INVITE_FROM_EMAIL — From header, e.g. "Acme Onboarding <onboarding@acme.com>".
+//                       Defaults to Resend's shared test sender, brand-named
+//                       from the tenant's own config (see brandName below).
 
 const crypto = require("crypto");
 const store = require("../lib/storage.js");
+const { readConfigForTenant } = require("./config");
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
@@ -42,7 +44,7 @@ async function sendEmail({ apiKey, from, to, subject, text }) {
 }
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
-let _deps = { store, sendEmail };
+let _deps = { store, sendEmail, readConfigForTenant };
 
 // Resolve the server's own origin from request headers — NOT from the request
 // body. body.origin is attacker-controlled (any value the caller's JS sets);
@@ -148,10 +150,19 @@ module.exports = async function handler(req, res) {
     console.warn("invite persist failed:", e && e.message);
   }
 
-  const subject = `Your Nium onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
+  // Brand comes from the tenant's own configuration. It used to be hardcoded,
+  // so every tenant's customers received a Nium-branded email.
+  let brandName = tenantId;
+  try {
+    const cfg = await _deps.readConfigForTenant(tenantId);
+    const configured = cfg && cfg.company && cfg.company.name;
+    if (typeof configured === "string" && configured.trim()) brandName = configured.trim();
+  } catch (_) { /* fall back to the tenant id */ }
+
+  const subject = `Your ${brandName} onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
   const text = `Dear ${contactName},
 
-Thank you for your interest in Nium. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
+Thank you for your interest in ${brandName}. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
 
 Please complete your onboarding by clicking the link below:
 
@@ -159,13 +170,13 @@ ${link}
 
 This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
 
-If you have any questions, please do not hesitate to reach out to your Nium contact.
+If you have any questions, please do not hesitate to reach out to your ${brandName} contact.
 
 Best regards,
-Nium Onboarding Team`;
+${brandName} Onboarding Team`;
 
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.INVITE_FROM_EMAIL || "Nium Onboarding <onboarding@resend.dev>";
+  const from = process.env.INVITE_FROM_EMAIL || `${brandName} Onboarding <onboarding@resend.dev>`;
 
   // No provider configured → simulate. The demo still shows the success screen
   // and a real, persisted link, but no mail actually leaves the building.
@@ -177,6 +188,8 @@ Nium Onboarding Team`;
       token,
       dossierId,
       link,
+      subject,
+      body: text,
     });
   }
 
@@ -191,6 +204,8 @@ Nium Onboarding Team`;
         token,
         dossierId,
         link,
+        subject,
+        body: text,
       });
     }
     return res.status(200).json({
@@ -200,6 +215,8 @@ Nium Onboarding Team`;
       token,
       dossierId,
       link,
+      subject,
+      body: text,
     });
   } catch (err) {
     return res.status(502).json({
@@ -210,6 +227,8 @@ Nium Onboarding Team`;
       token,
       dossierId,
       link,
+      subject,
+      body: text,
     });
   }
 };

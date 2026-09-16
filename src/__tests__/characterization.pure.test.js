@@ -8,7 +8,6 @@ import { API_PRICING, calcCostUsd, buildCostSummary } from '../utils/costs';
 import {
   COUNTRIES,
   OWNERSHIP_ID_TO_DRS,
-  MANUAL_FORM_URL,
 } from '../constants/appConstants';
 import { C } from '../constants/theme';
 import {
@@ -53,7 +52,6 @@ test('country list and DRS ownership mapping keep pre-refactor values', () => {
   expect(OWNERSHIP_ID_TO_DRS.public_listed).toBe('Public Listed Company');
   expect(OWNERSHIP_ID_TO_DRS.sole_trader).toBe('Sole Trader');
   expect(OWNERSHIP_ID_TO_DRS.other).toBe('Private Limited');
-  expect(MANUAL_FORM_URL).toBe('https://app.nium.com');
   expect(C.niumBlue).toBe('#1a3a4a');
 });
 
@@ -133,7 +131,8 @@ test('local fallback config covers all entity:jurisdiction schemas', () => {
     'Corporate:GB', 'Corporate:SG', 'Direct:GB', 'Direct:SG',
     'FI:GB', 'FI:SG', 'Platform:GB', 'Platform:SG',
   ]);
-  expect(cfg.company.name).toBe('Nium');
+  expect(cfg.company.name).toBe('');
+  expect(cfg.company.manualFormUrl).toBe('');
   expect(cfg.licences.map(l => l.id)).toEqual(['GB', 'SG']);
 });
 

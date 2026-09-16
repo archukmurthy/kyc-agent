@@ -4,7 +4,6 @@ import {
   UK_FI_SCHEMA,
   SG_FI_SCHEMA,
 } from "../pipeline";
-import { MANUAL_FORM_URL } from "../constants/appConstants";
 
 // Built locally from the still-present hardcoded constants above. This is
 // the offline fallback used only when /api/config is unreachable; the
@@ -15,9 +14,9 @@ export const buildLocalDefaultConfig = () => ({
   _version: 0,
   _seededAt: new Date().toISOString(),
   company: {
-    name: "Nium",
+    name: "",
     logo: null,
-    manualFormUrl: MANUAL_FORM_URL,
+    manualFormUrl: "",
     privacyPolicyUrl: "",
     submissionWebhookUrl: "",
     submissionEmail: "",

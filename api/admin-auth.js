@@ -2,7 +2,7 @@
 //
 // Lookup order:
 //   1. tenant-auth:{tenantId} in storage — hashed password set by super-admin
-//   2. Nium-only fallback: ADMIN_PASSWORD env var. On a successful env
+//   2. Platform-tenant-only fallback: ADMIN_PASSWORD env var. On a successful env
 //      fallback, the KV entry + tenant-registry are seeded so subsequent
 //      logins use the KV path.
 //
@@ -12,8 +12,10 @@
 const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { hashPassword, verifyPassword } = require("../lib/auth");
+const registry = require("../lib/tenantRegistry");
 
-const REGISTRY_KEY = "tenant-registry";
+// Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
+let _deps = { storage };
 
 function authKey(tid) {
   return `tenant-auth:${tid}`;
@@ -36,9 +38,9 @@ function readBody(req) {
 async function seedNiumAuth(envPassword) {
   // Idempotent: only writes if entry is missing.
   try {
-    const existing = await storage.get(authKey("nium"));
+    const existing = await _deps.storage.get(authKey("nium"));
     if (!existing) {
-      await storage.set(authKey("nium"), {
+      await _deps.storage.set(authKey("nium"), {
         passwordHash: hashPassword(envPassword),
         createdAt: new Date().toISOString(),
         createdBy: "system-seed",
@@ -46,19 +48,26 @@ async function seedNiumAuth(envPassword) {
         companyName: "Nium",
       });
     }
-    const registry = (await storage.get(REGISTRY_KEY)) || [];
-    if (!registry.find((t) => t.tenantId === "nium")) {
-      registry.unshift({
-        tenantId: "nium",
+    // Opportunistic: upsertEntry reads the registry strictly, so an unreadable
+    // registry throws here and the catch below logs and writes nothing. The
+    // env password already verified, so the login itself still succeeds.
+    //
+    // Through the registry module, not a hand-rolled write: it owns the key
+    // and the entry shape. Same flags the other seed paths produce — a
+    // platform entry missing isProtected/preboardingEnabled is what took
+    // pre-boarding dark for the tenant that uses it most.
+    if (!(await registry.findTenant("nium"))) {
+      await registry.upsertEntry("nium", {
         companyName: "Nium",
         createdAt: new Date().toISOString(),
         createdBy: "system",
         lastPublishedAt: null,
         isActive: true,
         isInternal: true,
+        isProtected: true,
+        preboardingEnabled: true,
         isBlank: false,
       });
-      await storage.set(REGISTRY_KEY, registry);
     }
   } catch (e) {
     // eslint-disable-next-line no-console
@@ -85,12 +94,12 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ success: false, error: "Password required" });
     }
 
-    const tenantAuth = await storage.get(authKey(tenantId));
+    const tenantAuth = await _deps.storage.get(authKey(tenantId));
 
     // No KV record? Nium falls back to the env password (and self-seeds on
     // success). Every other tenant must be created via /super-admin first.
     if (!tenantAuth) {
-      if (tenantId !== "nium") {
+      if (!registry.PLATFORM_TENANT_IDS.includes(tenantId)) {
         return res.status(401).json({
           success: false,
           error: "Tenant not found or not configured",
@@ -132,3 +141,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ success: false, error: "Authentication failed", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
