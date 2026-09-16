@@ -157,3 +157,81 @@ test("back-fill enables pre-boarding for protected entries only, and is idempote
   await handler(second.req, second.res);
   assert.strictEqual(JSON.stringify(storage.data["tenant-registry"]), snapshot, "back-fill must be idempotent");
 });
+
+// upsertEntry callers: a registry read that fails at the moment of the write
+// must surface as a 500 with NO registry write (it used to replace the whole
+// registry with the one entry being upserted).
+function flakyRegistryStorage(initial, { failFromRead = 1 } = {}) {
+  const base = fakeStorage(initial);
+  const writes = [];
+  let registryReads = 0;
+  return {
+    data: base.data,
+    writes,
+    async get(key) {
+      if (key === "tenant-registry" && ++registryReads >= failFromRead) throw new Error("kv down");
+      return base.get(key);
+    },
+    async set(key, value) { writes.push(key); return base.set(key, value); },
+    async del(key) { return base.del(key); },
+    async list(prefix) { return base.list(prefix); },
+  };
+}
+
+test("create tenant with an unreadable registry → 500 and the registry is not overwritten", async (t) => {
+  withSuperAdmin(t);
+  const existing = [{ tenantId: "nium", isProtected: true }, { tenantId: "acme" }];
+  const storage = flakyRegistryStorage({ "tenant-registry": existing });
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "POST",
+    body: { tenantId: "newco", companyName: "New Co", password: "pw", startFrom: "blank" },
+  });
+  await handler(req, res);
+
+  assert.strictEqual(res.statusCode, 500);
+  assert.ok(!storage.writes.includes("tenant-registry"), "registry must not be written");
+  assert.deepStrictEqual(storage.data["tenant-registry"], existing);
+});
+
+test("toggle-preboarding whose write-time registry read fails → 500 and no registry write", async (t) => {
+  withSuperAdmin(t);
+  const existing = [{ tenantId: "nium", isProtected: true }, { tenantId: "acme" }];
+  // First read (tenantExists) succeeds; the second (inside upsertEntry) fails.
+  const storage = flakyRegistryStorage({ "tenant-registry": existing }, { failFromRead: 2 });
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "PUT",
+    query: { action: "toggle-preboarding", tenantId: "acme" },
+    body: { preboardingEnabled: true },
+  });
+  await handler(req, res);
+
+  assert.strictEqual(res.statusCode, 500);
+  assert.ok(!storage.writes.includes("tenant-registry"), "registry must not be written");
+  assert.deepStrictEqual(storage.data["tenant-registry"], existing);
+});
+
+test("toggle-status whose write-time registry read fails → 500 and no registry write", async (t) => {
+  withSuperAdmin(t);
+  const existing = [{ tenantId: "nium", isProtected: true }, { tenantId: "acme" }];
+  // First read (isProtectedTenant) succeeds; the second (inside upsertEntry) fails.
+  const storage = flakyRegistryStorage({ "tenant-registry": existing }, { failFromRead: 2 });
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "PUT",
+    query: { action: "toggle-status", tenantId: "acme" },
+    body: { isActive: false },
+  });
+  await handler(req, res);
+
+  assert.strictEqual(res.statusCode, 500);
+  assert.ok(!storage.writes.includes("tenant-registry"), "registry must not be written");
+  assert.deepStrictEqual(storage.data["tenant-registry"], existing);
+});

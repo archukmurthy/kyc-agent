@@ -149,3 +149,30 @@ test("a legacy platform tenant (nium) is back-filled protected and self-heals", 
   // Self-heal ran: served response has non-empty licences.
   assert.ok(Array.isArray(res.body.licences) && res.body.licences.length > 0, "self-heal should have restored licences");
 });
+
+test("GET serves the stored config when the registry is UNREADABLE, and writes nothing", async () => {
+  const writes = [];
+  const data = {
+    // Protected-looking platform config with no licences: would trigger both
+    // the legacy back-fill AND the self-heal if the registry read as [].
+    "config:nium": { _tenantId: "nium", _version: 4, licences: [], company: { name: "Nium" } },
+  };
+  const storage = {
+    async get(key) {
+      if (key === "tenant-registry") throw new Error("kv down");
+      return key in data ? data[key] : null;
+    },
+    async set(key, value) { writes.push(key); data[key] = value; },
+    async del() {},
+    async list() { return []; },
+  };
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({ method: "GET", query: { tenant: "nium" } });
+  await handler(req, res);
+
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body._version, 4, "the stored config must be served as-is");
+  assert.deepStrictEqual(writes, [], "no registry back-fill and no self-heal write on an unreadable registry");
+});

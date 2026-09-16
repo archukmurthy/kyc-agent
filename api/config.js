@@ -1,8 +1,9 @@
 // Tenant config endpoint.
 //
 // All reads/writes are scoped to the tenant resolved from the request via
-// lib/tenant.js (?tenant= query param, x-tenant-id header, or TENANT_ID env
-// var, in that order). Each tenant has fully isolated config in KV.
+// lib/tenant.js (?tenant= query param, then x-tenant-id header; there is no
+// env fallback — no resolvable tenant is a 400). Each tenant has fully
+// isolated config in KV.
 //
 // GET    — returns the current config for the resolved tenant. Seeds on
 //          first read: Nium tenant gets the default config; any other tenant
@@ -14,9 +15,11 @@
 // DELETE — admin-only reset to defaults (Nium re-seeds; others get a fresh
 //          blank).
 //
-// NOTE: ADMIN_PASSWORD is currently shared across all tenants. When
-// per-tenant authentication is needed, look up the tenant's password instead
-// of comparing against the single env var.
+// Auth (see authorizeAdmin): each tenant authenticates against its own hashed
+// password in tenant-auth:{tenant}. The shared ADMIN_PASSWORD env var is only
+// accepted as a fallback for platform tenants (PLATFORM_TENANT_IDS) so their
+// first publish works before that entry is seeded; it never authenticates any
+// other tenant.
 
 const storage = require("../lib/storage");
 const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
@@ -43,8 +46,8 @@ function authKey(tid) {
 // Authorize an admin write for a specific tenant. Two paths:
 //   1. tenant-auth:{tenant} hash matches the bearer token (the per-tenant
 //      password set by /super-admin or the auto-seeded Nium entry)
-//   2. Nium-only fallback: bearer token equals ADMIN_PASSWORD env var.
-//      Lets the first-ever Nium publish succeed before the auto-seed runs.
+//   2. Platform-tenant-only fallback: bearer token equals ADMIN_PASSWORD env
+//      var. Lets the first-ever publish succeed before the auto-seed runs.
 async function authorizeAdmin(tenant, token) {
   if (!token) return false;
   try {
@@ -93,7 +96,21 @@ async function readConfig(tenant) {
   // Single registry read serves both the "exists" and "protected" answers
   // below — GET /api/config is hit on every page load, so this must not
   // fan out into multiple storage reads.
-  let entry = await _deps.registry.findTenant(tenant);
+  //
+  // Strict read, not findTenant: findTenant answers null for both "no entry"
+  // and "registry unreadable", and treating an outage as "no entry" would run
+  // the back-fill below. The back-fill and self-heal are opportunistic, so on
+  // an unreadable registry serve the stored config untouched and write
+  // nothing — a customer page load must not 500 on a registry blip.
+  let reg;
+  try {
+    reg = await _deps.registry.readRegistryStrict();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`tenant-registry unreadable — serving stored config for "${tenant}" without back-fill/self-heal:`, err && err.message);
+    return stored;
+  }
+  let entry = reg.find((t) => t && t.tenantId === tenant) || null;
 
   // Legacy tenant: it has a config but predates the registry. Back-fill the
   // entry so every later existence/protection check agrees with reality.

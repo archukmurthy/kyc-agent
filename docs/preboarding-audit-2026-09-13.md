@@ -3,7 +3,7 @@
 Three parallel read-only investigations (flow map, backend persistence, adversarial hunt).
 
 ## How it works
-Analyst opens `?preboarding=1` → client-side password gate (`PREBOARDING_PASSWORD="ARCH"`, App.js:287) → researches a company (shared CompanyLookupPage) → dossier auto-saves to `entity_dossiers` ~500ms after research at the confirm step (App.js:957-985) → reviews in DossierView → sends an invite → customer opens link → onboarding pre-filled.
+Analyst opens `?preboarding=1` → client-side password gate (a hardcoded `PREBOARDING_PASSWORD` literal, App.js:287 — value redacted; the password now comes from the server-side `PREBOARDING_PASSWORD` environment variable) → researches a company (shared CompanyLookupPage) → dossier auto-saves to `entity_dossiers` ~500ms after research at the confirm step (App.js:957-985) → reviews in DossierView → sends an invite → customer opens link → onboarding pre-filled.
 
 Persistence verdict: analyst in-progress work IS covered (the localStorage draft+resume we built fires for preboarding too, plus DB autosave). NOT the old no-draft hole. But real bugs remain.
 
@@ -19,7 +19,7 @@ Persistence verdict: analyst in-progress work IS covered (the localStorage draft
 `api/get-dossier.js` has NO auth — only tenant match + a random UUID. Dossier URL is an unexpiring/unrevocable bearer link to full stakeholder PII (names/DOB/nationality/PEP). Fix: server-side auth and/or signed+expiring dossier tokens.
 
 ### 🟠 P2 — Preboarding password is client-side only + APIs unauthenticated
-`"ARCH"` hardcoded in the bundle, checked in-browser (PreboardingGate.jsx:36). save/get/search-attempt APIs require no auth; save-dossier even creates arbitrary tenant rows on demand. Gates the screen, not the data. Fix: real server-side gate on preboarding APIs.
+Password (value redacted) hardcoded in the bundle, checked in-browser (PreboardingGate.jsx:36). save/get/search-attempt APIs require no auth; save-dossier even creates arbitrary tenant rows on demand. Gates the screen, not the data. Fix: real server-side gate on preboarding APIs.
 
 ### 🟡 P3 — Resume strands analyst on wrong view
 `showDossierView` not persisted in the draft; after resume the analyst lands on the customer Confirm step with no path back to DossierView (data safe in DB). Fix: persist or re-derive `showDossierView` (agentType===preboarding && dossierId && step===confirm).
