@@ -30,6 +30,23 @@ function validateFile(file) {
   return "";
 }
 
+function analysisFailureMessage(payload, status) {
+  const code = String(payload?.code || "customer_ownership_chart_failed");
+  const messages = {
+    provider_timeout: "The document was received, but analysis reached its time limit. Please retry once.",
+    provider_output_truncated: "The document was received, but the analysis result was too large to complete safely.",
+    provider_malformed_output: "The document was received, but the analysis service returned an unusable result.",
+    provider_unavailable: "The document was received, but the analysis service is temporarily unavailable.",
+    provider_authentication_failed: "The document was received, but the analysis service is not configured correctly.",
+    media_too_large: "The document was received, but its decoded image is too large for analysis.",
+    media_limit_exceeded: "The document was received, but its image dimensions exceed the analysis limit.",
+    invalid_media: "The selected file is labelled as an image, but its contents are not a valid supported image.",
+    unsupported_model_media: "The document was received, but this file format is not supported by the configured analysis model.",
+  };
+  const message = messages[code] || payload?.message || "We could not analyse this ownership chart.";
+  return `${message} Reference: ${code}${status ? ` (${status})` : ""}.`;
+}
+
 function relationshipValue(assertion) {
   const measurement = assertion.measurement;
   if (!measurement) return assertion.qualitativeValue || "Relationship stated";
@@ -167,7 +184,7 @@ export default function CustomerOwnershipChartPage() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok || !payload.success) throw new Error(payload.message || "We could not analyse this ownership chart.");
+      if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
       writeCustomerOwnershipChartSession({ context, result: payload.result });
       setResult(payload.result);
     } catch (caught) {
@@ -187,4 +204,4 @@ export default function CustomerOwnershipChartPage() {
   </div>;
 }
 
-export { MAX_BYTES, validateFile };
+export { MAX_BYTES, analysisFailureMessage, validateFile };
