@@ -127,7 +127,14 @@ module.exports = async function handler(req, res) {
   }
   if (!found.length) return res.status(404).json({ error: "dossier_not_found" });
 
-  const token = _deps.dossierToken.mint({ dossierId, tenantId });
+  // Postgres's uuid type matches an uppercase/braced/hyphenless spelling to
+  // the same row as its canonical lowercase form. Minting with the caller's
+  // spelling would embed an id in the token that api/get-dossier's
+  // canReadDossier — which compares against the canonical stored id — later
+  // refuses. Use the row's own id from here on, not the caller-typed one.
+  const canonicalDossierId = String(found[0].id);
+
+  const token = _deps.dossierToken.mint({ dossierId: canonicalDossierId, tenantId });
   const baseOrigin = resolveOrigin(req, origin);
   // The server builds the only link. A client-supplied link is never used.
   const link = `${baseOrigin}/?tenant=${encodeURIComponent(tenantId)}&dossierToken=${encodeURIComponent(token)}&journey=customer`;
@@ -140,7 +147,7 @@ module.exports = async function handler(req, res) {
     email,
     contactName,
     companyName: companyName || null,
-    dossierId,
+    dossierId: canonicalDossierId,
     tenantId,
     createdAt: new Date().toISOString(),
     status: "invited",
@@ -187,7 +194,7 @@ ${brandName} Onboarding Team`;
       simulated: true,
       reason: "RESEND_API_KEY not configured",
       inviteId,
-      dossierId,
+      dossierId: canonicalDossierId,
       link,
       subject,
       body: text,
@@ -203,7 +210,7 @@ ${brandName} Onboarding Team`;
         error: "Email provider error",
         details: data,
         inviteId,
-        dossierId,
+        dossierId: canonicalDossierId,
         link,
         subject,
         body: text,
@@ -214,7 +221,7 @@ ${brandName} Onboarding Team`;
       simulated: false,
       providerId: data && data.id,
       inviteId,
-      dossierId,
+      dossierId: canonicalDossierId,
       link,
       subject,
       body: text,
@@ -226,7 +233,7 @@ ${brandName} Onboarding Team`;
       error: "Email send failed",
       message: err.message,
       inviteId,
-      dossierId,
+      dossierId: canonicalDossierId,
       link,
       subject,
       body: text,

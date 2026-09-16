@@ -58,6 +58,24 @@ test("an analyst revokes every outstanding link for its dossier", async () => {
   assert.strictEqual(revokedFor, "d-1");
 });
 
+test("an uppercase/differently-cased dossierId revokes by the CANONICAL id the lookup returned, not the caller's spelling", async () => {
+  // Postgres's uuid type matches an uppercase/braced/hyphenless input to the
+  // same row as its canonical lowercase form. Using the caller's spelling to
+  // revoke would write dossier-token-revoked:<UPPER> while every minted token
+  // carries the lowercase id — so lowercase tokens would NOT be revoked, yet
+  // the response still says success:true.
+  let revokedFor = null;
+  handler.__setDeps({
+    neon: () => () => Promise.resolve([{ id: "d1111111-1111-1111-1111-111111111111" }]),
+    access: accessWith(ANALYST),
+    dossierToken: { revokeAllForDossier: async (id) => { revokedFor = id; return { revokedBefore: 1 }; } },
+  });
+  const res = fakeRes();
+  await handler(req({ dossierId: "D1111111-1111-1111-1111-111111111111" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(revokedFor, "d1111111-1111-1111-1111-111111111111");
+});
+
 test("400 without a dossierId", async () => {
   handler.__setDeps({ neon: () => () => Promise.resolve([]), access: accessWith(ANALYST), dossierToken: { revokeAllForDossier: async () => ({}) } });
   const res = fakeRes();

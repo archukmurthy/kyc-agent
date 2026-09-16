@@ -46,7 +46,13 @@ module.exports = async function handler(req, res) {
       LIMIT 1
     `;
     if (!found.length) return res.status(404).json({ error: "dossier_not_found" });
-    const { revokedBefore } = await _deps.dossierToken.revokeAllForDossier(dossierId);
+    // Postgres's uuid type matches an uppercase/braced/hyphenless spelling to
+    // the same row as its canonical lowercase form. Revoking by the caller's
+    // spelling instead of the row's own id would write
+    // dossier-token-revoked:<UPPER>, leaving every lowercase-id token (what
+    // invite.js actually mints) unrevoked while still answering success:true.
+    const canonicalId = String(found[0].id);
+    const { revokedBefore } = await _deps.dossierToken.revokeAllForDossier(canonicalId);
     return res.status(200).json({ success: true, revokedBefore });
   } catch (err) {
     console.error("[revoke-dossier-token]", err);

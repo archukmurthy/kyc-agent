@@ -152,6 +152,23 @@ test("the emailed link carries a verifiable token and no raw dossier id", async 
   assert.strictEqual(verified.payload.tenantId, "acme");
 });
 
+test("an uppercase/differently-cased dossierId mints a token for the CANONICAL id the lookup returned", async (t) => {
+  // Postgres's uuid type matches an uppercase input to the same row as its
+  // canonical lowercase form. Minting with the caller's spelling would embed
+  // an id in the token that api/get-dossier's canReadDossier later refuses,
+  // because every other write (save-dossier, revoke) uses the canonical id.
+  const canonical = "d1111111-1111-1111-1111-111111111111";
+  const { handler } = setup(t, { row: { id: canonical, tenant_id: "acme" } });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload, dossierId: "D1111111-1111-1111-1111-111111111111" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.dossierId, canonical);
+  const url = new URL(res.body.link);
+  const tok = url.searchParams.get("dossierToken");
+  const verified = await require("../../lib/dossierToken").verify(tok);
+  assert.strictEqual(verified.payload.dossierId, canonical);
+});
+
 test("the tenant comes from the credential; a body tenantId and a client link are ignored", async (t) => {
   const { handler } = setup(t);
   const res = fakeRes();
