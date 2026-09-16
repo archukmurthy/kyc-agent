@@ -4,7 +4,7 @@ import { adminColors, adminStyles } from "../../admin/adminDesign";
 // One tenant tile in the super-admin dashboard. Nium is rendered with a
 // niumBlue left rail and an "Internal" badge; nothing else is special-cased
 // beyond hiding the deactivate button (Nium can never be turned off).
-export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) {
+export default function TenantCard({ tenant, onResetPassword, onToggleStatus, onTogglePreboarding }) {
   const isNium = tenant.tenantId === "nium" || tenant.isInternal;
   const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -80,6 +80,11 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
                 {tenant.lastPublishedAt ? new Date(tenant.lastPublishedAt).toLocaleDateString() : "Never"}
               </strong>
             </span>
+            <span>
+              Pre-boarding: <strong style={{ color: tenant.preboardingEnabled ? adminColors.statusComplete : adminColors.textMuted }}>
+                {tenant.preboardingEnabled ? "On" : "Off"}
+              </strong>
+            </span>
           </div>
 
           <UrlRow label="Admin URL" value={origin + adminUrl} />
@@ -109,6 +114,13 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
           style={adminStyles.btnGhost}
         >
           Reset Password
+        </button>
+        <button
+          type="button"
+          onClick={() => onTogglePreboarding(tenant)}
+          style={adminStyles.btnGhost}
+        >
+          {tenant.preboardingEnabled ? "Disable pre-boarding" : "Enable pre-boarding"}
         </button>
         {!isNium && (
           <button

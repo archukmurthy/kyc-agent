@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import TenantCard from "../TenantCard";
 
@@ -31,5 +31,6 @@ test("an ordinary tenant's URLs carry its own id", () => {
   const text = document.body.textContent || "";
   expect(text).toContain("/admin?tenant=acme");
   expect(text).toContain("/?tenant=acme");
+  expect(text).toContain("/preboarding?tenant=acme");
   expect(text).not.toContain("tenant=nium");
 });

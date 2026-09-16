@@ -120,8 +120,8 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
         <RadioCard
           checked={startFrom === "nium-defaults"}
           onChange={() => setStartFrom("nium-defaults")}
-          title="Copy Nium defaults as template"
-          body="Starts with Nium's UK/SG schemas as a template. Client can modify."
+          title="Start from default settings"
+          body="UK/SG licences, entity types and reference schemas. Brand details stay blank - the client can modify everything."
         />
       </Field>
 
