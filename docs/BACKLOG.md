@@ -263,6 +263,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (known limit, accepted 2026-09-15)
 - **What:** Dossier-linked applications get their change records and amendment-document reads locked to the customer token / analyst password. Fresh customers (no analyst link) have no credential, so their `onboardingSubmissionId`-keyed writes/reads stay protected only by the random id + rate limit.
 - **Real fix:** customer accounts or a server-minted per-application session token issued at research start.
+- **Accepted risk (user decision 2026-09-16):** change-events / amendment-documents look up a `submissionId` against `entity_dossiers` before resolving the caller, so an anonymous caller can tell "this id is a dossier" (401) from a fresh application (200). No data or write access leaks; ids are random UUIDs (old `?dossierId=` emails expose some to ex-invitees). Closed by the real fix above.
 - **Area:** `api/change-events.js`, `api/amendment-documents.js`, `src/App.js` onboardingSubmissionId.
 
 ### PREB-3 — Per-tenant pre-boarding analyst password
