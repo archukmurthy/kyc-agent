@@ -114,7 +114,6 @@ import {
   OWNERSHIP_ID_TO_DRS,
   // TEST_FLAG went with the journey picker — it gated that screen's DemoToggle.
   SHOW_TEST_TOOLS,
-  MANUAL_FORM_URL,
   COUNTRIES,
 } from "./constants/appConstants";
 import {
@@ -4303,7 +4302,7 @@ export default function KYCAgent({ previewMode = false } = {}) {
   // Fallback is the tenant's own id, never another tenant's brand name.
   const companyName_ = tenantConfig?.company?.name || tenantId;
   const companyLogo_ = tenantConfig?.company?.logo || null;
-  const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || MANUAL_FORM_URL;
+  const manualFormUrl_ = tenantConfig?.company?.manualFormUrl || "";
   const activeEntityTypes = (tenantConfig?.entityTypes || [])
     .filter(e => e.active !== false)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
