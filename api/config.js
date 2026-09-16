@@ -299,3 +299,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 // Shared reader for other server modules (api/benchmark.js, api/research.js).
 // Returns null for an unknown tenant — callers decide how to respond.
 module.exports.readConfigForTenant = readConfig;
+
+// Shared admin check for other server modules (api/research.js draft preview,
+// api/benchmark.js). Same rules as the config endpoint itself.
+module.exports.authorizeAdminForTenant = authorizeAdmin;

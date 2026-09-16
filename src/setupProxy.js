@@ -53,7 +53,7 @@ const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-a
 const revokeDossierTokenHandler = require(path.join(__dirname, "..", "api", "revoke-dossier-token.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
-const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
+const researchHandler = require(path.join(__dirname, "..", "api", "research.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -82,116 +82,14 @@ module.exports = function (app) {
     });
   });
 
+  // Research — the real handler (server-built prompts, rate limit, cache).
   app.post("/api/research", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
     req.on("data", (chunk) => { raw += chunk; });
-    req.on("end", async () => {
-      try {
-        const body = JSON.parse(raw || "{}");
-        const { prompt, messages, model, tools, max_tokens,
-                companyName, jurisdiction, entityType, forceRefresh,
-                registrationNumber } = body;
-        if (!prompt && !messages) {
-          return res.status(400).json({ error: "Missing prompt or messages in request body" });
-        }
-
-        // ─── CACHE LAYER (opt-in) ───
-        // Mirrors api/research.js so caching works under `npm start` too. Only
-        // the main research call passes `companyName`, so other callers (doc
-        // extraction, gap recovery) are untouched. researchCache.js is ESM, so
-        // it's loaded via dynamic import() from this CJS dev-server file. Cache
-        // failures always fall through to the live API.
-        const cacheEnabled = !!companyName;
-        let cacheMod = null;
-        if (cacheEnabled) {
-          try {
-            // Node's ESM dynamic import() needs a file:// URL on Windows — a raw
-            // "C:\..." path throws "protocol 'c:'" and the cache silently never
-            // loads (every research run then hits the paid API). pathToFileURL fixes it.
-            cacheMod = await import(pathToFileURL(path.join(__dirname, "..", "lib", "researchCache.js")).href);
-          } catch (err) {
-            console.error("[research-cache] Failed to load cache module:", err.message);
-          }
-        }
-        if (cacheMod && !forceRefresh) {
-          try {
-            const cached = await cacheMod.getCachedResearch(companyName, jurisdiction, entityType);
-            if (cached) {
-              console.log(`[research-cache] HIT for "${companyName}" - serving from DB`);
-              return res.status(200).json(cached);
-            }
-            console.log(`[research-cache] MISS for "${companyName}" - calling Anthropic API`);
-          } catch (err) {
-            console.error("[research-cache] Cache lookup error, falling through:", err.message);
-          }
-        } else if (cacheMod && forceRefresh) {
-          console.log(`[research-cache] FORCE REFRESH for "${companyName}" - bypassing cache`);
-        }
-
-        // ─── LAYER 1 — Companies House Officers API (deterministic) ───
-        // Mirrors api/research.js: for UK (GB) companies fetch all active
-        // officers before the Anthropic call; the director field is replaced
-        // with this data after the call. Failures fall back to AI web search.
-        const chOfficers = await officersLayer.fetchOfficersLayer({
-          companyName, jurisdiction, registrationNumber,
-        });
-
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (!apiKey) {
-          return res.status(500).json({
-            error: "Server API key not configured",
-            message: "Add ANTHROPIC_API_KEY=sk-ant-... to .env.local at the repo root and restart `npm start`.",
-          });
-        }
-
-        const finalMessages = messages || [{ role: "user", content: prompt }];
-        const finalModel = model || "claude-sonnet-4-5";
-        const finalMaxTokens = max_tokens || 16000;
-        const finalTools = Array.isArray(tools)
-          ? tools
-          : [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
-
-        const requestBody = {
-          model: finalModel,
-          max_tokens: finalMaxTokens,
-          messages: finalMessages,
-        };
-        if (finalTools.length > 0) requestBody.tools = finalTools;
-
-        const r = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        const data = await r.json();
-
-        if (!r.ok) {
-          return res.status(r.status).json({ error: "Claude API error", details: data });
-        }
-
-        // Runs before the cache save so the cached copy carries them too. No-op
-        // when chOfficers is null/empty (non-GB, key absent, or fetch failed).
-        officersLayer.injectOfficers(data, chOfficers);
-
-        // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
-        if (cacheMod) {
-          try {
-            await cacheMod.saveResearchToCache(companyName, jurisdiction, entityType, data, finalModel);
-          } catch (err) {
-            console.error("[research-cache] Failed to save to cache:", err.message);
-          }
-        }
-
-        res.status(200).json(data);
-      } catch (err) {
-        res.status(500).json({ error: "Server error", message: err.message });
-      }
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(researchHandler)(req, res);
     });
   });
 
