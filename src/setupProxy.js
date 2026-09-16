@@ -13,6 +13,7 @@ const { pathToFileURL } = require("url");
 // locations so dev and production run the exact same code paths.
 const configHandler = require(path.join(__dirname, "..", "api", "config.js"));
 const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.js"));
+const preboardingAuthHandler = require(path.join(__dirname, "..", "api", "preboarding-auth.js"));
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
 const configTemplatesHandler = require(path.join(__dirname, "..", "api", "config-templates.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
@@ -195,6 +196,16 @@ module.exports = function (app) {
   app.all("/api/config-versions", adapt(configVersionsHandler));
   app.get("/api/config-templates", adapt(configTemplatesHandler));
   app.post("/api/admin-auth", adapt(adminAuthHandler));
+  app.get("/api/preboarding-auth", adapt(preboardingAuthHandler));
+  app.post("/api/preboarding-auth", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(preboardingAuthHandler)(req, res);
+    });
+  });
   app.post("/api/super-admin-auth", adapt(superAdminAuthHandler));
   app.all("/api/tenants", adapt(tenantsHandler));
 
