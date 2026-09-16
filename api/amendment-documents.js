@@ -50,10 +50,13 @@ module.exports = async function handler(req, res) {
   let dossier = null;
   try {
     sql = _deps.neon(process.env.DATABASE_URL);
+    // No status filter here: a soft-deleted dossier's id must still be
+    // recognised as a dossier (and gated behind a credential), never fall
+    // through to the unauthenticated "fresh application" branch below.
     const found = await sql`
       SELECT id, tenant_id, owned_by
       FROM entity_dossiers
-      WHERE id::text = ${String(submissionId)} AND status != 'deleted'
+      WHERE id::text = ${String(submissionId)}
       LIMIT 1
     `;
     dossier = found.length ? found[0] : null;

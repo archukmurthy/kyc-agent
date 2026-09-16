@@ -16,8 +16,18 @@ function accessWith(actor) {
 }
 
 function deps(dossierRow, actor) {
+  const sql = (strings) => {
+    const text = strings.join(" ");
+    // Mirror real Postgres: a `status != 'deleted'` clause in the query text
+    // actually excludes a row whose status is 'deleted'. Makes the
+    // "gate lookup must not filter on status" test meaningful.
+    if (dossierRow && dossierRow.status === "deleted" && /status\s*!=\s*'deleted'/i.test(text)) {
+      return Promise.resolve([]);
+    }
+    return Promise.resolve(dossierRow ? [dossierRow] : []);
+  };
   return {
-    neon: () => () => Promise.resolve(dossierRow ? [dossierRow] : []),
+    neon: () => sql,
     getEventsBySubmission: async () => [{ id: "e" }],
     deriveAmendmentDocuments: () => [{ docType: "Certificate" }],
     access: accessWith(actor),
@@ -37,6 +47,14 @@ test("a fresh application's documents are readable as before", async () => {
 
 test("a dossier's documents need a credential", async () => {
   handler.__setDeps(deps(ROW, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }));
+  const res = fakeRes();
+  await handler(req("d-1"), res);
+  assert.strictEqual(res.statusCode, 401);
+  assert.strictEqual(res.body.documents, undefined);
+});
+
+test("a soft-deleted dossier's id still requires a credential — it is not a fresh application", async () => {
+  handler.__setDeps(deps({ ...ROW, status: "deleted" }, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }));
   const res = fakeRes();
   await handler(req("d-1"), res);
   assert.strictEqual(res.statusCode, 401);

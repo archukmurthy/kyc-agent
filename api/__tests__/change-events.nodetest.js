@@ -15,7 +15,17 @@ function fakeSql(dossierRow, updateThrows = false) {
   const sql = (strings, ...values) => {
     const text = strings.join(" ");
     log.push({ text, values });
-    if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) return Promise.resolve(dossierRow ? [dossierRow] : []);
+    if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) {
+      // Mirror real Postgres: a `status != 'deleted'` clause in the query text
+      // actually excludes a row whose status is 'deleted'. This is what makes
+      // the "gate lookup must not filter on status" test meaningful — the test
+      // fails against the un-fixed route (which still carries the clause) and
+      // passes once it's removed.
+      if (dossierRow && dossierRow.status === "deleted" && /status\s*!=\s*'deleted'/i.test(text)) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(dossierRow ? [dossierRow] : []);
+    }
     if (/UPDATE entity_dossiers/i.test(text)) {
       if (updateThrows) return Promise.reject(new Error("ownership_update_failed"));
       return Promise.resolve([]);
@@ -97,6 +107,16 @@ test("a customer's ownership UPDATE throws → no change record is written", asy
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.success, false);
   assert.strictEqual(wrote, false, "expected no event written when ownership update fails");
+});
+
+test("a soft-deleted dossier's id still requires a credential — it is not a fresh application", async () => {
+  let wrote = false;
+  const sql = fakeSql({ ...ROW, status: "deleted" });
+  handler.__setDeps(deps(sql, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 401);
+  assert.strictEqual(wrote, false);
 });
 
 test("a customer cannot add records to another dossier", async () => {
