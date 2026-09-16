@@ -6,6 +6,7 @@
 // require() it for local dev, mirroring api/config.js and friends.
 
 const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -21,6 +22,14 @@ module.exports = async function handler(req, res) {
     niumEntityType,
     tenantId, // reserved for future per-tenant doc search behaviour
   } = req.body || {};
+
+  const limits = checkTextFields(req.body, {
+    companyName: 200,
+    country: 100,
+    ownershipType: 64,
+    niumEntityType: 64,
+  });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
 
   if (!companyName || !country ||
       !ownershipType || !niumEntityType) {

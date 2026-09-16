@@ -14,6 +14,7 @@
  */
 
 const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -29,6 +30,16 @@ module.exports = async function handler(req, res) {
     companyRegistrationNumber, // optional — improves second-pass on BR/JP/ID/CN
     tenantId,                  // reserved
   } = req.body || {};
+
+  const limits = checkTextFields(req.body, {
+    companyName: 200,
+    incorporationCountry: 100,
+    entityType: 64,
+    ownershipType: 64,
+    niumEntityType: 64,
+    companyRegistrationNumber: 64,
+  });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
 
   if (!companyName || !incorporationCountry || !entityType || !ownershipType) {
     return res.status(400).json({

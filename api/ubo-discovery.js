@@ -7,6 +7,7 @@ const { getFresh, resultKey, cacheResult, appendAudit, identity } = require("../
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
 const { randomUUID } = require("crypto");
 const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
 
 function forReviewer(result) {
   return {
@@ -25,6 +26,8 @@ function forReviewer(result) {
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false } = req.body || {};
+  const limits = checkTextFields(req.body, { entityName: 200, registrationNumber: 64, jurisdiction: 64 });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
   const threshold = Number(uboThreshold || 25);
   const discovery = Number(discoveryThreshold || 5);
