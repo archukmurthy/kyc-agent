@@ -10,11 +10,18 @@ function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
 }
 
-function fakeSql(dossierRow, updateThrows = false) {
+function fakeSql(dossierRow, updateThrows = false, { recheckRaced = false } = {}) {
   const log = [];
   const sql = (strings, ...values) => {
     const text = strings.join(" ");
     log.push({ text, values });
+    // The analyst re-check-before-write query carries its own ownership
+    // clause — distinct from the gate lookup above it — so it can be raced
+    // independently: dossierRow still looks analyst-owned at the gate, but a
+    // simulated concurrent customer takeover makes this query match zero rows.
+    if (/owned_by\s*<>\s*'customer'/i.test(text)) {
+      return Promise.resolve(recheckRaced ? [] : (dossierRow ? [{ ok: 1 }] : []));
+    }
     if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) {
       // Mirror real Postgres: a `status != 'deleted'` clause in the query text
       // actually excludes a row whose status is 'deleted'. This is what makes
@@ -95,6 +102,31 @@ test("an analyst cannot add records to a customer-owned dossier", async () => {
   assert.strictEqual(res.statusCode, 403);
   assert.deepStrictEqual(res.body, { error: "dossier_locked" });
   assert.strictEqual(wrote, false);
+});
+
+test("an analyst's write succeeds when the pre-write re-check still finds the dossier writable", async () => {
+  let wrote = false;
+  const sql = fakeSql(ROW); // owned_by: "analyst"
+  handler.__setDeps(deps(sql, ANALYST, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(wrote, true);
+});
+
+test("TOCTOU: a customer takeover races the analyst's write between the permission check and the insert — 403, write spy not called", async () => {
+  // The permission SELECT sees owned_by:'analyst' (so canWriteDossier
+  // permits), but the dedicated pre-write re-check simulates a concurrent
+  // customer takeover landing in between: it matches zero rows.
+  let wrote = false;
+  const sql = fakeSql(ROW, false, { recheckRaced: true });
+  handler.__setDeps(deps(sql, ANALYST, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 403);
+  assert.deepStrictEqual(res.body, { error: "dossier_locked" });
+  assert.strictEqual(wrote, false, "writeEvent must not run when the re-check finds the dossier customer-owned");
 });
 
 test("a customer's record is written and transfers ownership of the dossier", async () => {

@@ -94,6 +94,24 @@ module.exports = async function handler(req, res) {
         SET owned_by = 'customer', last_customer_action_at = NOW()
         WHERE id = ${dossier.id} AND tenant_id = ${dossier.tenant_id}
       `;
+    } else if (dossier && actor && actor.kind === "analyst") {
+      // Re-check ownership right before the write: the permission check above
+      // ran against a SELECT taken moments earlier, and a customer takeover
+      // can land in between (TOCTOU) — an analyst write would then silently
+      // land on a dossier the customer has just taken over.
+      // ponytail: SELECT-then-INSERT is still two statements, not one atomic
+      // query — a customer takeover racing the gap between them can still
+      // slip through. A fully atomic guard would need this INSERT folded into
+      // the same conditional CTE the UPDATE-based routes use; narrowing the
+      // window to one query is the practical fix here.
+      const stillWritable = await sql`
+        SELECT 1 FROM entity_dossiers
+        WHERE id = ${dossier.id} AND tenant_id = ${dossier.tenant_id} AND owned_by <> 'customer'
+        LIMIT 1
+      `;
+      if (stillWritable.length === 0) {
+        return res.status(403).json({ error: "dossier_locked" });
+      }
     }
 
     const row = await _deps.writeEvent(sql, event);
