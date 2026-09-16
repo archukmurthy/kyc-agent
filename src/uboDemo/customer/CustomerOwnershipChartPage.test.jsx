@@ -36,6 +36,19 @@ const analysis = {
     declaration: "I certify that this company structure chart is true, correct and accurate",
     signaturePresence: "Visible signature-like mark",
   },
+  sourceGraph: {
+    contractVersion: "ubo-ownership-graph-projection-v1",
+    projectionId: "source-graph-1",
+    subject: { entityId: "company-1", displayName: "Better Comms VOIP Ltd", category: "LEGAL_ENTITY", semantics: ["SUBJECT"] },
+    nodes: [
+      { entityId: "person-1", displayName: "Mitchell Fortescue", category: "NATURAL_PERSON", semantics: ["NOT_CONFIRMED_UBO"] },
+      { entityId: "company-1", displayName: "Better Comms VOIP Ltd", category: "LEGAL_ENTITY", semantics: ["SUBJECT"] },
+    ],
+    relationships: [{ relationshipId: "fact-1", sourceEntityId: "person-1", targetEntityId: "company-1", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 75 }, indicators: [], qualifiers: {}, support: { claimCount: 1, claimIds: ["fact-1"], evidenceReferences: [] } }],
+    calculations: [], qualifications: [], unresolved: [], conflicts: [], reviews: [],
+    decision: { snapshotId: "source-1", snapshotHash: "sha256:abc", checkpoint: { type: "SOURCE_INTERPRETATION" }, orchestrationState: "SOURCE_INTERPRETATION_ONLY" },
+    summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
+  },
   owners: [{ name: "Mitchell Fortescue", partyType: "NATURAL_PERSON", relationshipLabel: "Economic ownership in Better Holdco", measurement: { type: "EXACT", value: 75 } }],
   assertions: [{ factId: "fact-1", category: "Economic ownership", statement: "Mitchell Fortescue → economic ownership (75%) → Better Holdco", supportStateLabel: "supported" }],
 };
@@ -110,10 +123,17 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(await screen.findByRole("heading", { name: "Certification found" })).toBeInTheDocument();
   expect(screen.getByText("Alex Palmer")).toBeInTheDocument();
   expect(screen.getByText(/Verification of this certification is still required/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "How we understood your chart" })).toBeInTheDocument();
+  expect(screen.getByTitle("Visualised ownership structure")).toBeInTheDocument();
   expect(screen.getByText("Mitchell Fortescue")).toBeInTheDocument();
   expect(screen.getByText(/Candidate fact · not a UBO conclusion/i)).toBeInTheDocument();
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
   expect(screen.getByText(/No registry comparison performed/i)).toBeInTheDocument();
+  const certificationCard = screen.getByRole("heading", { name: "Certification found" }).closest("section");
+  const graphCard = screen.getByRole("heading", { name: "How we understood your chart" }).closest("section");
+  const ownersCard = screen.getByRole("heading", { name: "1 owner identified" }).closest("section");
+  expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(graphCard.compareDocumentPosition(ownersCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("invalid file types are rejected before any request", () => {

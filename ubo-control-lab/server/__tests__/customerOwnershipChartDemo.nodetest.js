@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildSourceGraph, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -71,7 +71,45 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.certification.verificationStatus, "VERIFICATION_REQUIRED");
   assert.equal(result.certification.signerIdentityVerified, false);
   assert.equal(result.owners[0].name, "Mitchell Fortescue");
+  assert.equal(result.sourceGraph.contractVersion, "ubo-ownership-graph-projection-v1");
+  assert.equal(result.sourceGraph.subject.displayName, "Better Comms VOIP Ltd");
+  assert.equal(result.sourceGraph.relationships.length, 1);
+  assert.equal(result.sourceGraph.qualifications.length, 0);
   assert.equal(result.comparison, "NOT_PERFORMED");
+});
+
+test("source visualization groups repeated chart names without inventing a UBO conclusion", () => {
+  const company = { legalName: "Vodafone Limited", countryCode: "GB" };
+  const party = (name, entityType = "LEGAL_ENTITY") => ({ name, entityType, externalIdentifiers: [], sourcePartySnapshot: {} });
+  const relationship = (factId, subject, type, object, value) => ({
+    factId,
+    type: "RELATIONSHIP",
+    subject,
+    relationship: type,
+    object,
+    ...(value === undefined ? {} : { measurement: { type: "EXACT", value } }),
+    qualifiers: { currentState: "UNKNOWN" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-1" }],
+  });
+  const alice = party("Alice Morgan", "NATURAL_PERSON");
+  const vodafoneThree = party("Vodafone Three Holdings Ltd");
+  const vodafone = party("Vodafone Limited");
+  const international = party("Vodafone International Holdings BV");
+  const graph = buildSourceGraph([
+    relationship("fact-1", international, "ECONOMIC_OWNERSHIP", vodafoneThree, 80),
+    relationship("fact-2", alice, "ECONOMIC_OWNERSHIP", vodafoneThree, 20),
+    relationship("fact-3", vodafoneThree, "ECONOMIC_OWNERSHIP", vodafone, 80),
+    relationship("fact-4", alice, "ECONOMIC_OWNERSHIP", vodafone, 10),
+    relationship("fact-5", alice, "VOTING_RIGHTS", vodafone, 10),
+    relationship("fact-6", alice, "FORMAL_CONTROL_RIGHT", vodafone),
+  ], company, { artifactId: "artifact-1", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" }, "request-1");
+  const aliceNode = graph.nodes.filter(({ displayName }) => displayName === "Alice Morgan");
+  const aliceRelationships = graph.relationships.filter(({ sourceEntityId }) => sourceEntityId === aliceNode[0].entityId);
+  assert.equal(aliceNode.length, 1);
+  assert.deepEqual(aliceRelationships.map(({ dimension }) => dimension).sort(), ["CONTROL", "ECONOMIC", "ECONOMIC", "VOTING"]);
+  assert.equal(graph.qualifications.length, 0);
+  assert.equal(graph.calculations.length, 0);
+  assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
 });
 
 test("invalid bytes and unsupported media fail before provider interpretation", () => {
