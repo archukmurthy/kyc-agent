@@ -21,6 +21,7 @@ const {
 
 const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
 const MAX_BYTES = 3 * 1024 * 1024;
+const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const CERTIFICATION_CONCEPTS = Object.freeze([
   ["certification_signer_name", "certification_signer_name", "Name of the person stated to certify or sign the chart"],
@@ -100,7 +101,11 @@ function createMemoryArtifactRepository(artifact) {
 
 function defaultProvider() {
   const model = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5";
-  return new AnthropicSemanticProvider({ apiKey: process.env.ANTHROPIC_API_KEY, model });
+  return new AnthropicSemanticProvider({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model,
+    timeoutMs: CUSTOMER_PROVIDER_TIMEOUT_MS,
+  });
 }
 
 function providerRelationship(relationship) {
@@ -441,6 +446,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
 }
 
 module.exports = Object.freeze({
+  CUSTOMER_PROVIDER_TIMEOUT_MS,
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,
