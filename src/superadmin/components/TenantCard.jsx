@@ -9,10 +9,11 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
   const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  const adminUrl =
-    isNium ? "/admin" : `/admin?tenant=${tenant.tenantId}`;
-  const customerUrl =
-    isNium ? "/" : `/?tenant=${tenant.tenantId}`;
+  // Every URL carries its tenant. Tenant resolution is 3-strict: a bare /admin
+  // or / resolves to no tenant at all and lands on the no-tenant screen.
+  const adminUrl = `/admin?tenant=${tenant.tenantId}`;
+  const customerUrl = `/?tenant=${tenant.tenantId}`;
+  const preboardingUrl = `/preboarding?tenant=${tenant.tenantId}`;
 
   return (
     <div
@@ -83,6 +84,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
 
           <UrlRow label="Admin URL" value={origin + adminUrl} />
           <UrlRow label="Customer URL" value={origin + customerUrl} />
+          <UrlRow label="Pre-boarding URL" value={origin + preboardingUrl} />
         </div>
       </div>
 

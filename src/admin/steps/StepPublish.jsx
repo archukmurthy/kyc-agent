@@ -90,15 +90,13 @@ export default function StepPublish({
     if (!config) return;
     try {
       sessionStorage.setItem("preview_config", JSON.stringify(config));
-      sessionStorage.setItem("preview_tenant_id", activeTenant || "nium");
+      sessionStorage.setItem("preview_tenant_id", activeTenant);
       sessionStorage.setItem("preview_timestamp", new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("Could not write preview config:", e);
     }
-    const tenantParam = activeTenant && activeTenant !== "nium"
-      ? `&tenant=${encodeURIComponent(activeTenant)}`
-      : "";
+    const tenantParam = activeTenant ? `&tenant=${encodeURIComponent(activeTenant)}` : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");
   }
 
@@ -142,7 +140,7 @@ export default function StepPublish({
           </p>
           <button
             type="button"
-            onClick={() => window.open("/", "_blank")}
+            onClick={() => window.open(`/?tenant=${encodeURIComponent(activeTenant)}`, "_blank")}
             style={{ ...adminStyles.btnSecondary, marginTop: 16 }}
           >
             View live flow →

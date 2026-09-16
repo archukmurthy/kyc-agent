@@ -173,15 +173,13 @@ export default function AdminDashboard({
       // from the same origin (modern Chrome/Firefox/Safari). Each tab gets its
       // own session, so this does not leak between unrelated tabs.
       sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
-      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId || "nium");
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId);
       sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("Could not write preview config:", e);
     }
-    const tenantParam = tenantId && tenantId !== "nium"
-      ? `&tenant=${encodeURIComponent(tenantId)}`
-      : "";
+    const tenantParam = tenantId ? `&tenant=${encodeURIComponent(tenantId)}` : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");
   }
 
