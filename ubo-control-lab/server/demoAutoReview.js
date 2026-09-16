@@ -45,9 +45,14 @@ function validMeasurement(fact) {
     && typeof measurement.lowerInclusive === "boolean" && typeof measurement.upperInclusive === "boolean";
 }
 
-function validRelationshipBasis(fact) {
+function explicitEconomicSemantics(fact) {
   if (fact.relationship !== "ECONOMIC_OWNERSHIP") return true;
-  return ["SHARE_OWNERSHIP", "SURPLUS_ASSET_RIGHTS"].includes(fact.qualifiers?.economicInterestConcept);
+  const concept = normalize(fact.qualifiers?.economicInterestConcept);
+  const targetProfile = normalize(fact.object?.entityType);
+  if (["LLP", "PARTNERSHIP"].includes(targetProfile)) {
+    return ["SURPLUS_ASSET_RIGHTS", "LLP_SURPLUS_ASSET_RIGHTS"].includes(concept);
+  }
+  return concept === "SHARE_OWNERSHIP";
 }
 
 function sourceBacked(fact) {
@@ -185,7 +190,7 @@ function buildPlan(session) {
     const safeRegistryContext = fact?.type === "ENTITY_ATTRIBUTE" && fact.attribute === "REGISTRY_CONTEXT"
       && fact.value && typeof fact.value === "object" && !Array.isArray(fact.value) && sourceBacked(fact);
     const safe = (safeRegistryContext || (fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
-      && sourceBacked(fact) && validMeasurement(fact) && validRelationshipBasis(fact)
+      && sourceBacked(fact) && validMeasurement(fact) && explicitEconomicSemantics(fact)
       && (fact.qualifiers?.requiresInterpretation !== true || isSourceBackedCombinedControlRight(fact))
       && !conflictingFactIds.has(fact.factId))) && endpointsSafe;
     return [target.claimId, safe];

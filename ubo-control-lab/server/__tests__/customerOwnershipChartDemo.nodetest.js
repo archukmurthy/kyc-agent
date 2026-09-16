@@ -123,6 +123,31 @@ test("chart-only analysis uses the shared engine for direct plus indirect owners
   assert.equal(effective.orderedPathReferences.length, 2);
 });
 
+test("chart-only analysis preserves ownership with no explicit share basis without crashing evaluation", () => {
+  const evidenceReferences = [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-provisional" }];
+  const analysis = buildChartAnalysis({
+    candidateFacts: [{
+      factId: "provisional-ownership",
+      type: "RELATIONSHIP",
+      subject: { name: "Alice Morgan", entityType: "UNKNOWN_OR_OTHER", sourcePartySnapshot: {} },
+      relationship: "ECONOMIC_OWNERSHIP",
+      object: { name: "Vodafone Limited", entityType: "UNKNOWN_OR_OTHER", sourcePartySnapshot: {} },
+      measurement: { type: "EXACT", value: 30 },
+      qualifiers: { currentState: "CURRENT" },
+      evidenceReferences,
+    }],
+    operationEvidenceReferences: evidenceReferences,
+    issues: [],
+    company: { legalName: "Vodafone Limited", registrationNumber: "01471587", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-provisional", capturedAt: "2026-09-16T10:00:00.000Z" },
+    requestId: "chart-provisional",
+  });
+  assert.equal(analysis.state, "EVALUATED");
+  assert.equal(analysis.provisionalDecisions.operativeClaims, 0);
+  assert.equal(analysis.provisionalDecisions.unresolvedClaims, 1);
+  assert.equal(analysis.view.graph.relationships.length, 0);
+});
+
 test("source visualization groups repeated chart names without inventing a UBO conclusion", () => {
   const company = { legalName: "Vodafone Limited", countryCode: "GB" };
   const party = (name, entityType = "LEGAL_ENTITY") => ({ name, entityType, externalIdentifiers: [], sourcePartySnapshot: {} });
