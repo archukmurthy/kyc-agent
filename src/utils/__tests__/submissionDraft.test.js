@@ -50,4 +50,14 @@ describe('draft scoping', () => {
     localStorage.setItem('kyc_draft_v1', JSON.stringify({ savedAt: '2026-01-01T00:00:00.000Z', state: { companyName: 'Old' } }));
     expect(loadDraft({ tenantId: 'acme', agentType: 'onboarding' })).toBeNull();
   });
+
+  // Isolates the `!parsed.tenantId` clause specifically: this saves AND loads
+  // with an empty scope, so `parsed.tenantId === wantTenant` (`"" === ""`)
+  // would already be true without that clause — without it, two different
+  // no-tenant sessions (both reachable: no ?tenant= present) could match each
+  // other's draft.
+  test('a draft saved with an empty scope is never offered back, even to an empty scope', () => {
+    saveDraft({ companyName: 'NoTenant' }, { tenantId: '', agentType: '' });
+    expect(loadDraft({ tenantId: '', agentType: '' })).toBeNull();
+  });
 });

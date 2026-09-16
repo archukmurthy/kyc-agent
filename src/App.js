@@ -5107,6 +5107,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             onIdvVerifiedFields={setIdvVerifiedFields}
             idvResult={idvResult}
             onIdvResultCache={setIdvResult}
+            brandName={companyName_}
           />
         )}
 

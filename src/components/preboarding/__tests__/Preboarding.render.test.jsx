@@ -164,6 +164,14 @@ describe("pre-boarding gate", () => {
     // through to the ordinary customer flow instead of the gate — discarding
     // preview mode. See task-11-report.md for this test's failing run against
     // the pre-fix call shape.
+    //
+    // LIMIT OF THIS TEST: it renders `<KYCAgent previewMode preboarding />`
+    // directly, proving the COMPONENT's contract for that prop combination.
+    // It does not — and under jsdom cannot — execute src/index.js itself, so
+    // it cannot catch a regression in index.js's /preview branch (e.g. a
+    // revert back to `<KYCAgent previewMode />` with the preboarding prop
+    // dropped). That branch has no test of its own; a future reader should
+    // not mistake this test for end-to-end coverage of it.
     await act(async () => {
       render(<KYCAgent previewMode preboarding />);
     });
@@ -232,6 +240,17 @@ describe("pre-boarding gate", () => {
         ok: true,
         json: () => Promise.resolve({ available: false, reason: "tenant_not_found", companyName: "" }),
       });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);
+  });
+
+  it("the availability probe rejecting (offline/server error) degrades to the unavailable screen, not a crash or a password box", async () => {
+    // PreboardingGate's probe effect has a `catch` fallback for a rejected
+    // fetch (network down, server 500 before it can even answer) that no
+    // other test exercises — it always resolves. Force that branch: the GET
+    // probe rejects outright rather than resolving with an `available` body.
+    fetchRoutes["/api/preboarding-auth"] = () => Promise.reject(new Error("network down"));
     await mountAtGate();
     expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
     expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);

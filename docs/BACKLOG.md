@@ -241,6 +241,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What:** Replace the single server-checked `PREBOARDING_PASSWORD` with a password per tenant (set from admin/super admin, stored hashed with a real KDF — see PLAT-2), so an analyst for tenant A can't enter tenant B's pre-boarding.
 - **Being built now instead:** `/preboarding?tenant=<id>` entry, per-tenant pre-boarding on/off switch, server check that the tenant exists and is active, analyst session bound to the verified tenant — with one shared analyst password.
 - **Area:** `api/preboarding-auth.js`, `lib/auth.js`, tenant settings UI.
+- **Status note (2026-09-16):** the tenant-scoped entry, registry checks and server-side gate shipped in Part 5; only the per-tenant password remains.
 
 ### BRAND-1 — Neutralize residual "Nium" brand naming (make the product brand-neutral / config-driven)
 - **Category:** UX / Architecture · **Priority:** P3 · **Status:** OPEN (discuss before actioning — 2026-09-12)
@@ -250,3 +251,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Why deferred:** this is a "should the product itself be brand-neutral / fully config-driven" decision, larger than the tenant-leakage fix. Needs a product call on how far to go (rename tokens/keys, make product name config-driven, migrate the `nium_invite_` storage key without breaking existing links, etc.).
 - **Action:** revisit with the user before implementing — they asked to discuss again later.
 - **Area:** `src/App.js` (+ a repo-wide sweep).
+- **Status note (2026-09-16, task 14 brand-consistency pass):** two more hardcoded strings pinned down, both apparently dead/unreachable today rather than live customer-facing copy — confirm reachability before acting on either:
+  - `src/App.js:4486` — "Powered by Nium Intelligence Platform", inside `renderLandingPage()`. That function is defined but has no call site anywhere in `App.js` — the analyst agent-selection hub it renders looks parked, matching the "PARKED" note already on `PreboardingGate`'s back-to-agent-selection button (`src/components/preboarding/PreboardingGate.jsx`), which points at this same screen.
+  - `src/components/Step2DynamicForm.jsx:492` — "Nium will retrieve these for you" (section heading). It sits inside a JSX comment block explicitly marked "hidden for now per request, but kept here for future use ... To restore, un-comment this block" (lines 485-489), so it does not render either.
+  - Separately (not a Nium string, but the same brand-consistency sweep): `ApplicantPage.jsx`'s three reused `DocumentUploadCard` call sites (Signatory ID, Authority-to-act x2) were not passing `brandName` through — fixed in task 14 by threading `brandName` from `App.js`'s `companyName_` the same way `Step2DynamicForm.jsx` already receives it.
