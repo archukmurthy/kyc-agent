@@ -51,7 +51,9 @@ async function authorizeAdmin(tenant, token) {
     const stored = await _deps.storage.get(authKey(tenant));
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  if (tenant === "nium") {
+  // Protected (platform) tenants keep the env-password path so the very first
+  // publish works before the per-tenant auth entry is seeded.
+  if (await _deps.registry.isProtectedTenant(tenant)) {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }
@@ -171,14 +173,14 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Invalid request body" });
       }
 
-      // Nium protection — refuse empty publishes that would wipe the live
-      // schemas. Self-healing only catches reads; this catches writes.
-      if (tenant === "nium") {
+      // Protected-tenant protection — refuse empty publishes that would wipe
+      // the live schemas. Self-healing only catches reads; this catches writes.
+      if (await _deps.registry.isProtectedTenant(tenant)) {
         const lic = Array.isArray(body.licences) ? body.licences.length : 0;
         const ent = Array.isArray(body.entityTypes) ? body.entityTypes.filter((e) => e && e.active !== false).length : 0;
         if (lic === 0 || ent === 0) {
           return res.status(400).json({
-            error: "Cannot publish an empty configuration for the Nium tenant. Please ensure at least one licence and one entity type are configured.",
+            error: "Cannot publish an empty configuration for a protected tenant. Please ensure at least one licence and one entity type are configured.",
           });
         }
       }
@@ -216,6 +218,11 @@ module.exports = async function handler(req, res) {
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
       if (!(await authorizeAdmin(tenant, token))) {
         return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (await _deps.registry.isProtectedTenant(tenant)) {
+        // A protected tenant's config and its whole version history are not
+        // deletable: this endpoint used to wipe config:<t> AND config:<t>:v*.
+        return res.status(403).json({ error: "tenant_protected" });
       }
       const keys = await _deps.storage.list(`config:${tenant}`);
       for (const k of keys) await _deps.storage.del(k);

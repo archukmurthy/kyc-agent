@@ -1,0 +1,175 @@
+const { test } = require("node:test");
+const assert = require("node:assert");
+const configHandler = require("../config");
+const versionsHandler = require("../config-versions");
+const registry = require("../../lib/tenantRegistry");
+const { hashPassword } = require("../../lib/auth");
+
+const ADMIN = "test-admin-password";
+
+function fakeStorage(initial) {
+  const data = { ...(initial || {}) };
+  return {
+    data,
+    async get(key) { return key in data ? data[key] : null; },
+    async set(key, value) { data[key] = value; },
+    async del(key) { delete data[key]; },
+    async list(prefix) { return Object.keys(data).filter((k) => k.startsWith(prefix)); },
+  };
+}
+
+function fakeReqRes({ method = "GET", query = {}, headers = {}, body = undefined } = {}) {
+  const req = { method, query, headers, body, url: "/api/config" };
+  const res = {
+    statusCode: null,
+    body: null,
+    headers: {},
+    setHeader(k, v) { this.headers[k] = v; },
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.body = b; return this; },
+    end() { return this; },
+  };
+  return { req, res };
+}
+
+const GOOD_CONFIG = {
+  _version: 4,
+  licences: [{ id: "GB" }],
+  entityTypes: [{ id: "Corporate", active: true }],
+  schemas: { "Corporate:GB": { researchFields: [], gapFields: [] } },
+};
+
+function protectedStore() {
+  return fakeStorage({
+    "tenant-registry": [{ tenantId: "acme", isProtected: true }],
+    "config:acme": { ...GOOD_CONFIG },
+    "config:acme:v3": { _version: 3, licences: [{ id: "GB" }], entityTypes: [{ id: "Corporate", active: true }] },
+    "config:acme:v2": { _version: 2, licences: [], entityTypes: [] },
+  });
+}
+
+function withAdmin(t) {
+  const prev = process.env.ADMIN_PASSWORD;
+  process.env.ADMIN_PASSWORD = ADMIN;
+  t.after(() => {
+    if (prev === undefined) delete process.env.ADMIN_PASSWORD;
+    else process.env.ADMIN_PASSWORD = prev;
+  });
+}
+
+test("DELETE is refused for a protected tenant and keeps every version", async (t) => {
+  withAdmin(t);
+  const storage = protectedStore();
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "DELETE",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+  });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 403);
+  assert.deepStrictEqual(res.body, { error: "tenant_protected" });
+  assert.ok(storage.data["config:acme"], "live config must survive");
+  assert.ok(storage.data["config:acme:v3"], "archived versions must survive");
+});
+
+test("DELETE still works for an unprotected tenant", async (t) => {
+  withAdmin(t);
+  // Unprotected (non-platform) tenants never got the ADMIN_PASSWORD env
+  // fallback — that path is (and always was) platform-only, now gated by
+  // isProtectedTenant instead of a literal "nium" check. A normal tenant
+  // authenticates with its own per-tenant password instead.
+  const storage = fakeStorage({
+    "tenant-registry": [{ tenantId: "plain", isProtected: false }],
+    "tenant-auth:plain": { passwordHash: hashPassword(ADMIN) },
+    "config:plain": { _version: 1 },
+  });
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "DELETE",
+    query: { tenant: "plain" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+  });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(storage.data["config:plain"], undefined);
+});
+
+test("publishing a gutted config is refused for any protected tenant (not just nium)", async (t) => {
+  withAdmin(t);
+  const storage = protectedStore();
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "POST",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+    body: { licences: [], entityTypes: [] },
+  });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 400);
+  assert.match(res.body.error, /empty configuration/i);
+  assert.strictEqual(storage.data["config:acme"]._version, 4, "live config untouched");
+});
+
+test("rolling a protected tenant back to a gutted version is refused", async (t) => {
+  withAdmin(t);
+  const storage = protectedStore();
+  versionsHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "POST",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+    body: { version: 2 },
+  });
+  await versionsHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 400);
+  assert.deepStrictEqual(res.body, { error: "empty_config_rejected" });
+  assert.strictEqual(storage.data["config:acme"]._version, 4);
+});
+
+test("rolling back to a healthy version still works", async (t) => {
+  withAdmin(t);
+  const storage = protectedStore();
+  versionsHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "POST",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+    body: { version: 3 },
+  });
+  await versionsHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(storage.data["config:acme"]._rolledBackFrom, 3);
+});
+
+test("self-heal archives the broken config before overwriting it", async (t) => {
+  const storage = fakeStorage({
+    "tenant-registry": [{ tenantId: "acme", isProtected: true }],
+    "config:acme": { _version: 7, licences: [], entityTypes: [] },
+  });
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({ method: "GET", query: { tenant: "acme" } });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 200);
+  assert.ok(res.body.licences.length > 0, "served config is healed");
+  assert.ok(storage.data["config:acme:v7"], "broken config archived before overwrite");
+  assert.deepStrictEqual(storage.data["config:acme:v7"].licences, []);
+});
