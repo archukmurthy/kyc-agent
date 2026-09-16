@@ -31,6 +31,15 @@ const ROW = { id: "d-1", tenant_id: "acme", owned_by: "analyst", search_attempts
 const ANALYST = { kind: "analyst", tenantId: "acme", dossierId: null, reason: null };
 const CUSTOMER = { kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null };
 
+test("a DB failure reports a fixed code, never the raw error text", async () => {
+  const throwingSql = () => { throw new Error("connection terminated unexpectedly — internal detail"); };
+  handler.__setDeps({ neon: () => throwingSql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler({ method: "POST", body: { dossierId: "d-1" }, query: {}, headers: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body, { attempts: null, warning: "search_attempt_failed" });
+});
+
 test("no credential is a 401 and the counter is untouched", async () => {
   const sql = fakeSql(ROW);
   handler.__setDeps({ neon: () => sql, access: accessWith({ kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }) });

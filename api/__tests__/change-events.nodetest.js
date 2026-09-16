@@ -54,6 +54,19 @@ function deps(sql, actor, onWrite) {
   };
 }
 
+test("a writeEvent failure reports a fixed code, never the raw error text", async () => {
+  const sql = fakeSql(null);
+  handler.__setDeps({
+    neon: () => sql,
+    writeEvent: async () => { throw new Error("writeEvent: fieldClass \"manager\" is not in the allowed enum [...]"); },
+    access: accessWith({ kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }),
+  });
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event, submissionId: "fresh-app" }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body, { success: false, warning: "event_write_failed" });
+});
+
 test("a fresh application (no matching dossier) writes exactly as before, with no credential", async () => {
   let wrote = false;
   const sql = fakeSql(null);

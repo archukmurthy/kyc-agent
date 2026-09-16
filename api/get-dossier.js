@@ -91,7 +91,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ success: true, dossier: row });
   } catch (err) {
     console.error("[get-dossier] Error:", err);
-    return res.status(200).json({ success: false, error: err.message });
+    return res.status(200).json({ success: false, error: "load_failed" });
   }
 };
 

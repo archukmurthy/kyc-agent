@@ -37,6 +37,19 @@ function deps(dossierRow, actor) {
 const ROW = { id: "d-1", tenant_id: "acme", owned_by: "customer" };
 const req = (submissionId) => ({ method: "GET", query: { submissionId }, headers: {} });
 
+test("a read failure reports a fixed code, never the raw error text", async () => {
+  handler.__setDeps({
+    neon: () => () => Promise.resolve([]),
+    getEventsBySubmission: async () => { throw new Error("connection terminated unexpectedly — internal detail"); },
+    deriveAmendmentDocuments: () => [],
+    access: accessWith({ kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }),
+  });
+  const res = fakeRes();
+  await handler(req("fresh-app"), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body, { documents: [], warning: "amendment_documents_failed" });
+});
+
 test("a fresh application's documents are readable as before", async () => {
   handler.__setDeps(deps(null, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }));
   const res = fakeRes();

@@ -249,7 +249,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ success: true, dossierId: savedId });
   } catch (err) {
     console.error("[save-dossier] ❌", err.message);
-    return res.status(200).json({ success: false, dossierId: null, warning: err.message });
+    return res.status(200).json({ success: false, dossierId: null, warning: "save_failed" });
   }
 };
 

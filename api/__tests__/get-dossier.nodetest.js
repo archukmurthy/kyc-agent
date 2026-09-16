@@ -31,6 +31,15 @@ const ANALYST = { kind: "analyst", tenantId: "acme", dossierId: null, reason: nu
 const CUSTOMER = { kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null };
 const req = (query = {}) => ({ method: "GET", query, headers: {}, url: "/api/get-dossier" });
 
+test("a DB failure reports a fixed code, never the raw error text", async () => {
+  const throwingSql = () => { throw new Error("relation entity_dossiers does not exist — internal schema detail"); };
+  handler.__setDeps({ neon: () => throwingSql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler(req({ id: "d-1", tenant: "acme" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body, { success: false, error: "load_failed" });
+});
+
 test("no credential is a 401 before any database work", async () => {
   const sql = fakeSql(ROW);
   handler.__setDeps({ neon: () => sql, access: accessWith({ kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }) });

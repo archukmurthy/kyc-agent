@@ -97,7 +97,7 @@ module.exports = async function handler(req, res) {
     // writeEvent throws on enum drift, missing required context, or a bad
     // supersede target. Surface it without failing the user's flow.
     console.error("[change-events] ❌", err.message);
-    return res.status(200).json({ success: false, warning: err.message });
+    return res.status(200).json({ success: false, warning: "event_write_failed" });
   }
 };
 

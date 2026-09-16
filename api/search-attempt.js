@@ -82,7 +82,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ attempts });
   } catch (err) {
     console.error("[search-attempt] ❌", err.message);
-    return res.status(200).json({ attempts: null, warning: err.message });
+    return res.status(200).json({ attempts: null, warning: "search_attempt_failed" });
   }
 };
 

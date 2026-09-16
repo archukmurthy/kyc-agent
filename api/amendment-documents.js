@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
     // A read failure must not break the Fill Gaps page — return an empty list
     // and log. The customer still sees the standard Required Documents step.
     console.error("[amendment-documents] ❌", err.message);
-    return res.status(200).json({ documents: [], warning: err.message });
+    return res.status(200).json({ documents: [], warning: "amendment_documents_failed" });
   }
 };
 
