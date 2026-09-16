@@ -3336,7 +3336,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         verifiability: "structured_registry",
       },
       jurisdiction: countryCode || "GB",
-      submissionId: dossierId || onboardingSubmissionId,
+      // A superseding write must reuse the HEAD event's own submissionId, not
+      // whatever resolves "now" — saveDossier can populate dossierId AFTER the
+      // head event was written under onboardingSubmissionId, and writeEvent's
+      // supersedesId lookup is scoped to submissionId (writeEvent.js ~93-99):
+      // a mismatched submissionId makes the target read as "does not exist"
+      // and the correction is silently dropped.
+      submissionId: (prev && prev.event && prev.event.submissionId) || dossierId || onboardingSubmissionId,
       dossierId,
       // The stored vocabulary is add|remove|changed. An addition must record as
       // 'add' — filing it as 'changed' would misdescribe it to an analyst
