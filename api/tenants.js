@@ -20,7 +20,7 @@ const tenantRegistry = require("../lib/tenantRegistry");
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
 let _deps = { storage, registry: tenantRegistry };
 
-const REGISTRY_KEY = "tenant-registry";
+const REGISTRY_KEY = tenantRegistry.REGISTRY_KEY;
 
 function configKey(tid) {
   return `config:${tid}`;
@@ -61,7 +61,13 @@ function requireSuperAdmin(req, res) {
 }
 
 async function ensureRegistry() {
-  let reg = await _deps.registry.readRegistry();
+  // readRegistryStrict, NOT readRegistry: the fail-soft reader answers [] for
+  // both "empty" and "unreadable" (lib/storage.js#get throws on KV/Redis
+  // failure), and seeding on a read blip would overwrite every real tenant
+  // entry with a platform-only registry. An unreadable registry propagates to
+  // the handler's catch → 500 with no write, which is what happened before
+  // the registry module existed.
+  let reg = await _deps.registry.readRegistryStrict();
   if (!reg.length) {
     reg = _deps.registry.PLATFORM_TENANT_IDS.map((tenantId) => ({
       tenantId,
@@ -78,13 +84,26 @@ async function ensureRegistry() {
     await _deps.storage.set(REGISTRY_KEY, reg);
     return reg;
   }
-  // Back-fill the protection flag for registries written before it existed:
-  // isInternal was the old spelling of the same idea.
-  const needsBackfill = reg.some((t) => t && t.isProtected === undefined && t.isInternal === true);
-  if (needsBackfill) {
-    reg = reg.map((t) => (t && t.isProtected === undefined && t.isInternal === true ? { ...t, isProtected: true } : t));
-    await _deps.storage.set(REGISTRY_KEY, reg);
-  }
+  // Back-fill flags for registries written before those flags existed.
+  //   isProtected — isInternal was the old spelling of the same idea.
+  //   preboardingEnabled — pre-boarding predates the per-tenant switch and was
+  //     implicitly on for platform tenants, so protected entries get it back;
+  //     ordinary tenants are deliberately left alone, because super-admin
+  //     opt-in is the design (turning every tenant on would defeat it).
+  // Additive and idempotent: an entry that already carries a flag — including
+  // an explicit `false` a super-admin set — is never re-patched.
+  let changed = false;
+  reg = reg.map((t) => {
+    if (!t) return t;
+    const patch = {};
+    if (t.isProtected === undefined && t.isInternal === true) patch.isProtected = true;
+    const isProtectedEntry = patch.isProtected === true || _deps.registry.entryIsProtected(t);
+    if (isProtectedEntry && t.preboardingEnabled === undefined) patch.preboardingEnabled = true;
+    if (!Object.keys(patch).length) return t;
+    changed = true;
+    return { ...t, ...patch };
+  });
+  if (changed) await _deps.storage.set(REGISTRY_KEY, reg);
   return reg;
 }
 

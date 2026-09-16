@@ -205,7 +205,13 @@ PRE-BOARDING AGENT (analyst tool — built)
   clicks the link and starts at the Applicant
   step — the dossier pre-populates everything.
 
-  Access: /?preboarding=1 password: ARCH
+  Access: /preboarding?tenant=<id>
+  The analyst password is checked
+  server-side only, from the
+  PREBOARDING_PASSWORD env var — it is
+  never in the client bundle or in this
+  file. The tenant must exist, be active
+  and have pre-boarding switched on.
 
 ═══════════════════════════════════════
 THE DATABASE — TWO SEPARATE STORES

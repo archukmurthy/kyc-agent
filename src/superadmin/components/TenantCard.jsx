@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import { adminColors, adminStyles } from "../../admin/adminDesign";
 
-// One tenant tile in the super-admin dashboard. Nium is rendered with a
-// niumBlue left rail and an "Internal" badge; nothing else is special-cased
-// beyond hiding the deactivate button (Nium can never be turned off).
+// One tenant tile in the super-admin dashboard. A protected (platform) tenant
+// is rendered with a niumBlue left rail and an "Internal" badge; nothing else
+// is special-cased beyond hiding the deactivate button (the server refuses to
+// deactivate a protected tenant anyway).
 export default function TenantCard({ tenant, onResetPassword, onToggleStatus, onTogglePreboarding }) {
-  const isNium = tenant.tenantId === "nium" || tenant.isInternal;
+  // Protection is a registry flag, never a tenant id: isInternal is the
+  // legacy spelling of the same idea, so both count (mirrors
+  // lib/tenantRegistry.js#entryIsProtected).
+  const isNium = tenant.isProtected || tenant.isInternal;
   const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 

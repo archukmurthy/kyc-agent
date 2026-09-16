@@ -17,6 +17,8 @@ const tenantRegistry = require("../lib/tenantRegistry");
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
+const { PLATFORM_TENANT_IDS } = tenantRegistry;
+
 function configKey(tenant) {
   return `config:${tenant}`;
 }
@@ -27,7 +29,11 @@ async function authorizeAdmin(tenant, token) {
     const stored = await _deps.storage.get(`tenant-auth:${tenant}`);
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  if (await _deps.registry.isProtectedTenant(tenant)) {
+  // Static platform list, NOT isProtectedTenant: that predicate fails closed
+  // (unreadable registry → "protected"), which would let the one shared
+  // ADMIN_PASSWORD authenticate as any tenant during a storage outage. The
+  // rollback guard below still uses it, where failing closed is correct.
+  if (PLATFORM_TENANT_IDS.includes(tenant)) {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }

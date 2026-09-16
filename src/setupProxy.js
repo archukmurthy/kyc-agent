@@ -4,7 +4,9 @@
 // endpoints work locally as on Vercel in production. This file is NOT
 // bundled into the React app — it only runs in the dev server process.
 //
-// Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
+// Requires ANTHROPIC_API_KEY and ADMIN_PASSWORD in .env.local. There is no
+// TENANT_ID: tenant resolution is strict, so every local URL carries its own
+// ?tenant= just as it does in production.
 
 const path = require("path");
 const { pathToFileURL } = require("url");

@@ -79,8 +79,10 @@ export default function AdminRoot() {
 
   // First-login wizard fires for brand-new blank tenants (created via
   // /super-admin) and for any tenant that has zero licences configured.
-  // The Nium tenant is excluded because it ships with default seed config —
-  // pushing it into the wizard on every fresh session would be annoying.
+  // No tenant is excluded by id: the platform tenant ships with default seed
+  // config, so it has licences and doesn't reach the wizard on its own. The
+  // one exception is the offline fallback above, which marks every tenant
+  // _isBlank — an API-unreachable admin session shows the wizard regardless.
   const firstLogin =
     tenantConfig._isBlank === true ||
     ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "nium");

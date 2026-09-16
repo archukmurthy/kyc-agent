@@ -194,6 +194,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [preboardingToken, setPreboardingToken] = useState("");
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
+  // The server answered 404 tenant_not_found: this tenant does not exist.
+  // Renders the same no-tenant surface as a bare URL (see the early return
+  // near the end of this component) instead of the offline fallback config.
+  const [tenantUnknown, setTenantUnknown] = useState(false);
   const inPreview = previewMode || isPreviewMode();
   // Timestamp the staged preview config was captured (admin click time). Shown
   // in the preview banner so the admin can tell whether the tab is stale.
@@ -285,8 +289,19 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
     const url = `/api/config?tenant=${encodeURIComponent(tenantId)}`;
     fetch(url, { cache: "no-store" })
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((cfg) => { if (!cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
+      .then((r) => {
+        // 404 is the server ANSWERING "no such tenant", not failing. Falling
+        // through to the offline fallback here would render a complete working
+        // wizard for a typo'd tenant, branded with the typo'd id, and attribute
+        // a submission to it. Only a genuine transport failure (below) keeps
+        // the offline fallback, so a customer mid-application survives a blip.
+        if (r.status === 404) {
+          if (!cancelled) { setTenantUnknown(true); setConfigLoading(false); }
+          return null;
+        }
+        return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+      })
+      .then((cfg) => { if (cfg && !cancelled) { setTenantConfig(cfg); setConfigLoading(false); } })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.warn("Falling back to local default config:", err.message);
@@ -4294,12 +4309,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     })
   );
 
-  // 3-strict: no ?tenant= means no tenant. This must come after every hook
-  // above (React rules-of-hooks — the last hook call in this component is
-  // ~3000 lines up, well before this point) but before any of the normal
-  // header/flow renders below. No fetch happened for this case either (see
-  // the config-loading effect's own !tenantId guard).
-  if (!tenantId) {
+  // 3-strict: no ?tenant= means no tenant, and a tenant the server does not
+  // know (404 tenant_not_found) is no tenant either — the browser must not
+  // contradict the server by rendering a working flow for an id it rejected.
+  // This must come after every hook above (React rules-of-hooks — the last
+  // hook call in this component is ~3000 lines up, well before this point) but
+  // before any of the normal header/flow renders below. In the !tenantId case
+  // no fetch happened at all (see the config-loading effect's own guard).
+  if (!tenantId || tenantUnknown) {
     return <NoTenantLanding surface={isPreboardingSurface ? "preboarding" : "onboarding"} />;
   }
 

@@ -16,13 +16,18 @@ const { listTemplates, buildTemplateConfig } = require("../lib/configTemplates")
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
+const { PLATFORM_TENANT_IDS } = tenantRegistry;
+
 async function authorizeAdmin(tenant, token) {
   if (!token) return false;
   try {
     const stored = await _deps.storage.get(`tenant-auth:${tenant}`);
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  if (await _deps.registry.isProtectedTenant(tenant)) {
+  // Static platform list, NOT isProtectedTenant: that predicate fails closed
+  // (unreadable registry → "protected"), which would let the one shared
+  // ADMIN_PASSWORD authenticate as any tenant during a storage outage.
+  if (PLATFORM_TENANT_IDS.includes(tenant)) {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }

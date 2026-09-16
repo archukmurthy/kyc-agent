@@ -20,15 +20,20 @@ store). The active tenant is resolved per request, with this priority:
 
 1. `?tenant=` URL query parameter (browser) / `req.query.tenant` (server)
 2. `x-tenant-id` request header
-3. `TENANT_ID` environment variable
-4. fallback `"nium"`
+
+Resolution is strict: there is no `TENANT_ID` environment fallback and no
+default tenant. A request that resolves to no tenant gets the no-tenant
+landing (browser) or `400 tenant_required` (server); a tenant that isn't in
+the registry gets `404 tenant_not_found` and the browser renders the same
+no-tenant surface — a typo never conjures a tenant into being.
 
 ### URLs
 
-| Tenant            | Customer flow                | Admin                            |
-| ----------------- | ---------------------------- | -------------------------------- |
-| Primary (Nium)    | `/`                          | `/admin`                         |
-| Any other tenant  | `/?tenant={tenantId}`        | `/admin?tenant={tenantId}`       |
+| Tenant       | Customer flow                | Admin                            |
+| ------------ | ---------------------------- | -------------------------------- |
+| Every tenant | `/?tenant={tenantId}`        | `/admin?tenant={tenantId}`       |
+
+A bare `/` or `/admin` carries no tenant and lands on the no-tenant screen.
 
 Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
 "Preview Mode" banner and is opened by the admin "Preview" button.
@@ -55,9 +60,11 @@ Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
 
 ### Env vars
 
-- `TENANT_ID=nium` — the default tenant served when no `?tenant=` is present
 - `ADMIN_PASSWORD=...` — shared across all tenants for now (per-tenant
-  passwords are a future change)
+  passwords are a future change). As a login fallback it is accepted only for
+  the static platform tenant list in `lib/tenantRegistry.js`.
+- There is no `TENANT_ID` variable: the env fallback was removed when tenant
+  resolution became strict.
 
 ## Architecture
 

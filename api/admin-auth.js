@@ -12,8 +12,7 @@
 const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { hashPassword, verifyPassword } = require("../lib/auth");
-
-const REGISTRY_KEY = "tenant-registry";
+const registry = require("../lib/tenantRegistry");
 
 function authKey(tid) {
   return `tenant-auth:${tid}`;
@@ -46,19 +45,22 @@ async function seedNiumAuth(envPassword) {
         companyName: "Nium",
       });
     }
-    const registry = (await storage.get(REGISTRY_KEY)) || [];
-    if (!registry.find((t) => t.tenantId === "nium")) {
-      registry.unshift({
-        tenantId: "nium",
+    // Through the registry module, not a hand-rolled write: it owns the key
+    // and the entry shape. Same flags the other seed paths produce — a
+    // platform entry missing isProtected/preboardingEnabled is what took
+    // pre-boarding dark for the tenant that uses it most.
+    if (!(await registry.findTenant("nium"))) {
+      await registry.upsertEntry("nium", {
         companyName: "Nium",
         createdAt: new Date().toISOString(),
         createdBy: "system",
         lastPublishedAt: null,
         isActive: true,
         isInternal: true,
+        isProtected: true,
+        preboardingEnabled: true,
         isBlank: false,
       });
-      await storage.set(REGISTRY_KEY, registry);
     }
   } catch (e) {
     // eslint-disable-next-line no-console

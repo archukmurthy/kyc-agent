@@ -42,6 +42,13 @@ const GOOD_CONFIG = {
 function protectedStore() {
   return fakeStorage({
     "tenant-registry": [{ tenantId: "acme", isProtected: true }],
+    // "acme" is flagged protected but is NOT a platform tenant, and the
+    // ADMIN_PASSWORD env fallback is platform-only (a static list in
+    // lib/tenantRegistry.js — it must not widen to every tenant when the
+    // registry is unreadable). So it authenticates with its own per-tenant
+    // password, exactly like any real protected-but-not-platform tenant.
+    // These tests are about the destructive GUARDS, not about auth.
+    "tenant-auth:acme": { passwordHash: hashPassword(ADMIN) },
     "config:acme": { ...GOOD_CONFIG },
     "config:acme:v3": { _version: 3, licences: [{ id: "GB" }], entityTypes: [{ id: "Corporate", active: true }] },
     "config:acme:v2": { _version: 2, licences: [], entityTypes: [] },
@@ -78,10 +85,11 @@ test("DELETE is refused for a protected tenant and keeps every version", async (
 
 test("DELETE still works for an unprotected tenant", async (t) => {
   withAdmin(t);
-  // Unprotected (non-platform) tenants never got the ADMIN_PASSWORD env
-  // fallback — that path is (and always was) platform-only, now gated by
-  // isProtectedTenant instead of a literal "nium" check. A normal tenant
-  // authenticates with its own per-tenant password instead.
+  // Non-platform tenants never got the ADMIN_PASSWORD env fallback — that
+  // path is, and always was, platform-only. It is gated by the static
+  // PLATFORM_TENANT_IDS list rather than by isProtectedTenant, which fails
+  // CLOSED and would hand the shared env password every tenant during a
+  // storage outage. A normal tenant uses its own per-tenant password.
   const storage = fakeStorage({
     "tenant-registry": [{ tenantId: "plain", isProtected: false }],
     "tenant-auth:plain": { passwordHash: hashPassword(ADMIN) },
@@ -189,4 +197,68 @@ test("self-heal archives the broken config before overwriting it", async (t) => 
   assert.ok(res.body.licences.length > 0, "served config is healed");
   assert.ok(storage.data["config:acme:v7"], "broken config archived before overwrite");
   assert.deepStrictEqual(storage.data["config:acme:v7"].licences, []);
+});
+
+// ── Env-password fallback vs. fail-closed protection (final-review CT-3) ───
+// isProtectedTenant fails CLOSED (unreadable registry → "protected") so a
+// storage blip can never unlock a destructive guard. On the AUTH branch that
+// same `true` would let the single shared ADMIN_PASSWORD authenticate as ANY
+// tenant, so the env fallback must key off the static platform list instead.
+const TENANT_PW = "acme-tenant-password";
+
+// A registry outage with the rest of the store still readable — the shape
+// that makes the two requirements pull in opposite directions.
+function registryDownStore(extra) {
+  const data = {
+    "tenant-auth:acme": { passwordHash: hashPassword(TENANT_PW) },
+    "config:acme": { ...GOOD_CONFIG },
+    ...(extra || {}),
+  };
+  return {
+    data,
+    async get(key) {
+      if (key === "tenant-registry") throw new Error("kv down");
+      return key in data ? data[key] : null;
+    },
+    async set(key, value) { data[key] = value; },
+    async del(key) { delete data[key]; },
+    async list(prefix) { return Object.keys(data).filter((k) => k.startsWith(prefix)); },
+  };
+}
+
+test("an unreadable registry does NOT let ADMIN_PASSWORD authenticate a non-platform tenant", async (t) => {
+  withAdmin(t);
+  const storage = registryDownStore();
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({
+    method: "POST",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${ADMIN}` },
+    body: { licences: [{ id: "GB" }], entityTypes: [{ id: "Corporate", active: true }] },
+  });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 401);
+  assert.deepStrictEqual(res.body, { error: "Unauthorized" });
+});
+
+test("the destructive guard still fails CLOSED when the registry is unreadable", async (t) => {
+  withAdmin(t);
+  const storage = registryDownStore();
+  configHandler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  // Authenticated by the tenant's OWN password, so auth is not what refuses.
+  const { req, res } = fakeReqRes({
+    method: "DELETE",
+    query: { tenant: "acme" },
+    headers: { authorization: `Bearer ${TENANT_PW}` },
+  });
+  await configHandler(req, res);
+
+  assert.strictEqual(res.statusCode, 403);
+  assert.deepStrictEqual(res.body, { error: "tenant_protected" });
+  assert.ok(storage.data["config:acme"], "config must survive a refused delete");
 });

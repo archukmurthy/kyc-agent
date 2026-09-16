@@ -51,9 +51,16 @@ async function authorizeAdmin(tenant, token) {
     const stored = await _deps.storage.get(authKey(tenant));
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
-  // Protected (platform) tenants keep the env-password path so the very first
-  // publish works before the per-tenant auth entry is seeded.
-  if (await _deps.registry.isProtectedTenant(tenant)) {
+  // Platform tenants keep the env-password path so the very first publish
+  // works before the per-tenant auth entry is seeded.
+  //
+  // Deliberately NOT isProtectedTenant: that predicate fails CLOSED (an
+  // unreadable registry answers "protected"), which is right for the
+  // destructive guards below but catastrophic here — it would let the one
+  // shared ADMIN_PASSWORD authenticate as ANY tenant during a storage blip.
+  // PLATFORM_TENANT_IDS is static and storage-independent, so it cannot fail
+  // open into "yes".
+  if (PLATFORM_TENANT_IDS.includes(tenant)) {
     const env = process.env.ADMIN_PASSWORD;
     if (env && token === env) return true;
   }
@@ -101,6 +108,10 @@ async function readConfig(tenant) {
       lastPublishedAt: stored._publishedAt || null,
       isActive: true,
       isProtected: PLATFORM_TENANT_IDS.includes(tenant),
+      // Pre-boarding predates the per-tenant switch and was implicitly on for
+      // platform tenants; ordinary tenants stay opt-in (super-admin turns it
+      // on from the tenant card). Mirrors the back-fill in api/tenants.js.
+      preboardingEnabled: PLATFORM_TENANT_IDS.includes(tenant),
       isInternal: false,
       isBlank: stored._isBlank === true,
     };
@@ -114,9 +125,15 @@ async function readConfig(tenant) {
       // eslint-disable-next-line no-console
       console.warn(`Protected tenant "${tenant}" config missing licences — self-healing from the default template`);
       // Archive the broken config first: self-heal must never be the only
-      // copy of what was there (it used to overwrite silently).
-      const brokenVersion = stored._version || 0;
-      await _deps.storage.set(versionKey(tenant, brokenVersion), stored);
+      // copy of what was there (it used to overwrite silently). An unversioned
+      // config has no number to archive under, and plain v0 would let a second
+      // corruption overwrite the first archive — so those get a timestamped
+      // key instead. The versions list only parses plain `:v<n>`, so these
+      // never masquerade as a rollback target.
+      const archiveKey = stored._version
+        ? versionKey(tenant, stored._version)
+        : `${versionKey(tenant, 0)}-${Date.now()}`;
+      await _deps.storage.set(archiveKey, stored);
       const fresh = buildDefaultConfig(tenant);
       fresh._tenantId = tenant;
       fresh._selfHealedAt = new Date().toISOString();

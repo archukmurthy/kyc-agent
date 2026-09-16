@@ -2,6 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const handler = require("../config-templates");
 const registry = require("../../lib/tenantRegistry");
+const { hashPassword } = require("../../lib/auth");
 
 const ADMIN = "test-admin-password";
 
@@ -12,6 +13,19 @@ function fakeStorage(initial) {
     async get(key) { return key in data ? data[key] : null; },
     async set(key, value) { data[key] = value; },
   };
+}
+
+// "acme" is flagged protected but is NOT a platform tenant, and the
+// ADMIN_PASSWORD env fallback is platform-only (a static list in
+// lib/tenantRegistry.js — it must not widen to every tenant when the registry
+// is unreadable), so the tenant carries its own password. The credential
+// happens to be the same string, which keeps the unauthed test below honest:
+// what makes that one a 401 is sending no Authorization header at all.
+function authedStore() {
+  return fakeStorage({
+    "tenant-registry": [{ tenantId: "acme", isProtected: true }],
+    "tenant-auth:acme": { passwordHash: hashPassword(ADMIN) },
+  });
 }
 
 function fakeReqRes({ query = {}, headers = {} } = {}) {
@@ -37,7 +51,7 @@ function withAdmin(t) {
 
 test("listing templates requires an admin credential", async (t) => {
   withAdmin(t);
-  const storage = fakeStorage({ "tenant-registry": [{ tenantId: "acme", isProtected: true }] });
+  const storage = authedStore();
   handler.__setDeps({ storage });
   registry.__setDeps({ storage });
 
@@ -48,7 +62,7 @@ test("listing templates requires an admin credential", async (t) => {
 
 test("an authed list returns the template ids", async (t) => {
   withAdmin(t);
-  const storage = fakeStorage({ "tenant-registry": [{ tenantId: "acme", isProtected: true }] });
+  const storage = authedStore();
   handler.__setDeps({ storage });
   registry.__setDeps({ storage });
 
@@ -64,7 +78,7 @@ test("an authed list returns the template ids", async (t) => {
 
 test("?id= builds the template for the requesting tenant", async (t) => {
   withAdmin(t);
-  const storage = fakeStorage({ "tenant-registry": [{ tenantId: "acme", isProtected: true }] });
+  const storage = authedStore();
   handler.__setDeps({ storage });
   registry.__setDeps({ storage });
 
@@ -81,7 +95,7 @@ test("?id= builds the template for the requesting tenant", async (t) => {
 
 test("an unknown template id is a 404", async (t) => {
   withAdmin(t);
-  const storage = fakeStorage({ "tenant-registry": [{ tenantId: "acme", isProtected: true }] });
+  const storage = authedStore();
   handler.__setDeps({ storage });
   registry.__setDeps({ storage });
 

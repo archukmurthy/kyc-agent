@@ -104,3 +104,56 @@ test("the seeded platform entry is marked protected", async (t) => {
   const seeded = storage.data["tenant-registry"][0];
   assert.strictEqual(seeded.isProtected, true);
 });
+
+// ── Registry durability (final-review CT-1) ────────────────────────────────
+// readRegistry() is deliberately fail-soft and answers [] for BOTH "empty"
+// and "unreadable". ensureRegistry must not read the second as the first:
+// lib/storage.js#get throws on KV/Redis failure, so seeding on a read blip
+// would overwrite every real tenant entry with a platform-only registry.
+test("an unreadable registry is never reseeded — no write, error surfaces", async (t) => {
+  withSuperAdmin(t);
+  let writes = 0;
+  const storage = {
+    async get() { throw new Error("kv down"); },
+    async set() { writes += 1; },
+    async del() {},
+    async list() { return []; },
+  };
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({ method: "GET" });
+  await handler(req, res);
+
+  assert.strictEqual(writes, 0, "a read blip must not rewrite the registry");
+  assert.strictEqual(res.statusCode, 500);
+});
+
+// ── Pre-boarding back-fill (final-review CT-2) ─────────────────────────────
+// Production KV already holds a registry, so the seeding branch never runs.
+// Without a back-fill every existing tenant — the platform one included —
+// resolves to preboardingEnabled: undefined and pre-boarding goes dark.
+// Ordinary tenants stay off on purpose: opt-in is the design.
+test("back-fill enables pre-boarding for protected entries only, and is idempotent", async (t) => {
+  withSuperAdmin(t);
+  const storage = fakeStorage({ "tenant-registry": [
+    { tenantId: "platform", isInternal: true },
+    { tenantId: "acme", isActive: true },
+  ] });
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const first = fakeReqRes({ method: "GET" });
+  await handler(first.req, first.res);
+
+  const byId = (id) => storage.data["tenant-registry"].find((x) => x.tenantId === id);
+  assert.strictEqual(first.res.statusCode, 200);
+  assert.strictEqual(byId("platform").isProtected, true);
+  assert.strictEqual(byId("platform").preboardingEnabled, true);
+  assert.strictEqual(byId("acme").preboardingEnabled, undefined, "ordinary tenants stay opt-in");
+
+  const snapshot = JSON.stringify(storage.data["tenant-registry"]);
+  const second = fakeReqRes({ method: "GET" });
+  await handler(second.req, second.res);
+  assert.strictEqual(JSON.stringify(storage.data["tenant-registry"]), snapshot, "back-fill must be idempotent");
+});
