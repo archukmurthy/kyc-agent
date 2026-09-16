@@ -243,6 +243,22 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Why not now:** no Referer leak today (no third-party assets; default `strict-origin-when-cross-origin` strips the query cross-origin).
 - **Area:** `src/App.js` landing effect.
 
+### PREB-5 — Customer save must not write the analyst's configuration columns
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 1 final review 2026-09-16)
+- **What:** A customer holding their own dossier token can overwrite `search_attempts`, `seeded_by`, `excluded_fields`, `required_documents`, `verified_data` through `POST /api/save-dossier`. Restrict the customer UPDATE to customer-editable columns; keep the retry count server-owned (Part 3 already stops the client writing `searchAttempts`).
+- **Why not now:** customer can only touch their own dossier, and `/api/submit` accepts client-sent data anyway.
+- **Area:** `api/save-dossier.js`.
+
+### PREB-6 — Revocation store must be shared and fail closed in production
+- **Category:** Security / Deploy · **Priority:** P1 · **Status:** OPEN (deploy note, Part 1 final review 2026-09-16)
+- **What:** Link revocation (`dossier-token-revoked:<id>`) lives in `lib/storage.js`. On Vercel without KV/Redis it falls back to per-instance `/tmp`, so a revoke only holds on the instance that wrote it; the filesystem backend also swallows read errors, so "fail closed on unreadable store" only holds on KV/Redis. Require KV/Redis wherever customer links are served (pairs with DEP-3).
+- **Area:** `lib/storage.js`, `lib/dossierToken.js`, Vercel env.
+
+### PLAT-8 — `api/change-intelligence-metrics.js` has no server-side auth
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (pre-existing, found in Part 1 final review 2026-09-16)
+- **What:** Aggregates all change events (including dossier-keyed ones) and is guarded only on the client. Put it behind admin auth. Also: `api/get-document.js:14-25` comment still says dossier context is unauthenticated — refresh when blob access control (PLAT-1) lands.
+- **Area:** `api/change-intelligence-metrics.js`, `api/get-document.js`.
+
 ### PLAT-7 — Fresh (no-link) applications can't be keyed: change-events / amendment-documents rely on unguessable ids
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (known limit, accepted 2026-09-15)
 - **What:** Dossier-linked applications get their change records and amendment-document reads locked to the customer token / analyst password. Fresh customers (no analyst link) have no credential, so their `onboardingSubmissionId`-keyed writes/reads stay protected only by the random id + rate limit.
