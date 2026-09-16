@@ -1109,13 +1109,22 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
+      // The customer token travels ONLY in the Authorization header (set via
+      // setCustomerDossierToken before this call) — never in the query string,
+      // where it would land in server logs, browser history and any Referer
+      // header. resolveDossierActor accepts the header-only bearer form.
       const query = dossierToken
-        ? `dossierToken=${encodeURIComponent(dossierToken)}&tenant=${encodeURIComponent(tenant)}`
+        ? `tenant=${encodeURIComponent(tenant)}`
         : `id=${encodeURIComponent(requestedId)}&tenant=${encodeURIComponent(tenant)}`;
       const res = await fetch(`/api/get-dossier?${query}`, { headers: getDossierAuthHeaders(tenant) });
       const data = await res.json();
-      if (res.status === 410 || res.status === 401) {
-        // The link is unusable. Never drop the customer into an empty wizard.
+      if (dossierToken && (res.status === 410 || res.status === 401)) {
+        // Customer token path: the link is unusable. Never drop the customer
+        // into an empty wizard. A 401 on the ANALYST Preview path (no
+        // dossierToken — e.g. an expired preboarding session) must NOT render
+        // this customer-facing full-screen error; it falls through to the
+        // same graceful, empty-wizard fallback as every other analyst-path
+        // failure below.
         setLinkError(data && (data.error === "link_expired" || data.error === "link_revoked") ? data.error : "invalid");
         return;
       }
@@ -5457,8 +5466,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back</Btn>
               <Btn
                 variant="green"
-                onClick={inPreview ? undefined : submitApplication}
-                disabled={!declared || inPreview}
+                onClick={inPreview || reviewOnly ? undefined : submitApplication}
+                disabled={!declared || inPreview || reviewOnly}
               >
                 {submitStatus === "retrying" ? "↻ Retry Submission" : "✓ Submit Application"}
               </Btn>

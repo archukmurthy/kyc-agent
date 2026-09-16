@@ -42,8 +42,11 @@ test("a valid token link loads the dossier through the token and sends it as a c
   await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
   const call = calls.find((c) => c.url.includes("/api/get-dossier"));
   expect(call).toBeTruthy();
-  expect(call.url).toContain("dossierToken=signed.tok");
+  // The token travels ONLY in the Authorization header — never the query
+  // string, where it would land in server logs, browser history and Referer.
+  expect(call.url).not.toContain("dossierToken=");
   expect(call.url).not.toContain("id=");
+  expect(call.opts.headers.Authorization).toBe("Bearer dossier:signed.tok");
   expect(bodyText()).not.toMatch(/no longer valid|expired/i);
 });
 
