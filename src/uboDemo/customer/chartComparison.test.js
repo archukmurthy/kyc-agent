@@ -90,7 +90,10 @@ test("Vodafone legal-name variants resolve into one comparison row without chang
     fact(`${prefix}-2`, parties.european, parties.international, values[1], "ECONOMIC_OWNERSHIP", `${reference}-2`),
     fact(`${prefix}-3`, parties.international, parties.three, values[2], "ECONOMIC_OWNERSHIP", `${reference}-3`),
     fact(`${prefix}-4`, parties.three, parties.vodafone, values[3], "ECONOMIC_OWNERSHIP", `${reference}-4`),
-  ];
+  ].map((relationship) => ({
+    ...relationship,
+    qualifiers: { currentState: prefix === "registry" ? "CURRENT" : "UNKNOWN" },
+  }));
   const ranges = Array.from({ length: 4 }, (_, index) => ({ type: "RANGE", lowerBound: index < 2 ? 75 : index === 2 ? 50 : 75, upperBound: index === 2 ? 75 : 100, lowerInclusive: false, upperInclusive: true }));
   const exact = [100, 100, 80, 80].map((value) => ({ type: "EXACT", value }));
   const registryFacts = ownership("registry", registryParties, ranges, "companies-house");
@@ -101,6 +104,13 @@ test("Vodafone legal-name variants resolve into one comparison row without chang
 
   expect(rows).toHaveLength(4);
   expect(rows.every((row) => row.researchFact && row.chartFact)).toBe(true);
+  expect(rows[0]).toEqual(expect.objectContaining({
+    status: "INDEPENDENTLY_VERIFIED",
+    verificationBasis: "INDEPENDENT_RANGE_SUPPORT",
+    descriptor: "Verified against independent registry range",
+    exactPointIndependentlyStated: false,
+  }));
+  expect(rows[2]).toEqual(expect.objectContaining({ status: "CONFLICT", verificationBasis: "CONFLICT" }));
   expect(rows.flatMap(({ identityResolutions }) => identityResolutions).some(({ identityResolutionMethod, sourcePartyA, sourcePartyB }) =>
     identityResolutionMethod === "NORMALIZED_LEGAL_NAME" && sourcePartyA.name === "Vodafonethree Holdings Limited" && sourcePartyB.name === "Vodafone Three Holdings Ltd")).toBe(true);
   expect(registryFacts.flatMap(({ subject, object }) => [subject.name, object.name])).toEqual(registryNames);

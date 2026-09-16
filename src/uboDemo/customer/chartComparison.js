@@ -54,9 +54,10 @@ export function compareMeasurements(research, chart) {
 }
 
 function temporalOrScopeIssue(research, chart) {
-  const researchCurrentness = research.qualifiers?.currentState || research.temporal?.state;
-  const chartCurrentness = chart.qualifiers?.currentState || chart.temporal?.state;
-  if (researchCurrentness && chartCurrentness && normalized(researchCurrentness) !== normalized(chartCurrentness)) return "Effective date or currentness differs";
+  const unspecified = new Set(["", "UNKNOWN", "UNSPECIFIED", "NOT_ESTABLISHED"]);
+  const researchCurrentness = normalized(research.qualifiers?.currentState || research.temporal?.state);
+  const chartCurrentness = normalized(chart.qualifiers?.currentState || chart.temporal?.state);
+  if (!unspecified.has(researchCurrentness) && !unspecified.has(chartCurrentness) && researchCurrentness !== chartCurrentness) return "Effective date or currentness differs";
   for (const field of ["interestClassRef", "denominatorRef", "shareClass", "controlScope"]) {
     const left = research.qualifiers?.[field];
     const right = chart.qualifiers?.[field];
