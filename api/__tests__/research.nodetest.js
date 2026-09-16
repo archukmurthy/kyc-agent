@@ -107,13 +107,14 @@ test("research: prompt, model and tools are built from the stored tenant config"
   assert.deepStrictEqual(calls.officers, [{ companyName: "Britannia Group Limited", jurisdiction: "GB", registrationNumber: "01234567" }]);
 });
 
-test("research: the cache key carries tenant, ownership type and registration number", async () => {
+test("research: the cache key carries tenant, country name, ownership type and registration number", async () => {
   const res = fakeRes();
   await research(req(researchBody()), res);
   const parts = {
     tenant: "acme",
     companyName: "Britannia Group Limited",
     jurisdiction: "GB",
+    countryName: "United Kingdom",
     entityType: "Corporate",
     ownershipType: "private_limited",
     registrationNumber: "01234567",
@@ -121,6 +122,26 @@ test("research: the cache key carries tenant, ownership type and registration nu
   assert.deepStrictEqual(calls.cacheGet, [parts]);
   assert.deepStrictEqual(calls.cacheSave[0].parts, parts);
   assert.strictEqual(calls.cacheSave[0].model, "claude-sonnet-4-5");
+});
+
+test("research: wolfsbergFields present is never read from or written to the cache", async () => {
+  const res = fakeRes();
+  await research(req(researchBody({ wolfsbergFields: { legal_name: "Britannia Group Limited" } })), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(calls.cacheGet.length, 0);
+  assert.strictEqual(calls.cacheSave.length, 0);
+  assert.strictEqual(calls.fetch.length, 1);
+});
+
+test("research: sourcedDocuments present is never read from or written to the cache", async () => {
+  const res = fakeRes();
+  await research(req(researchBody({
+    sourcedDocuments: [{ label: "AR", year: 2024, sourceUrl: "https://example.com/ar.pdf", sourceLabel: "Web" }],
+  })), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(calls.cacheGet.length, 0);
+  assert.strictEqual(calls.cacheSave.length, 0);
+  assert.strictEqual(calls.fetch.length, 1);
 });
 
 test("research: a cache hit is served without calling Anthropic", async () => {
