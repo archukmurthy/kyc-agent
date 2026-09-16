@@ -10,6 +10,7 @@ import {
 } from "../demoSession";
 import { listenForCustomerHandoff } from "../customerHandoff";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
+import AnalystCustomerRequests from "./AnalystCustomerRequests";
 import { sameCustomerCompany, writeCustomerDemoCase } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import "./customerOwnershipChart.css";
@@ -49,6 +50,7 @@ export default function CustomerCompanyPage() {
     <main className="ubo-customer-main ubo-customer-company-main">
       <div className="ubo-customer-intro"><span>Step 1 · Company</span><h1>Tell us about your company</h1><p>We’ll use these details to connect your ownership chart to the right company.</p></div>
       {assertionCount > 0 && <aside className="ubo-customer-connected" role="status"><strong>Connected to existing ownership research</strong><p>{assertionCount} source assertion{assertionCount === 1 ? "" : "s"} will continue with this same demo case.</p></aside>}
+      <AnalystCustomerRequests requests={researchResult?.analystCustomerRequests || []} />
       <form className="ubo-customer-card ubo-customer-company-form" action={CUSTOMER_OWNERSHIP_CHART_PATH} method="get" onSubmit={submit}>
         <label className="wide"><span>Company name *</span><input autoComplete="organization" value={draft.legalName} onChange={(event) => update("legalName", event.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <small className="ubo-customer-field-error">{errors.legalName}</small>}</label>
         <label><span>Registration number *</span><input value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} placeholder="For example, 00445790" />{errors.registrationNumber && <small className="ubo-customer-field-error">{errors.registrationNumber}</small>}</label>

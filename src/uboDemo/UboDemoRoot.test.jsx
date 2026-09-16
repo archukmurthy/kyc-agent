@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
 import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
@@ -47,7 +47,16 @@ beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, 
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
-test("country, ownership type and calculation inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /All policy routes/ })).toBeChecked(); });
+test("analyst journey progress is Company, Research and Review without an ownership stage", () => {
+  renderStart();
+  const progress = screen.getByLabelText("Demo journey progress");
+  expect(progress).toHaveTextContent("Company");
+  expect(progress).toHaveTextContent("Research");
+  expect(progress).toHaveTextContent("Review");
+  expect(progress).not.toHaveTextContent("Ownership");
+  expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
+});
+test("country, ownership type and effective ownership inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /Effective ownership/ })).toBeChecked(); });
 test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });
 test("ownership and calculation options map to stable semantic codes", () => { expect(OWNERSHIP_TYPES.map(({ code }) => code)).toEqual(["PRIVATE_LIMITED", "PUBLIC_LIMITED", "PUBLICLY_LISTED", "LLP", "PARTNERSHIP", "CHARITY", "TRUST", "CIC", "OTHER"]); expect(CALCULATION_METHODS.map(({ code }) => code)).toEqual(["POLICY_ALL_ROUTES", "EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"]); });
 
@@ -173,10 +182,11 @@ test("a missing or corrupt saved subject fails locally without a live fallback o
   expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
 });
 
-test("old sessions default to all policy routes and selector state survives refresh", () => {
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "" } }));
+test("old sessions default to effective ownership and selector state survives refresh", () => {
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "", calculationMethod: "POLICY_ALL_ROUTES" }, demoCase: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } }, researchResult: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } } }));
   renderStart();
-  expect(screen.getByLabelText(/All policy routes/)).toBeChecked();
+  expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).calculationDefaultVersion).toBe(2);
   fireEvent.click(screen.getByLabelText(/Control attribution/));
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
 });
@@ -207,6 +217,49 @@ test("Alice example uses one fixture operation and presents the recorded 10 plus
   expect(screen.getByText("At least one policy route is satisfied")).toBeInTheDocument();
   expect(window.fetch).toHaveBeenCalledTimes(1);
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("engine output and ownership structure start expanded, collapse independently, and use the intended graph defaults", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  const calculation = (await screen.findByRole("heading", { name: "How this result was calculated" })).closest("section");
+  const ownership = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
+  expect(within(calculation).getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(within(ownership).getByRole("button", { name: "Relevant to this company" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(ownership).getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(within(calculation).getByRole("button", { name: "Collapse" }));
+  expect(within(calculation).queryByText("Choose which calculation or control assessment to inspect.")).not.toBeInTheDocument();
+  expect(within(calculation).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(ownership).getByRole("button", { name: "Collapse" }));
+  expect(within(ownership).queryByTitle("Ownership structure")).not.toBeInTheDocument();
+  expect(within(ownership).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+});
+
+test("Ask customer records an existing open cause beside the unchanged source assertions", async () => {
+  const view = evaluatedSession.snapshots[0].view;
+  const selectedSession = {
+    ...evaluatedSession,
+    entityDirectory: [{ entityId: "target", party: { name: "Target Ltd" } }],
+    snapshots: [{ view: {
+      ...view,
+      graph: { ...projection, subjectEntityId: "target", nodes: [{ entityId: "target", primaryName: "Target Ltd" }] },
+      informationNeeds: [{ needId: "need-trust", concept: "TRUST_STATUS", status: "OPEN", reasonCode: "TRUST_STATUS_INCOMPLETE", requiredByRequirementIds: ["UBO-R11"], targetReference: { entityId: "target" }, affected: { relationshipIds: [] } }],
+      plan: { state: "SYSTEM_RESOLUTION", recommendedActions: [], customerActions: [] },
+      journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } },
+      snapshot: { decisionContent: { resolutionOptionsV2: [{ optionId: "option-trust", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-trust"], requirementIds: ["UBO-R11"], contentReadiness: "REQUIRES_POLICY_CONTENT" }] } },
+    } }],
+  };
+  window.fetch = jest.fn(() => okJson(selectedSession));
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  const ask = await screen.findByRole("button", { name: "Ask customer" });
+  fireEvent.click(ask);
+  expect(screen.getByRole("button", { name: "Added for customer" })).toHaveAttribute("aria-pressed", "true");
+  await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.analystCustomerRequests).toEqual([
+    expect.objectContaining({ informationNeedId: "need-trust", title: "Trust status", question: expect.stringMatching(/trust or similar legal arrangement/i), requirementIds: ["UBO-R11"] }),
+  ]));
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult;
+  expect(saved.candidateSources[0].candidateFacts).toEqual([fact]);
 });
 
 test("Alice direct and indirect rights survive Relevant/Full scope and Ownership/All filters by relationship ID", () => {

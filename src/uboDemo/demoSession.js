@@ -5,6 +5,7 @@ export const DEMO_SESSION_KEY = "ubo-demo.case.v1";
 export const LAB_REPLAY_KEY = "ubo-control-lab.discovery-replays.v1";
 export const REPLAY_LIBRARY_EXPORT_CONTRACT = "ubo-demo-replay-library-export-v1";
 export const MAX_SAVED_REPLAYS = 6;
+const CALCULATION_DEFAULT_VERSION = 2;
 
 export const CALCULATION_METHODS = Object.freeze([
   { code: "POLICY_ALL_ROUTES", label: "All policy routes", explanation: "Existing combined policy assessment." },
@@ -33,7 +34,7 @@ export function emptyDemoDraft() {
     referenceCaseId: "",
     sourceMode: "LIVE",
     replayId: "",
-    calculationMethod: "POLICY_ALL_ROUTES",
+    calculationMethod: "EFFECTIVE_INTEREST",
   };
 }
 
@@ -143,7 +144,16 @@ export function readDemoSession(storage = window.localStorage) {
   try {
     const parsed = JSON.parse(storage.getItem(DEMO_SESSION_KEY));
     if (parsed?.contractVersion !== DEMO_SESSION_CONTRACT || !parsed.draft) return null;
-    return { draft: { ...emptyDemoDraft(), ...parsed.draft }, demoCase: parsed.demoCase || null, researchResult: parsed.researchResult || null };
+    const migrateOldCombinedDefault = parsed.calculationDefaultVersion !== CALCULATION_DEFAULT_VERSION && parsed.draft.calculationMethod === "POLICY_ALL_ROUTES";
+    const calculationMethod = migrateOldCombinedDefault ? "EFFECTIVE_INTEREST" : parsed.draft.calculationMethod;
+    const withMigratedMethod = (value) => migrateOldCombinedDefault && value
+      ? { ...value, analysisContext: { ...(value.analysisContext || {}), calculationMethod: "EFFECTIVE_INTEREST" } }
+      : value || null;
+    return {
+      draft: { ...emptyDemoDraft(), ...parsed.draft, ...(calculationMethod ? { calculationMethod } : {}) },
+      demoCase: withMigratedMethod(parsed.demoCase),
+      researchResult: withMigratedMethod(parsed.researchResult),
+    };
   } catch (_) {
     return null;
   }
@@ -152,6 +162,7 @@ export function readDemoSession(storage = window.localStorage) {
 export function writeDemoSession({ draft, demoCase, researchResult }, storage = window.localStorage) {
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
+    calculationDefaultVersion: CALCULATION_DEFAULT_VERSION,
     savedAt: new Date().toISOString(),
     draft,
     demoCase,

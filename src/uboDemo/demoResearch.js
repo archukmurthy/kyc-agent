@@ -51,7 +51,7 @@ export function latestReviewView(session) {
   return session?.snapshots?.[session.snapshots.length - 1]?.view || null;
 }
 
-export function compactResearchResult(session, sourceMode, calculationMethod = "POLICY_ALL_ROUTES") {
+export function compactResearchResult(session, sourceMode, calculationMethod = "EFFECTIVE_INTEREST") {
   const replayCapture = session?.replayCapture || null;
   const entityLabels = Object.fromEntries((session?.entityDirectory || [])
     .filter(({ entityId, party }) => entityId && party?.name)
@@ -264,7 +264,7 @@ function basisPresentation(basis, relationshipById, entityName) {
   };
 }
 
-export function demoCalculationPeople(view, calculationMethod = "POLICY_ALL_ROUTES", entityLabels = {}) {
+export function demoCalculationPeople(view, calculationMethod = "EFFECTIVE_INTEREST", entityLabels = {}) {
   if (!view?.graph) return [];
   const nodes = new Map((view.graph.nodes || []).map((node) => [node.entityId, node.primaryName || node.name || node.entityId]));
   const entityName = (entityId) => entityLabels[entityId] || nodes.get(entityId) || entityId;

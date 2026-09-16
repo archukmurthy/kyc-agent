@@ -12,6 +12,7 @@ import {
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
+import AnalystCustomerRequests from "./AnalystCustomerRequests";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
 import "./customerOwnershipChart.css";
@@ -269,6 +270,7 @@ export default function CustomerOwnershipChartPage() {
     <CustomerJourneyHeader currentStep={2} />
     <main className="ubo-customer-main">
       <CompanyContext context={context} />
+      <AnalystCustomerRequests requests={context.researchResult?.analystCustomerRequests || []} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
       {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}

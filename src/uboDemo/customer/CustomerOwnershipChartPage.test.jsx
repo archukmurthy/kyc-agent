@@ -102,11 +102,13 @@ test("direct customer route renders from seeded company and case context", () =>
 });
 
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
-  seed({ researchResult: { candidateSources: [{ requestId: "request-1", candidateFacts: [
+  seed({ researchResult: { analystCustomerRequests: [{ requestId: "request-need-1", informationNeedId: "need-1", title: "Trust status", question: "Whether a trust is present in the ownership chain." }], candidateSources: [{ requestId: "request-1", candidateFacts: [
     { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Alice" }, object: { name: "Target Ltd" }, measurement: { type: "EXACT", value: 10 }, evidenceReferences: [{ referenceId: "ref-1" }] },
     { factId: "fact-2", type: "RELATIONSHIP", relationship: "VOTING_RIGHTS", subject: { name: "Bob" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, evidenceReferences: [{ referenceId: "ref-2" }] },
   ] }] } });
   render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: "Questions to help complete this review" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Trust status" })).toBeInTheDocument();
   expect(screen.getByText(/Registry assertions already available/i)).toBeInTheDocument();
   expect(screen.getByText(/2 assertions · click to inspect/)).toBeInTheDocument();
   fireEvent.click(screen.getByText(/Registry assertions already available/i));

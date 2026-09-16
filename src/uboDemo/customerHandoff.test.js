@@ -17,12 +17,14 @@ test("customer URL uses the consolidated same-host route and a configured deploy
 
 test("handoff keeps every normalized source assertion out of the URL and delivers it only after an exact-origin ready signal", async () => {
   const candidateSources = [{ sourceRecordId: "source-1", candidateFacts: [{ factId: "fact-1" }, { factId: "fact-2" }] }];
+  const analystCustomerRequests = [{ requestId: "request-need-1", informationNeedId: "need-1", title: "Trust status", question: "Is a trust present?" }];
   const payload = buildCustomerHandoff({
     draft: { legalName: "Target Ltd" },
     demoCase: { demoCaseId: "demo-1", company: { legalName: "Target Ltd" } },
-    researchResult: { candidateSources },
+    researchResult: { candidateSources, analystCustomerRequests },
   }, () => "2026-09-16T12:00:00.000Z");
   expect(payload.researchResult.candidateSources).toBe(candidateSources);
+  expect(payload.researchResult.analystCustomerRequests).toBe(analystCustomerRequests);
 
   const listeners = {};
   const customerWindow = { postMessage: jest.fn() };

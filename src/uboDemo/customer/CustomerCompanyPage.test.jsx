@@ -67,12 +67,19 @@ test("a connected analyst case keeps its case identity and every source assertio
     contractVersion: "ubo-demo-browser-session-v1",
     draft: { legalName: "ASDA Delivery Limited", registrationNumber: "01396513", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "CASE-63" },
     demoCase: { demoCaseId: "analyst-case-63", referenceCaseId: "CASE-63", company: { legalName: "ASDA Delivery Limited", registrationNumber: "01396513", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
-    researchResult: { candidateSources: [{ candidateFacts: [{ factId: "fact-1" }, { factId: "fact-2" }] }] },
+    researchResult: {
+      candidateSources: [{ candidateFacts: [{ factId: "fact-1" }, { factId: "fact-2" }] }],
+      analystCustomerRequests: [{ requestId: "request-need-1", informationNeedId: "need-1", title: "Trust status", question: "Whether a trust is present in the ownership chain.", about: [{ legalName: "ASDA Delivery Limited" }] }],
+    },
   }));
   const { container } = render(<CustomerCompanyPage />);
   expect(screen.getByText(/2 source assertions will continue/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Questions to help complete this review" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Trust status" })).toBeInTheDocument();
+  expect(screen.getByText(/Whether a trust is present/)).toBeInTheDocument();
   fireEvent.submit(container.querySelector("form"));
   const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
   expect(saved.demoCase.demoCaseId).toBe("analyst-case-63");
   expect(saved.researchResult.candidateSources[0].candidateFacts.map(({ factId }) => factId)).toEqual(["fact-1", "fact-2"]);
+  expect(saved.researchResult.analystCustomerRequests[0].informationNeedId).toBe("need-1");
 });

@@ -20,7 +20,7 @@ function DemoHeader({ onStartNew }) {
 }
 
 function DemoProgress({ research }) {
-  return <ol className="ubo-demo-progress" aria-label="Demo journey progress"><li className={research ? "complete" : "current"}><span>1</span>Company</li><li className={research ? "current" : ""}><span>2</span>Research</li><li><span>3</span>Ownership</li><li><span>4</span>Review</li></ol>;
+  return <ol className="ubo-demo-progress" aria-label="Demo journey progress"><li className={research ? "complete" : "current"}><span>1</span>Company</li><li className={research ? "current" : ""}><span>2</span>Research</li><li><span>3</span>Review</li></ol>;
 }
 
 function FieldError({ id, children }) { return <p className="ubo-demo-error" id={id} role="alert">{children}</p>; }
@@ -104,7 +104,7 @@ function Identity({ entity }) {
   return <span><strong>{entity.legalName}</strong>{entity.registrationNumber ? <> · {entity.registrationNumber}</> : null}</span>;
 }
 
-function OpenQuestions({ view, result, onShowOnMap }) {
+function OpenQuestions({ view, result, customerRequests, onShowOnMap, onToggleCustomerRequest }) {
   const items = accountOpenItems(view, result);
   const currentBundles = executableCustomerBundles(view);
   const currentQuestions = demoOpenQuestions(view).filter(({ state }) => state === "CURRENT_EXECUTABLE");
@@ -113,12 +113,12 @@ function OpenQuestions({ view, result, onShowOnMap }) {
   return <aside className="ubo-demo-questions"><span className="ubo-demo-eyebrow">Your next step</span><h2>Open questions</h2>
     {currentCustomerCount === 0 ? <div className="ubo-demo-no-questions"><strong>Nothing needed from you right now.</strong><p>{items.length ? `${items.length} open cause${items.length === 1 ? " is" : "s are"} recorded below so you can see what happens next. None is an executable customer task in the current planner wave.` : "We are still reviewing parts of the ownership structure."}</p></div> : currentQuestions.map((question) => <section key={`${question.kind}:${question.informationNeedIds.join(":")}`}><span className="ubo-demo-question-kind">Needed from you now</span><h3>{question.title}</h3><p>{question.body}</p></section>)}
     <div className="ubo-demo-open-accounting" aria-label="Open cause accounting">
-      {items.map((item) => <section id={`demo-need-${item.needId}`} key={item.needId} className={`ubo-demo-question-card state-${item.disposition.code.toLowerCase()}`} data-information-need-id={item.needId}>
+      {items.map((item) => { const selected = customerRequests.some(({ informationNeedId }) => informationNeedId === item.needId); return <section id={`demo-need-${item.needId}`} key={item.needId} className={`ubo-demo-question-card state-${item.disposition.code.toLowerCase()}`} data-information-need-id={item.needId}>
         <span className="ubo-demo-question-kind">{item.disposition.label}</span><h3>{item.title}</h3>
         <dl><dt>About</dt><dd>{item.about.map((entity) => <Identity key={entity.entityId || entity.legalName} entity={entity} />)}</dd><dt>Scope</dt><dd>{item.scope}</dd><dt>What is missing</dt><dd>{item.missing}</dd><dt>Why it matters</dt><dd>{item.disposition.summary} {item.why}</dd></dl>
         <details><summary>Addresses and possible routes</summary><p><strong>Requirements:</strong> {item.requirementIds.join(", ") || "No requirement ID supplied"}</p>{item.routes.length ? <ul>{item.routes.map((route, index) => <li key={`${route.actor}:${route.action}:${index}`}><strong>{route.state === "CURRENT" ? "Current" : route.state === "NOT_ENABLED" ? "Not enabled" : "Available later"}</strong> · {String(route.actor || "Unassigned").replaceAll("_", " ")} · {String(route.action || "No action").replaceAll("_", " ")}{route.requiredSignoffs?.length ? ` · sign-off ${route.requiredSignoffs.join(", ")}` : ""}</li>)}</ul> : <p>No resolution route is currently recorded.</p>}</details>
-        {item.targetChoices.length > 1 ? <div className="ubo-demo-map-targets"><span>Show on map:</span>{item.targetChoices.map((target) => <button type="button" key={target.entityId} onClick={() => selectTarget(item, target.entityId)}>{target.label}</button>)}</div> : <button className="ubo-demo-map-link" type="button" onClick={() => onShowOnMap(item.selection, item.needId)}>Show on map</button>}
-      </section>)}
+        <div className="ubo-demo-question-actions">{item.targetChoices.length > 1 ? <div className="ubo-demo-map-targets"><span>Show on map:</span>{item.targetChoices.map((target) => <button type="button" key={target.entityId} onClick={() => selectTarget(item, target.entityId)}>{target.label}</button>)}</div> : <button className="ubo-demo-map-link" type="button" onClick={() => onShowOnMap(item.selection, item.needId)}>Show on map</button>}<button className="ubo-demo-ask-customer" type="button" aria-pressed={selected} onClick={() => onToggleCustomerRequest(item)}>{selected ? "Added for customer" : "Ask customer"}</button></div>
+      </section>; })}
     </div>
     {view?.journeyProjection?.internalReview && ((view.journeyProjection.internalReview.actions || []).length + (view.journeyProjection.internalReview.requirements || []).length) > 0 && <p className="ubo-demo-internal">Internal review is still in progress. This is not a customer question.</p>}
     {items.some(({ disposition }) => disposition.code === "INTERNAL_REVIEW") && <div className="ubo-demo-llp-explainer"><strong>Why LLP review is still open</strong><p>Companies House records the parties and source rights, but an LLP control conclusion can depend on how the partnership agreement operates. This is a prototype policy-assumption limitation and internal interpretation step, not a question for the customer right now.</p><details><summary>Review references</summary><p>Review-only working assumption A-06-WA-01 · required sign-off A-06.</p></details></div>}
@@ -136,11 +136,12 @@ function GraphControls({ scope, dimension, onScope, onDimension, visibleGraph, t
 function CalculationPanel({ view, result, method, onMethodChange, onShowPath }) {
   const people = useMemo(() => demoCalculationPeople(view, method, result.entityLabels), [view, method, result.entityLabels]);
   const [personId, setPersonId] = useState(() => people[0]?.personEntityId || "");
+  const [expanded, setExpanded] = useState(true);
   useEffect(() => { if (!people.some(({ personEntityId }) => personEntityId === personId)) setPersonId(people[0]?.personEntityId || ""); }, [people, personId]);
   const person = people.find(({ personEntityId }) => personEntityId === personId) || people[0];
   return <section className="ubo-demo-calculation" aria-labelledby="demo-calculation-title">
-    <div className="ubo-demo-calculation-heading"><div><span className="ubo-demo-eyebrow">Recorded engine output</span><h2 id="demo-calculation-title">How this result was calculated</h2></div>{people.length > 1 && <label>Person<select value={person?.personEntityId || ""} onChange={(event) => setPersonId(event.target.value)}>{people.map((item) => <option key={item.personEntityId} value={item.personEntityId}>{item.personName}</option>)}</select></label>}</div>
-    <CalculationMethodSelector compact value={method} onChange={onMethodChange} />
+    <div className="ubo-demo-calculation-heading"><div><span className="ubo-demo-eyebrow">Recorded engine output</span><h2 id="demo-calculation-title">How this result was calculated</h2></div><div className="ubo-demo-heading-actions">{people.length > 1 && <label>Person<select value={person?.personEntityId || ""} onChange={(event) => setPersonId(event.target.value)}>{people.map((item) => <option key={item.personEntityId} value={item.personEntityId}>{item.personName}</option>)}</select></label>}<button type="button" aria-expanded={expanded} aria-controls="demo-calculation-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div></div>
+    {expanded && <div id="demo-calculation-content"><CalculationMethodSelector compact value={method} onChange={onMethodChange} />
     {!person ? <p className="ubo-demo-calculation-empty">No person-level calculation is recorded for the current result.</p> : <div className="ubo-demo-calculation-body">
       <div className="ubo-demo-result-pair"><div><span>Selected-method result — demo</span><strong>{person.selectedResultLabel}</strong></div><div><span>Overall policy result</span><strong>{person.overallPolicyLabel}</strong></div></div>
       {person.selectedBases.length === 0 ? <p className="ubo-demo-calculation-empty">This assessment route is not supported by the available recorded facts. No alternative fact or percentage has been inferred.</p> : person.selectedBases.map((basis) => <article className="ubo-demo-basis" key={basis.basisId}>
@@ -152,21 +153,24 @@ function CalculationPanel({ view, result, method, onMethodChange, onShowPath }) 
         <details><summary>Trace references</summary><p>Basis {basis.basisId} · Method {basis.method} · Relationship references retained in the immutable snapshot.</p></details>
       </article>)}
       <p className="ubo-demo-calculation-note">Changing this inspection focus does not alter the overall policy assessment, immutable snapshot, open questions or source facts.</p>
-    </div>}
+    </div>}</div>}
   </section>;
 }
 
-function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, onDisplayChange, onCalculationMethodChange }) {
+function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest }) {
   const view = result.view;
   const pending = (result.decisionTargets?.candidateParties?.length || 0) + (result.decisionTargets?.candidateClaims?.length || 0);
   const scope = result.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT;
   const dimension = result.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL;
   const [selectionCommand, setSelectionCommand] = useState(null);
+  const [graphExpanded, setGraphExpanded] = useState(true);
+  const customerRequests = result.analystCustomerRequests || [];
   const sourceRelevantIds = useMemo(() => demoSourceRelevantEntityIds(view?.graph, result), [view?.graph, result]);
   const filteredGraph = useMemo(() => projectDemoGraph(view?.graph, { scope, dimension, additionalRelevantEntityIds: sourceRelevantIds }), [view?.graph, scope, dimension, sourceRelevantIds]);
   const reviewPresentations = useMemo(() => demoReviewPresentations(view, result), [view, result]);
   const showOnMap = (selection, needId) => {
     if (!selection) return;
+    setGraphExpanded(true);
     onDisplayChange({ scope: DEMO_GRAPH_SCOPES.RELEVANT, dimension: DEMO_GRAPH_DIMENSIONS.ALL });
     setSelectionCommand({ commandId: `${needId}:${Date.now()}`, selection });
     window.setTimeout(() => document.querySelector(".ubo-demo-graph-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -177,14 +181,15 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
   }, []);
   const showCalculationPath = (relationshipIds, pathId) => {
     if (!relationshipIds?.length) return;
+    setGraphExpanded(true);
     onDisplayChange({ scope: DEMO_GRAPH_SCOPES.RELEVANT, dimension: DEMO_GRAPH_DIMENSIONS.ALL });
     setSelectionCommand({ commandId: `${pathId}:${Date.now()}`, selection: { kind: "path", id: pathId, relationshipIds } });
     window.setTimeout(() => document.querySelector(".ubo-demo-graph-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   };
-  const calculationMethod = result.analysisContext?.calculationMethod || demoCase.analysisContext?.calculationMethod || "POLICY_ALL_ROUTES";
+  const calculationMethod = result.analysisContext?.calculationMethod || demoCase.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST";
   return <main className="ubo-demo-results">
     <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : "LIVE RESEARCH — PROVISIONAL DEMO RESULT"}</span></header>
-    {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div></div><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></section><OpenQuestions view={view} result={result} onShowOnMap={showOnMap} /></div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><OpenQuestions view={null} result={result} onShowOnMap={() => {}} /></div></>}
+    {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} /></div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} /></div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button><button className="ubo-demo-primary" onClick={onSwitchCustomer}>Switch to customer view</button></div>
     {customerSwitchState && <p className={`ubo-demo-handoff-status ${customerSwitchState.kind}`} role="status">{customerSwitchState.message}</p>}
   </main>;
@@ -282,13 +287,32 @@ export default function UboDemoRoot() {
   };
   const loadCalculationExample = (fixtureId) => {
     const alice = fixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28;
-    const nextDraft = { ...draft, legalName: alice ? "Example Trading Ltd" : "V2 Review Customer Limited", registrationNumber: alice ? "DEMO0028" : "DEMO6040", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", sourceMode: "FIXTURE", replayId: "", calculationMethod: alice ? "EFFECTIVE_INTEREST" : "POLICY_ALL_ROUTES", demoFixtureId: fixtureId };
+    const nextDraft = { ...draft, legalName: alice ? "Example Trading Ltd" : "V2 Review Customer Limited", registrationNumber: alice ? "DEMO0028" : "DEMO6040", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", sourceMode: "FIXTURE", replayId: "", calculationMethod: "EFFECTIVE_INTEREST", demoFixtureId: fixtureId };
     setDraft(nextDraft); setDemoCase(createDemoCase(nextDraft)); setErrors({}); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: "FIXTURE" }); navigateDemo(DEMO_RESEARCH_PATH);
   };
   const changeCalculationMethod = (calculationMethod) => {
     setDraft((current) => ({ ...current, calculationMethod }));
     setDemoCase((current) => current ? ({ ...current, analysisContext: { ...(current.analysisContext || {}), calculationMethod } }) : current);
     setResearchResult((current) => current ? ({ ...current, analysisContext: { ...(current.analysisContext || {}), calculationMethod } }) : current);
+  };
+  const toggleCustomerRequest = (item) => {
+    setResearchResult((current) => {
+      if (!current) return current;
+      const requests = current.analystCustomerRequests || [];
+      const existing = requests.some(({ informationNeedId }) => informationNeedId === item.needId);
+      const next = existing ? requests.filter(({ informationNeedId }) => informationNeedId !== item.needId) : [...requests, {
+        contractVersion: "ubo-demo-analyst-customer-request-v1",
+        requestId: `analyst-customer-request:${item.needId}`,
+        informationNeedId: item.needId,
+        title: item.title,
+        question: item.missing,
+        scope: item.scope,
+        about: item.about,
+        requirementIds: item.requirementIds,
+        selectedAt: new Date().toISOString(),
+      }];
+      return { ...current, analystCustomerRequests: next };
+    });
   };
   const runAgain = (mode = draft.sourceMode) => {
     let nextDraft = { ...draft, sourceMode: mode };
@@ -337,7 +361,7 @@ export default function UboDemoRoot() {
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} />;
   else if (researchError) content = <ResearchError error={researchError} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
-  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
+  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
   else content = <ResearchProgress company={demoCase.company} />;
   return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress research={research} />{content}<footer className="ubo-demo-footer">Demo experience · Browser-local session · UK Corporate 1.6-RC review path</footer></div>;
 }
