@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const React = require("react");
 const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement } = require("../OwnershipGraph");
 const { fixtures, projection, renderGraph } = require("./testHarness");
 
@@ -150,6 +151,31 @@ test("accessible summary names the graph and describes its semantic state", () =
     assert.equal(rendered.container.querySelector("svg").getAttribute("aria-label"), "Ownership and control graph for Northstar Payments Ltd");
     assert.match(rendered.container.querySelector(".ug-sr-only").textContent, /customer subject/);
     assert.ok(rendered.container.querySelector("[role='toolbar'][aria-label='Graph navigation controls']"));
+  } finally { rendered.cleanup(); }
+});
+
+test("demo composition collapses the idle inspector and uses a fixed, bounded inspection viewport", () => {
+  const rendered = renderGraph(projection("UI07"), { collapseIdleInspector: true, fixedViewportHeight: true, boundedViewportNavigation: true, height: 640 });
+  try {
+    const workspace = rendered.container.querySelector(".ug-workspace");
+    const viewport = rendered.container.querySelector(".ug-canvas-scroll");
+    assert.ok(workspace.classList.contains("details-collapsed"));
+    assert.equal(rendered.container.querySelector(".ug-detail-panel"), null);
+    assert.doesNotMatch(rendered.container.textContent, /The subject remains visible while ownership\/control information is incomplete/);
+    assert.equal(viewport.style.height, "640px");
+    viewport.scrollLeft = 300;
+    viewport.scrollTop = 400;
+    const canvas = rendered.container.querySelector("svg.ug-canvas");
+    React.act(() => {
+      canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }));
+      canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 160 }));
+    });
+    assert.equal(viewport.scrollTop, 340, "dragging down navigates toward the top of the bounded scroll area");
+    React.act(() => canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 40 })));
+    assert.equal(viewport.scrollTop, 460, "dragging up navigates toward the bottom of the bounded scroll area");
+    rendered.click(rendered.container.querySelector(".ug-node"));
+    assert.equal(workspace.classList.contains("details-collapsed"), false);
+    assert.ok(rendered.container.querySelector(".ug-detail-panel"));
   } finally { rendered.cleanup(); }
 });
 

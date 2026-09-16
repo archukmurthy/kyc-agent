@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider } = require("../providers");
+const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit } = require("../providers");
 const { runIndependentVerification, runSemanticExtraction, supportState } = require("../extractor");
 const { DeterministicProfileDiscoveryProvider, PROFILE_DISCOVERY_SOURCE } = require("./profileDiscoveryFixture");
 
@@ -18,6 +18,43 @@ test("provider boundary is substitutable and does not contain domain persistence
   const provider = new SemanticExtractionProvider();
   await assert.rejects(() => provider.extract({}), /must be implemented/);
   assert.equal(Object.prototype.hasOwnProperty.call(provider, "model"), false);
+});
+
+test("explicit percentage-unit aliases normalize before Evidence validation and retain their original representation", () => {
+  for (const alias of ["%", "percent", "percentage", "percentage points"]) {
+    const normalized = normalizeRelationshipUnit("percentage", alias);
+    assert.equal(normalized.unit, "percentage_points");
+    assert.equal(normalized.normalization.originalUnit, alias);
+  }
+  const relationship = mapTypedRelationshipCandidate({
+    fact_index: 0,
+    direction_established: true,
+    relationship_type: "ECONOMIC_OWNERSHIP",
+    subject_party_type: "natural_person",
+    subject_json: JSON.stringify({ name: "Alice Morgan" }),
+    object_party_type: "legal_entity",
+    object_json: JSON.stringify({ name: "Vodafone Limited" }),
+    value_kind: "EXACT",
+    measurement_type: "percentage",
+    exact_value: 30,
+    unit: "%",
+    temporal_state: "current",
+    temporal_json: "{}",
+    source_specific_metadata_json: "{}",
+    qualifications_json: "[]",
+  });
+  assert.equal(relationship.value.unit, "percentage_points");
+  assert.deepEqual(relationship.sourceSpecificMetadata.valueUnitNormalization, {
+    kind: "EXPLICIT_PERCENTAGE_UNIT_ALIAS",
+    originalUnit: "%",
+    canonicalUnit: "percentage_points",
+  });
+});
+
+test("blank, ambiguous and non-percentage units are never guessed into percentage points", () => {
+  assert.equal(normalizeRelationshipUnit("percentage", "").unit, undefined);
+  assert.equal(normalizeRelationshipUnit("percentage", "shares").unit, "shares");
+  assert.equal(normalizeRelationshipUnit("absolute_quantity", "%").unit, "%");
 });
 
 test("independent verification provider is not anchored on the proposed answer", async () => {

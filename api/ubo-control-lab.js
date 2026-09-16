@@ -37,6 +37,7 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
+const { autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -48,6 +49,7 @@ const OPERATIONS = Object.freeze({
   COMPARE_SNAPSHOTS: "COMPARE_SNAPSHOTS",
   START_REVIEW_FIXTURE: "START_REVIEW_FIXTURE",
   START_REVIEW_LIVE: "START_REVIEW_LIVE",
+  START_DEMO_REVIEW_LIVE: "START_DEMO_REVIEW_LIVE",
   START_REVIEW_REPLAY: "START_REVIEW_REPLAY",
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
   CHANGE_REVIEW_PROFILE: "CHANGE_REVIEW_PROFILE",
@@ -137,6 +139,22 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
+async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body } = {}) {
+  const baseline = await startLive({
+    ...payload,
+    transport: { invoke: ({ body }) => invokeLegacyDiscovery(prepareDiscoveryBody(body)) },
+  });
+  const prepared = demoProfileReconciliation
+    ? prepareDemoReplayRecord(baseline.replayCapture)
+    : { replayRecord: baseline.replayCapture, reconciliation: null };
+  const successor = startReviewReplay({ replayRecord: prepared.replayRecord, profileId: payload?.profileId || "NOT_PROVIDED" });
+  successor.sourceState = "LIVE";
+  successor.sourceLabel = `Live Discovery · ${successor.companyContext.legalEntityName}`;
+  successor.replayCapture = baseline.replayCapture;
+  if (prepared.reconciliation) successor.demoProfileReconciliation = prepared.reconciliation;
+  return successor;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === "GET") return send(res, 200, {
     ...fixtureCatalogue(),
@@ -174,16 +192,13 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_REVIEW_REPLAY:
         return send(res, 200, startReviewReplay(input.payload));
       case OPERATIONS.START_REVIEW_LIVE: {
-        const baseline = await startLive({
-          ...input.payload,
-          transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
-        });
-        const successor = startReviewReplay({ replayRecord: baseline.replayCapture, profileId: input.payload?.profileId || "NOT_PROVIDED" });
-        successor.sourceState = "LIVE";
-        successor.sourceLabel = `Live Discovery · ${successor.companyContext.legalEntityName}`;
-        successor.replayCapture = baseline.replayCapture;
-        return send(res, 200, successor);
+        return send(res, 200, await startSuccessorLive(input.payload));
       }
+      case OPERATIONS.START_DEMO_REVIEW_LIVE:
+        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, {
+          demoProfileReconciliation: true,
+          prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
+        })));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:
         return send(res, 200, applyReviewDecisions(input.payload));
       case OPERATIONS.CHANGE_REVIEW_PROFILE:

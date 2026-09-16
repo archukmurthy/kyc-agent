@@ -105,6 +105,7 @@ async function runUboFramework({ entityName, registrationNumber, jurisdiction, t
     evidence: expanded.evidence,
     investigationLog: expanded.investigationLog,
     searchEvents: expanded.searchEvents,
+    expansion: expanded.expansion,
     resolutions: resolutions.decisions,
     confidence: { ownership: determination.ubos.map((ubo) => ({ personId: ubo.personId, confidence: 100 })) },
     missingInformation: [...expanded.missingInformation, ...ownership.unresolvedPaths, ...unrelatedStatements],
