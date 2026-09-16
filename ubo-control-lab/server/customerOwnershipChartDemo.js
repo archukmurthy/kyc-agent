@@ -305,25 +305,27 @@ function graphDimension(relationship) {
 function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
   const nodesById = new Map();
+  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
+  const isChartSubject = (party) => normalizedPartyName(party?.name) === normalizedPartyName(company.legalName);
   const addNode = (party, semantics = []) => {
-    const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
-    const entityId = graphEntityId(party);
+    const graphParty = isChartSubject(party) ? { ...party, ...companyParty } : party;
+    const name = graphParty?.name || graphParty?.sourcePartySnapshot?.description || "Unknown party";
+    const entityId = graphEntityId(graphParty);
     const current = nodesById.get(entityId);
     const nextSemantics = [...new Set([...(current?.semantics || []), ...semantics])];
     nodesById.set(entityId, {
       entityId,
       displayName: current?.displayName || name,
-      category: current?.category || graphCategory(party),
-      jurisdiction: current?.jurisdiction || party?.jurisdiction || null,
+      category: current?.category || graphCategory(graphParty),
+      jurisdiction: current?.jurisdiction || graphParty?.jurisdiction || null,
       semantics: nextSemantics,
     });
     return entityId;
   };
-  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
   const subjectEntityId = addNode(companyParty, ["SUBJECT"]);
   const projectedRelationships = relationships.map((fact) => {
     const sourceEntityId = addNode(fact.subject, fact.subject?.entityType === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
-    const targetEntityId = addNode(fact.object, normalizedGraphName(fact.object?.name) === normalizedGraphName(company.legalName) ? ["SUBJECT"] : []);
+    const targetEntityId = addNode(fact.object, isChartSubject(fact.object) ? ["SUBJECT"] : []);
     return {
       relationshipId: fact.factId,
       sourceEntityId,
@@ -412,7 +414,13 @@ function chartEntityProfile(ownershipType) {
 }
 
 function normalizedPartyName(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\bPUBLIC\s+LIMITED\s+COMPANY\b/g, "PLC")
+    .replace(/\bLIMITED\b/g, "LTD")
+    .replace(/[^A-Z0-9]+/g, "");
 }
 
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {

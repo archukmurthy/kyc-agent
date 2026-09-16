@@ -185,6 +185,32 @@ test("source visualization groups repeated chart names without inventing a UBO c
   assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
 });
 
+test("Bettercomms subject punctuation variant maps to one customer node in source and evaluated graphs", () => {
+  const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "09000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
+  const holdco = { name: "Better Holdco Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} };
+  const extractedSubject = { name: "Better Comms VOIP Ltd", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} };
+  const candidateFact = {
+    factId: "better-holdco-to-comms",
+    type: "RELATIONSHIP",
+    subject: holdco,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: extractedSubject,
+    measurement: { type: "EXACT", value: 100 },
+    qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "bettercomms-chart" }],
+  };
+  const artifact = { artifactId: "artifact-bettercomms-punctuation", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" };
+  const sourceGraph = buildSourceGraph([candidateFact], company, artifact, "bettercomms-punctuation");
+  const analysis = buildChartAnalysis({ candidateFacts: [candidateFact], operationEvidenceReferences: [], issues: [], company, artifact, requestId: "bettercomms-punctuation" });
+
+  assert.equal(sourceGraph.nodes.length, 2);
+  assert.equal(sourceGraph.nodes.filter(({ semantics }) => semantics.includes("SUBJECT")).length, 1);
+  assert.equal(sourceGraph.relationships[0].targetEntityId, sourceGraph.subject.entityId);
+  assert.equal(sourceGraphCoverage(sourceGraph).state, "CONNECTED");
+  assert.equal(analysis.view.graph.nodes.length, 2);
+  assert.equal(analysis.view.graph.relationships[0].objectEntityId, analysis.view.graph.subjectEntityId);
+});
+
 test("a Vodafone source map that stops above the customer is marked incomplete instead of presented as a complete chart", () => {
   const company = { legalName: "Vodafone Limited", countryCode: "GB" };
   const party = (name) => ({ name, entityType: "LEGAL_ENTITY", externalIdentifiers: [], sourcePartySnapshot: {} });
