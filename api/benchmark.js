@@ -19,12 +19,11 @@
 // GET  /api/benchmark?tenant=<id>&companyName=...&countryCode=GB&entityType=Corporate&ownershipType=private_limited
 //   (single-company convenience form for quick testing)
 
-const storage = require("../lib/storage");
-const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { runResearchPipeline } = require("../src/pipeline");
 const { getRequirements } = require("../documentRequirements.js");
 const { persistBenchmarkEntity } = require("../lib/persist");
+const { readConfigForTenant } = require("./config");
 
 const MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 16000;
@@ -71,33 +70,6 @@ const COUNTRY_NAMES = {
   TR: "Turkey", IL: "Israel", NZ: "New Zealand", PK: "Pakistan", BD: "Bangladesh",
   LK: "Sri Lanka", AM: "Armenia",
 };
-
-// ── Tenant config (mirrors api/config.js readConfig/seedTenant) ──────────────
-function configKey(tenant) {
-  return `config:${tenant}`;
-}
-
-async function seedTenant(tenant) {
-  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
-  seeded._tenantId = tenant;
-  await storage.set(configKey(tenant), seeded);
-  return seeded;
-}
-
-async function readConfig(tenant) {
-  let stored = await storage.get(configKey(tenant));
-  if (!stored) return seedTenant(tenant);
-  if (tenant === "nium") {
-    const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
-    if (!hasLicences) {
-      const fresh = buildDefaultConfig(tenant);
-      fresh._tenantId = tenant;
-      await storage.set(configKey(tenant), fresh);
-      return fresh;
-    }
-  }
-  return stored;
-}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -229,7 +201,10 @@ module.exports = async function handler(req, res) {
   const tenant = getTenantIdFromRequest(req);
 
   try {
-    const tenantConfig = await readConfig(tenant);
+    const tenantConfig = await readConfigForTenant(tenant);
+    if (!tenantConfig) {
+      return res.status(404).json({ error: "tenant_not_found" });
+    }
 
     // Build the company list from POST body or GET query.
     let companies;

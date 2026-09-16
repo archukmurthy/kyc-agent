@@ -261,3 +261,7 @@ module.exports = async function handler(req, res) {
 
 // Test seam only.
 module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
+
+// Shared reader for other server modules (api/benchmark.js, api/research.js).
+// Returns null for an unknown tenant — callers decide how to respond.
+module.exports.readConfigForTenant = readConfig;
