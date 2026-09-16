@@ -218,3 +218,29 @@ test("a real send passes the token link to the provider", async (t) => {
   assert.match(sent.text, /dossierToken=/);
   assert.doesNotMatch(sent.text, /dossierId=/);
 });
+
+test("a provider error reports a fixed code, never the raw provider response", async (t) => {
+  const { handler } = setup(t, {
+    sendEmail: async () => ({ ok: false, data: { message: "Domain not verified", apiKeyPrefix: "re_live_secret123" } }),
+  });
+  process.env.RESEND_API_KEY = "test-key";
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 502);
+  assert.deepStrictEqual(res.body.error, "email_send_failed");
+  assert.strictEqual(res.body.details, undefined);
+  assert.strictEqual(JSON.stringify(res.body).includes("re_live_secret123"), false);
+});
+
+test("a thrown send error reports a fixed code, never the raw error text", async (t) => {
+  const { handler } = setup(t, {
+    sendEmail: async () => { throw new Error("connect ECONNREFUSED 10.0.0.1:443 — internal detail"); },
+  });
+  process.env.RESEND_API_KEY = "test-key";
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 502);
+  assert.deepStrictEqual(res.body.error, "email_send_failed");
+  assert.strictEqual(res.body.message, undefined);
+  assert.strictEqual(JSON.stringify(res.body).includes("ECONNREFUSED"), false);
+});

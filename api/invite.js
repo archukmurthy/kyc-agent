@@ -204,11 +204,13 @@ ${brandName} Onboarding Team`;
   try {
     const { ok, data } = await _deps.sendEmail({ apiKey, from, to: email, subject, text });
     if (!ok) {
+      // The raw provider response can carry account/config details — log it
+      // server-side only, never in the client response.
+      console.error("[invite] email provider error:", data);
       return res.status(502).json({
         sent: false,
         simulated: false,
-        error: "Email provider error",
-        details: data,
+        error: "email_send_failed",
         inviteId,
         dossierId: canonicalDossierId,
         link,
@@ -227,11 +229,11 @@ ${brandName} Onboarding Team`;
       body: text,
     });
   } catch (err) {
+    console.error("[invite] email send failed:", err.message);
     return res.status(502).json({
       sent: false,
       simulated: false,
-      error: "Email send failed",
-      message: err.message,
+      error: "email_send_failed",
       inviteId,
       dossierId: canonicalDossierId,
       link,
