@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -81,6 +81,12 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.chartAnalysis.contractVersion, "ubo-demo-chart-analysis-v1");
   assert.equal(result.chartAnalysis.state, "EVALUATED");
   assert.ok(result.chartAnalysis.view.graph.relationships.length >= 1);
+  assert.equal(result.chartAnalysis.view.qualifications.length, 1);
+  const effective = result.chartAnalysis.view.qualificationBases.find(({ route }) => route === "EFFECTIVE_INTEREST");
+  assert.equal(effective.assessmentState, "INDETERMINATE");
+  assert.equal(effective.reasonCode, "NO_DEFENSIBLE_KNOWN_NUMERIC_CONTRIBUTION");
+  assert.equal(effective.orderedPathReferences.length, 1);
+  assert.deepEqual(effective.orderedPathReferences[0].reasons, ["UNKNOWN_TEMPORAL_STATE"]);
   assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").measurement.value, 75);
   assert.equal(result.comparison, "NOT_PERFORMED");
 });
@@ -185,6 +191,32 @@ test("source visualization groups repeated chart names without inventing a UBO c
   assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
 });
 
+test("saved structured chart facts re-enter the shared engine without document bytes or a provider call", () => {
+  const party = (name, entityType, id) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [{ namespace: entityType === "NATURAL_PERSON" ? "DEMO_PERSON" : "COMPANIES_HOUSE_COMPANY_NUMBER", value: id, jurisdiction: "GB" }], sourcePartySnapshot: {} });
+  const alice = party("Alice Morgan", "NATURAL_PERSON", "ALICE-1");
+  const holdco = party("Overseas HoldCo", "LEGAL_ENTITY", "HOLDCO-1");
+  const subject = party("Example Trading Ltd", "LEGAL_ENTITY", "DEMO0028");
+  const relationship = (factId, from, to, value) => ({ factId, type: "RELATIONSHIP", subject: from, relationship: "ECONOMIC_OWNERSHIP", object: to, measurement: { type: "EXACT", value }, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" }, evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-alice" }] });
+  const savedResult = {
+    contractVersion: "ubo-demo-customer-ownership-chart-result-v1",
+    company: { legalName: "Example Trading Ltd", registrationNumber: "DEMO0028", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-alice", digest: "abc123", capturedAt: "2026-09-16T10:00:00.000Z" },
+    candidateFacts: [relationship("direct", alice, subject, 10), relationship("upper", alice, holdco, 60), relationship("lower", holdco, subject, 30)],
+    ubo: { operationEvidenceReferences: [], issues: [] },
+    chartAnalysis: { state: "EVALUATED", view: { qualifications: [], qualificationBases: [] } },
+  };
+  const refreshed = reevaluateSavedCustomerOwnershipChart({
+    operation: "REEVALUATE_SAVED_EXTRACTION",
+    demoContext: { demoCaseId: "alice-case", company: savedResult.company },
+    savedResult,
+  });
+  const effective = refreshed.chartAnalysis.view.qualificationBases.find(({ route }) => route === "EFFECTIVE_INTEREST");
+  assert.equal(effective.recordedCalculation.value.value, "28");
+  assert.equal(effective.orderedPathReferences.length, 2);
+  assert.equal(JSON.stringify(refreshed).includes("contentBase64"), false);
+  assert.deepEqual(savedResult.chartAnalysis.view.qualificationBases, [], "the saved source record is not mutated");
+});
+
 test("Bettercomms subject punctuation variant maps to one customer node in source and evaluated graphs", () => {
   const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "09000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
   const holdco = { name: "Better Holdco Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} };
@@ -269,4 +301,17 @@ test("API handler is POST-only and returns a bounded customer error", async () =
   assert.equal(response.statusCode, 500);
   assert.equal(response.body.message, "We could not analyse this ownership chart. Please try again.");
   assert.doesNotMatch(JSON.stringify(response.body), /secret details/);
+});
+
+test("API dispatches saved-extraction re-evaluation separately from document analysis", async () => {
+  let analysisCalls = 0;
+  let reevaluationCalls = 0;
+  const handler = api.createHandler(async () => { analysisCalls += 1; }, async (body) => { reevaluationCalls += 1; return { contractVersion: body.savedResult.contractVersion }; });
+  const response = { statusCode: null, body: null, headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+  await handler({ method: "POST", body: { operation: "REEVALUATE_SAVED_EXTRACTION", savedResult: { contractVersion: "saved" } } }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.result.contractVersion, "saved");
+  assert.equal(analysisCalls, 0);
+  assert.equal(reevaluationCalls, 1);
 });

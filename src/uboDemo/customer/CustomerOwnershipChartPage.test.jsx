@@ -57,7 +57,12 @@ const analysis = {
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
     state: "EVALUATED",
-    view: { graph: null, qualifications: [], qualificationBases: [] },
+    entityLabels: { "person-1": "Mitchell Fortescue", "company-1": "Better Comms VOIP Ltd" },
+    view: {
+      graph: null,
+      qualifications: [{ personEntityId: "person-1", routeStatus: "SATISFIED" }],
+      qualificationBases: [{ basisId: "effective-75", personEntityId: "person-1", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", recordedCalculation: { value: { type: "EXACT", value: "75" } }, orderedPathReferences: [{ pathId: "direct-75", relationshipIds: ["fact-1"], contribution: { type: "EXACT", value: "75" } }] }],
+    },
   },
   candidateFacts: [{ factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Mitchell Fortescue", entityType: "NATURAL_PERSON" }, object: { name: "Better Holdco", entityType: "LEGAL_ENTITY" }, measurement: { type: "EXACT", value: 75 }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "artifact-1" }] }],
   owners: [{ name: "Mitchell Fortescue", partyType: "NATURAL_PERSON", relationshipLabel: "Economic ownership in Better Holdco", measurement: { type: "EXACT", value: 75 } }],
@@ -165,6 +170,41 @@ test("a saved same-company extraction can be replayed without a provider call", 
   expect(window.fetch).not.toHaveBeenCalled();
   expect(screen.getByRole("status")).toHaveTextContent(/No provider call was made/i);
   expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+});
+
+test("a stale saved calculation is re-evaluated through the current engine without uploading bytes", async () => {
+  seed();
+  const stale = {
+    ...analysis,
+    chartAnalysis: { ...analysis.chartAnalysis, view: { ...analysis.chartAnalysis.view, qualifications: [], qualificationBases: [] } },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    expect(body.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
+    expect(JSON.stringify(body)).not.toContain("contentBase64");
+    return { ok: true, json: async () => ({ success: true, result: analysis }) };
+  });
+
+  render(<CustomerOwnershipChartPage />);
+
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
+  expect(screen.getByText(/Recorded aggregate: 75%/i)).toBeInTheDocument();
+  expect(screen.getByText(/75% = 75%/i)).toBeInTheDocument();
+});
+
+test("an unevaluated chart still lists its ownership steps instead of leaving the calculation panel blank", () => {
+  seed();
+  const unevaluated = {
+    ...analysis,
+    candidateFacts: [],
+    chartAnalysis: { ...analysis.chartAnalysis, view: { ...analysis.chartAnalysis.view, qualifications: [], qualificationBases: [] } },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: unevaluated });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByText(/No effective-ownership result has been recorded yet/i)).toBeInTheDocument();
+  expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculation-empty li strong" }).closest("li")).toHaveTextContent(/Better Comms VOIP Ltd: 75%/i);
 });
 
 test("a disconnected Vodafone extraction remains inspectable but is explicitly marked incomplete", () => {

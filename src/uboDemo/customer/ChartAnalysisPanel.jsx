@@ -31,11 +31,25 @@ function graphForChartPresentation(viewGraph, sourceProjection) {
   return sourceProjection || viewGraph || null;
 }
 
+function sourceOwnershipSteps(projection) {
+  if (!projection) return [];
+  const labels = new Map((projection.nodes || []).map((node) => [node.entityId, node.displayName || node.primaryName || node.name || node.entityId]));
+  return (projection.relationships || [])
+    .filter((edge) => dimensionOf(edge) === "OWNERSHIP")
+    .map((edge) => ({
+      relationshipId: edge.relationshipId,
+      from: labels.get(edge.sourceEntityId || edge.subjectEntityId) || "Source party",
+      to: labels.get(edge.targetEntityId || edge.objectEntityId) || "Owned entity",
+      measurement: edge.measurement,
+    }));
+}
+
 export default function ChartAnalysisPanel({ analysis, method, onMethodChange, legacyProjection = null, sourceProjection = null }) {
   const view = analysis?.view;
   const [scope, setScope] = useState("FULL");
   const [dimension, setDimension] = useState("ALL");
   const people = useMemo(() => calculationPeople(view, method), [view, method]);
+  const ownershipSteps = useMemo(() => sourceOwnershipSteps(sourceProjection), [sourceProjection]);
   const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection), scope, dimension), [view?.graph, sourceProjection, scope, dimension]);
   if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}</section>;
   return <section className="ubo-customer-chart-analysis" aria-label="Uploaded chart analysis">
@@ -54,9 +68,9 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
           {basis.threshold && <p>Threshold: {basis.threshold.comparator}{basis.threshold.value}%</p>}
           {basis.paths.map((path) => <p key={path.pathId}>{path.route}<br /><small>{path.inputs.join(" × ")}{path.contribution ? ` = ${path.contribution}` : ""}</small></p>)}
         </div>)}
-      </article>)}</div> : <p className="ubo-customer-muted">No natural-person qualification result is recorded for the chart-only assessment. This is not a negative UBO conclusion.</p>}
+      </article>)}</div> : <div className="ubo-customer-calculation-empty"><p className="ubo-customer-muted"><strong>No effective-ownership result has been recorded yet.</strong> The chart facts did not produce an operative natural-person qualification record. This is not a negative UBO conclusion.</p>{ownershipSteps.length > 0 && <><p>The following ownership steps remain available from the chart, but they have not been combined into an effective ownership result:</p><ul>{ownershipSteps.map((step) => <li key={step.relationshipId}><strong>{step.from}</strong> → {step.to}: {formatAssertionMeasurement(step.measurement)}</li>)}</ul></>}</div>}
     </section>
   </section>;
 }
 
-export { graphForChartPresentation, projectGraph };
+export { graphForChartPresentation, projectGraph, sourceOwnershipSteps };

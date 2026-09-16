@@ -1,15 +1,18 @@
 "use strict";
 
-const { analyseCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
+const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
 
-function createHandler(analyse = analyseCustomerOwnershipChart) {
+function createHandler(analyse = analyseCustomerOwnershipChart, reevaluate = reevaluateSavedCustomerOwnershipChart) {
   return async function customerOwnershipChartHandler(req, res) {
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
     try {
-      const result = await analyse(req.body || {});
+      const body = req.body || {};
+      const result = body.operation === "REEVALUATE_SAVED_EXTRACTION"
+        ? await reevaluate(body)
+        : await analyse(body);
       res.setHeader("Cache-Control", "no-store");
       return res.status(200).json({ success: true, result });
     } catch (error) {

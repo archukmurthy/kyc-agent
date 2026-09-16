@@ -500,6 +500,41 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
   };
 }
 
+function reevaluateSavedCustomerOwnershipChart(rawInput) {
+  const demoContext = rawInput?.demoContext;
+  const savedResult = rawInput?.savedResult;
+  const company = demoContext?.company;
+  if (!demoContext?.demoCaseId || !company?.legalName || !company?.registrationNumber || !company?.countryCode) {
+    throw demoError("invalid_demo_context", "Seeded demo company and case context is required.");
+  }
+  if (savedResult?.contractVersion !== RESULT_VERSION || !savedResult?.artifact?.artifactId || !Array.isArray(savedResult?.candidateFacts)) {
+    throw demoError("invalid_saved_extraction", "A structured saved chart extraction is required.");
+  }
+  if (savedResult.candidateFacts.length > 250) throw demoError("saved_extraction_too_large", "The saved chart extraction is too large to re-evaluate.", 413);
+  const sameCompany = String(savedResult.company?.countryCode || "").toUpperCase() === String(company.countryCode).toUpperCase()
+    && String(savedResult.company?.registrationNumber || "").toUpperCase() === String(company.registrationNumber).toUpperCase()
+    && normalizedPartyName(savedResult.company?.legalName) === normalizedPartyName(company.legalName);
+  if (!sameCompany) throw demoError("saved_extraction_company_mismatch", "The saved chart extraction belongs to a different company.", 409);
+  if (!savedResult.artifact.capturedAt) throw demoError("invalid_saved_extraction", "The saved chart extraction has no original capture time.");
+  const artifact = {
+    artifactId: savedResult.artifact.artifactId,
+    digest: savedResult.artifact.digest || "saved-extraction-no-digest",
+    capturedAt: savedResult.artifact.capturedAt,
+  };
+  const operationEvidenceReferences = savedResult.ubo?.operationEvidenceReferences || [];
+  const issues = savedResult.ubo?.issues || [];
+  const requestId = `saved-chart-analysis:${artifact.artifactId}`;
+  const candidateFacts = structuredClone(savedResult.candidateFacts);
+  const sourceGraph = buildSourceGraph(candidateFacts, company, artifact, requestId);
+  return {
+    ...structuredClone(savedResult),
+    company: structuredClone(company),
+    sourceGraph,
+    sourceCoverage: sourceGraphCoverage(sourceGraph),
+    chartAnalysis: buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }),
+  };
+}
+
 function presentation(candidateFacts, issues = []) {
   const relationshipFacts = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
   const owners = relationshipFacts.filter((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").map((fact) => ({
@@ -741,6 +776,7 @@ module.exports = Object.freeze({
   chartRequestedConcepts,
   certificationFrom,
   presentation,
+  reevaluateSavedCustomerOwnershipChart,
   selectSemanticProvider,
   sourceGraphCoverage,
   statusForEvidenceFailure,

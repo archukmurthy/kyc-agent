@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ownershipLabelFor } from "../demoSession";
 import { allCandidateFacts } from "../demoResearch";
 import AssertionDetails from "../AssertionDetails";
@@ -173,6 +173,41 @@ export default function CustomerOwnershipChartPage() {
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "POLICY_ALL_ROUTES");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
+  const reevaluationAttempts = useRef(new Set());
+
+  useEffect(() => {
+    const artifactId = result?.artifact?.artifactId;
+    const hasStructuredFacts = Array.isArray(result?.candidateFacts) && result.candidateFacts.length > 0;
+    const hasCalculationRecords = (result?.chartAnalysis?.view?.qualificationBases || []).length > 0
+      && (result?.chartAnalysis?.view?.qualifications || []).length > 0;
+    if (!artifactId || !hasStructuredFacts || hasCalculationRecords || reevaluationAttempts.current.has(artifactId)) return;
+    reevaluationAttempts.current.add(artifactId);
+    let active = true;
+    (async () => {
+      try {
+        const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operation: "REEVALUATE_SAVED_EXTRACTION",
+            demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId },
+            savedResult: result,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
+        if (!active) return;
+        setResult(payload.result);
+        writeCustomerOwnershipChartSession({ context, result: payload.result, calculationMethod });
+        saveCustomerOwnershipChartExtraction({ context, result: payload.result, calculationMethod });
+        setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
+        setPersistenceNotice({ kind: "success", message: "Saved chart facts were re-evaluated through the current UBO engine. No provider call was made." });
+      } catch (caught) {
+        if (active) setPersistenceNotice({ kind: "warning", message: `The saved chart remains available, but its calculation could not be refreshed: ${caught.message}` });
+      }
+    })();
+    return () => { active = false; };
+  }, [calculationMethod, context, result]);
 
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={2} /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/customer/">Enter company details</a></main></div>;
 
