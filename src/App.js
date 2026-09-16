@@ -4826,6 +4826,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         <PreviewBanner
           missing={previewMissing}
           timestamp={previewTimestamp}
+          tenantId={tenantId}
         />
       )}
       {demoMode && <DemoBanner offsetTop={inPreview ? 40 : 0} />}
