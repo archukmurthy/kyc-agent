@@ -6,6 +6,8 @@ const { companiesHouseOwnershipAdapter } = require("../agents/ubo/companiesHouse
 const { getFresh, resultKey, cacheResult, appendAudit, identity } = require("../agents/ubo/uboPersistence");
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
 const { randomUUID } = require("crypto");
+const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
 
 function forReviewer(result) {
   return {
@@ -24,11 +26,14 @@ function forReviewer(result) {
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false } = req.body || {};
+  const limits = checkTextFields(req.body, { entityName: 200, registrationNumber: 64, jurisdiction: 64 });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
   const threshold = Number(uboThreshold || 25);
   const discovery = Number(discoveryThreshold || 5);
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) return res.status(400).json({ error: "uboThreshold must be a number from 0 to 100" });
   if (!Number.isFinite(discovery) || discovery <= 0 || discovery > 100) return res.status(400).json({ error: "discoveryThreshold must be a number from 0 to 100" });
+  if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
   const streaming = String(req.headers?.accept || "").includes("text/event-stream");
   const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify(event)}\n\n`); };
   const finish = (payload) => {

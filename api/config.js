@@ -24,7 +24,7 @@
 const storage = require("../lib/storage");
 const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
-const { verifyPassword } = require("../lib/auth");
+const { verifyPassword, verifyEnvBearer } = require("../lib/auth");
 const tenantRegistry = require("../lib/tenantRegistry");
 const { PLATFORM_TENANT_IDS, entryIsProtected } = tenantRegistry;
 
@@ -64,8 +64,7 @@ async function authorizeAdmin(tenant, token) {
   // PLATFORM_TENANT_IDS is static and storage-independent, so it cannot fail
   // open into "yes".
   if (PLATFORM_TENANT_IDS.includes(tenant)) {
-    const env = process.env.ADMIN_PASSWORD;
-    if (env && token === env) return true;
+    if (verifyEnvBearer(token, "ADMIN_PASSWORD")) return true;
   }
   return false;
 }
@@ -299,3 +298,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 // Shared reader for other server modules (api/benchmark.js, api/research.js).
 // Returns null for an unknown tenant — callers decide how to respond.
 module.exports.readConfigForTenant = readConfig;
+
+// Shared admin check for other server modules (api/research.js draft preview,
+// api/benchmark.js). Same rules as the config endpoint itself.
+module.exports.authorizeAdminForTenant = authorizeAdmin;

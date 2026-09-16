@@ -13,6 +13,9 @@
  * CommonJS — matches api/doc-search.js pattern.
  */
 
+const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -28,11 +31,23 @@ module.exports = async function handler(req, res) {
     tenantId,                  // reserved
   } = req.body || {};
 
+  const limits = checkTextFields(req.body, {
+    companyName: 200,
+    incorporationCountry: 100,
+    entityType: 64,
+    ownershipType: 64,
+    niumEntityType: 64,
+    companyRegistrationNumber: 64,
+  });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
+
   if (!companyName || !incorporationCountry || !entityType || !ownershipType) {
     return res.status(400).json({
       error: "Missing required fields: companyName, incorporationCountry, entityType, ownershipType",
     });
   }
+
+  if (!(await enforceRateLimit(req, res, "self-source"))) return undefined;
 
   try {
     // ── Lazy requires ──────────────────────────────────────────────────────

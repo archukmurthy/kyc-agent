@@ -13,17 +13,26 @@
 // documentRequirements.js engine. Tenant + config resolution mirror api/config.js
 // so the benchmark scores exactly the tenant the customer flow would serve.
 //
+// Admin-only: Authorization: Bearer <tenant admin password>, checked against
+// authorizeAdminForTenant(tenant, token) before the tenant config is even read.
+//
 // POST /api/benchmark?tenant=<id>
+//   headers: Authorization: Bearer <tenant admin password>
 //   body: { companies: [ { companyName, countryCode, country?, entityType,
 //                          ownershipType?, sector?, incorporationCountry? } ] }
 // GET  /api/benchmark?tenant=<id>&companyName=...&countryCode=GB&entityType=Corporate&ownershipType=private_limited
+//   headers: Authorization: Bearer <tenant admin password>
 //   (single-company convenience form for quick testing)
 
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { runResearchPipeline } = require("../src/pipeline");
 const { getRequirements } = require("../documentRequirements.js");
 const { persistBenchmarkEntity } = require("../lib/persist");
-const { readConfigForTenant } = require("./config");
+const { readConfigForTenant, authorizeAdminForTenant } = require("./config");
+const { readBearer } = require("../lib/dossierAccess");
+
+// Injected deps (overridable in tests via __setDeps).
+let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
 
 const MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 16000;
@@ -190,7 +199,7 @@ async function benchmarkCompany(input, tenantConfig) {
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Tenant-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -201,7 +210,13 @@ module.exports = async function handler(req, res) {
   const tenant = getTenantIdFromRequest(req);
 
   try {
-    const tenantConfig = await readConfigForTenant(tenant);
+    // Admin-only: every benchmark run spends Claude tokens.
+    const token = readBearer(req);
+    if (!tenant || !token || !(await _deps.authorizeAdmin(tenant, token))) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    const tenantConfig = await _deps.readConfigForTenant(tenant);
     if (!tenantConfig) {
       return res.status(404).json({ error: "tenant_not_found" });
     }
@@ -294,3 +309,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server error", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };

@@ -29,6 +29,11 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **Why:** Without the secret, invites return 500 and every customer link is refused. Without the migration, dossier reads and writes fail on the missing `owned_by` column.
 - **Breaking by design:** every previously-emailed `?dossierId=` link stops working; analysts re-send invites.
 
+### DEP-4 — Part 2 deploy notes: rate-limit storage + research cache reset
+- **Category:** Deploy · **Priority:** P2 · **Status:** OPEN (manual step for the owner)
+- **What:** (1) Rate-limit counters live in `lib/storage.js`. On Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global; and the filesystem backend ignores TTLs, so `ratelimit:*` keys pile up in `.config-store.json` (local) or `/tmp` until the instance recycles. Provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
+- **Why:** Behaviour changes that are correct by design but surprise on first deploy.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -218,6 +223,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What:** Stop Claude-backed research for a tenant once a configurable daily USD budget is reached (usage tracked from the cost/token data research already returns). Show the customer a clear message instead of failing silently.
 - **Why:** Last-line safety net against a surprise Anthropic bill. The rest of the `/api/research` hardening (server-built prompt, rate limit, key required where one exists) is being built now; only this cap is deferred.
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
+- **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
 
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
 - **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
@@ -263,6 +269,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (known limit, accepted 2026-09-15)
 - **What:** Dossier-linked applications get their change records and amendment-document reads locked to the customer token / analyst password. Fresh customers (no analyst link) have no credential, so their `onboardingSubmissionId`-keyed writes/reads stay protected only by the random id + rate limit.
 - **Real fix:** customer accounts or a server-minted per-application session token issued at research start.
+- **Accepted risk (user decision 2026-09-16):** change-events / amendment-documents look up a `submissionId` against `entity_dossiers` before resolving the caller, so an anonymous caller can tell "this id is a dossier" (401) from a fresh application (200). No data or write access leaks; ids are random UUIDs (old `?dossierId=` emails expose some to ex-invitees). Closed by the real fix above.
 - **Area:** `api/change-events.js`, `api/amendment-documents.js`, `src/App.js` onboardingSubmissionId.
 
 ### PREB-3 — Per-tenant pre-boarding analyst password
@@ -285,3 +292,28 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
   - `src/App.js:4486` — "Powered by Nium Intelligence Platform", inside `renderLandingPage()`. That function is defined but has no call site anywhere in `App.js` — the analyst agent-selection hub it renders looks parked, matching the "PARKED" note already on `PreboardingGate`'s back-to-agent-selection button (`src/components/preboarding/PreboardingGate.jsx`), which points at this same screen.
   - `src/components/Step2DynamicForm.jsx:492` — "Nium will retrieve these for you" (section heading). It sits inside a JSX comment block explicitly marked "hidden for now per request, but kept here for future use ... To restore, un-comment this block" (lines 485-489), so it does not render either.
   - Separately (not a Nium string, but the same brand-consistency sweep): `ApplicantPage.jsx`'s three reused `DocumentUploadCard` call sites (Signatory ID, Authority-to-act x2) were not passing `brandName` through — fixed in task 14 by threading `brandName` from `App.js`'s `companyName_` the same way `Step2DynamicForm.jsx` already receives it.
+
+## Part 2 final review findings (AI-endpoint hardening, 2026-09-16)
+
+### UBO-1 — UBO discovery defaults tenant to "nium" and trusts a client-supplied tenantId
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
+- **What:** `api/ubo-discovery.js` does `const { ..., tenantId = "nium", ... } = req.body || {}` — it both defaults an unnamed tenant to `"nium"` (the tenant-resolution rule elsewhere in this codebase is strict: no tenant named is refused, never defaulted) and accepts `tenantId` straight from the request body, so an anonymous caller can write UBO audit rows (`appendAudit`, `persistUboInvestigation`) attributed to any tenant it likes. `public/ubo-lab.html` and the UBO lab's `START_LIVE` operation send no tenant at all and rely on the `"nium"` default, so fixing the endpoint means fixing both together.
+- **Also:** the body `tenantId` has no type or length check before it reaches storage keys and the UBO audit insert.
+- **Area:** `api/ubo-discovery.js`, `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js` (`startLive`).
+
+### UBO-2 — UBO lab doesn't surface a 429 to the user
+- **Category:** UX · **Priority:** P3 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
+- **What:** `public/ubo-lab.html` and the UBO lab's `START_LIVE` operation don't special-case a rate-limited response from `/api/ubo-discovery`; a 429 surfaces as a generic "No completed result was returned" / failure rather than telling the user to slow down or retry later.
+- **Area:** `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js`.
+
+### AUTH-1 — No brute-force protection on admin password checks
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
+- **What:** `/api/admin-auth` and `/api/benchmark`'s admin password check both return a fast, unlimited 401 on a wrong password — nothing throttles repeated guesses against `ADMIN_PASSWORD` / a tenant's hashed password. Now that the comparisons are constant-time (this review's item (b)), the only remaining exposure is guess volume, not timing.
+- **Also:** only `api/config.js#authorizeAdmin` and `lib/auth.js#verifyPassword` became constant-time. Duplicate copies of `authorizeAdmin` in `api/config-templates.js` and `api/config-versions.js`, plus env-password `===` checks in `api/admin-auth.js`, `api/super-admin-auth.js` and `api/tenants.js`, still compare with `===` — merge them onto one shared constant-time check.
+- **Area:** `api/admin-auth.js`, `api/benchmark.js`, `api/config.js#authorizeAdmin`, `api/config-templates.js`, `api/config-versions.js`, `api/super-admin-auth.js`, `api/tenants.js`.
+
+### PERF-1 — Research endpoint cost/ordering inefficiencies
+- **Category:** Performance · **Priority:** P3 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
+- **What:** Several small inefficiencies in `api/research.js`'s request path: (1) it reads the tenant config from KV before validating the request body, so a malformed request still costs one KV read; (2) a preview analyst without a dossier credential shares the per-IP research rate-limit bucket with every other unauthenticated caller on that IP; (3) both a cache hit and a validation failure still count against the caller's research rate limit, even though neither spends an Anthropic call; (4) rate-limit caller identity trusts `x-forwarded-for`, which is only safe behind Vercel's own edge (spoofable if ever exposed elsewhere).
+- **Also:** the research cache key has no tenant config version, so after a schema publish, results cached under the old schema can be served for up to 30 days. Add `_version` to the key (or clear the tenant's rows on publish).
+- **Area:** `api/research.js`, `lib/rateLimit.js`, `lib/researchCache.js`.

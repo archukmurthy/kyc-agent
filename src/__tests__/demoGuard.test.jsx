@@ -106,6 +106,51 @@ describe("doResearch paid-call confirm guard", () => {
   });
 });
 
+describe("research request shape (server-built prompts)", () => {
+  it("sends structured research input, then gap recovery by field id, never a prompt", async () => {
+    window.confirm.mockReturnValueOnce(true);
+    global.fetch = jest.fn((url) => (url === "/api/research"
+      ? Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } }),
+      })
+      : Promise.reject(new Error("offline test"))));
+    await driveToResearchKickoff();
+    await settle(5000);
+
+    const bodies = researchCalls().map(([, init]) => JSON.parse(init.body));
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    expect(bodies[0]).toMatchObject({
+      mode: "research",
+      companyName: "Britannia Group Limited",
+      countryCode: "GB",
+      entityType: "Corporate",
+    });
+    expect(typeof bodies[0].ownershipType).toBe("string");
+    expect(bodies[1].mode).toBe("gap_recovery");
+    expect(Array.isArray(bodies[1].missingFields)).toBe(true);
+    expect(bodies[1].missingFields.length).toBeGreaterThan(0);
+    bodies[1].missingFields.forEach((id) => expect(typeof id).toBe("string"));
+    for (const body of bodies) {
+      for (const key of ["prompt", "messages", "model", "tools", "max_tokens"]) {
+        expect(body).not.toHaveProperty(key);
+      }
+    }
+  });
+
+  it("shows the rate-limit message when research returns 429", async () => {
+    window.confirm.mockReturnValueOnce(true);
+    global.fetch = jest.fn((url) => (url === "/api/research"
+      ? Promise.resolve({ ok: false, status: 429, json: async () => ({ error: "rate_limited", retryAfterSeconds: 120 }) })
+      : Promise.reject(new Error("offline test"))));
+    await driveToResearchKickoff();
+    await settle(0);
+
+    expect(screen.getAllByText(/Too many requests — please try again in 2 minutes/).length).toBeGreaterThan(0);
+  });
+});
+
 describe("setDemoMode persistence", () => {
   it("writes an explicit sessionStorage opt-out so it survives the localhost default", async () => {
     await act(async () => {

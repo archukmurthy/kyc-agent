@@ -21,9 +21,17 @@ const OPERATIONS = Object.freeze({
   COMPARE_SNAPSHOTS: "COMPARE_SNAPSHOTS",
 });
 
-function invokeLegacyDiscovery(body) {
+// Caller identity headers the rate limiter reads; forwarded so a live lab run
+// spends the caller's own ubo-discovery bucket.
+const FORWARDED_HEADERS = ["x-forwarded-for", "x-real-ip", "authorization", "x-tenant-id"];
+
+function invokeLegacyDiscovery(body, callerHeaders = {}) {
   return new Promise((resolve, reject) => {
-    const request = { method: "POST", body, headers: { accept: "application/json" } };
+    const headers = { accept: "application/json" };
+    for (const name of FORWARDED_HEADERS) {
+      if (typeof callerHeaders[name] === "string") headers[name] = callerHeaders[name];
+    }
+    const request = { method: "POST", body, headers };
     let statusCode = 200;
     const response = {
       status(code) { statusCode = code; return this; },
@@ -62,7 +70,7 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_LIVE:
         return send(res, 200, await startLive({
           ...input.payload,
-          transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
+          transport: { invoke: ({ body }) => invokeLegacyDiscovery(body, req.headers || {}) },
         }));
       case OPERATIONS.START_REPLAY:
         return send(res, 200, startReplay(input.payload));
@@ -87,3 +95,4 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.OPERATIONS = OPERATIONS;
+module.exports.invokeLegacyDiscovery = invokeLegacyDiscovery;

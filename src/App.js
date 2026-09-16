@@ -81,7 +81,6 @@ import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy"
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
 import {
   SOURCE_TRUST,
-  computeResearchStrategy,
   isStakeholderField,
   isUboLikeField,
   isRegistryExemptionNotice,
@@ -99,10 +98,7 @@ import {
   getVerificationStatus,
   computeCoverage,
   hasPlausibleHigherTierSource,
-  buildGapRecoveryPrompt,
   mergeResearchResults,
-  RESEARCH_TOOLS,
-  buildPrompt,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
 import { saveDraft, loadDraft, clearDraft } from "./utils/submissionDraft";
@@ -139,6 +135,7 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { resolveInputType } from "./utils/dateFields";
+import { rateLimitMessage } from "./utils/rateLimitMessage";
 import { setAnalystCredential, setCustomerDossierToken, clearDossierCredentials, getDossierAuthHeaders } from "./utils/dossierCredential";
 import { LinkUnavailable } from "./components/preboarding/LinkUnavailable";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
@@ -1657,6 +1654,22 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return true;
   });
 
+  // /api/research builds every prompt server-side. The client sends only the
+  // tenant, its credential (which picks the rate-limit bucket) and, in admin
+  // preview, the staged draft config plus the admin token the server needs to
+  // honour it.
+  const researchHeaders = () => {
+    const headers = { ...getDossierAuthHeaders(preboardingTenantId || tenantId) };
+    if (inPreview) {
+      try {
+        const adminToken = sessionStorage.getItem("admin_token");
+        if (adminToken) headers["X-Admin-Token"] = adminToken;
+      } catch (_) { /* storage blocked — preview falls back to the live config */ }
+    }
+    return headers;
+  };
+  const previewDraftBody = () => (inPreview && tenantConfig ? { draftConfig: tenantConfig } : {});
+
   const doResearch = async (journeyOverride) => {
     // Safety net: doResearch is the REAL, paid path (Anthropic + web search). In
     // dev/testing contexts (demo toggle available) confirm before spending, so an
@@ -1709,7 +1722,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           const file = uploadedDocs[dt.key];
           if (!file) continue;
           const fetchTs = new Date().toISOString();
-          const { docFound: dFound, wolfsbergFields: wFields, usage: dUsage } = await extractFromDoc(dt, file, schema, flow, fetchTs);
+          const { docFound: dFound, wolfsbergFields: wFields, usage: dUsage } = await extractFromDoc(dt, file, schema, flow, fetchTs, { headers: researchHeaders() });
           if (dUsage) {
             docExtractIn += dUsage.input_tokens || 0;
             docExtractOut += dUsage.output_tokens || 0;
@@ -1737,63 +1750,34 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       }
 
       // ─── Phase 2: web research, optionally seeded with Wolfsberg fields ───
-      // Accepted auto-sourced documents (Step 2 Section A) are appended to the
-      // prompt so the research engine fetches and extracts fields from their
-      // URLs — same as customer uploads, but via sourceUrl. Appended here
-      // rather than inside buildPrompt so the shared src/pipeline.js (also
-      // used by api/benchmark.js) stays unchanged.
-      let researchPrompt = buildPrompt(companyName, countryObj ? countryObj.name : countryCode, countryCode, schema, wolfsbergFields, ownershipType);
-      // Optional registration number → PRIMARY search key. Appended client-side
-      // (like the AUTOMATICALLY SOURCED DOCUMENTS block below) so the shared
-      // src/pipeline.js buildPrompt stays untouched. The company name is still
-      // in the prompt, so an absent or wrong number safely falls back to the
-      // name-based search — never a dead end.
+      // The server builds the prompt from this tenant's schema, including the
+      // PRIMARY COMPANY IDENTIFIER (reg number) and AUTOMATICALLY SOURCED
+      // DOCUMENTS blocks (lib/researchPrompts.js).
       const trimmedRegNumber = regNumber.trim();
-      if (trimmedRegNumber) {
-        researchPrompt += `\n\nPRIMARY COMPANY IDENTIFIER:\n` +
-          `The customer provided this official business registration / company number: ${trimmedRegNumber}.\n` +
-          `Use it as the PRIMARY key to identify the exact company in ` +
-          `${countryObj ? countryObj.name : countryCode} (Companies House and any ` +
-          `other applicable company register), so you pull the precise entity ` +
-          `rather than name-matching. If this number does not correspond to a ` +
-          `real company, ignore it and fall back to researching by the company ` +
-          `name "${companyName}".\n`;
-      }
       const acceptedDocs = (docSearchResults?.documents || [])
         .filter(d => acceptedDocTypes.has(d.type));
-      if (acceptedDocs.length > 0) {
-        researchPrompt += `\n\nAUTOMATICALLY SOURCED DOCUMENTS:\n`;
-        researchPrompt += `The following documents have been ` +
-          `sourced automatically and are available ` +
-          `for field extraction:\n\n`;
-        acceptedDocs.forEach(doc => {
-          researchPrompt += `- ${doc.label} (${doc.year})\n`;
-          researchPrompt += `  URL: ${doc.sourceUrl}\n`;
-          researchPrompt += `  Source: ${doc.sourceLabel}\n`;
-          researchPrompt += `  Please extract all relevant ` +
-            `compliance fields from this document.\n\n`;
-        });
-      }
       const resp = await fetch("/api/research", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...researchHeaders() },
         body: JSON.stringify({
-          prompt: researchPrompt,
-          tools: RESEARCH_TOOLS,
-          // Cache key fields — presence of companyName enables the cache layer
-          // in api/research.js for this (main research) call only.
+          mode: "research",
           companyName,
-          jurisdiction: countryCode,
+          countryCode,
+          countryName: countryObj ? countryObj.name : countryCode,
           entityType,
-          forceRefresh,
-          // Optional reg number → drives the deterministic Companies House
-          // officers layer in api/research.js (already wired to accept it).
-          // Undefined when blank, so the officers layer resolves from name.
+          ownershipType,
+          // Optional reg number → primary search key and the Companies House
+          // officers layer. Undefined when blank.
           registrationNumber: trimmedRegNumber || undefined,
-        })
+          forceRefresh,
+          wolfsbergFields,
+          sourcedDocuments: acceptedDocs.map(({ label, year, sourceUrl, sourceLabel }) => ({ label, year, sourceUrl, sourceLabel })),
+          ...previewDraftBody(),
+        }),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
+        if (resp.status === 429) throw new Error(rateLimitMessage(errData.retryAfterSeconds));
         const claudeErr = errData && errData.details && errData.details.error;
         if (claudeErr && claudeErr.type === "rate_limit_error") {
           throw new Error("Anthropic rate limit reached for this minute. Wait ~60 seconds and try again, or add credits to raise your limit.");
@@ -1886,7 +1870,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       let cov = computeCoverage(merged, schema);
 
       // ─── Phase 3: gap-recovery second pass ───
-      const recoveryStrategy = ownershipType ? computeResearchStrategy(ownershipType, countryCode) : null;
       const upgradeable = merged.filter(
         (r) => r.verificationStatus === "indicative" && hasPlausibleHigherTierSource(r.field)
       );
@@ -1899,15 +1882,17 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         try {
           const gapResp = await fetch("/api/research", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...researchHeaders() },
             body: JSON.stringify({
-              prompt: buildGapRecoveryPrompt(
-                { name: companyName, countryName: countryObj ? countryObj.name : countryCode },
-                cov.missingFields,
-                upgradeable,
-                recoveryStrategy
-              ),
-              tools: RESEARCH_TOOLS,
+              mode: "gap_recovery",
+              companyName,
+              countryCode,
+              countryName: countryObj ? countryObj.name : countryCode,
+              entityType,
+              ownershipType,
+              missingFields: cov.missingFields.map((f) => f.field),
+              upgradeableFields: upgradeable.map((r) => r.field),
+              ...previewDraftBody(),
             }),
           });
           if (gapResp.ok) {
@@ -2443,7 +2428,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     fetch("/api/self-source", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
       signal: controller.signal,
       body: JSON.stringify({
         companyName,
@@ -2455,7 +2440,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         tenantId,
       }),
     })
-      .then(r => r.json())
+      .then(r => r.json().then(data => (r.status === 429 ? { error: rateLimitMessage(data.retryAfterSeconds) } : data)))
       .then(data => {
         if (data.success) {
           setSelfSourceResults(data);
@@ -2530,7 +2515,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     fetch("/api/doc-search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
       signal: controller.signal,
       body: JSON.stringify({
         companyName,
@@ -2540,7 +2525,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         tenantId,
       }),
     })
-      .then(r => r.json())
+      .then(r => r.json().then(data => (r.status === 429 ? { error: rateLimitMessage(data.retryAfterSeconds) } : data)))
       .then(data => {
         if (data.success) {
           setDocSearchResults(data);
