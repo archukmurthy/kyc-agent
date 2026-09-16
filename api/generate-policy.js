@@ -45,8 +45,10 @@ async function handler(req, res) {
   }
 
   // The browser sends its structured form; the server validates it against the
-  // allowed option lists and builds the message. A raw prompt is refused.
-  if (req.body?.prompt !== undefined) {
+  // allowed option lists and builds the message. Any client-authored piece of
+  // the Anthropic request is refused.
+  const CLIENT_OWNED_KEYS = ['prompt', 'messages', 'model', 'tools', 'max_tokens', 'system'];
+  if (CLIENT_OWNED_KEYS.some((key) => req.body?.[key] !== undefined)) {
     res.statusCode = 400;
     return res.end(JSON.stringify({ error: 'client_prompt_not_allowed' }));
   }

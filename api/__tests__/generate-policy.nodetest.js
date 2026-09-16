@@ -97,6 +97,13 @@ describe("policy API", () => {
     assert.equal(promptResponse.statusCode, 400);
     assert.deepEqual(promptResponse.payload, { error: "client_prompt_not_allowed" });
 
+    for (const key of ["messages", "model", "tools", "max_tokens", "system"]) {
+      const res = response();
+      await handler({ method: "POST", headers: {}, body: { [key]: "x", form: validForm() } }, res);
+      assert.equal(res.statusCode, 400, `expected 400 for client-owned key "${key}"`);
+      assert.deepEqual(res.payload, { error: "client_prompt_not_allowed" });
+    }
+
     const formResponse = response();
     await handler({ method: "POST", headers: {}, body: { form: validForm({ geography: "Mars" }) } }, formResponse);
     assert.equal(formResponse.statusCode, 400);
