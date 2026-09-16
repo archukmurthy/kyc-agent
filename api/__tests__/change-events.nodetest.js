@@ -132,6 +132,29 @@ test("a soft-deleted dossier's id still requires a credential — it is not a fr
   assert.strictEqual(wrote, false);
 });
 
+test("a credentialed customer cannot write to a soft-deleted dossier — no write, no ownership flip", async () => {
+  let wrote = false;
+  const sql = fakeSql({ ...ROW, status: "deleted" });
+  handler.__setDeps(deps(sql, CUSTOMER, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "dossier_not_found" });
+  assert.strictEqual(wrote, false);
+  assert.ok(!sql.log.some((s) => /UPDATE entity_dossiers/i.test(s.text)), "expected no ownership update");
+});
+
+test("a credentialed analyst cannot write to a soft-deleted dossier", async () => {
+  let wrote = false;
+  const sql = fakeSql({ ...ROW, status: "deleted" });
+  handler.__setDeps(deps(sql, ANALYST, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "dossier_not_found" });
+  assert.strictEqual(wrote, false);
+});
+
 test("a customer cannot add records to another dossier", async () => {
   let wrote = false;
   handler.__setDeps(deps(fakeSql({ ...ROW, id: "d-2" }), CUSTOMER, () => { wrote = true; }));

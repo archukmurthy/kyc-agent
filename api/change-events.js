@@ -57,7 +57,7 @@ module.exports = async function handler(req, res) {
       // recognised as a dossier (and gated behind a credential), never fall
       // through to the unauthenticated "fresh application" branch below.
       const found = await sql`
-        SELECT id, tenant_id, owned_by
+        SELECT id, tenant_id, owned_by, status
         FROM entity_dossiers
         WHERE id::text = ${String(event.submissionId)}
         LIMIT 1
@@ -74,6 +74,13 @@ module.exports = async function handler(req, res) {
     actor = await _deps.access.resolveDossierActor(req);
     const permitted = _deps.access.canWriteDossier(actor, dossier);
     if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
+    // Credential check passed — but a soft-deleted dossier accepts no further
+    // writes (no event, no owned_by flip). Checked only after the permission
+    // gate so an anonymous/invalid caller still gets 401, never a 404 that
+    // would reveal deleted-ness to someone without a credential.
+    if (dossier.status === "deleted") {
+      return res.status(404).json({ error: "dossier_not_found" });
+    }
   }
   // A fresh application (no dossier) is unchanged — backlog PLAT-7.
 

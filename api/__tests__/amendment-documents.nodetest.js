@@ -74,6 +74,22 @@ test("a soft-deleted dossier's id still requires a credential — it is not a fr
   assert.strictEqual(res.body.documents, undefined);
 });
 
+test("a credentialed analyst cannot read a soft-deleted dossier's documents", async () => {
+  handler.__setDeps(deps({ ...ROW, status: "deleted" }, { kind: "analyst", tenantId: "acme", dossierId: null, reason: null }));
+  const res = fakeRes();
+  await handler(req("d-1"), res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "dossier_not_found" });
+});
+
+test("a credentialed customer cannot read its own soft-deleted dossier's documents", async () => {
+  handler.__setDeps(deps({ ...ROW, status: "deleted" }, { kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null }));
+  const res = fakeRes();
+  await handler(req("d-1"), res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "dossier_not_found" });
+});
+
 test("an analyst may READ a customer-owned dossier's documents", async () => {
   handler.__setDeps(deps(ROW, { kind: "analyst", tenantId: "acme", dossierId: null, reason: null }));
   const res = fakeRes();
