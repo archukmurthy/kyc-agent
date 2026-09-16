@@ -6,6 +6,7 @@ function AssertionCard({ row, index }) {
     <span>{row.category}</span><p><strong>{row.title}</strong></p><p>{row.valueText}</p>
     <small>{String(row.currentness).replaceAll("_", " ")} · {String(row.supportState).replaceAll("_", " ")} · Candidate/source assertion · not approved</small>
     <dl className="ubo-customer-assertion-detail">
+      {row.relationship && <><dt>Owner / source party</dt><dd>{row.subject?.name || "Not supplied"}</dd><dt>Relationship</dt><dd>{String(row.relationship).replaceAll("_", " ")}</dd><dt>Owned entity / target</dt><dd>{row.object?.name || "Not supplied"}</dd><dt>Measurement type</dt><dd>{String(row.measurementType).replaceAll("_", " ")}</dd></>}
       {(row.effectiveFrom || row.effectiveTo) && <><dt>Effective period</dt><dd>{row.effectiveFrom || "Not supplied"} to {row.effectiveTo || "open"}</dd></>}
       <dt>Source status</dt><dd>{row.sourceState}</dd>
       {row.evidence.map((evidence, evidenceIndex) => <React.Fragment key={`${evidence.referenceId || evidence.artifactId || evidenceIndex}`}>

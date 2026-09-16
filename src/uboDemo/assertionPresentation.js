@@ -61,6 +61,7 @@ export function presentCandidateFact(fact, source = {}) {
     subject: fact.subject || null,
     object: fact.object || null,
     relationship,
+    measurementType: isRelationship ? fact.measurement?.type || "NOT_SUPPLIED" : null,
     currentness: fact.qualifiers?.currentState || fact.temporal?.state || "NOT_SUPPLIED",
     effectiveFrom: fact.temporal?.effectiveFrom || null,
     effectiveTo: fact.temporal?.effectiveTo || null,

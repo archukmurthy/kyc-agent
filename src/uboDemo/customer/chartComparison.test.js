@@ -58,6 +58,17 @@ test("same-artifact facts, missing ownership and unresolved identity cannot rece
   expect(noIdentity.map((row) => row.status)).toEqual(["NEEDS_CONFIRMATION", "NEEDS_CONFIRMATION"]);
 });
 
+test("ambiguous repeated name-only relationship pairs are not automatically matched", () => {
+  const nameOnlyAlice = party("Alice Morgan");
+  const nameOnlyTarget = party("Vodafone Limited");
+  const rows = buildChartResearchComparison([
+    entry(fact("r1", nameOnlyAlice, nameOnlyTarget, { type: "EXACT", value: 20 }, "ECONOMIC_OWNERSHIP", "registry-1"), "registry"),
+    entry(fact("r2", nameOnlyAlice, nameOnlyTarget, { type: "EXACT", value: 30 }, "ECONOMIC_OWNERSHIP", "registry-2"), "registry"),
+  ], [entry(fact("c1", nameOnlyAlice, nameOnlyTarget, { type: "EXACT", value: 20 }, "ECONOMIC_OWNERSHIP", "artifact"), "artifact")]);
+  expect(rows).toHaveLength(3);
+  expect(rows.every((row) => row.status === "NEEDS_CONFIRMATION")).toBe(true);
+});
+
 test("comparison excludes voting, control and certification facts and summarizes only economic ownership", () => {
   const rows = buildChartResearchComparison([
     entry(fact("ownership-r", alice, target, { type: "EXACT", value: 80 }, "ECONOMIC_OWNERSHIP", "registry"), "registry"),

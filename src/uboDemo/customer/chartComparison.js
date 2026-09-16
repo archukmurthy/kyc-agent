@@ -22,7 +22,7 @@ function compatibleJurisdiction(left, right) {
 function identityState(left, right) {
   if (sharesIdentifier(left, right)) return "IDENTIFIER_MATCH";
   if (normalized(left?.name) && normalized(left?.name) === normalized(right?.name)
-    && compatiblePartyType(left, right) && compatibleJurisdiction(left, right)) return "CONFIDENT_NAME_MATCH";
+    && compatiblePartyType(left, right) && compatibleJurisdiction(left, right)) return "NAME_MATCH_REVIEW_REQUIRED";
   return "NO_MATCH";
 }
 
@@ -105,10 +105,16 @@ function independentlySourced(researchEntry, chartEntry) {
     && ![...researchTokens].some((token) => chartTokens.has(token));
 }
 
-function relationshipMatch(research, chart) {
+function pairNameKey(fact) { return `${normalized(fact?.subject?.name)}→${normalized(fact?.object?.name)}`; }
+
+function relationshipMatch(research, chart, researchPairCounts, chartPairCounts) {
   if (!isEconomicOwnership(research) || !isEconomicOwnership(chart)) return false;
-  return identityState(research.subject, chart.subject) !== "NO_MATCH"
-    && identityState(research.object, chart.object) !== "NO_MATCH";
+  const subject = identityState(research.subject, chart.subject);
+  const object = identityState(research.object, chart.object);
+  if (subject === "NO_MATCH" || object === "NO_MATCH") return false;
+  if (subject === "IDENTIFIER_MATCH" && object === "IDENTIFIER_MATCH") return true;
+  const key = pairNameKey(research);
+  return key === pairNameKey(chart) && researchPairCounts.get(key) === 1 && chartPairCounts.get(key) === 1;
 }
 
 function needsConfirmation(key, researchEntry, chartEntry, reason) {
@@ -172,16 +178,19 @@ function assessedRow(key, researchEntry, chartEntry) {
 export function buildChartResearchComparison(researchEntries = [], chartEntries = []) {
   const research = researchEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
   const chart = chartEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
+  const countPairs = (entries) => entries.reduce((counts, entry) => counts.set(pairNameKey(entry.fact), (counts.get(pairNameKey(entry.fact)) || 0) + 1), new Map());
+  const researchPairCounts = countPairs(research);
+  const chartPairCounts = countPairs(chart);
   const used = new Set();
   const rows = chart.map((chartEntry) => {
-    const foundIndex = research.findIndex((researchEntry, index) => !used.has(index) && relationshipMatch(researchEntry.fact, chartEntry.fact));
-    if (foundIndex < 0) return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Customer chart ownership has no comparable independent registry assertion.");
+    const foundIndex = research.findIndex((researchEntry, index) => !used.has(index) && relationshipMatch(researchEntry.fact, chartEntry.fact, researchPairCounts, chartPairCounts));
+    if (foundIndex < 0) return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Chart only — not independently corroborated by current research.");
     used.add(foundIndex);
     const researchEntry = research[foundIndex];
     return assessedRow(`${researchEntry.fact.factId}:${chartEntry.fact.factId}`, researchEntry, chartEntry);
   });
   research.forEach((researchEntry, index) => {
-    if (!used.has(index)) rows.push(needsConfirmation(`research:${researchEntry.fact.factId}`, researchEntry, null, "Registry ownership has no comparable assertion in the customer chart."));
+    if (!used.has(index)) rows.push(needsConfirmation(`research:${researchEntry.fact.factId}`, researchEntry, null, "Research only — need confirmation from customer."));
   });
   return rows;
 }

@@ -135,7 +135,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(screen.getByText(/Verification of this certification is still required/i)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "How we understood your chart" })).toBeInTheDocument();
   expect(screen.getByTitle("Visualised ownership structure")).toBeInTheDocument();
-  expect(screen.getByText("Mitchell Fortescue")).toBeInTheDocument();
+  expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText(/Candidate fact · not a UBO conclusion/i)).toBeInTheDocument();
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
   expect(screen.getByText(/not analyst-approved or independently verified/i)).toBeInTheDocument();
