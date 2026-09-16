@@ -2,7 +2,9 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement } = require("../OwnershipGraph");
+const React = require("react");
+const { DETAIL_LEVEL, computeLayout, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection } = require("../OwnershipGraph");
+const { startDemoCalculationFixture } = require("../../ubo-control-lab/server/reviewLabEngine");
 const { fixtures, projection, renderGraph } = require("./testHarness");
 
 function graphProjection(entityIds, relationshipDefinitions) {
@@ -153,6 +155,67 @@ test("accessible summary names the graph and describes its semantic state", () =
   } finally { rendered.cleanup(); }
 });
 
+test("source-backed registry context renders compact badges and ordered inspector details", () => {
+  const context = graphProjection(["customer"], []);
+  context.nodes[0].registryContext = {
+    legalName: "THE LAW DEBENTURE CORPORATION P.L.C.", registrationNumber: "00030397", legalForm: "Public limited company (PLC)", incorporatedIn: "United Kingdom",
+    pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25",
+    researchCoverage: { state: "TERMINAL_SOURCE_STATUS", reason: "Companies House records a current PSC-information exemption." },
+    badges: [{ semantic: "REGISTRY_PLC", label: "PLC", css: "registry" }, { semantic: "PSC_EXEMPT", label: "PSC exempt", css: "special" }],
+    sources: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "companies-house:00030397:exemptions" }],
+  };
+  const rendered = renderGraph(context, { detailLevel: DETAIL_LEVEL.CUSTOMER });
+  try {
+    const node = rendered.container.querySelector(".ug-node");
+    assert.match(node.getAttribute("aria-label"), /PLC.*PSC exempt/i);
+    assert.match(node.textContent, /00030397/, "the registry identity remains visible when names are similar or truncated");
+    rendered.click(node);
+    const text = rendered.container.textContent;
+    assert.ok(text.indexOf("Registry / legal form") < text.indexOf("Jurisdiction"));
+    assert.ok(text.indexOf("Jurisdiction") < text.indexOf("Special registry status"));
+    assert.ok(text.indexOf("Special registry status") < text.indexOf("Research coverage"));
+    assert.match(text, /25 May 2021/);
+    assert.match(text, /Voting shares admitted to trading on an EU regulated market/);
+  } finally { rendered.cleanup(); }
+});
+
+test("demo card can focus an exact graph item and demo review copy avoids developer-facing wording", () => {
+  const supplied = graphProjection(["customer", "owner-a"], [{ id: "economic", source: "owner-a", target: "customer" }]);
+  supplied.reviews = [{ reviewId: "review-llp", reviewType: "LLP_GOVERNANCE_REQUIRES_CONTROL_ROOM_REVIEW", state: "REVIEW_REQUIRED", entityIds: ["owner-a"], requirementIds: ["UBO-R01"], demoPresentation: { title: "LLP governance interpretation", summary: "The LLP agreement needs internal interpretation.", assumption: "A-06-WA-01", signoffs: ["A-06"] } }];
+  const rendered = renderGraph(supplied, { externalSelection: { kind: "review", id: "review-llp" } });
+  try {
+    assert.match(rendered.container.textContent, /LLP governance interpretation/);
+    assert.match(rendered.container.textContent, /A-06-WA-01/);
+    assert.match(rendered.container.textContent, /Required sign-off: A-06/);
+    assert.doesNotMatch(rendered.container.textContent, /Control Room/);
+  } finally { rendered.cleanup(); }
+});
+
+test("demo composition collapses the idle inspector and uses a fixed, bounded inspection viewport", () => {
+  const rendered = renderGraph(projection("UI07"), { collapseIdleInspector: true, fixedViewportHeight: true, boundedViewportNavigation: true, height: 640 });
+  try {
+    const workspace = rendered.container.querySelector(".ug-workspace");
+    const viewport = rendered.container.querySelector(".ug-canvas-scroll");
+    assert.ok(workspace.classList.contains("details-collapsed"));
+    assert.equal(rendered.container.querySelector(".ug-detail-panel"), null);
+    assert.doesNotMatch(rendered.container.textContent, /The subject remains visible while ownership\/control information is incomplete/);
+    assert.equal(viewport.style.height, "640px");
+    viewport.scrollLeft = 300;
+    viewport.scrollTop = 400;
+    const canvas = rendered.container.querySelector("svg.ug-canvas");
+    React.act(() => {
+      canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 }));
+      canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 160 }));
+    });
+    assert.equal(viewport.scrollTop, 340, "dragging down navigates toward the top of the bounded scroll area");
+    React.act(() => canvas.dispatchEvent(new rendered.dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 100, clientY: 40 })));
+    assert.equal(viewport.scrollTop, 460, "dragging up navigates toward the bottom of the bounded scroll area");
+    rendered.click(rendered.container.querySelector(".ug-node"));
+    assert.equal(workspace.classList.contains("details-collapsed"), false);
+    assert.ok(rendered.container.querySelector(".ug-detail-panel"));
+  } finally { rendered.cleanup(); }
+});
+
 test("deterministic hierarchy anchors the customer below immediate owners, long chains and sibling branches", () => {
   const supplied = graphProjection(
     ["customer", "midco", "holdco-a", "holdco-b", "owner-a", "owner-b"],
@@ -193,7 +256,7 @@ test("parallel economic and voting edges reuse nodes while remaining separately 
 });
 
 test("dense genuine rights use separate lanes, semantic labels, front-most selection and complete details", () => {
-  const evidence = { system: "companies-house", referenceType: "PSC_REGISTER", referenceId: "sanitized-psc-source" };
+  const evidence = { system: "legacy-ubo-discovery", referenceType: "PSC_REGISTER", referenceId: "companies-house:01777777:psc:1", locator: { source: "companies-house" } };
   const supplied = graphProjection(["customer", "owner-a"], [
     {
       id: "surplus", source: "owner-a", target: "customer", type: "ECONOMIC_OWNERSHIP",
@@ -203,7 +266,7 @@ test("dense genuine rights use separate lanes, semantic labels, front-most selec
     },
     {
       id: "appoint-or-remove", source: "owner-a", target: "customer", type: "FORMAL_CONTROL_RIGHT", omitMeasurement: true,
-      qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-person", requiresInterpretation: true },
+      qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors", requiresInterpretation: true },
       support: { claimCount: 1, claimIds: ["claim-control"], evidenceReferenceCount: 1, evidenceReferences: [evidence] },
     },
     {
@@ -221,16 +284,84 @@ test("dense genuine rights use separate lanes, semantic labels, front-most selec
     assert.equal(new Set(edges.map((edge) => edge.querySelector(".ug-edge-label-bg").getAttribute("x"))).size, 3, "each label requires an independent lane");
     assert.equal(new Set(edges.map((edge) => edge.getAttribute("data-relationship-id"))).size, 3, "each label remains independently addressable");
     assert.match(rendered.container.textContent, /Surplus asset rights ≥75%/);
+    assert.match(rendered.container.querySelector("[data-relationship-id='appoint-or-remove'] .ug-edge-label").textContent, /Appoint\/remove directors/);
     rendered.click(rendered.container.querySelector("[data-relationship-id='appoint-or-remove']"));
     const orderedAfterSelection = [...rendered.container.querySelectorAll(".ug-edge")];
     assert.equal(orderedAfterSelection.at(-1).getAttribute("data-relationship-id"), "appoint-or-remove", "selected relationship renders visually last/front-most");
     const details = rendered.container.querySelector(".ug-detail-panel").textContent;
     assert.match(details, /From entityowner-a/);
     assert.match(details, /To entitycustomer/);
-    assert.match(details, /Relationship basisCombined appoint-or-remove right/);
-    assert.match(details, /Source assertionright-to-appoint-and-remove-person/);
+    assert.match(details, /Relationship basisRight to appoint or remove directors/);
+    assert.match(details, /PercentageNot applicable to this type of right/);
+    assert.match(details, /Registry sourceRecorded in Companies House PSC information/);
+    assert.match(details, /Source assertionright-to-appoint-and-remove-directors/);
     assert.match(details, /No separate appointment or removal right is inferred/);
-    assert.match(details, /companies-housePSC_REGISTER · sanitized-psc-source/);
+    assert.match(details, /legacy-ubo-discoveryPSC_REGISTER · companies-house:01777777:psc:1/);
+    assert.doesNotMatch(details, /Value not established|Direct relationship valueUnknown/);
+  } finally { rendered.cleanup(); }
+});
+
+test("Alice direct and indirect ownership paths render together with the long direct right in a bounded outside lane", () => {
+  const view = startDemoCalculationFixture({ fixtureId: "DEMO-ALICE-28" }).snapshots.at(-1).view;
+  const supplied = normalizeReviewProjection(view.graph);
+  const layout = computeLayout(supplied);
+  const byRoute = (from, to) => supplied.relationships.find(({ sourceEntityId, targetEntityId }) => sourceEntityId === from && targetEntityId === to);
+  const direct = byRoute("demo-alice", "demo-alice-target");
+  const aliceToHoldco = byRoute("demo-alice", "demo-alice-holdco");
+  const holdcoToTarget = byRoute("demo-alice-holdco", "demo-alice-target");
+  const holdco = layout.positions.get("demo-alice-holdco");
+  assert.equal(supplied.nodes.length, 3);
+  assert.equal(supplied.relationships.length, 3);
+
+  const rendered = renderGraph(view.graph, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    const directEdge = rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`);
+    const indirectEdges = [
+      rendered.container.querySelector(`[data-relationship-id='${aliceToHoldco.relationshipId}']`),
+      rendered.container.querySelector(`[data-relationship-id='${holdcoToTarget.relationshipId}']`),
+    ];
+    assert.equal(rendered.container.querySelectorAll(".ug-node").length, 3);
+    assert.equal(rendered.container.querySelectorAll(".ug-edge").length, 3);
+    assert.equal(directEdge.getAttribute("data-edge-route"), "BYPASS");
+    assert.equal(directEdge.querySelector(".ug-edge-label").textContent, "10%");
+    const directLabel = directEdge.querySelector(".ug-edge-label-bg");
+    assert.ok(Number(directLabel.getAttribute("x")) > holdco.x + 196, "the direct label must sit outside the intermediate node");
+    assert.ok(Number(directLabel.getAttribute("x")) + Number(directLabel.getAttribute("width")) <= layout.width, "the direct label and outside lane must remain inside content bounds");
+    assert.match(directEdge.querySelector("path").getAttribute("marker-end"), /^url\(#ug-arrow-/);
+    assert.deepEqual(indirectEdges.map((edge) => edge.querySelector(".ug-edge-label").textContent), ["60%", "30%"]);
+    assert.equal(new Set([directEdge, ...indirectEdges].map((edge) => edge.querySelector("path").getAttribute("d"))).size, 3);
+
+    rendered.click(directEdge);
+    assert.deepEqual([...rendered.container.querySelectorAll(".ug-edge.active")].map((edge) => edge.dataset.relationshipId), [direct.relationshipId]);
+    rendered.click(rendered.container.querySelector("[aria-label='Fit entire graph']"));
+    assert.ok(rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`));
+    rendered.click(rendered.container.querySelector("[aria-label='Fit graph width']"));
+    assert.ok(rendered.container.querySelector(`[data-relationship-id='${direct.relationshipId}']`));
+  } finally { rendered.cleanup(); }
+
+  const indirectIds = [aliceToHoldco.relationshipId, holdcoToTarget.relationshipId];
+  const indirect = renderGraph(view.graph, { externalSelection: { kind: "path", id: "indirect", relationshipIds: indirectIds } });
+  try {
+    assert.deepEqual([...indirect.container.querySelectorAll(".ug-edge.active")].map((edge) => edge.dataset.relationshipId).sort(), [...indirectIds].sort());
+  } finally { indirect.cleanup(); }
+  const aggregate = renderGraph(view.graph, { externalSelection: { kind: "path", id: "aggregate", relationshipIds: [direct.relationshipId, ...indirectIds] } });
+  try {
+    assert.equal(aggregate.container.querySelectorAll(".ug-edge.active").length, 3);
+  } finally { aggregate.cleanup(); }
+});
+
+test("generic non-percentage control does not invent director semantics", () => {
+  const supplied = graphProjection(["customer", "owner-a"], [{
+    id: "generic-control", source: "owner-a", target: "customer", type: "FORMAL_CONTROL_RIGHT", omitMeasurement: true,
+    qualifiers: { requiresInterpretation: true },
+  }]);
+  const rendered = renderGraph(supplied, { detailLevel: DETAIL_LEVEL.EXPLAIN });
+  try {
+    assert.equal(rendered.container.querySelector(".ug-edge-label").textContent, "Formal control right");
+    rendered.click(rendered.container.querySelector("[data-relationship-id='generic-control']"));
+    const details = rendered.container.querySelector(".ug-detail-panel").textContent;
+    assert.match(details, /Formal control right reported — details not available in this result/);
+    assert.doesNotMatch(details, /appoint or remove directors/i);
   } finally { rendered.cleanup(); }
 });
 
