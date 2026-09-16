@@ -17,10 +17,13 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "prestart": "node scripts/stage-ubo-demo-dev.js",
     "start": "react-scripts start",
+    "prebuild": "npm run test:ubo-demo:regression",
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "postbuild": "node scripts/evidence-deployment-boundary.js --sanitize-build --verify",
     "test": "react-scripts test",
+    "test:ubo-demo:regression": "node scripts/run-ubo-demo-regression.js",
     "test:smoke:db": "node scripts/real-db-smoke.js",
     "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js idv/__tests__/secureIdentity.nodetest.js idv/__tests__/metrics.nodetest.js idv/__tests__/productionGuards.nodetest.js",
     "idv:security-scan": "node idv/scripts/securityScan.js",

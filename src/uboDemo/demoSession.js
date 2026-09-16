@@ -189,10 +189,35 @@ export function mergeLabReplays(...collections) {
   }).slice(0, MAX_SAVED_REPLAYS);
 }
 
+function replayCompanyKey(record) {
+  return [record?.companyContext?.jurisdiction, record?.companyContext?.registrationNumber]
+    .map(normalized)
+    .join(":");
+}
+
+export function pruneSupersededEmptyLabReplays(records) {
+  const merged = mergeLabReplays(records);
+  const newestUsableByCompany = new Map();
+  merged.filter((record) => record.discoveryResult.candidateFacts.length > 0).forEach((record) => {
+    const key = replayCompanyKey(record);
+    const savedAt = Date.parse(record.savedAt);
+    if (!newestUsableByCompany.has(key) || savedAt > newestUsableByCompany.get(key)) newestUsableByCompany.set(key, savedAt);
+  });
+  return merged.filter((record) => {
+    if (record.discoveryResult.candidateFacts.length > 0) return true;
+    const usableSavedAt = newestUsableByCompany.get(replayCompanyKey(record));
+    return usableSavedAt === undefined || Date.parse(record.savedAt) >= usableSavedAt;
+  });
+}
+
 export function readLabReplays(storage = window.localStorage) {
   try {
     const records = JSON.parse(storage.getItem(LAB_REPLAY_KEY) || "[]");
-    return Array.isArray(records) ? mergeLabReplays(records) : [];
+    if (!Array.isArray(records)) return [];
+    const merged = mergeLabReplays(records);
+    const cleaned = pruneSupersededEmptyLabReplays(merged);
+    if (cleaned.length !== merged.length) storage.setItem(LAB_REPLAY_KEY, JSON.stringify(cleaned));
+    return cleaned;
   } catch (_) {
     return [];
   }
@@ -200,13 +225,13 @@ export function readLabReplays(storage = window.localStorage) {
 
 export function saveLabReplay(record, storage = window.localStorage) {
   if (!validLabReplay(record)) throw new TypeError("The Discovery replay record is invalid and was not saved.");
-  const records = mergeLabReplays([record], readLabReplays(storage));
+  const records = pruneSupersededEmptyLabReplays(mergeLabReplays([record], readLabReplays(storage)));
   storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
   return records;
 }
 
 export function availableLabReplays(researchResult, storage = window.localStorage) {
-  return mergeLabReplays(readLabReplays(storage), researchResult?.replayCapture ? [researchResult.replayCapture] : []);
+  return pruneSupersededEmptyLabReplays(mergeLabReplays(readLabReplays(storage), researchResult?.replayCapture ? [researchResult.replayCapture] : []));
 }
 
 export function serializeReplayLibrary(records, now = () => new Date().toISOString()) {
@@ -222,7 +247,7 @@ export function importReplayLibrary(serialized, storage = window.localStorage) {
     || parsed.records.some((record) => !validLabReplay(record))) {
     throw new TypeError("This file is not a valid UBO demo replay library.");
   }
-  const records = mergeLabReplays(parsed.records, readLabReplays(storage));
+  const records = pruneSupersededEmptyLabReplays(mergeLabReplays(parsed.records, readLabReplays(storage)));
   storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
   return records;
 }

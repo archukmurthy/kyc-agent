@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
 import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
-import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, serializeReplayLibrary, writeDemoSession } from "./demoSession";
+import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
 const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
@@ -21,6 +21,15 @@ function britishAirwaysReplay(replayId = "ubo-lab:discovery-replay:ba-sanitized-
     companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
     subject: { entityId: "ba-subject", name: "BRITISH AIRWAYS PLC", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] },
     discoveryResult: { contractVersion: "1.0.0", requestId: `request-${replayId}`, outcome: { state: "PARTIAL" }, candidateFacts: [fact], operationEvidenceReferences: [], issues: [] },
+  };
+}
+function emptyReplay(replayId, savedAt, registrationNumber = "01471587") {
+  const record = britishAirwaysReplay(replayId, savedAt);
+  return {
+    ...record,
+    companyContext: { ...record.companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber },
+    subject: { ...record.subject, name: "VODAFONE LIMITED", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: registrationNumber }] },
+    discoveryResult: { ...record.discoveryResult, candidateFacts: [] },
   };
 }
 function britishAirwaysSession(replayId) {
@@ -111,6 +120,19 @@ test("repeated saved company names remain independently selectable by stable ID 
   expect(readLabReplays().map(({ replayId }) => replayId)).toEqual([newer.replayId, older.replayId]);
   expect(replayOptionLabel(newer, 2)).toMatch(/BRITISH AIRWAYS PLC · 01777777 · saved 15 Sept 2026, 08:00 UTC · ys-newer$/);
   expect(bindDraftToReplay({ ...emptyDemoDraft(), calculationMethod: "PSC_CONDITION_ATTRIBUTION" }, older)).toEqual(expect.objectContaining({ replayId: older.replayId, legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", calculationMethod: "PSC_CONDITION_ATTRIBUTION" }));
+});
+
+test("a newer usable capture removes only older zero-assertion captures for the same registered company", () => {
+  const failedVodafone = emptyReplay("vodafone-failed", "2026-09-16T08:00:00.000Z");
+  const usableVodafone = {
+    ...britishAirwaysReplay("vodafone-usable", "2026-09-16T09:00:00.000Z"),
+    companyContext: { ...britishAirwaysReplay().companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber: "01471587" },
+  };
+  const unrelatedEmpty = emptyReplay("unrelated-empty", "2026-09-16T07:00:00.000Z", "09999999");
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([failedVodafone, unrelatedEmpty]));
+  expect(saveLabReplay(usableVodafone).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY)).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
 });
 
 test("a replay capture retained by an older completed session is recovered and enables no-provider replay", async () => {
