@@ -183,7 +183,7 @@ module.exports = async function handler(req, res) {
         isInternal: false,
         isProtected: false,
         preboardingEnabled: false,
-        isBlank: startFrom !== "nium-defaults",
+        isBlank: !(startFrom === "nium-defaults" || startFrom === "nium-default"),
       });
 
       return res.status(200).json({
