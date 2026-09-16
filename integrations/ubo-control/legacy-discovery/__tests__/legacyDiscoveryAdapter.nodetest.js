@@ -92,6 +92,30 @@ test("L03 voting source becomes VOTING_RIGHTS and never economic ownership", asy
   });
 });
 
+test("Companies House 75-to-100 share and voting bands preserve the inclusive 75% source boundary", async () => {
+  const body = response({ edges: [
+    edge("top-band-share", "legacy-owner-node", "legacy-root-node", {
+      type: "ownership",
+      metadata: { naturesOfControl: ["ownership-of-shares-75-to-100-percent"] },
+    }),
+    edge("top-band-vote", "legacy-owner-node", "legacy-root-node", {
+      type: "ownership",
+      metadata: { naturesOfControl: ["voting-rights-75-to-100-percent"] },
+    }),
+  ] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.deepEqual(result.candidateFacts.map(({ relationship, measurement }) => ({ relationship, measurement })), [
+    {
+      relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+      measurement: { type: PERCENTAGE_VALUE_TYPE.RANGE, lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true },
+    },
+    {
+      relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
+      measurement: { type: PERCENTAGE_VALUE_TYPE.RANGE, lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true },
+    },
+  ]);
+});
+
 test("demo registry-context evidence becomes one source-backed entity attribute without fabricating a relationship", async () => {
   const body = response({ edges: [] });
   body.evidence = [{

@@ -69,6 +69,21 @@ test("ambiguous repeated name-only relationship pairs are not automatically matc
   expect(rows.every((row) => row.status === "NEEDS_CONFIRMATION")).toBe(true);
 });
 
+test("an exact 75% customer value is independently supported by the inclusive Companies House 75%-or-more band", () => {
+  const mitchell = party("Mitchell Fortescue", "person-mitchell");
+  const holdco = party("Better Holdco Limited", "16634265");
+  const rows = buildChartResearchComparison(
+    [entry(fact("registry-75-band", mitchell, holdco, { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true }, "ECONOMIC_OWNERSHIP", "companies-house:16634265:psc:0"), "bettercomms-registry-replay")],
+    [entry(fact("chart-exact-75", mitchell, holdco, { type: "EXACT", value: 75 }, "ECONOMIC_OWNERSHIP", "customer-chart-artifact"), "bettercomms-chart-artifact")],
+  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual(expect.objectContaining({
+    status: "INDEPENDENTLY_VERIFIED",
+    verificationBasis: "INDEPENDENT_RANGE_SUPPORT",
+    exactPointIndependentlyStated: false,
+  }));
+});
+
 test("Vodafone legal-name variants resolve into one comparison row without changing either source assertion", () => {
   const registryParty = (name, id) => ({ ...party(name, id), entityType: "COMPANY" });
   const registryParties = {

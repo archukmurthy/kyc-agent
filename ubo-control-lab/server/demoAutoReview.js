@@ -2,6 +2,7 @@
 
 const { createHash } = require("node:crypto");
 const { applyDemoAutoReviewDecisions } = require("./reviewLabEngine");
+const { normalizeCandidateFactSourceMeasurement } = require("../../integrations/ubo-control/legacy-discovery");
 
 const SAFE_RELATIONSHIPS = new Set([
   "ECONOMIC_OWNERSHIP",
@@ -102,6 +103,14 @@ function sameRegisteredSubject(party, subject) {
 
 function prepareDemoReplayRecord(replayRecord) {
   const prepared = clone(replayRecord);
+  const capturedFacts = prepared?.discoveryResult?.candidateFacts || [];
+  const normalizedFacts = capturedFacts.map(normalizeCandidateFactSourceMeasurement);
+  const normalizedSourceMeasurementFactIds = normalizedFacts
+    .filter((fact, index) => JSON.stringify(fact.measurement || null) !== JSON.stringify(capturedFacts[index]?.measurement || null))
+    .map(({ factId }) => factId)
+    .filter(Boolean)
+    .sort();
+  if (prepared?.discoveryResult) prepared.discoveryResult.candidateFacts = normalizedFacts;
   const requestedProfile = normalize(prepared?.companyContext?.entityProfile) || "COMPANY";
   const targetFacts = (prepared?.discoveryResult?.candidateFacts || []).filter((fact) =>
     fact.type === "RELATIONSHIP" && sameRegisteredSubject(fact.object, prepared.subject));
@@ -136,6 +145,7 @@ function prepareDemoReplayRecord(replayRecord) {
       registryLegalForm,
       registryCompanyType,
       sourceCandidateFactIds: supportingFacts.map(({ factId }) => factId).filter(Boolean).sort(),
+      normalizedSourceMeasurementFactIds,
     },
   };
 }

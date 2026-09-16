@@ -181,13 +181,22 @@ function rangeFromNature(nature) {
   const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
   const lowerBound = Number(match[1]);
+  const upperBound = Number(match[2]);
   return {
     type: PERCENTAGE_VALUE_TYPE.RANGE,
     lowerBound,
-    upperBound: Number(match[2]),
-    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
+    upperBound,
+    lowerInclusive: lowerBound === 75 && upperBound === 100,
     upperInclusive: true,
   };
+}
+
+function normalizeCandidateFactSourceMeasurement(fact) {
+  if (!isPlainObject(fact) || !isPlainObject(fact.qualifiers)) return fact;
+  if (![RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP, RELATIONSHIP_TYPE.VOTING_RIGHTS].includes(fact.relationship)) return fact;
+  const sourceMeasurement = rangeFromNature(fact.qualifiers.sourceNatureOfControl);
+  if (!sourceMeasurement) return fact;
+  return { ...fact, measurement: sourceMeasurement };
 }
 
 function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex) {
@@ -534,4 +543,5 @@ module.exports = Object.freeze({
   createHttpLegacyDiscoveryTransport,
   createLegacyDiscoveryAdapter,
   createLegacyDiscoveryComposition,
+  normalizeCandidateFactSourceMeasurement,
 });

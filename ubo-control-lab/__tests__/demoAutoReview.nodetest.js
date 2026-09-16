@@ -112,6 +112,42 @@ test("Bettercomms shared PSC occurrence keeps the person and all three control d
   ].sort(byRelationship));
 });
 
+test("saved replay repairs the Companies House top-band endpoint from source nature without a provider call", () => {
+  const target = { entityId: "better-holdco", name: "BETTER HOLDCO LIMITED", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "16634265" }] };
+  const mitchell = { name: "MITCHELL FORTESCUE", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const original = {
+    replayId: "bettercomms-pre-fix-replay",
+    subject: target,
+    companyContext: { legalEntityName: target.name, registrationNumber: "16634265", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    discoveryResult: {
+      contractVersion: "ubo-capability-result-v1",
+      requestId: "bettercomms-pre-fix-request",
+      outcome: { state: "COMPLETE" },
+      candidateFacts: [{
+        factId: "mitchell-better-holdco-ownership",
+        type: "RELATIONSHIP",
+        subject: mitchell,
+        object: target,
+        relationship: "ECONOMIC_OWNERSHIP",
+        measurement: { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: false, upperInclusive: true },
+        qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP", sourceNatureOfControl: "ownership-of-shares-75-to-100-percent" },
+        evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "companies-house:16634265:psc:0" }],
+      }],
+      operationEvidenceReferences: [],
+      issues: [],
+    },
+    savedAt: "2026-09-16T08:00:00.000Z",
+  };
+  const prepared = prepareDemoReplayRecord(original);
+  assert.deepEqual(original.discoveryResult.candidateFacts[0].measurement, {
+    type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: false, upperInclusive: true,
+  }, "the captured replay remains immutable");
+  assert.deepEqual(prepared.replayRecord.discoveryResult.candidateFacts[0].measurement, {
+    type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true,
+  });
+  assert.deepEqual(prepared.reconciliation.normalizedSourceMeasurementFactIds, ["mitchell-better-holdco-ownership"]);
+});
+
 test("same-name people from different PSC records remain unresolved", () => {
   const target = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
   const person = { name: "Same Name", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
