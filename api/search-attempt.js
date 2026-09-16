@@ -71,13 +71,28 @@ module.exports = async function handler(req, res) {
 
     // Atomic increment — the database is the single source of truth, so two
     // concurrent re-search clicks can't both read the same pre-increment value.
+    // The `(${isCustomer} OR owned_by <> 'customer')` clause RE-CHECKS
+    // ownership at write time: the permission check above ran against a
+    // SELECT taken moments earlier, and an analyst's write can otherwise
+    // race a concurrent customer write that flips owned_by in between
+    // (TOCTOU) — the analyst's increment would then silently land on a
+    // dossier the customer has just taken over.
+    const isCustomer = actor.kind === "customer";
     const rows = await sql`
       UPDATE entity_dossiers
       SET search_attempts = search_attempts + 1
-      WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId}
+      WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId} AND (${isCustomer} OR owned_by <> 'customer')
       RETURNING search_attempts
     `;
-    const attempts = rows.length ? rows[0].search_attempts : null;
+    if (rows.length === 0) {
+      // The permission check above found the row, but the UPDATE matched
+      // none — owned_by flipped to 'customer' between the SELECT and this
+      // write. Fail closed rather than reporting a bogus/stale count.
+      return res.status(isCustomer ? 404 : 403).json(
+        isCustomer ? { error: "dossier_not_found" } : { error: "dossier_locked" }
+      );
+    }
+    const attempts = rows[0].search_attempts;
     console.log(`[search-attempt] dossier ${dossierId} → attempt ${attempts}`);
     return res.status(200).json({ attempts });
   } catch (err) {

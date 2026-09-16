@@ -10,12 +10,18 @@ function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
 }
 
-function fakeSql(row) {
+function fakeSql(row, { updateRaced = false } = {}) {
   const log = [];
   const sql = (strings, ...values) => {
     const text = strings.join(" ");
     log.push({ text, values });
-    if (/UPDATE entity_dossiers/i.test(text)) return Promise.resolve(row ? [{ search_attempts: (row.search_attempts || 0) + 1 }] : []);
+    if (/UPDATE entity_dossiers/i.test(text)) {
+      // Mirrors a real Postgres re-check clause on the UPDATE's WHERE: a
+      // concurrent write that flipped owned_by between the permission SELECT
+      // and this UPDATE makes it match zero rows.
+      if (updateRaced) return Promise.resolve([]);
+      return Promise.resolve(row ? [{ search_attempts: (row.search_attempts || 0) + 1 }] : []);
+    }
     return Promise.resolve(row ? [row] : []);
   };
   sql.log = log;
@@ -78,6 +84,19 @@ test("an analyst must name the dossier", async () => {
   await handler({ method: "GET", query: {}, headers: {} }, res);
   assert.strictEqual(res.statusCode, 400);
   assert.deepStrictEqual(res.body, { error: "dossierId_required" });
+});
+
+test("TOCTOU: the row flips to customer-owned between the permission SELECT and the UPDATE — analyst gets 403 dossier_locked", async () => {
+  // The permission SELECT sees owned_by:'analyst' (so canWriteDossier
+  // permits), but a concurrent customer write flips owned_by before the
+  // UPDATE runs. The re-check clause on the UPDATE's WHERE must then match
+  // zero rows.
+  const sql = fakeSql(ROW, { updateRaced: true }); // ROW.owned_by === "analyst"
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler({ method: "POST", body: { dossierId: "d-1" }, query: {}, headers: {} }, res);
+  assert.strictEqual(res.statusCode, 403);
+  assert.deepStrictEqual(res.body, { error: "dossier_locked" });
 });
 
 test("an analyst cannot increment a customer-owned dossier's counter", async () => {

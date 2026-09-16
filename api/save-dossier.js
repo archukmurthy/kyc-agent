@@ -115,7 +115,13 @@ module.exports = async function handler(req, res) {
     let rows = [];
     if (existing) {
       // Update-in-place, scoped to this tenant so one tenant can never
-      // overwrite another's row by guessing/replaying an id.
+      // overwrite another's row by guessing/replaying an id. The
+      // `(${isCustomer} OR owned_by <> 'customer')` clause RE-CHECKS
+      // ownership at write time: the permission check above ran against a
+      // SELECT taken moments earlier, and an analyst's write can otherwise
+      // race a concurrent customer write that flips owned_by in between
+      // (TOCTOU) — the analyst's UPDATE would then silently land on a
+      // dossier the customer has just taken over.
       rows = await sql`
         UPDATE entity_dossiers
         SET
@@ -155,15 +161,26 @@ module.exports = async function handler(req, res) {
           last_customer_action_at = CASE WHEN ${isCustomer} THEN NOW() ELSE last_customer_action_at END,
           status = 'ready',
           saved_at = NOW()
-        WHERE id = ${dossierId} AND tenant_id = ${tenantId}
+        WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND (${isCustomer} OR owned_by <> 'customer')
         RETURNING id
       `;
+
+      if (rows.length === 0) {
+        // The permission check above found the row, but the UPDATE matched
+        // none — owned_by flipped to 'customer' between the SELECT and this
+        // write. Fail closed: never fall through to the INSERT branch below,
+        // which would silently create a duplicate dossier row instead of
+        // reporting the lock.
+        return res.status(isCustomer ? 404 : 403).json(
+          isCustomer ? { error: "dossier_not_found" } : { error: "dossier_locked" }
+        );
+      }
     }
 
-    if (!existing || rows.length === 0) {
-      // Either the caller has no id yet (first save), or the id it sent
-      // didn't match a row for this tenant (stale/foreign id) — insert fresh
-      // rather than silently dropping the save.
+    if (!existing) {
+      // The caller has no id yet (first save), or the id it sent didn't
+      // match a row for this tenant (stale/foreign id) — insert fresh rather
+      // than silently dropping the save.
       rows = await sql`
       INSERT INTO entity_dossiers (
         tenant_id,
