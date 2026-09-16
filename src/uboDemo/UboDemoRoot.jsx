@@ -20,7 +20,7 @@ function DemoHeader({ onStartNew }) {
 }
 
 function DemoProgress({ research }) {
-  return <ol className="ubo-demo-progress" aria-label="Demo journey progress"><li className={research ? "complete" : "current"}><span>1</span>Company</li><li className={research ? "current" : ""}><span>2</span>Research</li><li><span>3</span>Review</li></ol>;
+  return <ol className="ubo-demo-progress" aria-label="Demo journey progress"><li className={research ? "complete" : "current"}><span className="ubo-demo-progress-number">1</span><span className="ubo-demo-progress-label">Company</span></li><li className={research ? "current" : ""}><span className="ubo-demo-progress-number">2</span><span className="ubo-demo-progress-label">Research</span></li><li><span className="ubo-demo-progress-number">3</span><span className="ubo-demo-progress-label">Review</span></li></ol>;
 }
 
 function FieldError({ id, children }) { return <p className="ubo-demo-error" id={id} role="alert">{children}</p>; }

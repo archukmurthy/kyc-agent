@@ -68,7 +68,7 @@
   margin: 34px auto 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   list-style: none;
 }
 
@@ -93,8 +93,10 @@
   background: var(--ubo-demo-border);
 }
 
-.ubo-demo-progress span {
+.ubo-demo-progress-number {
+  position: relative;
   z-index: 1;
+  flex: 0 0 28px;
   width: 28px;
   height: 28px;
   display: grid;
@@ -104,9 +106,17 @@
   background: var(--ubo-demo-bg);
 }
 
+.ubo-demo-progress-label {
+  position: relative;
+  z-index: 1;
+  padding-right: 8px;
+  background: var(--ubo-demo-bg);
+  white-space: nowrap;
+}
+
 .ubo-demo-progress .current { color: var(--ubo-demo-ink); }
-.ubo-demo-progress .current span { border-color: var(--ubo-demo-green); background: var(--ubo-demo-green); color: white; }
-.ubo-demo-progress .complete span { border-color: var(--ubo-demo-green); background: var(--ubo-demo-mint); color: var(--ubo-demo-green); }
+.ubo-demo-progress .current .ubo-demo-progress-number { border-color: var(--ubo-demo-green); background: var(--ubo-demo-green); color: white; }
+.ubo-demo-progress .complete .ubo-demo-progress-number { border-color: var(--ubo-demo-green); background: var(--ubo-demo-mint); color: var(--ubo-demo-green); }
 .ubo-demo-progress .complete::after { background: var(--ubo-demo-green); }
 
 .ubo-demo-main {
@@ -354,6 +364,7 @@
   .ubo-demo-progress { width: calc(100% - 36px); margin-top: 24px; }
   .ubo-demo-progress li { gap: 5px; font-size: 0; }
   .ubo-demo-progress li::after { right: 6px; }
+  .ubo-demo-progress-label { padding-right: 0; }
   .ubo-demo-main { width: calc(100% - 28px); margin-top: 38px; }
   .ubo-demo-fields { grid-template-columns: 1fr; padding: 22px; }
   .ubo-demo-wide { grid-column: auto; }

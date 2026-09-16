@@ -55,6 +55,9 @@ test("analyst journey progress is Company, Research and Review without an owners
   expect(progress).toHaveTextContent("Review");
   expect(progress).not.toHaveTextContent("Ownership");
   expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
+  expect(within(progress).getByText("Company")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Research")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Review")).toHaveClass("ubo-demo-progress-label");
 });
 test("country, ownership type and effective ownership inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /Effective ownership/ })).toBeChecked(); });
 test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });
