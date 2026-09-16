@@ -1,0 +1,530 @@
+import React from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import UboDemoRoot from "./UboDemoRoot";
+import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
+import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
+import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
+
+const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
+const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
+const evaluatedSession = { sourceLabel: "Fixture", candidateSources: [{ sourceRecordId: "source-1", sourceState: "FIXTURE", candidateFacts: [fact] }], decisionTargets: { candidateParties: [], candidateClaims: [] }, snapshots: [{ view: { graph: projection, journeyProjection: { customerWorkBundles: [{ bundleId: "open", state: "OPEN", canonicalSubject: { name: "Owner Ltd" }, permittedSemanticActions: [{ actionType: "PROVIDE_STRUCTURED_INFORMATION", executable: true }] }, { bundleId: "blocked", state: "SIGNOFF_REQUIRED", permittedSemanticActions: [{ actionType: "REQUEST_EXTERNAL_EVIDENCE", executable: false }] }], internalReview: { actions: [], requirements: [{ reasonCode: "REVIEW" }] } } } }] };
+const aliceBasis = { basisId: "basis-alice-effective", personEntityId: "alice", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", method: "ubo-percentage-lookthrough-v1", threshold: { value: 25, comparator: ">", classification: "STATUTORY", dimension: "ECONOMIC" }, recordedCalculation: { value: { type: "EXACT", value: "28" }, cycles: [] }, orderedPathReferences: [{ pathId: "direct", state: "KNOWN", relationshipIds: ["direct-10"], contribution: { type: "EXACT", value: "10" } }, { pathId: "indirect", state: "KNOWN", relationshipIds: ["alice-holdco", "holdco-target"], contribution: { type: "EXACT", value: "18" } }] };
+const aliceSession = { sourceLabel: "Alice fixture", selectedFixtureId: "DEMO-ALICE-28", entityDirectory: [{ entityId: "alice", party: { name: "Alice Example" } }, { entityId: "holdco", party: { name: "Example Holdings Ltd" } }, { entityId: "target", party: { name: "Example Trading Ltd" } }], candidateSources: [], decisionTargets: { candidateParties: [], candidateClaims: [] }, snapshots: [{ view: { graph: { contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "target", nodes: [{ entityId: "alice", primaryName: "Alice Example" }, { entityId: "holdco", primaryName: "Example Holdings Ltd" }, { entityId: "target", primaryName: "Example Trading Ltd" }], relationships: [{ relationshipId: "direct-10", subjectEntityId: "alice", objectEntityId: "target", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 10 } }, { relationshipId: "alice-holdco", subjectEntityId: "alice", objectEntityId: "holdco", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 60 } }, { relationshipId: "holdco-target", subjectEntityId: "holdco", objectEntityId: "target", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 30 } }], informationNeeds: [], reviewRequirements: [], qualificationBasisRecords: [aliceBasis], personQualificationAssessments: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST"], unassessedRoutes: ["PSC_CONDITION_ATTRIBUTION"] }] }, qualificationBases: [aliceBasis], qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST"], unassessedRoutes: ["PSC_CONDITION_ATTRIBUTION"] }], informationNeeds: [], plan: { recommendedActions: [], customerActions: [] }, journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } }, snapshot: { decisionContent: { resolutionOptionsV2: [] } } } }] };
+
+function okJson(value) { return Promise.resolve({ ok: true, json: () => Promise.resolve(value) }); }
+function renderStart() { window.history.replaceState({}, "", DEMO_START_PATH); return render(<UboDemoRoot />); }
+function completeRequiredFields({ name = "Acme Holdings Limited", number = "00445790" } = {}) { fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: name } }); fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: number } }); }
+function britishAirwaysReplay(replayId = "ubo-lab:discovery-replay:ba-sanitized-01", savedAt = "2026-09-15T08:00:00.000Z") {
+  return {
+    contractVersion: "ubo-control-lab-discovery-replay-v1", replayId, contentHash: `sanitized-${replayId}`, savedAt,
+    companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    subject: { entityId: "ba-subject", name: "BRITISH AIRWAYS PLC", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] },
+    discoveryResult: { contractVersion: "1.0.0", requestId: `request-${replayId}`, outcome: { state: "PARTIAL" }, candidateFacts: [fact], operationEvidenceReferences: [], issues: [] },
+  };
+}
+function emptyReplay(replayId, savedAt, registrationNumber = "01471587") {
+  const record = britishAirwaysReplay(replayId, savedAt);
+  return {
+    ...record,
+    companyContext: { ...record.companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber },
+    subject: { ...record.subject, name: "VODAFONE LIMITED", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: registrationNumber }] },
+    discoveryResult: { ...record.discoveryResult, candidateFacts: [] },
+  };
+}
+function britishAirwaysSession(replayId) {
+  return {
+    ...evaluatedSession,
+    sourceState: "REPLAY", sourceLabel: "Saved live replay · BRITISH AIRWAYS PLC · provisional demo result · no provider call",
+    companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY" },
+    replay: { replayId, originalSavedAt: "2026-09-15T08:00:00.000Z", replayedAt: "2026-09-15T09:00:00.000Z", transportCalls: 0 },
+    entityDirectory: [{ entityId: "ba-subject", party: { name: "BRITISH AIRWAYS PLC", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] } }],
+    snapshots: [{ view: { ...evaluatedSession.snapshots[0].view, graph: { ...projection, subjectEntityId: "ba-subject", nodes: [{ entityId: "ba-subject", primaryName: "BRITISH AIRWAYS PLC" }], relationships: [] } } }],
+  };
+}
+
+beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
+afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
+
+test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
+test("analyst journey progress is Company, Research and Review without an ownership stage", () => {
+  renderStart();
+  const progress = screen.getByLabelText("Demo journey progress");
+  expect(progress).toHaveTextContent("Company");
+  expect(progress).toHaveTextContent("Research");
+  expect(progress).toHaveTextContent("Review");
+  expect(progress).not.toHaveTextContent("Ownership");
+  expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
+  expect(within(progress).getByText("Company")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Research")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Review")).toHaveClass("ubo-demo-progress-label");
+});
+test("country, ownership type and effective ownership inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /Effective ownership/ })).toBeChecked(); });
+test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });
+test("ownership and calculation options map to stable semantic codes", () => { expect(OWNERSHIP_TYPES.map(({ code }) => code)).toEqual(["PRIVATE_LIMITED", "PUBLIC_LIMITED", "PUBLICLY_LISTED", "LLP", "PARTNERSHIP", "CHARITY", "TRUST", "CIC", "OTHER"]); expect(CALCULATION_METHODS.map(({ code }) => code)).toEqual(["POLICY_ALL_ROUTES", "EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"]); });
+
+test("Start research invokes the existing live Lab composition and preserves a leading zero", async () => {
+  renderStart(); completeRequiredFields({ number: "0012AB34" }); fireEvent.click(screen.getByLabelText(/Effective ownership/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(window.location.pathname).toBe(DEMO_RESEARCH_PATH);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  const body = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(body).toEqual(expect.objectContaining({ operation: "START_DEMO_REVIEW_LIVE", payload: expect.objectContaining({ companyContext: expect.objectContaining({ legalEntityName: "Acme Holdings Limited", registrationNumber: "0012AB34", jurisdiction: "GB" }) }) }));
+  expect(JSON.stringify(body)).not.toContain("calculationMethod");
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
+});
+
+test("a successful live result is saved locally and enables replay without storing a second capture in the demo session", async () => {
+  const replayCapture = britishAirwaysReplay("fresh-live-capture", "2026-09-16T08:00:00.000Z");
+  window.fetch = jest.fn(() => okJson({ ...evaluatedSession, replayCapture }));
+  renderStart(); completeRequiredFields({ name: "BRITISH AIRWAYS PLC", number: "01777777" });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["fresh-live-capture"]);
+  const savedSession = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(savedSession.researchResult.replayCapture).toBeUndefined();
+  expect(savedSession.researchResult.replayReference).toEqual({ replayId: "fresh-live-capture", savedAt: "2026-09-16T08:00:00.000Z" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
+  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
+  expect(screen.getByText("1 saved live replay")).toBeInTheDocument();
+  expect(screen.getByText(/Future replay will make no provider call/)).toBeInTheDocument();
+});
+
+test("saved replay binds the selected record identity, reaches the graph, and restores it without a provider operation", async () => {
+  const record = britishAirwaysReplay();
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
+  window.fetch = jest.fn(() => okJson(britishAirwaysSession(record.replayId)));
+  const first = renderStart();
+  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
+  fireEvent.click(screen.getByLabelText(/Saved live replay/));
+  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: record.replayId } });
+  expect(screen.getByLabelText(/Company name/)).toHaveValue("BRITISH AIRWAYS PLC");
+  expect(screen.getByLabelText(/Company name/)).toHaveAttribute("readonly");
+  expect(screen.getByLabelText(/Registration number/)).toHaveValue("01777777");
+  expect(screen.getByText("Selected saved company")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Replay saved research — no provider call/ }));
+  expect(await screen.findByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
+  expect(screen.getByText("Saved live replay — provisional demo result")).toBeInTheDocument();
+  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  const request = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(request.operation).toBe("START_DEMO_REVIEW_REPLAY");
+  expect(request.payload.replayRecord.replayId).toBe(record.replayId);
+  expect(JSON.stringify(request)).not.toContain("START_DEMO_REVIEW_LIVE");
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(saved.demoCase.company).toEqual(expect.objectContaining({ legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }));
+  expect(saved.demoCase.analysisContext.replayId).toBe(record.replayId);
+  expect(saved.researchResult.replay).toEqual(expect.objectContaining({ replayId: record.replayId, transportCalls: 0 }));
+
+  first.unmount();
+  window.fetch.mockClear();
+  render(<UboDemoRoot />);
+  expect(screen.getByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
+  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))).toHaveLength(1);
+});
+
+test("repeated saved company names remain independently selectable by stable ID and sort by actual save time", () => {
+  const older = britishAirwaysReplay("capture-british-airways-older", "2026-09-14T08:00:00.000Z");
+  const newer = britishAirwaysReplay("capture-british-airways-newer", "2026-09-15T08:00:00.000Z");
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([older, newer]));
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual([newer.replayId, older.replayId]);
+  expect(replayOptionLabel(newer, 2)).toMatch(/BRITISH AIRWAYS PLC · 01777777 · saved 15 Sept 2026, 08:00 UTC · ys-newer$/);
+  expect(bindDraftToReplay({ ...emptyDemoDraft(), calculationMethod: "PSC_CONDITION_ATTRIBUTION" }, older)).toEqual(expect.objectContaining({ replayId: older.replayId, legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", calculationMethod: "PSC_CONDITION_ATTRIBUTION" }));
+});
+
+test("a newer usable capture removes only older zero-assertion captures for the same registered company", () => {
+  const failedVodafone = emptyReplay("vodafone-failed", "2026-09-16T08:00:00.000Z");
+  const usableVodafone = {
+    ...britishAirwaysReplay("vodafone-usable", "2026-09-16T09:00:00.000Z"),
+    companyContext: { ...britishAirwaysReplay().companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber: "01471587" },
+  };
+  const unrelatedEmpty = emptyReplay("unrelated-empty", "2026-09-16T07:00:00.000Z", "09999999");
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([failedVodafone, unrelatedEmpty]));
+  expect(saveLabReplay(usableVodafone).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY)).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+});
+
+test("a replay capture retained by an older completed session is recovered and enables no-provider replay", async () => {
+  const record = britishAirwaysReplay("recover-from-session");
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777" },
+    demoCase: { demoCaseId: "demo-recover", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: { status: "COMPLETE", sourceMode: "LIVE", candidateSources: [], replayCapture: record },
+  }));
+  renderStart();
+  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
+  await waitFor(() => expect(readLabReplays().map(({ replayId }) => replayId)).toContain("recover-from-session"));
+  expect(screen.getByText(/Recovered the last completed live result/)).toBeInTheDocument();
+});
+
+test("a replay library exports and imports across browser origins without a provider call", () => {
+  const first = britishAirwaysReplay("portable-1", "2026-09-15T08:00:00.000Z");
+  const second = britishAirwaysReplay("portable-2", "2026-09-16T08:00:00.000Z");
+  const serialized = serializeReplayLibrary([first, second], () => "2026-09-16T09:00:00.000Z");
+  const destination = { values: {}, getItem(key) { return this.values[key] || null; }, setItem(key, value) { this.values[key] = value; }, removeItem(key) { delete this.values[key]; } };
+  expect(importReplayLibrary(serialized, destination).map(({ replayId }) => replayId)).toEqual(["portable-2", "portable-1"]);
+  expect(destination.values[LAB_REPLAY_KEY]).toContain("portable-1");
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(() => importReplayLibrary('{"records":[]}', destination)).toThrow(/not a valid UBO demo replay library/);
+});
+
+test("a missing or corrupt saved subject fails locally without a live fallback or deleting the capture", () => {
+  const corrupt = { ...britishAirwaysReplay("corrupt-capture"), subject: null };
+  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([corrupt]));
+  renderStart();
+  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
+  fireEvent.click(screen.getByLabelText(/Saved live replay/));
+  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: corrupt.replayId } });
+  fireEvent.click(screen.getByRole("button", { name: /Replay saved research/ }));
+  expect(screen.getByText(/does not contain its captured subject identity/)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
+});
+
+test("old sessions default to effective ownership and selector state survives refresh", () => {
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "", calculationMethod: "POLICY_ALL_ROUTES" }, demoCase: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } }, researchResult: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } } }));
+  renderStart();
+  expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).calculationDefaultVersion).toBe(2);
+  fireEvent.click(screen.getByLabelText(/Control attribution/));
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("Alice example uses one fixture operation and presents the recorded 10 plus 18 equals 28 engine result", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  await screen.findByRole("heading", { name: "How this result was calculated" });
+  const body = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(body).toEqual({ operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: DEMO_CALCULATION_FIXTURES.ALICE_28 } });
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(screen.getAllByText("Threshold satisfied under effective ownership")).toHaveLength(2);
+  expect(screen.getByText("10% = 10%")).toBeInTheDocument();
+  expect(screen.getByText("60% × 30% = 18%")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Recorded result 28%/ })).toBeInTheDocument();
+  const graph = screen.getByTitle("Ownership structure");
+  const postMessage = jest.spyOn(graph.contentWindow, "postMessage");
+  fireEvent.click(screen.getByText("10% = 10%").closest("button"));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection).toEqual({ kind: "path", id: "direct", relationshipIds: ["direct-10"] }));
+  fireEvent.click(screen.getByText("60% × 30% = 18%").closest("button"));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection).toEqual({ kind: "path", id: "indirect", relationshipIds: ["alice-holdco", "holdco-target"] }));
+  fireEvent.click(screen.getByRole("button", { name: /Recorded result 28%/ }));
+  await waitFor(() => expect(postMessage.mock.calls.at(-1)[0].selectionCommand.selection.relationshipIds.sort()).toEqual(["alice-holdco", "direct-10", "holdco-target"]));
+  fireEvent.click(screen.getByLabelText(/Control attribution/));
+  expect(screen.getByText(/This assessment route is not supported/)).toBeInTheDocument();
+  expect(screen.getByText("At least one policy route is satisfied")).toBeInTheDocument();
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+});
+
+test("engine output and ownership structure start expanded, collapse independently, and use the intended graph defaults", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  const calculation = (await screen.findByRole("heading", { name: "How this result was calculated" })).closest("section");
+  const ownership = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
+  expect(within(calculation).getByLabelText(/Effective ownership/)).toBeChecked();
+  expect(within(ownership).getByRole("button", { name: "Relevant to this company" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(ownership).getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(within(calculation).getByRole("button", { name: "Collapse" }));
+  expect(within(calculation).queryByText("Choose which calculation or control assessment to inspect.")).not.toBeInTheDocument();
+  expect(within(calculation).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(ownership).getByRole("button", { name: "Collapse" }));
+  expect(within(ownership).queryByTitle("Ownership structure")).not.toBeInTheDocument();
+  expect(within(ownership).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+});
+
+test("open questions and analyst assertions use the same explicit collapse control", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  const questions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
+  expect(within(questions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+  expect(within(questions).getByText(/Nothing needed from you right now/)).toBeInTheDocument();
+  fireEvent.click(within(questions).getByRole("button", { name: "Collapse" }));
+  expect(within(questions).queryByText(/Nothing needed from you right now/)).not.toBeInTheDocument();
+  expect(within(questions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+
+  const assertions = screen.getByText("Research assertions and source facts").closest("section");
+  expect(within(assertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  expect(within(assertions).queryByText(/Candidate\/source assertions are not approved conclusions/)).not.toBeInTheDocument();
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
+  expect(within(assertions).getByText(/Candidate\/source assertions are not approved conclusions/)).toBeInTheDocument();
+  expect(within(assertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+});
+
+test("Ask customer records an existing open cause beside the unchanged source assertions", async () => {
+  const view = evaluatedSession.snapshots[0].view;
+  const selectedSession = {
+    ...evaluatedSession,
+    entityDirectory: [{ entityId: "target", party: { name: "Target Ltd" } }],
+    snapshots: [{ view: {
+      ...view,
+      graph: { ...projection, subjectEntityId: "target", nodes: [{ entityId: "target", primaryName: "Target Ltd" }] },
+      informationNeeds: [{ needId: "need-trust", concept: "TRUST_STATUS", status: "OPEN", reasonCode: "TRUST_STATUS_INCOMPLETE", requiredByRequirementIds: ["UBO-R11"], targetReference: { entityId: "target" }, affected: { relationshipIds: [] } }],
+      plan: { state: "SYSTEM_RESOLUTION", recommendedActions: [], customerActions: [] },
+      journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } },
+      snapshot: { decisionContent: { resolutionOptionsV2: [{ optionId: "option-trust", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-trust"], requirementIds: ["UBO-R11"], contentReadiness: "REQUIRES_POLICY_CONTENT" }] } },
+    } }],
+  };
+  window.fetch = jest.fn(() => okJson(selectedSession));
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  const ask = await screen.findByRole("button", { name: "Ask customer" });
+  fireEvent.click(ask);
+  expect(screen.getByRole("button", { name: "Added for customer" })).toHaveAttribute("aria-pressed", "true");
+  await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.analystCustomerRequests).toEqual([
+    expect.objectContaining({ informationNeedId: "need-trust", title: "Trust status", question: expect.stringMatching(/trust or similar legal arrangement/i), requirementIds: ["UBO-R11"] }),
+  ]));
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult;
+  expect(saved.candidateSources[0].candidateFacts).toEqual([fact]);
+});
+
+test("Alice direct and indirect rights survive Relevant/Full scope and Ownership/All filters by relationship ID", () => {
+  const graph = aliceSession.snapshots[0].view.graph;
+  const expected = ["alice-holdco", "direct-10", "holdco-target"];
+  [DEMO_GRAPH_SCOPES.RELEVANT, DEMO_GRAPH_SCOPES.FULL].forEach((scope) => {
+    [DEMO_GRAPH_DIMENSIONS.OWNERSHIP, DEMO_GRAPH_DIMENSIONS.ALL].forEach((dimension) => {
+      const visible = projectDemoGraph(graph, { scope, dimension });
+      expect(visible.nodes.map(({ entityId }) => entityId).sort()).toEqual(["alice", "holdco", "target"]);
+      expect(visible.relationships.map(({ relationshipId }) => relationshipId).sort()).toEqual(expected);
+    });
+  });
+  expect(projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.VOTING }).relationships).toEqual([]);
+  expect(projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL }).relationships).toEqual([]);
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("method presentation preserves recorded 24 percent effective and 40 percent attribution results", () => {
+  const relationship = (id, from, to, type, value) => ({ relationshipId: id, subjectEntityId: from, objectEntityId: to, relationshipType: type, dimension: type === "VOTING_RIGHTS" ? "VOTING" : "ECONOMIC", measurement: { type: "EXACT", value } });
+  const effective = { basisId: "effective", personEntityId: "alice", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "NOT_SATISFIED", method: "ubo-percentage-lookthrough-v1", recordedCalculation: { value: { type: "EXACT", value: "24" }, cycles: [] }, orderedPathReferences: [{ pathId: "effective-path", relationshipIds: ["economic-60", "target-40"], contribution: { type: "EXACT", value: "24" } }] };
+  const attributed = { basisId: "attributed", personEntityId: "alice", route: "PSC_CONDITION_ATTRIBUTION", dimension: "ECONOMIC", assessmentState: "SATISFIED", method: "ubo-psc-attribution-v1", aggregatedTargetRightValue: { type: "EXACT", value: "40" }, attributionChains: [{ pathId: "control-path", relationshipIds: ["voting-60", "target-40"], majoritySteps: [{ relationshipId: "voting-60", fromEntityId: "alice", toEntityId: "holdco", relationshipType: "VOTING_RIGHTS", measurement: { type: "EXACT", value: 60 } }], state: "VALID" }] };
+  const view = { graph: { nodes: [{ entityId: "alice", primaryName: "Alice" }, { entityId: "holdco", primaryName: "HoldCo" }, { entityId: "target", primaryName: "Customer" }], relationships: [relationship("economic-60", "alice", "holdco", "ECONOMIC_OWNERSHIP", 60), relationship("voting-60", "alice", "holdco", "VOTING_RIGHTS", 60), relationship("target-40", "holdco", "target", "ECONOMIC_OWNERSHIP", 40)] }, qualificationBases: [effective, attributed], qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED", assessedRoutes: ["EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"] }] };
+  expect(demoCalculationPeople(view, "EFFECTIVE_INTEREST")[0].selectedBases[0].aggregate.value).toBe("24");
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].aggregate.value).toBe("40");
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].effectivePaths).toEqual([]);
+  expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].attributionChains[0].majoritySteps[0]).toEqual(expect.objectContaining({ relationshipType: "VOTING_RIGHTS", measurement: "60%" }));
+});
+
+test("reviewed fixture makes no provider call and renders graph, collapsed source assertions and only executable customer work", async () => {
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByLabelText(/Reviewed ASDA fixture/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByTitle("Ownership structure");
+  const body = JSON.parse(window.fetch.mock.calls[0][1].body);
+  expect(body).toEqual({ operation: "START_REVIEW_FIXTURE", payload: { fixtureId: "V2-LAB-08" } });
+  expect(window.fetch.mock.calls[0][0]).toBe("/api/ubo-control-lab");
+  const disclosure = screen.getByText("Research assertions and source facts").closest("section");
+  expect(within(disclosure).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(disclosure).getByRole("button", { name: "Expand" }));
+  expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
+  expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
+  expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
+  expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();
+  const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
+  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
+  expect(graphCard.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("a response without an evaluated snapshot exposes no invented graph or questions", async () => {
+  window.fetch = jest.fn(() => okJson({ candidateSources: evaluatedSession.candidateSources, decisionTargets: { candidateParties: [{ candidatePartyKey: "p" }], candidateClaims: [{ claimId: "c" }] }, snapshots: [] }));
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByRole("heading", { name: /Explicit review is required/ })).toBeInTheDocument();
+  expect(screen.getByText(/2 candidate identity or claim decisions remain/)).toBeInTheDocument();
+  expect(screen.getByText("Nothing needed from you right now.")).toBeInTheDocument();
+  expect(screen.getByText("We are still reviewing parts of the ownership structure.")).toBeInTheDocument();
+});
+
+test("refresh restores the normalized result and Start new case clears it", async () => {
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByLabelText(/Reviewed ASDA fixture/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); await screen.findByTitle("Ownership structure");
+  expect(window.localStorage.getItem(DEMO_SESSION_KEY)).toContain("graph-1");
+  fireEvent.click(screen.getByRole("button", { name: "Start new case" })); expect(window.localStorage.getItem(DEMO_SESSION_KEY)).toBeNull(); expect(screen.getByLabelText(/Company name/)).toHaveValue("");
+});
+
+test("pure boundaries preserve ranges and filter raw blocked work", () => {
+  expect(formatMeasurement(fact.measurement)).toBe("(25%, 50%]");
+  expect([relationshipCategory("ECONOMIC_OWNERSHIP"), relationshipCategory("VOTING_RIGHTS"), relationshipCategory("SIGNIFICANT_INFLUENCE_OR_CONTROL")]).toEqual(["Ownership", "Voting", "Control"]);
+  expect(executableCustomerBundles(evaluatedSession.snapshots[0].view)).toHaveLength(1);
+  expect(buildResearchRequest({ demoCase: { company: { legalName: "A", registrationNumber: "0001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" }).operation).toBe("START_DEMO_REVIEW_LIVE");
+  expect(buildResearchRequest({ demoCase: { company: { legalName: "TDR GP V LP", registrationNumber: "SL035224", countryCode: "GB", ownershipType: "PARTNERSHIP" } }, sourceMode: "LIVE" }).payload.companyContext.entityProfile).toBe("LLP");
+  expect(buildResearchRequest({ sourceMode: "REPLAY", replayRecord: { replayId: "saved-1" } })).toEqual({ operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord: { replayId: "saved-1" }, profileId: "NOT_PROVIDED" } });
+});
+
+test("compact demo result retains customer-readable entity labels separately from the signed graph projection", () => {
+  const compact = compactResearchResult({
+    ...evaluatedSession,
+    entityDirectory: [
+      { entityId: "owner", party: { name: "Owner Ltd" } },
+      { entityId: "target", party: { name: "Target Ltd" } },
+    ],
+  }, "LIVE");
+  expect(compact.entityLabels).toEqual({ owner: "Owner Ltd", target: "Target Ltd" });
+  expect(compact.view.graph).toBe(projection);
+});
+
+test("scope and relationship controls filter a projection independently without provider calls", () => {
+  const graph = {
+    contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "subject",
+    nodes: ["subject", "llp", "person", "disconnected"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "economic", subjectEntityId: "llp", objectEntityId: "subject", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "voting", subjectEntityId: "person", objectEntityId: "llp", relationshipType: "VOTING_RIGHTS", dimension: "VOTING" },
+      { relationshipId: "disconnected-control", subjectEntityId: "disconnected", objectEntityId: "disconnected", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL" },
+    ],
+  };
+  const relevantVoting = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.RELEVANT, dimension: DEMO_GRAPH_DIMENSIONS.VOTING });
+  expect(relevantVoting.nodes.map(({ entityId }) => entityId).sort()).toEqual(["llp", "person", "subject"]);
+  expect(relevantVoting.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["voting"]);
+  const fullControl = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL });
+  expect(fullControl.nodes).toHaveLength(4);
+  expect(fullControl.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["disconnected-control"]);
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("IAG and Law Debenture director rights remain two exact control edges in Control and All views", () => {
+  const graph = {
+    contractVersion: "ubo-ownership-graph-projection-v2", subjectEntityId: "ba",
+    nodes: ["ba", "iag", "ldc", "law"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "iag-ba-owner", subjectEntityId: "iag", objectEntityId: "ba", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "iag-ba-directors", subjectEntityId: "iag", objectEntityId: "ba", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL", qualifiers: { sourceNatureOfControl: "right-to-appoint-and-remove-directors" } },
+      { relationshipId: "ldc-ba-owner", subjectEntityId: "ldc", objectEntityId: "ba", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" },
+      { relationshipId: "law-ldc-directors", subjectEntityId: "law", objectEntityId: "ldc", relationshipType: "FORMAL_CONTROL_RIGHT", dimension: "CONTROL", qualifiers: { sourceNatureOfControl: "right-to-appoint-and-remove-directors" } },
+    ],
+  };
+  const control = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.CONTROL });
+  const all = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.ALL });
+  const voting = projectDemoGraph(graph, { scope: DEMO_GRAPH_SCOPES.FULL, dimension: DEMO_GRAPH_DIMENSIONS.VOTING });
+  expect(control.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["iag-ba-directors", "law-ldc-directors"]);
+  expect(all.relationships).toHaveLength(4);
+  expect(voting.relationships).toHaveLength(0);
+  expect(control.relationships).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ subjectEntityId: "law", objectEntityId: "ba" }),
+    expect.objectContaining({ subjectEntityId: "ldc", objectEntityId: "ba", relationshipType: "FORMAL_CONTROL_RIGHT" }),
+  ]));
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("source-backed director-control assertions use right wording and no percentage-unknown label", () => {
+  const controlFact = {
+    relationship: "FORMAL_CONTROL_RIGHT",
+    qualifiers: { controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors" },
+    evidenceReferences: [{ system: "legacy-ubo-discovery", referenceId: "companies-house:01777777:psc:1", locator: { source: "companies-house" } }],
+  };
+  expect(relationshipAssertionPresentation(controlFact)).toEqual({
+    category: "Control",
+    description: "Right to appoint or remove directors",
+    measurement: null,
+    sourceDescription: "Recorded in Companies House PSC information",
+  });
+  expect(relationshipAssertionPresentation({ relationship: "FORMAL_CONTROL_RIGHT", evidenceReferences: [] })).toEqual(expect.objectContaining({
+    description: "Formal control right reported — details not available in this result",
+    measurement: null,
+  }));
+  expect(formatMeasurement({ type: "UNKNOWN" })).toBe("Value not established", "economic/voting unknown semantics stay unchanged");
+});
+
+test("a source-backed unresolved control assertion retains its canonical branch without manufacturing an edge", () => {
+  const graph = { subjectEntityId: "subject", nodes: [{ entityId: "subject", primaryName: "Target LP" }, { entityId: "llp", primaryName: "TDR Capital LLP" }, { entityId: "gp", primaryName: "GP V Limited" }], relationships: [{ relationshipId: "llp-gp", subjectEntityId: "llp", objectEntityId: "gp", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC" }] };
+  const result = { entityLabels: { subject: "Target LP", llp: "TDR Capital LLP", gp: "GP V Limited" }, entityContexts: { subject: { entityId: "subject", legalName: "Target LP", registrationNumber: "SL1" }, llp: { entityId: "llp", legalName: "TDR Capital LLP", registrationNumber: "OC1" }, gp: { entityId: "gp", legalName: "GP V Limited", registrationNumber: "SC1" } }, candidateSources: [{ candidateFacts: [{ type: "RELATIONSHIP", relationship: "FORMAL_CONTROL_RIGHT", subject: { name: "GP V Limited", externalIdentifiers: [{ value: "SC1" }] }, object: { name: "Target LP", externalIdentifiers: [{ value: "SL1" }] } }] }] };
+  const relevant = demoSourceRelevantEntityIds(graph, result);
+  const visible = projectDemoGraph(graph, { additionalRelevantEntityIds: relevant });
+  expect(relevant).toEqual(["gp"]);
+  expect(visible.nodes.map(({ entityId }) => entityId).sort()).toEqual(["gp", "llp", "subject"]);
+  expect(visible.relationships.map(({ relationshipId }) => relationshipId)).toEqual(["llp-gp"]);
+  expect(visible.relationships).not.toEqual(expect.arrayContaining([expect.objectContaining({ relationshipType: "FORMAL_CONTROL_RIGHT" })]));
+});
+
+test("open-item accounting presents every cause while preserving the no-customer-action planner outcome", () => {
+  const concepts = ["CURRENT_OWNERSHIP_AND_CONTROL", "INDEPENDENT_CORROBORATION", "LAYER_QUALIFIER", "LLP_GOVERNANCE_CONTROL_BASIS", "NOMINEE_BEARER_STATUS", "TRUST_STATUS", "VOTING_CONTROL_STATUS"];
+  const needs = concepts.map((concept, index) => ({ needId: `need-${index}`, concept, status: "OPEN", reasonCode: `${concept}_INCOMPLETE`, requiredByRequirementIds: [`UBO-R${index + 1}`], targetReference: { entityId: concept === "CURRENT_OWNERSHIP_AND_CONTROL" ? "llp" : "subject", ...(concept === "LLP_GOVERNANCE_CONTROL_BASIS" ? { groupPersonIds: ["person-a", "person-b"] } : {}) }, affected: { relationshipIds: [] } }));
+  const currentSystem = ["CURRENT_OWNERSHIP_AND_CONTROL", "LAYER_QUALIFIER", "LLP_GOVERNANCE_CONTROL_BASIS", "VOTING_CONTROL_STATUS"].map((concept) => ({ actor: "SYSTEM", semanticActionType: "DISCOVER_INFORMATION", coveredInformationNeedIds: [needs.find((need) => need.concept === concept).needId] }));
+  const customerOptions = ["TRUST_STATUS", "NOMINEE_BEARER_STATUS", "VOTING_CONTROL_STATUS"].map((concept) => ({ optionId: `option-${concept}`, actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: [needs.find((need) => need.concept === concept).needId], contentReadiness: "REQUIRES_POLICY_CONTENT", requiredSignoffs: [] }));
+  customerOptions.push({ optionId: "option-evidence", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", informationNeedIds: [needs.find((need) => need.concept === "INDEPENDENT_CORROBORATION").needId], contentReadiness: "NOT_REQUIRED" });
+  const view = { informationNeeds: needs, graph: { subjectEntityId: "subject", reviewRequirements: [] }, plan: { state: "SYSTEM_RESOLUTION", recommendedActions: currentSystem, customerActions: [{ actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", coveredInformationNeedIds: [needs.find((need) => need.concept === "INDEPENDENT_CORROBORATION").needId] }] }, snapshot: { decisionContent: { resolutionOptionsV2: customerOptions } }, journeyProjection: { customerWorkBundles: [], internalReview: { requirements: [{ relatedInformationNeedIds: [needs.find((need) => need.concept === "LLP_GOVERNANCE_CONTROL_BASIS").needId] }] } } };
+  const result = { entityContexts: { subject: { entityId: "subject", legalName: "TDR CAPITAL GENERAL PARTNER V L.P.", registrationNumber: "SL035224" }, llp: { entityId: "llp", legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604" }, "person-a": { entityId: "person-a", legalName: "MR GARY LINDSAY" }, "person-b": { entityId: "person-b", legalName: "MANJIT DALE" } } };
+  const items = accountOpenItems(view, result);
+  expect(items).toHaveLength(7);
+  expect(items.find(({ concept }) => concept === "CURRENT_OWNERSHIP_AND_CONTROL").about[0]).toEqual(expect.objectContaining({ legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604" }));
+  expect(items.find(({ concept }) => concept === "LLP_GOVERNANCE_CONTROL_BASIS").targetChoices).toHaveLength(3);
+  expect(items.find(({ concept }) => concept === "LLP_GOVERNANCE_CONTROL_BASIS").disposition.code).toBe("INTERNAL_REVIEW");
+  expect(items.find(({ concept }) => concept === "TRUST_STATUS").disposition.code).toBe("QUESTION_NOT_ENABLED");
+  expect(items.find(({ concept }) => concept === "INDEPENDENT_CORROBORATION").disposition.code).toBe("POSSIBLE_LATER");
+});
+
+test("demo presenter preserves planner routes, keeps evidence as evidence and groups content-gated questions", () => {
+  const view = {
+    informationNeeds: [
+      { needId: "need-evidence", concept: "INDEPENDENT_CORROBORATION" },
+      { needId: "need-layer", concept: "LAYER_QUALIFIER" },
+      { needId: "need-current", concept: "RELATIONSHIP_CURRENTNESS" },
+      { needId: "need-trust", concept: "TRUST_STATUS" },
+      { needId: "need-internal", concept: "IDENTITY_AGGREGATION" },
+    ],
+    journeyProjection: { customerWorkBundles: [], internalReview: { actions: [], requirements: [] } },
+    plan: {
+      state: "SYSTEM_RESOLUTION",
+      customerActions: [{ actionId: "action-evidence", semanticActionType: "REQUEST_STRUCTURE_EVIDENCE", coveredInformationNeedIds: ["need-evidence"], coveredRequirementIds: ["UBO-R08"] }],
+    },
+    snapshot: { decisionContent: { resolutionOptionsV2: [
+      { optionId: "option-layer", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-layer", "need-current"], requirementIds: ["UBO-R01"], contentReadiness: "READY" },
+      { optionId: "option-trust", actor: "CUSTOMER", semanticActionType: "REQUEST_STRUCTURED_INFORMATION", informationNeedIds: ["need-trust"], requirementIds: ["UBO-R11"], contentReadiness: "REQUIRES_POLICY_CONTENT" },
+      { optionId: "option-internal", actor: "INTERNAL", semanticActionType: "INTERNAL_REVIEW", informationNeedIds: ["need-internal"], requirementIds: ["UBO-R02"], contentReadiness: "NOT_REQUIRED" },
+    ] } },
+  };
+  const presented = demoOpenQuestions(view);
+  expect(presented.map(({ kind }) => kind)).toContain("EVIDENCE_REQUEST");
+  expect(presented.find(({ kind }) => kind === "EVIDENCE_REQUEST").informationNeedIds).toEqual(["need-evidence"]);
+  expect(presented.filter(({ title }) => title === "Remaining ownership structure")).toHaveLength(1);
+  expect(presented.find(({ title }) => title === "Trust involvement")).toEqual(expect.objectContaining({ state: "DEMO_CONTENT_FALLBACK", contentApproved: false, optionIds: ["option-trust"] }));
+  expect(presented.flatMap(({ informationNeedIds }) => informationNeedIds)).not.toContain("need-internal");
+});
+
+test("compact result projects source-backed foreign and PSC-exempt registry context without changing graph semantics", () => {
+  const registryFacts = [
+    { factId: "iag", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "IAG S.A.", jurisdiction: "ES", externalIdentifiers: [{ namespace: "legacy-company-register:ES", value: "M-492,129" }] }, value: { legalForm: "Spanish Public Company-Sociedad Anonima", governingLaw: "Law Of Spain", incorporatedIn: "Spain", placeRegistered: "Madrid Mercantile Register", registrationNumber: "M-492,129" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:ba:psc" }] },
+    { factId: "law-profile", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { legalForm: "Public limited company (PLC)", incorporatedIn: "United Kingdom", registrationNumber: "00030397" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:profile" }] },
+    { factId: "law-exemption", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:exemptions" }] },
+  ];
+  const compact = compactResearchResult({
+    ...evaluatedSession,
+    candidateSources: [{ sourceRecordId: "registry", candidateFacts: registryFacts }],
+    entityDirectory: [
+      { entityId: "iag-id", party: registryFacts[0].subject },
+      { entityId: "law-id", party: registryFacts[1].subject },
+    ],
+  }, "LIVE");
+  expect(compact.registryContexts["iag-id"]).toEqual(expect.objectContaining({ incorporatedIn: "Spain", researchCoverage: expect.objectContaining({ state: "UNSUPPORTED_JURISDICTION" }) }));
+  expect(compact.registryContexts["iag-id"].badges.map(({ label }) => label)).toEqual(["SPAIN", "Public company", "Research frontier"]);
+  expect(compact.registryContexts["law-id"]).toEqual(expect.objectContaining({ pscStatus: "EXEMPT", pscExemptionEffectiveFrom: "2021-05-25" }));
+  expect(compact.registryContexts["law-id"].badges.map(({ label }) => label)).toEqual(["PLC", "PSC exempt"]);
+  expect(compact.view.graph).toBe(projection);
+});
+
+test("live assertions retain their actual live-operation label after replay-safe review hydration", () => {
+  expect(assertionSourceState({ sourceMode: "LIVE" }, { sourceState: "REPLAY" })).toBe("LIVE");
+  expect(assertionSourceState({ sourceMode: "REPLAY" }, { sourceState: "REPLAY" })).toBe("REPLAY");
+});
+
+test("Screen 2 uses the source-backed registry legal form instead of the Screen 1 context", async () => {
+  const draft = { ...emptyDemoDraft(), legalName: "TDR CAPITAL LLP", registrationNumber: "OC302604", ownershipType: "PRIVATE_LIMITED" };
+  writeDemoSession({
+    draft,
+    demoCase: { demoCaseId: "demo-tdr", referenceCaseId: "", company: { legalName: draft.legalName, registrationNumber: draft.registrationNumber, countryCode: "GB", countryName: "United Kingdom", ownershipType: draft.ownershipType } },
+    researchResult: { status: "COMPLETE", sourceMode: "LIVE", sourceLabel: "Live Discovery", canonicalCompanyTypeLabel: "Limited liability partnership", candidateSources: [], decisionTargets: { candidateParties: [], candidateClaims: [] }, view: null, entityLabels: {} },
+  });
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  render(<UboDemoRoot />);
+  expect(await screen.findByText(/Limited liability partnership/)).toBeInTheDocument();
+  expect(screen.queryByText(/Private limited company \(Ltd\)/)).not.toBeInTheDocument();
+});
+
+test("saved draft survives refresh", () => {
+  const draft = { ...emptyDemoDraft(), legalName: "Restored Limited", registrationNumber: "00001234" };
+  writeDemoSession({ draft, demoCase: null, researchResult: null }); renderStart();
+  expect(screen.getByLabelText(/Company name/)).toHaveValue("Restored Limited"); expect(screen.getByLabelText(/Registration number/)).toHaveValue("00001234");
+});

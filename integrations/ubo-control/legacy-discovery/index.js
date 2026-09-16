@@ -92,7 +92,10 @@ function translateRequest(request) {
   return body;
 }
 
-function entityTypeFromLegacy(type) {
+function entityTypeFromLegacy(type, metadata = {}) {
+  const registryProfile = String(metadata.registryEntityProfile || "").toUpperCase();
+  if (["LLP", "PARTNERSHIP"].includes(registryProfile)) return "LLP";
+  if (registryProfile === "COMPANY") return "COMPANY";
   const normalized = String(type || "").toLowerCase();
   if (["individual", "person", "natural_person"].includes(normalized)) return "NATURAL_PERSON";
   if (["company", "public_company", "corporate"].includes(normalized)) return "COMPANY";
@@ -103,17 +106,26 @@ function entityTypeFromLegacy(type) {
 }
 
 function partyFromLegacy(node, request, rootEntityId) {
-  if (String(node.id) === String(rootEntityId)) return cloneData(request.subject);
+  const sourceRegistration = node.registrationNumber ? String(node.registrationNumber).trim().toUpperCase() : null;
+  const requestedRegistration = registrationNumberFrom(request.subject);
+  const isRegisteredSubject = sourceRegistration && requestedRegistration
+    && sourceRegistration === String(requestedRegistration).trim().toUpperCase();
+  if (String(node.id) === String(rootEntityId) || isRegisteredSubject) {
+    const party = cloneData(request.subject);
+    const entityType = entityTypeFromLegacy(node.type, node.metadata);
+    if (entityType) party.entityType = entityType;
+    return party;
+  }
   const party = { externalIdentifiers: [] };
   if (node.name) party.name = String(node.name);
   if (node.registrationNumber) {
     const jurisdiction = String(node.jurisdiction || "UNKNOWN").toUpperCase();
     party.externalIdentifiers.push({
       namespace: "legacy-company-register:" + jurisdiction,
-      value: String(node.registrationNumber),
+      value: String(node.registrationNumber).trim().toUpperCase(),
     });
   }
-  const entityType = entityTypeFromLegacy(node.type);
+  const entityType = entityTypeFromLegacy(node.type, node.metadata);
   if (entityType) party.entityType = entityType;
   if (node.jurisdiction) party.jurisdiction = String(node.jurisdiction).toUpperCase();
   return party;
@@ -127,6 +139,8 @@ function evidenceReferenceFromLegacy(evidence) {
   if (evidence.source) locator.source = String(evidence.source);
   if (evidence.sourceUrl) locator.sourceUrl = String(evidence.sourceUrl);
   if (evidence.publishedAt) locator.publishedAt = String(evidence.publishedAt);
+  if (evidence.fetchedAt) locator.retrievedAt = String(evidence.fetchedAt);
+  if (evidence.apiPath) locator.apiPath = String(evidence.apiPath);
   const reference = {
     system: "legacy-ubo-discovery",
     referenceType: evidence.sourceUrl ? "SOURCE_REFERENCE" : "LEGACY_SOURCE_REFERENCE",
@@ -167,13 +181,22 @@ function rangeFromNature(nature) {
   const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
   const lowerBound = Number(match[1]);
+  const upperBound = Number(match[2]);
   return {
     type: PERCENTAGE_VALUE_TYPE.RANGE,
     lowerBound,
-    upperBound: Number(match[2]),
-    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
+    upperBound,
+    lowerInclusive: lowerBound === 75 && upperBound === 100,
     upperInclusive: true,
   };
+}
+
+function normalizeCandidateFactSourceMeasurement(fact) {
+  if (!isPlainObject(fact) || !isPlainObject(fact.qualifiers)) return fact;
+  if (![RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP, RELATIONSHIP_TYPE.VOTING_RIGHTS].includes(fact.relationship)) return fact;
+  const sourceMeasurement = rangeFromNature(fact.qualifiers.sourceNatureOfControl);
+  if (!sourceMeasurement) return fact;
+  return { ...fact, measurement: sourceMeasurement };
 }
 
 function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex) {
@@ -309,7 +332,30 @@ function translateLegacyResponse(request, body) {
   const nodeById = new Map(body.ownershipGraph.nodes.filter(isPlainObject).map((node) => [String(node.id), node]));
   const evidenceById = new Map((body.evidence || []).filter(isPlainObject).filter((item) => item.id).map((item) => [String(item.id), item]));
   const candidateFacts = [];
+  const candidateFactSignatures = new Set();
   let candidateLikeAssertions = 0;
+
+  (body.evidence || []).forEach((evidence, sourceIndex) => {
+    const assertion = evidence?.registryContextAssertion;
+    if (!isPlainObject(assertion) || !isPlainObject(assertion.subject) || !isPlainObject(assertion.value)) return;
+    const subject = partyFromLegacy(assertion.subject, request, body.ownershipGraph.rootEntityId);
+    const evidenceReference = evidenceReferenceFromLegacy(evidence);
+    if (!evidenceReference) return;
+    candidateLikeAssertions += 1;
+    const fact = {
+      factId: `${request.requestId}:legacy-registry-context:${sourceIndex}`,
+      type: CANDIDATE_FACT_TYPE.ENTITY_ATTRIBUTE,
+      subject,
+      attribute: "REGISTRY_CONTEXT",
+      value: cloneData(assertion.value),
+      evidenceReferences: [evidenceReference],
+    };
+    const signature = JSON.stringify({ subject: fact.subject, attribute: fact.attribute, value: fact.value, evidenceReferences: fact.evidenceReferences });
+    if (!candidateFactSignatures.has(signature)) {
+      candidateFactSignatures.add(signature);
+      candidateFacts.push(fact);
+    }
+  });
 
   body.ownershipGraph.edges.forEach((edge, sourceIndex) => {
     if (!isPlainObject(edge)) {
@@ -359,9 +405,23 @@ function translateLegacyResponse(request, body) {
         qualifiers: {
           adapter: "legacy-discovery-anti-corruption-v1",
           ...(descriptor.qualifiers || {}),
+          ...(subjectNode.metadata?.registryLegalForm ? { subjectRegistryLegalForm: subjectNode.metadata.registryLegalForm } : {}),
+          ...(subjectNode.metadata?.registryCompanyType ? { subjectRegistryCompanyType: subjectNode.metadata.registryCompanyType } : {}),
+          ...(objectNode.metadata?.registryLegalForm ? { objectRegistryLegalForm: objectNode.metadata.registryLegalForm } : {}),
+          ...(objectNode.metadata?.registryCompanyType ? { objectRegistryCompanyType: objectNode.metadata.registryCompanyType } : {}),
         },
       };
       if (descriptor.measurement !== undefined) fact.measurement = descriptor.measurement;
+      const signature = JSON.stringify({
+        subject: fact.subject,
+        relationship: fact.relationship,
+        object: fact.object,
+        measurement: fact.measurement,
+        evidenceReferences: fact.evidenceReferences,
+        qualifiers: fact.qualifiers,
+      });
+      if (candidateFactSignatures.has(signature)) return;
+      candidateFactSignatures.add(signature);
       candidateFacts.push(fact);
     });
   });
@@ -483,4 +543,5 @@ module.exports = Object.freeze({
   createHttpLegacyDiscoveryTransport,
   createLegacyDiscoveryAdapter,
   createLegacyDiscoveryComposition,
+  normalizeCandidateFactSourceMeasurement,
 });

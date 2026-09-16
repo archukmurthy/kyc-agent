@@ -76,3 +76,34 @@ test("Lab API starts successor ASDA A and returns an exact baseline/successor co
   assert.equal(comparison.payload.successor.policyVersion, "1.6-RC");
   assert.equal(comparison.payload.definitionsDiffer, true);
 });
+
+test("Lab API demo replay applies provisional review without composing the live Discovery transport", async () => {
+  const companyContext = { legalEntityName: "API Demo Replay Ltd", registrationNumber: "05556667", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "LOW" };
+  const subject = { entityId: "captured-demo-replay-subject", name: companyContext.legalEntityName, entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: companyContext.registrationNumber }] };
+  const replayRecord = createDiscoveryReplayRecord({
+    companyContext, subject,
+    result: { contractVersion: "1.0.0", requestId: "captured-demo-replay-request", outcome: { state: "NO_DATA" }, candidateFacts: [], operationEvidenceReferences: [], issues: [] },
+    savedAt: "2026-09-01T10:00:00.000Z",
+  });
+  const result = await invoke("POST", { operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.sourceState, "REPLAY");
+  assert.deepEqual(result.payload.companyContext, companyContext);
+  assert.equal(result.payload.candidateSources.every(({ sourceState }) => sourceState === "REPLAY"), true);
+  assert.equal(result.payload.snapshots.length, 1);
+  assert.match(result.payload.sourceLabel, /Saved live replay.*no provider call/);
+  const corrupted = structuredClone(replayRecord);
+  corrupted.companyContext.legalEntityName = "Example Trading Ltd";
+  const rejected = await invoke("POST", { operation: "START_DEMO_REVIEW_REPLAY", payload: { replayRecord: corrupted } });
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.payload.message, /integrity check/);
+});
+
+test("Lab API runs the demo-only Alice calculation fixture without Discovery", async () => {
+  const result = await invoke("POST", { operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: "DEMO-ALICE-28" } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.sourceState, "FIXTURE");
+  assert.equal(result.payload.selectedFixtureId, "DEMO-ALICE-28");
+  const view = result.payload.snapshots.at(-1).view;
+  assert.equal(view.graph.calculations.find(({ subjectEntityId }) => subjectEntityId === "demo-alice").aggregateKnownValue.value, "28");
+});

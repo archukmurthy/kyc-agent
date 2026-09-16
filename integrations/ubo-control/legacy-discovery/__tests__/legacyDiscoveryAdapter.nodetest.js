@@ -92,6 +92,59 @@ test("L03 voting source becomes VOTING_RIGHTS and never economic ownership", asy
   });
 });
 
+test("Companies House 75-to-100 share and voting bands preserve the inclusive 75% source boundary", async () => {
+  const body = response({ edges: [
+    edge("top-band-share", "legacy-owner-node", "legacy-root-node", {
+      type: "ownership",
+      metadata: { naturesOfControl: ["ownership-of-shares-75-to-100-percent"] },
+    }),
+    edge("top-band-vote", "legacy-owner-node", "legacy-root-node", {
+      type: "ownership",
+      metadata: { naturesOfControl: ["voting-rights-75-to-100-percent"] },
+    }),
+  ] });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.deepEqual(result.candidateFacts.map(({ relationship, measurement }) => ({ relationship, measurement })), [
+    {
+      relationship: RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP,
+      measurement: { type: PERCENTAGE_VALUE_TYPE.RANGE, lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true },
+    },
+    {
+      relationship: RELATIONSHIP_TYPE.VOTING_RIGHTS,
+      measurement: { type: PERCENTAGE_VALUE_TYPE.RANGE, lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true },
+    },
+  ]);
+});
+
+test("demo registry-context evidence becomes one source-backed entity attribute without fabricating a relationship", async () => {
+  const body = response({ edges: [] });
+  body.evidence = [{
+    id: "companies-house:00030397:exemptions",
+    source: "Companies House PSC exemptions",
+    sourceUrl: "https://find-and-update.company-information.service.gov.uk/company/00030397/persons-with-significant-control",
+    apiPath: "/company/00030397/exemptions",
+    fetchedAt: "2026-09-15T12:00:00.000Z",
+    registryContextAssertion: {
+      subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", type: "company", registrationNumber: "00030397", jurisdiction: "GB" },
+      value: { pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25" },
+    },
+  }];
+  const request = discoveryRequest({ subject: {
+    ...discoveryRequest().subject,
+    name: "THE LAW DEBENTURE CORPORATION P.L.C.",
+    externalIdentifiers: [{ namespace: "GB_COMPANIES_HOUSE", value: "00030397" }],
+  } });
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(request);
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.PARTIAL);
+  assert.equal(result.candidateFacts.length, 1);
+  assert.equal(result.candidateFacts[0].type, "ENTITY_ATTRIBUTE");
+  assert.equal(result.candidateFacts[0].attribute, "REGISTRY_CONTEXT");
+  assert.equal(result.candidateFacts[0].subject.entityId, "canonical-customer");
+  assert.equal(result.candidateFacts[0].value.pscExemptionEffectiveFrom, "2021-05-25");
+  assert.equal(result.candidateFacts.some(({ type }) => type === "RELATIONSHIP"), false);
+  assert.equal(result.candidateFacts[0].evidenceReferences[0].locator.apiPath, "/company/00030397/exemptions");
+});
+
 test("Companies House LLP voting bands retain their range instead of degrading to Unknown", async () => {
   const body = response({ edges: [edge("llp-vote", "legacy-owner-node", "legacy-root-node", {
     ownershipPercentage: 25,

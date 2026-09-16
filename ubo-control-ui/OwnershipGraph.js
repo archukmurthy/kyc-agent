@@ -14,6 +14,9 @@
   const HG = 64;
   const VG = 154;
   const PAD = 72;
+  const BYPASS_LANE_GAP = 74;
+  const BYPASS_LABEL_HALF_WIDTH = 110;
+  const BYPASS_NODE_GAP = 48;
 
   const RELATIONSHIP_LABELS = Object.freeze({
     ECONOMIC_OWNERSHIP: "Economic ownership",
@@ -188,12 +191,27 @@
 
   function relationshipBasis(relationship) {
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return "LLP surplus asset rights";
-    if (relationship.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE") return "Combined appoint-or-remove right";
+    const sourceNature = String(relationship.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+    if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Right to appoint or remove directors";
+    if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Right to appoint or remove persons";
+    if (relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement) return "Formal control right reported — details not available in this result";
     return relationshipLabel(relationship.relationshipType);
+  }
+
+  function isNonPercentageControlRight(relationship) {
+    return relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement;
+  }
+
+  function isCompaniesHouseSupported(relationship) {
+    return (relationship.support?.evidenceReferences || []).some((reference) => [
+      reference.system, reference.referenceId, reference.locator?.source, reference.locator?.sourceUrl,
+    ].filter(Boolean).join(" ").toLowerCase().includes("companies-house")
+      || [reference.locator?.source].filter(Boolean).join(" ").toLowerCase().includes("companies house"));
   }
 
   function relationshipValue(relationship, detailed = false) {
     const measurement = relationship.measurement;
+    if (isNonPercentageControlRight(relationship)) return "Not applicable to this type of right";
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS"
       && measurement?.type === "RANGE" && measurement.lowerInclusive && measurement.upperBound === 100) {
       return detailed ? `≥${measurement.lowerBound}% · ${formatMeasurement(measurement, true)}` : `≥${measurement.lowerBound}%`;
@@ -204,6 +222,12 @@
   function relationshipEdgeLabel(relationship) {
     if (relationship.qualifiers?.economicInterestConcept === "SURPLUS_ASSET_RIGHTS") return `Surplus asset rights ${relationshipValue(relationship)}`;
     if (relationship.dimension === "VOTING") return `Vote · ${relationshipValue(relationship)}`;
+    if (isNonPercentageControlRight(relationship)) {
+      const sourceNature = String(relationship.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+      if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Appoint/remove directors";
+      if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Appoint/remove persons";
+      return "Formal control right";
+    }
     return relationship.measurement ? relationshipValue(relationship) : short(relationshipBasis(relationship), 32);
   }
 
@@ -235,11 +259,25 @@
       return value;
     };
     nodes.forEach(({ entityId }) => depthFor(entityId));
+    let assignedDescendant = true;
+    while (assignedDescendant) {
+      assignedDescendant = false;
+      nodes.forEach(({ entityId }) => {
+        if (depth.has(entityId)) return;
+        const parentDepths = relationships
+          .filter(({ targetEntityId, sourceEntityId }) => targetEntityId === entityId && depth.has(sourceEntityId))
+          .map(({ sourceEntityId }) => depth.get(sourceEntityId) - 1);
+        if (!parentDepths.length) return;
+        depth.set(entityId, Math.min(...parentDepths));
+        assignedDescendant = true;
+      });
+    }
     const connectedMax = Math.max(0, ...depth.values());
     nodes.forEach((node) => { if (!depth.has(node.entityId)) depth.set(node.entityId, connectedMax + 1); });
     Object.entries(projection.presentationView?.layoutDepthOverrides || {}).forEach(([entityId, value]) => {
       if (depth.has(entityId) && Number.isInteger(value) && value >= 0) depth.set(entityId, value);
     });
+    const minDepth = Math.min(0, ...depth.values());
     const maxDepth = Math.max(0, ...depth.values());
     const layers = new Map();
     nodes.forEach((node) => {
@@ -261,18 +299,78 @@
       layerNodes.forEach((node, index) => order.set(node.entityId, index));
     });
     const widest = Math.max(1, ...[...layers.values()].map((items) => items.length));
-    const width = Math.max(920, (PAD * 2) + (widest * NW) + ((widest - 1) * HG));
-    const height = (PAD * 2) + NH + (maxDepth * VG);
+    const nodeAreaWidth = Math.max(920, (PAD * 2) + (widest * NW) + ((widest - 1) * HG));
+    const bypassRelationships = relationships.filter((relationship) => {
+      const sourceDepth = depth.get(relationship.sourceEntityId);
+      const targetDepth = depth.get(relationship.targetEntityId);
+      return Number.isInteger(sourceDepth) && Number.isInteger(targetDepth) && Math.abs(sourceDepth - targetDepth) > 1;
+    });
+    const rightLaneCount = Math.ceil(bypassRelationships.length / 2);
+    const leftLaneCount = Math.floor(bypassRelationships.length / 2);
+    const laneSpace = (count) => count
+      ? BYPASS_LABEL_HALF_WIDTH + BYPASS_NODE_GAP + ((count - 1) * BYPASS_LANE_GAP)
+      : 0;
+    const leftLaneSpace = laneSpace(leftLaneCount);
+    const rightLaneSpace = laneSpace(rightLaneCount);
+    const width = nodeAreaWidth + leftLaneSpace + rightLaneSpace;
+    const height = (PAD * 2) + NH + ((maxDepth - minDepth) * VG);
     const positions = new Map();
     [...layers.entries()].forEach(([layer, layerNodes]) => {
       const layerWidth = (layerNodes.length * NW) + ((layerNodes.length - 1) * HG);
-      const startX = (width - layerWidth) / 2;
+      const startX = leftLaneSpace + ((nodeAreaWidth - layerWidth) / 2);
       layerNodes.forEach((node, index) => positions.set(node.entityId, {
         x: startX + (index * (NW + HG)),
         y: PAD + ((maxDepth - layer) * VG),
       }));
     });
-    return { width, height, positions, relationships, nodes, depths: depth };
+    const bypassLanes = new Map();
+    bypassRelationships.forEach((relationship, index) => {
+      const laneIndex = Math.floor(index / 2);
+      const right = index % 2 === 0;
+      bypassLanes.set(relationship.relationshipId, {
+        side: right ? "RIGHT" : "LEFT",
+        x: right
+          ? leftLaneSpace + nodeAreaWidth + BYPASS_NODE_GAP + (laneIndex * BYPASS_LANE_GAP)
+          : leftLaneSpace - BYPASS_NODE_GAP - (laneIndex * BYPASS_LANE_GAP),
+      });
+    });
+    return { width, height, positions, relationships, nodes, depths: depth, bypassLanes };
+  }
+
+  function relationshipEdgeGeometry(relationship, layout) {
+    const source = layout.positions.get(relationship.sourceEntityId);
+    const target = layout.positions.get(relationship.targetEntityId);
+    if (!source || !target) return null;
+    const bypassLane = layout.bypassLanes?.get(relationship.relationshipId);
+    if (bypassLane) {
+      const x1 = source.x + (NW / 2);
+      const y1 = source.y + NH;
+      const x2 = target.x + (NW / 2);
+      const y2 = target.y;
+      const direction = y2 >= y1 ? 1 : -1;
+      const elbow = Math.min(82, Math.max(42, (Math.abs(y2 - y1) - 24) / 3));
+      const firstY = y1 + (direction * elbow);
+      const lastY = y2 - (direction * elbow);
+      return {
+        kind: "BYPASS",
+        path: `M ${x1} ${y1} C ${x1} ${firstY}, ${bypassLane.x} ${firstY}, ${bypassLane.x} ${firstY} L ${bypassLane.x} ${lastY} C ${bypassLane.x} ${lastY}, ${x2} ${lastY}, ${x2} ${y2}`,
+        labelX: bypassLane.x,
+        labelY: (y1 + y2) / 2,
+        lane: bypassLane,
+      };
+    }
+    const parallelOffset = parallelRelationshipOffset(relationship, layout.relationships);
+    const x1 = source.x + (NW / 2) + parallelOffset;
+    const y1 = source.y + NH;
+    const x2 = target.x + (NW / 2) + parallelOffset;
+    const y2 = target.y;
+    const midY = y1 + ((y2 - y1) / 2);
+    return {
+      kind: "STANDARD",
+      path: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`,
+      labelX: ((x1 + x2) / 2) + (parallelOffset * 2),
+      labelY: midY,
+    };
   }
 
   function fitScale(layout, viewportWidth, viewportHeight) {
@@ -363,7 +461,7 @@
   }
 
   function badgesFor(node, projection) {
-    const output = [];
+    const output = [...(node.registryContext?.badges || [])];
     const add = (semantic, label, css) => { if ((node.semantics || []).includes(semantic)) output.push({ semantic, label, css }); };
     add("SUBJECT", "Customer", "subject");
     add("QUALIFYING_PERSON", "Qualifying", "qualifying");
@@ -426,6 +524,39 @@
       h("span", null, `${relationshipBasis(relationship)} · ${relationshipValue(relationship, true)}`)))));
   }
 
+  function DefinitionRows({ rows }) {
+    return rows.filter(([, value]) => value).map(([label, value]) => h(React.Fragment, { key: label }, h("dt", null, label), h("dd", null, value)));
+  }
+
+  function RegistryDetails({ registry, node }) {
+    if (!registry) return null;
+    const sources = registry.sources || [];
+    const effectiveDate = registry.pscExemptionEffectiveFrom
+      ? new Date(`${registry.pscExemptionEffectiveFrom}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+      : null;
+    return h(React.Fragment, null,
+      h("section", { className: "ug-detail-section ug-registry-context" },
+        h("h4", null, "Registry / legal form"),
+        h("dl", { className: "ug-definition-list" }, h(DefinitionRows, { rows: [
+          ["Legal name", registry.legalName || node.displayName],
+          ["Registration number", registry.registrationNumber],
+          ["Legal form", registry.legalForm],
+          ["Governing law", registry.governingLaw],
+          ["Registry", registry.registryName],
+          ["Place registered", registry.placeRegistered !== registry.registryName ? registry.placeRegistered : null],
+        ] })),
+        sources.length > 0 && h("ul", { className: "ug-reference-list" }, sources.map((source) => h("li", { key: `${source.system}:${source.referenceId}` }, h("strong", null, source.locator?.source || source.system), h("span", null, `${source.referenceType} · ${source.referenceId}`))))),
+      h("section", { className: "ug-detail-section" }, h("h4", null, "Jurisdiction"), h("p", null, registry.incorporatedIn || registry.jurisdiction || node.jurisdiction || "Not supplied")),
+      registry.pscStatus && h("section", { className: "ug-detail-section ug-registry-status" },
+        h("h4", null, "Special registry status"),
+        h("dl", { className: "ug-definition-list" }, h(DefinitionRows, { rows: [
+          ["PSC status", registry.pscStatus === "EXEMPT" ? "Exempt from PSC information requirement" : registry.pscStatus],
+          ["Reason", registry.pscExemptionReason],
+          ["Effective from", effectiveDate],
+        ] }))),
+      registry.researchCoverage && h("section", { className: "ug-detail-section" }, h("h4", null, "Research coverage"), h("p", null, registry.researchCoverage.reason), h("p", { className: "ug-audit-line" }, registry.researchCoverage.state)));
+  }
+
   function EntityDetails({ node, projection, detailLevel, onSelect }) {
     const qualification = projection.qualifications.find((item) => item.entityId === node.entityId);
     const calculations = projection.calculations.filter((item) => item.subjectEntityId === node.entityId);
@@ -438,6 +569,7 @@
     const conflicts = projection.conflicts.filter((item) => (item.affectedEntityIds || []).includes(node.entityId));
     const reviews = projection.reviews.filter((item) => (item.entityIds || []).includes(node.entityId));
     const category = CATEGORIES[node.category] || CATEGORIES.UNKNOWN;
+    const registry = node.registryContext || null;
     return h(React.Fragment, null,
       h("p", { className: "ug-selection-context" }, node.entityId === projection.subject.entityId
         ? "Customer under review — showing relationships that reach this entity"
@@ -445,6 +577,7 @@
       h("div", { className: "ug-detail-heading" }, h("span", { className: `ug-detail-icon ${category.css}` }, category.icon), h("div", null,
         h("p", { className: "ug-eyebrow" }, category.label), h("h3", null, node.displayName),
         h("p", { className: "ug-muted" }, [node.jurisdiction, node.entityTypeMetadata?.sourceEntityType].filter(Boolean).join(" · ")))),
+      h(RegistryDetails, { registry, node }),
       h(RelationshipContextList, { title: "Direct incoming relationships", relationships: relationshipContext.incoming, projection, onSelect }),
       h(RelationshipContextList, { title: "Direct outgoing relationships", relationships: relationshipContext.outgoing, projection, onSelect }),
       h(RelationshipContextList, { title: node.entityId === projection.subject.entityId ? "Subject-centred relationship network" : "Downstream route to customer", relationships: downstreamRelationships, projection, onSelect }),
@@ -463,7 +596,7 @@
         h("p", null, "A natural-person source fact is present, but no G2.3 qualification basis is recorded for this person."),
         directRelationships.length > 0 && h("div", { className: "ug-candidate-facts" }, directRelationships.map((relationship) => h("div", { className: "ug-state-detail", key: relationship.relationshipId },
           h("strong", null, relationshipLabel(relationship.relationshipType)),
-          h("span", null, `Direct fact: ${formatMeasurement(relationship.measurement, true)}`),
+          h("span", null, `Direct fact: ${relationshipValue(relationship, true)}`),
           unresolvedDirectRelationships.some(({ relationshipId }) => relationshipId === relationship.relationshipId) && h("span", null, "The subject-centred path remains unresolved.")))),
         h("p", { className: "ug-audit-line" }, calculations.length ? "Recorded calculations do not establish a qualifying threshold." : "No determinative effective-interest calculation is recorded.")),
       calculations.length > 0 && !qualification && h("section", { className: "ug-detail-section" }, h("h4", null, "Recorded effective interests"), calculations.map((calculation) => h("div", { className: "ug-basis", key: calculation.calculationId }, h("strong", null, `${calculation.dimension === "VOTING" ? "Voting" : "Economic"}: ${formatMeasurement(calculation.result, true)}`), (calculation.paths || []).map((path) => h(PathCard, { path, projection, onSelect, key: path.pathId }))))),
@@ -485,7 +618,7 @@
     return h(React.Fragment, null,
       h("p", { className: "ug-selection-context" }, "Showing this relationship"),
       h("p", { className: "ug-eyebrow" }, relationshipBasis(relationship)), h("h3", null, `${source?.displayName || relationship.sourceEntityId} → ${target?.displayName || relationship.targetEntityId}`),
-      h("div", { className: "ug-direct-value" }, h("span", null, "Direct relationship value"), h("strong", null, relationshipValue(relationship, true))),
+      h("div", { className: "ug-direct-value" }, h("span", null, isNonPercentageControlRight(relationship) ? "Percentage" : "Direct relationship value"), h("strong", null, relationshipValue(relationship, true))),
       h("dl", { className: "ug-definition-list" },
         h("dt", null, "From entity"), h("dd", null, source?.displayName || relationship.sourceEntityId),
         h("dt", null, "To entity"), h("dd", null, target?.displayName || relationship.targetEntityId),
@@ -495,6 +628,7 @@
         h("dt", null, "Temporal / currentness state"), h("dd", null, relationship.temporalState || "Unknown"),
         h("dt", null, "Relationship / claim state"), h("dd", null, relationship.resolutionStatus || relationship.claimState || "Unknown"),
         h("dt", null, "Evidence / support state"), h("dd", null, relationship.evidenceStatus || "UNKNOWN"),
+        isCompaniesHouseSupported(relationship) && h(React.Fragment, null, h("dt", null, "Registry source"), h("dd", null, "Recorded in Companies House PSC information")),
         sourceNature && h(React.Fragment, null, h("dt", null, "Source assertion"), h("dd", null, sourceNature)),
         interpretation && h(React.Fragment, null, h("dt", null, "Control / policy interpretation"), h("dd", null, interpretation)),
         h("dt", null, "Supporting claims"), h("dd", null, String(relationship.support?.claimCount || 0))),
@@ -514,8 +648,11 @@
   }
 
   function ReviewDetails({ review, detailLevel }) {
-    return h(React.Fragment, null, h("p", { className: "ug-eyebrow review" }, "Deliberate internal review state"), h("h3", null, relationshipLabel(review.reviewType || "Review required")), h("p", null, "This branch or conclusion requires internal review; the graph is not broken."),
+    const demo = review.demoPresentation;
+    return h(React.Fragment, null, h("p", { className: "ug-eyebrow review" }, "Deliberate internal review state"), h("h3", null, demo?.title || relationshipLabel(review.reviewType || "Review required")), h("p", null, demo?.summary || "This branch or conclusion requires internal review; the graph is not broken."),
       h("dl", { className: "ug-definition-list" }, h("dt", null, "State"), h("dd", null, review.state || "REVIEW_REQUIRED"), h("dt", null, "Reason"), h("dd", null, review.reasonCode || "Recorded review requirement")),
+      demo?.assumption && h("p", { className: "ug-audit-line" }, `Review-only working assumption: ${demo.assumption}`),
+      demo?.signoffs?.length > 0 && h("p", { className: "ug-audit-line" }, `Required sign-off: ${demo.signoffs.join(", ")}`),
       detailLevel === DETAIL_LEVEL.EXPLAIN && review.requirementIds?.length > 0 ? h("p", { className: "ug-audit-line" }, `Requirements: ${review.requirementIds.join(", ")}`) : null);
   }
 
@@ -604,7 +741,7 @@
       content || h(EmptyDetails, { projection, onSelect }));
   }
 
-  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [] }) {
+  function OwnershipGraph({ projection: supplied, detailLevel = DETAIL_LEVEL.CUSTOMER, onSelectionChange, externalSelection, className = "", height, initialView = VIEW_MODE.FIT_WIDTH, highlightEntityIds = [], highlightRelationshipIds = [], collapseIdleInspector = false, fixedViewportHeight = false, boundedViewportNavigation = false }) {
     const projection = React.useMemo(() => assertProjection(supplied), [supplied]);
     if (!Object.values(DETAIL_LEVEL).includes(detailLevel)) throw new TypeError("detailLevel must be CUSTOMER or EXPLAIN");
     if (!Object.values(VIEW_MODE).includes(initialView)) throw new TypeError("initialView must be FIT_WIDTH or OVERVIEW");
@@ -665,6 +802,11 @@
       applyFit(initialView);
     }, [projection, initialView, applyFit]);
     React.useEffect(() => {
+      if (!externalSelection) return;
+      setSelection(externalSelection);
+      if (typeof onSelectionChange === "function") onSelectionChange(externalSelection);
+    }, [externalSelection, onSelectionChange]);
+    React.useEffect(() => {
       const onResize = () => { if (fitMode.current) applyFit(fitMode.current); };
       window.addEventListener("resize", onResize);
       const observer = typeof ResizeObserver === "function" && canvasScrollRef.current ? new ResizeObserver(onResize) : null;
@@ -674,21 +816,34 @@
 
     const zoomBy = (delta) => { fitMode.current = null; setViewMode(null); setZoom((current) => Math.min(1.8, Math.max(0.2, Number((current + delta).toFixed(2))))); };
     const onWheel = (event) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
-      else { fitMode.current = null; setViewMode(null); setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY })); }
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      } else if (!boundedViewportNavigation) {
+        event.preventDefault();
+        fitMode.current = null;
+        setViewMode(null);
+        setPan((current) => ({ x: current.x - event.deltaX, y: current.y - event.deltaY }));
+      }
     };
     const onPointerDown = (event) => {
       if (event.target.closest?.("[data-graph-selectable='true']")) return;
       fitMode.current = null;
       setViewMode(null);
-      drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, pan, moved: false };
+      const viewport = canvasScrollRef.current;
+      drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: viewport?.scrollLeft || 0, scrollTop: viewport?.scrollTop || 0, pan, moved: false };
       event.currentTarget.setPointerCapture?.(event.pointerId);
     };
     const onPointerMove = (event) => {
       if (!drag.current || drag.current.id !== event.pointerId) return;
       drag.current.moved = drag.current.moved || Math.abs(event.clientX - drag.current.x) > 3 || Math.abs(event.clientY - drag.current.y) > 3;
-      setPan({ x: drag.current.pan.x + event.clientX - drag.current.x, y: drag.current.pan.y + event.clientY - drag.current.y });
+      const viewport = canvasScrollRef.current;
+      if (boundedViewportNavigation && viewport) {
+        viewport.scrollLeft = drag.current.scrollLeft - (event.clientX - drag.current.x);
+        viewport.scrollTop = drag.current.scrollTop - (event.clientY - drag.current.y);
+      } else {
+        setPan({ x: drag.current.pan.x + event.clientX - drag.current.x, y: drag.current.pan.y + event.clientY - drag.current.y });
+      }
     };
     const stopDrag = () => { drag.current = null; };
     const clearFromCanvas = (event) => {
@@ -704,17 +859,9 @@
       return activeOrder || left.relationshipId.localeCompare(right.relationshipId);
     });
     const edges = renderRelationships.map((relationship) => {
-      const source = layout.positions.get(relationship.sourceEntityId);
-      const target = layout.positions.get(relationship.targetEntityId);
-      if (!source || !target) return null;
-      const parallelOffset = parallelRelationshipOffset(relationship, layout.relationships);
-      const x1 = source.x + (NW / 2) + parallelOffset;
-      const y1 = source.y + NH;
-      const x2 = target.x + (NW / 2) + parallelOffset;
-      const y2 = target.y;
-      const midY = y1 + ((y2 - y1) / 2);
-      const labelX = ((x1 + x2) / 2) + (parallelOffset * 2);
-      const labelY = midY;
+      const geometry = relationshipEdgeGeometry(relationship, layout);
+      if (!geometry) return null;
+      const { labelX, labelY } = geometry;
       const edgeLabel = relationshipEdgeLabel(relationship);
       const labelWidth = Math.max(58, Math.min(220, 26 + (edgeLabel.length * 7)));
       const active = activeIds.has(relationship.relationshipId);
@@ -722,8 +869,8 @@
         || journeyEntityIds.has(relationship.sourceEntityId) || journeyEntityIds.has(relationship.targetEntityId);
       const css = ["ug-edge", `type-${relationship.relationshipType.toLowerCase().replaceAll("_", "-")}`, active ? "active" : "", journeyLinked ? "journey-linked" : "", activeIds.size && !active ? "muted" : "", relationship.indicators?.includes("CONFLICT") ? "conflict" : "", relationship.indicators?.includes("REVIEW_REQUIRED") ? "review" : ""].filter(Boolean).join(" ");
       const activate = () => select({ kind: "relationship", id: relationship.relationshipId });
-      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "data-relationship-id": relationship.relationshipId, "aria-label": `${relationshipBasis(relationship)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${relationshipValue(relationship)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
-        h("path", { d: `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`, markerEnd: `url(#${markerId})` }),
+      return h("g", { key: relationship.relationshipId, className: css, role: "button", tabIndex: 0, "data-graph-selectable": "true", "data-relationship-id": relationship.relationshipId, "data-edge-route": geometry.kind, "aria-label": `${relationshipBasis(relationship)} from ${nodesById.get(relationship.sourceEntityId)?.displayName} to ${nodesById.get(relationship.targetEntityId)?.displayName}, ${relationshipValue(relationship)}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
+        h("path", { d: geometry.path, markerEnd: `url(#${markerId})` }),
         h("rect", { className: "ug-edge-label-bg", x: labelX - (labelWidth / 2), y: labelY - 14, width: labelWidth, height: 28, rx: 14 }),
         h("text", { className: "ug-edge-label", x: labelX, y: labelY + 4, textAnchor: "middle" }, edgeLabel));
     });
@@ -732,35 +879,38 @@
       const position = layout.positions.get(node.entityId);
       const category = CATEGORIES[node.category] || CATEGORIES.UNKNOWN;
       const badges = badgesFor(node, projection);
+      const visibleBadges = node.registryContext
+        ? badges.slice(0, 3).map((badge, index) => ({ badge, x: 11 + (index * 61), width: 58, textX: 29, maxLength: 10 }))
+        : badges.slice(0, 2).map((badge, index) => ({ badge, x: 20 + (index * 84), width: 78, textX: 39, maxLength: 13 }));
       const selected = selection?.kind === "entity" && selection.id === node.entityId;
       const connected = selected || activeIds.size === 0 || layout.relationships.some((relationship) => activeIds.has(relationship.relationshipId) && (relationship.sourceEntityId === node.entityId || relationship.targetEntityId === node.entityId));
       const activate = () => select({ kind: "entity", id: node.entityId });
       return h("g", { key: node.entityId, className: ["ug-node", category.css, selected ? "selected" : "", journeyEntityIds.has(node.entityId) ? "journey-linked" : "", connected ? "" : "muted"].filter(Boolean).join(" "), transform: `translate(${position.x} ${position.y})`, role: "button", tabIndex: 0, "data-graph-selectable": "true", "aria-pressed": selected, "aria-label": `${node.displayName}, ${category.label}${badges.length ? `, ${badges.map((badge) => badge.label).join(", ")}` : ""}`, onClick: activate, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } },
         h("rect", { className: "ug-node-shape", width: NW, height: NH, rx: node.category === "NATURAL_PERSON" ? 44 : 18 }),
         unresolvedEntities.has(node.entityId) && h("rect", { className: "ug-unresolved-outline", x: -7, y: -7, width: NW + 14, height: NH + 14, rx: node.category === "NATURAL_PERSON" ? 51 : 24 }),
-        h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, category.label),
-        badges.slice(0, 2).map((badge, index) => h("g", { key: badge.semantic, className: `ug-svg-badge ${badge.css}`, transform: `translate(${20 + (index * 84)} 65)` }, h("rect", { width: 78, height: 19, rx: 9 }), h("text", { x: 39, y: 13, textAnchor: "middle" }, short(badge.label, 13)))));
+        h("text", { className: "ug-node-icon", x: 20, y: 30 }, category.icon), h("text", { className: "ug-node-name", x: 44, y: 30 }, short(node.displayName, 22)), h("text", { className: "ug-node-type", x: 20, y: 54 }, [category.label, node.registryContext?.registrationNumber && String(node.registryContext.registrationNumber).trim().toUpperCase()].filter(Boolean).join(" · ")),
+        visibleBadges.map(({ badge, x, width, textX, maxLength }) => h("g", { key: badge.semantic, className: `ug-svg-badge ${badge.css}`, transform: `translate(${x} 65)` }, h("rect", { width, height: 19, rx: 9 }), h("text", { x: textX, y: 13, textAnchor: "middle" }, short(badge.label, maxLength)))));
     });
 
     const stateButtons = [
       ...projection.conflicts.map((item) => ({ kind: "conflict", id: item.conflictId, label: `Conflict · ${item.claimIds.length} claims`, css: "conflict" })),
-      ...projection.reviews.map((item) => ({ kind: "review", id: item.reviewId, label: `Review · ${relationshipLabel(item.reviewType)}`, css: "review" })),
+      ...projection.reviews.map((item) => ({ kind: "review", id: item.reviewId, label: `Review · ${item.demoPresentation?.title || relationshipLabel(item.reviewType)}`, css: "review" })),
     ];
 
     return h("section", { className: `ug-shell ${className}`.trim(), style: { "--ug-viewport-height": `${Number(height) || 680}px` }, "data-contract-version": projection.contractVersion, "data-view-mode": viewMode || "MANUAL" },
       h("header", { className: "ug-header" }, h("div", null, h("p", { className: "ug-kicker" }, "UBO CONTROL · OWNERSHIP EXPLAINER"), h("h2", null, projection.subject.displayName), h("p", { className: "ug-subtitle" }, "Follow relationships downward toward the customer under review.")),
         detailLevel === DETAIL_LEVEL.EXPLAIN && h("div", { className: "ug-snapshot" }, h("span", null, `${projection.decision.checkpoint?.type || "Snapshot"} · ${projection.decision.evaluationTime || "Time unavailable"}`), h("strong", null, snapshot ? `#${snapshot}` : "Snapshot identity unavailable"), h("span", null, projection.decision.terminalOutcome || projection.decision.orchestrationState || "IN PROGRESS"))),
       h(Summary, { projection, onSelect: select }),
-      h("div", { className: "ug-workspace" },
+      h("div", { className: `ug-workspace ${collapseIdleInspector && !selection ? "details-collapsed" : ""}`.trim() },
         h("div", { className: "ug-canvas-card" },
           h("div", { className: "ug-toolbar", role: "toolbar", "aria-label": "Graph navigation controls" }, h("button", { type: "button", onClick: () => zoomBy(0.1), "aria-label": "Zoom in" }, "+"), h("button", { type: "button", onClick: () => zoomBy(-0.1), "aria-label": "Zoom out" }, "−"), h("button", { type: "button", className: viewMode === VIEW_MODE.FIT_WIDTH ? "active" : "", onClick: fitWidth, "aria-label": "Fit graph width", "aria-pressed": viewMode === VIEW_MODE.FIT_WIDTH }, "Fit width"), h("button", { type: "button", className: viewMode === VIEW_MODE.OVERVIEW ? "active" : "", onClick: overview, "aria-label": "Fit entire graph", "aria-pressed": viewMode === VIEW_MODE.OVERVIEW }, "Overview"), h("span", { "aria-live": "polite" }, `${Math.round(zoom * 100)}%`)),
-          h("div", { className: "ug-canvas-scroll", ref: canvasScrollRef, style: { maxHeight: `${height || 680}px` } }, h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { width: `${layout.width * zoom}px`, height: `${layout.height * zoom}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag, onClick: clearFromCanvas },
+          h("div", { className: "ug-canvas-scroll", ref: canvasScrollRef, style: fixedViewportHeight ? { height: `${height || 680}px` } : { maxHeight: `${height || 680}px` } }, h("svg", { className: "ug-canvas", viewBox: `0 0 ${layout.width} ${layout.height}`, style: { width: `${layout.width * zoom}px`, height: `${layout.height * zoom}px` }, role: "img", "aria-label": graphName, onWheel, onPointerDown, onPointerMove, onPointerUp: stopDrag, onPointerCancel: stopDrag, onClick: clearFromCanvas },
             h("title", null, graphName), h("desc", null, `${projection.nodes.length} entities, ${projection.relationships.length} relationships, ${projection.qualifications.length} qualifying people, ${projection.unresolved.length} unresolved items.`),
-            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: `translate(${pan.x} ${pan.y})` }, edges, nodes))),
+            h("defs", null, h("marker", { id: markerId, markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: "auto", markerUnits: "strokeWidth" }, h("path", { d: "M 0 0 L 8 4 L 0 8 z", className: "ug-arrow-head" }))), h("g", { transform: boundedViewportNavigation ? undefined : `translate(${pan.x} ${pan.y})` }, edges, nodes))),
           projection.relationships.length === 0 && h("div", { className: "ug-empty-overlay", role: "status" }, h("strong", null, "Ownership/control unresolved"), h("span", null, "No safe relationship is established yet; the customer subject remains visible.")),
           stateButtons.length > 0 && h("div", { className: "ug-state-strip", "aria-label": "Conflict and review states" }, stateButtons.map((item) => h("button", { type: "button", key: `${item.kind}:${item.id}`, className: item.css, onClick: () => select({ kind: item.kind, id: item.id }) }, item.label)))),
-        h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
-      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipLabel(relationship.relationshipType)}, ${formatMeasurement(relationship.measurement, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
+        (!collapseIdleInspector || selection) && h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
+      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipBasis(relationship)}, ${relationshipValue(relationship, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 
   return Object.freeze({ CONTRACT_VERSION, REVIEW_CONTRACT_VERSION, DETAIL_LEVEL, VIEW_MODE, OwnershipGraph, assertProjection, basisLabel, computeLayout, entityRelationshipContext, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });

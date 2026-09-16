@@ -5,6 +5,11 @@ import AdminRoot from "./admin/AdminRoot";
 import SuperAdminRoot from "./superadmin/SuperAdminRoot";
 import ChangeIntelligenceRoot from "./components/changeIntelligenceDashboard/ChangeIntelligenceRoot";
 import PolicySimulator from "./policySimulator/PolicySimulator";
+import UboDemoRoot from "./uboDemo/UboDemoRoot";
+import { isUboDemoPath } from "./uboDemo/demoRoute";
+import CustomerOwnershipChartPage from "./uboDemo/customer/CustomerOwnershipChartPage";
+import CustomerCompanyPage from "./uboDemo/customer/CustomerCompanyPage";
+import { isCustomerCompanyPath, isCustomerOwnershipChartPath } from "./uboDemo/customer/customerRoute";
 
 const path = window.location.pathname;
 // Pre-boarding agent vs. the plain customer onboarding flow is distinguished by
@@ -22,7 +27,16 @@ let title = "KYC Onboarding Agent";
 const isPolicySimulator = path === "/policy-simulator" || path.startsWith("/policy-simulator/");
 document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
 
-if (isPolicySimulator) {
+if (isCustomerOwnershipChartPath(path)) {
+  tree = <CustomerOwnershipChartPage />;
+  title = "Upload ownership chart | Ownership review demo";
+} else if (isCustomerCompanyPath(path)) {
+  tree = <CustomerCompanyPage />;
+  title = "Company details | Ownership review demo";
+} else if (isUboDemoPath(path)) {
+  tree = <UboDemoRoot />;
+  title = "Ownership review demo";
+} else if (isPolicySimulator) {
   tree = <PolicySimulator />;
   title = "UK KYB Policy Simulator";
 } else if (path === "/super-admin" || path.startsWith("/super-admin/")) {
