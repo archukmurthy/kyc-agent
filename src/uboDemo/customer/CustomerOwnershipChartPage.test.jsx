@@ -112,7 +112,7 @@ test("the customer ownership step can inspect every registry assertion handed ov
 test("direct route fails closed when demo context has not been seeded", () => {
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: /Start with a demo company/i })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Enter company details/i })).toHaveAttribute("href", "/ubo-demo/");
+  expect(screen.getByRole("link", { name: /Enter company details/i })).toHaveAttribute("href", "/ubo-demo/customer/");
 });
 
 test("one uploaded chart is sent to the isolated Evidence demo endpoint and renders source-backed results", async () => {

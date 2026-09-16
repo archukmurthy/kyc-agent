@@ -9,10 +9,10 @@ import {
   resolveCustomerDemoUrl,
 } from "./customerHandoff";
 
-test("local customer URL follows the active hostname and a configured deployment URL takes precedence", () => {
-  expect(resolveCustomerDemoUrl({ protocol: "http:", hostname: "localhost", origin: "http://localhost:3000" }, "").href).toBe("http://localhost:3002/ubo-demo/");
+test("customer URL uses the consolidated same-host route and a configured deployment URL takes precedence", () => {
+  expect(resolveCustomerDemoUrl({ protocol: "http:", hostname: "localhost", origin: "http://localhost:3000" }, "").href).toBe("http://localhost:3000/ubo-demo/customer/");
   expect(resolveCustomerDemoUrl({ protocol: "https:", hostname: "preview.example", origin: "https://preview.example" }, "https://customer.example/ubo-demo/").href).toBe("https://customer.example/ubo-demo/");
-  expect(resolveCustomerDemoUrl({ protocol: "https:", hostname: "preview.example", origin: "https://preview.example" }, "")).toBeNull();
+  expect(resolveCustomerDemoUrl({ protocol: "https:", hostname: "preview.example", origin: "https://preview.example" }, "").href).toBe("https://preview.example/ubo-demo/customer/");
 });
 
 test("handoff keeps every normalized source assertion out of the URL and delivers it only after an exact-origin ready signal", async () => {
@@ -34,16 +34,16 @@ test("handoff keeps every normalized source assertion out of the URL and deliver
     setTimeout: jest.fn(() => 7),
     clearTimeout: jest.fn(),
   };
-  const accepted = openCustomerViewHandoff(payload, { windowRef, configuredUrl: "http://localhost:3002/ubo-demo/" });
+  const accepted = openCustomerViewHandoff(payload, { windowRef });
   const openedUrl = windowRef.open.mock.calls[0][0];
   expect(openedUrl).toContain("handoff=ubo-demo-customer-handoff-v1");
   expect(openedUrl).not.toContain("fact-1");
   listeners.message({ origin: "http://malicious.example", source: customerWindow, data: { type: CUSTOMER_HANDOFF_READY } });
   expect(customerWindow.postMessage).not.toHaveBeenCalled();
-  listeners.message({ origin: "http://localhost:3002", source: customerWindow, data: { type: CUSTOMER_HANDOFF_READY } });
-  expect(customerWindow.postMessage).toHaveBeenCalledWith({ type: CUSTOMER_HANDOFF_DELIVERY, payload }, "http://localhost:3002");
-  listeners.message({ origin: "http://localhost:3002", source: customerWindow, data: { type: CUSTOMER_HANDOFF_ACCEPTED, contractVersion: CUSTOMER_HANDOFF_CONTRACT } });
-  await expect(accepted).resolves.toContain("http://localhost:3002/ubo-demo/");
+  listeners.message({ origin: "http://localhost:3000", source: customerWindow, data: { type: CUSTOMER_HANDOFF_READY } });
+  expect(customerWindow.postMessage).toHaveBeenCalledWith({ type: CUSTOMER_HANDOFF_DELIVERY, payload }, "http://localhost:3000");
+  listeners.message({ origin: "http://localhost:3000", source: customerWindow, data: { type: CUSTOMER_HANDOFF_ACCEPTED, contractVersion: CUSTOMER_HANDOFF_CONTRACT } });
+  await expect(accepted).resolves.toContain("http://localhost:3000/ubo-demo/customer/");
 });
 
 test("customer receiver accepts the complete handoff only from its exact opener origin", () => {

@@ -7,12 +7,13 @@ import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerCompanyPath } from "./customer
 
 beforeEach(() => {
   window.localStorage.clear();
-  window.history.replaceState({}, "", "/ubo-demo/");
+  window.history.replaceState({}, "", "/ubo-demo/customer/");
 });
 
 test("customer company input continues directly to ownership with no research step", () => {
   const { container } = render(<CustomerCompanyPage />);
   expect(isCustomerCompanyPath(window.location.pathname)).toBe(true);
+  expect(isCustomerCompanyPath("/ubo-demo/")).toBe(false);
   expect(screen.queryByText("Research")).not.toBeInTheDocument();
   fireEvent.change(screen.getByPlaceholderText("Enter the registered company name"), { target: { value: "ASDA Delivery Limited" } });
   fireEvent.change(screen.getByPlaceholderText("For example, 00445790"), { target: { value: "03873501" } });

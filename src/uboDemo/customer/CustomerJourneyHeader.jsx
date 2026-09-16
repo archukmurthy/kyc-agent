@@ -5,7 +5,7 @@ const STEPS = ["Company", "Ownership", "Review"];
 export default function CustomerJourneyHeader({ currentStep }) {
   return <>
     <header className="ubo-customer-header">
-      <a className="ubo-customer-brand" href="/ubo-demo/"><span>N</span><strong>Ownership review</strong></a>
+      <a className="ubo-customer-brand" href="/ubo-demo/customer/"><span>N</span><strong>Ownership review</strong></a>
       <span className="ubo-customer-secure">Customer journey · Demo</span>
     </header>
     <ol className="ubo-customer-progress" aria-label="Customer journey progress">

@@ -246,7 +246,7 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   fireEvent.click(screen.getByText(/1 assertions · click to inspect/));
   expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
-  expect(screen.getByText(/Provide the missing ownership information/)).toBeInTheDocument();
+  expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
   expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();

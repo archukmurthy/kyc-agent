@@ -1,14 +1,13 @@
+import { CUSTOMER_DEMO_START_PATH } from "./customer/customerRoute";
+
 export const CUSTOMER_HANDOFF_CONTRACT = "ubo-demo-customer-handoff-v1";
 export const CUSTOMER_HANDOFF_READY = "ubo-demo-customer-handoff-ready-v1";
 export const CUSTOMER_HANDOFF_DELIVERY = "ubo-demo-customer-handoff-delivery-v1";
 export const CUSTOMER_HANDOFF_ACCEPTED = "ubo-demo-customer-handoff-accepted-v1";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-
 export function resolveCustomerDemoUrl(location = window.location, configuredUrl = process.env.REACT_APP_UBO_CUSTOMER_DEMO_URL) {
   if (configuredUrl) return new URL(configuredUrl, location.origin);
-  if (LOCAL_HOSTS.has(location.hostname)) return new URL(`${location.protocol}//${location.hostname}:3002/ubo-demo/`);
-  return null;
+  return new URL(CUSTOMER_DEMO_START_PATH, location.origin);
 }
 
 export function buildCustomerHandoff({ draft, demoCase, researchResult }, now = () => new Date().toISOString()) {
