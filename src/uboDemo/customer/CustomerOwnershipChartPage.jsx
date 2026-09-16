@@ -5,8 +5,8 @@ import AssertionDetails from "../AssertionDetails";
 import {
   clearCustomerOwnershipChartSession,
   customerOwnershipChartExtractionsForContext,
+  customerOwnershipChartSessionForContext,
   readCustomerDemoContext,
-  readCustomerOwnershipChartSession,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
@@ -160,7 +160,7 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
 
 export default function CustomerOwnershipChartPage() {
   const context = useMemo(() => readCustomerDemoContext(), []);
-  const restored = useMemo(() => readCustomerOwnershipChartSession(), []);
+  const restored = useMemo(() => customerOwnershipChartSessionForContext(context), [context]);
   const availableExtractions = useMemo(() => customerOwnershipChartExtractionsForContext(context), [context]);
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");

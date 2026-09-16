@@ -4,6 +4,7 @@ import "@testing-library/jest-dom";
 import CustomerCompanyPage from "./CustomerCompanyPage";
 import { DEMO_SESSION_KEY } from "../demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerCompanyPath } from "./customerRoute";
+import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customerOwnershipChartSession";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -29,7 +30,7 @@ test("customer company input continues directly to ownership with no research st
   expect(saved.researchResult).toBeNull();
 });
 
-test("customer company input preserves an existing opaque research reference", () => {
+test("customer company input does not attach an unbound research reference to a newly entered company", () => {
   window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: "ubo-demo-browser-session-v1",
     draft: {},
@@ -39,8 +40,26 @@ test("customer company input preserves an existing opaque research reference", (
   fireEvent.change(screen.getByPlaceholderText("Enter the registered company name"), { target: { value: "ASDA Delivery Limited" } });
   fireEvent.change(screen.getByPlaceholderText("For example, 00445790"), { target: { value: "03873501" } });
   fireEvent.submit(container.querySelector("form"));
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResultReference)
-    .toEqual({ contract: "future", token: "opaque-1" });
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResultReference).toBeUndefined();
+});
+
+test("changing company creates a new case and clears cross-company research and active chart state", () => {
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: "ubo-demo-browser-session-v1",
+    draft: { legalName: "Old Company Limited", registrationNumber: "00999999", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "" },
+    demoCase: { demoCaseId: "old-case", referenceCaseId: "", company: { legalName: "Old Company Limited", registrationNumber: "00999999", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: { candidateSources: [{ candidateFacts: [{ factId: "old-fact" }] }] },
+  }));
+  window.localStorage.setItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY, JSON.stringify({ contractVersion: "ubo-demo-customer-ownership-chart-session-v1", context: { demoCaseId: "old-case" }, result: { artifact: { artifactId: "old-artifact" } } }));
+  const { container } = render(<CustomerCompanyPage />);
+  fireEvent.change(screen.getByPlaceholderText("Enter the registered company name"), { target: { value: "Vodafone Limited" } });
+  fireEvent.change(screen.getByPlaceholderText("For example, 00445790"), { target: { value: "01471587" } });
+  fireEvent.submit(container.querySelector("form"));
+
+  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(saved.demoCase.demoCaseId).not.toBe("old-case");
+  expect(saved.researchResult).toBeNull();
+  expect(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).toBeNull();
 });
 
 test("a connected analyst case keeps its case identity and every source assertion when customer ownership continues", () => {

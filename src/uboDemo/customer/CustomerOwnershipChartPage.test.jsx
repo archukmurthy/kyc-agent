@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
-import { projectGraph } from "./ChartAnalysisPanel";
+import { graphForChartPresentation, projectGraph } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
@@ -27,6 +27,7 @@ const demoCase = {
 
 const analysis = {
   contractVersion: "ubo-demo-customer-ownership-chart-result-v1",
+  company: { ...demoCase.company },
   artifact: { artifactId: "artifact-1", originalFilename: "ownership-chart.png", mediaType: "image/png", sizeBytes: 2048, integrityVerified: true },
   certification: {
     status: "FOUND",
@@ -212,6 +213,25 @@ test("customer result refresh restore is case-bound and preserves an opaque rese
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.opaqueResearchReference).toEqual(context.opaqueResearchReference);
 });
 
+test("an active extraction from another company is never restored even when a reused case ID matches", () => {
+  seed();
+  const current = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({
+    context: {
+      ...current,
+      company: { ...current.company, legalName: "Old Company Limited", registrationNumber: "00999999" },
+    },
+    result: {
+      ...analysis,
+      company: { ...analysis.company, legalName: "Old Company Limited", registrationNumber: "00999999" },
+    },
+  });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: /Upload your ownership chart/i })).toBeInTheDocument();
+  expect(screen.queryByText("ownership-chart.png")).not.toBeInTheDocument();
+});
+
 test("the result page offers read-only source comparison without open-question consumption or final decisioning", () => {
   seed();
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: analysis });
@@ -251,4 +271,23 @@ test("graph filters preserve source-projection nodes and relationship endpoints"
   expect(projected.nodes.map(({ entityId }) => entityId)).toEqual(["alice", "customer"]);
   expect(projected.relationships).toHaveLength(1);
   expect(source.nodes).toHaveLength(2);
+});
+
+test("chart presentation keeps the complete source graph when the operative engine graph contains only one safe edge", () => {
+  const operative = {
+    nodes: [{ entityId: "subject" }, { entityId: "direct-owner" }],
+    relationships: [{ relationshipId: "operative-1", sourceEntityId: "direct-owner", targetEntityId: "subject", dimension: "ECONOMIC" }],
+  };
+  const source = {
+    nodes: ["subject", "direct-owner", "holdco", "parent", "person"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "source-1", sourceEntityId: "direct-owner", targetEntityId: "subject", dimension: "ECONOMIC" },
+      { relationshipId: "source-2", sourceEntityId: "holdco", targetEntityId: "direct-owner", dimension: "ECONOMIC" },
+      { relationshipId: "source-3", sourceEntityId: "parent", targetEntityId: "holdco", dimension: "ECONOMIC" },
+      { relationshipId: "source-4", sourceEntityId: "person", targetEntityId: "parent", dimension: "ECONOMIC" },
+    ],
+  };
+
+  expect(graphForChartPresentation(operative, source)).toBe(source);
+  expect(projectGraph(graphForChartPresentation(operative, source), "FULL", "ALL").relationships).toHaveLength(4);
 });

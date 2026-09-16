@@ -18,8 +18,13 @@ function safeParse(raw) {
 
 function normalized(value) { return String(value || "").trim().toUpperCase(); }
 
-function companyKey(company) {
+export function customerCompanyKey(company) {
   return [normalized(company?.countryCode), normalized(company?.registrationNumber), normalized(company?.legalName)].join("|");
+}
+
+export function sameCustomerCompany(left, right) {
+  const leftKey = customerCompanyKey(left);
+  return leftKey !== "||" && leftKey === customerCompanyKey(right);
 }
 
 function resultKey(result) {
@@ -57,6 +62,14 @@ export function readCustomerOwnershipChartSession(storage = window.localStorage)
   return parsed?.contractVersion === CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION ? parsed : null;
 }
 
+export function customerOwnershipChartSessionForContext(context, storage = window.localStorage) {
+  const session = readCustomerOwnershipChartSession(storage);
+  if (!session || session.context?.demoCaseId !== context?.demoCaseId) return null;
+  if (!sameCustomerCompany(session.context?.company, context?.company)) return null;
+  if (session.result?.company && !sameCustomerCompany(session.result.company, context.company)) return null;
+  return session;
+}
+
 export function readCustomerOwnershipChartExtractions(storage = window.localStorage) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY));
   if (parsed?.contractVersion !== CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION || !Array.isArray(parsed.records)) return [];
@@ -64,20 +77,22 @@ export function readCustomerOwnershipChartExtractions(storage = window.localStor
 }
 
 export function customerOwnershipChartExtractionsForContext(context, storage = window.localStorage) {
-  const key = companyKey(context?.company);
-  return readCustomerOwnershipChartExtractions(storage).filter((record) => record.companyKey === key);
+  const key = customerCompanyKey(context?.company);
+  return readCustomerOwnershipChartExtractions(storage).filter((record) => record.companyKey === key
+    && (!record.result?.company || sameCustomerCompany(record.result.company, context.company)));
 }
 
 export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "POLICY_ALL_ROUTES" }, storage = window.localStorage) {
   if (!context?.company || !result?.artifact?.artifactId || !resultKey(result)) throw new TypeError("A company-bound Artifact extraction is required for local replay.");
+  if (result.company && !sameCustomerCompany(context.company, result.company)) throw new TypeError("The extraction belongs to a different company and cannot be saved to this case.");
   assertReplaySafe(result);
   const savedAt = new Date().toISOString();
-  const recordId = `chart-extraction:${companyKey(context.company)}:${resultKey(result)}`;
+  const recordId = `chart-extraction:${customerCompanyKey(context.company)}:${resultKey(result)}`;
   const record = {
     contractVersion: "ubo-demo-customer-ownership-chart-extraction-v1",
     recordId,
     savedAt,
-    companyKey: companyKey(context.company),
+    companyKey: customerCompanyKey(context.company),
     company: { ...context.company },
     result,
     calculationMethod,
@@ -94,15 +109,17 @@ export function saveCustomerOwnershipChartExtraction({ context, result, calculat
 
 export function writeCustomerDemoCase({ draft, demoCase }, storage = window.localStorage) {
   const current = safeParse(storage.getItem(DEMO_SESSION_KEY));
+  const sameCompany = sameCustomerCompany(current?.demoCase?.company, demoCase?.company);
   const opaqueReferences = Object.fromEntries(RESEARCH_REFERENCE_KEYS
-    .filter((key) => current?.[key] !== undefined)
+    .filter((key) => sameCompany && current?.[key] !== undefined)
     .map((key) => [key, current[key]]));
+  if (!sameCompany) clearCustomerOwnershipChartSession(storage);
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     savedAt: new Date().toISOString(),
     draft,
     demoCase,
-    researchResult: current?.researchResult || null,
+    researchResult: sameCompany ? current?.researchResult || null : null,
     ...opaqueReferences,
   }));
 }

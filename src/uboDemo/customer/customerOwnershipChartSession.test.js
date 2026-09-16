@@ -2,6 +2,7 @@ import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
   clearCustomerOwnershipChartSession,
   customerOwnershipChartExtractionsForContext,
+  customerOwnershipChartSessionForContext,
   readCustomerOwnershipChartExtractions,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
@@ -17,6 +18,7 @@ const context = {
 };
 
 const result = {
+  company: { ...context.company },
   artifact: {
     artifactId: "artifact-1",
     originalFilename: "ownership-chart.png",
@@ -58,6 +60,22 @@ test("does not offer one company's extraction to another company", () => {
   };
 
   expect(customerOwnershipChartExtractionsForContext(otherContext)).toEqual([]);
+});
+
+test("fails closed when a result company does not match the company-bound replay record", () => {
+  expect(() => saveCustomerOwnershipChartExtraction({
+    context,
+    result: { ...result, company: { ...result.company, registrationNumber: "00999999" } },
+  })).toThrow(/different company/);
+});
+
+test("an active result requires both the case ID and company identity to match", () => {
+  writeCustomerOwnershipChartSession({ context, result });
+  expect(customerOwnershipChartSessionForContext(context)).not.toBeNull();
+  expect(customerOwnershipChartSessionForContext({
+    ...context,
+    company: { ...context.company, legalName: "Other Limited", registrationNumber: "00999999" },
+  })).toBeNull();
 });
 
 test("rejects any result that attempts to put document content into browser replay storage", () => {
