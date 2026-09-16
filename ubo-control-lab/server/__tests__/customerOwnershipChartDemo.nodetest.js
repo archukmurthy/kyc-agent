@@ -286,6 +286,35 @@ test("Bettercomms subject punctuation variant maps to one customer node in sourc
   assert.equal(analysis.view.graph.relationships[0].objectEntityId, analysis.view.graph.subjectEntityId);
 });
 
+test("a sibling subsidiary does not make a customer-connected Bettercomms chart incomplete", () => {
+  const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "14605186", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
+  const party = (name, entityType = "LEGAL_ENTITY") => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const fact = (factId, subject, object, value) => ({
+    factId,
+    type: "RELATIONSHIP",
+    subject,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object,
+    measurement: { type: "EXACT", value },
+    qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ referenceId: "bettercomms-chart" }],
+  });
+  const holdco = party("Better Holdco");
+  const subject = party("Better Comms VOIP Ltd");
+  const graph = buildSourceGraph([
+    fact("mitchell-holdco", party("Mitchell Fortescue", "NATURAL_PERSON"), holdco, 75),
+    fact("holdco-customer", holdco, subject, 100),
+    fact("holdco-sibling", holdco, party("Better Network Services"), 100),
+  ], company, { artifactId: "artifact-bettercomms", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" }, "request-bettercomms");
+
+  assert.deepEqual(sourceGraphCoverage(graph), {
+    state: "CONNECTED",
+    sourceRelationshipCount: 3,
+    subjectConnectedRelationshipCount: 2,
+    disconnectedRelationshipIds: [],
+  });
+});
+
 test("a Vodafone source map that stops above the customer is marked incomplete instead of presented as a complete chart", () => {
   const company = { legalName: "Vodafone Limited", countryCode: "GB" };
   const party = (name) => ({ name, entityType: "LEGAL_ENTITY", externalIdentifiers: [], sourcePartySnapshot: {} });

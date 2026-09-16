@@ -399,8 +399,27 @@ function sourceGraphCoverage(graph) {
       }
     });
   }
+
+  // A chart can legitimately show another subsidiary of an entity that is on
+  // the customer's ownership path. Keep that source context in the full graph,
+  // but do not treat the downstream sibling branch as evidence that the chart
+  // failed to reach the customer.
+  const contextualNodes = new Set(connectedNodes);
+  const contextualRelationships = new Set(connectedRelationships);
+  changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      if (!contextualNodes.has(relationship.sourceEntityId)) return;
+      contextualRelationships.add(relationship.relationshipId);
+      if (!contextualNodes.has(relationship.targetEntityId)) {
+        contextualNodes.add(relationship.targetEntityId);
+        changed = true;
+      }
+    });
+  }
   const disconnectedRelationshipIds = relationships
-    .filter(({ relationshipId }) => !connectedRelationships.has(relationshipId))
+    .filter(({ relationshipId }) => !contextualRelationships.has(relationshipId))
     .map(({ relationshipId }) => relationshipId);
   return {
     state: disconnectedRelationshipIds.length ? "REVIEW_REQUIRED" : "CONNECTED",
