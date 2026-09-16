@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { COUNTRIES } from "../../constants/appConstants";
 import {
   createDemoCase,
@@ -6,16 +6,30 @@ import {
   OWNERSHIP_TYPES,
   readDemoSession,
   validateDemoDraft,
+  writeDemoSession,
 } from "../demoSession";
+import { listenForCustomerHandoff } from "../customerHandoff";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import { writeCustomerDemoCase } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import "./customerOwnershipChart.css";
 
 export default function CustomerCompanyPage() {
-  const restoredDraft = useMemo(() => readDemoSession()?.draft || emptyDemoDraft(), []);
-  const [draft, setDraft] = useState(restoredDraft);
+  const restored = useMemo(() => readDemoSession(), []);
+  const [draft, setDraft] = useState(restored?.draft || emptyDemoDraft());
+  const [demoCase, setDemoCase] = useState(restored?.demoCase || null);
+  const [researchResult, setResearchResult] = useState(restored?.researchResult || null);
   const [errors, setErrors] = useState({});
+  useEffect(() => listenForCustomerHandoff((handoff) => {
+    writeDemoSession(handoff);
+    setDraft(handoff.draft);
+    setDemoCase(handoff.demoCase);
+    setResearchResult(handoff.researchResult);
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("handoff");
+    clean.searchParams.delete("handoffOrigin");
+    window.history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
+  }), []);
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const submit = (event) => {
     const nextErrors = validateDemoDraft(draft);
@@ -24,13 +38,16 @@ export default function CustomerCompanyPage() {
       event.preventDefault();
       return;
     }
-    writeCustomerDemoCase({ draft, demoCase: createDemoCase(draft) });
+    const created = createDemoCase(draft);
+    writeCustomerDemoCase({ draft, demoCase: demoCase?.demoCaseId ? { ...created, demoCaseId: demoCase.demoCaseId } : created });
   };
+  const assertionCount = (researchResult?.candidateSources || []).reduce((count, source) => count + (source.candidateFacts || []).length, 0);
 
   return <div className="ubo-customer-page">
     <CustomerJourneyHeader currentStep={1} />
     <main className="ubo-customer-main ubo-customer-company-main">
       <div className="ubo-customer-intro"><span>Step 1 · Company</span><h1>Tell us about your company</h1><p>We’ll use these details to connect your ownership chart to the right company.</p></div>
+      {assertionCount > 0 && <aside className="ubo-customer-connected" role="status"><strong>Connected to existing ownership research</strong><p>{assertionCount} source assertion{assertionCount === 1 ? "" : "s"} will continue with this same demo case.</p></aside>}
       <form className="ubo-customer-card ubo-customer-company-form" action={CUSTOMER_OWNERSHIP_CHART_PATH} method="get" onSubmit={submit}>
         <label className="wide"><span>Company name *</span><input autoComplete="organization" value={draft.legalName} onChange={(event) => update("legalName", event.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <small className="ubo-customer-field-error">{errors.legalName}</small>}</label>
         <label><span>Registration number *</span><input value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} placeholder="For example, 00445790" />{errors.registrationNumber && <small className="ubo-customer-field-error">{errors.registrationNumber}</small>}</label>
