@@ -59,7 +59,7 @@ Five parts, built in this order. Each is independently shippable and independent
 ### 3.2 Decisions
 
 1. **Entry:** `/preboarding?tenant=<id>` (own path, mirrors `/admin`). `/?tenant=<id>&preboarding=1` **redirects** to it (client-side, preserving other params).
-2. **Per-tenant switch:** `preboarding.enabled` in tenant config; **super admin only** toggles it (tenant card). Tenant admins see a read-only indicator.
+2. **Per-tenant switch:** `preboardingEnabled` on the **tenant registry entry** (not the tenant config — a config rollback must never silently re-open or close pre-boarding); **super admin only** toggles it (tenant card, `PUT /api/tenants?action=toggle-preboarding`). Tenant admins see a read-only indicator.
 3. **Password:** one shared, **server-checked** analyst password (`PREBOARDING_PASSWORD` env). Per-tenant passwords → PREB-3.
 4. **Tenant binding:** the pre-boarding auth response carries the verified tenant; the client uses it for dossier saves and invite links.
 5. **No silent tenant creation:** config GET seeds only for tenants that exist (registry entry, or a pre-existing non-blank config for legacy tenants).
