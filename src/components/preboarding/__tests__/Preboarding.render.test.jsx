@@ -483,15 +483,25 @@ describe("invite screen", () => {
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
       });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
+      });
 
     await driveToInvite();
     await sendInvite();
 
     const text = bodyText();
     expect(text).toMatch(/Onboarding link/i);
-    expect(text).toContain("dossierId=dossier_abc123");
+    expect(text).toContain("dossierToken=signed.tok");
     expect(text).toContain("journey=customer");
-    // The legacy fallback must NOT be used when a dossier exists.
+    // No raw dossier id and no legacy link ever reach the screen.
+    expect(text).not.toContain("dossierId=");
     expect(text).not.toContain("?ref=");
   });
 
@@ -501,9 +511,31 @@ describe("invite screen", () => {
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
       });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
+      });
 
     await driveToInvite();
     await sendInvite();
     expect(buttonsWithText(/Copy link/i).length).toBe(1);
+  });
+
+  it("POPULATED - the invite request carries the analyst credential", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    let inviteHeaders = null;
+    fetchRoutes["/api/invite"] = (url, opts) => {
+      inviteHeaders = opts && opts.headers;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=t&journey=customer" }) });
+    };
+    await driveToInvite();
+    await sendInvite();
+    expect(inviteHeaders.Authorization).toBe("Bearer ARCH");
   });
 });

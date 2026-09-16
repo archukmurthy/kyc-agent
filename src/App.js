@@ -139,6 +139,7 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { resolveInputType } from "./utils/dateFields";
+import { setAnalystCredential, getDossierAuthHeaders } from "./utils/dossierCredential";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
@@ -2744,7 +2745,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (dossierId) {
         fetch("/api/search-attempt", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
           body: JSON.stringify({ dossierId }),
         })
           .then((r) => r.json())
@@ -4671,10 +4672,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     try {
       const response = await fetch("/api/save-dossier", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
+      if (response.status === 403 && result.error === "dossier_locked") {
+        setDossierSaveError("The customer has taken over this application, so it can no longer be changed here.");
+        return;
+      }
       if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
         setDossierId(result.dossierId);
@@ -4729,6 +4734,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         tenantId={tenantId}
         onUnlocked={(token, resolvedTenantId) => {
           setPreboardingToken(token);
+          setAnalystCredential(token);
           setPreboardingTenantId(resolvedTenantId || tenantId);
           setPreboardingUnlocked(true);
           setStep(0);
