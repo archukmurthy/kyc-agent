@@ -1,0 +1,94 @@
+const { test, before, after } = require("node:test");
+const assert = require("node:assert");
+const handler = require("../change-events");
+
+let prevUrl;
+before(() => { prevUrl = process.env.DATABASE_URL; process.env.DATABASE_URL = "postgres://test"; });
+after(() => { if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl; });
+
+function fakeRes() {
+  return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
+}
+
+function fakeSql(dossierRow) {
+  const log = [];
+  const sql = (strings, ...values) => {
+    const text = strings.join(" ");
+    log.push({ text, values });
+    if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) return Promise.resolve(dossierRow ? [dossierRow] : []);
+    return Promise.resolve([]);
+  };
+  sql.log = log;
+  return sql;
+}
+
+function accessWith(actor) {
+  const real = require("../../lib/dossierAccess");
+  return { ...real, resolveDossierActor: async () => actor };
+}
+
+const ROW = { id: "d-1", tenant_id: "acme", owned_by: "analyst" };
+const event = { submissionId: "d-1", fieldId: "company_name" };
+const ANALYST = { kind: "analyst", tenantId: "acme", dossierId: null, reason: null };
+const CUSTOMER = { kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null };
+
+function deps(sql, actor, onWrite) {
+  return {
+    neon: () => sql,
+    writeEvent: async (_sql, ev) => { if (onWrite) onWrite(ev); return { id: "e-1", field_id: ev.fieldId, workflow: "x" }; },
+    access: accessWith(actor),
+  };
+}
+
+test("a fresh application (no matching dossier) writes exactly as before, with no credential", async () => {
+  let wrote = false;
+  const sql = fakeSql(null);
+  handler.__setDeps(deps(sql, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event, submissionId: "fresh-app" }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.strictEqual(wrote, true);
+});
+
+test("a dossier-keyed record with no credential is refused and not written", async () => {
+  let wrote = false;
+  handler.__setDeps(deps(fakeSql(ROW), { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 401);
+  assert.strictEqual(wrote, false);
+});
+
+test("an analyst cannot add records to a customer-owned dossier", async () => {
+  let wrote = false;
+  handler.__setDeps(deps(fakeSql({ ...ROW, owned_by: "customer" }), ANALYST, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 403);
+  assert.deepStrictEqual(res.body, { error: "dossier_locked" });
+  assert.strictEqual(wrote, false);
+});
+
+test("a customer's record is written and transfers ownership of the dossier", async () => {
+  let wrote = false;
+  const sql = fakeSql(ROW);
+  handler.__setDeps(deps(sql, CUSTOMER, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(wrote, true);
+  const flip = sql.log.find((s) => /UPDATE entity_dossiers/i.test(s.text));
+  assert.ok(flip, "expected an ownership update");
+  assert.match(flip.text, /owned_by/);
+  assert.ok(flip.values.includes("d-1"));
+});
+
+test("a customer cannot add records to another dossier", async () => {
+  let wrote = false;
+  handler.__setDeps(deps(fakeSql({ ...ROW, id: "d-2" }), CUSTOMER, () => { wrote = true; }));
+  const res = fakeRes();
+  await handler({ method: "POST", body: { ...event, submissionId: "d-2" }, headers: {}, query: {} }, res);
+  assert.strictEqual(res.statusCode, 403);
+  assert.strictEqual(wrote, false);
+});

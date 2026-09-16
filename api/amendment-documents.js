@@ -5,18 +5,27 @@
 // documents the customer currently owes because of their changes. All logic is in
 // the pure module; this route is a thin wrapper (load → derive → respond).
 //
+// A submissionId that matches a DOSSIER (entity_dossiers row) requires a
+// read-capable credential (lib/dossierAccess.js) — an analyst scoped to that
+// tenant, or the dossier's own customer token. A submissionId that matches no
+// dossier is a fresh application and is read exactly as before, with no
+// credential required (backlog PLAT-7).
+//
 // Data flows ONE way: the dialogue writes events (api/change-events.js) → this
 // route derives the doc list → the Fill Gaps component renders it. This route
 // never writes and never reaches into the dialogue or the engine.
 //
 // CommonJS (module.exports), mirroring api/get-dossier.js. GET; the submission id
-// arrives as req.query.submissionId. NOTE: src/setupProxy.js (DO-NOT-TOUCH) mounts
-// routes explicitly, so this endpoint is live on Vercel but NOT under local
-// `npm start`; verified locally via direct handler invocation.
+// arrives as req.query.submissionId. src/setupProxy.js mounts this route
+// explicitly so it also works under local `npm start`.
 
 const { neon } = require("@neondatabase/serverless");
 const { getEventsBySubmission } = require("../src/changeIntelligence/events/readEvents");
 const { deriveAmendmentDocuments } = require("../src/changeIntelligence/amendmentDocuments");
+const dossierAccess = require("../lib/dossierAccess");
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+let _deps = { neon, getEventsBySubmission, deriveAmendmentDocuments, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") {
@@ -33,10 +42,36 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ documents: [] });
   }
 
+  // Is this a DOSSIER's documents? This lookup is a security boundary: if it
+  // cannot run (a bad connection, a schema mismatch, …) we fail CLOSED with a
+  // controlled 5xx rather than risk treating a dossier-keyed read as an
+  // unauthenticated "fresh application" read.
+  let sql;
+  let dossier = null;
   try {
-    const sql = neon(process.env.DATABASE_URL);
-    const events = await getEventsBySubmission(sql, submissionId);
-    const documents = deriveAmendmentDocuments(events);
+    sql = _deps.neon(process.env.DATABASE_URL);
+    const found = await sql`
+      SELECT id, tenant_id, owned_by
+      FROM entity_dossiers
+      WHERE id::text = ${String(submissionId)} AND status != 'deleted'
+      LIMIT 1
+    `;
+    dossier = found.length ? found[0] : null;
+  } catch (err) {
+    console.error("[amendment-documents] dossier lookup failed", err);
+    return res.status(500).json({ error: "lookup_failed" });
+  }
+
+  if (dossier) {
+    const actor = await _deps.access.resolveDossierActor(req);
+    const permitted = _deps.access.canReadDossier(actor, dossier);
+    if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
+  }
+  // A fresh application (no dossier) is unchanged — backlog PLAT-7.
+
+  try {
+    const events = await _deps.getEventsBySubmission(sql, submissionId);
+    const documents = _deps.deriveAmendmentDocuments(events);
     return res.status(200).json({ documents });
   } catch (err) {
     // A read failure must not break the Fill Gaps page — return an empty list
@@ -45,3 +80,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ documents: [], warning: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
