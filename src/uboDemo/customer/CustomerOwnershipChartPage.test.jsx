@@ -145,6 +145,21 @@ test("invalid file types are rejected before any request", () => {
   expect(window.fetch).not.toHaveBeenCalled();
 });
 
+test("a server-side analysis failure distinguishes ingestion from provider timeout", async () => {
+  seed();
+  window.fetch = jest.fn(async () => ({
+    ok: false,
+    status: 502,
+    json: async () => ({ success: false, code: "provider_timeout", message: "We could not analyse this ownership chart. Please try again." }),
+  }));
+  const { container } = render(<CustomerOwnershipChartPage />);
+  const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("document was received");
+  expect(screen.getByRole("alert")).toHaveTextContent("Reference: provider_timeout (502)");
+});
+
 test("customer result refresh restore is case-bound and preserves an opaque research reference without inspecting it", () => {
   seed({ researchResultReference: { kind: "future-contract", token: "research-ref-1", nested: { intentionally: "unknown" } } });
   const context = readCustomerDemoContext();
