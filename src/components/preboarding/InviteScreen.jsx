@@ -25,6 +25,7 @@ import React from "react";
 export function InviteScreen({
   research,
   companyName,
+  brandName,
   tenantId,
   dossierId,
   inviteEmail,
@@ -38,6 +39,7 @@ export function InviteScreen({
   setShowInviteScreen,
 }) {
     const companyDisplayName = research?.companyName || companyName || 'the company';
+    const brand = brandName || tenantId || 'the company';
 
     // The dossier-backed link — the single source of truth for what gets sent.
     // Only callable once a dossier is saved (dossierId truthy); callers must
@@ -79,7 +81,7 @@ export function InviteScreen({
 
     const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
 
-Thank you for your interest in Nium. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
+Thank you for your interest in ${brand}. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
 
 Please complete your onboarding by clicking the link below:
 
@@ -87,10 +89,10 @@ ${inviteLink || '[Onboarding link will appear here]'}
 
 This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
 
-If you have any questions, please do not hesitate to reach out to your Nium contact.
+If you have any questions, please do not hesitate to reach out to your ${brand} contact.
 
 Best regards,
-Nium Onboarding Team`;
+${brand} Onboarding Team`;
 
     const stepLabels = ['Company Input', 'Research', 'Dossier Review', 'Invite Customer'];
 
@@ -242,7 +244,7 @@ Nium Onboarding Team`;
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
               <strong>To:</strong> {inviteEmail || '[customer email]'}
               &nbsp;·&nbsp;
-              <strong>Subject:</strong> Your Nium onboarding is ready - {companyDisplayName}
+              <strong>Subject:</strong> Your {brand} onboarding is ready - {companyDisplayName}
             </div>
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
               <pre style={{

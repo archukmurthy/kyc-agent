@@ -59,6 +59,7 @@ import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
+import { buildLocalDefaultConfig } from "../../../config/localDefaultConfig";
 
 jest.setTimeout(60000);
 
@@ -155,6 +156,31 @@ const CARD_C = "I'll complete the form myself";
 const CARD_D = "Nium API Lookup";
 const CARD_E = "Run for max prefill";
 
+// Task 13: Card C only renders when the tenant configured its own manual
+// application form URL (App.js manualFormUrl_ / JourneyPicker's manualFormUrl
+// prop). The suite's default fetch mock (see beforeEach above) falls back to
+// buildLocalDefaultConfig(), which ships an empty manualFormUrl by design —
+// so by default Card C is ABSENT. Tests that exercise Card C's own behaviour
+// opt in via this helper, which makes only /api/config resolve (with a
+// manual form URL configured), leaving every other endpoint rejecting exactly
+// as the suite-wide mock does.
+const TEST_MANUAL_FORM_URL = "https://acme.example/apply";
+function withManualFormUrlConfigured() {
+  const base = buildLocalDefaultConfig();
+  global.fetch = jest.fn((url) => {
+    if (typeof url === "string" && url.startsWith("/api/config")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...base,
+          company: { ...base.company, manualFormUrl: TEST_MANUAL_FORM_URL },
+        }),
+      });
+    }
+    return Promise.reject(new Error("offline test"));
+  });
+}
+
 const continueBtn = () => screen.getByRole("button", { name: /^Continue/ });
 const backBtn = () => screen.getByRole("button", { name: /Back/ });
 
@@ -195,12 +221,18 @@ describe("reaching the journey picker", () => {
 });
 
 describe("the cards that render", () => {
-  it("renders cards A, B, C and E", async () => {
+  it("renders cards A, B and E; card C is absent with no manual form URL configured", async () => {
     await driveToPicker();
     expect(screen.getByText(CARD_A)).toBeInTheDocument();
     expect(screen.getByText(CARD_B)).toBeInTheDocument();
-    expect(screen.getByText(CARD_C)).toBeInTheDocument();
+    expect(screen.queryByText(CARD_C)).not.toBeInTheDocument();
     expect(screen.getByText(CARD_E)).toBeInTheDocument();
+  });
+
+  it("renders card C once the tenant has configured a manual form URL", async () => {
+    withManualFormUrlConfigured();
+    await driveToPicker();
+    expect(screen.getByText(CARD_C)).toBeInTheDocument();
   });
 
   it("badges card A as Recommended and card E as New", async () => {
@@ -213,8 +245,13 @@ describe("the cards that render", () => {
     await driveToPicker();
     expect(screen.getByText(/Fastest · Most accurate · Lowest effort/)).toBeInTheDocument();
     expect(screen.getByText(/~30 seconds · No uploads needed/)).toBeInTheDocument();
-    expect(screen.getByText(/Full control · No AI · ~15 minutes/)).toBeInTheDocument();
     expect(screen.getByText(/Most comprehensive · Highest coverage/)).toBeInTheDocument();
+  });
+
+  it("renders card C's supporting copy once configured", async () => {
+    withManualFormUrlConfigured();
+    await driveToPicker();
+    expect(screen.getByText(/Full control · No AI · ~15 minutes/)).toBeInTheDocument();
   });
 
   it("does NOT render card D (Nium API Lookup) - demoMode is off by default", async () => {
@@ -374,6 +411,12 @@ describe("routing - card B (AI research only)", () => {
 });
 
 describe("routing - card C (manual form)", () => {
+  // Card C only renders once the tenant has configured a manual form URL —
+  // see withManualFormUrlConfigured() above.
+  beforeEach(() => {
+    withManualFormUrlConfigured();
+  });
+
   it("opens the manual form in a new tab", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_C));
@@ -491,6 +534,7 @@ describe("the ← Back control", () => {
   });
 
   it("clears the manual-opened notice", async () => {
+    withManualFormUrlConfigured();
     await driveToPicker();
     fireEvent.click(card(CARD_C));
     await settle(0);
@@ -577,6 +621,7 @@ describe("the search cap - unlocked state (the only reachable one)", () => {
   });
 
   it("card C carries no lock styling - it is the never-blocked exception", async () => {
+    withManualFormUrlConfigured();
     await driveToPicker();
     // Cards A/B read `locked` into cursor+opacity; card C hardcodes
     // cursor:"pointer" and opacity:0.92 and has no locked branch at all.

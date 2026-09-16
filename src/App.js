@@ -4728,6 +4728,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       <InviteScreen
         research={research}
         companyName={companyName}
+        brandName={companyName_}
         tenantId={tenantId}
         dossierId={dossierId}
         inviteEmail={inviteEmail}
@@ -4930,6 +4931,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             manualOpened={manualOpened}
             setManualOpened={setManualOpened}
             proceedFromJourney={proceedFromJourney}
+            manualFormUrl={manualFormUrl_}
             companyName={companyName}
             countryCode={countryCode}
             niumRegNumber={niumRegNumber}
@@ -5234,6 +5236,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
                 return (
                   <Step2DynamicForm
                     step1Data={drsStep1Data}
+                    brandName={companyName_}
                     researchData={research}
                     docSearchResults={docSearchResults}
                     selfSourceResults={selfSourceResults}
