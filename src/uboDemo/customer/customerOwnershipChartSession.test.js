@@ -1,5 +1,6 @@
 import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
+  chartSourceCoverage,
   clearCustomerOwnershipChartSession,
   customerOwnershipChartExtractionsForContext,
   customerOwnershipChartSessionForContext,
@@ -58,6 +59,21 @@ test("a later poorer result cannot overwrite a richer extraction of the same Art
 
   expect(() => saveCustomerOwnershipChartExtraction({ context, result: poorer })).toThrow(/structurally richer/);
   expect(readCustomerOwnershipChartExtractions()[0].result.sourceGraph.relationships).toHaveLength(4);
+});
+
+test("legacy saved results reconstruct disconnected-subject coverage without another extraction", () => {
+  const legacy = {
+    sourceGraph: {
+      subject: { entityId: "vodafone-limited" },
+      relationships: [{ relationshipId: "r1", sourceEntityId: "vodafone-group", targetEntityId: "vodafone-european-investments" }],
+    },
+  };
+  expect(chartSourceCoverage(legacy)).toEqual({
+    state: "REVIEW_REQUIRED",
+    sourceRelationshipCount: 1,
+    subjectConnectedRelationshipCount: 0,
+    disconnectedRelationshipIds: ["r1"],
+  });
 });
 
 test("does not offer one company's extraction to another company", () => {

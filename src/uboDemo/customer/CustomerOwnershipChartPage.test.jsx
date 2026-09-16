@@ -172,11 +172,10 @@ test("a disconnected Vodafone extraction remains inspectable but is explicitly m
   const context = readCustomerDemoContext();
   const incomplete = {
     ...analysis,
-    sourceCoverage: {
-      state: "REVIEW_REQUIRED",
-      sourceRelationshipCount: 1,
-      subjectConnectedRelationshipCount: 0,
-      disconnectedRelationshipIds: ["fact-1"],
+    sourceCoverage: undefined,
+    sourceGraph: {
+      ...analysis.sourceGraph,
+      relationships: [{ ...analysis.sourceGraph.relationships[0], targetEntityId: "disconnected-company" }],
     },
   };
   writeCustomerOwnershipChartSession({ context, result: incomplete });

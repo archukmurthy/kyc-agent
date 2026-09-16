@@ -35,6 +35,29 @@ function relationshipCount(result) {
   return (result?.sourceGraph?.relationships || []).length;
 }
 
+export function chartSourceCoverage(result) {
+  if (result?.sourceCoverage?.state) return result.sourceCoverage;
+  const graph = result?.sourceGraph;
+  const relationships = graph?.relationships || [];
+  const subjectEntityId = graph?.subject?.entityId || graph?.subjectEntityId || null;
+  if (!relationships.length) return { state: "NO_RELATIONSHIPS", sourceRelationshipCount: 0, subjectConnectedRelationshipCount: 0, disconnectedRelationshipIds: [] };
+  const connectedNodes = new Set(subjectEntityId ? [subjectEntityId] : []);
+  const connectedRelationships = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      const target = relationship.targetEntityId || relationship.objectEntityId;
+      const source = relationship.sourceEntityId || relationship.subjectEntityId;
+      if (!connectedNodes.has(target)) return;
+      connectedRelationships.add(relationship.relationshipId);
+      if (!connectedNodes.has(source)) { connectedNodes.add(source); changed = true; }
+    });
+  }
+  const disconnectedRelationshipIds = relationships.filter(({ relationshipId }) => !connectedRelationships.has(relationshipId)).map(({ relationshipId }) => relationshipId);
+  return { state: disconnectedRelationshipIds.length ? "REVIEW_REQUIRED" : "CONNECTED", sourceRelationshipCount: relationships.length, subjectConnectedRelationshipCount: connectedRelationships.size, disconnectedRelationshipIds };
+}
+
 function assertReplaySafe(value, path = "result") {
   if (value == null || typeof value !== "object") return;
   Object.entries(value).forEach(([key, item]) => {
