@@ -16,6 +16,13 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **Interim:** spike builds against a local file/in-memory store; Neon wiring flipped on once confirmed. No blocking.
 - **Area:** spike persistence layer, `.env.local` `DATABASE_URL`.
 
+### DEP-2 — Set `CRON_SECRET` in Vercel (Production) and redeploy
+- **Category:** Security / Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner — deferred 2026-09-15)
+- **What:** Add a long random `CRON_SECRET` env var in the Vercel project (Production), then redeploy so it takes effect.
+- **Why:** `api/finalize-submissions.js` only checks `Authorization: Bearer <CRON_SECRET>` when the var is set. Unset, anyone with the URL can trigger the submission retry worker. Nothing leaks and finalize is idempotent, but repeated calls add DB load and cost. Vercel Cron sends the header automatically once the var exists.
+- **Local:** not needed. Vercel Cron doesn't run locally, and the worker only runs via `npm run worker:finalize`.
+- **Area:** Vercel env settings, `api/finalize-submissions.js`, `vercel.json` `crons`.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -199,6 +206,41 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 ### PLAT-5 — Inconsistent Claude model IDs across code/docs
 - **Category:** Correctness · **Priority:** P3 · **Status:** OPEN
 - **What/Why:** `claude-sonnet-4-5`, `claude-sonnet-4-6`, and `claude-sonnet-4-20250514` all appear. Verify each referenced model ID exists to avoid runtime 404s.
+
+### PLAT-6 — Daily research spending cap per tenant
+- **Category:** Cost / Security · **Priority:** P2 · **Status:** OPEN (deferred by user 2026-09-15)
+- **What:** Stop Claude-backed research for a tenant once a configurable daily USD budget is reached (usage tracked from the cost/token data research already returns). Show the customer a clear message instead of failing silently.
+- **Why:** Last-line safety net against a surprise Anthropic bill. The rest of the `/api/research` hardening (server-built prompt, rate limit, key required where one exists) is being built now; only this cap is deferred.
+- **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
+
+### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
+- **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
+- **What:** Being built now (user-refined 2026-09-15): wrong company name / country / registration number / ownership type → full re-search (uses a retry); wrong entity type ONLY → re-derive from existing research (no search, no retry). Alternative to revisit: entity-type corrections also trigger a full re-search.
+- **Why deferred:** Re-deriving entity type is cheaper and faster; user wants to reconsider "always re-search" later.
+- **Area:** `src/App.js` foundational-facts correction handlers, `api/dossier-reseed.js` / `dossierLifecycle/`.
+
+### PREB-1 — Analyst dashboard (dossiers + applications) and notifications
+- **Category:** Feature · **Priority:** P2 · **Status:** OPEN (deferred by user 2026-09-15)
+- **What:** (a) Password-protected analyst page listing dossiers (company, status, customer-corrected?, submitted?) that opens each one, including the analyst's original vs the customer-corrected version. (b) Email the analyst when a customer corrects data or submits (needs "which analyst sent this invite" stored — not captured today).
+- **Why deferred:** Being built now is only the data link: submissions record their source `dossierId`, link customers stay linked on "start a brand-new application", and the analyst's original dossier is snapshotted before any customer re-research overwrites it. Today no screen lists dossiers or applications; the analyst can't reopen a dossier after closing the browser.
+- **Area:** new analyst UI + list endpoint, `entity_dossiers`, `onboarding_sessions`, `api/invite.js`.
+
+### PREB-2 — Revoke-link UI for customer dossier tokens
+- **Category:** Feature · **Priority:** P3 · **Status:** OPEN (deferred by user 2026-09-15)
+- **What:** A "Revoke link" button for analysts. The revoke endpoint + server check are being built now; only the UI is deferred.
+- **Area:** `src/components/preboarding/**`.
+
+### PLAT-7 — Fresh (no-link) applications can't be keyed: change-events / amendment-documents rely on unguessable ids
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (known limit, accepted 2026-09-15)
+- **What:** Dossier-linked applications get their change records and amendment-document reads locked to the customer token / analyst password. Fresh customers (no analyst link) have no credential, so their `onboardingSubmissionId`-keyed writes/reads stay protected only by the random id + rate limit.
+- **Real fix:** customer accounts or a server-minted per-application session token issued at research start.
+- **Area:** `api/change-events.js`, `api/amendment-documents.js`, `src/App.js` onboardingSubmissionId.
+
+### PREB-3 — Per-tenant pre-boarding analyst password
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (deferred to polish phase by user 2026-09-15)
+- **What:** Replace the single server-checked `PREBOARDING_PASSWORD` with a password per tenant (set from admin/super admin, stored hashed with a real KDF — see PLAT-2), so an analyst for tenant A can't enter tenant B's pre-boarding.
+- **Being built now instead:** `/preboarding?tenant=<id>` entry, per-tenant pre-boarding on/off switch, server check that the tenant exists and is active, analyst session bound to the verified tenant — with one shared analyst password.
+- **Area:** `api/preboarding-auth.js`, `lib/auth.js`, tenant settings UI.
 
 ### BRAND-1 — Neutralize residual "Nium" brand naming (make the product brand-neutral / config-driven)
 - **Category:** UX / Architecture · **Priority:** P3 · **Status:** OPEN (discuss before actioning — 2026-09-12)
