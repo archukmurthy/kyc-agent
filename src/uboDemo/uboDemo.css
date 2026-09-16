@@ -316,6 +316,9 @@
 .ubo-demo-graph-empty h2 { margin: 0 0 8px; }
 .ubo-demo-graph-empty p { max-width: 520px; margin: 0; color: var(--ubo-demo-muted); }
 .ubo-demo-bottom-actions, .ubo-demo-error-actions { margin-top: 20px; display: flex; gap: 12px; justify-content: center; }
+.ubo-demo-handoff-status { width: fit-content; max-width: min(720px, calc(100% - 32px)); margin: 12px auto 0; padding: 10px 14px; border-radius: 9px; color: var(--ubo-demo-muted); background: #edf6f3; text-align: center; }
+.ubo-demo-handoff-status.accepted { color: var(--ubo-demo-green); }
+.ubo-demo-handoff-status.error { color: #9b2525; background: #fff0f0; }
 .ubo-demo-failure { border-color: #e5b6b6; }
 
 @media (max-width: 640px) {

@@ -184,6 +184,7 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   expect(screen.getByText("Owner Ltd", { selector: "strong" })).toBeInTheDocument();
   expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();
   const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
   const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
   expect(graphCard.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
