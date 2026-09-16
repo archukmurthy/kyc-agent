@@ -23,6 +23,7 @@ const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { verifyPassword } = require("../lib/auth");
 const tenantRegistry = require("../lib/tenantRegistry");
+const { PLATFORM_TENANT_IDS, entryIsProtected } = tenantRegistry;
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
@@ -60,10 +61,8 @@ async function authorizeAdmin(tenant, token) {
 // Seed a tenant that doesn't yet have a config. Only tenants that exist (a
 // registry entry, or a pre-existing config from before the registry) are ever
 // seeded — a typo must not conjure a tenant into being.
-async function seedTenant(tenant) {
-  const seeded = (await _deps.registry.isProtectedTenant(tenant))
-    ? buildDefaultConfig(tenant)
-    : buildBlankConfig(tenant);
+async function seedTenant(tenant, entry) {
+  const seeded = entryIsProtected(entry) ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
   seeded._tenantId = tenant;
   await _deps.storage.set(configKey(tenant), seeded);
   return seeded;
@@ -77,25 +76,37 @@ async function readConfig(tenant) {
   const stored = await _deps.storage.get(configKey(tenant));
 
   if (!stored) {
-    if (!(await _deps.registry.tenantExists(tenant))) return null;
-    return seedTenant(tenant);
+    const entry = await _deps.registry.findTenant(tenant);
+    if (!entry) return null;
+    return seedTenant(tenant, entry);
   }
 
+  // Single registry read serves both the "exists" and "protected" answers
+  // below — GET /api/config is hit on every page load, so this must not
+  // fan out into multiple storage reads.
+  let entry = await _deps.registry.findTenant(tenant);
+
   // Legacy tenant: it has a config but predates the registry. Back-fill the
-  // entry so every later existence check agrees with reality.
-  if (!(await _deps.registry.tenantExists(tenant))) {
-    await _deps.registry.upsertEntry(tenant, {
+  // entry so every later existence/protection check agrees with reality.
+  // Platform tenants (e.g. "nium") must come back protected from the very
+  // first back-fill — the self-heal check right below reads this same
+  // entry, so the protection decision has to be correct before that read.
+  if (!entry) {
+    const patch = {
       companyName: (stored.company && stored.company.name) || tenant,
       createdAt: stored._seededAt || new Date().toISOString(),
       createdBy: "back-fill",
       lastPublishedAt: stored._publishedAt || null,
       isActive: true,
+      isProtected: PLATFORM_TENANT_IDS.includes(tenant),
       isInternal: false,
       isBlank: stored._isBlank === true,
-    });
+    };
+    await _deps.registry.upsertEntry(tenant, patch);
+    entry = { tenantId: tenant, ...patch };
   }
 
-  if (await _deps.registry.isProtectedTenant(tenant)) {
+  if (entryIsProtected(entry)) {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       // eslint-disable-next-line no-console

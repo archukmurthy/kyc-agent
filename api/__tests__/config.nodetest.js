@@ -124,3 +124,28 @@ test("a legacy tenant (config exists, no registry entry) is served and back-fill
   assert.ok(entry, "legacy tenant should be back-filled into the registry");
   assert.strictEqual(entry.companyName, "Old Co");
 });
+
+test("a legacy platform tenant (nium) is back-filled protected and self-heals", async () => {
+  const storage = fakeStorage({
+    "tenant-registry": [],
+    "config:nium": { _tenantId: "nium", _version: 2, licences: [], company: { name: "Nium" } },
+  });
+  handler.__setDeps({ storage });
+  registry.__setDeps({ storage });
+
+  const { req, res } = fakeReqRes({ method: "GET", query: { tenant: "nium" } });
+  await handler(req, res);
+
+  assert.strictEqual(res.statusCode, 200);
+
+  const entry = storage.data["tenant-registry"].find((t) => t.tenantId === "nium");
+  assert.ok(entry, "nium should be back-filled into the registry");
+  assert.strictEqual(entry.isProtected, true, "platform tenant must be back-filled as protected");
+
+  // The broken (empty-licences) config must be archived, not lost.
+  assert.ok(storage.data["config:nium:v2"], "broken config should be archived under its version key");
+  assert.deepStrictEqual(storage.data["config:nium:v2"].licences, []);
+
+  // Self-heal ran: served response has non-empty licences.
+  assert.ok(Array.isArray(res.body.licences) && res.body.licences.length > 0, "self-heal should have restored licences");
+});
