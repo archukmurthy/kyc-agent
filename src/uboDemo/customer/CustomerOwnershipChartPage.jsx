@@ -8,6 +8,7 @@ import {
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
+import CustomerOwnershipGraph from "./CustomerOwnershipGraph";
 import "./customerOwnershipChart.css";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -127,6 +128,7 @@ function Results({ result, onReplace }) {
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
     <CertificationCard certification={result.certification} />
+    <CustomerOwnershipGraph projection={result.sourceGraph} />
     <OwnersCard owners={result.owners || []} />
     <AssertionsCard assertions={result.assertions || []} />
     <div className="ubo-customer-stop"><strong>This page stops after chart analysis.</strong><p>Registry comparison, open-question resolution and UBO determination are deliberately not performed in this increment.</p></div>

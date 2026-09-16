@@ -260,6 +260,99 @@ function relationshipLabel(type) {
   }[type] || String(type || "Relationship").replaceAll("_", " ").toLowerCase();
 }
 
+function normalizedGraphName(value) {
+  return String(value || "Unknown party").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function graphCategory(party) {
+  if (["NATURAL_PERSON", "LEGAL_ENTITY", "TRUST_OR_LEGAL_ARRANGEMENT"].includes(party?.entityType)) {
+    return party.entityType;
+  }
+  return party?.entityType ? "OTHER" : "UNKNOWN";
+}
+
+function graphEntityId(party) {
+  const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
+  return `source-entity:${createHash("sha256").update(`${graphCategory(party)}|${normalizedGraphName(name)}`).digest("hex").slice(0, 20)}`;
+}
+
+function graphDimension(relationship) {
+  if (relationship === "ECONOMIC_OWNERSHIP") return "ECONOMIC";
+  if (relationship === "VOTING_RIGHTS") return "VOTING";
+  return "CONTROL";
+}
+
+function buildSourceGraph(candidateFacts, company, artifact, requestId) {
+  const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
+  const nodesById = new Map();
+  const addNode = (party, semantics = []) => {
+    const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
+    const entityId = graphEntityId(party);
+    const current = nodesById.get(entityId);
+    const nextSemantics = [...new Set([...(current?.semantics || []), ...semantics])];
+    nodesById.set(entityId, {
+      entityId,
+      displayName: current?.displayName || name,
+      category: current?.category || graphCategory(party),
+      jurisdiction: current?.jurisdiction || party?.jurisdiction || null,
+      semantics: nextSemantics,
+    });
+    return entityId;
+  };
+  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
+  const subjectEntityId = addNode(companyParty, ["SUBJECT"]);
+  const projectedRelationships = relationships.map((fact) => {
+    const sourceEntityId = addNode(fact.subject, fact.subject?.entityType === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
+    const targetEntityId = addNode(fact.object, normalizedGraphName(fact.object?.name) === normalizedGraphName(company.legalName) ? ["SUBJECT"] : []);
+    return {
+      relationshipId: fact.factId,
+      sourceEntityId,
+      targetEntityId,
+      relationshipType: fact.relationship,
+      dimension: graphDimension(fact.relationship),
+      ...(fact.measurement ? { measurement: structuredClone(fact.measurement) } : {}),
+      temporalState: fact.qualifiers?.currentState || "UNKNOWN",
+      resolutionStatus: "SOURCE_ASSERTION",
+      evidenceStatus: "SOURCE_SUPPORTED",
+      indicators: [],
+      qualifiers: structuredClone(fact.qualifiers || {}),
+      support: {
+        claimCount: 1,
+        claimIds: [fact.factId],
+        evidenceReferences: structuredClone(fact.evidenceReferences || []),
+      },
+    };
+  });
+  return {
+    contractVersion: "ubo-ownership-graph-projection-v1",
+    projectionId: `source-interpretation:${requestId}`,
+    subject: nodesById.get(subjectEntityId),
+    nodes: [...nodesById.values()],
+    relationships: projectedRelationships,
+    calculations: [],
+    qualifications: [],
+    unresolved: [],
+    conflicts: [],
+    reviews: [],
+    decision: {
+      snapshotId: `source-interpretation:${artifact.artifactId}`,
+      snapshotHash: `sha256:${artifact.digest}`,
+      checkpoint: { type: "SOURCE_INTERPRETATION" },
+      evaluationTime: artifact.capturedAt,
+      orchestrationState: "SOURCE_INTERPRETATION_ONLY",
+      terminalOutcome: "NOT_PERFORMED",
+    },
+    summary: {
+      totalEntities: nodesById.size,
+      totalRelationships: projectedRelationships.length,
+      qualifyingPeople: 0,
+      unresolvedBranches: 0,
+      conflicts: 0,
+      reviewRequirements: 0,
+    },
+  };
+}
+
 function presentation(candidateFacts) {
   const relationshipFacts = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
   const owners = relationshipFacts.filter((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").map((fact) => ({
@@ -404,6 +497,11 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     throw demoError("ubo_candidate_mapping_failed", capabilityResult.outcome.message || "No UBO candidate facts could be mapped from this chart.", 422);
   }
   const displayed = presentation(capabilityResult.candidateFacts);
+  const sourceGraph = buildSourceGraph(capabilityResult.candidateFacts, input.demoContext.company, {
+    artifactId: ingestion.artifactId,
+    digest: ingestion.fingerprintValue,
+    capturedAt: ingestion.capturedAt,
+  }, requestId);
   return {
     contractVersion: RESULT_VERSION,
     demoCaseId: input.demoContext.demoCaseId,
@@ -439,6 +537,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
       downstreamDecision: "NOT_PERFORMED",
     },
     certification: certificationFrom(capabilityResult.candidateFacts),
+    sourceGraph,
     owners: displayed.owners,
     assertions: displayed.assertions,
     comparison: "NOT_PERFORMED",
@@ -450,6 +549,7 @@ module.exports = Object.freeze({
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,
+  buildSourceGraph,
   certificationFrom,
   presentation,
   selectSemanticProvider,
