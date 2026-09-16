@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -27,6 +27,7 @@ function provider(observed) {
     async extract({ artifactInputs, requestedConcepts }) {
       observed.bytes = Buffer.from(artifactInputs[0].verifiedContent);
       observed.concepts = requestedConcepts.map(({ concept }) => concept);
+      observed.requestedConcepts = structuredClone(requestedConcepts);
       const artifactId = artifactInputs[0].artifact.id;
       const company = { partyType: "legal_entity", name: "Better Comms VOIP Ltd", jurisdiction: "GB", identifiers: [] };
       const person = { partyType: "natural_person", name: "Mitchell Fortescue", jurisdiction: "GB", identifiers: [] };
@@ -59,6 +60,7 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   const result = await analyseCustomerOwnershipChart(input(), { provider: provider(observed) });
   assert.deepEqual(observed.bytes, PNG);
   assert.ok(observed.concepts.includes("economic_ownership"));
+  assert.match(observed.requestedConcepts.find(({ concept }) => concept === "economic_ownership").description, /every visible connector.*one separate Fact.*typed_relationship.*intermediate layers/i);
   assert.ok(observed.concepts.includes("certification_signer_name"));
   assert.equal(result.artifact.integrityVerified, true);
   assert.equal(result.artifact.persistence, "EPHEMERAL_DEMO_ONLY");
@@ -74,6 +76,7 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.sourceGraph.contractVersion, "ubo-ownership-graph-projection-v1");
   assert.equal(result.sourceGraph.subject.displayName, "Better Comms VOIP Ltd");
   assert.equal(result.sourceGraph.relationships.length, 1);
+  assert.equal(result.sourceCoverage.state, "CONNECTED");
   assert.equal(result.sourceGraph.qualifications.length, 0);
   assert.equal(result.chartAnalysis.contractVersion, "ubo-demo-chart-analysis-v1");
   assert.equal(result.chartAnalysis.state, "EVALUATED");
@@ -180,6 +183,28 @@ test("source visualization groups repeated chart names without inventing a UBO c
   assert.equal(graph.qualifications.length, 0);
   assert.equal(graph.calculations.length, 0);
   assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
+});
+
+test("a Vodafone source map that stops above the customer is marked incomplete instead of presented as a complete chart", () => {
+  const company = { legalName: "Vodafone Limited", countryCode: "GB" };
+  const party = (name) => ({ name, entityType: "LEGAL_ENTITY", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const graph = buildSourceGraph([{
+    factId: "vodafone-group-to-european-investments",
+    type: "RELATIONSHIP",
+    subject: party("Vodafone Group Plc"),
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: party("Vodafone European Investments"),
+    measurement: { type: "EXACT", value: 100 },
+    qualifiers: { currentState: "UNKNOWN" },
+    evidenceReferences: [{ referenceId: "vodafone-chart" }],
+  }], company, { artifactId: "artifact-vodafone", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" }, "request-vodafone");
+
+  assert.deepEqual(sourceGraphCoverage(graph), {
+    state: "REVIEW_REQUIRED",
+    sourceRelationshipCount: 1,
+    subjectConnectedRelationshipCount: 0,
+    disconnectedRelationshipIds: ["vodafone-group-to-european-investments"],
+  });
 });
 
 test("invalid bytes and unsupported media fail before provider interpretation", () => {

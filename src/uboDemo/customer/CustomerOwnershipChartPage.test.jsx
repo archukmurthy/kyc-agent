@@ -53,6 +53,7 @@ const analysis = {
     decision: { snapshotId: "source-1", snapshotHash: "sha256:abc", checkpoint: { type: "SOURCE_INTERPRETATION" }, orchestrationState: "SOURCE_INTERPRETATION_ONLY" },
     summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
   },
+  sourceCoverage: { state: "CONNECTED", sourceRelationshipCount: 1, subjectConnectedRelationshipCount: 1, disconnectedRelationshipIds: [] },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
     state: "EVALUATED",
@@ -164,6 +165,26 @@ test("a saved same-company extraction can be replayed without a provider call", 
   expect(window.fetch).not.toHaveBeenCalled();
   expect(screen.getByRole("status")).toHaveTextContent(/No provider call was made/i);
   expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+});
+
+test("a disconnected Vodafone extraction remains inspectable but is explicitly marked incomplete", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  const incomplete = {
+    ...analysis,
+    sourceCoverage: {
+      state: "REVIEW_REQUIRED",
+      sourceRelationshipCount: 1,
+      subjectConnectedRelationshipCount: 0,
+      disconnectedRelationshipIds: ["fact-1"],
+    },
+  };
+  writeCustomerOwnershipChartSession({ context, result: incomplete });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("alert")).toHaveTextContent(/Incomplete ownership map/);
+  expect(screen.getByRole("alert")).toHaveTextContent(/relationship chain does not reach Better Comms VOIP Ltd/i);
+  expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
 });
 
 test("replacing a rendered chart preserves the saved extraction for no-cost replay", () => {

@@ -102,7 +102,8 @@ function SavedExtractionsPanel({ records, onUse }) {
     <div><small>Saved document extracts</small><h2>Reuse an earlier chart analysis</h2><p>These structured results are stored in this browser for the same company. The original document bytes are not retained.</p></div>
     <div>{records.map((record) => <button type="button" key={record.recordId} onClick={() => onUse(record)}>
       <strong>{record.result.artifact.originalFilename || "Ownership chart"}</strong>
-      <span>{record.result.candidateFacts?.length || 0} assertions · saved {new Date(record.savedAt).toLocaleString()}</span>
+      <span>{record.result.candidateFacts?.length || 0} assertions · {record.result.sourceGraph?.relationships?.length || 0} relationships · saved {new Date(record.savedAt).toLocaleString()}</span>
+      {record.result.sourceCoverage?.state === "REVIEW_REQUIRED" && <span>Incomplete map · relationship chain does not reach the customer</span>}
       <small>Use saved extraction — no provider call</small>
     </button>)}</div>
   </section>;
@@ -149,6 +150,7 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
+    {result.sourceCoverage?.state === "REVIEW_REQUIRED" && <p className="ubo-customer-extraction-save warning" role="alert"><strong>Incomplete ownership map.</strong> The extracted relationship chain does not reach {result.company?.legalName || "the customer under review"}. The visible source facts are retained, but this result must not be treated as the complete chart.</p>}
     <CertificationCard certification={result.certification} />
     <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} />
     <OwnersCard owners={result.owners || []} />

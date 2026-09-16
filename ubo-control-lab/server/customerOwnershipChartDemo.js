@@ -35,6 +35,24 @@ const CERTIFICATION_CONCEPTS = Object.freeze([
   ["certification_scope", "certification_scope", "Scope of the ownership chart certification"],
   ["certification_signature_presence", "certification_signature_presence", "Whether a visible signature or signature-like mark is stated or shown"],
 ]);
+const CHART_RELATIONSHIP_CONCEPTS = new Set([
+  "economic_ownership",
+  "voting_rights",
+  "appointment_rights",
+  "removal_rights",
+  "formal_control",
+  "significant_influence_or_control",
+]);
+
+function chartRequestedConcepts(requestedConcepts, company) {
+  return requestedConcepts.map((item) => {
+    if (!CHART_RELATIONSHIP_CONCEPTS.has(item.concept)) return item;
+    return {
+      ...item,
+      description: `${item.description}. Ownership-chart enumeration requirement: inspect every visible connector and arrow through every intermediate person or entity down to ${company.legalName}. Return one separate Fact and one typed_relationship row for each source-supported directed relationship. Preserve each exact percentage or range on its own connector. Never collapse several relationships into one array or omit intermediate layers. Do not infer a missing connector, direction, value or relationship type.`,
+    };
+  });
+}
 
 function demoError(code, message, statusCode = 400) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -355,6 +373,40 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   };
 }
 
+function sourceGraphCoverage(graph) {
+  const relationships = graph?.relationships || [];
+  const subjectEntityId = graph?.subject?.entityId || null;
+  if (!relationships.length) return {
+    state: "NO_RELATIONSHIPS",
+    sourceRelationshipCount: 0,
+    subjectConnectedRelationshipCount: 0,
+    disconnectedRelationshipIds: [],
+  };
+  const connectedNodes = new Set(subjectEntityId ? [subjectEntityId] : []);
+  const connectedRelationships = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      if (!connectedNodes.has(relationship.targetEntityId)) return;
+      connectedRelationships.add(relationship.relationshipId);
+      if (!connectedNodes.has(relationship.sourceEntityId)) {
+        connectedNodes.add(relationship.sourceEntityId);
+        changed = true;
+      }
+    });
+  }
+  const disconnectedRelationshipIds = relationships
+    .filter(({ relationshipId }) => !connectedRelationships.has(relationshipId))
+    .map(({ relationshipId }) => relationshipId);
+  return {
+    state: disconnectedRelationshipIds.length ? "REVIEW_REQUIRED" : "CONNECTED",
+    sourceRelationshipCount: relationships.length,
+    subjectConnectedRelationshipCount: connectedRelationships.size,
+    disconnectedRelationshipIds,
+  };
+}
+
 function chartEntityProfile(ownershipType) {
   return ["LLP", "PARTNERSHIP"].includes(String(ownershipType || "").toUpperCase()) ? "LLP" : "COMPANY";
 }
@@ -554,10 +606,18 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
   const evidenceConsumer = {
     async interpretArtifacts(trustedAuthorization, request) {
       const requestedConcepts = [
-        ...request.requestedConcepts,
+        ...chartRequestedConcepts(request.requestedConcepts, input.demoContext.company),
         ...CERTIFICATION_CONCEPTS.map((concept) => certificationConcept(concept, input.demoContext.company)),
       ];
-      interpretationEnvelope = await baseConsumer.interpretArtifacts(trustedAuthorization, { ...request, requestedConcepts });
+      interpretationEnvelope = await baseConsumer.interpretArtifacts(trustedAuthorization, {
+        ...request,
+        requestedConcepts,
+        extractionContext: {
+          ...request.extractionContext,
+          jurisdiction: input.demoContext.company.countryCode,
+          purpose: `Complete source-faithful ownership chart relationship enumeration for ${input.demoContext.company.legalName} (${input.demoContext.company.registrationNumber}); no UBO or policy conclusion`,
+        },
+      });
       return interpretationEnvelope;
     },
   };
@@ -609,6 +669,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
   }, requestId);
+  const sourceCoverage = sourceGraphCoverage(sourceGraph);
   const chartAnalysis = buildChartAnalysis({
     candidateFacts: capabilityResult.candidateFacts,
     operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
@@ -654,6 +715,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     candidateFacts: structuredClone(capabilityResult.candidateFacts),
     certification: certificationFrom(capabilityResult.candidateFacts),
     sourceGraph,
+    sourceCoverage,
     chartAnalysis,
     owners: displayed.owners,
     assertions: displayed.assertions,
@@ -668,9 +730,11 @@ module.exports = Object.freeze({
   analyseCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
+  chartRequestedConcepts,
   certificationFrom,
   presentation,
   selectSemanticProvider,
+  sourceGraphCoverage,
   statusForEvidenceFailure,
   validateRequest,
 });

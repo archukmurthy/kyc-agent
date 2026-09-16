@@ -28,7 +28,11 @@ export function sameCustomerCompany(left, right) {
 }
 
 function resultKey(result) {
-  return normalized(result?.artifact?.digest || result?.artifact?.artifactId);
+  return normalized(result?.artifact?.artifactId || result?.artifact?.digest);
+}
+
+function relationshipCount(result) {
+  return (result?.sourceGraph?.relationships || []).length;
 }
 
 function assertReplaySafe(value, path = "result") {
@@ -97,7 +101,12 @@ export function saveCustomerOwnershipChartExtraction({ context, result, calculat
     result,
     calculationMethod,
   };
-  const records = [record, ...readCustomerOwnershipChartExtractions(storage).filter((item) => item.recordId !== recordId)]
+  const existingRecords = readCustomerOwnershipChartExtractions(storage);
+  const existing = existingRecords.find((item) => item.recordId === recordId);
+  if (existing && relationshipCount(existing.result) > relationshipCount(result)) {
+    throw new TypeError("A structurally richer saved extraction already exists for this Artifact and was preserved.");
+  }
+  const records = [record, ...existingRecords.filter((item) => item.recordId !== recordId)]
     .slice(0, MAX_SAVED_EXTRACTIONS);
   storage.setItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY, JSON.stringify({
     contractVersion: CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION,

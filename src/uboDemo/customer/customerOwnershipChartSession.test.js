@@ -51,6 +51,15 @@ test("deduplicates a saved Artifact while retaining its latest calculation displ
   expect(readCustomerOwnershipChartExtractions()[0].calculationMethod).toBe("ECONOMIC_EFFECTIVE_INTEREST");
 });
 
+test("a later poorer result cannot overwrite a richer extraction of the same Artifact", () => {
+  const richer = { ...result, sourceGraph: { relationships: [{ relationshipId: "r1" }, { relationshipId: "r2" }, { relationshipId: "r3" }, { relationshipId: "r4" }] } };
+  const poorer = { ...result, sourceGraph: { relationships: [{ relationshipId: "r1" }] } };
+  saveCustomerOwnershipChartExtraction({ context, result: richer });
+
+  expect(() => saveCustomerOwnershipChartExtraction({ context, result: poorer })).toThrow(/structurally richer/);
+  expect(readCustomerOwnershipChartExtractions()[0].result.sourceGraph.relationships).toHaveLength(4);
+});
+
 test("does not offer one company's extraction to another company", () => {
   saveCustomerOwnershipChartExtraction({ context, result });
   const otherContext = {
