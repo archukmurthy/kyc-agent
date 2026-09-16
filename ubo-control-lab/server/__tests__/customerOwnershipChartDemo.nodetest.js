@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { analyseCustomerOwnershipChart, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -87,6 +87,12 @@ test("the exact reviewed Bettercomms digest selects the local source-backed inte
   });
   const injected = provider({});
   assert.equal(selectSemanticProvider(REVIEWED_BETTERCOMMS_DIGEST, injected), injected);
+});
+
+test("unmatched customer charts receive the dense-chart provider timeout", () => {
+  const selected = selectSemanticProvider("unmatched-chart-digest");
+  assert.equal(CUSTOMER_PROVIDER_TIMEOUT_MS, 240000);
+  assert.equal(selected.timeoutMs, CUSTOMER_PROVIDER_TIMEOUT_MS);
 });
 
 test("safe Evidence media failures remain actionable at the customer API boundary", () => {
