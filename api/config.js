@@ -22,6 +22,10 @@ const storage = require("../lib/storage");
 const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { verifyPassword } = require("../lib/auth");
+const tenantRegistry = require("../lib/tenantRegistry");
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+let _deps = { storage, registry: tenantRegistry };
 
 function configKey(tenant) {
   return `config:${tenant}`;
@@ -43,7 +47,7 @@ function authKey(tid) {
 async function authorizeAdmin(tenant, token) {
   if (!token) return false;
   try {
-    const stored = await storage.get(authKey(tenant));
+    const stored = await _deps.storage.get(authKey(tenant));
     if (stored && verifyPassword(token, stored.passwordHash)) return true;
   } catch (_) {}
   if (tenant === "nium") {
@@ -53,32 +57,57 @@ async function authorizeAdmin(tenant, token) {
   return false;
 }
 
-// Seed a tenant that doesn't yet have a config. Nium gets the canonical
-// defaults; everyone else gets a blank template.
+// Seed a tenant that doesn't yet have a config. Only tenants that exist (a
+// registry entry, or a pre-existing config from before the registry) are ever
+// seeded — a typo must not conjure a tenant into being.
 async function seedTenant(tenant) {
-  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
+  const seeded = (await _deps.registry.isProtectedTenant(tenant))
+    ? buildDefaultConfig(tenant)
+    : buildBlankConfig(tenant);
   seeded._tenantId = tenant;
-  await storage.set(configKey(tenant), seeded);
+  await _deps.storage.set(configKey(tenant), seeded);
   return seeded;
 }
 
-// Read the live config for a tenant, seeding on miss. For the Nium tenant we
-// also self-heal: if the stored config is corrupted or accidentally emptied
-// (no licences), we re-seed it from defaults so the live customer flow is
-// never left in a broken state.
+// Read the live config for a tenant. Returns null when the tenant is unknown
+// (no registry entry AND no legacy config) so the handler can 404.
+// Protected tenants self-heal: a config with no licences is archived and
+// re-seeded from the template so the live customer flow is never broken.
 async function readConfig(tenant) {
-  let stored = await storage.get(configKey(tenant));
-  if (!stored) return seedTenant(tenant);
+  const stored = await _deps.storage.get(configKey(tenant));
 
-  if (tenant === "nium") {
+  if (!stored) {
+    if (!(await _deps.registry.tenantExists(tenant))) return null;
+    return seedTenant(tenant);
+  }
+
+  // Legacy tenant: it has a config but predates the registry. Back-fill the
+  // entry so every later existence check agrees with reality.
+  if (!(await _deps.registry.tenantExists(tenant))) {
+    await _deps.registry.upsertEntry(tenant, {
+      companyName: (stored.company && stored.company.name) || tenant,
+      createdAt: stored._seededAt || new Date().toISOString(),
+      createdBy: "back-fill",
+      lastPublishedAt: stored._publishedAt || null,
+      isActive: true,
+      isInternal: false,
+      isBlank: stored._isBlank === true,
+    });
+  }
+
+  if (await _deps.registry.isProtectedTenant(tenant)) {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       // eslint-disable-next-line no-console
-      console.warn("Nium config missing licences — self-healing from defaults");
+      console.warn(`Protected tenant "${tenant}" config missing licences — self-healing from the default template`);
+      // Archive the broken config first: self-heal must never be the only
+      // copy of what was there (it used to overwrite silently).
+      const brokenVersion = stored._version || 0;
+      await _deps.storage.set(versionKey(tenant, brokenVersion), stored);
       const fresh = buildDefaultConfig(tenant);
       fresh._tenantId = tenant;
       fresh._selfHealedAt = new Date().toISOString();
-      await storage.set(configKey(tenant), fresh);
+      await _deps.storage.set(configKey(tenant), fresh);
       return fresh;
     }
   }
@@ -115,6 +144,7 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const cfg = await readConfig(tenant);
+      if (!cfg) return res.status(404).json({ error: "tenant_not_found" });
       return res.status(200).json(cfg);
     }
 
@@ -142,12 +172,12 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      const previous = await readConfig(tenant);
+      const previous = (await readConfig(tenant)) || {};
       const previousVersion = previous._version || 0;
       const newVersion = previousVersion + 1;
 
       // Archive the previous version for rollback before overwriting.
-      await storage.set(versionKey(tenant, previousVersion), previous);
+      await _deps.storage.set(versionKey(tenant, previousVersion), previous);
 
       // Strip any client-supplied private fields and stamp fresh metadata.
       const sanitized = { ...body };
@@ -164,7 +194,7 @@ module.exports = async function handler(req, res) {
         _tenantId: tenant,
       };
 
-      await storage.set(configKey(tenant), next);
+      await _deps.storage.set(configKey(tenant), next);
       return res.status(200).json({ success: true, version: newVersion });
     }
 
@@ -176,8 +206,8 @@ module.exports = async function handler(req, res) {
       if (!(await authorizeAdmin(tenant, token))) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const keys = await storage.list(`config:${tenant}`);
-      for (const k of keys) await storage.del(k);
+      const keys = await _deps.storage.list(`config:${tenant}`);
+      for (const k of keys) await _deps.storage.del(k);
       return res.status(200).json({ success: true, cleared: keys.length });
     }
 
@@ -188,7 +218,7 @@ module.exports = async function handler(req, res) {
       if (!(await authorizeAdmin(tenant, token))) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const keys = await storage.list(`config:${tenant}:v`);
+      const keys = await _deps.storage.list(`config:${tenant}:v`);
       const versions = keys
         .map((k) => Number(k.split(":v")[1]))
         .filter((n) => !Number.isNaN(n))
@@ -196,7 +226,7 @@ module.exports = async function handler(req, res) {
         .slice(0, 5);
       const items = await Promise.all(
         versions.map(async (v) => {
-          const cfg = await storage.get(versionKey(tenant, v));
+          const cfg = await _deps.storage.get(versionKey(tenant, v));
           return cfg ? { version: v, publishedAt: cfg._publishedAt || cfg._seededAt || null } : null;
         }),
       );
@@ -210,3 +240,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server error", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
