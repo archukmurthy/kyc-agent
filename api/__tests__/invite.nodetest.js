@@ -36,20 +36,23 @@ function reqWith(body, headers) {
   return { method: "POST", body, headers: headers || { host: "kyc-agent-deploy.vercel.app" }, query: {} };
 }
 
-function setup(t, { actor = ANALYST, row = ROW, secret = SECRET, sendEmail, readConfigForTenant } = {}) {
+function setup(t, { actor = ANALYST, row = ROW, secret = SECRET, dbUrl = "postgres://test", sql, sendEmail, readConfigForTenant } = {}) {
   const handler = require("../invite");
   const prevKey = process.env.RESEND_API_KEY;
   const prevSecret = process.env.DOSSIER_TOKEN_SECRET;
+  const prevDbUrl = process.env.DATABASE_URL;
   delete process.env.RESEND_API_KEY;
   if (secret === null) delete process.env.DOSSIER_TOKEN_SECRET; else process.env.DOSSIER_TOKEN_SECRET = secret;
+  if (dbUrl === null) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = dbUrl;
   t.after(() => {
     if (prevKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = prevKey;
     if (prevSecret === undefined) delete process.env.DOSSIER_TOKEN_SECRET; else process.env.DOSSIER_TOKEN_SECRET = prevSecret;
+    if (prevDbUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevDbUrl;
   });
   const store = fakeStore();
   handler.__setDeps({
     store,
-    neon: () => fakeSql(row),
+    neon: () => sql || fakeSql(row),
     access: accessWith(actor),
     readConfigForTenant: readConfigForTenant || (async () => ({ company: { name: "Acme Payments" } })),
     sendEmail: sendEmail || (async () => { throw new Error("sendEmail called without a test-provided fake"); }),
@@ -97,6 +100,38 @@ test("without DOSSIER_TOKEN_SECRET no link can be issued", async (t) => {
   await handler(reqWith({ ...basePayload }), res);
   assert.strictEqual(res.statusCode, 500);
   assert.deepStrictEqual(res.body, { error: "not_configured" });
+});
+
+function withMintSpy(t) {
+  const real = require("../../lib/dossierToken");
+  let minted = false;
+  const handler = require("../invite");
+  handler.__setDeps({ dossierToken: { ...real, mint: (...args) => { minted = true; return real.mint(...args); } } });
+  t.after(() => { handler.__setDeps({ dossierToken: real }); });
+  return () => minted;
+}
+
+test("without DATABASE_URL the request fails closed before minting or storing anything", async (t) => {
+  const { handler, store } = setup(t, { dbUrl: null });
+  const mintedFn = withMintSpy(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "not_configured" });
+  assert.strictEqual(mintedFn(), false);
+  assert.strictEqual(Object.keys(store.data).length, 0);
+});
+
+test("a failing dossier lookup fails closed before minting or storing anything", async (t) => {
+  const throwingSql = () => { throw new Error("connection refused"); };
+  const { handler, store } = setup(t, { sql: throwingSql });
+  const mintedFn = withMintSpy(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "lookup_failed" });
+  assert.strictEqual(mintedFn(), false);
+  assert.strictEqual(Object.keys(store.data).length, 0);
 });
 
 test("the emailed link carries a verifiable token and no raw dossier id", async (t) => {

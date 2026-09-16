@@ -64,3 +64,23 @@ test("400 without a dossierId", async () => {
   await handler(req({}), res);
   assert.strictEqual(res.statusCode, 400);
 });
+
+test("without DATABASE_URL the request fails closed and nothing is revoked", async () => {
+  const savedUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  let revoked = false;
+  handler.__setDeps({
+    neon: () => () => Promise.resolve([{ id: "d-1" }]),
+    access: accessWith(ANALYST),
+    dossierToken: { revokeAllForDossier: async () => { revoked = true; return { revokedBefore: 1 }; } },
+  });
+  const res = fakeRes();
+  try {
+    await handler(req({ dossierId: "d-1" }), res);
+  } finally {
+    if (savedUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = savedUrl;
+  }
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "not_configured" });
+  assert.strictEqual(revoked, false);
+});

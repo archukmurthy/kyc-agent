@@ -30,16 +30,22 @@ module.exports = async function handler(req, res) {
   const dossierId = (req.body || {}).dossierId;
   if (!dossierId) return res.status(400).json({ error: "dossierId_required" });
 
+  // The tenant-ownership check below is a security boundary and must never be
+  // skipped: without a reachable DB we cannot prove the dossier belongs to
+  // this analyst's tenant, so we fail closed rather than revoking blind.
+  if (!process.env.DATABASE_URL) {
+    console.error("[revoke-dossier-token] DATABASE_URL is not configured");
+    return res.status(500).json({ error: "not_configured" });
+  }
+
   try {
-    if (process.env.DATABASE_URL) {
-      const sql = _deps.neon(process.env.DATABASE_URL);
-      const found = await sql`
-        SELECT id FROM entity_dossiers
-        WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId}
-        LIMIT 1
-      `;
-      if (!found.length) return res.status(404).json({ error: "dossier_not_found" });
-    }
+    const sql = _deps.neon(process.env.DATABASE_URL);
+    const found = await sql`
+      SELECT id FROM entity_dossiers
+      WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId}
+      LIMIT 1
+    `;
+    if (!found.length) return res.status(404).json({ error: "dossier_not_found" });
     const { revokedBefore } = await _deps.dossierToken.revokeAllForDossier(dossierId);
     return res.status(200).json({ success: true, revokedBefore });
   } catch (err) {

@@ -108,12 +108,23 @@ module.exports = async function handler(req, res) {
   // unlike save-dossier/search-attempt it is never skipped when DATABASE_URL
   // is unset; an unreachable DB fails the request rather than silently
   // skipping the ownership check.
-  const sql = _deps.neon(process.env.DATABASE_URL);
-  const found = await sql`
-    SELECT id FROM entity_dossiers
-    WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND status != 'deleted'
-    LIMIT 1
-  `;
+  if (!process.env.DATABASE_URL) {
+    console.error("[invite] DATABASE_URL is not configured");
+    return res.status(500).json({ error: "not_configured" });
+  }
+
+  let found;
+  try {
+    const sql = _deps.neon(process.env.DATABASE_URL);
+    found = await sql`
+      SELECT id FROM entity_dossiers
+      WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND status != 'deleted'
+      LIMIT 1
+    `;
+  } catch (err) {
+    console.error("[invite] dossier lookup failed", err);
+    return res.status(500).json({ error: "lookup_failed" });
+  }
   if (!found.length) return res.status(404).json({ error: "dossier_not_found" });
 
   const token = _deps.dossierToken.mint({ dossierId, tenantId });
