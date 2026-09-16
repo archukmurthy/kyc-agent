@@ -538,4 +538,66 @@ describe("invite screen", () => {
     await sendInvite();
     expect(inviteHeaders.Authorization).toBe("Bearer ARCH");
   });
+
+  /* ── Finding 1: a failed /api/invite must show a visible error, not silently no-op ── */
+
+  it("401 unauthorized - shows a session-expired message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: "unauthorized" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/pre-boarding session is no longer valid/i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+    // Still on the invite form, not silently stuck - Send invite is available to retry.
+    expect(buttonsWithText(/Send invite/i).length).toBe(1);
+  });
+
+  it("500 not_configured - shows a generic retry message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: "not_configured" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+  });
+
+  it("a retried send clears the previous error once it succeeds", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "lookup_failed" }) });
+
+    await driveToInvite();
+    await sendInvite();
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer" }),
+      });
+    fireEvent.click(buttonsWithText(/Send invite/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).toMatch(/Onboarding link/i);
+  });
 });

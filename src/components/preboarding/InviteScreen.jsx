@@ -40,11 +40,30 @@ export function InviteScreen({
 }) {
     const companyDisplayName = research?.companyName || companyName || 'the company';
     const brand = brandName || tenantId || 'the company';
+    const [sendError, setSendError] = React.useState('');
+
+    // Maps a failed /api/invite response to plain-language, non-technical text.
+    // Server error codes: 401 unauthorized, 403 forbidden, 404 dossier_not_found,
+    // 500 not_configured / lookup_failed. Falls back to a generic message for
+    // anything else (including a network failure, which has no status/code).
+    function inviteErrorMessage(status, errorCode) {
+      if (errorCode === 'unauthorized' || status === 401) {
+        return 'Your pre-boarding session is no longer valid. Unlock pre-boarding again.';
+      }
+      if (errorCode === 'forbidden' || status === 403) {
+        return "You don't have permission to send this invite.";
+      }
+      if (errorCode === 'dossier_not_found' || status === 404) {
+        return 'Save the dossier before sending an invite.';
+      }
+      return "Couldn't create the invite link. Try again.";
+    }
 
     // The SERVER builds the link: it signs a token for this dossier, so there is
     // no client-built link to drift from, and no raw dossier id ever leaves.
     async function handleSendInvite() {
       if (!inviteEmail || !inviteContactName || !dossierId) return;
+      setSendError('');
       try {
         const resp = await fetch('/api/invite', {
           method: 'POST',
@@ -60,12 +79,14 @@ export function InviteScreen({
         const data = await resp.json();
         if (!resp.ok || !data.link) {
           console.warn('Invite was not issued:', data && data.error);
+          setSendError(inviteErrorMessage(resp.status, data && data.error));
           return;
         }
         setInviteLink(data.link);
         setInviteSent(true);
       } catch (err) {
         console.warn('Invite send failed, email may not have been dispatched:', err);
+        setSendError(inviteErrorMessage(null, null));
       }
     }
 
@@ -279,6 +300,11 @@ ${brand} Onboarding Team`;
             </span>
           )}
         </div>
+        {sendError && (
+          <div style={{ marginTop: 12, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+            {sendError}
+          </div>
+        )}
       </div>
     );
 }

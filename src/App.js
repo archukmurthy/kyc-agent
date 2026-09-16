@@ -139,7 +139,7 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { resolveInputType } from "./utils/dateFields";
-import { setAnalystCredential, getDossierAuthHeaders } from "./utils/dossierCredential";
+import { setAnalystCredential, clearDossierCredentials, getDossierAuthHeaders } from "./utils/dossierCredential";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
@@ -800,6 +800,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // so "Start New Application" keeps the user in the right flow.
     setAgentType(isPreboardingSurface ? "preboarding" : "onboarding");
     setPreboardingUnlocked(false);
+    // Re-locking the pre-boarding gate must drop the analyst credential too, so
+    // it isn't left sitting in sessionStorage. Only on the pre-boarding surface —
+    // a customer's Start Over must keep their own dossier link credential, and
+    // clearDossierCredentials() clears both.
+    if (isPreboardingSurface) clearDossierCredentials();
     setExcludedGapFields(new Set());
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
