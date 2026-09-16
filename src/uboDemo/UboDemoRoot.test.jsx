@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
 import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
-import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, readLabReplays, replayOptionLabel, writeDemoSession } from "./demoSession";
+import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
 const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
@@ -53,6 +53,22 @@ test("Start research invokes the existing live Lab composition and preserves a l
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
 });
 
+test("a successful live result is saved locally and enables replay without storing a second capture in the demo session", async () => {
+  const replayCapture = britishAirwaysReplay("fresh-live-capture", "2026-09-16T08:00:00.000Z");
+  window.fetch = jest.fn(() => okJson({ ...evaluatedSession, replayCapture }));
+  renderStart(); completeRequiredFields({ name: "BRITISH AIRWAYS PLC", number: "01777777" });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["fresh-live-capture"]);
+  const savedSession = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  expect(savedSession.researchResult.replayCapture).toBeUndefined();
+  expect(savedSession.researchResult.replayReference).toEqual({ replayId: "fresh-live-capture", savedAt: "2026-09-16T08:00:00.000Z" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
+  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
+  expect(screen.getByText("1 saved live replay")).toBeInTheDocument();
+  expect(screen.getByText(/Future replay will make no provider call/)).toBeInTheDocument();
+});
+
 test("saved replay binds the selected record identity, reaches the graph, and restores it without a provider operation", async () => {
   const record = britishAirwaysReplay();
   window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
@@ -95,6 +111,31 @@ test("repeated saved company names remain independently selectable by stable ID 
   expect(readLabReplays().map(({ replayId }) => replayId)).toEqual([newer.replayId, older.replayId]);
   expect(replayOptionLabel(newer, 2)).toMatch(/BRITISH AIRWAYS PLC · 01777777 · saved 15 Sept 2026, 08:00 UTC · ys-newer$/);
   expect(bindDraftToReplay({ ...emptyDemoDraft(), calculationMethod: "PSC_CONDITION_ATTRIBUTION" }, older)).toEqual(expect.objectContaining({ replayId: older.replayId, legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", calculationMethod: "PSC_CONDITION_ATTRIBUTION" }));
+});
+
+test("a replay capture retained by an older completed session is recovered and enables no-provider replay", async () => {
+  const record = britishAirwaysReplay("recover-from-session");
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777" },
+    demoCase: { demoCaseId: "demo-recover", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: { status: "COMPLETE", sourceMode: "LIVE", candidateSources: [], replayCapture: record },
+  }));
+  renderStart();
+  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
+  await waitFor(() => expect(readLabReplays().map(({ replayId }) => replayId)).toContain("recover-from-session"));
+  expect(screen.getByText(/Recovered the last completed live result/)).toBeInTheDocument();
+});
+
+test("a replay library exports and imports across browser origins without a provider call", () => {
+  const first = britishAirwaysReplay("portable-1", "2026-09-15T08:00:00.000Z");
+  const second = britishAirwaysReplay("portable-2", "2026-09-16T08:00:00.000Z");
+  const serialized = serializeReplayLibrary([first, second], () => "2026-09-16T09:00:00.000Z");
+  const destination = { values: {}, getItem(key) { return this.values[key] || null; }, setItem(key, value) { this.values[key] = value; }, removeItem(key) { delete this.values[key]; } };
+  expect(importReplayLibrary(serialized, destination).map(({ replayId }) => replayId)).toEqual(["portable-2", "portable-1"]);
+  expect(destination.values[LAB_REPLAY_KEY]).toContain("portable-1");
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(() => importReplayLibrary('{"records":[]}', destination)).toThrow(/not a valid UBO demo replay library/);
 });
 
 test("a missing or corrupt saved subject fails locally without a live fallback or deleting the capture", () => {

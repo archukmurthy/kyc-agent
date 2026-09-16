@@ -214,6 +214,17 @@
 .ubo-demo-replay-summary strong { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ubo-demo-green); }
 .ubo-demo-replay-summary span { font-size: 14px; font-weight: 800; }
 .ubo-demo-replay-summary small { color: var(--ubo-demo-muted); }
+.ubo-demo-replay-library { flex-basis: 100%; display: grid; grid-template-columns: 1fr auto; gap: 10px 18px; align-items: center; padding: 14px; border: 1px solid #c9d9d5; border-radius: 10px; background: #f5faf8; }
+.ubo-demo-replay-library > div:first-child { display: grid; gap: 4px; }
+.ubo-demo-replay-library > div:first-child small { line-height: 1.45; }
+.ubo-demo-replay-library > div:nth-child(2) { display: flex; flex-wrap: wrap; gap: 8px; }
+.ubo-demo-replay-library button, .ubo-demo-replay-library label { min-height: 36px; padding: 8px 11px; border: 1px solid #a8c0ba; border-radius: 8px; background: white; color: var(--ubo-demo-green); font: inherit; font-weight: 800; cursor: pointer; }
+.ubo-demo-replay-library button:disabled { cursor: not-allowed; opacity: .45; }
+.ubo-demo-replay-library label { display: inline-flex; align-items: center; }
+.ubo-demo-replay-library input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ubo-demo-replay-library p { grid-column: 1 / -1; margin: 0; color: var(--ubo-demo-muted); }
+.ubo-demo-replay-library p.success { color: var(--ubo-demo-green); }
+.ubo-demo-replay-library p.error { color: #9b2525; }
 .ubo-demo-method { margin: 0; padding: 18px; border: 1px solid var(--ubo-demo-border); border-radius: 12px; }
 .ubo-demo-method legend { padding: 0 7px; font-size: 12px; font-weight: 800; }
 .ubo-demo-method > p { margin: 0 0 12px; color: var(--ubo-demo-muted); font-size: 11px; }
@@ -331,6 +342,7 @@
   .ubo-demo-wide { grid-column: auto; }
   .ubo-demo-card-heading { padding: 18px 22px; }
   .ubo-demo-card-heading small { display: none; }
+  .ubo-demo-replay-library { grid-template-columns: 1fr; }
   .ubo-demo-actions { align-items: stretch; flex-direction: column; padding: 18px 22px; }
   .ubo-demo-method > div, .ubo-demo-result-pair { grid-template-columns: 1fr; }
   .ubo-demo-examples { align-items: stretch; flex-direction: column; }

@@ -3,6 +3,8 @@ import { COUNTRIES } from "../constants/appConstants";
 export const DEMO_SESSION_CONTRACT = "ubo-demo-browser-session-v1";
 export const DEMO_SESSION_KEY = "ubo-demo.case.v1";
 export const LAB_REPLAY_KEY = "ubo-control-lab.discovery-replays.v1";
+export const REPLAY_LIBRARY_EXPORT_CONTRACT = "ubo-demo-replay-library-export-v1";
+export const MAX_SAVED_REPLAYS = 6;
 
 export const CALCULATION_METHODS = Object.freeze([
   { code: "POLICY_ALL_ROUTES", label: "All policy routes", explanation: "Existing combined policy assessment." },
@@ -157,26 +159,72 @@ export function writeDemoSession({ draft, demoCase, researchResult }, storage = 
   }));
 }
 
+export function validLabReplay(record) {
+  return Boolean(record && typeof record === "object"
+    && record.contractVersion === "ubo-control-lab-discovery-replay-v1"
+    && typeof record.replayId === "string" && record.replayId
+    && typeof record.savedAt === "string" && !Number.isNaN(Date.parse(record.savedAt))
+    && typeof record.companyContext?.legalEntityName === "string" && record.companyContext.legalEntityName.trim()
+    && typeof record.companyContext?.registrationNumber === "string" && record.companyContext.registrationNumber.trim()
+    && record.subject && typeof record.subject === "object"
+    && record.discoveryResult && typeof record.discoveryResult === "object"
+    && Array.isArray(record.discoveryResult.candidateFacts));
+}
+
+export function mergeLabReplays(...collections) {
+  const byId = new Map();
+  collections.flat().filter((record) => record && typeof record === "object" && typeof record.replayId === "string" && record.replayId).forEach((record) => {
+    const existing = byId.get(record.replayId);
+    const recordTime = Date.parse(record.savedAt || "");
+    const existingTime = Date.parse(existing?.savedAt || "");
+    if (!existing || (!Number.isNaN(recordTime) && (Number.isNaN(existingTime) || recordTime >= existingTime))) byId.set(record.replayId, record);
+  });
+  return [...byId.values()].sort((left, right) => {
+    const leftTime = Date.parse(left.savedAt || "");
+    const rightTime = Date.parse(right.savedAt || "");
+    if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) return 0;
+    if (Number.isNaN(leftTime)) return 1;
+    if (Number.isNaN(rightTime)) return -1;
+    return rightTime - leftTime;
+  }).slice(0, MAX_SAVED_REPLAYS);
+}
+
 export function readLabReplays(storage = window.localStorage) {
   try {
     const records = JSON.parse(storage.getItem(LAB_REPLAY_KEY) || "[]");
-    return Array.isArray(records) ? records.map((record, index) => ({ record, index })).sort((left, right) => {
-      const leftTime = Date.parse(left.record?.savedAt || "");
-      const rightTime = Date.parse(right.record?.savedAt || "");
-      if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) return left.index - right.index;
-      if (Number.isNaN(leftTime)) return 1;
-      if (Number.isNaN(rightTime)) return -1;
-      return rightTime - leftTime || left.index - right.index;
-    }).map(({ record }) => record) : [];
+    return Array.isArray(records) ? mergeLabReplays(records) : [];
   } catch (_) {
     return [];
   }
 }
 
 export function saveLabReplay(record, storage = window.localStorage) {
-  if (!record?.replayId) return;
-  const records = [record, ...readLabReplays(storage).filter(({ replayId }) => replayId !== record.replayId)].slice(0, 6);
+  if (!validLabReplay(record)) throw new TypeError("The Discovery replay record is invalid and was not saved.");
+  const records = mergeLabReplays([record], readLabReplays(storage));
   storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
+  return records;
+}
+
+export function availableLabReplays(researchResult, storage = window.localStorage) {
+  return mergeLabReplays(readLabReplays(storage), researchResult?.replayCapture ? [researchResult.replayCapture] : []);
+}
+
+export function serializeReplayLibrary(records, now = () => new Date().toISOString()) {
+  const validated = mergeLabReplays(records);
+  if (validated.length !== records.length || validated.some((record) => !validLabReplay(record))) throw new TypeError("The replay library contains an invalid or duplicate capture.");
+  return JSON.stringify({ contractVersion: REPLAY_LIBRARY_EXPORT_CONTRACT, exportedAt: now(), records: validated }, null, 2);
+}
+
+export function importReplayLibrary(serialized, storage = window.localStorage) {
+  let parsed;
+  try { parsed = JSON.parse(serialized); } catch (_) { throw new TypeError("Choose a valid UBO demo replay-library JSON file."); }
+  if (parsed?.contractVersion !== REPLAY_LIBRARY_EXPORT_CONTRACT || !Array.isArray(parsed.records)
+    || parsed.records.some((record) => !validLabReplay(record))) {
+    throw new TypeError("This file is not a valid UBO demo replay library.");
+  }
+  const records = mergeLabReplays(parsed.records, readLabReplays(storage));
+  storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
+  return records;
 }
 
 export function clearDemoSession(storage = window.localStorage) {
