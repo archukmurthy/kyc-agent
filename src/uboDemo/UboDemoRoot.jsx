@@ -97,7 +97,7 @@ function GraphFrame({ projection, entityLabels, registryContexts, reviewPresenta
 
 function Assertions({ result }) {
   const rows = allCandidateFacts(result);
-  return <AssertionDetails entries={rows} title="Research assertions and source facts" sourceNotice="Candidate/source assertions are not approved conclusions." variant="analyst" />;
+  return <AssertionDetails entries={rows} title="Research assertions and source facts" sourceNotice="Candidate/source assertions are not approved conclusions." variant="analyst" collapseButton />;
 }
 
 function Identity({ entity }) {
@@ -105,12 +105,14 @@ function Identity({ entity }) {
 }
 
 function OpenQuestions({ view, result, customerRequests, onShowOnMap, onToggleCustomerRequest }) {
+  const [expanded, setExpanded] = useState(true);
   const items = accountOpenItems(view, result);
   const currentBundles = executableCustomerBundles(view);
   const currentQuestions = demoOpenQuestions(view).filter(({ state }) => state === "CURRENT_EXECUTABLE");
   const currentCustomerCount = currentBundles.length;
   const selectTarget = (item, entityId) => onShowOnMap({ kind: "entity", id: entityId }, item.needId);
-  return <aside className="ubo-demo-questions"><span className="ubo-demo-eyebrow">Your next step</span><h2>Open questions</h2>
+  return <aside className="ubo-demo-questions"><div className="ubo-demo-questions-heading"><div><span className="ubo-demo-eyebrow">Your next step</span><h2>Open questions</h2></div><button type="button" aria-expanded={expanded} aria-controls="demo-open-questions-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>
+    {expanded && <div id="demo-open-questions-content">
     {currentCustomerCount === 0 ? <div className="ubo-demo-no-questions"><strong>Nothing needed from you right now.</strong><p>{items.length ? `${items.length} open cause${items.length === 1 ? " is" : "s are"} recorded below so you can see what happens next. None is an executable customer task in the current planner wave.` : "We are still reviewing parts of the ownership structure."}</p></div> : currentQuestions.map((question) => <section key={`${question.kind}:${question.informationNeedIds.join(":")}`}><span className="ubo-demo-question-kind">Needed from you now</span><h3>{question.title}</h3><p>{question.body}</p></section>)}
     <div className="ubo-demo-open-accounting" aria-label="Open cause accounting">
       {items.map((item) => { const selected = customerRequests.some(({ informationNeedId }) => informationNeedId === item.needId); return <section id={`demo-need-${item.needId}`} key={item.needId} className={`ubo-demo-question-card state-${item.disposition.code.toLowerCase()}`} data-information-need-id={item.needId}>
@@ -122,6 +124,7 @@ function OpenQuestions({ view, result, customerRequests, onShowOnMap, onToggleCu
     </div>
     {view?.journeyProjection?.internalReview && ((view.journeyProjection.internalReview.actions || []).length + (view.journeyProjection.internalReview.requirements || []).length) > 0 && <p className="ubo-demo-internal">Internal review is still in progress. This is not a customer question.</p>}
     {items.some(({ disposition }) => disposition.code === "INTERNAL_REVIEW") && <div className="ubo-demo-llp-explainer"><strong>Why LLP review is still open</strong><p>Companies House records the parties and source rights, but an LLP control conclusion can depend on how the partnership agreement operates. This is a prototype policy-assumption limitation and internal interpretation step, not a question for the customer right now.</p><details><summary>Review references</summary><p>Review-only working assumption A-06-WA-01 · required sign-off A-06.</p></details></div>}
+    </div>}
   </aside>;
 }
 

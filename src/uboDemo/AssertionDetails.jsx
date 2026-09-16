@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { groupAssertionRows, presentCandidateFacts } from "./assertionPresentation";
 
 function AssertionCard({ row, index }) {
@@ -20,15 +20,23 @@ function AssertionCard({ row, index }) {
   </article>;
 }
 
-export default function AssertionDetails({ entries, eyebrow = "Source assertions", title = "Research assertions and source facts", open = false, sourceNotice, variant = "analyst" }) {
+export default function AssertionDetails({ entries, eyebrow = "Source assertions", title = "Research assertions and source facts", open = false, sourceNotice, variant = "analyst", collapseButton = false }) {
   const rows = presentCandidateFacts(entries);
   const groups = groupAssertionRows(entries, { variant });
-  return <details className="ubo-customer-card ubo-customer-assertions ubo-demo-assertions" open={open}>
-    <summary><div><small>{eyebrow}</small><strong>{title}</strong></div><span>{rows.length} assertions · click to inspect</span></summary>
+  const [expanded, setExpanded] = useState(open);
+  const content = <>
     {sourceNotice && <p className="ubo-customer-source-notice">{sourceNotice}</p>}
     <div className="ubo-demo-assertion-groups">{groups.map((group) => <section key={group.label} className="ubo-demo-assertion-group">
       <header><h3>{group.label}</h3><span>{group.rows.length}</span></header>
       <div className="ubo-demo-assertion-list">{group.rows.map((row, index) => <AssertionCard key={row.factId || index} row={row} index={index} />)}</div>
     </section>)}</div>
+  </>;
+  if (collapseButton) return <section className="ubo-customer-card ubo-customer-assertions ubo-demo-assertions">
+    <div className="ubo-demo-assertion-heading"><div><small>{eyebrow}</small><strong>{title}</strong><span>{rows.length} assertions</span></div><button type="button" aria-expanded={expanded} aria-controls="demo-assertions-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>
+    {expanded && <div id="demo-assertions-content">{content}</div>}
+  </section>;
+  return <details className="ubo-customer-card ubo-customer-assertions ubo-demo-assertions" open={open}>
+    <summary><div><small>{eyebrow}</small><strong>{title}</strong></div><span>{rows.length} assertions · click to inspect</span></summary>
+    {content}
   </details>;
 }

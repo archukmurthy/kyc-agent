@@ -236,6 +236,25 @@ test("engine output and ownership structure start expanded, collapse independent
   expect(within(ownership).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
 });
 
+test("open questions and analyst assertions use the same explicit collapse control", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  const questions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
+  expect(within(questions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+  expect(within(questions).getByText(/Nothing needed from you right now/)).toBeInTheDocument();
+  fireEvent.click(within(questions).getByRole("button", { name: "Collapse" }));
+  expect(within(questions).queryByText(/Nothing needed from you right now/)).not.toBeInTheDocument();
+  expect(within(questions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+
+  const assertions = screen.getByText("Research assertions and source facts").closest("section");
+  expect(within(assertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  expect(within(assertions).queryByText(/Candidate\/source assertions are not approved conclusions/)).not.toBeInTheDocument();
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
+  expect(within(assertions).getByText(/Candidate\/source assertions are not approved conclusions/)).toBeInTheDocument();
+  expect(within(assertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+});
+
 test("Ask customer records an existing open cause beside the unchanged source assertions", async () => {
   const view = evaluatedSession.snapshots[0].view;
   const selectedSession = {
@@ -294,9 +313,9 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
   expect(body).toEqual({ operation: "START_REVIEW_FIXTURE", payload: { fixtureId: "V2-LAB-08" } });
   expect(window.fetch.mock.calls[0][0]).toBe("/api/ubo-control-lab");
-  const disclosure = screen.getByText(/1 assertions · click to inspect/).closest("details");
-  expect(disclosure).not.toHaveAttribute("open");
-  fireEvent.click(screen.getByText(/1 assertions · click to inspect/));
+  const disclosure = screen.getByText("Research assertions and source facts").closest("section");
+  expect(within(disclosure).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(disclosure).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
   expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
