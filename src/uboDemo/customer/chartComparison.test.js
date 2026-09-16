@@ -70,12 +70,13 @@ test("ambiguous repeated name-only relationship pairs are not automatically matc
 });
 
 test("Vodafone legal-name variants resolve into one comparison row without changing either source assertion", () => {
+  const registryParty = (name, id) => ({ ...party(name, id), entityType: "COMPANY" });
   const registryParties = {
-    group: party("Vodafone Group Plc", "01833679"),
-    european: party("Vodafone European Investments"),
-    international: party("Vodafone International Operations Limited", "02797438"),
-    three: party("Vodafonethree Holdings Limited", "14903490"),
-    vodafone: party("Vodafone Limited", "01471587"),
+    group: registryParty("Vodafone Group Plc", "01833679"),
+    european: registryParty("Vodafone European Investments"),
+    international: registryParty("Vodafone International Operations Limited", "02797438"),
+    three: registryParty("Vodafonethree Holdings Limited", "14903490"),
+    vodafone: registryParty("Vodafone Limited", "01471587"),
   };
   const chartParties = {
     group: party("VODAFONE GROUP PLC"),

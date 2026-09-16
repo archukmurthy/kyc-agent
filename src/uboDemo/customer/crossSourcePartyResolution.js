@@ -68,9 +68,19 @@ function sharedTrustedIdentifier(left, right) {
   return trustedIdentifiers(left).find(({ key }) => rightKeys.has(key))?.key || null;
 }
 
+function broadPartyCategory(party) {
+  const value = words(party?.entityType || party?.partyType);
+  if (!value || ["UNKNOWN", "UNKNOWN OR OTHER", "OTHER"].includes(value)) return "";
+  if (["NATURAL PERSON", "PERSON", "INDIVIDUAL"].includes(value)) return "NATURAL_PERSON";
+  if (["COMPANY", "LEGAL ENTITY", "PUBLIC COMPANY", "CORPORATE", "REGISTERED ENTITY"].includes(value)) return "LEGAL_ENTITY";
+  if (["LLP", "LIMITED LIABILITY PARTNERSHIP", "PARTNERSHIP", "LIMITED PARTNERSHIP", "LP"].includes(value)) return "PARTNERSHIP";
+  if (["TRUST", "TRUST OR LEGAL ARRANGEMENT", "FOUNDATION"].includes(value)) return "LEGAL_ARRANGEMENT";
+  return value;
+}
+
 function compatiblePartyType(left, right) {
-  const a = words(left?.entityType || left?.partyType);
-  const b = words(right?.entityType || right?.partyType);
+  const a = broadPartyCategory(left);
+  const b = broadPartyCategory(right);
   return !a || !b || a === b;
 }
 
