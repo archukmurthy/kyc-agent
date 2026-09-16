@@ -29,6 +29,7 @@ const { runResearchPipeline } = require("../src/pipeline");
 const { getRequirements } = require("../documentRequirements.js");
 const { persistBenchmarkEntity } = require("../lib/persist");
 const { readConfigForTenant, authorizeAdminForTenant } = require("./config");
+const { readBearer } = require("../lib/dossierAccess");
 
 // Injected deps (overridable in tests via __setDeps).
 let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
@@ -210,8 +211,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // Admin-only: every benchmark run spends Claude tokens.
-    const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || "";
-    const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+    const token = readBearer(req);
     if (!tenant || !token || !(await _deps.authorizeAdmin(tenant, token))) {
       return res.status(401).json({ error: "unauthorized" });
     }

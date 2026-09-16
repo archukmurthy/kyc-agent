@@ -30,9 +30,11 @@ let _deps = {
   authorizeAdmin: config.authorizeAdminForTenant,
 };
 
+// Callers always pass an already-lowercase header name (Vercel/Node normalise
+// incoming header keys to lowercase).
 function header(req, name) {
   const headers = (req && req.headers) || {};
-  const value = headers[name] || headers[name.toLowerCase()];
+  const value = headers[name];
   return typeof value === "string" ? value : "";
 }
 
