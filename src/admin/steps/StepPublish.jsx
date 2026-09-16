@@ -50,6 +50,8 @@ export default function StepPublish({
   const [publishSuccess, setPublishSuccess] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState(null);
   const [publishError, setPublishError] = useState(null);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState(null);
 
   const activeTenant = tenantId || getTenantId();
   const canPublish =
@@ -98,6 +100,33 @@ export default function StepPublish({
       ? `&tenant=${encodeURIComponent(activeTenant)}`
       : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");
+  }
+
+  // Load the named default-settings template into the working draft. It is a
+  // DRAFT action on purpose: nothing goes live until Publish, and the current
+  // live version is already archived by the publish path itself.
+  async function handleApplyDefaults() {
+    if (!adminToken) return;
+    const ok = window.confirm(
+      "Replace your unsaved configuration with the default settings template?\n\n" +
+      "Your currently published version is not affected until you press Publish."
+    );
+    if (!ok) return;
+    setApplyingTemplate(true);
+    setTemplateError(null);
+    try {
+      const r = await fetch(
+        `/api/config-templates?id=nium-default&tenant=${encodeURIComponent(activeTenant)}`,
+        { headers: { Authorization: `Bearer ${adminToken}`, "X-Tenant-Id": activeTenant }, cache: "no-store" }
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      if (onChange) onChange(data.config);
+    } catch (err) {
+      setTemplateError(err.message);
+    } finally {
+      setApplyingTemplate(false);
+    }
   }
 
   if (publishSuccess) {
@@ -172,6 +201,35 @@ export default function StepPublish({
         >
           👁 Preview current changes ↗
         </button>
+        <button
+          type="button"
+          onClick={handleApplyDefaults}
+          disabled={applyingTemplate || !adminToken}
+          title="Loads the default settings template into your draft. Review it, then Publish to make it live."
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            marginLeft: 10,
+            padding: "9px 18px",
+            background: "#fff",
+            color: "#0369A1",
+            border: "1px solid #BAE6FD",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: applyingTemplate || !adminToken ? "not-allowed" : "pointer",
+            opacity: applyingTemplate || !adminToken ? 0.5 : 1,
+            fontFamily: "inherit",
+          }}
+        >
+          {applyingTemplate ? "Applying…" : "⚙ Apply default settings"}
+        </button>
+        {templateError && (
+          <div style={{ marginTop: 8, fontSize: 12, color: adminColors.danger }}>
+            Could not load the template: {templateError}
+          </div>
+        )}
       </div>
       {canPublish ? (
         <div style={{ background: "#fff", border: `1px solid ${adminColors.border}`, borderRadius: 10, padding: 16 }}>
