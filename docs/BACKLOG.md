@@ -29,6 +29,11 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **Why:** Without the secret, invites return 500 and every customer link is refused. Without the migration, dossier reads and writes fail on the missing `owned_by` column.
 - **Breaking by design:** every previously-emailed `?dossierId=` link stops working; analysts re-send invites.
 
+### DEP-4 — Part 2 deploy notes: rate-limit storage + research cache reset
+- **Category:** Deploy · **Priority:** P2 · **Status:** OPEN (manual step for the owner)
+- **What:** (1) Rate-limit counters live in `lib/storage.js`. On Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global; and the filesystem backend ignores TTLs, so `ratelimit:*` keys pile up in `.config-store.json` (local) or `/tmp` until the instance recycles. Provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
+- **Why:** Behaviour changes that are correct by design but surprise on first deploy.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -218,6 +223,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What:** Stop Claude-backed research for a tenant once a configurable daily USD budget is reached (usage tracked from the cost/token data research already returns). Show the customer a clear message instead of failing silently.
 - **Why:** Last-line safety net against a surprise Anthropic bill. The rest of the `/api/research` hardening (server-built prompt, rate limit, key required where one exists) is being built now; only this cap is deferred.
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
+- **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
 
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
 - **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
