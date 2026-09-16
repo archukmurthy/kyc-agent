@@ -123,11 +123,11 @@ function OwnersCard({ owners }) {
 function ExistingResearchAssertions({ researchResult }) {
   const rows = allCandidateFacts(researchResult);
   if (!rows.length) return null;
-  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." />;
+  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." variant="analyst" />;
 }
 
 function ChartAssertions({ result }) {
-  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact" } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." />;
+  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact", artifactId: result.artifact?.artifactId } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." variant="customer" />;
   return <details className="ubo-customer-card ubo-customer-assertions"><summary><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong></div><span>{result.assertions?.length || 0} reduced assertions</span></summary><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></details>;
 }
 

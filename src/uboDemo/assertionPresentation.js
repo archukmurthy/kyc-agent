@@ -75,3 +75,49 @@ export function presentCandidateFact(fact, source = {}) {
 export function presentCandidateFacts(entries = []) {
   return entries.map((entry) => presentCandidateFact(entry.fact || entry, entry.source || {}));
 }
+
+function registryIdentity(row) {
+  const external = row.subject?.externalIdentifiers?.[0];
+  return external
+    ? `${external.namespace || external.system || external.identifierType}:${external.value}`
+    : String(row.subject?.name || row.title || row.factId).trim().toUpperCase();
+}
+
+function groupLabel(row, variant) {
+  const registryContext = row.relationship == null && row.title.toUpperCase().includes("REGISTRY CONTEXT");
+  if (registryContext) return "Registry / entity context";
+  if (variant === "customer" && row.category === "Certification detail") return "Certification details";
+  if (row.category === "Ownership") return variant === "customer" ? "Ownership assertions" : "Ownership";
+  if (row.category === "Voting") return variant === "customer" ? "Voting assertions" : "Voting";
+  if (row.category === "Control") return variant === "customer" ? "Control assertions" : "Control";
+  return "Other source facts";
+}
+
+function consolidateRegistryRows(rows) {
+  const consolidated = new Map();
+  rows.forEach((row) => {
+    const key = registryIdentity(row);
+    const existing = consolidated.get(key);
+    if (!existing) {
+      consolidated.set(key, { ...row, observations: [row], evidence: [...row.evidence] });
+      return;
+    }
+    existing.observations.push(row);
+    existing.evidence.push(...row.evidence);
+  });
+  return [...consolidated.values()];
+}
+
+export function groupAssertionRows(entries = [], { variant = "analyst" } = {}) {
+  const order = variant === "customer"
+    ? ["Ownership assertions", "Voting assertions", "Control assertions", "Certification details", "Other source facts"]
+    : ["Registry / entity context", "Ownership", "Voting", "Control", "Other source facts"];
+  const grouped = new Map(order.map((label) => [label, []]));
+  presentCandidateFacts(entries).forEach((row) => {
+    const label = groupLabel(row, variant);
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label).push(row);
+  });
+  if (grouped.has("Registry / entity context")) grouped.set("Registry / entity context", consolidateRegistryRows(grouped.get("Registry / entity context")));
+  return [...grouped.entries()].filter(([, rows]) => rows.length).map(([label, rows]) => ({ label, rows }));
+}

@@ -288,10 +288,17 @@
 .ubo-demo-assertions { border-top: 1px solid var(--ubo-demo-border); }
 .ubo-demo-assertions summary { padding: 20px 22px; display: flex; justify-content: space-between; gap: 16px; cursor: pointer; font-size: 13px; }
 .ubo-demo-assertions summary span { color: var(--ubo-demo-muted); font-size: 11px; }
-.ubo-demo-assertion-list { padding: 0 22px 22px; display: grid; gap: 10px; }
+.ubo-demo-assertion-groups { padding: 0 22px 22px; display: grid; gap: 18px; }
+.ubo-demo-assertion-group > header { padding-bottom: 7px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--ubo-demo-border); }
+.ubo-demo-assertion-group > header h3 { margin: 0; font-size: 13px; }
+.ubo-demo-assertion-group > header span { min-width: 24px; padding: 3px 7px; border-radius: 999px; background: var(--ubo-demo-mint); color: var(--ubo-demo-green-dark); font-size: 9px; font-weight: 850; text-align: center; }
+.ubo-demo-assertion-list { padding: 10px 0 0; display: grid; gap: 10px; }
 .ubo-demo-assertion-list article { padding: 15px; border: 1px solid var(--ubo-demo-border); border-radius: 10px; }
 .ubo-demo-assertion-list p { margin: 5px 0; font-size: 12px; line-height: 1.45; }
 .ubo-demo-assertion-list small { color: var(--ubo-demo-muted); font-size: 10px; }
+.ubo-demo-source-observations { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--ubo-demo-border); font-size: 10px; }
+.ubo-demo-source-observations summary { padding: 0; color: var(--ubo-demo-green); font-size: 10px; font-weight: 800; }
+.ubo-demo-source-observations ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 5px; }
 .ubo-demo-kind { display: inline-block; padding: 4px 7px; border-radius: 999px; background: var(--ubo-demo-mint); color: var(--ubo-demo-green-dark); font-size: 9px; font-weight: 850; text-transform: uppercase; }
 .ubo-demo-questions { padding: 24px; }
 .ubo-demo-open-accounting { display: grid; gap: 12px; margin-top: 16px; }

@@ -97,7 +97,7 @@ function GraphFrame({ projection, entityLabels, registryContexts, reviewPresenta
 
 function Assertions({ result }) {
   const rows = allCandidateFacts(result);
-  return <AssertionDetails entries={rows} title="Research assertions and source facts" sourceNotice="Candidate/source assertions are not approved conclusions." />;
+  return <AssertionDetails entries={rows} title="Research assertions and source facts" sourceNotice="Candidate/source assertions are not approved conclusions." variant="analyst" />;
 }
 
 function Identity({ entity }) {
