@@ -298,6 +298,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 ### UBO-1 — UBO discovery defaults tenant to "nium" and trusts a client-supplied tenantId
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
 - **What:** `api/ubo-discovery.js` does `const { ..., tenantId = "nium", ... } = req.body || {}` — it both defaults an unnamed tenant to `"nium"` (the tenant-resolution rule elsewhere in this codebase is strict: no tenant named is refused, never defaulted) and accepts `tenantId` straight from the request body, so an anonymous caller can write UBO audit rows (`appendAudit`, `persistUboInvestigation`) attributed to any tenant it likes. `public/ubo-lab.html` and the UBO lab's `START_LIVE` operation send no tenant at all and rely on the `"nium"` default, so fixing the endpoint means fixing both together.
+- **Also:** the body `tenantId` has no type or length check before it reaches storage keys and the UBO audit insert.
 - **Area:** `api/ubo-discovery.js`, `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js` (`startLive`).
 
 ### UBO-2 — UBO lab doesn't surface a 429 to the user
@@ -308,9 +309,11 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 ### AUTH-1 — No brute-force protection on admin password checks
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
 - **What:** `/api/admin-auth` and `/api/benchmark`'s admin password check both return a fast, unlimited 401 on a wrong password — nothing throttles repeated guesses against `ADMIN_PASSWORD` / a tenant's hashed password. Now that the comparisons are constant-time (this review's item (b)), the only remaining exposure is guess volume, not timing.
-- **Area:** `api/admin-auth.js`, `api/benchmark.js`, `api/config.js#authorizeAdmin`.
+- **Also:** only `api/config.js#authorizeAdmin` and `lib/auth.js#verifyPassword` became constant-time. Duplicate copies of `authorizeAdmin` in `api/config-templates.js` and `api/config-versions.js`, plus env-password `===` checks in `api/admin-auth.js`, `api/super-admin-auth.js` and `api/tenants.js`, still compare with `===` — merge them onto one shared constant-time check.
+- **Area:** `api/admin-auth.js`, `api/benchmark.js`, `api/config.js#authorizeAdmin`, `api/config-templates.js`, `api/config-versions.js`, `api/super-admin-auth.js`, `api/tenants.js`.
 
 ### PERF-1 — Research endpoint cost/ordering inefficiencies
 - **Category:** Performance · **Priority:** P3 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
 - **What:** Several small inefficiencies in `api/research.js`'s request path: (1) it reads the tenant config from KV before validating the request body, so a malformed request still costs one KV read; (2) a preview analyst without a dossier credential shares the per-IP research rate-limit bucket with every other unauthenticated caller on that IP; (3) both a cache hit and a validation failure still count against the caller's research rate limit, even though neither spends an Anthropic call; (4) rate-limit caller identity trusts `x-forwarded-for`, which is only safe behind Vercel's own edge (spoofable if ever exposed elsewhere).
-- **Area:** `api/research.js`, `lib/rateLimit.js`.
+- **Also:** the research cache key has no tenant config version, so after a schema publish, results cached under the old schema can be served for up to 30 days. Add `_version` to the key (or clear the tenant's rows on publish).
+- **Area:** `api/research.js`, `lib/rateLimit.js`, `lib/researchCache.js`.
