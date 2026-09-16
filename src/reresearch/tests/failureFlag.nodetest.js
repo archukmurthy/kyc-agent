@@ -67,3 +67,18 @@ test('poster posts to /api/change-events when fetch exists', () => {
     global.fetch = savedFetch;
   }
 });
+
+test("postReresearchFailureFlag merges caller headers and keeps them out of the event", () => {
+  const seen = [];
+  const prev = global.fetch;
+  global.fetch = (url, opts) => { seen.push(opts); return Promise.resolve({}); };
+  try {
+    const event = postReresearchFailureFlag({ dossierId: "d-1", headers: { Authorization: "Bearer dossier:t" } });
+    assert.strictEqual(seen[0].headers.Authorization, "Bearer dossier:t");
+    assert.strictEqual(seen[0].headers["Content-Type"], "application/json");
+    assert.strictEqual(event.headers, undefined);
+    assert.strictEqual(JSON.parse(seen[0].body).headers, undefined);
+  } finally {
+    global.fetch = prev;
+  }
+});

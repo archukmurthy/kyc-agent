@@ -396,6 +396,33 @@ describe("dossier view", () => {
     expect(buttonsWithText(/Retry save/i).length).toBe(0);
     expect(buttonsWithText(/Invite Customer to Onboard/i)[0]).not.toBeDisabled();
   });
+
+  /**
+   * A 403 dossier_locked means the save DID land — under the customer, not
+   * lost — so this must NOT look like the offline-save-failure case above:
+   * no "hasn't been saved" banner, no Retry save button (retrying can never
+   * succeed once the customer owns it). Instead the analyst goes read-only.
+   */
+  it("a 403 dossier_locked on save switches to read-only instead of showing a save-failure banner", async () => {
+    await driveToDossier();
+    expect(buttonsWithText(/Retry save/i).length).toBe(1); // offline first save failed
+
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ error: "dossier_locked" }),
+      });
+
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(0);
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+    expect(bodyText()).toMatch(/The customer has taken over this application\./i);
+  });
 });
 
 /* ═══════════════════════════════════════════
