@@ -46,25 +46,18 @@ export function mapToDocAgentOwnershipType(
   // - wolfsbergFields: only populated for the Wolfsberg slot (legacy object format),
   //     used to seed the web prompt so the AI doesn't re-search those fields.
   // - raw: parsed JSON for the by-doc audit map.
-export const extractFromDoc = async (docType, file, schema, flow, fetchTs) => {
+export const extractFromDoc = async (docType, file, schema, flow, fetchTs, { headers = {} } = {}) => {
     const base64 = await readFileAsBase64(file);
     const mediaType = file.type === "image/png" || file.type === "image/jpeg" ? file.type : "application/pdf";
-    const isImage = mediaType.startsWith("image/");
-    const blockType = isImage ? "image" : "document";
+    // The server picks the extraction prompt, model and token budget from the
+    // document slot (POST /api/research mode "extract_document").
     const resp = await fetch("/api/research", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 4096,
-        tools: [],
-        messages: [{
-          role: "user",
-          content: [
-            { type: blockType, source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: docType.extractionPrompt },
-          ],
-        }],
+        mode: "extract_document",
+        docKey: docType.key,
+        file: { mediaType, base64 },
       }),
     });
     if (!resp.ok) {
