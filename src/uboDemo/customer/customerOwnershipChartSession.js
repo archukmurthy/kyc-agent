@@ -109,7 +109,7 @@ export function customerOwnershipChartExtractionsForContext(context, storage = w
     && (!record.result?.company || sameCustomerCompany(record.result.company, context.company)));
 }
 
-export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "POLICY_ALL_ROUTES" }, storage = window.localStorage) {
+export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = window.localStorage) {
   if (!context?.company || !result?.artifact?.artifactId || !resultKey(result)) throw new TypeError("A company-bound Artifact extraction is required for local replay.");
   if (result.company && !sameCustomerCompany(context.company, result.company)) throw new TypeError("The extraction belongs to a different company and cannot be saved to this case.");
   assertReplaySafe(result);
@@ -156,7 +156,7 @@ export function writeCustomerDemoCase({ draft, demoCase }, storage = window.loca
   }));
 }
 
-export function writeCustomerOwnershipChartSession({ context, result, calculationMethod = "POLICY_ALL_ROUTES" }, storage = window.localStorage) {
+export function writeCustomerOwnershipChartSession({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = window.localStorage) {
   storage.setItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY, JSON.stringify({
     contractVersion: CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
     savedAt: new Date().toISOString(),

@@ -22,6 +22,7 @@ const {
 } = require("../fixtures/bettercomms-source-reviewed.js");
 
 const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
+const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
 const MAX_BYTES = 3 * 1024 * 1024;
 const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -433,12 +434,31 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     sourcePartySnapshot: {},
     entityId: subjectEntityId,
   };
-  const mappedParty = (party) => normalizedPartyName(party?.name) === subjectName ? { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} } : party;
-  return candidateFacts.map((fact) => ({
-    ...structuredClone(fact),
-    ...(fact.subject ? { subject: mappedParty(structuredClone(fact.subject)) } : {}),
-    ...(fact.object ? { object: mappedParty(structuredClone(fact.object)) } : {}),
-  }));
+  const mappedParty = (party) => {
+    if (normalizedPartyName(party?.name) === subjectName) return { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} };
+    if (!party?.name || party.entityId) return party;
+    const category = graphCategory(party);
+    const identitySeed = `${category}|${String(party.jurisdiction || company.countryCode || "").toUpperCase()}|${normalizedPartyName(party.name)}`;
+    return { ...party, entityId: `chart-party:${createHash("sha256").update(identitySeed).digest("hex").slice(0, 20)}` };
+  };
+  return candidateFacts.map((fact) => {
+    const cloned = structuredClone(fact);
+    const sourceCurrentState = cloned.qualifiers?.currentState || "UNKNOWN";
+    const useAsDepictedOwnership = cloned.type === "RELATIONSHIP"
+      && cloned.relationship === "ECONOMIC_OWNERSHIP"
+      && sourceCurrentState === "UNKNOWN";
+    return {
+      ...cloned,
+      ...(cloned.subject ? { subject: mappedParty(cloned.subject) } : {}),
+      ...(cloned.object ? { object: mappedParty(cloned.object) } : {}),
+      ...(useAsDepictedOwnership ? { qualifiers: {
+        ...(cloned.qualifiers || {}),
+        sourceCurrentState,
+        currentState: "CURRENT",
+        chartEvaluationTemporalScope: "AS_DEPICTED_IN_UPLOADED_CHART",
+      } } : {}),
+    };
+  });
 }
 
 function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }) {
@@ -483,6 +503,7 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
   const entityLabels = Object.fromEntries((reviewed.entityDirectory || []).filter((item) => item.entityId && item.party?.name).map((item) => [item.entityId, item.party.name]));
   return {
     contractVersion: "ubo-demo-chart-analysis-v1",
+    calculationSemanticsVersion: CHART_CALCULATION_SEMANTICS_VERSION,
     sourceMode: "CUSTOMER_UPLOADED_DOCUMENT",
     heading: "Based on your uploaded chart — not independently verified",
     provisionalDecisions: {
@@ -495,6 +516,8 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
     entityLabels,
     limitations: [
       "Chart CandidateFacts were evaluated separately from saved research.",
+      "Repeated named parties are linked only within this chart for provisional calculation; original extracted party representations remain unchanged.",
+      "Source-backed economic ownership is calculated as depicted in the uploaded chart; present-day currentness is not independently verified.",
       "Provisional demo document analysis is not analyst approval or final case completion.",
     ],
   };
@@ -768,6 +791,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
 
 module.exports = Object.freeze({
   CUSTOMER_PROVIDER_TIMEOUT_MS,
+  CHART_CALCULATION_SEMANTICS_VERSION,
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,

@@ -17,6 +17,8 @@ import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
 import "./customerOwnershipChart.css";
 
+const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
+
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
 
@@ -171,7 +173,7 @@ export default function CustomerOwnershipChartPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
-  const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "POLICY_ALL_ROUTES");
+  const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
   const reevaluationAttempts = useRef(new Set());
@@ -181,7 +183,8 @@ export default function CustomerOwnershipChartPage() {
     const hasStructuredFacts = Array.isArray(result?.candidateFacts) && result.candidateFacts.length > 0;
     const hasCalculationRecords = (result?.chartAnalysis?.view?.qualificationBases || []).length > 0
       && (result?.chartAnalysis?.view?.qualifications || []).length > 0;
-    if (!artifactId || !hasStructuredFacts || hasCalculationRecords || reevaluationAttempts.current.has(artifactId)) return;
+    const hasCurrentCalculationSemantics = result?.chartAnalysis?.calculationSemanticsVersion === CHART_CALCULATION_SEMANTICS_VERSION;
+    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics) || reevaluationAttempts.current.has(artifactId)) return;
     reevaluationAttempts.current.add(artifactId);
     let active = true;
     (async () => {
@@ -217,7 +220,7 @@ export default function CustomerOwnershipChartPage() {
   const replace = () => { clearCustomerOwnershipChartSession(); setResult(null); setPersistenceNotice(null); remove(); };
   const useSaved = (record) => {
     setResult(record.result);
-    setCalculationMethod(record.calculationMethod || "POLICY_ALL_ROUTES");
+    setCalculationMethod(record.calculationMethod || "EFFECTIVE_INTEREST");
     setPersistenceNotice({ kind: "success", message: "Saved extraction loaded from this browser. No provider call was made." });
     try { writeCustomerOwnershipChartSession({ context, result: record.result, calculationMethod: record.calculationMethod }); }
     catch (_) { setPersistenceNotice({ kind: "warning", message: "Saved extraction loaded without a provider call, but the active browser session could not be updated." }); }

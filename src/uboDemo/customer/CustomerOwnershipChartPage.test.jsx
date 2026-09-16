@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
-import { graphForChartPresentation, projectGraph } from "./ChartAnalysisPanel";
+import { graphForChartPresentation, projectGraph, provisionalUboLabel } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
@@ -56,6 +56,7 @@ const analysis = {
   sourceCoverage: { state: "CONNECTED", sourceRelationshipCount: 1, subjectConnectedRelationshipCount: 1, disconnectedRelationshipIds: [] },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
+    calculationSemanticsVersion: "ubo-demo-chart-calculation-v2",
     state: "EVALUATED",
     entityLabels: { "person-1": "Mitchell Fortescue", "company-1": "Better Comms VOIP Ltd" },
     view: {
@@ -178,7 +179,7 @@ test("a stale saved calculation is re-evaluated through the current engine witho
   seed();
   const stale = {
     ...analysis,
-    chartAnalysis: { ...analysis.chartAnalysis, view: { ...analysis.chartAnalysis.view, qualifications: [], qualificationBases: [] } },
+    chartAnalysis: { ...analysis.chartAnalysis, calculationSemanticsVersion: "ubo-demo-chart-calculation-v1" },
   };
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
   window.fetch = jest.fn(async (_url, request) => {
@@ -194,6 +195,7 @@ test("a stale saved calculation is re-evaluated through the current engine witho
   expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
   expect(screen.getByText(/Recorded aggregate: 75%/i)).toBeInTheDocument();
   expect(screen.getByText(/75% = 75%/i)).toBeInTheDocument();
+  expect(screen.getByText("Provisional UBO · qualifies")).toBeInTheDocument();
 });
 
 test("an unevaluated chart still lists its ownership steps instead of leaving the calculation panel blank", () => {
@@ -318,6 +320,12 @@ test("graph scope and relationship filters are presentation-only", () => {
   expect(projectGraph(graph, "RELEVANT", "ALL").relationships.map(({ relationshipId }) => relationshipId)).toEqual(["ownership", "to-customer", "vote"]);
   expect(projectGraph(graph, "FULL", "VOTING").relationships.map(({ relationshipId }) => relationshipId)).toEqual(["vote"]);
   expect(graph.relationships).toHaveLength(4);
+});
+
+test("effective-ownership route states use clear provisional UBO labels", () => {
+  expect(provisionalUboLabel("SATISFIED", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · qualifies");
+  expect(provisionalUboLabel("NOT_SATISFIED", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · does not qualify");
+  expect(provisionalUboLabel("INDETERMINATE", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · cannot determine");
 });
 
 test("graph filters preserve source-projection nodes and relationship endpoints", () => {

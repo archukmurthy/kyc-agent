@@ -37,7 +37,7 @@ test("saves and restores a company-bound structured extraction without source do
     expect.objectContaining({
       companyKey: "GB|00123456|EXAMPLE LIMITED",
       result,
-      calculationMethod: "POLICY_ALL_ROUTES",
+      calculationMethod: "EFFECTIVE_INTEREST",
     }),
   ]);
   const stored = window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY);

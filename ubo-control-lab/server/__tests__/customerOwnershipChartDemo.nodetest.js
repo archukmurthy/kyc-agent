@@ -83,11 +83,12 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.ok(result.chartAnalysis.view.graph.relationships.length >= 1);
   assert.equal(result.chartAnalysis.view.qualifications.length, 1);
   const effective = result.chartAnalysis.view.qualificationBases.find(({ route }) => route === "EFFECTIVE_INTEREST");
-  assert.equal(effective.assessmentState, "INDETERMINATE");
-  assert.equal(effective.reasonCode, "NO_DEFENSIBLE_KNOWN_NUMERIC_CONTRIBUTION");
+  assert.equal(effective.assessmentState, "SATISFIED");
+  assert.equal(effective.recordedCalculation.value.value, "75");
   assert.equal(effective.orderedPathReferences.length, 1);
-  assert.deepEqual(effective.orderedPathReferences[0].reasons, ["UNKNOWN_TEMPORAL_STATE"]);
+  assert.equal(effective.orderedPathReferences[0].contribution.value, "75");
   assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").measurement.value, 75);
+  assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").qualifiers.currentState, "UNKNOWN");
   assert.equal(result.comparison, "NOT_PERFORMED");
 });
 
@@ -189,6 +190,48 @@ test("source visualization groups repeated chart names without inventing a UBO c
   assert.equal(graph.qualifications.length, 0);
   assert.equal(graph.calculations.length, 0);
   assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
+});
+
+test("Bettercomms chart-local identities produce separate 75 and 25 percent effective-ownership results without altering source facts", () => {
+  const party = (name, entityType) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const mitchell = party("Mitchell Fortescue", "NATURAL_PERSON");
+  const lee = party("Lee Taylor", "NATURAL_PERSON");
+  const holdco = party("Better Holdco", "LEGAL_ENTITY");
+  const subject = party("Better Comms VOIP Ltd", "LEGAL_ENTITY");
+  const relationship = (factId, from, to, value) => ({
+    factId, type: "RELATIONSHIP", subject: from, relationship: "ECONOMIC_OWNERSHIP", object: to,
+    measurement: { type: "EXACT", value },
+    qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-bettercomms" }],
+  });
+  const candidateFacts = [
+    relationship("mitchell-holdco", mitchell, holdco, 75),
+    relationship("lee-holdco", lee, holdco, 25),
+    relationship("holdco-subject", holdco, subject, 100),
+  ];
+  const analysis = buildChartAnalysis({
+    candidateFacts,
+    operationEvidenceReferences: [], issues: [],
+    company: { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "14605186", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-bettercomms", capturedAt: "2026-09-16T10:00:00.000Z" }, requestId: "chart-bettercomms",
+  });
+  const byName = Object.fromEntries(Object.entries(analysis.entityLabels).map(([entityId, name]) => [name, entityId]));
+  const basisFor = (name) => analysis.view.qualificationBases.find((basis) => basis.personEntityId === byName[name] && basis.route === "EFFECTIVE_INTEREST");
+  const qualificationFor = (name) => analysis.view.qualifications.find((qualification) => qualification.personEntityId === byName[name]);
+  const mitchellBasis = basisFor("Mitchell Fortescue");
+  const leeBasis = basisFor("Lee Taylor");
+  assert.equal(mitchellBasis.recordedCalculation.value.type, "EXACT");
+  assert.equal(mitchellBasis.recordedCalculation.value.value, "75");
+  assert.equal(mitchellBasis.assessmentState, "SATISFIED");
+  assert.equal(qualificationFor("Mitchell Fortescue").routeStatus, "ROUTE_SATISFIED");
+  assert.equal(leeBasis.recordedCalculation.value.type, "EXACT");
+  assert.equal(leeBasis.recordedCalculation.value.value, "25");
+  assert.equal(leeBasis.assessmentState, "NOT_SATISFIED");
+  assert.notEqual(qualificationFor("Lee Taylor").routeStatus, "ROUTE_SATISFIED");
+  assert.equal(mitchellBasis.orderedPathReferences[0].relationshipIds.length, 2);
+  assert.equal(leeBasis.orderedPathReferences[0].relationshipIds.length, 2);
+  assert.equal(candidateFacts.every((fact) => fact.qualifiers.currentState === "UNKNOWN"), true);
+  assert.equal(candidateFacts.some((fact) => fact.subject.entityId || fact.object.entityId), false);
 });
 
 test("saved structured chart facts re-enter the shared engine without document bytes or a provider call", () => {
