@@ -69,6 +69,69 @@ test("demo-only review makes source-backed voting ranges operative without chang
   assert.match(result.sourceLabel, /provisional demo result/);
 });
 
+test("Bettercomms shared PSC occurrence keeps the person and all three control dimensions on the rendered chain", () => {
+  const baseline = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });
+  const target = { entityId: "better-comms", name: "BETTERCOMMS VOIP LTD", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "09000001" }] };
+  const holdco = { name: "BETTER HOLDCO LIMITED", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "09000002" }] };
+  const mitchell = { name: "MR MITCHELL FORTESCUE", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const source = (referenceId) => [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId }];
+  const range = { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: false, upperInclusive: true };
+  const facts = [
+    { factId: "holdco-target", type: "RELATIONSHIP", subject: holdco, object: target, relationship: "ECONOMIC_OWNERSHIP", measurement: { type: "EXACT", value: 100 }, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" }, evidenceReferences: source("companies-house:09000001:psc:0") },
+    { factId: "mitchell-holdco-ownership", type: "RELATIONSHIP", subject: mitchell, object: holdco, relationship: "ECONOMIC_OWNERSHIP", measurement: range, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP", sourceNatureOfControl: "ownership-of-shares-75-to-100-percent" }, evidenceReferences: source("companies-house:09000002:psc:0") },
+    { factId: "mitchell-holdco-voting", type: "RELATIONSHIP", subject: mitchell, object: holdco, relationship: "VOTING_RIGHTS", measurement: range, qualifiers: { currentState: "CURRENT", votingConcept: "VOTING_RIGHTS", sourceNatureOfControl: "voting-rights-75-to-100-percent" }, evidenceReferences: source("companies-house:09000002:psc:0") },
+    { factId: "mitchell-holdco-directors", type: "RELATIONSHIP", subject: mitchell, object: holdco, relationship: "FORMAL_CONTROL_RIGHT", qualifiers: { currentState: "CURRENT", controlConcept: "APPOINT_OR_REMOVE_PERSONS", sourceStatementMode: "COMBINED_ALTERNATIVE", sourceNatureOfControl: "right-to-appoint-and-remove-directors", requiresInterpretation: true }, evidenceReferences: source("companies-house:09000002:psc:0") },
+  ];
+  const session = startReviewReplay({ replayRecord: {
+    replayId: "bettercomms-live-psc-chain",
+    subject: target,
+    companyContext: { legalEntityName: target.name, registrationNumber: "09000001", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" },
+    discoveryResult: { ...baseline.result, requestId: "bettercomms-live-psc-chain", candidateFacts: facts },
+    savedAt: "2026-09-16T08:00:00.000Z",
+  } });
+  session.sourceState = "LIVE";
+
+  const result = autoReviewDemoSession(session, "2026-09-16T08:01:00.000Z");
+  const graph = result.snapshots[0].view.graph;
+  const names = new Map(result.entityDirectory.map(({ entityId, party }) => [entityId, party.name]));
+  const rendered = graph.relationships.map((relationship) => ({
+    from: names.get(relationship.subjectEntityId),
+    to: names.get(relationship.objectEntityId),
+    type: relationship.relationshipType,
+  }));
+
+  assert.equal(result.demoAutoReview.unresolvedIdentities, 0);
+  assert.equal(result.demoAutoReview.unresolvedClaims, 0);
+  assert.deepEqual([...new Set(graph.nodes.map(({ entityId }) => names.get(entityId)))].sort(), ["BETTER HOLDCO LIMITED", "BETTERCOMMS VOIP LTD", "MR MITCHELL FORTESCUE"]);
+  const byRelationship = (left, right) => `${left.from}>${left.to}:${left.type}`.localeCompare(`${right.from}>${right.to}:${right.type}`);
+  assert.deepEqual(rendered.sort(byRelationship), [
+    { from: "BETTER HOLDCO LIMITED", to: "BETTERCOMMS VOIP LTD", type: "ECONOMIC_OWNERSHIP" },
+    { from: "MR MITCHELL FORTESCUE", to: "BETTER HOLDCO LIMITED", type: "ECONOMIC_OWNERSHIP" },
+    { from: "MR MITCHELL FORTESCUE", to: "BETTER HOLDCO LIMITED", type: "VOTING_RIGHTS" },
+    { from: "MR MITCHELL FORTESCUE", to: "BETTER HOLDCO LIMITED", type: "FORMAL_CONTROL_RIGHT" },
+  ].sort(byRelationship));
+});
+
+test("same-name people from different PSC records remain unresolved", () => {
+  const target = { entityId: "target", name: "Target Ltd", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [] };
+  const person = { name: "Same Name", entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [] };
+  const facts = ["psc:0", "psc:1"].map((referenceId, index) => ({
+    factId: `different-source-${index}`,
+    type: "RELATIONSHIP",
+    subject: person,
+    object: target,
+    relationship: index ? "VOTING_RIGHTS" : "ECONOMIC_OWNERSHIP",
+    measurement: { type: "EXACT", value: 30 },
+    qualifiers: { currentState: "CURRENT", ...(index ? { votingConcept: "VOTING_RIGHTS" } : { economicInterestConcept: "SHARE_OWNERSHIP" }) },
+    evidenceReferences: [{ system: "registry", referenceType: "SOURCE_REFERENCE", referenceId }],
+  }));
+  const claims = facts.map((fact, index) => ({ targetType: "CANDIDATE_CLAIM", claimId: `claim-${index}`, currentState: "CANDIDATE", relationship: fact.relationship, originatingCandidateFact: { candidateFactId: fact.factId } }));
+  const parties = claims.map((claim) => ({ targetType: "CANDIDATE_PARTY", candidatePartyKey: `${claim.claimId}:subject`, claimId: claim.claimId, endpoint: "SUBJECT", party: person }));
+  const plan = buildPlan({ caseId: "same-name-different-psc", candidateSources: [{ candidateFacts: facts }], decisionTargets: { candidateParties: parties, candidateClaims: claims }, entityDirectory: [{ entityId: "target", party: target }] });
+  assert.equal(plan.identityDecisions.every(({ action }) => action === "LEAVE_UNRESOLVED"), true);
+  assert.equal(plan.claimDecisions.every(({ resultingState }) => resultingState === "DISPUTED"), true);
+});
+
 test("ordinary successor live/replay intake still waits for explicit decisions", () => {
   const session = replaySession("V2-LAB-01");
   assert.equal(session.snapshots.length, 0);

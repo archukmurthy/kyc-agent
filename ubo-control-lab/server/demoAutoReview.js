@@ -59,6 +59,25 @@ function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
 
+function sourceReferenceKeys(fact) {
+  return new Set((fact?.evidenceReferences || []).filter((reference) => reference?.referenceId).map((reference) => [
+    normalize(reference.system),
+    normalize(reference.referenceType),
+    normalize(reference.referenceId),
+  ].join(":")));
+}
+
+function isOneSourcePartyOccurrence(targets, factByClaimId) {
+  if (targets.length === 1) return true;
+  const endpoints = new Set(targets.map(({ endpoint }) => normalize(endpoint)));
+  if (endpoints.size !== 1 || ![...endpoints][0]) return false;
+  const facts = targets.map(({ claimId }) => factByClaimId.get(claimId));
+  if (facts.some((fact) => !fact) || new Set(facts.map(({ relationship }) => relationship)).size !== facts.length) return false;
+  const sourceSets = facts.map(sourceReferenceKeys);
+  if (sourceSets.some((references) => references.size === 0)) return false;
+  return [...sourceSets[0]].some((reference) => sourceSets.every((references) => references.has(reference)));
+}
+
 function isSourceBackedCombinedControlRight(fact) {
   const sourceNature = String(fact?.qualifiers?.sourceNatureOfControl || "").toLowerCase();
   return fact?.relationship === "FORMAL_CONTROL_RIGHT"
@@ -149,11 +168,18 @@ function buildPlan(session) {
     targetsByClaim.get(target.claimId).push(target);
   }
 
-  const nameOnlyCounts = new Map();
+  const factByClaimId = new Map(claimTargets.map((target) => [
+    target.claimId,
+    factById.get(target.originatingCandidateFact?.candidateFactId),
+  ]));
+
+  const nameOnlyGroups = new Map();
   for (const target of partyTargets) {
     if (target.party?.entityId || identifierKey(target.party)) continue;
     const key = nameKey(target.party);
-    if (key) nameOnlyCounts.set(key, (nameOnlyCounts.get(key) || 0) + 1);
+    if (!key) continue;
+    if (!nameOnlyGroups.has(key)) nameOnlyGroups.set(key, []);
+    nameOnlyGroups.get(key).push(target);
   }
 
   const conflictGroups = new Map();
@@ -173,7 +199,8 @@ function buildPlan(session) {
   const identityDecisions = partyTargets.map((target) => {
     const strongKey = target.party?.entityId ? `ENTITY:${target.party.entityId}` : identifierKey(target.party);
     const weakKey = nameKey(target.party);
-    const ambiguousName = !strongKey && (!weakKey || nameOnlyCounts.get(weakKey) !== 1);
+    const weakTargets = weakKey ? nameOnlyGroups.get(weakKey) || [] : [];
+    const ambiguousName = !strongKey && (!weakKey || !isOneSourcePartyOccurrence(weakTargets, factByClaimId));
     if (ambiguousName) return { candidatePartyKey: target.candidatePartyKey, action: "LEAVE_UNRESOLVED" };
     const identityKey = strongKey || weakKey;
     const existingEntityId = entityIdByStrongIdentity.get(identityKey);
