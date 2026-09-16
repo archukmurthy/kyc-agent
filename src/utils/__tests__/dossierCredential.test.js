@@ -23,10 +23,27 @@ test("an analyst credential becomes a plain bearer", () => {
   expect(getDossierAuthHeaders("acme")).toEqual({ Authorization: "Bearer analyst-pw", "X-Tenant-Id": "acme" });
 });
 
-test("a customer token becomes a dossier-prefixed bearer and wins over an analyst credential", () => {
-  setAnalystCredential("analyst-pw");
+test("a customer token becomes a dossier-prefixed bearer", () => {
   setCustomerDossierToken("tok");
   expect(getDossierAuthHeaders("acme")).toEqual({ Authorization: "Bearer dossier:tok", "X-Tenant-Id": "acme" });
+});
+
+// Finding 1 (review): a lingering customer token in the same tab must never
+// leak into later analyst work, and vice versa - the two credentials are
+// mutually exclusive, not "customer wins when both happen to be set".
+test("setting an analyst credential drops any customer token this tab was holding", () => {
+  setCustomerDossierToken("tok");
+  setAnalystCredential("analyst-pw");
+  expect(getDossierAuthHeaders("acme")).toEqual({ Authorization: "Bearer analyst-pw", "X-Tenant-Id": "acme" });
+  expect(sessionStorage.getItem("dossier_token")).toBeNull();
+});
+
+test("setting a customer token drops any analyst credential this tab was holding", () => {
+  setAnalystCredential("analyst-pw");
+  setCustomerDossierToken("tok");
+  const headers = getDossierAuthHeaders("acme");
+  expect(headers).toEqual({ Authorization: "Bearer dossier:tok", "X-Tenant-Id": "acme" });
+  expect(sessionStorage.getItem("preboarding_token")).toBeNull();
 });
 
 test("the tenant defaults to the URL tenant", () => {

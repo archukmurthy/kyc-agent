@@ -29,11 +29,21 @@ function read(key) {
 export function setAnalystCredential(token) {
   memory.analyst = token || "";
   write(ANALYST_KEY, memory.analyst);
+  // The two credentials are mutually exclusive: a tab that becomes an analyst
+  // can no longer also be acting as whichever customer it previously opened
+  // an invite link as. Without this, a lingering customer token would keep
+  // winning in getDossierAuthHeaders() and hijack the analyst's calls.
+  memory.customer = "";
+  write(CUSTOMER_KEY, "");
 }
 
 export function setCustomerDossierToken(token) {
   memory.customer = token || "";
   write(CUSTOMER_KEY, memory.customer);
+  // Mirror of the above: landing as a customer drops any analyst credential
+  // this tab was holding, so the tab can't straddle both identities.
+  memory.analyst = "";
+  write(ANALYST_KEY, "");
 }
 
 export function clearDossierCredentials() {

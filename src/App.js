@@ -1119,6 +1119,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         setLinkError(data && (data.error === "link_expired" || data.error === "link_revoked") ? data.error : "invalid");
         return;
       }
+      if (dossierToken && !(data && data.success && data.dossier)) {
+        // Customer token path: any other non-success response (404
+        // dossier_not_found, a 5xx, a malformed body) must not fall through
+        // to the empty wizard below either - it's just as broken for the
+        // customer as the 410/401 cases above.
+        setLinkError("invalid");
+        return;
+      }
       if (data.success && data.dossier) {
         const d = data.dossier;
         if (d.company_name) setCompanyName(d.company_name);
@@ -1229,9 +1237,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         trackEvent("invite_link_opened", { dossierId: d.id, companyName: d.company_name || null, via: "dossier_link" });
       }
     } catch (err) {
-      // Fail gracefully — land on the Applicant page with empty fields.
       // eslint-disable-next-line no-console
       console.error("[loadDossier] Failed:", err);
+      if (dossierToken) {
+        // Customer token path: a network error is just as unusable as a 404 -
+        // never drop the customer into an empty wizard.
+        setLinkError("invalid");
+        return;
+      }
+      // Analyst Preview path: fail gracefully, land on the Applicant page
+      // with empty fields (unchanged from before this fix).
     }
     // Always advance to the Applicant step regardless of whether the dossier
     // loaded (ai_only step map applies; documents step is analyst-only here).
@@ -4833,7 +4848,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         preboardingUnlocked={preboardingUnlocked}
         docSearchResults={docSearchResults}
         selfSourceResults={selfSourceResults}
-        tenantId={tenantId}
+        tenantId={preboardingTenantId || tenantId}
         setShowDossierView={setShowDossierView}
         setShowInviteScreen={setShowInviteScreen}
         setDossierId={setDossierId}

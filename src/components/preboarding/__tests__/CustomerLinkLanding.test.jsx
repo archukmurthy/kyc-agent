@@ -64,6 +64,17 @@ test("a revoked link says so", async () => {
   expect(bodyText()).toMatch(/no longer active|revoked/i);
 });
 
+test("a 404 on a valid token (dossier gone) shows link-unavailable and does not start the wizard", async () => {
+  // Finding 2 (review): a token whose dossier no longer exists is a 404, not
+  // a 401/410 - the old code let this fall through into the empty wizard.
+  fetchRoutes["/api/get-dossier"] = () => Promise.resolve({
+    ok: false, status: 404, json: () => Promise.resolve({ error: "dossier_not_found" }),
+  });
+  await mountAt("/?tenant=nium&dossierToken=gone.tok&journey=customer");
+  expect(bodyText()).toMatch(/isn't valid/i);
+  expect(bodyText()).not.toMatch(/Applicant Details/i);
+});
+
 test("a legacy dossierId link is treated as no longer valid and never fetched", async () => {
   await mountAt("/?tenant=nium&dossierId=d-1&journey=customer");
   expect(bodyText()).toMatch(/no longer valid/i);
