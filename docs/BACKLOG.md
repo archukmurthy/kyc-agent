@@ -23,6 +23,12 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **Local:** not needed. Vercel Cron doesn't run locally, and the worker only runs via `npm run worker:finalize`.
 - **Area:** Vercel env settings, `api/finalize-submissions.js`, `vercel.json` `crons`.
 
+### DEP-3 — Part 1 deploy gates: DOSSIER_TOKEN_SECRET + migration 026
+- **Category:** Security / Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
+- **What:** (1) Set `DOSSIER_TOKEN_SECRET` to a long random value in every environment that sends invites or serves customer links. (2) Apply `db/migrations/026_dossier_ownership.sql` to each database (`node db/apply.js db/migrations/026_dossier_ownership.sql`).
+- **Why:** Without the secret, invites return 500 and every customer link is refused. Without the migration, dossier reads and writes fail on the missing `owned_by` column.
+- **Breaking by design:** every previously-emailed `?dossierId=` link stops working; analysts re-send invites.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -229,6 +235,29 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** Feature · **Priority:** P3 · **Status:** OPEN (deferred by user 2026-09-15)
 - **What:** A "Revoke link" button for analysts. The revoke endpoint + server check are being built now; only the UI is deferred.
 - **Area:** `src/components/preboarding/**`.
+- **Status note (Part 1):** the server side shipped — `POST /api/revoke-dossier-token { dossierId }` (analyst only) revokes every outstanding link for that dossier. Only the button is still missing.
+
+### PREB-4 — Strip the customer link token from the address bar after landing
+- **Category:** Security · **Priority:** P3 · **Status:** OPEN (found in Part 1 review 2026-09-16)
+- **What:** After the customer lands on `/?tenant=<t>&dossierToken=<tok>&journey=customer`, the token is stored in sessionStorage but stays in the URL (browser history, screenshots, copy-paste). Remove only the `dossierToken` param with `history.replaceState`, keeping `tenant`/`journey` — other code re-reads `window.location.search`.
+- **Why not now:** no Referer leak today (no third-party assets; default `strict-origin-when-cross-origin` strips the query cross-origin).
+- **Area:** `src/App.js` landing effect.
+
+### PREB-5 — Customer save must not write the analyst's configuration columns
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 1 final review 2026-09-16)
+- **What:** A customer holding their own dossier token can overwrite `search_attempts`, `seeded_by`, `excluded_fields`, `required_documents`, `verified_data` through `POST /api/save-dossier`. Restrict the customer UPDATE to customer-editable columns; keep the retry count server-owned (Part 3 already stops the client writing `searchAttempts`).
+- **Why not now:** customer can only touch their own dossier, and `/api/submit` accepts client-sent data anyway.
+- **Area:** `api/save-dossier.js`.
+
+### PREB-6 — Revocation store must be shared and fail closed in production
+- **Category:** Security / Deploy · **Priority:** P1 · **Status:** OPEN (deploy note, Part 1 final review 2026-09-16)
+- **What:** Link revocation (`dossier-token-revoked:<id>`) lives in `lib/storage.js`. On Vercel without KV/Redis it falls back to per-instance `/tmp`, so a revoke only holds on the instance that wrote it; the filesystem backend also swallows read errors, so "fail closed on unreadable store" only holds on KV/Redis. Require KV/Redis wherever customer links are served (pairs with DEP-3).
+- **Area:** `lib/storage.js`, `lib/dossierToken.js`, Vercel env.
+
+### PLAT-8 — `api/change-intelligence-metrics.js` has no server-side auth
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (pre-existing, found in Part 1 final review 2026-09-16)
+- **What:** Aggregates all change events (including dossier-keyed ones) and is guarded only on the client. Put it behind admin auth. Also: `api/get-document.js:14-25` comment still says dossier context is unauthenticated — refresh when blob access control (PLAT-1) lands.
+- **Area:** `api/change-intelligence-metrics.js`, `api/get-document.js`.
 
 ### PLAT-7 — Fresh (no-link) applications can't be keyed: change-events / amendment-documents rely on unguessable ids
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (known limit, accepted 2026-09-15)

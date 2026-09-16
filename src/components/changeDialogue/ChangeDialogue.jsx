@@ -27,6 +27,7 @@ import { fieldHasHighRiskCountry } from '../../changeIntelligence/highRiskCountr
 // the row itself carries the result. Re-add the import if a notice ever returns.
 import { buildChangeEvent } from './buildChangeEvent';
 import { useDialogueState } from './useDialogueState';
+import { getDossierAuthHeaders } from '../../utils/dossierCredential';
 import {
   classifyFieldClass,
   deriveVerifiability,
@@ -148,7 +149,7 @@ export function ChangeDialogue({
       if (typeof fetch === 'function') {
         fetch('/api/change-events', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getDossierAuthHeaders() },
           body: JSON.stringify(event),
         })
           .then((r) => r.json())

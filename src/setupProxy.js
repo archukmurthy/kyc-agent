@@ -50,6 +50,7 @@ const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-ev
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
+const revokeDossierTokenHandler = require(path.join(__dirname, "..", "api", "revoke-dossier-token.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
@@ -452,6 +453,17 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(inviteHandler)(req, res);
+    });
+  });
+
+  // Revoke every outstanding customer link for a dossier (analyst only).
+  app.post("/api/revoke-dossier-token", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(revokeDossierTokenHandler)(req, res);
     });
   });
 

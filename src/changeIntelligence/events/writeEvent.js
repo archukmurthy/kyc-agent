@@ -90,9 +90,13 @@ async function writeEvent(db, event = {}) {
   //    the caller's call to make, not silently resolved here. (Open question O2.)
   const supersedesId = event.supersedesId ?? null;
   if (supersedesId !== null) {
+    // Scoped to the SAME submission: an unscoped lookup lets an anonymous
+    // POST with a fresh submissionId supersede another dossier's event by
+    // guessing its (sequential, BIGSERIAL) id — marking it superseded with
+    // no ownership check. A foreign-submission target must read as not found.
     const existing = await db.query(
-      `-- @qid:get_by_id\nSELECT ${COLUMNS.id} FROM change_events WHERE ${COLUMNS.id} = $1`,
-      [supersedesId],
+      `-- @qid:get_by_id\nSELECT ${COLUMNS.id} FROM change_events WHERE ${COLUMNS.id} = $1 AND ${COLUMNS.submissionId} = $2`,
+      [supersedesId, event.submissionId],
     );
     if (!existing || existing.length === 0) {
       throw new Error(`writeEvent: supersedesId ${supersedesId} does not exist`);

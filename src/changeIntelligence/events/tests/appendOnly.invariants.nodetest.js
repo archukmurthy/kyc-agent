@@ -65,6 +65,22 @@ test('superseding a non-existent event is rejected', async () => {
   );
 });
 
+test('superseding another submission\'s event is rejected - cross-submission ids are guessable (BIGSERIAL)', async () => {
+  const db = makeFakeDb();
+  // Dossier A's event.
+  const victim = await writeEvent(db, baseEvent({ submissionId: 'sub-A', fieldId: 'a' }));
+  // An anonymous POST for a fresh, unrelated submission guesses the victim's id.
+  await assert.rejects(
+    () => writeEvent(db, baseEvent({ submissionId: 'sub-B', fieldId: 'a', supersedesId: victim.id })),
+    /does not exist/,
+  );
+  // The victim event must be untouched: not superseded, still current.
+  const current = await getCurrentFieldState(db, 'sub-A', 'a');
+  assert.equal(current.id, victim.id);
+  const stillFresh = await db.query('-- @qid:is_superseded\nSELECT id FROM change_events WHERE supersedes = $1', [victim.id]);
+  assert.equal(stillFresh.length, 0);
+});
+
 test('after a chain of N supersedes: current = tail, history = all N in order', async () => {
   const db = makeFakeDb();
   const N = 5;

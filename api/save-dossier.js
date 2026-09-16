@@ -2,7 +2,14 @@
 //
 // CommonJS (module.exports), not `export default`, so src/setupProxy.js can
 // require() it for local `npm start` (mirrors api/submit.js, api/track-event.js).
-// Always returns 200 — a save failure must never block the analyst.
+// Always returns 200 on a database failure — a save failure must never block
+// the analyst — but authorisation failures are proper 4xx.
+//
+// Callers must hold an analyst or customer credential (lib/dossierAccess.js).
+// The tenant comes from the credential only — a request body can no longer
+// name (or create) a tenant. A customer may only refresh its own dossier
+// (never create one, never touch another); its write flips `owned_by` to
+// 'customer', after which an analyst can no longer write that row.
 //
 // Upsert-by-id: a caller that already has a dossierId (a re-research / an
 // analyst "Update" re-save) must refresh THAT row, never insert a second one —
@@ -11,18 +18,27 @@
 // original contract) still gets a plain INSERT.
 
 const { neon } = require("@neondatabase/serverless");
+const dossierAccess = require("../lib/dossierAccess");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
-let _deps = { neon };
+let _deps = { neon, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Credential first. The tenant comes from the credential ONLY — a request
+  // body can no longer name (or create) a tenant.
+  const actor = await _deps.access.resolveDossierActor(req);
+  if (actor.kind === "none") {
+    const deny = _deps.access.denyFor(actor);
+    return res.status(deny.status).json({ error: deny.error });
+  }
+  const tenantId = actor.tenantId;
+
   const {
     dossierId,
-    tenantId,
     company,
     entityType,
     ownershipType,
@@ -49,8 +65,13 @@ module.exports = async function handler(req, res) {
   const seededByValue = seededBy === "customer" ? "customer" : "analyst";
   const searchAttemptsValue = Number.isFinite(searchAttempts) ? searchAttempts : 1;
 
-  if (!tenantId || !company?.name) {
-    return res.status(400).json({ error: "tenantId and company.name required" });
+  if (!company?.name) {
+    return res.status(400).json({ error: "company.name required" });
+  }
+
+  // Customers only ever refresh their own dossier; creating one is analyst work.
+  if (actor.kind === "customer" && !dossierId) {
+    return res.status(403).json({ error: "forbidden" });
   }
 
   if (!process.env.DATABASE_URL) {
@@ -61,7 +82,30 @@ module.exports = async function handler(req, res) {
   try {
     const sql = _deps.neon(process.env.DATABASE_URL);
 
-    // Ensure tenant exists (slug is NOT NULL on this table).
+    let existing = null;
+    if (dossierId) {
+      const found = await sql`
+        SELECT id, tenant_id, owned_by
+        FROM entity_dossiers
+        WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND status != 'deleted'
+        LIMIT 1
+      `;
+      existing = found.length ? found[0] : null;
+
+      if (existing) {
+        const permitted = _deps.access.canWriteDossier(actor, existing);
+        if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
+      } else if (actor.kind === "customer") {
+        // The customer's dossier is gone; never let a customer mint a new one.
+        return res.status(404).json({ error: "dossier_not_found" });
+      }
+    }
+
+    const isCustomer = actor.kind === "customer";
+
+    // Ensure the Postgres tenants row exists (slug is NOT NULL). The tenant id
+    // here is the VERIFIED one from the credential — the historical hole was
+    // that it came from the request body, letting any caller create tenants.
     await sql`
       INSERT INTO tenants (id, name, slug)
       VALUES (${tenantId}, ${tenantId}, ${tenantId})
@@ -69,9 +113,15 @@ module.exports = async function handler(req, res) {
     `;
 
     let rows = [];
-    if (dossierId) {
+    if (existing) {
       // Update-in-place, scoped to this tenant so one tenant can never
-      // overwrite another's row by guessing/replaying an id.
+      // overwrite another's row by guessing/replaying an id. The
+      // `(${isCustomer} OR owned_by <> 'customer')` clause RE-CHECKS
+      // ownership at write time: the permission check above ran against a
+      // SELECT taken moments earlier, and an analyst's write can otherwise
+      // race a concurrent customer write that flips owned_by in between
+      // (TOCTOU) — the analyst's UPDATE would then silently land on a
+      // dossier the customer has just taken over.
       rows = await sql`
         UPDATE entity_dossiers
         SET
@@ -107,17 +157,30 @@ module.exports = async function handler(req, res) {
           seeded_by = ${seededByValue},
           search_attempts = ${searchAttemptsValue},
 
+          owned_by = CASE WHEN ${isCustomer} THEN ${"customer"} ELSE owned_by END,
+          last_customer_action_at = CASE WHEN ${isCustomer} THEN NOW() ELSE last_customer_action_at END,
           status = 'ready',
           saved_at = NOW()
-        WHERE id = ${dossierId} AND tenant_id = ${tenantId}
+        WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND (${isCustomer} OR owned_by <> 'customer')
         RETURNING id
       `;
+
+      if (rows.length === 0) {
+        // The permission check above found the row, but the UPDATE matched
+        // none — owned_by flipped to 'customer' between the SELECT and this
+        // write. Fail closed: never fall through to the INSERT branch below,
+        // which would silently create a duplicate dossier row instead of
+        // reporting the lock.
+        return res.status(isCustomer ? 404 : 403).json(
+          isCustomer ? { error: "dossier_not_found" } : { error: "dossier_locked" }
+        );
+      }
     }
 
-    if (!dossierId || rows.length === 0) {
-      // Either the caller has no id yet (first save), or the id it sent
-      // didn't match a row for this tenant (stale/foreign id) — insert fresh
-      // rather than silently dropping the save.
+    if (!existing) {
+      // The caller has no id yet (first save), or the id it sent didn't
+      // match a row for this tenant (stale/foreign id) — insert fresh rather
+      // than silently dropping the save.
       rows = await sql`
       INSERT INTO entity_dossiers (
         tenant_id,
@@ -203,7 +266,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ success: true, dossierId: savedId });
   } catch (err) {
     console.error("[save-dossier] ❌", err.message);
-    return res.status(200).json({ success: false, dossierId: null, warning: err.message });
+    return res.status(200).json({ success: false, dossierId: null, warning: "save_failed" });
   }
 };
 

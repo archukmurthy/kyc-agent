@@ -396,6 +396,33 @@ describe("dossier view", () => {
     expect(buttonsWithText(/Retry save/i).length).toBe(0);
     expect(buttonsWithText(/Invite Customer to Onboard/i)[0]).not.toBeDisabled();
   });
+
+  /**
+   * A 403 dossier_locked means the save DID land — under the customer, not
+   * lost — so this must NOT look like the offline-save-failure case above:
+   * no "hasn't been saved" banner, no Retry save button (retrying can never
+   * succeed once the customer owns it). Instead the analyst goes read-only.
+   */
+  it("a 403 dossier_locked on save switches to read-only instead of showing a save-failure banner", async () => {
+    await driveToDossier();
+    expect(buttonsWithText(/Retry save/i).length).toBe(1); // offline first save failed
+
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ error: "dossier_locked" }),
+      });
+
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(0);
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+    expect(bodyText()).toMatch(/The customer has taken over this application\./i);
+  });
 });
 
 /* ═══════════════════════════════════════════
@@ -483,15 +510,25 @@ describe("invite screen", () => {
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
       });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
+      });
 
     await driveToInvite();
     await sendInvite();
 
     const text = bodyText();
     expect(text).toMatch(/Onboarding link/i);
-    expect(text).toContain("dossierId=dossier_abc123");
+    expect(text).toContain("dossierToken=signed.tok");
     expect(text).toContain("journey=customer");
-    // The legacy fallback must NOT be used when a dossier exists.
+    // No raw dossier id and no legacy link ever reach the screen.
+    expect(text).not.toContain("dossierId=");
     expect(text).not.toContain("?ref=");
   });
 
@@ -501,9 +538,93 @@ describe("invite screen", () => {
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
       });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
+      });
 
     await driveToInvite();
     await sendInvite();
     expect(buttonsWithText(/Copy link/i).length).toBe(1);
+  });
+
+  it("POPULATED - the invite request carries the analyst credential", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    let inviteHeaders = null;
+    fetchRoutes["/api/invite"] = (url, opts) => {
+      inviteHeaders = opts && opts.headers;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=t&journey=customer" }) });
+    };
+    await driveToInvite();
+    await sendInvite();
+    expect(inviteHeaders.Authorization).toBe("Bearer ARCH");
+  });
+
+  /* ── Finding 1: a failed /api/invite must show a visible error, not silently no-op ── */
+
+  it("401 unauthorized - shows a session-expired message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: "unauthorized" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/pre-boarding session is no longer valid/i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+    // Still on the invite form, not silently stuck - Send invite is available to retry.
+    expect(buttonsWithText(/Send invite/i).length).toBe(1);
+  });
+
+  it("500 not_configured - shows a generic retry message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: "not_configured" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+  });
+
+  it("a retried send clears the previous error once it succeeds", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "lookup_failed" }) });
+
+    await driveToInvite();
+    await sendInvite();
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer" }),
+      });
+    fireEvent.click(buttonsWithText(/Send invite/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).toMatch(/Onboarding link/i);
   });
 });

@@ -8,19 +8,19 @@
  * showInviteScreen is set; it takes priority over the dossier view, and that
  * ordering lives in the routing block, not here.
  *
- * ONE LINK, dossier-backed: ?dossierId=…&journey=customer. It works cross-device
- * because the customer's mount fetches the dossier server-side (api/get-dossier).
- * The legacy ?ref=<token> link only ever rehydrated from a same-browser
- * localStorage snapshot, so it was dead the moment the customer opened the email
- * on another device — it is no longer generated or emailed. A saved dossier
- * (dossierId) is therefore REQUIRED to send an invite; Send is disabled until one
- * exists.
+ * ONE LINK, SERVER-ISSUED: the server signs a customer token for this dossier
+ * (POST /api/invite) and returns `?dossierToken=<token>&journey=customer` — the
+ * client never builds the link itself and no raw dossier id ever leaves. It
+ * works cross-device because the customer's mount fetches the dossier
+ * server-side (api/get-dossier) using that token. A saved dossier (dossierId)
+ * is therefore REQUIRED to send an invite; Send is disabled until one exists.
  *
  * THIS COMPONENT OWNS NO STATE. The invite fields and the sent/link pair are all
  * App-owned and drilled.
  */
 
 import React from "react";
+import { getDossierAuthHeaders } from "../../utils/dossierCredential";
 
 export function InviteScreen({
   research,
@@ -40,43 +40,54 @@ export function InviteScreen({
 }) {
     const companyDisplayName = research?.companyName || companyName || 'the company';
     const brand = brandName || tenantId || 'the company';
+    const [sendError, setSendError] = React.useState('');
 
-    // The dossier-backed link — the single source of truth for what gets sent.
-    // Only callable once a dossier is saved (dossierId truthy); callers must
-    // gate on that themselves (see the Send button's disabled state below).
-    function buildDossierLink() {
-      const base = window.location.origin;
-      return `${base}/?tenant=${tenantId}&dossierId=${dossierId}&journey=customer`;
+    // Maps a failed /api/invite response to plain-language, non-technical text.
+    // Server error codes: 401 unauthorized, 403 forbidden, 404 dossier_not_found,
+    // 500 not_configured / lookup_failed. Falls back to a generic message for
+    // anything else (including a network failure, which has no status/code).
+    function inviteErrorMessage(status, errorCode) {
+      if (errorCode === 'unauthorized' || status === 401) {
+        return 'Your pre-boarding session is no longer valid. Unlock pre-boarding again.';
+      }
+      if (errorCode === 'forbidden' || status === 403) {
+        return "You don't have permission to send this invite.";
+      }
+      if (errorCode === 'dossier_not_found' || status === 404) {
+        return 'Save the dossier before sending an invite.';
+      }
+      return "Couldn't create the invite link. Try again.";
     }
 
-    // Sends the invite for real via /api/invite (Resend), handing it the same
-    // dossier-backed link shown on screen (plus dossierId/tenantId) so the
-    // server embeds THAT link in the email rather than minting its own.
+    // The SERVER builds the link: it signs a token for this dossier, so there is
+    // no client-built link to drift from, and no raw dossier id ever leaves.
     async function handleSendInvite() {
       if (!inviteEmail || !inviteContactName || !dossierId) return;
-      const link = buildDossierLink();
+      setSendError('');
       try {
         const resp = await fetch('/api/invite', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getDossierAuthHeaders(tenantId) },
           body: JSON.stringify({
             email: inviteEmail,
             contactName: inviteContactName,
             companyName: companyDisplayName,
             origin: window.location.origin,
             dossierId,
-            tenantId,
-            link,
           }),
         });
         const data = await resp.json();
-        console.log('Invite dispatched:', { ...data, email: inviteEmail, contactName: inviteContactName });
+        if (!resp.ok || !data.link) {
+          console.warn('Invite was not issued:', data && data.error);
+          setSendError(inviteErrorMessage(resp.status, data && data.error));
+          return;
+        }
+        setInviteLink(data.link);
+        setInviteSent(true);
       } catch (err) {
         console.warn('Invite send failed, email may not have been dispatched:', err);
+        setSendError(inviteErrorMessage(null, null));
       }
-
-      setInviteLink(link);
-      setInviteSent(true);
     }
 
     const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
@@ -289,6 +300,11 @@ ${brand} Onboarding Team`;
             </span>
           )}
         </div>
+        {sendError && (
+          <div style={{ marginTop: 12, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+            {sendError}
+          </div>
+        )}
       </div>
     );
 }

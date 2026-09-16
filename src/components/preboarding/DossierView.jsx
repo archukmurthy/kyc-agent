@@ -43,6 +43,7 @@ export function DossierView({
   customQuestions,
   excludedGapFields,
   dossierId,
+  dossierOwnedBy,
   dossierSaved,
   dossierSaving,
   dossierSaveError,
@@ -388,8 +389,8 @@ export function DossierView({
                       setDossierSaved(false);
                       saveDossier();
                     }}
-                    disabled={dossierSaving}
-                    style={{ fontSize: 11, color: "#7C3AED", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}
+                    disabled={dossierSaving || dossierOwnedBy === "customer"}
+                    style={{ fontSize: 11, color: "#7C3AED", background: "none", border: "none", cursor: dossierOwnedBy === "customer" ? "not-allowed" : "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline", opacity: dossierOwnedBy === "customer" ? 0.5 : 1 }}
                   >
                     Update
                   </button>
@@ -399,7 +400,8 @@ export function DossierView({
               {!dossierSaving && !dossierSaved && (
                 <button
                   onClick={() => saveDossier()}
-                  style={{ padding: "8px 16px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}
+                  disabled={dossierOwnedBy === "customer"}
+                  style={{ padding: "8px 16px", background: dossierOwnedBy === "customer" ? "#94a3b8" : "#7C3AED", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: dossierOwnedBy === "customer" ? "not-allowed" : "pointer" }}
                 >
                   💾 Save Dossier
                 </button>
@@ -448,7 +450,7 @@ export function DossierView({
                   console.warn("[Preview] No dossierId - cannot load from DB");
                   return;
                 }
-                await loadDossierAndStartOnboarding(dossierId, tenantId);
+                await loadDossierAndStartOnboarding({ tenant: tenantId, dossierId });
                 trackEvent("preboarding_to_onboarding", {
                   dossierId,
                   via: "preview_button",
@@ -481,16 +483,16 @@ export function DossierView({
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
             <button
               onClick={() => setShowInviteScreen(true)}
-              disabled={!dossierId}
+              disabled={!dossierId || dossierOwnedBy === "customer"}
               style={{
                 padding: '10px 20px',
-                background: dossierId ? '#1a3a4a' : '#94a3b8',
+                background: (dossierId && dossierOwnedBy !== "customer") ? '#1a3a4a' : '#94a3b8',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: dossierId ? 'pointer' : 'not-allowed',
+                cursor: (dossierId && dossierOwnedBy !== "customer") ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
@@ -498,7 +500,11 @@ export function DossierView({
             >
               ✉ Invite Customer to Onboard
             </button>
-            {!dossierId && (
+            {dossierOwnedBy === "customer" ? (
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                The customer has taken over this application.
+              </div>
+            ) : !dossierId && (
               <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
                 Save the dossier before inviting.
               </div>

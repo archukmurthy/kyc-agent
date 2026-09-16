@@ -139,6 +139,8 @@ import {
   DUMMY_RESEARCH_VALUES,
 } from "./demo/demoData";
 import { resolveInputType } from "./utils/dateFields";
+import { setAnalystCredential, setCustomerDossierToken, clearDossierCredentials, getDossierAuthHeaders } from "./utils/dossierCredential";
+import { LinkUnavailable } from "./components/preboarding/LinkUnavailable";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
@@ -191,7 +193,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // The tenant the SERVER verified at the pre-boarding gate. Dossier saves and
   // invite links use this, never the raw URL value.
   const [preboardingTenantId, setPreboardingTenantId] = useState("");
-  const [preboardingToken, setPreboardingToken] = useState("");
   const [tenantConfig, setTenantConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
   // The server answered 404 tenant_not_found: this tenant does not exist.
@@ -336,6 +337,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   });
   // Pre-boarding dossier (Part 7).
   const [dossierId, setDossierId] = useState(null);
+  // Why a customer's invite link could not be used, if it couldn't.
+  const [linkError, setLinkError] = useState(null);
+  // Who controls the loaded dossier: 'analyst' until the customer changes
+  // anything, then 'customer' (the analyst becomes read-only).
+  const [dossierOwnedBy, setDossierOwnedBy] = useState(null);
   // PR: stable per-research-run submission id for the FRESH onboarding flow,
   // which has no dossierId. Used as the change_events key (submissionId) for both
   // the Confirm capture-dialogue WRITE and the Fill Gaps amendment-document READ,
@@ -799,6 +805,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // so "Start New Application" keeps the user in the right flow.
     setAgentType(isPreboardingSurface ? "preboarding" : "onboarding");
     setPreboardingUnlocked(false);
+    // Re-locking the pre-boarding gate must drop the analyst credential too, so
+    // it isn't left sitting in sessionStorage. Only on the pre-boarding surface —
+    // a customer's Start Over must keep their own dossier link credential, and
+    // clearDossierCredentials() clears both.
+    if (isPreboardingSurface) clearDossierCredentials();
     setExcludedGapFields(new Set());
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
@@ -1062,11 +1073,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // regardless, so there's no dossier to hydrate into.
     if (!tenantId) return;
     const params = new URLSearchParams(window.location.search);
-    const dId = params.get("dossierId");
-    const journey = params.get("journey");
-    if (!dId || journey !== "customer") return;
+    if (params.get("journey") !== "customer") return;
+    const token = params.get("dossierToken");
+    const legacyId = params.get("dossierId");
+    if (!token) {
+      // Old bare-id links were unauthenticated bearer URLs and no longer work.
+      if (legacyId) {
+        dossierHydratedRef.current = true;
+        setLinkError("legacy");
+      }
+      return;
+    }
     dossierHydratedRef.current = true;
-    loadDossierAndStartOnboarding(dId, tenantId);
+    setCustomerDossierToken(token);
+    loadDossierAndStartOnboarding({ tenant: tenantId, dossierToken: token });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1081,13 +1101,41 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return () => { cancelled = true; };
   }, []);
 
-  async function loadDossierAndStartOnboarding(id, tenant) {
+  // Two callers: a customer landing via their token link ({ tenant, dossierToken }),
+  // and the analyst's "Preview" ({ tenant, dossierId }) which authenticates with
+  // the analyst credential already held for this tab.
+  async function loadDossierAndStartOnboarding({ tenant, dossierId: requestedId, dossierToken } = {}) {
     // Customer landed via the dossier/invite link — mark the journey so the step
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
-      const res = await fetch(`/api/get-dossier?id=${encodeURIComponent(id)}&tenant=${encodeURIComponent(tenant)}`);
+      // The customer token travels ONLY in the Authorization header (set via
+      // setCustomerDossierToken before this call) — never in the query string,
+      // where it would land in server logs, browser history and any Referer
+      // header. resolveDossierActor accepts the header-only bearer form.
+      const query = dossierToken
+        ? `tenant=${encodeURIComponent(tenant)}`
+        : `id=${encodeURIComponent(requestedId)}&tenant=${encodeURIComponent(tenant)}`;
+      const res = await fetch(`/api/get-dossier?${query}`, { headers: getDossierAuthHeaders(tenant) });
       const data = await res.json();
+      if (dossierToken && (res.status === 410 || res.status === 401)) {
+        // Customer token path: the link is unusable. Never drop the customer
+        // into an empty wizard. A 401 on the ANALYST Preview path (no
+        // dossierToken — e.g. an expired preboarding session) must NOT render
+        // this customer-facing full-screen error; it falls through to the
+        // same graceful, empty-wizard fallback as every other analyst-path
+        // failure below.
+        setLinkError(data && (data.error === "link_expired" || data.error === "link_revoked") ? data.error : "invalid");
+        return;
+      }
+      if (dossierToken && !(data && data.success && data.dossier)) {
+        // Customer token path: any other non-success response (404
+        // dossier_not_found, a 5xx, a malformed body) must not fall through
+        // to the empty wizard below either - it's just as broken for the
+        // customer as the 410/401 cases above.
+        setLinkError("invalid");
+        return;
+      }
       if (data.success && data.dossier) {
         const d = data.dossier;
         if (d.company_name) setCompanyName(d.company_name);
@@ -1193,13 +1241,21 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           });
         }
 
-        setDossierId(id);
-        trackEvent("invite_link_opened", { dossierId: id, companyName: d.company_name || null, via: "dossier_link" });
+        setDossierId(d.id);
+        setDossierOwnedBy(d.owned_by || null);
+        trackEvent("invite_link_opened", { dossierId: d.id, companyName: d.company_name || null, via: "dossier_link" });
       }
     } catch (err) {
-      // Fail gracefully — land on the Applicant page with empty fields.
       // eslint-disable-next-line no-console
       console.error("[loadDossier] Failed:", err);
+      if (dossierToken) {
+        // Customer token path: a network error is just as unusable as a 404 -
+        // never drop the customer into an empty wizard.
+        setLinkError("invalid");
+        return;
+      }
+      // Analyst Preview path: fail gracefully, land on the Applicant page
+      // with empty fields (unchanged from before this fix).
     }
     // Always advance to the Applicant step regardless of whether the dossier
     // loaded (ai_only step map applies; documents step is analyst-only here).
@@ -1460,7 +1516,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     const submissionId = dossierId || onboardingSubmissionId;
     if (!submissionId || step !== STEPS.confirm) return undefined;
     let cancelled = false;
-    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`)
+    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`, { headers: getDossierAuthHeaders() })
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -1973,6 +2029,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           jurisdiction: countryCode,
           stage: "re_research",
           reason: err.message,
+          headers: getDossierAuthHeaders(),
         });
         setError("We couldn't complete that search just now. You can continue by entering your application manually below.");
         setJourneyOpen(true);
@@ -2650,7 +2707,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         });
         fetch("/api/change-events", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
           body: JSON.stringify(ev),
         }).catch((err) => console.warn("[ownership-change] doc persist failed:", err));
       });
@@ -2701,7 +2758,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       });
       fetch("/api/change-events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
         body: JSON.stringify(ev),
       }).catch((err) => console.warn("[reg-number-change] doc persist failed:", err));
     }
@@ -2744,7 +2801,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (dossierId) {
         fetch("/api/search-attempt", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
           body: JSON.stringify({ dossierId }),
         })
           .then((r) => r.json())
@@ -3165,7 +3222,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (typeof fetch === "function") {
         fetch("/api/change-events", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
           body: JSON.stringify(revertEvent),
         }).catch((err) => console.warn("[retractFieldChange] revert persist failed:", err));
       }
@@ -3279,7 +3336,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         verifiability: "structured_registry",
       },
       jurisdiction: countryCode || "GB",
-      submissionId: dossierId || onboardingSubmissionId,
+      // A superseding write must reuse the HEAD event's own submissionId, not
+      // whatever resolves "now" — saveDossier can populate dossierId AFTER the
+      // head event was written under onboardingSubmissionId, and writeEvent's
+      // supersedesId lookup is scoped to submissionId (writeEvent.js ~93-99):
+      // a mismatched submissionId makes the target read as "does not exist"
+      // and the correction is silently dropped.
+      submissionId: (prev && prev.event && prev.event.submissionId) || dossierId || onboardingSubmissionId,
       dossierId,
       // The stored vocabulary is add|remove|changed. An addition must record as
       // 'add' — filing it as 'changed' would misdescribe it to an analyst
@@ -3315,7 +3378,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (typeof fetch === "function") {
       fetch("/api/change-events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
         body: JSON.stringify(event),
       })
         .then((r) => r.json())
@@ -3506,7 +3569,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (typeof fetch === "function") {
       fetch("/api/change-events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
         body: JSON.stringify(superseding),
       })
         .then((r) => r.json())
@@ -4320,6 +4383,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return <NoTenantLanding surface={isPreboardingSurface ? "preboarding" : "onboarding"} />;
   }
 
+  if (linkError) {
+    return <LinkUnavailable reason={linkError} />;
+  }
+
+  // An analyst previewing a dossier the customer has taken over may read it but
+  // not change it. The server enforces this on every write; the banner says why.
+  const reviewOnly = preboardingUnlocked && dossierOwnedBy === "customer";
+
   // Resolved values from tenant config with safe fallbacks. Keep these on the
   // happy path (after configLoading guard) so any null deref is contained.
   // Fallback is the tenant's own id, never another tenant's brand name.
@@ -4671,10 +4742,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     try {
       const response = await fetch("/api/save-dossier", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(preboardingTenantId || tenantId) },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
+      if (response.status === 403 && result.error === "dossier_locked") {
+        // The dossier IS saved — under the customer, not lost. This is not a
+        // save failure: switch to the read-only "customer has taken over" view
+        // instead of the save-error banner (clearing any stale one from an
+        // earlier failed attempt), and never offer a retry that can never
+        // succeed.
+        setDossierSaveError("");
+        setDossierOwnedBy("customer");
+        return;
+      }
       if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
         setDossierId(result.dossierId);
@@ -4728,7 +4809,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       <PreboardingGate
         tenantId={tenantId}
         onUnlocked={(token, resolvedTenantId) => {
-          setPreboardingToken(token);
+          setAnalystCredential(token);
           setPreboardingTenantId(resolvedTenantId || tenantId);
           setPreboardingUnlocked(true);
           setStep(0);
@@ -4746,7 +4827,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         research={research}
         companyName={companyName}
         brandName={companyName_}
-        tenantId={tenantId}
+        tenantId={preboardingTenantId || tenantId}
         dossierId={dossierId}
         inviteEmail={inviteEmail}
         setInviteEmail={setInviteEmail}
@@ -4771,6 +4852,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         customQuestions={customQuestions}
         excludedGapFields={excludedGapFields}
         dossierId={dossierId}
+        dossierOwnedBy={dossierOwnedBy}
         dossierSaved={dossierSaved}
         dossierSaving={dossierSaving}
         dossierSaveError={dossierSaveError}
@@ -4781,7 +4863,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         preboardingUnlocked={preboardingUnlocked}
         docSearchResults={docSearchResults}
         selfSourceResults={selfSourceResults}
-        tenantId={tenantId}
+        tenantId={preboardingTenantId || tenantId}
         setShowDossierView={setShowDossierView}
         setShowInviteScreen={setShowInviteScreen}
         setDossierId={setDossierId}
@@ -4822,6 +4904,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(170deg, #f4f8f7 0%, #eaeff4 50%, #f7f4f0 100%)", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: "#1a3a4a" }}>
+      {reviewOnly && (
+        <div role="status" style={{
+          background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412",
+          padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center",
+        }}>
+          Review only — the customer has taken over this application, so nothing here can be changed.
+        </div>
+      )}
       {inPreview && (
         <PreviewBanner
           missing={previewMissing}
@@ -5382,8 +5472,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
               <Btn variant="secondary" onClick={() => scrollAndSetStep(STEPS.documentRequirements)}>← Back</Btn>
               <Btn
                 variant="green"
-                onClick={inPreview ? undefined : submitApplication}
-                disabled={!declared || inPreview}
+                onClick={inPreview || reviewOnly ? undefined : submitApplication}
+                disabled={!declared || inPreview || reviewOnly}
               >
                 {submitStatus === "retrying" ? "↻ Retry Submission" : "✓ Submit Application"}
               </Btn>
