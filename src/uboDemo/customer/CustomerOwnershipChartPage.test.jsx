@@ -5,8 +5,10 @@ import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
 import { projectGraph } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
+  CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
   readCustomerDemoContext,
+  saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
@@ -144,6 +146,36 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   const ownersCard = screen.getByRole("heading", { name: "1 owner identified" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(graphCard.compareDocumentPosition(ownersCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("status")).toHaveTextContent(/saved in this browser for future no-cost replay/i);
+  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+});
+
+test("a saved same-company extraction can be replayed without a provider call", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  saveCustomerOwnershipChartExtraction({ context, result: analysis });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
+  expect(screen.getByText(/original document bytes are not retained/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Use saved extraction — no provider call/i }));
+
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(screen.getByRole("status")).toHaveTextContent(/No provider call was made/i);
+  expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+});
+
+test("replacing a rendered chart preserves the saved extraction for no-cost replay", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  saveCustomerOwnershipChartExtraction({ context, result: analysis });
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+
+  render(<CustomerOwnershipChartPage />);
+  fireEvent.click(screen.getByRole("button", { name: /Replace chart/i }));
+
+  expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
 
 test("invalid file types are rejected before any request", () => {

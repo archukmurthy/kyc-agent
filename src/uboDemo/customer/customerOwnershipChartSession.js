@@ -2,6 +2,9 @@ import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_KEY = "ubo-demo.customer-ownership-chart.v1";
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION = "ubo-demo-customer-ownership-chart-session-v1";
+export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY = "ubo-demo.customer-ownership-chart-library.v1";
+export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION = "ubo-demo-customer-ownership-chart-library-v1";
+const MAX_SAVED_EXTRACTIONS = 12;
 
 const RESEARCH_REFERENCE_KEYS = Object.freeze([
   "researchResultReference",
@@ -11,6 +14,26 @@ const RESEARCH_REFERENCE_KEYS = Object.freeze([
 
 function safeParse(raw) {
   try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+function normalized(value) { return String(value || "").trim().toUpperCase(); }
+
+function companyKey(company) {
+  return [normalized(company?.countryCode), normalized(company?.registrationNumber), normalized(company?.legalName)].join("|");
+}
+
+function resultKey(result) {
+  return normalized(result?.artifact?.digest || result?.artifact?.artifactId);
+}
+
+function assertReplaySafe(value, path = "result") {
+  if (value == null || typeof value !== "object") return;
+  Object.entries(value).forEach(([key, item]) => {
+    if (["contentBase64", "fileBytes", "blobUrl", "filesystemPath", "storagePath"].includes(key)) {
+      throw new TypeError(`Saved extraction cannot contain ${path}.${key}.`);
+    }
+    assertReplaySafe(item, `${path}.${key}`);
+  });
 }
 
 export function readCustomerDemoContext(storage = window.localStorage) {
@@ -32,6 +55,41 @@ export function readCustomerDemoContext(storage = window.localStorage) {
 export function readCustomerOwnershipChartSession(storage = window.localStorage) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY));
   return parsed?.contractVersion === CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION ? parsed : null;
+}
+
+export function readCustomerOwnershipChartExtractions(storage = window.localStorage) {
+  const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY));
+  if (parsed?.contractVersion !== CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION || !Array.isArray(parsed.records)) return [];
+  return parsed.records.filter((record) => record?.recordId && record?.result?.artifact?.artifactId);
+}
+
+export function customerOwnershipChartExtractionsForContext(context, storage = window.localStorage) {
+  const key = companyKey(context?.company);
+  return readCustomerOwnershipChartExtractions(storage).filter((record) => record.companyKey === key);
+}
+
+export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "POLICY_ALL_ROUTES" }, storage = window.localStorage) {
+  if (!context?.company || !result?.artifact?.artifactId || !resultKey(result)) throw new TypeError("A company-bound Artifact extraction is required for local replay.");
+  assertReplaySafe(result);
+  const savedAt = new Date().toISOString();
+  const recordId = `chart-extraction:${companyKey(context.company)}:${resultKey(result)}`;
+  const record = {
+    contractVersion: "ubo-demo-customer-ownership-chart-extraction-v1",
+    recordId,
+    savedAt,
+    companyKey: companyKey(context.company),
+    company: { ...context.company },
+    result,
+    calculationMethod,
+  };
+  const records = [record, ...readCustomerOwnershipChartExtractions(storage).filter((item) => item.recordId !== recordId)]
+    .slice(0, MAX_SAVED_EXTRACTIONS);
+  storage.setItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY, JSON.stringify({
+    contractVersion: CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION,
+    savedAt,
+    records,
+  }));
+  return records;
 }
 
 export function writeCustomerDemoCase({ draft, demoCase }, storage = window.localStorage) {

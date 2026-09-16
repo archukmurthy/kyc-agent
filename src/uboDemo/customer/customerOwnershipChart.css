@@ -50,6 +50,13 @@
 .ubo-customer-company-actions { grid-column: 1 / -1; margin-top: 4px; padding-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--ubo-customer-border); }
 .ubo-customer-company-actions > small { color: var(--ubo-customer-muted); font-size: 9px; }
 .ubo-customer-upload-card { padding: clamp(24px, 5vw, 42px); }
+.ubo-customer-saved-extractions { margin-bottom: 18px; padding: 22px 24px; display: grid; gap: 14px; }
+.ubo-customer-saved-extractions h2 { margin: 4px 0; font-size: 18px; }
+.ubo-customer-saved-extractions p { margin: 5px 0 0; color: var(--ubo-customer-muted); font-size: 10px; line-height: 1.5; }
+.ubo-customer-saved-extractions > div:last-child { display: grid; gap: 8px; }
+.ubo-customer-saved-extractions button { padding: 12px 14px; display: grid; gap: 4px; border: 1px solid #a8cfc2; border-radius: 10px; background: #f2faf7; color: var(--ubo-customer-ink); text-align: left; cursor: pointer; }
+.ubo-customer-saved-extractions button span { color: var(--ubo-customer-muted); font-size: 9px; }
+.ubo-customer-saved-extractions button small { color: var(--ubo-customer-green); }
 .ubo-customer-card-title { display: flex; align-items: center; gap: 14px; }
 .ubo-customer-card-title h2, .ubo-customer-result-card h2 { margin: 4px 0 0; font-size: 21px; }
 .ubo-customer-icon { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 12px; background: var(--ubo-customer-mint); color: var(--ubo-customer-green); font-size: 24px; font-weight: 900; }
@@ -77,6 +84,9 @@
 .ubo-customer-primary:disabled { opacity: .6; cursor: wait; }
 .ubo-customer-primary span { margin-left: 13px; }
 .ubo-customer-results { display: grid; gap: 18px; }
+.ubo-customer-extraction-save { margin: -7px 0 0; padding: 10px 13px; border-radius: 9px; font-size: 10px; line-height: 1.45; }
+.ubo-customer-extraction-save.success { background: #eaf7f2; color: var(--ubo-customer-green-dark); }
+.ubo-customer-extraction-save.warning { background: #fff5d8; color: #725b16; }
 .ubo-customer-received { padding: 16px 20px; display: flex; align-items: center; gap: 13px; border: 1px solid #a8d2c4; border-radius: 13px; background: #eaf7f2; }
 .ubo-customer-received > span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--ubo-customer-green); color: white; }
 .ubo-customer-received > div { flex: 1; display: grid; gap: 3px; }

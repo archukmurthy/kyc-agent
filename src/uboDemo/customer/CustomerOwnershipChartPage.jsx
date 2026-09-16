@@ -4,8 +4,10 @@ import { allCandidateFacts } from "../demoResearch";
 import AssertionDetails from "../AssertionDetails";
 import {
   clearCustomerOwnershipChartSession,
+  customerOwnershipChartExtractionsForContext,
   readCustomerDemoContext,
   readCustomerOwnershipChartSession,
+  saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
@@ -94,6 +96,18 @@ function UploadPanel({ file, error, busy, onChoose, onAnalyse, onRemove }) {
   </section>;
 }
 
+function SavedExtractionsPanel({ records, onUse }) {
+  if (!records.length) return null;
+  return <section className="ubo-customer-card ubo-customer-saved-extractions">
+    <div><small>Saved document extracts</small><h2>Reuse an earlier chart analysis</h2><p>These structured results are stored in this browser for the same company. The original document bytes are not retained.</p></div>
+    <div>{records.map((record) => <button type="button" key={record.recordId} onClick={() => onUse(record)}>
+      <strong>{record.result.artifact.originalFilename || "Ownership chart"}</strong>
+      <span>{record.result.candidateFacts?.length || 0} assertions · saved {new Date(record.savedAt).toLocaleString()}</span>
+      <small>Use saved extraction — no provider call</small>
+    </button>)}</div>
+  </section>;
+}
+
 function CertificationCard({ certification }) {
   const found = certification?.status === "FOUND";
   return <section className="ubo-customer-card ubo-customer-result-card">
@@ -131,9 +145,10 @@ function ChartAssertions({ result }) {
   return <details className="ubo-customer-card ubo-customer-assertions"><summary><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong></div><span>{result.assertions?.length || 0} reduced assertions</span></summary><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></details>;
 }
 
-function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace }) {
+function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice }) {
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
+    {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
     <CertificationCard certification={result.certification} />
     <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} />
     <OwnersCard owners={result.owners || []} />
@@ -146,17 +161,27 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
 export default function CustomerOwnershipChartPage() {
   const context = useMemo(() => readCustomerDemoContext(), []);
   const restored = useMemo(() => readCustomerOwnershipChartSession(), []);
+  const availableExtractions = useMemo(() => customerOwnershipChartExtractionsForContext(context), [context]);
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || context?.researchResult?.analysisContext?.calculationMethod || "POLICY_ALL_ROUTES");
+  const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
+  const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
 
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={2} /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/customer/">Enter company details</a></main></div>;
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
-  const replace = () => { clearCustomerOwnershipChartSession(); setResult(null); remove(); };
+  const replace = () => { clearCustomerOwnershipChartSession(); setResult(null); setPersistenceNotice(null); remove(); };
+  const useSaved = (record) => {
+    setResult(record.result);
+    setCalculationMethod(record.calculationMethod || "POLICY_ALL_ROUTES");
+    setPersistenceNotice({ kind: "success", message: "Saved extraction loaded from this browser. No provider call was made." });
+    try { writeCustomerOwnershipChartSession({ context, result: record.result, calculationMethod: record.calculationMethod }); }
+    catch (_) { setPersistenceNotice({ kind: "warning", message: "Saved extraction loaded without a provider call, but the active browser session could not be updated." }); }
+  };
   const analyse = async () => {
     const nextError = validateFile(file);
     if (nextError) { setError(nextError); return; }
@@ -177,15 +202,28 @@ export default function CustomerOwnershipChartPage() {
       });
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
-      writeCustomerOwnershipChartSession({ context, result: payload.result });
       setResult(payload.result);
+      try {
+        writeCustomerOwnershipChartSession({ context, result: payload.result });
+        saveCustomerOwnershipChartExtraction({ context, result: payload.result });
+        setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
+        setPersistenceNotice({ kind: "success", message: "Extraction saved in this browser for future no-cost replay. Document bytes were not retained." });
+      } catch (saveError) {
+        setPersistenceNotice({ kind: "warning", message: `Analysis completed, but the browser could not save this extraction: ${saveError.message || "local storage unavailable"}` });
+      }
     } catch (caught) {
       setError(caught.message || "We could not analyse this ownership chart.");
     } finally { setBusy(false); }
   };
   const changeCalculationMethod = (next) => {
     setCalculationMethod(next);
-    if (result) writeCustomerOwnershipChartSession({ context, result, calculationMethod: next });
+    if (result) {
+      try {
+        writeCustomerOwnershipChartSession({ context, result, calculationMethod: next });
+        saveCustomerOwnershipChartExtraction({ context, result, calculationMethod: next });
+        setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
+      } catch (_) { /* Existing extraction remains usable. */ }
+    }
   };
 
   return <div className="ubo-customer-page">
@@ -194,7 +232,7 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} /> : <UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} />}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
   </div>;
