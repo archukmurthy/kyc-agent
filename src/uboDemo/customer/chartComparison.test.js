@@ -1,4 +1,4 @@
-import { buildChartResearchComparison, compareMeasurements, summarizeOwnershipComparison } from "./chartComparison";
+import { buildChartResearchComparison, compareMeasurements, filterComparisonEntriesRelevantToCustomer, summarizeOwnershipComparison } from "./chartComparison";
 
 const party = (name, id) => ({ name, jurisdiction: "GB", entityType: id?.startsWith("person") ? "NATURAL_PERSON" : "LEGAL_ENTITY", externalIdentifiers: id ? [{ namespace: "COMPANIES_HOUSE", value: id }] : [] });
 const fact = (factId, subject, object, measurement, relationship = "ECONOMIC_OWNERSHIP", referenceId = `${factId}-source`) => ({ factId, type: "RELATIONSHIP", relationship, subject, object, measurement, evidenceReferences: [{ referenceId }] });
@@ -144,4 +144,28 @@ test("comparison excludes voting, control and certification facts and summarizes
   expect(rows).toHaveLength(1);
   expect(rows[0].concept).toBe("ECONOMIC_OWNERSHIP");
   expect(summarizeOwnershipComparison(rows)).toEqual({ independentlyVerified: 1, discrepancies: 0, needsConfirmation: 0, exactMatches: 1, independentRangeSupport: 0, independentRangeOverlap: 0 });
+});
+
+test("comparison scope follows ownership paths to the customer and retains source facts unchanged", () => {
+  const customer = party("Better Comms (VOIP) Ltd", "01234567");
+  const holdco = party("Better Holdco Limited", "16634265");
+  const networkServices = party("Better Network Services Limited", "07654321");
+  const mitchell = party("Mitchell Fortescue", "person-mitchell");
+  const lee = party("Lee Taylor", "person-lee");
+  const entries = [
+    entry(fact("mitchell-holdco", mitchell, holdco, { type: "EXACT", value: 75 }), "chart"),
+    entry(fact("lee-holdco", lee, holdco, { type: "EXACT", value: 25 }), "chart"),
+    entry(fact("holdco-customer", holdco, customer, { type: "EXACT", value: 100 }), "chart"),
+    entry(fact("holdco-network", holdco, networkServices, { type: "EXACT", value: 100 }), "chart"),
+  ];
+  const original = JSON.parse(JSON.stringify(entries));
+
+  const relevant = filterComparisonEntriesRelevantToCustomer(entries, {
+    legalName: "BETTER COMMS (VOIP) LTD",
+    registrationNumber: "01234567",
+    countryCode: "GB",
+  });
+
+  expect(relevant.map(({ fact: value }) => value.factId).sort()).toEqual(["holdco-customer", "lee-holdco", "mitchell-holdco"]);
+  expect(entries).toEqual(original);
 });

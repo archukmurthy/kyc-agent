@@ -30,6 +30,7 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   "src/uboDemo/customerHandoff.test.js",
   "src/uboDemo/assertionPresentation.test.js",
   "src/uboDemo/customer/chartComparison.test.js",
+  "src/uboDemo/customer/ChartResearchComparison.test.jsx",
   "src/uboDemo/customer/crossSourcePartyResolution.test.js",
   "src/uboDemo/customer/CustomerCompanyPage.test.jsx",
   "src/uboDemo/customer/CustomerOwnershipChartPage.test.jsx",

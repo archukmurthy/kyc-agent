@@ -10,6 +10,44 @@ function normalized(value) { return String(value || "").trim().toUpperCase().rep
 function unwrap(entry) { return { fact: entry?.fact || entry, source: entry?.source || {} }; }
 function isEconomicOwnership(fact) { return fact?.type === "RELATIONSHIP" && fact.relationship === "ECONOMIC_OWNERSHIP"; }
 
+function customerParty(company) {
+  if (!company?.legalName) return null;
+  return {
+    name: company.legalName,
+    entityType: "LEGAL_ENTITY",
+    jurisdiction: company.countryCode || company.jurisdiction || null,
+    externalIdentifiers: company.registrationNumber
+      ? [{ namespace: "COMPANIES_HOUSE", value: company.registrationNumber }]
+      : [],
+  };
+}
+
+function sameSourceParty(left, right) {
+  return resolveCrossSourceParty({ sourcePartyA: left, sourcePartyB: right }).autoLinked;
+}
+
+export function filterComparisonEntriesRelevantToCustomer(entries = [], company = null) {
+  const subject = customerParty(company);
+  if (!subject) return entries;
+  const ownership = entries.map(unwrap).filter(({ fact }) => isEconomicOwnership(fact));
+  const relevantParties = [subject];
+  const relevantFactIds = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { fact } of ownership) {
+      if (relevantFactIds.has(fact.factId) || !relevantParties.some((party) => sameSourceParty(fact.object, party))) continue;
+      relevantFactIds.add(fact.factId);
+      relevantParties.push(fact.subject);
+      changed = true;
+    }
+  }
+  return entries.filter((entry) => {
+    const { fact } = unwrap(entry);
+    return !isEconomicOwnership(fact) || relevantFactIds.has(fact.factId);
+  });
+}
+
 function interval(value) {
   if (!value || value.type === "UNKNOWN") return null;
   if (value.type === "EXACT" && value.value != null) return { lower: Number(value.value), upper: Number(value.value), lowerInclusive: true, upperInclusive: true, exact: true };

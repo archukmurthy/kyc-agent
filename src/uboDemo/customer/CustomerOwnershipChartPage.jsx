@@ -157,7 +157,7 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
     <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} />
     <OwnersCard owners={result.owners || []} />
     <ChartAssertions result={result} />
-    <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} />
+    <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
     <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
   </div>;
 }

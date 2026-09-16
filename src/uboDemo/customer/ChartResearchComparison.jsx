@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
 import { formatAssertionMeasurement } from "../assertionPresentation";
-import { buildChartResearchComparison, buildChartResearchIdentityCandidates, summarizeOwnershipComparison } from "./chartComparison";
+import { buildChartResearchComparison, buildChartResearchIdentityCandidates, filterComparisonEntriesRelevantToCustomer, summarizeOwnershipComparison } from "./chartComparison";
 
 const IDENTITY_CACHE_KEY = "ubo-control-demo.cross-source-party-resolution.v1";
 
@@ -51,14 +51,14 @@ function resultDetail(row) {
   </div>;
 }
 
-export default function ChartResearchComparison({ researchResult, chartFacts }) {
+export default function ChartResearchComparison({ researchResult, chartFacts, company = null }) {
   const [visible, setVisible] = useState(false);
   const [needsAttention, setNeedsAttention] = useState(false);
   const [aiResolutions, setAiResolutions] = useState(readIdentityCache);
   const [identityCheck, setIdentityCheck] = useState({ state: "IDLE", requestKey: null });
   const attemptedIdentityChecks = useRef(new Set());
-  const researchEntries = useMemo(() => allCandidateFacts(researchResult), [researchResult]);
-  const chartEntries = useMemo(() => (chartFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), [chartFacts]);
+  const researchEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company), [researchResult, company]);
+  const chartEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer((chartFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), company), [chartFacts, company]);
   const identityCandidates = useMemo(() => buildChartResearchIdentityCandidates(researchEntries, chartEntries), [researchEntries, chartEntries]);
   const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries, { aiResolutions }), [researchEntries, chartEntries, aiResolutions]);
   const summary = useMemo(() => summarizeOwnershipComparison(rows), [rows]);
@@ -96,7 +96,7 @@ export default function ChartResearchComparison({ researchResult, chartFacts }) 
   const displayed = needsAttention ? rows.filter((row) => row.status !== "INDEPENDENTLY_VERIFIED") : rows;
   return <section className="ubo-customer-card ubo-customer-comparison">
     <header><div><small>Separate source datasets</small><h2>Ownership assertions compared with saved research</h2></div><button type="button" onClick={() => setVisible((value) => !value)}>{visible ? "Hide comparison" : "Compare with research"}</button></header>
-    <p>This read-only check compares economic ownership only. It does not merge facts, approve identities, treat certification as ownership evidence or replace independent review.</p>
+    <p>This read-only check compares economic ownership on directed paths to the customer only. Sibling and other off-path facts remain inspectable in the full source graph and source assertions. The comparison does not merge facts, approve identities, treat certification as ownership evidence or replace independent review.</p>
     {visible && <>
       {identityCheck.state === "CHECKING" && <p className="ubo-customer-identity-status" role="status">Checking unresolved party identities using the bounded identity-only matcher…</p>}
       {identityCheck.state === "UNAVAILABLE" && <p className="ubo-customer-identity-status warning" role="status">AI-assisted identity matching is unavailable. Deterministic matches remain applied; unresolved identities still need confirmation.</p>}

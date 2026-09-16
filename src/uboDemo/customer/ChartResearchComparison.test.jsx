@@ -62,3 +62,32 @@ test("unresolved parties use one bounded identity-only request and high-confiden
   expect(screen.getByText("AI_ASSISTED")).toBeInTheDocument();
   expect(screen.getByText("94%")).toBeInTheDocument();
 });
+
+test("comparison hides sibling ownership outside the directed customer path while retaining customer ancestors", () => {
+  const customer = { name: "Better Comms (VOIP) Ltd", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE", value: "01234567" }] };
+  const holdco = { name: "Better Holdco Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const sibling = { name: "Better Network Services Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const mitchell = { name: "Mitchell Fortescue", entityType: "NATURAL_PERSON", jurisdiction: "GB" };
+  const ownership = (factId, subject, object, value, referenceId) => ({ factId, type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject, object, measurement: { type: "EXACT", value }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId }] });
+  const registryFacts = [
+    ownership("registry-person", mitchell, holdco, 75, "registry-person"),
+    ownership("registry-customer", holdco, customer, 100, "registry-customer"),
+  ];
+  const chartFacts = [
+    ownership("chart-person", mitchell, holdco, 75, "chart-person"),
+    ownership("chart-customer", holdco, customer, 100, "chart-customer"),
+    ownership("chart-sibling", holdco, sibling, 100, "chart-sibling"),
+  ];
+
+  render(<ChartResearchComparison
+    researchResult={{ candidateSources: [{ requestId: "registry", candidateFacts: registryFacts }] }}
+    chartFacts={chartFacts}
+    company={{ legalName: "Better Comms (VOIP) Ltd", registrationNumber: "01234567", countryCode: "GB" }}
+  />);
+  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
+
+  expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Better Holdco Limited").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Better Network Services Limited")).not.toBeInTheDocument();
+  expect(screen.getByText(/directed paths to the customer only/i)).toBeInTheDocument();
+});
