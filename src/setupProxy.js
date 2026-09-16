@@ -93,6 +93,15 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  // CRA serves the staged UBO graph assets from build/ in production, but
+  // `npm start` does not run the staging script. Expose the same canonical
+  // files in local development so the ownership-graph iframe receives JS/CSS
+  // rather than CRA's HTML fallback.
+  app.get("/ubo-control-lab/vendor/react.production.min.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "node_modules", "react", "umd", "react.production.min.js")));
+  app.get("/ubo-control-lab/vendor/react-dom.production.min.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "node_modules", "react-dom", "umd", "react-dom.production.min.js")));
+  app.get("/ubo-control-lab/vendor/OwnershipGraph.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "OwnershipGraph.js")));
+  app.get("/ubo-control-lab/vendor/ownership-graph.css", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "ownership-graph.css")));
+
   app.post("/api/ubo-demo-customer-ownership-chart", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
