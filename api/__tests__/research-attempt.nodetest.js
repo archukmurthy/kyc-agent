@@ -5,6 +5,12 @@ const researchGrant = require("../../lib/researchGrant");
 
 process.env.RESEARCH_GRANT_SECRET = "grant-secret";
 const withoutGrant = ({ grant, ...rest }) => rest;
+// Restores an env var, deleting it rather than setting it to the string
+// "undefined" when it was unset beforehand.
+function restoreEnv(name, value) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
@@ -90,7 +96,7 @@ test("an allowed search returns a grant for this application; a refused one retu
   assert.strictEqual("grant" in refused.body, false);
 });
 
-test("no grant secret refuses the search without spending it", async () => {
+test("no grant secret still allows and counts the search — the grant is unenforced for fresh customers", async () => {
   const saved = { r: process.env.RESEARCH_GRANT_SECRET, d: process.env.DOSSIER_TOKEN_SECRET };
   delete process.env.RESEARCH_GRANT_SECRET;
   delete process.env.DOSSIER_TOKEN_SECRET;
@@ -98,10 +104,11 @@ test("no grant secret refuses the search without spending it", async () => {
     store[`research-attempts:${APP_ID}`] = 1;
     const res = fakeRes();
     await handler(post({ applicationId: APP_ID }), res);
-    assert.deepStrictEqual(res.body, { allowed: false, attemptsUsed: 1, remaining: 1, warning: "grant_unavailable" });
-    assert.strictEqual(store[`research-attempts:${APP_ID}`], 1);
+    assert.deepStrictEqual(res.body, { allowed: true, attemptsUsed: 2, remaining: 0, warning: "grant_unavailable" });
+    assert.strictEqual("grant" in res.body, false);
+    assert.strictEqual(store[`research-attempts:${APP_ID}`], 2);
   } finally {
-    process.env.RESEARCH_GRANT_SECRET = saved.r;
-    if (saved.d !== undefined) process.env.DOSSIER_TOKEN_SECRET = saved.d;
+    restoreEnv("RESEARCH_GRANT_SECRET", saved.r);
+    restoreEnv("DOSSIER_TOKEN_SECRET", saved.d);
   }
 });

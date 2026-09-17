@@ -400,3 +400,75 @@ test("CORS allows the X-Research-Grant header", async () => {
   await research({ method: "OPTIONS", headers: {}, query: {}, url: "/api/research" }, res);
   assert.match(res.headers["Access-Control-Allow-Headers"], /X-Research-Grant/);
 });
+
+// ── Consume-later: the grant is burned right before spend, not on arrival ──
+
+test("a 429 from the rate limiter does not consume the grant", async () => {
+  research.__setDeps({
+    resolveDossierActor: async () => CUSTOMER,
+    enforceRateLimit: async (_req, res) => { res.status(429).json({ error: "rate_limited", retryAfterSeconds: 60 }); return false; },
+  });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req(researchBody(), withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 429);
+  assert.deepStrictEqual(usedGrants, {});
+
+  // The grant is still good afterwards, once the caller is no longer rate limited.
+  research.__setDeps({ enforceRateLimit: async () => { calls.rateLimit += 1; return true; } });
+  const retry = fakeRes();
+  await research(req(researchBody(), withGrant(g)), retry);
+  assert.strictEqual(retry.statusCode, 200);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+});
+
+test("a 400 from invalid structured input does not consume the grant", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req({ mode: "research" }, withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 400);
+  assert.deepStrictEqual(res.body, { error: "missing_company_fields" });
+  assert.deepStrictEqual(usedGrants, {});
+
+  // The grant still works for a valid request afterwards.
+  const retry = fakeRes();
+  await research(req(researchBody(), withGrant(g)), retry);
+  assert.strictEqual(retry.statusCode, 200);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+});
+
+test("a 404 unknown tenant does not consume the grant", async () => {
+  research.__setDeps({ resolveDossierActor: async () => ({ kind: "customer", tenantId: "ghost", dossierId: "d-1", reason: null }) });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "ghost" });
+  const res = fakeRes();
+  await research(req(researchBody(), { "x-tenant-id": "ghost", "x-research-grant": g }), res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "tenant_not_found" });
+  assert.deepStrictEqual(usedGrants, {});
+});
+
+test("a successful call consumes the grant before the cache lookup — a cache hit still consumes", async () => {
+  research.__setDeps({
+    resolveDossierActor: async () => CUSTOMER,
+    cache: {
+      getCachedResearch: async () => ({ content: [], _fromCache: true }),
+      saveResearchToCache: async () => { throw new Error("must not save on a hit"); },
+    },
+  });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req(researchBody(), withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body._fromCache, true);
+  assert.strictEqual(calls.fetch.length, 0);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+
+  const again = fakeRes();
+  await research(req(researchBody(), withGrant(g)), again);
+  assert.strictEqual(again.statusCode, 403);
+  assert.deepStrictEqual(again.body, { error: "research_grant_used" });
+});

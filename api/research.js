@@ -17,6 +17,13 @@
 // anonymous callers need none — a fresh customer has no credential to bind a
 // grant to (RERES-2 scope limit, PLAT-7).
 //
+// This only caps the unmodified client: a link holder who strips their own
+// dossier-link credential (the Authorization bearer / dossierToken that makes
+// resolveDossierActor see them as a customer at all) is no longer identified
+// as a customer here, so no grant is required of them either — they fall back
+// to the anonymous, IP-rate-limited tier like any other caller with no
+// credential.
+//
 // CommonJS so src/setupProxy.js mounts this exact handler for `npm start`.
 
 const { getTenantIdFromRequest } = require("../lib/tenant");
@@ -71,23 +78,16 @@ module.exports = async function handler(req, res) {
     console.error("[api/research] actor resolution failed:", err.message);
     return res.status(500).json({ error: "research_failed" });
   }
+  // Verified up front, before any I/O or spend — but NOT burned yet: a grant
+  // is only consumed once the request has actually earned it (see below).
+  let grantPayload = null;
   if (actor && actor.kind === "customer") {
     const check = _deps.grant.verify(header(req, "x-research-grant"), {
       subject: `dossier:${actor.dossierId}`,
       tenantId: actor.tenantId,
     });
     if (!check.valid) return res.status(403).json({ error: "research_grant_required" });
-    if (body.mode === "research") {
-      let fresh;
-      try {
-        fresh = await _deps.grant.consume(check.payload);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[api/research] grant store failed:", err.message);
-        return res.status(503).json({ error: "research_grant_unavailable" });
-      }
-      if (!fresh) return res.status(403).json({ error: "research_grant_used" });
-    }
+    grantPayload = check.payload;
   }
 
   if (!(await _deps.enforceRateLimit(req, res, "research"))) return undefined;
@@ -111,6 +111,22 @@ module.exports = async function handler(req, res) {
     } catch (err) {
       if (err instanceof ResearchInputError) return res.status(400).json({ error: err.code });
       throw err;
+    }
+
+    // Burn the grant only now that the rate limit, config read and request
+    // build have all succeeded — immediately before the request actually
+    // spends (the cache lookup counts as spend: a hit still avoids the
+    // Anthropic call, but not the customer's search budget).
+    if (grantPayload && body.mode === "research") {
+      let fresh;
+      try {
+        fresh = await _deps.grant.consume(grantPayload);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[api/research] grant store failed:", err.message);
+        return res.status(503).json({ error: "research_grant_unavailable" });
+      }
+      if (!fresh) return res.status(403).json({ error: "research_grant_used" });
     }
 
     const cacheParts = built.cacheKeyParts && !usingDraft ? { tenant, ...built.cacheKeyParts } : null;
