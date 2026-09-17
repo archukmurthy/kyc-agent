@@ -78,6 +78,11 @@ export function ApplicantPage({
   resolveOwnershipChange,
   declareRegNumberChanged,
   resolveRegNumberChange,
+  onApplyCorrections,
+  correctionBusy = false,
+  correctionError = "",
+  countryOptions = [],
+  entityTypeOptions = [],
   // ── the seven Applicant useStates: values AND setters, both drilled ──
   applicantSelectedPerson,
   setApplicantSelectedPerson,
@@ -322,7 +327,7 @@ export function ApplicantPage({
     const regValue = customerReg || systemReg || "";
 
     const facts = [
-      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "-", disputable: true },
+      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "-", editValue: research?.companyName || companyName || "", disputable: true },
       {
         key: "registrationNumber",
         label: "Registration / company number",
@@ -332,6 +337,7 @@ export function ApplicantPage({
         value: regNumberChangeDeclared?.to
           ? regNumberChangeDeclared.to
           : (regValue || "Not provided"),
+        editValue: regValue,
         disputable: regProvenance === "system",
         note: regNumberChangeDeclared?.to
           ? `Changed from "${regNumberChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
@@ -341,8 +347,8 @@ export function ApplicantPage({
             ? "Found by research - please verify"
             : "Not provided on lookup",
       },
-      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "-", disputable: true },
-      { key: "entityType", label: "Entity type", value: entityType || "-", disputable: true },
+      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "-", editValue: countryCode || "", disputable: true },
+      { key: "entityType", label: "Entity type", value: entityType || "-", editValue: entityType || "", disputable: true },
       {
         key: "ownershipType",
         label: "Ownership type",
@@ -353,6 +359,7 @@ export function ApplicantPage({
         value: ownershipChangeDeclared?.to
           ? ownershipChangeDeclared.to
           : (ownershipTypeLabel(ownershipType) || ownershipType || "-"),
+        editValue: ownershipType || "",
         disputable: true,
         note: ownershipChangeDeclared?.to
           ? `Changed from "${ownershipChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
@@ -361,7 +368,8 @@ export function ApplicantPage({
     ];
 
     // All five confirmed (a disputed fact, or a pending ownership fork, hides the
-    // applicant section below). A four-fact dispute resets; ownership forks.
+    // applicant section below). A disputed fact opens its correction input in
+    // the gate (nothing resets); ownership and registration number fork first.
     const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && factChecks[f.key] === false);
     const ownershipDisputed = factChecks.ownershipType === false;
     const regNumberDisputed = factChecks.registrationNumber === false;
@@ -491,7 +499,6 @@ export function ApplicantPage({
           onToggle={toggleFact}
           ownershipFork={ownershipFork}
           ownershipChangeFrom={ownershipChangeDeclared?.from || ""}
-          onReset={resetAll}
           onOwnershipChanged={declareOwnershipChanged}
           onCancel={cancelFactDispute}
           ownershipTypeOptions={OWNERSHIP_TYPE_LIBRARY.map((o) => ({ value: o.id, label: o.label }))}
@@ -500,6 +507,11 @@ export function ApplicantPage({
           regNumberChangeFrom={regNumberChangeDeclared?.from || ""}
           onRegNumberChanged={() => declareRegNumberChanged(regValue)}
           onRegNumberChangeResolved={resolveRegNumberChange}
+          countryOptions={countryOptions}
+          entityTypeOptions={entityTypeOptions}
+          onApplyCorrections={onApplyCorrections}
+          correctionBusy={correctionBusy}
+          correctionError={correctionError}
         />
 
         {factsConfirmed && (
