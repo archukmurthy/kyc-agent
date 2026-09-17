@@ -80,6 +80,32 @@ test("board appointment rights establish a control UBO after voting rights resol
   expect(engine.uboAssessments[0].idvRequired).toBe(true);
 });
 
+test("non-qualifying voting rights advance the automatic journey to board control", () => {
+  const rows = [row(company("Holding Limited"), 100)];
+  let { answers } = answerNomineeNo(rows);
+  let engine = run({ comparisonRows: rows, answers });
+  answers = { ...answers, ...answer(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_VOTING_RIGHT_HOLDER), "YES") };
+  engine = run({ comparisonRows: rows, answers });
+  answers = { ...answers, ...answer(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_VOTING_RIGHT_HOLDERS), "Jane Smith") };
+  engine = run({ comparisonRows: rows, answers });
+  answers = { ...answers, ...answer(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE), 10) };
+  engine = run({ comparisonRows: rows, answers });
+  expect(engine.controlResolution.assessments[0]).toEqual(expect.objectContaining({ outcome: CONTROL_ASSESSMENT_OUTCOME.NOT_CONTROL_UBO }));
+  expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_BOARD_APPOINTMENT_CONTROL)).toEqual(expect.objectContaining({ status: "OPEN" }));
+});
+
+test("a manually selected voting topic stays scoped instead of opening every control route", () => {
+  const rows = [row(person("Alice Morgan"), 40)];
+  const activation = createTopicActivation({ topicCode: INVESTIGATION_TOPIC_CODE.VOTING_RIGHTS, caseId: "case-1" });
+  let { answers } = answerNomineeNo(rows);
+  let engine = run({ comparisonRows: rows, answers, topicActivations: [activation] });
+  answers = { ...answers, ...answer(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_VOTING_RIGHT_HOLDER), "NO") };
+  engine = run({ comparisonRows: rows, answers, topicActivations: [activation] });
+  expect(engine.controlResolution.status).toBe("COMPLETE");
+  expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_BOARD_APPOINTMENT_CONTROL)).toBeUndefined();
+  expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_INFLUENCE)).toBeUndefined();
+});
+
 test("significant influence creates a structured analyst-review assertion instead of an AI UBO conclusion", () => {
   const rows = [row(company("Holding Limited"), 100)];
   let { answers } = answerNomineeNo(rows);
@@ -182,6 +208,16 @@ test("senior fallback requires practical authority as well as a role title and s
   engine = run({ comparisonRows: rows, answers });
   expect(engine.fallback.outcome).toBe("FALLBACK_SENIOR_MANAGING_OFFICIAL_REQUIRED");
   expect(engine.fallback.people).toHaveLength(0);
+});
+
+test("manual senior-management activation does not claim ownership and control are exhausted", () => {
+  const rows = [row(person("Alice Morgan"), 40)];
+  const { answers } = answerNomineeNo(rows);
+  const activation = createTopicActivation({ topicCode: INVESTIGATION_TOPIC_CODE.SENIOR_MANAGING_OFFICIAL, caseId: "case-1" });
+  const engine = run({ comparisonRows: rows, answers, topicActivations: [activation] });
+  const seniorQuestion = question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SENIOR_MANAGING_OFFICIAL);
+  expect(seniorQuestion.prompt).toMatch(/^Who is the most senior person/i);
+  expect(seniorQuestion.prompt).not.toMatch(/not been able to identify/i);
 });
 
 test("parallel policy can investigate control even when ownership already identifies a UBO", () => {

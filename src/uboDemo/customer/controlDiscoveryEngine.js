@@ -187,12 +187,14 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
   const manualBoard = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.BOARD_APPOINTMENT_OR_REMOVAL_RIGHTS);
   const manualInfluence = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.OTHER_SIGNIFICANT_INFLUENCE_OR_CONTROL);
   const auto = mode === CONTROL_DISCOVERY_MODE.OWNERSHIP_AND_CONTROL_IN_PARALLEL || (ownership.status === OWNERSHIP_RESOLUTION_STATUS.COMPLETE && ownership.naturalPersonUboCount === 0);
+  const progressive = auto || manualAll.length > 0;
   const origin = auto ? QUESTION_ORIGIN.SYSTEM_CONTROL_DISCOVERY : QUESTION_ORIGIN.ANALYST_TOPIC;
   const votingActive = auto || manualAll.length > 0 || manualVoting.length > 0;
   const boardForced = manualBoard.length > 0;
   const influenceForced = manualInfluence.length > 0;
   const assessment = [];
   let votingResolvedNo = false;
+  let votingResolvedWithoutUbo = false;
   let boardResolvedNo = false;
   let influenceResolvedNo = false;
   if (votingActive) {
@@ -204,16 +206,23 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
       const common = { stage: "CONTROL", reason: "SIGNIFICANT_VOTING_RIGHTS_DECLARED", originType: origin, topicActivations: [...manualAll, ...manualVoting], targetEntityId };
       const holders = requirement(TYPE.IDENTIFY_VOTING_RIGHT_HOLDERS, { ...common, prompt: "Who has those voting rights?", explanation: "Enter each individual's full name, separated by commas if there is more than one." });
       requirements.push(holders);
-      names(answerFor(holders, answers)?.value).forEach((personName) => requirements.push(requirement(TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE, { ...common, targetPersonId: safe(personName), role: personName, prompt: `What percentage of the company's voting rights can ${personName} exercise or control?`, explanation: "Enter the direct or indirect percentage known for this individual.", questionType: "PERCENTAGE" })));
-      requirements.filter(({ type }) => type === TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE).forEach((item) => {
+      const holderNames = names(answerFor(holders, answers)?.value);
+      holderNames.forEach((personName) => requirements.push(requirement(TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE, { ...common, targetPersonId: safe(personName), role: personName, prompt: `What percentage of the company's voting rights can ${personName} exercise or control?`, explanation: "Enter the direct or indirect percentage known for this individual.", questionType: "PERCENTAGE" })));
+      const votingPercentageRequirements = requirements.filter(({ type }) => type === TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE);
+      votingPercentageRequirements.forEach((item) => {
         const value = Number(answerFor(item, answers)?.value);
         if (!Number.isFinite(value)) return;
         assessment.push({ personId: item.targetPersonId, personName: item.role, customerEntityId: targetEntityId, basis: UBO_BASIS.VOTING_RIGHTS, percentage: value, directness: "UNKNOWN", policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: "ASSERTED", outcome: value >= 25 ? CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO : CONTROL_ASSESSMENT_OUTCOME.NOT_CONTROL_UBO });
       });
+      votingResolvedWithoutUbo = holderNames.length > 0
+        && votingPercentageRequirements.length === holderNames.length
+        && votingPercentageRequirements.every((item) => Number.isFinite(Number(answerFor(item, answers)?.value)))
+        && !assessment.some(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO);
     }
   }
   const controlUbo = () => assessment.some(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO);
-  if (!controlUbo() && (boardForced || (votingActive && votingResolvedNo))) {
+  const votingRouteResolvedWithoutUbo = votingResolvedNo || votingResolvedWithoutUbo;
+  if (!controlUbo() && (boardForced || (progressive && votingActive && votingRouteResolvedWithoutUbo))) {
     const acts = [...manualAll, ...manualBoard];
     addBooleanRoute(requirements, TYPE.IDENTIFY_BOARD_APPOINTMENT_CONTROL, "CONTROL", boardForced ? "ANALYST_TOPIC_ACTIVATED" : "VOTING_RIGHTS_ROUTE_RESOLVED_WITHOUT_UBO", boardForced ? QUESTION_ORIGIN.ANALYST_TOPIC : origin, acts, "Does any individual have the right to appoint or remove a majority of the company's directors or equivalent governing body?", "Consider rights in the articles, shareholder agreements, investor rights or another governing arrangement.", targetEntityId);
     const root = requirements[requirements.length - 1];
@@ -231,7 +240,7 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
       });
     }
   }
-  if (!controlUbo() && (influenceForced || (boardResolvedNo && (votingResolvedNo || !votingActive)))) {
+  if (!controlUbo() && (influenceForced || (progressive && boardResolvedNo && (votingRouteResolvedWithoutUbo || !votingActive)))) {
     const acts = [...manualAll, ...manualInfluence];
     addBooleanRoute(requirements, TYPE.IDENTIFY_SIGNIFICANT_INFLUENCE, "CONTROL", influenceForced ? "ANALYST_TOPIC_ACTIVATED" : "FORMAL_CONTROL_ROUTES_RESOLVED_WITHOUT_UBO", influenceForced ? QUESTION_ORIGIN.ANALYST_TOPIC : origin, acts, "Is there any individual who can direct or strongly influence important decisions of the company even though this is not clear from their shareholding or voting percentage?", "Examples include deciding or vetoing important business decisions, determining strategy, controlling major borrowing or exercising decisive influence over the board.", targetEntityId);
     const root = requirements[requirements.length - 1];
@@ -254,7 +263,11 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
     }
   }
   const uncertain = requirements.some((item) => item.stage === "CONTROL" && answerFor(item, answers)?.value === "NOT_SURE") || assessment.some(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.INDETERMINATE);
-  const status = controlUbo() || influenceResolvedNo ? CONTROL_RESOLUTION_STATUS.COMPLETE : uncertain ? CONTROL_RESOLUTION_STATUS.ANALYST_REVIEW : requirements.some(({ stage }) => stage === "CONTROL") ? CONTROL_RESOLUTION_STATUS.IN_PROGRESS : CONTROL_RESOLUTION_STATUS.NOT_STARTED;
+  const manualSpecificComplete = !auto && !manualAll.length && (manualVoting.length || manualBoard.length || manualInfluence.length)
+    && (!manualVoting.length || votingRouteResolvedWithoutUbo)
+    && (!manualBoard.length || boardResolvedNo || assessment.some(({ basis, outcome }) => basis === UBO_BASIS.BOARD_CONTROL && outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO))
+    && (!manualInfluence.length || influenceResolvedNo);
+  const status = controlUbo() || influenceResolvedNo || manualSpecificComplete ? CONTROL_RESOLUTION_STATUS.COMPLETE : uncertain ? CONTROL_RESOLUTION_STATUS.ANALYST_REVIEW : requirements.some(({ stage }) => stage === "CONTROL") ? CONTROL_RESOLUTION_STATUS.IN_PROGRESS : CONTROL_RESOLUTION_STATUS.NOT_STARTED;
   return { assessments: assessment, status, uboCount: assessment.filter(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO).length, exhausted: influenceResolvedNo };
 }
 
@@ -263,7 +276,7 @@ function seniorRequirements(requirements, answers, activations, ownership, contr
   const automatic = ownership.status === OWNERSHIP_RESOLUTION_STATUS.COMPLETE && ownership.naturalPersonUboCount === 0 && control.status === CONTROL_RESOLUTION_STATUS.COMPLETE && control.uboCount === 0 && control.exhausted;
   if (!automatic && !manual.length) return { outcome: null, people: [], reason: null };
   const originType = automatic ? QUESTION_ORIGIN.SYSTEM_FALLBACK : QUESTION_ORIGIN.ANALYST_TOPIC;
-  const people = requirement(TYPE.IDENTIFY_SENIOR_MANAGING_OFFICIAL, { stage: "FALLBACK", reason: automatic ? "OWNERSHIP_AND_CONTROL_ROUTES_EXHAUSTED" : "ANALYST_TOPIC_ACTIVATED", originType, topicActivations: manual, targetEntityId, prompt: "We have not been able to identify an individual who ultimately owns or controls the company. Who is the most senior person, or persons, responsible for the company's overall management and key strategic decisions?", explanation: "Enter the person or people to whom significant decisions are escalated and who have authority to direct the company's overall activities. Separate multiple names with commas." });
+  const people = requirement(TYPE.IDENTIFY_SENIOR_MANAGING_OFFICIAL, { stage: "FALLBACK", reason: automatic ? "OWNERSHIP_AND_CONTROL_ROUTES_EXHAUSTED" : "ANALYST_TOPIC_ACTIVATED", originType, topicActivations: manual, targetEntityId, prompt: automatic ? "We have not been able to identify an individual who ultimately owns or controls the company. Who is the most senior person, or persons, responsible for the company's overall management and key strategic decisions?" : "Who is the most senior person, or persons, responsible for the company's overall management and key strategic decisions?", explanation: "Enter the person or people to whom significant decisions are escalated and who have authority to direct the company's overall activities. Separate multiple names with commas." });
   requirements.push(people);
   const officials = names(answerFor(people, answers)?.value);
   officials.forEach((personName) => {
