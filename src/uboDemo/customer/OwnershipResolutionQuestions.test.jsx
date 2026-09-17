@@ -157,3 +157,22 @@ test("an uncertain explanation routes to analyst review and creates no evidence 
   expect(screen.getByText("Analyst review required")).toBeInTheDocument();
   expect(screen.queryByText(/Choose supporting evidence/i)).not.toBeInTheDocument();
 });
+
+test("a media mismatch explains the format problem and keeps re-upload available", async () => {
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+  const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
+  fireEvent.click(within(discrepancyQuestion).getByLabelText(/existing shares were transferred/i));
+  fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
+  window.fetch.mockResolvedValueOnce({
+    ok: false,
+    json: async () => ({ success: false, code: "invalid_media", message: "Artifact bytes do not match the declared media type" }),
+  });
+
+  const evidence = screen.getByText(/Establish the current shareholding after the reported share transfer/i).closest("article");
+  const fileInput = container.querySelector('.ubo-resolution-evidence input[type="file"]');
+  fireEvent.change(fileInput, { target: { files: [new File(["not-png"], "evidence.png", { type: "image/png" })] } });
+
+  await waitFor(() => expect(within(evidence).getByText(/contents do not match that format/i)).toBeInTheDocument());
+  expect(within(evidence).getByRole("button", { name: "Choose another file" })).toBeInTheDocument();
+  expect(within(evidence).getByText(/Accepted file formats: PDF, PNG or JPEG/i)).toBeInTheDocument();
+});

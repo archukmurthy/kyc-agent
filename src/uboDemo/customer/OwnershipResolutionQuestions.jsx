@@ -15,6 +15,7 @@ export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-se
 const SESSION_PREFIX = "ubo-demo.ownership-resolution.v1";
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
+const MEDIA_MISMATCH_MESSAGE = "This file is labelled as a PDF, PNG or JPEG, but its contents do not match that format. Export it again as a PDF, PNG or JPEG, or choose another file.";
 
 function sessionKey(context, result) { return `${SESSION_PREFIX}:${context?.demoCaseId || "case"}:${result?.artifact?.artifactId || "artifact"}`; }
 function readSession(context, result) {
@@ -54,6 +55,11 @@ function statusLabel(status) {
     [RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW]: "Analyst review required",
     [RESOLUTION_STATUS.UNRESOLVED]: "Still being resolved",
   }[status] || humanize(status);
+}
+
+function evidenceUploadError(payload) {
+  if (payload?.code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) return MEDIA_MISMATCH_MESSAGE;
+  return payload?.message || "Evidence validation failed";
 }
 
 function resolutionContext(comparisonItemId, requirements, rows, company) {
@@ -142,6 +148,12 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, on
 
 function EvidenceRequest({ record, context, busy, message, onUpload }) {
   const input = useRef(null);
+  const canChooseFile = record.status === EVIDENCE_STATUS.OPEN || record.status === EVIDENCE_STATUS.REJECTED;
+  const chooseFile = () => {
+    if (!input.current) return;
+    input.current.value = "";
+    input.current.click();
+  };
   return <article className={`ubo-resolution-evidence ${String(record.status).toLowerCase()}`}>
     <div><span>Supporting evidence</span><h3>{record.purpose}</h3></div>
     <dl className="ubo-resolution-evidence-context">
@@ -152,8 +164,9 @@ function EvidenceRequest({ record, context, busy, message, onUpload }) {
     <p>Preferred: {record.preferredEvidenceTypes.map(humanize).join(", ")}.</p>
     <details><summary>Other accepted evidence</summary><p>{record.alternativeEvidenceTypes.map(humanize).join(", ")}.</p></details>
     <p className="ubo-resolution-evidence-boundary">Your document is sent through the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue.</p>
-    <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => onUpload(record, event.target.files?.[0] || null)} />
-    {record.status === EVIDENCE_STATUS.OPEN && <button type="button" onClick={() => input.current?.click()} disabled={busy}>{busy ? "Validating evidence…" : "Choose supporting evidence"}</button>}
+    <p>Accepted file formats: PDF, PNG or JPEG, up to 3 MB.</p>
+    <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.currentTarget.files?.[0] || null; event.currentTarget.value = ""; onUpload(record, file); }} />
+    {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.REJECTED ? "Choose another file" : "Choose supporting evidence"}</button>}
     {record.status !== EVIDENCE_STATUS.OPEN && <strong className="ubo-resolution-evidence-status">{humanize(record.status)}</strong>}
     {message && <p role="status">{message}</p>}
   </article>;
@@ -289,7 +302,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         }),
       });
       const payload = await response.json();
-      if (!response.ok || !payload.success) throw new Error(payload.message || "Evidence validation failed");
+      if (!response.ok || !payload.success) throw new Error(evidenceUploadError(payload));
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
       const outcome = evidenceResultStatus(payload.result, resolution, record);
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], ...outcome, artifactId: payload.result.artifact?.artifactId, validatedAt: new Date().toISOString() } }));
