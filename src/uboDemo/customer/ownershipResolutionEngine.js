@@ -1,3 +1,6 @@
+import { CONTROL_DISCOVERY_MODE } from "./investigationTopics";
+import { extendResolutionWithInvestigation } from "./controlDiscoveryEngine";
+
 export const FACT_REQUIREMENT_TYPE = Object.freeze({
   EXACT_SHARE_PERCENTAGE: "EXACT_SHARE_PERCENTAGE",
   CONFIRM_CURRENT_SHAREHOLDING: "CONFIRM_CURRENT_SHAREHOLDING",
@@ -258,7 +261,7 @@ function evidenceKeyForExplanation(answer) {
   return null;
 }
 
-export function evaluateOwnershipResolution({ comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25, now = new Date().toISOString() } = {}) {
+function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25, now = new Date().toISOString() } = {}) {
   const { requirements, preResolved } = deriveFactRequirements(comparisonRows, { threshold, answers });
   const questions = requirements.filter(({ status }) => status !== "RESOLVED").map((item) => {
     const question = questionForRequirement(item, now);
@@ -391,6 +394,16 @@ export function evaluateOwnershipResolution({ comparisonRows = [], answers = {},
     resolutions: [...resolutions.values()],
     openQuestions: questions.filter(({ status }) => status === QUESTION_STATUS.OPEN),
   };
+}
+
+export function evaluateOwnershipResolution({
+  comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25,
+  topicActivations = [], analystCustomerRequests = [],
+  controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL,
+  customerEntityId = "CUSTOMER_ENTITY", now = new Date().toISOString(),
+} = {}) {
+  const base = evaluateOwnershipResolutionBase({ comparisonRows, answers, evidence, recalculations, threshold, now });
+  return extendResolutionWithInvestigation({ base, comparisonRows, answers, topicActivations, analystCustomerRequests, controlDiscoveryMode, customerEntityId, now });
 }
 
 export function customerOwnershipFact(row, percentage, answers = {}, effectiveDate = null, recordedAt = new Date().toISOString()) {
