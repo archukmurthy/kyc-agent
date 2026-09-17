@@ -347,9 +347,12 @@ describe("correcting a foundational fact", () => {
     window.confirm = jest.fn(() => true);
   });
 
-  it("entity type alone re-derives: no search, no attempt spent, gate re-confirmed", async () => {
+  it("entity type alone re-searches too: spends an attempt and researches with the corrected type", async () => {
     await driveToApplicant();
-    routeFetch({});
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
     const gate = screen.getByTestId("foundational-facts-gate");
     fireEvent.click(within(gate).getByLabelText(/Confirm Entity type/i));
     await settle(0);
@@ -359,10 +362,14 @@ describe("correcting a foundational fact", () => {
     fireEvent.change(select, { target: { value: other.value } });
     fireEvent.click(screen.getByTestId("facts-apply-corrections"));
     await settle(5000);
+    await settle(5000);
 
-    expect(calls("/api/research")).toHaveLength(0);
-    expect(calls("/api/research-attempt")).toHaveLength(0);
-    expect(calls("/api/search-attempt")).toHaveLength(0);
+    expect(calls("/api/research-attempt")).toHaveLength(1);
+    const researchCalls = calls("/api/research");
+    expect(researchCalls.length).toBeGreaterThanOrEqual(1);
+    const first = JSON.parse(researchCalls[0][1].body);
+    expect(first.mode).toBe("research");
+    expect(first.entityType).toBe(other.value);
     expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
   });
 

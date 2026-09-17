@@ -2684,9 +2684,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // ── Foundational-facts confirmation gate handlers (slice 2 of 2) ──────────
   // The five-fact gate at the top of the Applicant page is controlled: these
   // handlers own its check state and outcomes. A wrong fact is corrected in place
-  // (applyCorrections, Part 3): entity type alone re-derives the schema, anything
-  // else re-researches with the corrected values and spends one server-counted
-  // search. Nothing resets the application; a search that cannot run falls back
+  // (applyCorrections, Part 3): any correction re-researches with the corrected
+  // values and spends one server-counted search. Nothing resets the application; a search that cannot run falls back
   // to manual entry (fallBackToManual). The ownership / registration-number
   // "genuinely changed" forks request documents instead.
   const isFactConfirmed = (key) => factChecks[key] !== false;
@@ -2764,9 +2763,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
   };
 
-  // The customer corrected one or more foundational facts. Entity type alone
-  // re-derives the schema; anything else re-researches with the corrected
-  // values and spends one server-counted search. Never resets the application.
+  // The customer corrected one or more foundational facts. Every correction
+  // (entity type included) re-researches with the corrected values and spends
+  // one server-counted search. Never resets the application.
   // `shown.registrationNumber`: the number the gate displayed (and the customer
   // edited against) — it can differ from regNumber state (e.g. research found one).
   // With nothing shown the fact is not disputable, so regNumber is kept as-is.
@@ -2808,16 +2807,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     // Saves are queued, not awaited here: this closure still holds the pre-
     // correction state, so the deferred-save effect runs them on the next render.
-    if (plan.action === "re_derive") {
-      try {
-        setActiveSchema(getSchemaFromConfig(next.countryCode, next.entityType, tenantConfig));
-      } catch (_) { /* leave the schema as-is */ }
-      cancelFactDispute();
-      logCorrection();
-      if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
-      return;
-    }
-
     // ponytail: demo mode never spends a paid search — the corrected facts are
     // kept and the existing (dummy) research stands. Real runs go below.
     if (demoMode) { cancelFactDispute(); return; }

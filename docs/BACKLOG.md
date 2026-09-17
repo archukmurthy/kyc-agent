@@ -256,9 +256,10 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Area:** `api/research.js`, `api/search-attempt.js`, `api/research-attempt.js`.
 
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
-- **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
+- **Category:** Product / UX · **Priority:** P3 · **Status:** DONE (2026-09-17 — owner chose "always re-search")
 - **What:** Being built now (user-refined 2026-09-15): wrong company name / country / registration number / ownership type → full re-search (uses a retry); wrong entity type ONLY → re-derive from existing research (no search, no retry). Alternative to revisit: entity-type corrections also trigger a full re-search.
 - **Why deferred:** Re-deriving entity type is cheaper and faster; user wants to reconsider "always re-search" later.
+- **Resolution (2026-09-17):** every correction, entity type included, now re-runs research and spends one of the customer's two searches (`src/reresearch/correctionPlan.js`); the re-derive branch in `applyCorrections` was removed.
 - **Area:** `src/App.js` foundational-facts correction handlers, `api/dossier-reseed.js` / `dossierLifecycle/`.
 
 ### PREB-1 — Analyst dashboard (dossiers + applications) and notifications

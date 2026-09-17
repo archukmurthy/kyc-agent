@@ -21,9 +21,9 @@ test("no corrections, or corrections equal to the current values, is 'none'", ()
   assert.deepStrictEqual(same.changed, []);
 });
 
-test("entity type alone re-derives", () => {
+test("entity type alone also re-searches (RERES-1, owner decision 2026-09-17)", () => {
   const plan = planCorrection(CURRENT, { entityType: "FI" });
-  assert.strictEqual(plan.action, "re_derive");
+  assert.strictEqual(plan.action, "re_search");
   assert.deepStrictEqual(plan.changed, ["entityType"]);
   assert.strictEqual(plan.next.entityType, "FI");
   assert.strictEqual(plan.next.companyName, "Britannia Group Limited");
