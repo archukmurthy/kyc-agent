@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
 import { formatAssertionMeasurement } from "../assertionPresentation";
-import { buildChartResearchComparison, buildChartResearchIdentityCandidates, filterComparisonEntriesRelevantToCustomer, summarizeOwnershipComparison } from "./chartComparison";
+import { buildChartResearchComparison, buildChartResearchIdentityCandidates, filterComparisonEntriesRelevantToCustomer, partitionResearchEntriesForComparison, summarizeOwnershipComparison } from "./chartComparison";
 
 const IDENTITY_CACHE_KEY = "ubo-control-demo.cross-source-party-resolution.v1";
 
@@ -58,9 +58,11 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
   const [identityCheck, setIdentityCheck] = useState({ state: "IDLE", requestKey: null });
   const attemptedIdentityChecks = useRef(new Set());
   const researchEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company), [researchResult, company]);
+  const { primaryEntries, supplementaryEntries } = useMemo(() => partitionResearchEntriesForComparison(researchEntries), [researchEntries]);
+  const supplementaryOwnershipEntries = useMemo(() => supplementaryEntries.filter(({ fact }) => fact?.type === "RELATIONSHIP" && fact.relationship === "ECONOMIC_OWNERSHIP"), [supplementaryEntries]);
   const chartEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer((chartFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), company), [chartFacts, company]);
-  const identityCandidates = useMemo(() => buildChartResearchIdentityCandidates(researchEntries, chartEntries), [researchEntries, chartEntries]);
-  const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries, { aiResolutions }), [researchEntries, chartEntries, aiResolutions]);
+  const identityCandidates = useMemo(() => buildChartResearchIdentityCandidates(primaryEntries, chartEntries), [primaryEntries, chartEntries]);
+  const rows = useMemo(() => buildChartResearchComparison(primaryEntries, chartEntries, { aiResolutions }), [primaryEntries, chartEntries, aiResolutions]);
   const summary = useMemo(() => summarizeOwnershipComparison(rows), [rows]);
   useEffect(() => {
     if (!visible || !identityCandidates.length) return;
@@ -107,7 +109,7 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
       </div>
       <details className="ubo-customer-comparison-breakdown"><summary>How the verified total is composed</summary><p>Exact matches: {summary.exactMatches} · Independent-range support: {summary.independentRangeSupport} · Overlapping independent ranges: {summary.independentRangeOverlap}</p></details>
       <label className="ubo-customer-attention-filter"><input type="checkbox" checked={needsAttention} onChange={(event) => setNeedsAttention(event.target.checked)} />Show needs attention only</label>
-      <div className="ubo-customer-comparison-grid">
+      <div className="ubo-customer-comparison-grid" aria-label="Core ownership comparison">
         <div className="head">Owner</div><div className="head">Owned entity</div><div className="head">Analyst / registry ownership</div><div className="head">Customer chart ownership</div><div className="head">Result</div>
         {displayed.map((row) => <React.Fragment key={row.key}>
           <div><strong>{row.chartFact?.subject?.name || row.researchFact?.subject?.name || "Owner not resolved"}</strong></div>
@@ -117,6 +119,20 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
           <div>{resultDetail(row)}</div>
         </React.Fragment>)}
       </div>
+      {supplementaryOwnershipEntries.length > 0 && <details className="ubo-customer-supplementary-research">
+        <summary>Additional web-sourced ownership information ({supplementaryOwnershipEntries.length})</summary>
+        <p><strong>Additional information required.</strong> These web-sourced assertions remain available to analysts, but are not included in the core ownership comparison, verification totals, identity matching or customer questions.</p>
+        <div className="ubo-customer-supplementary-grid" aria-label="Additional web-sourced ownership information">
+          <div className="head">Owner</div><div className="head">Owned entity</div><div className="head">Reported ownership</div><div className="head">Source reference</div><div className="head">Handling</div>
+          {supplementaryOwnershipEntries.map(({ fact, source }) => <React.Fragment key={fact.factId}>
+            <div><strong>{fact.subject?.name || "Owner not resolved"}</strong></div>
+            <div><strong>{fact.object?.name || "Owned entity not resolved"}</strong></div>
+            <div>{factSide(fact, source, "Value not available")}</div>
+            <div><small>{factReference(fact, source)}</small></div>
+            <div><span className="ubo-customer-supplementary-status">Additional information required</span></div>
+          </React.Fragment>)}
+        </div>
+      </details>}
     </>}
   </section>;
 }

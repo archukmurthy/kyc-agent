@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
-import { buildChartResearchComparison, filterComparisonEntriesRelevantToCustomer } from "./chartComparison";
+import { buildChartResearchComparison, filterComparisonEntriesRelevantToCustomer, partitionResearchEntriesForComparison } from "./chartComparison";
 import {
   applyResultingFact,
   determinationFromChartAnalysis,
@@ -196,7 +196,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const requestedRecalculations = useRef(new Set());
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
-  const researchEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company), [researchResult, company]);
+  const researchEntries = useMemo(() => partitionResearchEntriesForComparison(filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company)).primaryEntries, [researchResult, company]);
   const chartEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer((result?.candidateFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), company), [result, company]);
   const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries), [researchEntries, chartEntries]);
   const engine = useMemo(() => evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, now: createdAt.current }), [rows, answers, evidence, recalculations]);

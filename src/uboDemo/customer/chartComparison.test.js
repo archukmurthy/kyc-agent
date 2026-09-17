@@ -1,4 +1,4 @@
-import { buildChartResearchComparison, compareMeasurements, filterComparisonEntriesRelevantToCustomer, summarizeOwnershipComparison } from "./chartComparison";
+import { buildChartResearchComparison, compareMeasurements, filterComparisonEntriesRelevantToCustomer, isWebSourcedResearchEntry, partitionResearchEntriesForComparison, summarizeOwnershipComparison } from "./chartComparison";
 
 const party = (name, id) => ({ name, jurisdiction: "GB", entityType: id?.startsWith("person") ? "NATURAL_PERSON" : "LEGAL_ENTITY", externalIdentifiers: id ? [{ namespace: "COMPANIES_HOUSE", value: id }] : [] });
 const fact = (factId, subject, object, measurement, relationship = "ECONOMIC_OWNERSHIP", referenceId = `${factId}-source`) => ({ factId, type: "RELATIONSHIP", relationship, subject, object, measurement, evidenceReferences: [{ referenceId }] });
@@ -14,6 +14,20 @@ test("measurement comparison preserves exact, range and endpoint semantics", () 
   expect(compareMeasurements({ type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, { type: "RANGE", lowerBound: 40, upperBound: 75, lowerInclusive: true, upperInclusive: false }).status).toBe("RANGE_OVERLAP");
   expect(compareMeasurements({ type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: false }, { type: "RANGE", lowerBound: 50, upperBound: 75, lowerInclusive: true, upperInclusive: false }).status).toBe("CONFLICT");
   expect(compareMeasurements({ type: "UNKNOWN" }, { type: "EXACT", value: 80 }).status).toBe("NOT_COMPARABLE");
+});
+
+test("research provenance separates web assertions while retaining Companies House URLs in the core comparison", () => {
+  const web = entry(fact("web", alice, target, { type: "EXACT", value: 3.5 }, "ECONOMIC_OWNERSHIP", "WEB:VODAFONE GROUP PLC:0"), "research-web");
+  const companiesHouse = entry({
+    ...fact("registry", alice, target, { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: true, upperInclusive: true }, "ECONOMIC_OWNERSHIP", "companies-house-psc"),
+    evidenceReferences: [{ referenceId: "companies-house-psc", locator: { sourceUrl: "https://find-and-update.company-information.service.gov.uk/company/01471587/persons-with-significant-control" } }],
+  }, "registry-record");
+  const partition = partitionResearchEntriesForComparison([web, companiesHouse]);
+
+  expect(isWebSourcedResearchEntry(web)).toBe(true);
+  expect(isWebSourcedResearchEntry(companiesHouse)).toBe(false);
+  expect(partition.primaryEntries).toEqual([companiesHouse]);
+  expect(partition.supplementaryEntries).toEqual([web]);
 });
 
 test("exact values from independent registry and customer sources are independently verified", () => {

@@ -120,6 +120,20 @@ test("questions and evidence identify the company and related ownership issue", 
   expect(within(evidence).getByText("Alice Morgan")).toBeInTheDocument();
 });
 
+test("web-sourced ownership assertions do not create customer resolution questions", () => {
+  const webOwner = { name: "Public Market Investor", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const webFact = {
+    ...ownership("web-fact", { type: "UNKNOWN" }, "WEB:TARGET LIMITED:0"),
+    subject: webOwner,
+  };
+  const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
+  input.researchResult.candidateSources[0].candidateFacts.push(webFact);
+  render(<OwnershipResolutionQuestions {...input} />);
+
+  expect(screen.queryByText(/What percentage of Target Limited does Public Market Investor currently own/i)).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
+});
+
 test("a discrepancy asks for its cause before showing transfer-specific questions and evidence", () => {
   render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
   expect(screen.getByRole("heading", { name: /Has the company's ownership changed/i })).toBeInTheDocument();

@@ -10,6 +10,40 @@ function normalized(value) { return String(value || "").trim().toUpperCase().rep
 function unwrap(entry) { return { fact: entry?.fact || entry, source: entry?.source || {} }; }
 function isEconomicOwnership(fact) { return fact?.type === "RELATIONSHIP" && fact.relationship === "ECONOMIC_OWNERSHIP"; }
 
+function provenanceText(entry) {
+  const { fact, source } = unwrap(entry);
+  return [
+    source?.sourceLabel,
+    source?.sourceRecordId,
+    source?.requestId,
+    ...(fact?.evidenceReferences || []).flatMap((reference) => [
+      reference.system,
+      reference.referenceType,
+      reference.referenceId,
+      reference.locator?.source,
+      reference.locator?.sourceUrl,
+      reference.locator?.apiPath,
+    ]),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+export function isWebSourcedResearchEntry(entry) {
+  const provenance = provenanceText(entry);
+  const companiesHouse = provenance.includes("companies house") || provenance.includes("companies-house") || provenance.includes("company-information.service.gov.uk");
+  const web = /(^|\s)web:/.test(provenance)
+    || provenance.includes("web search")
+    || provenance.includes("web_search")
+    || /https?:\/\//.test(provenance);
+  return web && !companiesHouse;
+}
+
+export function partitionResearchEntriesForComparison(entries = []) {
+  return entries.reduce((partition, entry) => {
+    partition[isWebSourcedResearchEntry(entry) ? "supplementaryEntries" : "primaryEntries"].push(entry);
+    return partition;
+  }, { primaryEntries: [], supplementaryEntries: [] });
+}
+
 function customerParty(company) {
   if (!company?.legalName) return null;
   return {

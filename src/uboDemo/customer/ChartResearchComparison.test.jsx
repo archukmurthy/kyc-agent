@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ChartResearchComparison from "./ChartResearchComparison";
 
@@ -90,4 +90,25 @@ test("comparison hides sibling ownership outside the directed customer path whil
   expect(screen.getAllByText("Better Holdco Limited").length).toBeGreaterThan(0);
   expect(screen.queryByText("Better Network Services Limited")).not.toBeInTheDocument();
   expect(screen.getByText(/directed paths to the customer only/i)).toBeInTheDocument();
+});
+
+test("web-sourced ownership is collapsed outside the core comparison and excluded from its totals", () => {
+  const webOwner = { name: "Public Market Investor", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const registryFact = relationship("registry-owner", "ECONOMIC_OWNERSHIP", { type: "EXACT", value: 80 }, "companies-house-psc");
+  const webFact = { ...relationship("web-owner", "ECONOMIC_OWNERSHIP", { type: "EXACT", value: 3.5 }, "WEB:VODAFONE GROUP PLC:0"), subject: webOwner };
+  const chartFact = relationship("chart-owner", "ECONOMIC_OWNERSHIP", { type: "EXACT", value: 80 }, "customer-artifact");
+  const { container } = render(<ChartResearchComparison
+    researchResult={{ candidateSources: [{ requestId: "mixed-research", candidateFacts: [registryFact, webFact] }] }}
+    chartFacts={[chartFact]}
+  />);
+  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
+
+  const core = within(container.querySelector('[aria-label="Core ownership comparison"]'));
+  const supplementary = within(container.querySelector('[aria-label="Additional web-sourced ownership information"]'));
+  expect(core.queryByText("Public Market Investor")).not.toBeInTheDocument();
+  expect(supplementary.getByText("Public Market Investor")).toBeInTheDocument();
+  expect(screen.getByText("Additional web-sourced ownership information (1)")).toBeInTheDocument();
+  expect(supplementary.getByText("Additional information required")).toBeInTheDocument();
+  expect(screen.getByText("1", { selector: ".ubo-customer-comparison-summary strong" })).toBeInTheDocument();
+  expect(screen.getAllByText("0", { selector: ".ubo-customer-comparison-summary strong" })).toHaveLength(2);
 });
