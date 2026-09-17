@@ -339,7 +339,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // so `dossierId || onboardingSubmissionId` always resolves to dossierId.
   const [onboardingSubmissionId, setOnboardingSubmissionId] = useState(null);
   // Journey-origin flag: true when the customer landed via an invite link
-  // (?dossierId&journey=customer or ?ref) and so never saw the lookup page —
+  // (?dossierId&journey=customer) and so never saw the lookup page —
   // Company/Research were done by the analyst before they arrived. This is the
   // SAME "dossier/invite journey" definition the reg-number "you provided this"
   // lock uses (the link-landing URL param; regNumberSource stays null on exactly
@@ -347,8 +347,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // because resetAll does not clear the URL: clearing this flag on a "wrong
   // company" dispute reset correctly returns the redirected-to-lookup customer
   // to the full 7-step bar. Drives which step-bar pills show (never routing) and,
-  // with dossierId, marks research as the customer's (isCustomerResearch). Set in the two link-landing paths (loadDossierAndStartOnboarding +
-  // the ?ref hydration effect); cleared in resetAll.
+  // with dossierId, marks research as the customer's (isCustomerResearch). Set in
+  // loadDossierAndStartOnboarding; cleared in resetAll.
   const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
@@ -441,7 +441,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
   // the string is non-empty. Set to "customer" ONLY by the lookup-page input
   // handler (the customer typed it themselves this session). Every link-landing
-  // path (?dossierId / ?ref) leaves it null — even once `regNumber` is later
+  // path (?dossierId) leaves it null — even once `regNumber` is later
   // restored from a loaded dossier — so slice 2's FoundationalFactsGate locks
   // the "✓ You provided this" row only for the genuine lookup journey and keeps
   // it verifiable/uncheckable everywhere else.
@@ -1064,51 +1064,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCorrectionSave, dossierId]);
 
-  // Customer invite landing. When the app is opened via an invite link
-  // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
-  // send-time (localStorage, keyed by token) and drop the customer straight
-  // onto the populated Confirm page — the exact view "Preview Customer
-  // Onboarding" shows. Without this, a fresh page load has no in-memory
-  // research and lands on a blank onboarding step. Runs once on mount; if no
-  // snapshot is found (e.g. a different browser/device) it quietly falls back
-  // to the normal onboarding entry. (Cross-device hydration from the
-  // server-persisted invite record is future work — PR-029.)
-  const inviteHydratedRef = useRef(false);
-  useEffect(() => {
-    if (inviteHydratedRef.current) return;
-    const ref = new URLSearchParams(window.location.search).get("ref");
-    if (!ref) return;
-    inviteHydratedRef.current = true;
-    let snap = null;
-    try {
-      const raw = localStorage.getItem("nium_invite_" + ref);
-      if (raw) snap = JSON.parse(raw);
-    } catch (_) { /* ignore malformed/unavailable storage */ }
-    if (!snap || !snap.research) return;
-    const jt = snap.journeyType || "ai_only";
-    setCompanyName(snap.companyName || "");
-    setCountryCode(snap.countryCode || "");
-    setEntityType(snap.entityType || "");
-    setOwnershipType(snap.ownershipType || "");
-    setJourneyType(jt);
-    setActiveSchema(snap.activeSchema || null);
-    setResearch(snap.research);
-    setCoverage(snap.coverage || null);
-    setFieldMetadata(snap.fieldMetadata || []);
-    setChecks(snap.checks || {});
-    setAgentType("onboarding");
-    setStep(stepsFor(jt).confirm);
-    // Customer landed via the ?ref invite link — same dossier/invite journey
-    // marker as the ?dossierId path (drives the step-bar subset, display only).
-    setLandedViaLink(true);
-    trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Customer invite landing (dossier-backed). When opened via the dossier link
   // (`?dossierId=<id>&journey=customer`), fetch the dossier server-side and drop
-  // the customer straight onto the standalone Applicant page. Works cross-device
-  // (unlike the localStorage `?ref` path). Runs once on mount.
+  // the customer straight onto the standalone Applicant page. Runs once on mount.
   const dossierHydratedRef = useRef(false);
   useEffect(() => {
     if (dossierHydratedRef.current) return;
