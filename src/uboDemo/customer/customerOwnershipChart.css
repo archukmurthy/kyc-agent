@@ -209,6 +209,21 @@
 .ubo-resolution-engine > header > span { padding: 6px 9px; border-radius: 999px; background: var(--ubo-customer-mint); color: var(--ubo-customer-green-dark); font-size: 9px; font-weight: 850; text-transform: uppercase; }
 .ubo-resolution-intro { margin: 0; padding: 16px 24px; color: var(--ubo-customer-muted); font-size: 10px; line-height: 1.55; }
 .ubo-resolution-question-list, .ubo-resolution-evidence-list { padding: 0 24px 22px; display: grid; gap: 12px; }
+.ubo-resolution-answered { margin: 0 24px 22px; padding: 18px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; background: #f7faf8; }
+.ubo-resolution-answered > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ubo-resolution-answered > header h3 { margin: 3px 0 0; font-size: 14px; }
+.ubo-resolution-answered > header small, .ubo-resolution-answered-question > div:first-child > span { color: var(--ubo-customer-green); font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.ubo-resolution-answered > header > span { min-width: 24px; padding: 5px; border-radius: 999px; background: var(--ubo-customer-mint); color: var(--ubo-customer-green-dark); text-align: center; font-size: 9px; font-weight: 850; }
+.ubo-resolution-answered > p { margin: 10px 0 15px; color: var(--ubo-customer-muted); font-size: 10px; line-height: 1.5; }
+.ubo-resolution-answered > div { display: grid; gap: 9px; }
+.ubo-resolution-answered-question { padding: 14px; border: 1px solid var(--ubo-customer-border); border-radius: 9px; background: white; }
+.ubo-resolution-answered-question h3 { margin: 4px 0 10px; font-size: 12px; line-height: 1.4; }
+.ubo-resolution-answer-summary { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.ubo-resolution-answer-summary p { margin: 0; display: grid; gap: 3px; }
+.ubo-resolution-answer-summary small { color: var(--ubo-customer-muted); font-size: 8px; text-transform: uppercase; }
+.ubo-resolution-answer-summary strong { color: var(--ubo-customer-ink); font-size: 11px; }
+.ubo-resolution-answer-summary button, .ubo-resolution-edit-actions > button:last-child { padding: 7px 10px; border: 1px solid var(--ubo-customer-border); border-radius: 7px; background: white; color: var(--ubo-customer-green-dark); font-size: 9px; font-weight: 800; cursor: pointer; }
+.ubo-resolution-edit-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .ubo-resolution-question { padding: 18px; border: 1px solid var(--ubo-customer-border); border-left: 4px solid var(--ubo-customer-green); border-radius: 12px; background: #fbfdfc; }
 .ubo-resolution-question-kicker, .ubo-resolution-evidence > div > span { color: var(--ubo-customer-green); font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .ubo-resolution-question h3, .ubo-resolution-evidence h3 { margin: 5px 0; font-size: 14px; line-height: 1.35; }

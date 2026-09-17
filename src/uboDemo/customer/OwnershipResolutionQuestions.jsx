@@ -52,6 +52,18 @@ function statusLabel(status) {
   }[status] || humanize(status);
 }
 
+function answerLabel(question, answer) {
+  const value = answer?.value;
+  const option = question.options?.find((item) => item.value === value);
+  if (option) return option.label;
+  if (question.type === QUESTION_TYPE.PERCENTAGE) return `${value}%`;
+  if (question.type === QUESTION_TYPE.DATE && value) {
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleDateString();
+  }
+  return String(value ?? "");
+}
+
 function QuestionInput({ question, value, onChange }) {
   if (question.options) return <fieldset className="ubo-resolution-options">
     <legend className="sr-only">{question.prompt}</legend>
@@ -70,6 +82,26 @@ function CustomerQuestion({ question, draft, error, onDraft, onSubmit }) {
     <QuestionInput question={question} value={draft || ""} onChange={onDraft} />
     {error && <p className="ubo-resolution-error" role="alert">{error}</p>}
     <button type="button" className="ubo-customer-primary" disabled={draft === undefined || draft === ""} onClick={onSubmit}>Save answer <span>→</span></button>
+  </article>;
+}
+
+function AnsweredQuestion({ question, answer, editing, draft, error, onEdit, onDraft, onSave, onCancel }) {
+  return <article className="ubo-resolution-answered-question">
+    <div>
+      <span>Answered ownership question</span>
+      <h3>{question.prompt}</h3>
+    </div>
+    {editing ? <>
+      <QuestionInput question={question} value={draft ?? answer.value ?? ""} onChange={onDraft} />
+      {error && <p className="ubo-resolution-error" role="alert">{error}</p>}
+      <div className="ubo-resolution-edit-actions">
+        <button type="button" className="ubo-customer-primary" disabled={draft === undefined || draft === ""} onClick={onSave}>Save change <span>→</span></button>
+        <button type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </> : <div className="ubo-resolution-answer-summary">
+      <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong></p>
+      <button type="button" onClick={onEdit}>Edit answer</button>
+    </div>}
   </article>;
 }
 
@@ -120,6 +152,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [recalculations, setRecalculations] = useState(restored?.recalculations || {});
   const [drafts, setDrafts] = useState({});
   const [errors, setErrors] = useState({});
+  const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const requestedRecalculations = useRef(new Set());
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
@@ -156,7 +189,32 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const submit = (question) => {
     try {
       const value = answerValue(question, drafts[question.id]);
-      setAnswers((current) => ({ ...current, [question.id]: { value, answeredAt: new Date().toISOString(), factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId } }));
+      const previousValue = answers[question.id]?.value;
+      const changed = previousValue !== value;
+      setAnswers((current) => {
+        const next = { ...current, [question.id]: { value, answeredAt: new Date().toISOString(), factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId } };
+        const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: next, evidence, recalculations, now: createdAt.current });
+        const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
+        Object.entries(next).forEach(([questionId, stored]) => {
+          if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete next[questionId];
+        });
+        return next;
+      });
+      if (changed) {
+        setRecalculations((current) => {
+          const next = { ...current };
+          delete next[question.comparisonItemId];
+          return next;
+        });
+        const relatedEvidenceIds = engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).map(({ id: evidenceId }) => evidenceId);
+        if (relatedEvidenceIds.length) setEvidence((current) => {
+          const next = { ...current };
+          relatedEvidenceIds.forEach((evidenceId) => delete next[evidenceId]);
+          return next;
+        });
+        requestedRecalculations.current.delete(question.comparisonItemId);
+      }
+      setEditingQuestionId(null);
       setErrors((current) => ({ ...current, [question.id]: "" }));
     } catch (caught) { setErrors((current) => ({ ...current, [question.id]: caught.message })); }
   };
@@ -191,11 +249,28 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     }
   };
 
+  const answeredQuestions = engine.questions.filter((question) => Boolean(answers[question.id]));
   const completed = engine.resolutions.filter(({ resolutionStatus }) => resolutionStatus !== RESOLUTION_STATUS.UNRESOLVED).length;
   return <section className="ubo-customer-card ubo-resolution-engine">
     <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} ownership question${engine.openQuestions.length === 1 ? "" : "s"} for you` : "No further ownership questions right now"}</h2></div><span>{completed} resolved</span></header>
     <p className="ubo-resolution-intro">We only ask for facts that remain unresolved after comparing the registry research with your ownership chart. Answers can change the questions shown below.</p>
     {engine.openQuestions.length > 0 && <div className="ubo-resolution-question-list">{engine.openQuestions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))} onSubmit={() => submit(question)} />)}</div>}
+    {answeredQuestions.length > 0 && <section className="ubo-resolution-answered">
+      <header><div><small>Answer history</small><h3>Answered questions</h3></div><span>{answeredQuestions.length}</span></header>
+      <p>You can review or change an answer. If it changes the ownership position, the UBO assessment and any affected evidence validation will run again.</p>
+      <div>{answeredQuestions.map((question) => <AnsweredQuestion
+        key={question.id}
+        question={question}
+        answer={answers[question.id]}
+        editing={editingQuestionId === question.id}
+        draft={drafts[question.id]}
+        error={errors[question.id]}
+        onEdit={() => { setDrafts((current) => ({ ...current, [question.id]: answers[question.id].value })); setEditingQuestionId(question.id); }}
+        onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))}
+        onSave={() => submit(question)}
+        onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
+      />)}</div>
+    </section>}
     {engine.evidenceRequirements.length > 0 && <div className="ubo-resolution-evidence-list">{engine.evidenceRequirements.map((record) => <EvidenceRequest key={record.id} record={record} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} onUpload={uploadEvidence} />)}</div>}
     <div className="ubo-resolution-outcomes">{engine.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration").map((resolution) => <article key={resolution.id} className={resolution.resolutionStatus.toLowerCase()}><span>{statusLabel(resolution.resolutionStatus)}</span><strong>{resolution.reason}</strong><small>{resolution.uboImpact.determination} · Identity verification {resolution.uboImpact.idvRequired ? "required" : "not required"}</small></article>)}</div>
     <AnalystTrace engine={engine} rows={rows} />
