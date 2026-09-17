@@ -302,7 +302,7 @@ export function ApplicantPage({
     // The five foundational facts used to research the company. Reg-number
     // provenance (G2) is gated on the EXPLICIT `regNumberSource` flag, never on
     // `regNumber` truthiness — so a number restored from a loaded dossier (the
-    // ?dossierId / ?ref link journeys, which leave the source null) is treated as
+    // token link journey, which leaves the source null) is treated as
     // system-retrieved and stays verifiable, not locked as "you provided this".
     // A customer-typed number (source === "customer") is pre-confirmed and
     // display-only; otherwise the schema-correct registration-number research

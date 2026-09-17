@@ -667,23 +667,6 @@ describe("dossier creation is idempotent", () => {
     expect(last.dossierId).toBe("d-1");
     expect(last).not.toHaveProperty("creationKey");
   });
-
-  it("concurrent saves while one is in flight make only one request", async () => {
-    let resolveSave;
-    fetchRoutes["/api/save-dossier"] = () =>
-      new Promise((resolve) => {
-        resolveSave = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
-      });
-    await driveToDossier(); // the auto-save is now in flight and unresolved
-    expect(saveBodies().length).toBe(1);
-    // A second trigger while in flight (e.g. the Retry/Save control) must not POST again.
-    const retry = buttonsWithText(/Save Dossier|Retry save/i)[0];
-    if (retry) fireEvent.click(retry);
-    await settle(0);
-    expect(saveBodies().length).toBe(1);
-    await act(async () => { resolveSave(); });
-    await settle(0);
-  });
 });
 
 describe("analyst resume", () => {

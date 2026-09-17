@@ -4984,8 +4984,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
 
   const saveDossier = (options) => {
-    if (saveInFlightRef.current) return saveInFlightRef.current;
-    const p = runSaveDossier(options).finally(() => { saveInFlightRef.current = null; });
+    const running = saveInFlightRef.current;
+    // A first save (no dossier id yet) shares the running create, so a second
+    // trigger can never insert another row. An update of an existing dossier
+    // queues behind the running save instead, so newer state (e.g. a second
+    // customer correction) is still written.
+    if (running && !dossierId) return running;
+    const p = (running ? running.catch(() => {}).then(() => runSaveDossier(options)) : runSaveDossier(options))
+      .finally(() => { if (saveInFlightRef.current === p) saveInFlightRef.current = null; });
     saveInFlightRef.current = p;
     return p;
   };

@@ -291,6 +291,16 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What:** Link revocation (`dossier-token-revoked:<id>`) lives in `lib/storage.js`. On Vercel without KV/Redis it falls back to per-instance `/tmp`, so a revoke only holds on the instance that wrote it; the filesystem backend also swallows read errors, so "fail closed on unreadable store" only holds on KV/Redis. Require KV/Redis wherever customer links are served (pairs with DEP-3).
 - **Area:** `lib/storage.js`, `lib/dossierToken.js`, Vercel env.
 
+### PREB-7 — Dossier save/resume edges (Part 4 final review)
+- **Category:** Reliability / UX · **Priority:** P3 · **Status:** OPEN (found in Part 4 final review 2026-09-17)
+- **What:**
+  - A retried first save that hits the creation-key conflict returns the existing row without writing the retry's content, yet the UI shows "Saved" — edits made between the lost response and the retry (exclusions, custom questions) are dropped until the analyst clicks Update. Fix: `RETURNING (xmax = 0) AS inserted` and run the update branch when false, or have the client follow a reused-key create with an Update.
+  - The creation key lives only in memory; a lost first-save response followed by a page reload + resume mints a new key and can create a duplicate. Fix: mint on research completion and persist it in the draft.
+  - Resume doesn't restore `dossierSaved` (shows "Save Dossier" instead of "Saved") or re-read `dossierOwnedBy` (Invite stays enabled after a customer takeover; the server still refuses writes).
+  - The draft now carries the full `selfSourceResults`; large results raise the localStorage quota risk (a failed write silently keeps an older draft). Stop persisting `blob:` upload URLs.
+  - No test exercises the shared/queued in-flight save (no analyst control can overlap a save; the customer correction path is the only real overlap).
+- **Area:** `api/save-dossier.js`, `src/App.js` (`saveDossier`, draft save / `applyResume`), `src/utils/submissionDraft.js`.
+
 ### PLAT-8 — `api/change-intelligence-metrics.js` has no server-side auth
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (pre-existing, found in Part 1 final review 2026-09-16)
 - **What:** Aggregates all change events (including dossier-keyed ones) and is guarded only on the client. Put it behind admin auth. Also: `api/get-document.js:14-25` comment still says dossier context is unauthenticated — refresh when blob access control (PLAT-1) lands.
