@@ -16,7 +16,7 @@
  *       "You got it wrong - correct it" → the same inline correction input
  *       "It genuinely changed"          → the existing document-request path
  *   - "Update my details" → onApplyCorrections({ <changed keys only> }). The
- *     parent decides re-derive vs re-search (src/reresearch/correctionPlan.js).
+ *     parent re-researches with the corrections (src/reresearch/correctionPlan.js).
  *     Nothing here resets the application.
  *
  * The registration number is display-only/pre-confirmed when the customer

@@ -4,6 +4,12 @@ const research = require("../research");
 const { buildDefaultConfig } = require("../../lib/seedConfig");
 const { buildAnthropicRequest } = require("../../lib/researchPrompts");
 const pipeline = require("../../src/pipeline");
+const researchGrant = require("../../lib/researchGrant");
+
+process.env.RESEARCH_GRANT_SECRET = "grant-secret";
+const ANONYMOUS = { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" };
+const CUSTOMER = { kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null };
+const ANALYST = { kind: "analyst", tenantId: "acme", dossierId: null, reason: null };
 
 const STORED = buildDefaultConfig("acme");
 const DRAFT = { ...buildDefaultConfig("acme"), _draftMarker: true };
@@ -36,10 +42,15 @@ const researchBody = (extra = {}) => ({
 const CLAUDE_OK = { content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 10, output_tokens: 5 } };
 
 let calls;
+let usedGrants;
 
 beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
-  calls = { fetch: [], cacheGet: [], cacheSave: [], readConfig: [], officers: [], inject: [] };
+  calls = { fetch: [], cacheGet: [], cacheSave: [], readConfig: [], officers: [], inject: [], rateLimit: 0 };
+  usedGrants = {};
+  researchGrant.__setDeps({
+    storage: { async get(k) { return usedGrants[k] || null; }, async set(k, v) { usedGrants[k] = v; } },
+  });
   research.__setDeps({
     fetch: async (url, init) => {
       calls.fetch.push({ url, init, body: JSON.parse(init.body) });
@@ -53,7 +64,9 @@ beforeEach(() => {
       fetchOfficersLayer: async (input) => { calls.officers.push(input); return null; },
       injectOfficers: (data, officers) => { calls.inject.push(officers); },
     },
-    enforceRateLimit: async () => true,
+    enforceRateLimit: async () => { calls.rateLimit += 1; return true; },
+    resolveDossierActor: async () => ANONYMOUS,
+    grant: researchGrant,
     readConfigForTenant: async (tenant) => { calls.readConfig.push(tenant); return tenant === "acme" ? STORED : null; },
     authorizeAdmin: async (tenant, token) => tenant === "acme" && token === "admin-secret",
   });
@@ -270,4 +283,192 @@ test("non-POST methods are refused", async () => {
   const res = fakeRes();
   await research({ method: "GET", headers: {}, query: {}, url: "/api/research" }, res);
   assert.strictEqual(res.statusCode, 405);
+});
+
+// ── Research grants (RERES-2): link customers must present one ──────────────
+
+const GAP_BODY = () => {
+  const schema = pipeline.getSchemaFromConfig("GB", "Corporate", STORED);
+  return {
+    mode: "gap_recovery", companyName: "Britannia Group Limited", countryCode: "GB", countryName: "United Kingdom",
+    entityType: "Corporate", ownershipType: "private_limited", missingFields: [schema.researchFields[0].field], upgradeableFields: [],
+  };
+};
+const EXTRACT_BODY = () => ({ mode: "extract_document", docKey: "certificate", file: { mediaType: "application/pdf", base64: "JVBERi0=" } });
+const withGrant = (g) => ({ "x-tenant-id": "acme", "x-research-grant": g });
+
+test("a link customer without a grant is refused before the rate limit, config read or any spend", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  for (const body of [researchBody(), GAP_BODY(), EXTRACT_BODY()]) {
+    const res = fakeRes();
+    await research(req(body), res);
+    assert.strictEqual(res.statusCode, 403);
+    assert.deepStrictEqual(res.body, { error: "research_grant_required" });
+  }
+  assert.strictEqual(calls.rateLimit, 0);
+  assert.strictEqual(calls.readConfig.length, 0);
+  assert.strictEqual(calls.fetch.length, 0);
+});
+
+test("a grant for another dossier, another tenant or a garbage grant is refused", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  for (const g of [
+    researchGrant.mint({ subject: "dossier:d-2", tenantId: "acme" }),
+    researchGrant.mint({ subject: "dossier:d-1", tenantId: "other" }),
+    researchGrant.mint({ subject: "application:3f2b8a4e-9c1d-4e6f-8a2b-7c9d0e1f2a3b", tenantId: "" }),
+    "garbage",
+  ]) {
+    const res = fakeRes();
+    await research(req(researchBody(), withGrant(g)), res);
+    assert.strictEqual(res.statusCode, 403);
+    assert.deepStrictEqual(res.body, { error: "research_grant_required" });
+  }
+  assert.strictEqual(calls.readConfig.length, 0);
+  assert.strictEqual(calls.fetch.length, 0);
+  assert.deepStrictEqual(usedGrants, {});
+});
+
+test("a valid grant runs research once; reusing it for research is refused, but gap recovery and extraction still work", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+
+  const first = fakeRes();
+  await research(req(researchBody(), withGrant(g)), first);
+  assert.strictEqual(first.statusCode, 200);
+  assert.strictEqual(calls.fetch.length, 1);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+
+  const again = fakeRes();
+  await research(req(researchBody(), withGrant(g)), again);
+  assert.strictEqual(again.statusCode, 403);
+  assert.deepStrictEqual(again.body, { error: "research_grant_used" });
+  assert.strictEqual(calls.fetch.length, 1);
+
+  for (const body of [GAP_BODY(), EXTRACT_BODY()]) {
+    const res = fakeRes();
+    await research(req(body, withGrant(g)), res);
+    assert.strictEqual(res.statusCode, 200);
+  }
+  assert.strictEqual(calls.fetch.length, 3);
+});
+
+test("an expired grant is refused even for gap recovery", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  researchGrant.__setDeps({ now: () => 1_000 });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  researchGrant.__setDeps({ now: () => Date.now() });
+  const res = fakeRes();
+  await research(req(GAP_BODY(), withGrant(g)), res);
+  assert.deepStrictEqual(res.body, { error: "research_grant_required" });
+  assert.strictEqual(calls.fetch.length, 0);
+});
+
+test("a grant store failure refuses research with a fixed code", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  researchGrant.__setDeps({ storage: { async get() { throw new Error("kv down at 10.0.0.1"); }, async set() {} } });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req(researchBody(), withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 503);
+  assert.deepStrictEqual(res.body, { error: "research_grant_unavailable" });
+  assert.strictEqual(calls.fetch.length, 0);
+});
+
+test("analyst and anonymous callers need no grant", async () => {
+  for (const actor of [ANALYST, ANONYMOUS]) {
+    research.__setDeps({ resolveDossierActor: async () => actor });
+    const res = fakeRes();
+    await research(req(researchBody()), res);
+    assert.strictEqual(res.statusCode, 200);
+  }
+  assert.strictEqual(calls.fetch.length, 2);
+  assert.deepStrictEqual(usedGrants, {});
+});
+
+test("an actor resolution failure fails closed with a fixed code", async () => {
+  research.__setDeps({ resolveDossierActor: async () => { throw new Error("registry down at 10.0.0.1"); } });
+  const res = fakeRes();
+  await research(req(researchBody()), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "research_failed" });
+  assert.strictEqual(calls.fetch.length, 0);
+});
+
+test("CORS allows the X-Research-Grant header", async () => {
+  const res = fakeRes();
+  await research({ method: "OPTIONS", headers: {}, query: {}, url: "/api/research" }, res);
+  assert.match(res.headers["Access-Control-Allow-Headers"], /X-Research-Grant/);
+});
+
+// ── Consume-later: the grant is burned right before spend, not on arrival ──
+
+test("a 429 from the rate limiter does not consume the grant", async () => {
+  research.__setDeps({
+    resolveDossierActor: async () => CUSTOMER,
+    enforceRateLimit: async (_req, res) => { res.status(429).json({ error: "rate_limited", retryAfterSeconds: 60 }); return false; },
+  });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req(researchBody(), withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 429);
+  assert.deepStrictEqual(usedGrants, {});
+
+  // The grant is still good afterwards, once the caller is no longer rate limited.
+  research.__setDeps({ enforceRateLimit: async () => { calls.rateLimit += 1; return true; } });
+  const retry = fakeRes();
+  await research(req(researchBody(), withGrant(g)), retry);
+  assert.strictEqual(retry.statusCode, 200);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+});
+
+test("a 400 from invalid structured input does not consume the grant", async () => {
+  research.__setDeps({ resolveDossierActor: async () => CUSTOMER });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req({ mode: "research" }, withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 400);
+  assert.deepStrictEqual(res.body, { error: "missing_company_fields" });
+  assert.deepStrictEqual(usedGrants, {});
+
+  // The grant still works for a valid request afterwards.
+  const retry = fakeRes();
+  await research(req(researchBody(), withGrant(g)), retry);
+  assert.strictEqual(retry.statusCode, 200);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+});
+
+test("a 404 unknown tenant does not consume the grant", async () => {
+  research.__setDeps({ resolveDossierActor: async () => ({ kind: "customer", tenantId: "ghost", dossierId: "d-1", reason: null }) });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "ghost" });
+  const res = fakeRes();
+  await research(req(researchBody(), { "x-tenant-id": "ghost", "x-research-grant": g }), res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(res.body, { error: "tenant_not_found" });
+  assert.deepStrictEqual(usedGrants, {});
+});
+
+test("a successful call consumes the grant before the cache lookup — a cache hit still consumes", async () => {
+  research.__setDeps({
+    resolveDossierActor: async () => CUSTOMER,
+    cache: {
+      getCachedResearch: async () => ({ content: [], _fromCache: true }),
+      saveResearchToCache: async () => { throw new Error("must not save on a hit"); },
+    },
+  });
+  const g = researchGrant.mint({ subject: "dossier:d-1", tenantId: "acme" });
+  const { payload } = researchGrant.verify(g, { subject: "dossier:d-1", tenantId: "acme" });
+  const res = fakeRes();
+  await research(req(researchBody(), withGrant(g)), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body._fromCache, true);
+  assert.strictEqual(calls.fetch.length, 0);
+  assert.ok(usedGrants[`research-grant-used:${payload.jti}`]);
+
+  const again = fakeRes();
+  await research(req(researchBody(), withGrant(g)), again);
+  assert.strictEqual(again.statusCode, 403);
+  assert.deepStrictEqual(again.body, { error: "research_grant_used" });
 });

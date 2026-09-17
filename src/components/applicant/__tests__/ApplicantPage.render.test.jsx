@@ -24,6 +24,7 @@ import React from "react";
 import { render, screen, within, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
+import { buildLocalDefaultConfig } from "../../../config/localDefaultConfig";
 
 jest.setTimeout(60000);
 
@@ -346,10 +347,20 @@ describe("correcting a foundational fact", () => {
   beforeEach(() => {
     window.confirm = jest.fn(() => true);
   });
+  // A tenant with a manual form link: a search that can't run opens the picker.
+  function withManualFormLink() {
+    const base = buildLocalDefaultConfig();
+    global.fetch = jest.fn((url) => (String(url).startsWith("/api/config")
+      ? Promise.resolve({ ok: true, status: 200, json: async () => ({ ...base, company: { ...base.company, manualFormUrl: "https://acme.example/apply" } }) })
+      : Promise.reject(new Error("offline test"))));
+  }
 
-  it("entity type alone re-derives: no search, no attempt spent, gate re-confirmed", async () => {
+  it("entity type alone re-searches too: spends an attempt and researches with the corrected type", async () => {
     await driveToApplicant();
-    routeFetch({});
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
     const gate = screen.getByTestId("foundational-facts-gate");
     fireEvent.click(within(gate).getByLabelText(/Confirm Entity type/i));
     await settle(0);
@@ -359,10 +370,14 @@ describe("correcting a foundational fact", () => {
     fireEvent.change(select, { target: { value: other.value } });
     fireEvent.click(screen.getByTestId("facts-apply-corrections"));
     await settle(5000);
+    await settle(5000);
 
-    expect(calls("/api/research")).toHaveLength(0);
-    expect(calls("/api/research-attempt")).toHaveLength(0);
-    expect(calls("/api/search-attempt")).toHaveLength(0);
+    expect(calls("/api/research-attempt")).toHaveLength(1);
+    const researchCalls = calls("/api/research");
+    expect(researchCalls.length).toBeGreaterThanOrEqual(1);
+    const first = JSON.parse(researchCalls[0][1].body);
+    expect(first.mode).toBe("research");
+    expect(first.entityType).toBe(other.value);
     expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
   });
 
@@ -391,6 +406,9 @@ describe("correcting a foundational fact", () => {
     expect(first.sourcedDocuments).toEqual([]);
     expect(screen.getByTestId("foundational-facts-gate")).toBeInTheDocument();
     expect(screen.queryByText(/We couldn't complete that search/)).not.toBeInTheDocument();
+    // No dossier to save: the correction is logged as soon as research succeeds.
+    const logged = calls("/api/change-events").map(([, init]) => JSON.parse(init.body)).filter((e) => e.fieldId === "foundational_facts.correction");
+    expect(logged).toHaveLength(1);
   });
 
   it("keeps the applicant's typed details through a re-search", async () => {
@@ -412,6 +430,7 @@ describe("correcting a foundational fact", () => {
   });
 
   it("with no searches left: no research, the cap message, manual entry offered", async () => {
+    withManualFormLink();
     await driveToApplicant();
     routeFetch({
       "/api/research-attempt": () => ok({ allowed: false, attemptsUsed: 2, remaining: 0 }),
@@ -429,6 +448,7 @@ describe("correcting a foundational fact", () => {
   });
 
   it("a failed re-search falls back to manual entry and flags the failure against the application", async () => {
+    withManualFormLink();
     await driveToApplicant();
     routeFetch({
       "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
@@ -447,6 +467,37 @@ describe("correcting a foundational fact", () => {
     const flags = calls("/api/change-events").map(([, init]) => JSON.parse(init.body)).filter((e) => e.fieldId === "reresearch.fallback");
     expect(flags).toHaveLength(1);
     expect(flags[0].submissionId).toBeTruthy();
+  });
+
+  it("with no manual form link, a failed re-search keeps the customer on the Applicant page without the old findings", async () => {
+    await driveToApplicant();
+    fireEvent.change(gapField("applicant email"), { target: { value: "jane@example.com" } });
+    const researchedNames = within(personSelect()).getAllByRole("option")
+      .filter((o) => o.value && o.value !== "none").map((o) => o.textContent);
+    expect(researchedNames.length).toBeGreaterThan(0);
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ({ ok: false, status: 500, json: async () => ({ error: "research_failed" }) }),
+      "/api/change-events": () => ok({ success: true }),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+    await settle(5000);
+
+    expect(screen.getByTestId("facts-corrections-error")).toHaveTextContent(
+      "We couldn't look up your company automatically. Please continue and fill in your application below."
+    );
+    expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
+    expect(screen.queryByText("Let AI research your company")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("facts-corrections-panel")).not.toBeInTheDocument();
+    researchedNames.forEach((name) => expect(screen.queryByText(name)).not.toBeInTheDocument());
+    expect(gapField("applicant email")).toHaveValue("jane@example.com");
+    const flags = calls("/api/change-events").map(([, init]) => JSON.parse(init.body)).filter((e) => e.fieldId === "reresearch.fallback");
+    expect(flags).toHaveLength(1);
   });
 
   it("cancelling the paid-research confirm spends no search", async () => {
@@ -469,6 +520,7 @@ describe("correcting a foundational fact", () => {
   });
 
   it("after a fallback, a picker search keeps the application id and the typed details", async () => {
+    withManualFormLink();
     await driveToApplicant();
     fireEvent.change(gapField("applicant email"), { target: { value: "jane@example.com" } });
     let researchOk = false;

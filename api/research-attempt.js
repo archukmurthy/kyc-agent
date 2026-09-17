@@ -9,16 +9,23 @@
 // strings. Fails CLOSED on a storage error. Spend is further bounded by the
 // /api/research rate limit.
 //
+// An allowed attempt also returns a research grant (lib/researchGrant.js). It
+// is issued for symmetry only: /api/research cannot require it from a fresh
+// customer, who has no credential to bind it to (RERES-2 scope limit) — so a
+// missing RESEARCH_GRANT_SECRET never blocks a search here, only omits the
+// unused grant (unlike /api/search-attempt, where research does enforce it).
+//
 // CommonJS so src/setupProxy.js can mount it for `npm start`.
 
 const storage = require("../lib/storage");
+const researchGrant = require("../lib/researchGrant");
 const { SEARCH_CAP } = require("../src/reresearch/searchPolicy");
 
 const TTL_SECONDS = 30 * 24 * 3600;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Injected deps (overridable in tests via __setDeps).
-let _deps = { storage };
+let _deps = { storage, grant: researchGrant };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -34,6 +41,14 @@ module.exports = async function handler(req, res) {
     if (used >= SEARCH_CAP) {
       return res.status(200).json({ allowed: false, attemptsUsed: used, remaining: 0 });
     }
+    // The grant isn't enforced for fresh customers (see header comment), so a
+    // missing secret must not refuse the search — it just means no grant ships.
+    let grant;
+    try {
+      grant = _deps.grant.mint({ subject: `application:${applicationId.toLowerCase()}`, tenantId: "" });
+    } catch (_) {
+      console.warn("[research-attempt] research grant unavailable (no secret) — allowing without one");
+    }
     // ponytail: read-modify-write, not atomic — any number of concurrent requests
     // that read the count before the first write lands all pass, and a caller can
     // mint a fresh UUID at will. The real bound is the per-caller /api/research
@@ -41,7 +56,10 @@ module.exports = async function handler(req, res) {
     // a server-issued application id if it ever matters.
     const attemptsUsed = used + 1;
     await _deps.storage.set(key, attemptsUsed, { ttlSeconds: TTL_SECONDS });
-    return res.status(200).json({ allowed: true, attemptsUsed, remaining: Math.max(0, SEARCH_CAP - attemptsUsed) });
+    const response = { allowed: true, attemptsUsed, remaining: Math.max(0, SEARCH_CAP - attemptsUsed) };
+    if (grant) response.grant = grant;
+    else response.warning = "grant_unavailable";
+    return res.status(200).json(response);
   } catch (err) {
     console.error("[research-attempt] ❌", err.message);
     return res.status(200).json({ allowed: false, attemptsUsed: null, remaining: null, warning: "attempt_store_unavailable" });

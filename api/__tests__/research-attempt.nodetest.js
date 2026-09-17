@@ -1,6 +1,16 @@
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert");
 const handler = require("../research-attempt");
+const researchGrant = require("../../lib/researchGrant");
+
+process.env.RESEARCH_GRANT_SECRET = "grant-secret";
+const withoutGrant = ({ grant, ...rest }) => rest;
+// Restores an env var, deleting it rather than setting it to the string
+// "undefined" when it was unset beforehand.
+function restoreEnv(name, value) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
@@ -26,10 +36,10 @@ const post = (body) => ({ method: "POST", body, headers: {}, query: {} });
 test("a fresh application gets exactly two searches", async () => {
   const first = fakeRes();
   await handler(post({ applicationId: APP_ID }), first);
-  assert.deepStrictEqual(first.body, { allowed: true, attemptsUsed: 1, remaining: 1 });
+  assert.deepStrictEqual(withoutGrant(first.body), { allowed: true, attemptsUsed: 1, remaining: 1 });
   const second = fakeRes();
   await handler(post({ applicationId: APP_ID }), second);
-  assert.deepStrictEqual(second.body, { allowed: true, attemptsUsed: 2, remaining: 0 });
+  assert.deepStrictEqual(withoutGrant(second.body), { allowed: true, attemptsUsed: 2, remaining: 0 });
   const third = fakeRes();
   await handler(post({ applicationId: APP_ID }), third);
   assert.deepStrictEqual(third.body, { allowed: false, attemptsUsed: 2, remaining: 0 });
@@ -71,4 +81,34 @@ test("only POST is accepted", async () => {
   const res = fakeRes();
   await handler({ method: "GET", headers: {}, query: {} }, res);
   assert.strictEqual(res.statusCode, 405);
+});
+
+test("an allowed search returns a grant for this application; a refused one returns none", async () => {
+  store[`research-attempts:${APP_ID}`] = 1;
+  const allowed = fakeRes();
+  await handler(post({ applicationId: APP_ID }), allowed);
+  assert.strictEqual(allowed.body.allowed, true);
+  assert.strictEqual(researchGrant.verify(allowed.body.grant, { subject: `application:${APP_ID}`, tenantId: "" }).valid, true);
+
+  const refused = fakeRes();
+  await handler(post({ applicationId: APP_ID }), refused);
+  assert.strictEqual(refused.body.allowed, false);
+  assert.strictEqual("grant" in refused.body, false);
+});
+
+test("no grant secret still allows and counts the search — the grant is unenforced for fresh customers", async () => {
+  const saved = { r: process.env.RESEARCH_GRANT_SECRET, d: process.env.DOSSIER_TOKEN_SECRET };
+  delete process.env.RESEARCH_GRANT_SECRET;
+  delete process.env.DOSSIER_TOKEN_SECRET;
+  try {
+    store[`research-attempts:${APP_ID}`] = 1;
+    const res = fakeRes();
+    await handler(post({ applicationId: APP_ID }), res);
+    assert.deepStrictEqual(res.body, { allowed: true, attemptsUsed: 2, remaining: 0, warning: "grant_unavailable" });
+    assert.strictEqual("grant" in res.body, false);
+    assert.strictEqual(store[`research-attempts:${APP_ID}`], 2);
+  } finally {
+    restoreEnv("RESEARCH_GRANT_SECRET", saved.r);
+    restoreEnv("DOSSIER_TOKEN_SECRET", saved.d);
+  }
 });

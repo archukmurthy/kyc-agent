@@ -236,7 +236,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
 
 ### RERES-3 — Part 3 correction flow: known edges (final review)
-- **Category:** Reliability / UX · **Priority:** P3 · **Status:** OPEN (found in Part 3 final review 2026-09-17)
+- **Category:** Reliability / UX · **Priority:** P3 · **Status:** DONE (2026-09-17)
 - **What:**
   - Overlapping correction saves can both snapshot the same version and hit `UNIQUE(dossier_id, version)` → `save_failed` (fails safe: the second save is refused, the customer sees the retry message).
   - The version snapshot and the dossier UPDATE are two statements, not atomic; a single CTE (snapshot + UPDATE) would close the gap.
@@ -248,17 +248,22 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
   - Resuming a saved draft on top of a link landing overwrites the server-loaded `dossierId` / `searchAttempts` with the draft's (the server still refuses a 3rd search).
   - Entering the documents step auto-runs `/api/doc-search` and `/api/self-source` for link customers and analyst Preview — rate-limited (Part 2) but not counted against the 2-search cap.
 - **Area:** `api/save-dossier.js`, `src/App.js` (`proceedFromJourney`, `proceedFromDocuments`, `fallBackToManual`, `applyCorrections`, `applyResume`).
+- **Resolution (2026-09-17):** snapshot + update are one statement with a single retry on a version collision (`save_conflict` after two); card A confirms once; picker/documents cap refusals post the failure flag (once per session); an unused paid search is reused by a correction; the correction event posts only after the save succeeds; with no `manualFormUrl` a failed/refused search keeps the customer on the Applicant page without prefill (owner decision); resume keeps a link landing's server `dossierId`/count; customers start document search + registry lookup with a "Find documents automatically" button (owner decision).
+- **Remaining minors:** a 503 `research_grant_unavailable` leaves the grant unburned but the client drops it; the correction-path cap flag isn't de-duplicated with the picker's; the shared `Btn` doesn't set the HTML `disabled` attribute (loading clicks are ignored, not blocked); the documents button is hidden while test tools are on (local `npm start`). Also (final review): a counter failure that isn't the cap (network, 401, `grant_unavailable`, DB error) is flagged and shown as `no_searches_left` — flag only when `attemptsUsed >= cap`; a consumed grant still allows `gap_recovery` / `extract_document` for its 60-minute life (bounded by the rate limit); with no manual form link, a failed plain picker search also clears the analyst's findings; the local file store keeps `research-grant-used:*` keys forever.
 
 ### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
-- **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
+- **Category:** Cost · **Priority:** P3 · **Status:** DONE (2026-09-17)
 - **What:** The cap lives in `/api/search-attempt` and `/api/research-attempt`, which the client calls before re-researching. A client that skips that call can still run research, bounded only by Part 2's per-caller rate limit. Real fix: have `/api/research` require a one-time attempt grant (e.g. a short-lived signed nonce issued by the attempt endpoints).
 - **Also:** fresh-customer counts are keyed by a client-held application id, so a new id gets a new allowance (PLAT-7 territory), and the storage counter is read-modify-write, not atomic.
 - **Area:** `api/research.js`, `api/search-attempt.js`, `api/research-attempt.js`.
+- **Resolution (2026-09-17):** the attempt counters return a one-time research grant (`lib/researchGrant.js`, 60-minute lifetime, own HMAC key derived from `RESEARCH_GRANT_SECRET` or `DOSSIER_TOKEN_SECRET`); `/api/research` refuses a link customer's call without a valid grant and burns it right before spend (a 429/400/404 doesn't burn it).
+- **Still advisory:** fresh customers (no credential — PLAT-7), and a link holder who strips their credential falls back to the anonymous IP-rate-limited tier. One-time use needs shared storage (KV/Redis). A tab that opened a customer link and is later used for a bare fresh lookup still sends the customer token and gets `research_grant_required` (shown raw as "Research failed: research_grant_required").
 
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
-- **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
+- **Category:** Product / UX · **Priority:** P3 · **Status:** DONE (2026-09-17 — owner chose "always re-search")
 - **What:** Being built now (user-refined 2026-09-15): wrong company name / country / registration number / ownership type → full re-search (uses a retry); wrong entity type ONLY → re-derive from existing research (no search, no retry). Alternative to revisit: entity-type corrections also trigger a full re-search.
 - **Why deferred:** Re-deriving entity type is cheaper and faster; user wants to reconsider "always re-search" later.
+- **Resolution (2026-09-17):** every correction, entity type included, now re-runs research and spends one of the customer's two searches (`src/reresearch/correctionPlan.js`); the re-derive branch in `applyCorrections` was removed.
 - **Area:** `src/App.js` foundational-facts correction handlers, `api/dossier-reseed.js` / `dossierLifecycle/`.
 
 ### PREB-1 — Analyst dashboard (dossiers + applications) and notifications
