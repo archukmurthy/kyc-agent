@@ -1,10 +1,20 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert");
 const handler = require("../search-attempt");
+const researchGrant = require("../../lib/researchGrant");
 
 let prevUrl;
-before(() => { prevUrl = process.env.DATABASE_URL; process.env.DATABASE_URL = "postgres://test"; });
-after(() => { if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl; });
+let prevSecret;
+before(() => {
+  prevUrl = process.env.DATABASE_URL; process.env.DATABASE_URL = "postgres://test";
+  prevSecret = process.env.RESEARCH_GRANT_SECRET; process.env.RESEARCH_GRANT_SECRET = "grant-secret";
+});
+after(() => {
+  if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl;
+  if (prevSecret === undefined) delete process.env.RESEARCH_GRANT_SECRET; else process.env.RESEARCH_GRANT_SECRET = prevSecret;
+});
+
+const withoutGrant = ({ grant, ...rest }) => rest;
 
 function fakeRes() {
   return { statusCode: null, body: null, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
@@ -71,11 +81,11 @@ test("a customer gets exactly two searches; the third is refused", async () => {
 
   const first = fakeRes();
   await handler(post(), first);
-  assert.deepStrictEqual(first.body, { allowed: true, attemptsUsed: 1, remaining: 1 });
+  assert.deepStrictEqual(withoutGrant(first.body), { allowed: true, attemptsUsed: 1, remaining: 1 });
 
   const second = fakeRes();
   await handler(post(), second);
-  assert.deepStrictEqual(second.body, { allowed: true, attemptsUsed: 2, remaining: 0 });
+  assert.deepStrictEqual(withoutGrant(second.body), { allowed: true, attemptsUsed: 2, remaining: 0 });
 
   const third = fakeRes();
   await handler(post(), third);
@@ -149,5 +159,39 @@ test("no DATABASE_URL refuses the search", async () => {
     assert.deepStrictEqual(res.body, { allowed: false, attemptsUsed: null, remaining: null, warning: "database_not_configured" });
   } finally {
     process.env.DATABASE_URL = saved;
+  }
+});
+
+test("an allowed search returns a grant for this dossier and tenant; a refused one returns none", async () => {
+  const sql = fakeSql({ ...ROW, customer_searches: 1 });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  const allowed = fakeRes();
+  await handler(post(), allowed);
+  assert.strictEqual(allowed.body.allowed, true);
+  assert.strictEqual(researchGrant.verify(allowed.body.grant, { subject: "dossier:d-1", tenantId: "acme" }).valid, true);
+  assert.strictEqual(researchGrant.verify(allowed.body.grant, { subject: "dossier:d-2", tenantId: "acme" }).valid, false);
+
+  const refused = fakeRes();
+  await handler(post(), refused);
+  assert.strictEqual(refused.body.allowed, false);
+  assert.strictEqual("grant" in refused.body, false);
+});
+
+test("no grant secret refuses the search without spending it", async () => {
+  const saved = { r: process.env.RESEARCH_GRANT_SECRET, d: process.env.DOSSIER_TOKEN_SECRET };
+  delete process.env.RESEARCH_GRANT_SECRET;
+  delete process.env.DOSSIER_TOKEN_SECRET;
+  try {
+    const sql = fakeSql({ ...ROW, customer_searches: 1 });
+    handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+    const res = fakeRes();
+    await handler(post(), res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(res.body, { allowed: false, attemptsUsed: 1, remaining: 1, warning: "grant_unavailable" });
+    assert.strictEqual(sql.state().customer_searches, 1);
+    assert.ok(!sql.log.some((l) => /UPDATE/i.test(l.text)));
+  } finally {
+    process.env.RESEARCH_GRANT_SECRET = saved.r;
+    if (saved.d !== undefined) process.env.DOSSIER_TOKEN_SECRET = saved.d;
   }
 });

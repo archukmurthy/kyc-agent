@@ -13,6 +13,10 @@
 // search, and it flips owned_by to 'customer' — spending a search is a
 // customer action, after which the analyst is read-only.
 //
+// An allowed POST also returns a one-time research grant (lib/researchGrant.js)
+// that /api/research requires from a link customer. It is minted BEFORE the
+// increment, so a missing secret refuses the search without spending it.
+//
 // Fails CLOSED: on a DB error the search is refused (the customer falls back
 // to manual entry) rather than letting an unknown count run a paid search.
 //
@@ -20,10 +24,11 @@
 
 const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
+const researchGrant = require("../lib/researchGrant");
 const { SEARCH_CAP } = require("../src/reresearch/searchPolicy");
 
 // Injected deps (overridable in tests via __setDeps).
-let _deps = { neon, access: dossierAccess };
+let _deps = { neon, access: dossierAccess, grant: researchGrant };
 
 function refused(warning) {
   return { allowed: false, attemptsUsed: null, remaining: null, warning };
@@ -76,6 +81,14 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ attemptsUsed: used, remaining: Math.max(0, SEARCH_CAP - used), cap: SEARCH_CAP });
     }
 
+    let grant;
+    try {
+      grant = _deps.grant.mint({ subject: `dossier:${dossierId}`, tenantId: actor.tenantId });
+    } catch (_) {
+      console.warn("[search-attempt] research grant unavailable (no secret)");
+      return res.status(200).json({ allowed: false, attemptsUsed: used, remaining: Math.max(0, SEARCH_CAP - used), warning: "grant_unavailable" });
+    }
+
     const rows = await sql`
       UPDATE entity_dossiers
       SET customer_searches = customer_searches + 1,
@@ -89,7 +102,7 @@ module.exports = async function handler(req, res) {
     }
     const attemptsUsed = Number(rows[0].customer_searches);
     console.log(`[search-attempt] dossier ${dossierId} → customer search ${attemptsUsed}`);
-    return res.status(200).json({ allowed: true, attemptsUsed, remaining: Math.max(0, SEARCH_CAP - attemptsUsed) });
+    return res.status(200).json({ allowed: true, attemptsUsed, remaining: Math.max(0, SEARCH_CAP - attemptsUsed), grant });
   } catch (err) {
     console.error("[search-attempt] ❌", err.message);
     return req.method === "POST"

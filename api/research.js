@@ -10,12 +10,21 @@
 // Admin preview may send `draftConfig`; it is honoured only with a valid admin
 // token in X-Admin-Token and never touches the research cache.
 //
+// A link customer (verified `dossier:` token) must also send X-Research-Grant,
+// the one-time grant /api/search-attempt returned when it counted the search
+// (lib/researchGrant.js). `mode: "research"` burns it; gap recovery and
+// document extraction in the same run accept it while unexpired. Analysts and
+// anonymous callers need none — a fresh customer has no credential to bind a
+// grant to (RERES-2 scope limit, PLAT-7).
+//
 // CommonJS so src/setupProxy.js mounts this exact handler for `npm start`.
 
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const researchCache = require("../lib/researchCache");
 const officersLayer = require("../lib/applyOfficersLayer");
 const { enforceRateLimit } = require("../lib/rateLimit");
+const { resolveDossierActor } = require("../lib/dossierAccess");
+const researchGrant = require("../lib/researchGrant");
 const { buildAnthropicRequest, ResearchInputError, CLIENT_OWNED_KEYS } = require("../lib/researchPrompts");
 const config = require("./config");
 
@@ -26,6 +35,8 @@ let _deps = {
   cache: researchCache,
   officersLayer,
   enforceRateLimit,
+  resolveDossierActor,
+  grant: researchGrant,
   readConfigForTenant: config.readConfigForTenant,
   authorizeAdmin: config.authorizeAdminForTenant,
 };
@@ -41,7 +52,7 @@ function header(req, name) {
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id, X-Admin-Token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id, X-Admin-Token, X-Research-Grant");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -50,6 +61,33 @@ module.exports = async function handler(req, res) {
   if (!tenant) return res.status(400).json({ error: "tenant_required" });
   if (CLIENT_OWNED_KEYS.some((key) => body[key] !== undefined)) {
     return res.status(400).json({ error: "client_prompt_not_allowed" });
+  }
+
+  let actor;
+  try {
+    actor = await _deps.resolveDossierActor(req);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[api/research] actor resolution failed:", err.message);
+    return res.status(500).json({ error: "research_failed" });
+  }
+  if (actor && actor.kind === "customer") {
+    const check = _deps.grant.verify(header(req, "x-research-grant"), {
+      subject: `dossier:${actor.dossierId}`,
+      tenantId: actor.tenantId,
+    });
+    if (!check.valid) return res.status(403).json({ error: "research_grant_required" });
+    if (body.mode === "research") {
+      let fresh;
+      try {
+        fresh = await _deps.grant.consume(check.payload);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[api/research] grant store failed:", err.message);
+        return res.status(503).json({ error: "research_grant_unavailable" });
+      }
+      if (!fresh) return res.status(403).json({ error: "research_grant_used" });
+    }
   }
 
   if (!(await _deps.enforceRateLimit(req, res, "research"))) return undefined;
