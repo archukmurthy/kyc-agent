@@ -263,3 +263,37 @@ test("searchAttempts in the body is ignored; search_attempts is never written", 
     }
   }
 });
+
+// A customer's link landing never restores the analyst-authored question set,
+// so a customer save must keep the stored values rather than wipe them.
+const ANALYST_COLUMNS = ["included_fields", "excluded_fields", "custom_questions"];
+const analystAuthored = {
+  includedFields: ["inc_a"], excludedFields: ["exc_b"],
+  customQuestions: [{ text: "Why?", fieldType: "text" }],
+};
+
+test("a customer save keeps the analyst-authored included/excluded fields and custom questions", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  const res = fakeRes();
+  await handler(req({ ...base, dossierId: "d-1", includedFields: [], excludedFields: [], customQuestions: [] }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const update = sql.log.find((l) => l.kind === "update");
+  for (const col of ANALYST_COLUMNS) {
+    // A bound `true` (isCustomer) picks the stored column over the body value.
+    assert.match(update.text, new RegExp(`${col}\\s*=\\s*CASE WHEN\\s+THEN ${col} ELSE\\s+END`));
+  }
+});
+
+test("an analyst save binds the new included/excluded fields and custom questions", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler(req({ ...base, dossierId: "d-1", ...analystAuthored }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const update = sql.log.find((l) => l.kind === "update");
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.includedFields)));
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.excludedFields)));
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.customQuestions)));
+  assert.ok(!update.values.includes(true), "the analyst path binds isCustomer=false everywhere");
+});

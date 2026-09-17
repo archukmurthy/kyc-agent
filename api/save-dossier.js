@@ -160,9 +160,11 @@ module.exports = async function handler(req, res) {
           fill_rate = ${coverage?.fillRate != null ? Math.round(coverage.fillRate * 100) : null},
           verified_fill_rate = ${coverage?.verifiedFillRate != null ? Math.round(coverage.verifiedFillRate * 100) : null},
 
-          included_fields = ${JSON.stringify(includedFields || [])},
-          excluded_fields = ${JSON.stringify(excludedFields || [])},
-          custom_questions = ${JSON.stringify(customQuestions || [])},
+          -- Analyst-authored: a customer's link landing never restores these,
+          -- so a customer save keeps the stored values instead of wiping them.
+          included_fields = CASE WHEN ${isCustomer} THEN included_fields ELSE ${JSON.stringify(includedFields || [])} END,
+          excluded_fields = CASE WHEN ${isCustomer} THEN excluded_fields ELSE ${JSON.stringify(excludedFields || [])} END,
+          custom_questions = CASE WHEN ${isCustomer} THEN custom_questions ELSE ${JSON.stringify(customQuestions || [])} END,
 
           verified_data = ${JSON.stringify(verifiedData || [])},
           probable_data = ${JSON.stringify(probableData || [])},

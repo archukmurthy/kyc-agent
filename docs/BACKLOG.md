@@ -264,6 +264,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 1 final review 2026-09-16)
 - **What:** A customer holding their own dossier token can overwrite `search_attempts`, `seeded_by`, `excluded_fields`, `required_documents`, `verified_data` through `POST /api/save-dossier`. Restrict the customer UPDATE to customer-editable columns; keep the retry count server-owned (Part 3 already stops the client writing `searchAttempts`).
 - **Why not now:** customer can only touch their own dossier, and `/api/submit` accepts client-sent data anyway.
+- **Progress (Part 3 final review 2026-09-17):** a customer UPDATE now keeps the stored `included_fields`, `excluded_fields` and `custom_questions` (and `search_attempts` is never written). Still open: `seeded_by`, `required_documents`, `verified_data` (and the other research columns).
 - **Area:** `api/save-dossier.js`.
 
 ### PREB-6 — Revocation store must be shared and fail closed in production
