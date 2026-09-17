@@ -132,24 +132,32 @@ module.exports = async function handler(req, res) {
       // (TOCTOU) — the analyst's UPDATE would then silently land on a
       // dossier the customer has just taken over.
 
-      // Keep every version: copy the row as it is NOW into the append-only
-      // history before overwriting it, so the analyst's original and every
-      // customer revision stay recoverable. Same ownership re-check as the
-      // UPDATE below, so a write that will be refused leaves no history row.
-      await sql`
-        INSERT INTO entity_dossier_versions (dossier_id, tenant_id, version, snapshot, created_by, reason)
-        SELECT
-          d.id,
-          d.tenant_id,
-          COALESCE((SELECT MAX(v.version) FROM entity_dossier_versions v WHERE v.dossier_id = d.id), 0) + 1,
-          to_jsonb(d),
-          ${actor.kind},
-          ${reason}
-        FROM entity_dossiers d
-        WHERE d.id = ${dossierId} AND d.tenant_id = ${tenantId} AND (${isCustomer} OR d.owned_by <> 'customer')
-      `;
-
-      rows = await sql`
+      // One atomic statement: snapshot the row as it is NOW into the
+      // append-only history, then update it. The versions INSERT is a
+      // data-modifying CTE — Postgres executes it exactly once even though
+      // the outer UPDATE never references `snap` — and it shares the exact
+      // same id/tenant/ownership re-check as the UPDATE below, so a write
+      // that will be refused leaves no history row, and a raced ownership
+      // flip between the permission SELECT and this statement can no longer
+      // leave an orphaned snapshot with no matching update (or vice versa):
+      // both halves see the same snapshot of the row and either both match
+      // or neither does. A concurrent save can compute the same next
+      // version number and hit entity_dossier_versions' UNIQUE(dossier_id,
+      // version) (23505); that's handled by the retry below.
+      const runSnapshotAndUpdate = () => sql`
+        WITH snap AS (
+          INSERT INTO entity_dossier_versions (dossier_id, tenant_id, version, snapshot, created_by, reason)
+          SELECT
+            d.id,
+            d.tenant_id,
+            COALESCE((SELECT MAX(v.version) FROM entity_dossier_versions v WHERE v.dossier_id = d.id), 0) + 1,
+            to_jsonb(d),
+            ${actor.kind},
+            ${reason}
+          FROM entity_dossiers d
+          WHERE d.id = ${dossierId} AND d.tenant_id = ${tenantId} AND (${isCustomer} OR d.owned_by <> 'customer')
+          RETURNING version
+        )
         UPDATE entity_dossiers
         SET
           company_name = ${company.name},
@@ -192,6 +200,19 @@ module.exports = async function handler(req, res) {
         WHERE id = ${dossierId} AND tenant_id = ${tenantId} AND (${isCustomer} OR owned_by <> 'customer')
         RETURNING id
       `;
+
+      try {
+        rows = await runSnapshotAndUpdate();
+      } catch (err) {
+        if (err.code !== "23505") throw err;
+        // A concurrent save took the same next version number; retry once.
+        try {
+          rows = await runSnapshotAndUpdate();
+        } catch (err2) {
+          if (err2.code !== "23505") throw err2;
+          return res.status(200).json({ success: false, dossierId: null, warning: "save_conflict" });
+        }
+      }
 
       if (rows.length === 0) {
         // The permission check above found the row, but the UPDATE matched
