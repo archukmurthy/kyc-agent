@@ -11,9 +11,9 @@ const FACTS = [
   { key: "ownershipType", label: "Ownership type", value: "Private Limited Company", editValue: "private_limited", disputable: true },
 ];
 
-function Harness({ onApplyCorrections = jest.fn(), correctionBusy = false, correctionError = "" }) {
-  const [checks, setChecks] = useState({});
-  const [ownershipFork, setOwnershipFork] = useState(null);
+function Harness({ onApplyCorrections = jest.fn(), correctionBusy = false, correctionError = "", readOnly = false, initialChecks = {}, initialOwnershipFork = null }) {
+  const [checks, setChecks] = useState(initialChecks);
+  const [ownershipFork, setOwnershipFork] = useState(initialOwnershipFork);
   const [regNumberFork, setRegNumberFork] = useState(null);
   return (
     <FoundationalFactsGate
@@ -38,6 +38,7 @@ function Harness({ onApplyCorrections = jest.fn(), correctionBusy = false, corre
       onApplyCorrections={onApplyCorrections}
       correctionBusy={correctionBusy}
       correctionError={correctionError}
+      readOnly={readOnly}
     />
   );
 }
@@ -147,4 +148,19 @@ test("busy state disables the button and relabels it; the error is shown", () =>
   expect(button).toBeDisabled();
   expect(button).toHaveTextContent(/Updating your details/);
   expect(screen.getByTestId("facts-corrections-error")).toHaveTextContent("Something went wrong");
+});
+
+test("a save error shows even when no fact is being corrected (the deferred save failed after the panel closed)", () => {
+  render(<Harness correctionError="We updated your details but couldn't save them. Please try again." />);
+  expect(screen.queryByTestId("facts-corrections-panel")).not.toBeInTheDocument();
+  expect(screen.getByTestId("facts-corrections-error")).toHaveTextContent(/couldn't save them/);
+});
+
+test("readOnly (analyst Preview) disables every checkbox and hides correction and fork actions", () => {
+  render(<Harness readOnly initialChecks={{ companyName: false, ownershipType: false }} initialOwnershipFork="choose" />);
+  screen.getAllByRole("checkbox").forEach((cb) => expect(cb).toBeDisabled());
+  expect(screen.queryByTestId("correct-companyName")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("facts-corrections-panel")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("ownership-fork-panel")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("ownership-misclassified")).not.toBeInTheDocument();
 });

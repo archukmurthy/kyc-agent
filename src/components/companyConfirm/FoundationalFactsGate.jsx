@@ -22,6 +22,9 @@
  * The registration number is display-only/pre-confirmed when the customer
  * provided it themselves; it is only checkbox-verifiable when research
  * retrieved it (provenance decided by the parent via `disputable`).
+ *
+ * `readOnly` (an analyst's Preview, spec §4.2): the facts show, but nothing can
+ * be unticked, corrected or declared changed.
  */
 
 import React, { useEffect, useState } from "react";
@@ -111,6 +114,7 @@ export function FoundationalFactsGate({
   onApplyCorrections,
   correctionBusy = false,
   correctionError = "",
+  readOnly = false,
 }) {
   const ownershipDisputed = !isConfirmed("ownershipType");
   const regNumberDisputed = !isConfirmed("registrationNumber");
@@ -130,7 +134,7 @@ export function FoundationalFactsGate({
   useEffect(() => { if (!regNumberDisputed) setCorrectingRegNumber(false); }, [regNumberDisputed]);
 
   const isCorrecting = (fact) => {
-    if (!fact.disputable || isConfirmed(fact.key)) return false;
+    if (readOnly || !fact.disputable || isConfirmed(fact.key)) return false;
     if (DIRECT_KEYS.includes(fact.key)) return true;
     if (fact.key === "ownershipType") return correctingOwnership;
     if (fact.key === "registrationNumber") return correctingRegNumber;
@@ -220,8 +224,8 @@ export function FoundationalFactsGate({
               <input
                 type="checkbox"
                 checked={confirmed}
-                disabled={!f.disputable || correctionBusy}
-                onChange={() => f.disputable && handleToggle(f.key)}
+                disabled={readOnly || !f.disputable || correctionBusy}
+                onChange={() => !readOnly && f.disputable && handleToggle(f.key)}
                 style={{
                   width: 15, height: 15, flexShrink: 0,
                   accentColor: "#4a9e8e",
@@ -239,6 +243,11 @@ export function FoundationalFactsGate({
         );
       })}
 
+      {/* Outside the panel: a deferred save can fail after the panel has closed. */}
+      {correctionError && (
+        <p style={{ ...ERROR, marginTop: 12 }} data-testid="facts-corrections-error" role="alert">{correctionError}</p>
+      )}
+
       {correcting.length > 0 && (
         <div style={PANEL("info")} data-testid="facts-corrections-panel">
           <p style={PANEL_TITLE("info")}>Update your company details</p>
@@ -246,9 +255,6 @@ export function FoundationalFactsGate({
             We'll use your corrections to update what we found. You won't lose anything you've already
             entered on this page.
           </p>
-          {correctionError && (
-            <p style={ERROR} data-testid="facts-corrections-error" role="alert">{correctionError}</p>
-          )}
           <div style={ROW_BTNS}>
             <button
               type="button"
@@ -272,7 +278,7 @@ export function FoundationalFactsGate({
         </div>
       )}
 
-      {ownershipDisputed && !correctingOwnership && (
+      {!readOnly && ownershipDisputed && !correctingOwnership && (
         ownershipFork === "changed" ? (
           <div style={PANEL("warn")} data-testid="ownership-changed-panel">
             <p style={PANEL_TITLE("warn")}>What did the ownership type change to?</p>
@@ -329,7 +335,7 @@ export function FoundationalFactsGate({
         )
       )}
 
-      {regNumberDisputed && !correctingRegNumber && (
+      {!readOnly && regNumberDisputed && !correctingRegNumber && (
         regNumberFork === "changed" ? (
           <div style={PANEL("warn")} data-testid="regnumber-changed-panel">
             <p style={PANEL_TITLE("warn")}>What's the new registration / company number?</p>

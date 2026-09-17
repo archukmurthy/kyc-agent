@@ -81,6 +81,8 @@ export function ApplicantPage({
   onApplyCorrections,
   correctionBusy = false,
   correctionError = "",
+  // An analyst previewing the dossier: facts are shown but cannot be corrected.
+  factsReadOnly = false,
   countryOptions = [],
   entityTypeOptions = [],
   // ── the seven Applicant useStates: values AND setters, both drilled ──
@@ -512,6 +514,7 @@ export function ApplicantPage({
           onApplyCorrections={(corrections) => onApplyCorrections(corrections, { registrationNumber: regValue })}
           correctionBusy={correctionBusy}
           correctionError={correctionError}
+          readOnly={factsReadOnly}
         />
 
         {factsConfirmed && (

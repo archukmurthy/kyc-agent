@@ -5383,6 +5383,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             onApplyCorrections={applyCorrections}
             correctionBusy={correctionBusy}
             correctionError={correctionError}
+            factsReadOnly={preboardingUnlocked}
             countryOptions={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
             entityTypeOptions={activeEntityTypes.map((e) => ({ value: e.id, label: e.label || e.id }))}
             applicantSelectedPerson={applicantSelectedPerson}
