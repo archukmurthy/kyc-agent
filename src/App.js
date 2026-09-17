@@ -79,6 +79,7 @@ import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendm
 // are still used by proceedFromJourney, which did not move.
 import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
+import { isDemoToggleVisible } from "./utils/demoToggle";
 import { planCorrection } from "./reresearch/correctionPlan";
 import {
   SOURCE_TRUST,
@@ -236,19 +237,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setDemoModeState(next);
     try { sessionStorage.setItem("demo_mode", next ? "true" : "false"); } catch (_) { /* ignore */ }
   }, []);
-  // Visibility gate — the toggle is hidden on production end-customer URLs.
-  // Surfaces only with ?demo=true in the URL or on localhost. Not on ?tenant=:
-  // every real customer URL carries it now that tenant resolution is strict.
-  const demoToggleVisible = (() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const p = new URLSearchParams(window.location.search);
-      if (p.get("demo") === "true") return true;
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1") return true;
-    } catch (_) { /* ignore */ }
-    return false;
-  })();
+  // Visibility gate — see utils/demoToggle.js.
+  const demoToggleVisible = typeof window !== "undefined"
+    && isDemoToggleVisible({ search: window.location.search, hostname: window.location.hostname });
 
   useEffect(() => {
     let cancelled = false;
