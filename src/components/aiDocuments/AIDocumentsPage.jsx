@@ -76,6 +76,8 @@ export function AIDocumentsPage({
   setHasRunRealAgent,
   runRealDocSearch,
   runRealSelfSource,
+  // A researching customer starts both agents from a button (paid calls).
+  searchOnClick = false,
   doDummyResearch,
   // ── page chrome + navigation ──
   proceedFromDocuments,
@@ -186,6 +188,9 @@ export function AIDocumentsPage({
           // reveal together. Message cycles via the effect above.
           const isLoading = docSearchLoading || selfSourceLoading;
           const currentMessage = DOC_LOADER_MSGS[docLoaderIdx % DOC_LOADER_MSGS.length];
+          // Not searched yet: offer the button instead of an empty-state warning.
+          const showFindButton = searchOnClick && !hasRunRealAgent &&
+            docSearchResults === null && selfSourceResults === null;
 
           // ── Section B: flag (but do not hide) documents already auto-sourced
           // in Section A. Only count docs the agent actually has (downloaded or
@@ -388,6 +393,22 @@ export function AIDocumentsPage({
                   </div>
                 )}
 
+                {showFindButton && (
+                  <div style={{ marginBottom: 20 }}>
+                    <Btn
+                      variant="primary"
+                      disabled={isLoading}
+                      onClick={() => {
+                        setHasRunRealAgent(true);
+                        runRealDocSearch();
+                        runRealSelfSource();
+                      }}
+                    >
+                      Find documents automatically
+                    </Btn>
+                  </div>
+                )}
+
                 {/* Unified loading panel - held until BOTH agents finish, then
                     all results + uploads reveal together below. */}
                 {isLoading && (
@@ -404,7 +425,7 @@ export function AIDocumentsPage({
                 {!isLoading && (<>
 
                 {/* Empty state - both agents done, nothing found anywhere. */}
-                {foundDocs.length === 0 && !(selfSourceResults?.results?.length > 0) && (
+                {!showFindButton && foundDocs.length === 0 && !(selfSourceResults?.results?.length > 0) && (
                   <div style={{
                     padding: "16px", background: C.warningBg,
                     border: `1px solid ${C.warningBorder}`, borderRadius: 10,

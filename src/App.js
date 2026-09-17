@@ -1066,10 +1066,15 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // sees seededBy 'customer', the corrected facts, schema, research and checks.
   useEffect(() => {
     if (!pendingCorrectionSave || !dossierId) return;
-    const { reason } = pendingCorrectionSave;
+    const { reason, correctionEvent } = pendingCorrectionSave;
     setPendingCorrectionSave(null);
     saveDossier({ reason }).then((saved) => {
-      if (!saved) setCorrectionError("We updated your details but couldn't save them. Please try again.");
+      if (!saved) {
+        setCorrectionError("We updated your details but couldn't save them. Please try again.");
+        return;
+      }
+      // Audit trail only for a correction that actually saved.
+      if (correctionEvent) postCorrectionEvent({ ...correctionEvent, headers: getDossierAuthHeaders() });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCorrectionSave, dossierId]);
@@ -2665,9 +2670,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       captureDocSearchCost(demo);
       setDocSearchLoading(false);
       setSelfSourceResults(buildDemoSelfSourceResults(companyName));
-    } else {
+    } else if (!isCustomerResearch) {
       // Run both agents in parallel — doc search (Wolfsberg/Annual Report)
       // and registry self-source (Companies House / ACRA / etc.)
+      // A researching customer starts them from the page instead (paid calls).
       runRealDocSearch();
       runRealSelfSource();
     }
@@ -2773,6 +2779,22 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Close the correction form: the customer continues by manual entry or a
     // new search, and must not land back on a still-disputed gate.
     cancelFactDispute();
+    if (!manualFormUrl_) {
+      // No manual form to fall back to: the customer fills in the application
+      // here, without the findings of a company they said was wrong. Typed
+      // applicant details (gapRef) are kept.
+      setResearch((prev) => (prev ? { ...prev, found: [] } : prev));
+      setChecks({}); setCoverage(null); setFieldMetadata([]);
+      setSelfSourceResults(null); setDocSearchResults(null); setAcceptedDocTypes(new Set());
+      setDossierStakeholders(null);
+      setRejectedStakeholders({}); setStakeholderFieldChecks({}); setExpandedStakeholders({});
+      setIsPubliclyListedOverride(false);
+      stakeholdersRef.current = {}; setStakeholderVersion((v) => v + 1); setStakeholderErrors([]);
+      setRevealedTs({});
+      setCorrectionError("We couldn't look up your company automatically. Please continue and fill in your application below.");
+      setStep(stepsFor(journey || journeyType || "ai_only").applicant);
+      return;
+    }
     setError(message);
     setCorrectionError(message);
     setJourneyOpen(true);
@@ -2832,14 +2854,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
 
     const next = plan.next;
-    // Audit trail (spec §6.2 step 6), once the corrected facts are applied.
-    const logCorrection = () => postCorrectionEvent({
+    // Audit trail (spec §6.2 step 6), once the corrected facts are applied —
+    // for a dossier, only after they have saved (the deferred-save effect).
+    const correctionEvent = {
       submissionId: dossierId || onboardingSubmissionId,
       dossierId,
       before: current,
       plan,
-      headers: getDossierAuthHeaders(),
-    });
+    };
     setCorrectionError("");
     setSeededBy("customer");
     setCompanyName(next.companyName);
@@ -2878,8 +2900,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         return;
       }
       cancelFactDispute();
-      logCorrection();
-      if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
+      if (dossierId) setPendingCorrectionSave({ reason: "customer_correction", correctionEvent });
+      else postCorrectionEvent({ ...correctionEvent, headers: getDossierAuthHeaders() });
     } finally {
       setCorrectionBusy(false);
     }
@@ -5320,6 +5342,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             setHasRunRealAgent={setHasRunRealAgent}
             runRealDocSearch={runRealDocSearch}
             runRealSelfSource={runRealSelfSource}
+            searchOnClick={isCustomerResearch && !(demoMode || SHOW_TEST_TOOLS)}
             doDummyResearch={doDummyResearch}
             proceedFromDocuments={proceedFromDocuments}
             setJourneyOpen={setJourneyOpen}

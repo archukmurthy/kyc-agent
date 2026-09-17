@@ -3,6 +3,7 @@ import { render, screen, act, fireEvent, waitFor, within } from "@testing-librar
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
 import { clearDossierCredentials } from "../../../utils/dossierCredential";
+import { buildLocalDefaultConfig } from "../../../config/localDefaultConfig";
 
 jest.setTimeout(60000);
 
@@ -134,7 +135,12 @@ test("a link customer's correction saves the committed corrected state and spend
   const research = calls.filter((c) => /\/api\/research(\?|$)/.test(c.url));
   expect(research.length).toBeGreaterThan(0);
   research.forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-1"));
-  // The correction is logged once as a change_event (spec §6.2 step 6).
+  // The correction is logged once as a change_event (spec §6.2 step 6), only
+  // after the corrected facts have saved.
+  await waitFor(() => expect(calls.some((c) => c.url.includes("/api/change-events"))).toBe(true));
+  const saveIdx = calls.findIndex((c) => c.url.includes("/api/save-dossier"));
+  const eventIdx = calls.findIndex((c) => c.url.includes("/api/change-events"));
+  expect(eventIdx).toBeGreaterThan(saveIdx);
   const events = calls
     .filter((c) => c.url.includes("/api/change-events"))
     .map((c) => JSON.parse(c.opts.body))
@@ -150,6 +156,36 @@ test("a link customer's correction saves the committed corrected state and spend
   // The corrected company must not offer the old company's directors.
   expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
   expect(screen.queryByText(/Olga Oldcompany/)).not.toBeInTheDocument();
+});
+
+test("a link customer's correction whose save fails logs no correction event", async () => {
+  window.confirm = jest.fn(() => true);
+  const ok = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+  fetchRoutes["/api/get-dossier"] = () => ok({
+    success: true,
+    dossier: {
+      id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB",
+      owned_by: "analyst", customer_searches: 0,
+      raw_research: { found: [{ field: "company_name", value: "Acme Ltd", verificationStatus: "verified", source: "Companies House" }] },
+    },
+  });
+  fetchRoutes["/api/search-attempt"] = () => ok({ allowed: true, attemptsUsed: 1, remaining: 1, grant: "grant-1" });
+  fetchRoutes["/api/research"] = () => ok({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
+  fetchRoutes["/api/save-dossier"] = () => ok({ success: false, warning: "db_down" });
+  fetchRoutes["/api/change-events"] = () => ok({ success: true });
+  await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
+
+  const gate = await screen.findByTestId("foundational-facts-gate");
+  fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+  fireEvent.change(await screen.findByTestId("correct-companyName"), { target: { value: "Acme Holdings Ltd" } });
+  await act(async () => { fireEvent.click(screen.getByTestId("facts-apply-corrections")); });
+
+  await screen.findByText(/couldn't save them/, {}, { timeout: 10000 });
+  const events = calls
+    .filter((c) => c.url.includes("/api/change-events"))
+    .map((c) => JSON.parse(c.opts.body))
+    .filter((e) => e.fieldId === "foundational_facts.correction");
+  expect(events).toHaveLength(0);
 });
 
 // I1: a link customer is a customer from the moment they land. Reaching the
@@ -197,6 +233,11 @@ const flagEvents = () => calls
   .map((c) => JSON.parse(c.opts.body))
   .filter((e) => e.fieldId === "reresearch.fallback");
 const researchCalls = () => calls.filter((c) => /\/api\/research(\?|$)/.test(c.url));
+// A tenant with a manual form link: a search that can't run opens the picker.
+function withManualFormLink() {
+  const base = buildLocalDefaultConfig();
+  fetchRoutes["/api/config"] = () => okJson({ ...base, company: { ...base.company, manualFormUrl: "https://acme.example/apply" } });
+}
 
 test("a link customer's Continue from the documents step spends a dossier search before research runs", async () => {
   await landOnDocumentsAsLinkCustomer({ allowed: true, attemptsUsed: 1, remaining: 1 });
@@ -254,6 +295,7 @@ test("card A asks the paid-call confirm once, not again when the documents step 
 
 test("an unused card-A search pays for a later correction instead of spending another", async () => {
   window.confirm = jest.fn(() => true);
+  withManualFormLink();
   const found = [{ field: "company_name", value: "Acme Ltd", verificationStatus: "verified", source: "Companies House" }];
   // The Applicant-step draft is resumed only after card A was paid and abandoned.
   localStorage.setItem("kyc_draft_v1", JSON.stringify({
@@ -300,6 +342,7 @@ test("an unused card-A search pays for a later correction instead of spending an
 });
 
 test("research refused before the grant is burned (429) keeps the paid search for the next attempt", async () => {
+  withManualFormLink();
   await resumeOnDocumentsAsLinkCustomer({ allowed: true, attemptsUsed: 1, remaining: 1, grant: "grant-1" });
   let researchStatus = 429;
   fetchRoutes["/api/research"] = () => (researchStatus === 200
