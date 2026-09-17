@@ -443,6 +443,20 @@ function normalizedPartyName(value) {
     .replace(/[^A-Z0-9]+/g, "");
 }
 
+function isExplicitTypedChartShareOwnership(fact, entityProfile) {
+  const qualifiers = fact?.qualifiers || {};
+  const evidenceValue = qualifiers.evidenceValue || {};
+  return entityProfile === "COMPANY"
+    && fact?.type === "RELATIONSHIP"
+    && fact.relationship === "ECONOMIC_OWNERSHIP"
+    && qualifiers.economicInterestConcept == null
+    && qualifiers.evidenceRelationshipType === "ECONOMIC_OWNERSHIP"
+    && evidenceValue.measurementType === "percentage"
+    && ["EXACT", "RANGE"].includes(fact.measurement?.type)
+    && Boolean(qualifiers.evidenceMapping?.method)
+    && qualifiers.evidenceSupportState === "supported";
+}
+
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {
   const subjectName = normalizedPartyName(company.legalName);
   const subjectParty = {
@@ -466,15 +480,22 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     const useAsDepictedOwnership = cloned.type === "RELATIONSHIP"
       && cloned.relationship === "ECONOMIC_OWNERSHIP"
       && sourceCurrentState === "UNKNOWN";
+    const useExplicitTypedShareSemantics = isExplicitTypedChartShareOwnership(cloned, entityProfile);
     return {
       ...cloned,
       ...(cloned.subject ? { subject: mappedParty(cloned.subject) } : {}),
       ...(cloned.object ? { object: mappedParty(cloned.object) } : {}),
-      ...(useAsDepictedOwnership ? { qualifiers: {
+      ...((useAsDepictedOwnership || useExplicitTypedShareSemantics) ? { qualifiers: {
         ...(cloned.qualifiers || {}),
-        sourceCurrentState,
-        currentState: "CURRENT",
-        chartEvaluationTemporalScope: "AS_DEPICTED_IN_UPLOADED_CHART",
+        ...(useAsDepictedOwnership ? {
+          sourceCurrentState,
+          currentState: "CURRENT",
+          chartEvaluationTemporalScope: "AS_DEPICTED_IN_UPLOADED_CHART",
+        } : {}),
+        ...(useExplicitTypedShareSemantics ? {
+          economicInterestConcept: "SHARE_OWNERSHIP",
+          chartEvaluationEconomicConceptBasis: "EXPLICIT_TYPED_ECONOMIC_OWNERSHIP_PERCENTAGE",
+        } : {}),
       } } : {}),
     };
   });

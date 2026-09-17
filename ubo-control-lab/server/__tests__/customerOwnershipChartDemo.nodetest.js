@@ -133,6 +133,61 @@ test("chart-only analysis uses the shared engine for direct plus indirect owners
   assert.equal(effective.orderedPathReferences.length, 2);
 });
 
+test("typed source-backed chart percentages identify Alice as a provisional UBO across direct and indirect paths", () => {
+  const party = (name, entityType) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const alice = party("Alice Morgan", "NATURAL_PERSON");
+  const sophia = party("Sophia Patel", "NATURAL_PERSON");
+  const vodafone = party("Vodafone Limited", "LEGAL_ENTITY");
+  const vodafoneThree = party("Vodafonethree Holdings Limited", "LEGAL_ENTITY");
+  const international = party("Vodafone International Operations Limited", "LEGAL_ENTITY");
+  const european = party("Vodafone European Investments", "LEGAL_ENTITY");
+  const group = party("Vodafone Group Plc", "LEGAL_ENTITY");
+  const relationship = (factId, from, to, value) => ({
+    factId,
+    type: "RELATIONSHIP",
+    subject: from,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: to,
+    measurement: { type: "EXACT", value },
+    qualifiers: {
+      currentState: "UNKNOWN",
+      evidenceRelationshipType: "ECONOMIC_OWNERSHIP",
+      evidenceValue: { kind: "EXACT", measurementType: "percentage", exact: value, unit: "percentage_points" },
+      evidenceMapping: { method: "provider_structured", id: "chart-provider", version: "1" },
+      evidenceSupportState: "supported",
+    },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-vodafone" }],
+  });
+  const candidateFacts = [
+    relationship("three-vodafone", vodafoneThree, vodafone, 80),
+    relationship("alice-three", alice, vodafoneThree, 20),
+    relationship("group-european", group, european, 100),
+    relationship("sophia-vodafone", sophia, vodafone, 10),
+    relationship("european-international", european, international, 100),
+    relationship("alice-vodafone", alice, vodafone, 10),
+    relationship("international-three", international, vodafoneThree, 80),
+  ];
+  const analysis = buildChartAnalysis({
+    candidateFacts,
+    operationEvidenceReferences: [],
+    issues: [],
+    company: { legalName: "Vodafone Limited", registrationNumber: "01471587", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-vodafone", capturedAt: "2026-09-17T10:00:00.000Z" },
+    requestId: "chart-vodafone",
+  });
+  const aliceEntityId = Object.entries(analysis.entityLabels).find(([, name]) => name === "Alice Morgan")?.[0];
+  const effective = analysis.view.qualificationBases.find((basis) => basis.personEntityId === aliceEntityId && basis.route === "EFFECTIVE_INTEREST");
+  const qualification = analysis.view.qualifications.find((item) => item.personEntityId === aliceEntityId);
+
+  assert.equal(analysis.provisionalDecisions.operativeClaims, 7);
+  assert.equal(effective.recordedCalculation.value.type, "EXACT");
+  assert.equal(effective.recordedCalculation.value.value, "26");
+  assert.equal(effective.assessmentState, "SATISFIED");
+  assert.equal(effective.orderedPathReferences.length, 2);
+  assert.equal(qualification.routeStatus, "ROUTE_SATISFIED");
+  assert.equal(candidateFacts.some((fact) => fact.qualifiers.economicInterestConcept), false, "source CandidateFacts remain unchanged");
+});
+
 test("chart-only analysis preserves ownership with no explicit share basis without crashing evaluation", () => {
   const evidenceReferences = [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-provisional" }];
   const analysis = buildChartAnalysis({
