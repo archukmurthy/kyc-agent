@@ -23,6 +23,7 @@ beforeEach(() => {
 afterEach(() => {
   jest.restoreAllMocks();
   clearDossierCredentials();
+  localStorage.clear();
   window.history.pushState({}, "", "/");
 });
 
@@ -132,4 +133,47 @@ test("a link customer's correction saves the committed corrected state and spend
   // The corrected company must not offer the old company's directors.
   expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
   expect(screen.queryByText(/Olga Oldcompany/)).not.toBeInTheDocument();
+});
+
+// I1: a link customer is a customer from the moment they land. Reaching the
+// documents step without the picker (e.g. Confirm's "Upload docs") and pressing
+// Continue must spend a dossier search BEFORE any research runs. The documents
+// step is reached here by resuming a saved draft on top of the link landing —
+// driving the Applicant step's identity checks to Confirm is not practical here.
+async function landOnDocumentsAsLinkCustomer(attemptBody) {
+  window.confirm = jest.fn(() => true);
+  const ok = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+  localStorage.setItem("kyc_draft_v1", JSON.stringify({
+    savedAt: new Date().toISOString(), tenantId: "nium", agentType: "onboarding",
+    state: { companyName: "Acme Ltd", countryCode: "GB", entityType: "Corporate", journeyType: "ai_documents", step: 1, dossierId: "d-1" },
+  }));
+  fetchRoutes["/api/get-dossier"] = () => ok({
+    success: true,
+    dossier: { id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB", owned_by: "analyst", customer_searches: 0, raw_research: { found: [] } },
+  });
+  fetchRoutes["/api/search-attempt"] = () => ok(attemptBody);
+  fetchRoutes["/api/research"] = () => ok({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
+  await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
+  await screen.findByTestId("foundational-facts-gate");
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Resume" })); });
+  const cont = await screen.findByRole("button", { name: /Continue →/ });
+  await act(async () => { fireEvent.click(cont); });
+}
+const researchCalls = () => calls.filter((c) => /\/api\/research(\?|$)/.test(c.url));
+
+test("a link customer's Continue from the documents step spends a dossier search before research runs", async () => {
+  await landOnDocumentsAsLinkCustomer({ allowed: true, attemptsUsed: 1, remaining: 1 });
+  await waitFor(() => expect(researchCalls().length).toBeGreaterThan(0), { timeout: 10000 });
+  const spendIdx = calls.findIndex((c) => c.url.includes("/api/search-attempt"));
+  const researchIdx = calls.findIndex((c) => /\/api\/research(\?|$)/.test(c.url));
+  expect(spendIdx).toBeGreaterThanOrEqual(0);
+  expect(spendIdx).toBeLessThan(researchIdx);
+  expect(calls.filter((c) => c.url.includes("/api/search-attempt"))).toHaveLength(1);
+});
+
+test("a refused search from the documents step runs no research", async () => {
+  await landOnDocumentsAsLinkCustomer({ allowed: false, attemptsUsed: 2, remaining: 0 });
+  await waitFor(() => expect(calls.some((c) => c.url.includes("/api/search-attempt"))).toBe(true));
+  await act(async () => { await Promise.resolve(); });
+  expect(researchCalls()).toHaveLength(0);
 });
