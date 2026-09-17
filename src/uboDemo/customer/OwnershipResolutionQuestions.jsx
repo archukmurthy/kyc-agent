@@ -135,6 +135,7 @@ function CustomerQuestion({ question, draft, error, onDraft, onSubmit }) {
 
 function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, retainedFiles, onDraft, onSubmit, onUpload }) {
   const answered = allQuestions.filter(({ status }) => status !== "OPEN").length;
+  const evidenceAccepted = evidenceRecords.length > 0 && evidenceRecords.every(({ status }) => status === EVIDENCE_STATUS.SATISFIED);
   return <section className="ubo-resolution-question-group">
     <header>
       <div><small>{context.stageLabel}</small><h3>{context.label}</h3></div>
@@ -146,11 +147,13 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
     </dl>
     {questions.length > 0
       ? <p>Complete each open question in this group. Unanswered sibling questions stay here unless an answer makes them no longer applicable; new follow-ups may appear when your answer changes what is needed.</p>
-      : <p><strong>All questions for this issue are answered.</strong> Supporting evidence is still required before the issue can be resolved.</p>}
+      : evidenceAccepted
+        ? <p><strong>All questions for this issue are answered.</strong> Supporting evidence has been accepted and remains visible below.</p>
+        : <p><strong>All questions for this issue are answered.</strong> Supporting evidence is still required before the issue can be resolved.</p>}
     {questions.length > 0 && <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>}
     {evidenceRecords.length > 0 && <div className="ubo-resolution-group-evidence">
       <p>Supporting evidence for this ownership issue</p>
-      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} retryAvailable={Boolean(retainedFiles[record.id])} onUpload={onUpload} onRetry={() => onUpload(record, retainedFiles[record.id])} />)}
+      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} retainedFile={retainedFiles[record.id]} retryAvailable={Boolean(retainedFiles[record.id])} onUpload={onUpload} onRetry={() => onUpload(record, retainedFiles[record.id])} />)}
     </div>}
   </section>;
 }
@@ -176,7 +179,25 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, on
   </article>;
 }
 
-function EvidenceRequest({ record, context, busy, message, retryAvailable, onUpload, onRetry }) {
+function EvidencePreview({ file }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  useEffect(() => {
+    if (!file || typeof URL.createObjectURL !== "function") return undefined;
+    const nextUrl = URL.createObjectURL(file);
+    const revokeObjectURL = typeof URL.revokeObjectURL === "function" ? URL.revokeObjectURL.bind(URL) : null;
+    setPreviewUrl(nextUrl);
+    return () => { revokeObjectURL?.(nextUrl); };
+  }, [file]);
+  if (!previewUrl) return null;
+  return <details className="ubo-resolution-evidence-preview">
+    <summary>View uploaded document</summary>
+    {file.type === "application/pdf"
+      ? <iframe src={previewUrl} title={`Preview of ${file.name}`} />
+      : <img src={previewUrl} alt={`Preview of ${file.name}`} />}
+  </details>;
+}
+
+function EvidenceRequest({ record, context, busy, message, retainedFile, retryAvailable, onUpload, onRetry }) {
   const input = useRef(null);
   const canChooseFile = [EVIDENCE_STATUS.OPEN, EVIDENCE_STATUS.REJECTED, EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, EVIDENCE_STATUS.ANALYST_REVIEW].includes(record.status);
   const chooseFile = () => {
@@ -193,9 +214,10 @@ function EvidenceRequest({ record, context, busy, message, retryAvailable, onUpl
     </dl>
     <p>Preferred: {record.preferredEvidenceTypes.map(humanize).join(", ")}.</p>
     <details><summary>Other accepted evidence</summary><p>{record.alternativeEvidenceTypes.map(humanize).join(", ")}.</p></details>
-    <p className="ubo-resolution-evidence-boundary">This issue remains unresolved until supporting evidence passes the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue.</p>
-    <p>Accepted file formats: PDF, PNG or JPEG, up to 3 MB.</p>
-    {record.filename && <div className="ubo-resolution-evidence-file"><span aria-hidden="true">▤</span><div><strong>{record.filename}</strong><small>{record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE ? "File received · analysis not completed" : record.status === EVIDENCE_STATUS.REJECTED ? "File received · evidence not accepted" : "File received"}</small></div></div>}
+    <p className="ubo-resolution-evidence-boundary">{record.status === EVIDENCE_STATUS.SATISFIED ? "This evidence passed the existing Evidence staging, extraction and validation path and is retained with this ownership issue." : "This issue remains unresolved until supporting evidence passes the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue."}</p>
+    {record.status !== EVIDENCE_STATUS.SATISFIED && <p>Accepted file formats: PDF, PNG or JPEG, up to 3 MB.</p>}
+    {record.filename && <div className="ubo-resolution-evidence-file"><span aria-hidden="true">▤</span><div><strong>{record.filename}</strong><small>{record.status === EVIDENCE_STATUS.SATISFIED ? "File received · evidence accepted" : record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE ? "File received · analysis not completed" : record.status === EVIDENCE_STATUS.REJECTED ? "File received · evidence not accepted" : "File received"}</small></div></div>}
+    {record.status === EVIDENCE_STATUS.SATISFIED && <EvidencePreview file={retainedFile} />}
     <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.currentTarget.files?.[0] || null; event.currentTarget.value = ""; onUpload(record, file); }} />
     {record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE && retryAvailable && <button type="button" onClick={onRetry} disabled={busy}>Retry analysis</button>}
     {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.OPEN ? "Choose supporting evidence" : "Choose another file"}</button>}
@@ -379,14 +401,14 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
 
   const answeredQuestions = engine.questions.filter((question) => Boolean(answers[question.id]));
   const pendingEvidence = engine.evidenceRequirements.filter(({ status }) => status !== EVIDENCE_STATUS.SATISFIED);
-  const activeIssueGroups = Object.values([...engine.openQuestions, ...pendingEvidence].reduce((groups, item) => {
+  const activeIssueGroups = Object.values([...engine.openQuestions, ...engine.evidenceRequirements].reduce((groups, item) => {
     const key = item.comparisonItemId;
     if (!groups[key]) groups[key] = { comparisonItemId: key };
     return groups;
   }, {})).map((group) => ({
     ...group,
     questions: engine.openQuestions.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
-    evidenceRecords: pendingEvidence.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
+    evidenceRecords: engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
   }));
   const completed = engine.resolutions.filter(({ resolutionStatus }) => resolutionStatus !== RESOLUTION_STATUS.UNRESOLVED).length;
   return <section className="ubo-customer-card ubo-resolution-engine">

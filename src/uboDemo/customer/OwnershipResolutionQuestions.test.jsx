@@ -188,6 +188,42 @@ test("a media mismatch explains the format problem and keeps re-upload available
   expect(within(evidence).getByText(/Accepted file formats: PDF, PNG or JPEG/i)).toBeInTheDocument();
 });
 
+test("accepted evidence remains visible with its filename and an inline preview", async () => {
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  URL.createObjectURL = jest.fn(() => "blob:accepted-evidence");
+  URL.revokeObjectURL = jest.fn();
+  try {
+    const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+    const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
+    fireEvent.click(within(discrepancyQuestion).getByLabelText(/existing shares were transferred/i));
+    fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
+
+    const effectiveDate = screen.getByLabelText("Effective date").closest("article");
+    fireEvent.change(within(effectiveDate).getByLabelText("Effective date"), { target: { value: "2026-09-01" } });
+    fireEvent.click(within(effectiveDate).getByRole("button", { name: /Save answer/i }));
+    const percentage = screen.getByLabelText("Ownership percentage").closest("article");
+    fireEvent.change(within(percentage).getByLabelText("Ownership percentage"), { target: { value: "30" } });
+    fireEvent.click(within(percentage).getByRole("button", { name: /Save answer/i }));
+    await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+
+    const fileInput = container.querySelector('.ubo-resolution-evidence input[type="file"]');
+    fireEvent.change(fileInput, { target: { files: [new File(["%PDF-1.4\n%%EOF"], "current-register.pdf", { type: "application/pdf" })] } });
+
+    await waitFor(() => expect(screen.getByText("File received · evidence accepted")).toBeInTheDocument());
+    const acceptedEvidence = screen.getByText("current-register.pdf").closest("article");
+    expect(within(acceptedEvidence).getByText("satisfied")).toBeInTheDocument();
+    expect(within(acceptedEvidence).getByText(/passed the existing Evidence staging/i)).toBeInTheDocument();
+    expect(within(acceptedEvidence).getByText("View uploaded document")).toBeInTheDocument();
+    fireEvent.click(within(acceptedEvidence).getByText("View uploaded document"));
+    expect(within(acceptedEvidence).getByTitle("Preview of current-register.pdf")).toHaveAttribute("src", "blob:accepted-evidence");
+    expect(screen.getByText(/Supporting evidence has been accepted and remains visible below/i)).toBeInTheDocument();
+  } finally {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  }
+});
+
 test("a provider outage keeps the received filename and permits retrying the same file", async () => {
   const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
   const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");

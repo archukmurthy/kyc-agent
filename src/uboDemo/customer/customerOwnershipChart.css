@@ -272,6 +272,9 @@
 .ubo-resolution-evidence-file small { color: var(--ubo-customer-muted); font-size: 8px; }
 .ubo-resolution-evidence > button { padding: 9px 12px; border: 1px solid #8d6a24; border-radius: 8px; background: white; color: #725b16; font-size: 10px; font-weight: 800; cursor: pointer; }
 .ubo-resolution-evidence-status { display: inline-flex; padding: 7px 9px; border-radius: 7px; background: white; color: #725b16; font-size: 9px; text-transform: uppercase; }
+.ubo-resolution-evidence-preview { margin: 10px 0; padding: 10px; border: 1px solid var(--ubo-customer-border); border-radius: 8px; background: white; }
+.ubo-resolution-evidence-preview summary { color: var(--ubo-customer-green-dark); }
+.ubo-resolution-evidence-preview iframe, .ubo-resolution-evidence-preview img { width: 100%; min-height: 520px; margin-top: 10px; border: 1px solid var(--ubo-customer-border); border-radius: 6px; background: white; object-fit: contain; }
 .ubo-resolution-evidence.satisfied { border-color: #87bfae; background: #eef9f5; }
 .ubo-resolution-evidence.rejected { border-color: #e8a2a2; background: #fff3f3; }
 .ubo-resolution-outcomes { padding: 0 24px 22px; display: grid; gap: 8px; }
