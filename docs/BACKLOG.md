@@ -34,6 +34,11 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **What:** (1) Rate-limit counters live in `lib/storage.js`. On Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global; and the filesystem backend ignores TTLs, so `ratelimit:*` keys pile up in `.config-store.json` (local) or `/tmp` until the instance recycles. Provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
 - **Why:** Behaviour changes that are correct by design but surprise on first deploy.
 
+### DEP-5 — Part 3 deploy gate: migration 027
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
+- **What:** Apply `db/migrations/027_customer_corrections.sql` to each database (`node db/apply.js db/migrations/027_customer_corrections.sql`) BEFORE deploying Part 3.
+- **Why:** Without it, dossier updates fail (the snapshot insert targets `entity_dossier_versions`), the customer re-search counter reads a missing `customer_searches` column, and submissions fail on `onboarding_sessions.dossier_id`.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -224,6 +229,12 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Why:** Last-line safety net against a surprise Anthropic bill. The rest of the `/api/research` hardening (server-built prompt, rate limit, key required where one exists) is being built now; only this cap is deferred.
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
 - **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
+
+### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
+- **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
+- **What:** The cap lives in `/api/search-attempt` and `/api/research-attempt`, which the client calls before re-researching. A client that skips that call can still run research, bounded only by Part 2's per-caller rate limit. Real fix: have `/api/research` require a one-time attempt grant (e.g. a short-lived signed nonce issued by the attempt endpoints).
+- **Also:** fresh-customer counts are keyed by a client-held application id, so a new id gets a new allowance (PLAT-7 territory), and the storage counter is read-modify-write, not atomic.
+- **Area:** `api/research.js`, `api/search-attempt.js`, `api/research-attempt.js`.
 
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
 - **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
