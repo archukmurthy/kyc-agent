@@ -298,3 +298,34 @@ test("an unused card-A search pays for a later correction instead of spending an
   expect(attempt).toBe(2);
   researchCalls().forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-2"));
 });
+
+test("research refused before the grant is burned (429) keeps the paid search for the next attempt", async () => {
+  await resumeOnDocumentsAsLinkCustomer({ allowed: true, attemptsUsed: 1, remaining: 1, grant: "grant-1" });
+  let researchStatus = 429;
+  fetchRoutes["/api/research"] = () => (researchStatus === 200
+    ? researchJson()
+    : Promise.resolve({ ok: false, status: researchStatus, json: () => Promise.resolve({ error: "rate_limited", retryAfterSeconds: 30 }) }));
+  const cont = await screen.findByRole("button", { name: /Continue →/ });
+  await act(async () => { fireEvent.click(cont); });
+  // The 429 falls back to the picker; the search was paid for but never used.
+  await screen.findByText(CARD_A, {}, { timeout: 10000 });
+  expect(researchCalls()).toHaveLength(1);
+  researchStatus = 200;
+  await pickCardAndContinue(CARD_A);
+  const again = await screen.findByRole("button", { name: /Continue →/ });
+  await act(async () => { fireEvent.click(again); });
+  await waitFor(() => expect(researchCalls().length).toBeGreaterThan(1), { timeout: 10000 });
+  expect(calls.filter((c) => c.url.includes("/api/search-attempt"))).toHaveLength(1);
+  researchCalls().forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-1"));
+});
+
+test("repeated Continue presses at the search cap flag the refusal only once", async () => {
+  await resumeOnDocumentsAsLinkCustomer({ allowed: false, attemptsUsed: 2, remaining: 0 });
+  await backToPicker();
+  await pickCardAndContinue(CARD_A);
+  await waitFor(() => expect(flagEvents()).toHaveLength(1));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Continue →/ })); });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Continue →/ })); });
+  await act(async () => { await Promise.resolve(); });
+  expect(flagEvents()).toHaveLength(1);
+});

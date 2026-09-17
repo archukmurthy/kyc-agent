@@ -384,6 +384,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // every /api/research call of that run; cleared when the run ends, when a new
   // search is paid for, and on resetAll.
   const researchGrantRef = useRef(null);
+  // The search-cap refusal is flagged once per session, not on every Continue.
+  const searchCapFlaggedRef = useRef(false);
 
   // Foundational-facts confirmation gate (slice 2 of 2). Shown at the top of the
   // Applicant page; the applicant section reveals only once all five facts are
@@ -792,7 +794,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // this is the shared root for Start Over and Start New Application.
     setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
     clearDraft();
-    setSeededBy("analyst"); searchGrantRef.current = false; researchGrantRef.current = null; setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
+    setSeededBy("analyst"); searchGrantRef.current = false; researchGrantRef.current = null; searchCapFlaggedRef.current = false; setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
     // A customer who arrived by link stays attached to the analyst's dossier
     // (and keeps its server-counted searches) when starting again.
     const keepDossierLink = landedViaLink && !!dossierId;
@@ -1677,9 +1679,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // tenant, its credential (which picks the rate-limit bucket) and, in admin
   // preview, the staged draft config plus the admin token the server needs to
   // honour it.
-  const researchHeaders = () => {
+  // `grant`: the run's grant, captured once when the run starts — never read
+  // live, so a second click can't swap grants mid-run.
+  const researchHeaders = (grant) => {
     const headers = { ...getDossierAuthHeaders(preboardingTenantId || tenantId) };
-    if (researchGrantRef.current) headers["X-Research-Grant"] = researchGrantRef.current;
+    if (grant) headers["X-Research-Grant"] = grant;
     if (inPreview) {
       try {
         const adminToken = sessionStorage.getItem("admin_token");
@@ -1725,6 +1729,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     searchGrantRef.current = false;
     // This run owns the grant until it ends (extraction, research, gap recovery).
     const runGrant = researchGrantRef.current;
+    // Set when the server refused the main research call BEFORE burning the
+    // grant (429 / 400 / 404): the paid search is still unused and retryable.
+    let keepGrant = false;
     setError("");
     // A fresh (non-correction) search starts clean: a correction's earlier
     // fallback message must not follow the customer onto the next page.
@@ -1782,7 +1789,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           const file = uploadedDocs[dt.key];
           if (!file) continue;
           const fetchTs = new Date().toISOString();
-          const { docFound: dFound, wolfsbergFields: wFields, usage: dUsage } = await extractFromDoc(dt, file, schema, flow, fetchTs, { headers: researchHeaders() });
+          const { docFound: dFound, wolfsbergFields: wFields, usage: dUsage } = await extractFromDoc(dt, file, schema, flow, fetchTs, { headers: researchHeaders(runGrant) });
           if (dUsage) {
             docExtractIn += dUsage.input_tokens || 0;
             docExtractOut += dUsage.output_tokens || 0;
@@ -1818,7 +1825,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         .filter(d => acceptedDocTypes.has(d.type));
       const resp = await fetch("/api/research", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...researchHeaders() },
+        headers: { "Content-Type": "application/json", ...researchHeaders(runGrant) },
         body: JSON.stringify({
           mode: "research",
           companyName: facts.companyName,
@@ -1837,6 +1844,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
+        keepGrant = !!runGrant && [400, 404, 429].includes(resp.status);
         if (resp.status === 429) throw new Error(rateLimitMessage(errData.retryAfterSeconds));
         const claudeErr = errData && errData.details && errData.details.error;
         if (claudeErr && claudeErr.type === "rate_limit_error") {
@@ -1942,7 +1950,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         try {
           const gapResp = await fetch("/api/research", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...researchHeaders() },
+            headers: { "Content-Type": "application/json", ...researchHeaders(runGrant) },
             body: JSON.stringify({
               mode: "gap_recovery",
               companyName: facts.companyName,
@@ -2093,8 +2101,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
     finally {
       setLoading(false); setLoaderPhase(0); setResearchStatus("");
-      // One grant, one run: it never follows into a later search.
-      if (researchGrantRef.current === runGrant) researchGrantRef.current = null;
+      if (keepGrant && researchGrantRef.current === runGrant) {
+        // Unburned: the next attempt reuses this search instead of paying again.
+        searchGrantRef.current = true;
+      } else if (researchGrantRef.current === runGrant) {
+        // One grant, one run: it never follows into a later search.
+        researchGrantRef.current = null;
+      }
     }
   };
 
@@ -2457,15 +2470,21 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setError("");
     if (demoMode) { doDummyResearch("ai_documents"); return; }
     if (!isCustomerResearch) { doResearch(); return; }
-    // Card A already paid for — and confirmed — this run.
-    if (searchGrantRef.current) { doResearch(undefined, { confirmed: true }); return; }
+    // Held for the spend AND the run, so a second click while either is in
+    // flight does nothing.
     if (searchSpendBusyRef.current) return;
-    if (!confirmPaidResearch()) return;
     searchSpendBusyRef.current = true;
-    let attempt;
-    try { attempt = await consumeCustomerSearch(); } finally { searchSpendBusyRef.current = false; }
-    if (!attempt.allowed) { flagSearchCap(countryCode); setError(CONTACT_ADMIN_MSG); return; }
-    doResearch(undefined, { confirmed: true });
+    try {
+      // Card A (or an earlier unburned run) already paid for — and confirmed — this run.
+      if (!searchGrantRef.current) {
+        if (!confirmPaidResearch()) return;
+        const attempt = await consumeCustomerSearch();
+        if (!attempt.allowed) { flagSearchCap(countryCode); setError(CONTACT_ADMIN_MSG); return; }
+        // Paid: a validation stop in doResearch must not cause a second spend.
+        searchGrantRef.current = true;
+      }
+      await doResearch(undefined, { confirmed: true });
+    } finally { searchSpendBusyRef.current = false; }
   };
 
   // ─── Doc search agent (Step 2 — Document Intelligence, Section A) ───
@@ -2744,7 +2763,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     headers: getDossierAuthHeaders(),
   });
   // A picker/documents search refused for having no searches left.
-  const flagSearchCap = (jurisdiction) => flagReresearchFailure({ stage: "search_cap", reason: "no_searches_left", jurisdiction });
+  const flagSearchCap = (jurisdiction) => {
+    if (searchCapFlaggedRef.current) return;
+    searchCapFlaggedRef.current = true;
+    flagReresearchFailure({ stage: "search_cap", reason: "no_searches_left", jurisdiction });
+  };
   const fallBackToManual = ({ stage, reason, message, journey, jurisdiction }) => {
     flagReresearchFailure({ stage, reason, jurisdiction });
     // Close the correction form: the customer continues by manual entry or a
