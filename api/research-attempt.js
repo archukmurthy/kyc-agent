@@ -34,9 +34,11 @@ module.exports = async function handler(req, res) {
     if (used >= SEARCH_CAP) {
       return res.status(200).json({ allowed: false, attemptsUsed: used, remaining: 0 });
     }
-    // ponytail: read-modify-write, not atomic — two concurrent clicks could both
-    // pass at used=1. Bounded (at most one extra search) and rate-limited; swap
-    // for an atomic INCR if it ever matters.
+    // ponytail: read-modify-write, not atomic — any number of concurrent requests
+    // that read the count before the first write lands all pass, and a caller can
+    // mint a fresh UUID at will. The real bound is the per-caller /api/research
+    // rate limit, not this counter (BACKLOG RERES-2); swap for an atomic INCR plus
+    // a server-issued application id if it ever matters.
     const attemptsUsed = used + 1;
     await _deps.storage.set(key, attemptsUsed, { ttlSeconds: TTL_SECONDS });
     return res.status(200).json({ allowed: true, attemptsUsed, remaining: Math.max(0, SEARCH_CAP - attemptsUsed) });

@@ -81,7 +81,7 @@ module.exports = async function handler(req, res) {
       SET customer_searches = customer_searches + 1,
           owned_by = ${"customer"},
           last_customer_action_at = NOW()
-      WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId} AND customer_searches < ${SEARCH_CAP}
+      WHERE id = ${dossierId} AND tenant_id = ${actor.tenantId} AND status != 'deleted' AND customer_searches < ${SEARCH_CAP}
       RETURNING customer_searches
     `;
     if (rows.length === 0) {
