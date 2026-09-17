@@ -280,6 +280,12 @@
 .ubo-resolution-outcomes article > strong { font-size: 10px; }
 .ubo-resolution-outcomes article > small { color: var(--ubo-customer-muted); font-size: 8px; }
 .ubo-resolution-outcomes article.requires_analyst_review { border-color: #dfc46f; background: #fffaf0; }
+.ubo-resolution-ubo-results, .ubo-resolution-fallback { margin: 0 24px 22px; padding: 16px; border: 1px solid #87bfae; border-radius: 12px; background: #eef9f5; }
+.ubo-resolution-ubo-results h3, .ubo-resolution-fallback h3 { margin: 0 0 10px; color: var(--ubo-customer-green-dark); font-size: 13px; text-transform: capitalize; }
+.ubo-resolution-ubo-results article { display: grid; gap: 3px; margin-top: 7px; padding: 10px; border-radius: 8px; background: white; font-size: 10px; }
+.ubo-resolution-ubo-results article span, .ubo-resolution-ubo-results article small, .ubo-resolution-fallback p { color: var(--ubo-customer-muted); font-size: 9px; }
+.ubo-resolution-fallback { border-color: #dfc46f; background: #fffaf0; }
+.ubo-resolution-fallback p { margin: 0; line-height: 1.5; }
 .ubo-resolution-trace { margin: 0 24px 22px; border-top: 1px solid var(--ubo-customer-border); color: var(--ubo-customer-muted); font-size: 9px; }
 .ubo-resolution-trace > summary { padding: 14px 0 0; color: var(--ubo-customer-green); font-weight: 850; cursor: pointer; }
 .ubo-resolution-trace article { margin-top: 12px; padding: 13px; border: 1px solid var(--ubo-customer-border); border-radius: 9px; }

@@ -13,6 +13,8 @@ import {
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
 import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff";
+import AnalystInvestigationTopics from "./AnalystInvestigationTopics";
+import { createTopicActivation } from "./customer/investigationTopics";
 import "./uboDemo.css";
 
 function DemoHeader({ onStartNew }) {
@@ -160,7 +162,7 @@ function CalculationPanel({ view, result, method, onMethodChange, onShowPath }) 
   </section>;
 }
 
-function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest }) {
+function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest, onActivateTopic, onCancelTopic }) {
   const view = result.view;
   const pending = (result.decisionTargets?.candidateParties?.length || 0) + (result.decisionTargets?.candidateClaims?.length || 0);
   const scope = result.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT;
@@ -192,6 +194,7 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
   const calculationMethod = result.analysisContext?.calculationMethod || demoCase.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST";
   return <main className="ubo-demo-results">
     <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : "LIVE RESEARCH — PROVISIONAL DEMO RESULT"}</span></header>
+    <AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />
     {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} /></div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} /></div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button><button className="ubo-demo-primary" onClick={onSwitchCustomer}>Switch to customer view</button></div>
     {customerSwitchState && <p className={`ubo-demo-handoff-status ${customerSwitchState.kind}`} role="status">{customerSwitchState.message}</p>}
@@ -224,6 +227,17 @@ export default function UboDemoRoot() {
     catch (cause) { setReplayLibraryStatus({ kind: "error", message: cause.message || "The last live replay could not be restored." }); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (skipNextSave.current) { skipNextSave.current = false; return; } writeDemoSession({ draft, demoCase, researchResult }); }, [draft, demoCase, researchResult]);
+  useEffect(() => {
+    const receiveCustomerProgress = (event) => {
+      if (event.key !== "ubo-demo.case.v1" || !event.newValue) return;
+      try {
+        const next = JSON.parse(event.newValue);
+        if (next?.demoCase?.demoCaseId === demoCase?.demoCaseId && next.researchResult?.ownershipResolutionTrace) setResearchResult(next.researchResult);
+      } catch (_) { /* Ignore unrelated or incomplete browser storage events. */ }
+    };
+    window.addEventListener("storage", receiveCustomerProgress);
+    return () => window.removeEventListener("storage", receiveCustomerProgress);
+  }, [demoCase?.demoCaseId]);
   useEffect(() => {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
     let active = true;
@@ -317,6 +331,19 @@ export default function UboDemoRoot() {
       return { ...current, analystCustomerRequests: next };
     });
   };
+  const activateTopic = (topicCode, wordingOverride) => {
+    setResearchResult((current) => {
+      if (!current) return current;
+      const existing = current.investigationTopicActivations || [];
+      if (existing.some((item) => item.topicCode === topicCode && item.status === "ACTIVE")) return current;
+      const activation = createTopicActivation({ topicCode, caseId: demoCase.demoCaseId, analystReason: "Selected by analyst for customer investigation" });
+      return { ...current, investigationTopicActivations: [...existing, { ...activation, ...(wordingOverride ? { wordingOverride } : {}) }] };
+    });
+  };
+  const cancelTopic = (activationId) => setResearchResult((current) => current ? ({
+    ...current,
+    investigationTopicActivations: (current.investigationTopicActivations || []).map((item) => item.id === activationId ? { ...item, status: "CANCELLED", cancelledAt: new Date().toISOString() } : item),
+  }) : current);
   const runAgain = (mode = draft.sourceMode) => {
     let nextDraft = { ...draft, sourceMode: mode };
     if (mode === "REPLAY") {
@@ -364,7 +391,7 @@ export default function UboDemoRoot() {
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} />;
   else if (researchError) content = <ResearchError error={researchError} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
-  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
+  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
   else content = <ResearchProgress company={demoCase.company} />;
   return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress research={research} />{content}<footer className="ubo-demo-footer">Demo experience · Browser-local session · UK Corporate 1.6-RC review path</footer></div>;
 }

@@ -24,7 +24,7 @@ export const QUESTION_TYPE = Object.freeze({
 });
 
 export const QUESTION_STATUS = Object.freeze({ OPEN: "OPEN", ANSWERED: "ANSWERED", RESOLVED: "RESOLVED", SUPERSEDED: "SUPERSEDED" });
-export const EVIDENCE_STATUS = Object.freeze({ OPEN: "OPEN", RECEIVED: "RECEIVED", VALIDATING: "VALIDATING", SATISFIED: "SATISFIED", REJECTED: "REJECTED", ANALYSIS_UNAVAILABLE: "ANALYSIS_UNAVAILABLE" });
+export const EVIDENCE_STATUS = Object.freeze({ OPEN: "OPEN", RECEIVED: "RECEIVED", VALIDATING: "VALIDATING", SATISFIED: "SATISFIED", REJECTED: "REJECTED", ANALYSIS_UNAVAILABLE: "ANALYSIS_UNAVAILABLE", ANALYST_REVIEW: "ANALYST_REVIEW" });
 export const RESOLUTION_STATUS = Object.freeze({
   RESOLVED_CUSTOMER_CONFIRMED: "RESOLVED_CUSTOMER_CONFIRMED",
   RESOLVED_EVIDENCE_VERIFIED: "RESOLVED_EVIDENCE_VERIFIED",
@@ -399,11 +399,12 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
 export function evaluateOwnershipResolution({
   comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25,
   topicActivations = [], analystCustomerRequests = [],
+  ownershipContext = {},
   controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL,
   customerEntityId = "CUSTOMER_ENTITY", now = new Date().toISOString(),
 } = {}) {
   const base = evaluateOwnershipResolutionBase({ comparisonRows, answers, evidence, recalculations, threshold, now });
-  return extendResolutionWithInvestigation({ base, comparisonRows, answers, topicActivations, analystCustomerRequests, controlDiscoveryMode, customerEntityId, now });
+  return extendResolutionWithInvestigation({ base, comparisonRows, answers, evidence, topicActivations, analystCustomerRequests, ownershipContext, controlDiscoveryMode, customerEntityId, now });
 }
 
 export function customerOwnershipFact(row, percentage, answers = {}, effectiveDate = null, recordedAt = new Date().toISOString()) {
@@ -465,6 +466,7 @@ export function determinationFromChartAnalysis(chartAnalysis, resultingFact, thr
 
 export function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
   if (!result?.artifact?.integrityVerified || !Array.isArray(result?.candidateFacts)) return { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence pipeline did not return an integrity-checked structured result." };
+  if (evidenceRequirementRecord?.reviewMode === "ANALYST_REVIEW") return { status: EVIDENCE_STATUS.ANALYST_REVIEW, reason: "The document passed through Evidence extraction and is queued for analyst review against the declared control or special-arrangement fact." };
   if (evidenceRequirementRecord?.comparisonItemId === "ownership-comparison:nominee-declaration") {
     return result.candidateFacts.length ? { status: EVIDENCE_STATUS.SATISFIED, reason: "Evidence was staged and interpreted by the existing pipeline for analyst review." }
       : { status: EVIDENCE_STATUS.REJECTED, reason: "No structured facts were extracted from the supporting evidence." };

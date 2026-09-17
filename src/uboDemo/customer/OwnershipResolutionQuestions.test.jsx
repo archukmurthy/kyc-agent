@@ -56,6 +56,15 @@ test("verified ownership creates no percentage or mismatch question", () => {
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
 });
 
+test("analyst topic and custom requests share the existing customer Questions experience", () => {
+  const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
+  input.researchResult.investigationTopicActivations = [{ id: "topic-voting", caseId: "case-questions", topicCode: "VOTING_RIGHTS", origin: "ANALYST", status: "ACTIVE", createdAt: "2026-09-17T10:00:00.000Z" }];
+  input.researchResult.analystCustomerRequests = [{ requestId: "custom-trust-detail", title: "Specific trust detail", question: "Please explain the unusual trust arrangement." }];
+  render(<OwnershipResolutionQuestions {...input} />);
+  expect(screen.getByRole("heading", { name: /Does any individual have significant voting rights/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Please explain the unusual trust arrangement." })).toBeInTheDocument();
+});
+
 test("an unknown percentage is answered, re-evaluated by the existing endpoint and removed from the open list", async () => {
   const { container } = render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
   expect(screen.getByText(/What percentage of Target Limited does Alice Morgan currently own/i)).toBeInTheDocument();

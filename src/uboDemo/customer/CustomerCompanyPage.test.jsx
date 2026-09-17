@@ -74,9 +74,8 @@ test("a connected analyst case keeps its case identity and every source assertio
   }));
   const { container } = render(<CustomerCompanyPage />);
   expect(screen.getByText(/2 source assertions will continue/i)).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Questions to help complete this review" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Trust status" })).toBeInTheDocument();
-  expect(screen.getByText(/Whether a trust is present/)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Questions to help complete this review" })).not.toBeInTheDocument();
+  expect(screen.getByText(/2 source assertions will continue/i)).toBeInTheDocument();
   fireEvent.submit(container.querySelector("form"));
   const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
   expect(saved.demoCase.demoCaseId).toBe("analyst-case-63");

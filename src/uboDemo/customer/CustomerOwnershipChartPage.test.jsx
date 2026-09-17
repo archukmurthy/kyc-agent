@@ -111,8 +111,7 @@ test("the customer ownership step can inspect every registry assertion handed ov
     { factId: "fact-2", type: "RELATIONSHIP", relationship: "VOTING_RIGHTS", subject: { name: "Bob" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, evidenceReferences: [{ referenceId: "ref-2" }] },
   ] }] } });
   render(<CustomerOwnershipChartPage />);
-  expect(screen.getByRole("heading", { name: "Questions to help complete this review" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Trust status" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Questions to help complete this review" })).not.toBeInTheDocument();
   const registryAssertions = screen.getByText(/Registry assertions already available/i).closest("section");
   expect(within(registryAssertions).getByText(/2 assertions/)).toBeInTheDocument();
   expect(within(registryAssertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");

@@ -4,6 +4,7 @@ import {
   INVESTIGATION_TOPIC_CODE,
   QUESTION_ORIGIN,
   semanticFactKey,
+  topicDefinition,
 } from "./investigationTopics";
 
 export const OWNERSHIP_RESOLUTION_STATUS = Object.freeze({ COMPLETE: "COMPLETE", INDETERMINATE: "INDETERMINATE", UNKNOWN: "UNKNOWN", EVIDENCE_REQUIRED: "EVIDENCE_REQUIRED", CONFLICTED: "CONFLICTED" });
@@ -35,6 +36,7 @@ const TYPE = Object.freeze({
   ESTABLISH_INFLUENCE_TYPE: "ESTABLISH_INFLUENCE_TYPE",
   EXPLAIN_SIGNIFICANT_INFLUENCE: "EXPLAIN_SIGNIFICANT_INFLUENCE",
   IDENTIFY_SENIOR_MANAGING_OFFICIAL: "IDENTIFY_SENIOR_MANAGING_OFFICIAL",
+  IDENTIFY_SENIOR_MANAGEMENT_ROLE: "IDENTIFY_SENIOR_MANAGEMENT_ROLE",
   ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY: "ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY",
   ANALYST_CUSTOM: "ANALYST_CUSTOM",
 });
@@ -43,6 +45,13 @@ export const DISCOVERY_FACT_REQUIREMENT_TYPE = TYPE;
 
 const options = (...pairs) => pairs.map(([value, label]) => ({ value, label }));
 const YES_NO_UNSURE = options(["NO", "No"], ["YES", "Yes"], ["NOT_SURE", "I'm not sure"]);
+const DISCOVERY_EVIDENCE = Object.freeze({
+  VOTING_RIGHTS: { purpose: "Establish the declared voting-right arrangement.", preferred: ["ARTICLES_OF_ASSOCIATION", "SHARE_CLASS_RIGHTS", "REGISTER_OF_MEMBERS"], alternative: ["SHAREHOLDERS_AGREEMENT", "VOTING_AGREEMENT", "INVESTOR_RIGHTS_AGREEMENT", "OTHER_GOVERNING_DOCUMENT"] },
+  BOARD_CONTROL: { purpose: "Establish the declared board appointment or removal right.", preferred: ["ARTICLES_OF_ASSOCIATION", "SHAREHOLDERS_AGREEMENT"], alternative: ["INVESTOR_RIGHTS_AGREEMENT", "BOARD_NOMINATION_AGREEMENT", "GOVERNING_DOCUMENT", "OTHER_SUPPORTING_DOCUMENT"] },
+  SIGNIFICANT_INFLUENCE: { purpose: "Support the declared significant influence or control arrangement.", preferred: ["SHAREHOLDERS_AGREEMENT", "RESERVED_MATTERS_SCHEDULE"], alternative: ["VOTING_AGREEMENT", "INVESTOR_RIGHTS_AGREEMENT", "POWER_OF_ATTORNEY", "BOARD_OR_GOVERNANCE_AGREEMENT", "OTHER_CONTRACTUAL_ARRANGEMENT", "CUSTOMER_DECLARATION"] },
+  BEARER: { purpose: "Establish the bearer interest and the person or custodian controlling it.", preferred: ["REGISTER_OF_MEMBERS", "CUSTODY_RECORD"], alternative: ["SHARE_WARRANT", "CUSTOMER_DECLARATION", "OTHER_SUPPORTING_DOCUMENT"] },
+  TRUST: { purpose: "Establish the trust or trustee involvement and relevant parties.", preferred: ["TRUST_DEED", "DECLARATION_OF_TRUST"], alternative: ["TRUSTEE_APPOINTMENT", "CUSTOMER_DECLARATION", "OTHER_SUPPORTING_DOCUMENT"] },
+});
 const safe = (value) => String(value || "item").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100) || "item";
 const questionId = (requirement) => `question:${requirement.id}`;
 const answerFor = (requirement, answers) => requirement ? answers[questionId(requirement)] || null : null;
@@ -51,18 +60,36 @@ const activeTopics = (activations) => activations.filter(({ status }) => status 
 const hasTopic = (activations, ...codes) => activeTopics(activations).some(({ topicCode }) => codes.includes(topicCode));
 const activationsFor = (activations, ...codes) => activeTopics(activations).filter(({ topicCode }) => codes.includes(topicCode));
 
+function questionGroup(type, stage, targetEntityId) {
+  const target = targetEntityId || "customer";
+  if (stage === "CONTROL") {
+    if (type.includes("BOARD")) return `control:board:${target}`;
+    if (type.includes("INFLUENCE") || type.includes("INFLUENTIAL")) return `control:influence:${target}`;
+    return `control:voting:${target}`;
+  }
+  if (stage === "FALLBACK") return `fallback:senior-management:${target}`;
+  if (type.includes("BEARER")) return `ownership:bearer:${target}`;
+  if (type.includes("TRUST")) return `ownership:trust:${target}`;
+  if (type.includes("LAYER")) return `ownership:layer:${target}`;
+  if (stage === "ADDITIONAL") return `additional:${target}`;
+  return `ownership:topic:${target}`;
+}
+
 function requirement(type, {
   stage, reason, originType, targetEntityId, targetPersonId, scope = "CUSTOMER_ENTITY", topicActivations = [], role, prompt, explanation, questionType = "FREE_TEXT", questionOptions,
 }) {
   const semanticKey = semanticFactKey(type, { targetEntityId, targetPersonId, scope });
+  const originTypes = [originType];
+  if (topicActivations.length && originType !== QUESTION_ORIGIN.ANALYST_TOPIC) originTypes.push(QUESTION_ORIGIN.ANALYST_TOPIC);
   return {
     id: `fact-requirement:${semanticKey}`,
+    comparisonItemId: questionGroup(type, stage, targetEntityId),
     type,
     semanticKey,
     stage,
     reason,
     status: "OPEN",
-    originTypes: [originType],
+    originTypes,
     topicActivationIds: topicActivations.map(({ id }) => id),
     comparisonItemIds: [],
     ...(targetEntityId ? { targetEntityId } : {}),
@@ -113,6 +140,12 @@ function deriveSpecialTopicRequirements(requirements, activations, answers, targ
     return requirements[requirements.length - 1];
   };
   if (hasTopic(activations, INVESTIGATION_TOPIC_CODE.CURRENT_OWNERSHIP)) addBooleanRoute(requirements, TYPE.CONFIRM_CURRENT_OWNERSHIP, "OWNERSHIP", "ANALYST_TOPIC_ACTIVATED", QUESTION_ORIGIN.ANALYST_TOPIC, activationsFor(activations, INVESTIGATION_TOPIC_CODE.CURRENT_OWNERSHIP), "Is the ownership information provided the current ownership position?", "Confirm this for the company under review. If it has changed, we will ask for the effective position and evidence.", targetEntityId);
+  const discrepancyActs = activationsFor(activations, INVESTIGATION_TOPIC_CODE.OWNERSHIP_DISCREPANCY);
+  if (discrepancyActs.length && !requirements.some(({ type }) => type === "EXPLAIN_OWNERSHIP_DIFFERENCE")) addBooleanRoute(requirements, "EXPLAIN_OWNERSHIP_DIFFERENCE", "OWNERSHIP", "ANALYST_TOPIC_ACTIVATED", QUESTION_ORIGIN.ANALYST_TOPIC, discrepancyActs, "Is any ownership information materially different from the current position?", "If yes, describe the current position in the next ownership follow-up or provide supporting evidence.", targetEntityId);
+  const exactActs = activationsFor(activations, INVESTIGATION_TOPIC_CODE.EXACT_OWNERSHIP_PERCENTAGE);
+  if (exactActs.length && !requirements.some(({ type }) => type === "EXACT_SHARE_PERCENTAGE")) requirements.push(requirement("EXACT_SHARE_PERCENTAGE", { stage: "OWNERSHIP", reason: "ANALYST_TOPIC_ACTIVATED", originType: QUESTION_ORIGIN.ANALYST_TOPIC, topicActivations: exactActs, targetEntityId, prompt: "Which owner needs an exact ownership percentage confirmed, and what is that percentage?", explanation: "Provide the owner and exact current percentage. The analyst will map this answer to the relevant ownership relationship." }));
+  const changeActs = activationsFor(activations, INVESTIGATION_TOPIC_CODE.OWNERSHIP_CHANGE);
+  if (changeActs.length && !requirements.some(({ type }) => type === "OWNERSHIP_CHANGE_OCCURRED")) addBooleanRoute(requirements, "OWNERSHIP_CHANGE_OCCURRED", "OWNERSHIP", "ANALYST_TOPIC_ACTIVATED", QUESTION_ORIGIN.ANALYST_TOPIC, changeActs, "Has the company's ownership changed since the ownership information was prepared?", "If yes, provide the current position and effective date in the follow-up requested by the analyst.", targetEntityId);
   const layerActs = activationsFor(activations, INVESTIGATION_TOPIC_CODE.LAYER_QUALIFIER);
   if (layerActs.length) requirements.push(requirement(TYPE.IDENTIFY_LAYER_QUALIFIER, { stage: "OWNERSHIP", reason: "ANALYST_TOPIC_ACTIVATED", originType: QUESTION_ORIGIN.ANALYST_TOPIC, topicActivations: layerActs, targetEntityId, prompt: "What role does the selected party play in this ownership structure?", explanation: "Choose the role that best describes how the party appears in this ownership layer.", questionType: "SINGLE_SELECT", questionOptions: options(["DIRECT_SHAREHOLDER", "Direct shareholder"], ["INTERMEDIATE_HOLDING_COMPANY", "Intermediate holding company"], ["NOMINEE", "Nominee"], ["TRUSTEE", "Trustee"], ["TRUST", "Trust"], ["INVESTMENT_VEHICLE", "Investment vehicle"], ["PARTNERSHIP_OR_LLP", "Partnership or LLP"], ["OTHER", "Other"], ["UNKNOWN", "Unknown"]) }));
   const layer = requirements.find(({ type }) => type === TYPE.IDENTIFY_LAYER_QUALIFIER);
@@ -146,10 +179,13 @@ function deriveSpecialTopicRequirements(requirements, activations, answers, targ
 }
 
 function controlRequirements({ requirements, answers, activations, ownership, mode, targetEntityId }) {
-  const manualAll = activationsFor(activations, INVESTIGATION_TOPIC_CODE.CONTROL_DISCOVERY);
-  const manualVoting = activationsFor(activations, INVESTIGATION_TOPIC_CODE.VOTING_RIGHTS);
-  const manualBoard = activationsFor(activations, INVESTIGATION_TOPIC_CODE.BOARD_APPOINTMENT_OR_REMOVAL_RIGHTS);
-  const manualInfluence = activationsFor(activations, INVESTIGATION_TOPIC_CODE.OTHER_SIGNIFICANT_INFLUENCE_OR_CONTROL);
+  const allControlActivations = activeTopics(activations).filter(({ topicCode }) => [INVESTIGATION_TOPIC_CODE.CONTROL_DISCOVERY, INVESTIGATION_TOPIC_CODE.VOTING_RIGHTS, INVESTIGATION_TOPIC_CODE.BOARD_APPOINTMENT_OR_REMOVAL_RIGHTS, INVESTIGATION_TOPIC_CODE.OTHER_SIGNIFICANT_INFLUENCE_OR_CONTROL].includes(topicCode));
+  const ownershipEstablishedAfterActivation = ownership.naturalPersonUboCount > 0 && allControlActivations.length > 0 && allControlActivations.every((activation) => Object.values(answers).some(({ answeredAt }) => answeredAt && activation.createdAt && answeredAt > activation.createdAt));
+  const availableManual = ownershipEstablishedAfterActivation && mode === CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL ? [] : allControlActivations;
+  const manualAll = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.CONTROL_DISCOVERY);
+  const manualVoting = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.VOTING_RIGHTS);
+  const manualBoard = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.BOARD_APPOINTMENT_OR_REMOVAL_RIGHTS);
+  const manualInfluence = activationsFor(availableManual, INVESTIGATION_TOPIC_CODE.OTHER_SIGNIFICANT_INFLUENCE_OR_CONTROL);
   const auto = mode === CONTROL_DISCOVERY_MODE.OWNERSHIP_AND_CONTROL_IN_PARALLEL || (ownership.status === OWNERSHIP_RESOLUTION_STATUS.COMPLETE && ownership.naturalPersonUboCount === 0);
   const origin = auto ? QUESTION_ORIGIN.SYSTEM_CONTROL_DISCOVERY : QUESTION_ORIGIN.ANALYST_TOPIC;
   const votingActive = auto || manualAll.length > 0 || manualVoting.length > 0;
@@ -230,11 +266,15 @@ function seniorRequirements(requirements, answers, activations, ownership, contr
   const people = requirement(TYPE.IDENTIFY_SENIOR_MANAGING_OFFICIAL, { stage: "FALLBACK", reason: automatic ? "OWNERSHIP_AND_CONTROL_ROUTES_EXHAUSTED" : "ANALYST_TOPIC_ACTIVATED", originType, topicActivations: manual, targetEntityId, prompt: "We have not been able to identify an individual who ultimately owns or controls the company. Who is the most senior person, or persons, responsible for the company's overall management and key strategic decisions?", explanation: "Enter the person or people to whom significant decisions are escalated and who have authority to direct the company's overall activities. Separate multiple names with commas." });
   requirements.push(people);
   const officials = names(answerFor(people, answers)?.value);
-  officials.forEach((personName) => requirements.push(requirement(TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY, { stage: "FALLBACK", reason: "SENIOR_MANAGER_IDENTIFIED", originType, topicActivations: manual, targetEntityId, targetPersonId: safe(personName), role: personName, prompt: `Which best describes ${personName}'s authority?`, explanation: "Select based on practical authority, not title alone.", questionType: "SINGLE_SELECT", questionOptions: options(["DAY_TO_DAY_MANAGEMENT", "Overall day-to-day management"], ["FINAL_MAJOR_DECISIONS", "Final authority over major business decisions"], ["STRATEGIC_DIRECTION", "Responsible for strategic direction"], ["ESCALATION_AUTHORITY", "Key decisions are normally escalated to this person"], ["COLLECTIVE_MANAGEMENT", "Member of a management group that collectively exercises these responsibilities"], ["OTHER", "Other"]) })));
+  officials.forEach((personName) => {
+    requirements.push(requirement(TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE, { stage: "FALLBACK", reason: "SENIOR_MANAGER_IDENTIFIED", originType, topicActivations: manual, targetEntityId, targetPersonId: safe(personName), role: personName, prompt: `What is ${personName}'s role or title?`, explanation: "Examples include CEO, Managing Director, Executive Director, executive Chair, General Manager, Partner or another senior decision maker. Title alone does not establish the fallback role." }));
+    requirements.push(requirement(TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY, { stage: "FALLBACK", reason: "SENIOR_MANAGER_IDENTIFIED", originType, topicActivations: manual, targetEntityId, targetPersonId: safe(personName), role: personName, prompt: `Which best describes ${personName}'s authority?`, explanation: "Select based on practical authority, not title alone.", questionType: "SINGLE_SELECT", questionOptions: options(["DAY_TO_DAY_MANAGEMENT", "Overall day-to-day management"], ["FINAL_MAJOR_DECISIONS", "Final authority over major business decisions"], ["STRATEGIC_DIRECTION", "Responsible for strategic direction"], ["ESCALATION_AUTHORITY", "Key decisions are normally escalated to this person"], ["COLLECTIVE_MANAGEMENT", "Member of a management group that collectively exercises these responsibilities"], ["OTHER", "Other"]) }));
+  });
   const identified = officials.filter((personName) => {
     const authority = requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName));
-    return Boolean(answerFor(authority, answers)?.value);
-  }).map((personName) => ({ personId: safe(personName), personName, authority: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName)), answers).value, cddIdentityVerificationRequired: true }));
+    const role = requirements.find(({ type, targetPersonId }) => type === TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE && targetPersonId === safe(personName));
+    return Boolean(answerFor(authority, answers)?.value && answerFor(role, answers)?.value);
+  }).map((personName) => ({ personId: safe(personName), personName, role: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE && targetPersonId === safe(personName)), answers).value, authority: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName)), answers).value, entityId: targetEntityId, cddIdentityVerificationRequired: true }));
   return {
     outcome: identified.length && identified.length === officials.length ? "FALLBACK_SENIOR_MANAGING_OFFICIAL_IDENTIFIED" : "FALLBACK_SENIOR_MANAGING_OFFICIAL_REQUIRED",
     people: identified,
@@ -249,7 +289,7 @@ function customRequirements(requirements, analystCustomerRequests, targetEntityI
 function mergeUboAssessments(ownership, control) {
   const people = new Map();
   [...ownership.ubos, ...control.assessments.filter(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO)].forEach((item) => {
-    const key = item.personId || safe(item.personName);
+    const key = safe(item.personName || item.personId);
     const existing = people.get(key) || { personId: key, personName: item.personName, determination: "DEFINITE_UBO", bases: [], idvRequired: true };
     existing.bases = [...new Set([...existing.bases, ...(item.bases || [item.basis])])];
     people.set(key, existing);
@@ -257,8 +297,41 @@ function mergeUboAssessments(ownership, control) {
   return [...people.values()];
 }
 
-export function extendResolutionWithInvestigation({ base, comparisonRows = [], answers = {}, topicActivations = [], analystCustomerRequests = [], controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL, customerEntityId = "CUSTOMER_ENTITY", now }) {
-  const ownership = baseOwnershipSummary(base, comparisonRows);
+function discoveryEvidenceRecord(item, ruleKey, now) {
+  const rule = DISCOVERY_EVIDENCE[ruleKey];
+  return {
+    id: `evidence-requirement:${item.semanticKey}:${ruleKey}`,
+    comparisonItemId: item.comparisonItemId,
+    factRequirementId: item.id,
+    purpose: rule.purpose,
+    preferredEvidenceTypes: rule.preferred,
+    alternativeEvidenceTypes: rule.alternative,
+    status: "OPEN",
+    createdAt: now,
+    reviewMode: "ANALYST_REVIEW",
+    handoff: {
+      contractVersion: "ubo-external-evidence-handoff-v1", handoffType: "EXTERNAL_EVIDENCE_REQUIRED", status: "PENDING_EXTERNAL_ACTION",
+      semanticEvidenceCategories: [...rule.preferred, ...rule.alternative], requestedConcepts: [ruleKey], requestDoesNotResolveInformationNeed: true,
+      acceptsFileBytes: false, createsEvidenceArtifact: false, executionConnected: true, executionRoute: "/api/ubo-demo-customer-ownership-chart",
+    },
+  };
+}
+
+function discoveryEvidenceRequirements(requirements, answers, control, now) {
+  const records = [];
+  const withAnswer = (type) => requirements.find((item) => item.type === type && answerFor(item, answers)?.value);
+  if (control.assessments.some(({ basis }) => basis === UBO_BASIS.VOTING_RIGHTS)) records.push(discoveryEvidenceRecord(withAnswer(TYPE.ESTABLISH_VOTING_RIGHT_PERCENTAGE), "VOTING_RIGHTS", now));
+  if (control.assessments.some(({ basis }) => basis === UBO_BASIS.BOARD_CONTROL)) records.push(discoveryEvidenceRecord(withAnswer(TYPE.ESTABLISH_BOARD_CONTROL_RIGHT), "BOARD_CONTROL", now));
+  if (control.assessments.some(({ basis }) => basis === UBO_BASIS.SIGNIFICANT_INFLUENCE)) records.push(discoveryEvidenceRecord(withAnswer(TYPE.EXPLAIN_SIGNIFICANT_INFLUENCE), "SIGNIFICANT_INFLUENCE", now));
+  const bearer = withAnswer(TYPE.CONFIRM_BEARER_SHARES);
+  if (answerFor(bearer, answers)?.value === "YES" && withAnswer(TYPE.IDENTIFY_BEARER_CONTROLLER)) records.push(discoveryEvidenceRecord(withAnswer(TYPE.IDENTIFY_BEARER_CONTROLLER), "BEARER", now));
+  const trust = withAnswer(TYPE.CONFIRM_TRUST_INVOLVEMENT);
+  if (answerFor(trust, answers)?.value === "YES" && withAnswer(TYPE.IDENTIFY_TRUSTEES)) records.push(discoveryEvidenceRecord(withAnswer(TYPE.IDENTIFY_TRUSTEES), "TRUST", now));
+  return records.filter(Boolean);
+}
+
+export function extendResolutionWithInvestigation({ base, comparisonRows = [], answers = {}, evidence = {}, topicActivations = [], analystCustomerRequests = [], ownershipContext = {}, controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL, customerEntityId = "CUSTOMER_ENTITY", now }) {
+  let ownership = baseOwnershipSummary(base, comparisonRows);
   const decoratedBase = base.requirements.map((item) => ({
     ...item,
     semanticKey: semanticFactKey(item.type, {
@@ -269,11 +342,33 @@ export function extendResolutionWithInvestigation({ base, comparisonRows = [], a
     originTypes: [QUESTION_ORIGIN.SYSTEM_COMPARISON], comparisonItemIds: [item.comparisonItemId], topicActivationIds: [], stage: "OWNERSHIP",
   }));
   const requirements = [...decoratedBase];
+  activeTopics(topicActivations).forEach((activation) => {
+    const roots = topicDefinition(activation.topicCode)?.rootFactTypes || [];
+    requirements.filter(({ type }) => roots.includes(type)).forEach((item) => {
+      item.originTypes = [...new Set([...(item.originTypes || []), QUESTION_ORIGIN.ANALYST_TOPIC])];
+      item.topicActivationIds = [...new Set([...(item.topicActivationIds || []), activation.id])];
+    });
+  });
+  if (comparisonRows.some(({ status }) => status === "CONFLICT") && !ownershipContext.customerDocumentEffectiveDate) {
+    addBooleanRoute(requirements, TYPE.CONFIRM_CURRENT_OWNERSHIP, "OWNERSHIP", "MATERIAL_DISCREPANCY_AND_CUSTOMER_DOCUMENT_DATE_UNCLEAR", QUESTION_ORIGIN.SYSTEM_COMPARISON, [], "Is the ownership information provided the current ownership position?", "We found a material difference from independent information and the ownership document does not state when this position became effective.", customerEntityId);
+  }
   deriveSpecialTopicRequirements(requirements, topicActivations, answers, customerEntityId);
+  const unresolvedSpecialOwnership = requirements.some((item) => item.stage === "OWNERSHIP" && item.question && !answerFor(item, answers));
+  if (ownership.status === OWNERSHIP_RESOLUTION_STATUS.COMPLETE && unresolvedSpecialOwnership) ownership = { ...ownership, status: OWNERSHIP_RESOLUTION_STATUS.INDETERMINATE };
+  const declaredTrust = requirements.find(({ type }) => type === TYPE.CONFIRM_TRUST_INVOLVEMENT);
+  const declaredBearer = requirements.find(({ type }) => type === TYPE.CONFIRM_BEARER_SHARES);
+  if (answerFor(declaredTrust, answers)?.value === "YES") ownership = { ...ownership, status: OWNERSHIP_RESOLUTION_STATUS.CONFLICTED };
+  else if (answerFor(declaredBearer, answers)?.value === "YES") ownership = { ...ownership, status: OWNERSHIP_RESOLUTION_STATUS.EVIDENCE_REQUIRED };
   const control = controlRequirements({ requirements, answers, activations: topicActivations, ownership, mode: controlDiscoveryMode, targetEntityId: customerEntityId });
   const fallback = seniorRequirements(requirements, answers, topicActivations, ownership, control, customerEntityId);
   customRequirements(requirements, analystCustomerRequests, customerEntityId);
+  requirements.forEach((item) => {
+    const activation = topicActivations.find(({ id: activationId, wordingOverride }) => wordingOverride && item.topicActivationIds?.includes(activationId) && topicDefinition(item.topicCode || topicActivations.find(({ id }) => id === activationId)?.topicCode)?.rootFactTypes.includes(item.type));
+    if (activation) item.question = { ...item.question, prompt: activation.wordingOverride };
+  });
   const deduped = deduplicateFactRequirements(requirements);
+  const discoveryEvidence = discoveryEvidenceRequirements(deduped, answers, control, now).map((record) => evidence[record.id] ? { ...record, ...evidence[record.id] } : record);
+  const allEvidenceRequirements = [...base.evidenceRequirements, ...discoveryEvidence];
   const baseQuestionByRequirement = new Map(base.questions.map((item) => [item.factRequirementId, item]));
   const questions = deduped.filter(({ status }) => status !== "RESOLVED").map((item) => {
     const existing = baseQuestionByRequirement.get(item.id);
@@ -284,7 +379,7 @@ export function extendResolutionWithInvestigation({ base, comparisonRows = [], a
   const openQuestions = questions.filter(({ status }) => status === "OPEN");
   const topicStatuses = topicActivations.map((activation) => {
     const related = questions.filter(({ topicActivationIds = [] }) => topicActivationIds.includes(activation.id));
-    const evidenceRequired = base.evidenceRequirements.some(({ factRequirementId }) => related.some(({ factRequirementId: id }) => id === factRequirementId));
+    const evidenceRequired = allEvidenceRequirements.some(({ factRequirementId }) => related.some(({ factRequirementId: id }) => id === factRequirementId));
     const analystReview = control.assessments.some(({ evidenceStatus }) => evidenceStatus === "ANALYST_REVIEW") && [INVESTIGATION_TOPIC_CODE.OTHER_SIGNIFICANT_INFLUENCE_OR_CONTROL, INVESTIGATION_TOPIC_CODE.CONTROL_DISCOVERY].includes(activation.topicCode);
     const status = analystReview ? "ANALYST_REVIEW" : evidenceRequired ? "EVIDENCE_REQUIRED" : related.some(({ status: state }) => state === "OPEN") ? "ASKING_CUSTOMER" : related.length ? "ANSWERED" : "SUPERSEDED";
     return { ...activation, displayStatus: status, reason: status === "SUPERSEDED" ? "No unresolved fact remains for this topic under the active policy." : activation.analystReason || activation.reason };
@@ -296,6 +391,7 @@ export function extendResolutionWithInvestigation({ base, comparisonRows = [], a
     requirements: deduped,
     questions,
     openQuestions,
+    evidenceRequirements: allEvidenceRequirements,
     ownershipResolution: ownership,
     controlResolution: control,
     fallback,

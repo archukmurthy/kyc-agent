@@ -274,7 +274,8 @@ test("Ask customer records an existing open cause beside the unchanged source as
   };
   window.fetch = jest.fn(() => okJson(selectedSession));
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  const ask = await screen.findByRole("button", { name: "Ask customer" });
+  const openQuestions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
+  const ask = within(openQuestions).getByRole("button", { name: "Ask customer" });
   fireEvent.click(ask);
   expect(screen.getByRole("button", { name: "Added for customer" })).toHaveAttribute("aria-pressed", "true");
   await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.analystCustomerRequests).toEqual([
@@ -282,6 +283,21 @@ test("Ask customer records an existing open cause beside the unchanged source as
   ]));
   const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult;
   expect(saved.candidateSources[0].candidateFacts).toEqual([fact]);
+});
+
+test("analyst topic selection previews and stores a structured activation", async () => {
+  window.fetch = jest.fn(() => okJson(aliceSession));
+  renderStart();
+  fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
+  const voting = (await screen.findByText("Voting rights")).closest("article");
+  fireEvent.click(within(voting).getByRole("button", { name: "Ask customer" }));
+  expect(screen.getByRole("heading", { name: "Ask customer about voting rights" })).toBeInTheDocument();
+  expect(screen.getByText(/Follow-up questions will only appear where relevant/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Add to customer questions" }));
+  expect(within(voting).getByText(/queued/i)).toBeInTheDocument();
+  await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.investigationTopicActivations).toEqual([
+    expect.objectContaining({ topicCode: "VOTING_RIGHTS", origin: "ANALYST", status: "ACTIVE", caseId: expect.any(String) }),
+  ]));
 });
 
 test("Alice direct and indirect rights survive Relevant/Full scope and Ownership/All filters by relationship ID", () => {
