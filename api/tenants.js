@@ -86,10 +86,8 @@ async function ensureRegistry() {
   }
   // Back-fill flags for registries written before those flags existed.
   //   isProtected — isInternal was the old spelling of the same idea.
-  //   preboardingEnabled — pre-boarding predates the per-tenant switch and was
-  //     implicitly on for platform tenants, so protected entries get it back;
-  //     ordinary tenants are deliberately left alone, because super-admin
-  //     opt-in is the design (turning every tenant on would defeat it).
+  //   preboardingEnabled — on by default for every tenant (owner decision
+  //     2026-09-17), so an entry that never had the flag gets true.
   // Additive and idempotent: an entry that already carries a flag — including
   // an explicit `false` a super-admin set — is never re-patched.
   let changed = false;
@@ -97,8 +95,7 @@ async function ensureRegistry() {
     if (!t) return t;
     const patch = {};
     if (t.isProtected === undefined && t.isInternal === true) patch.isProtected = true;
-    const isProtectedEntry = patch.isProtected === true || _deps.registry.entryIsProtected(t);
-    if (isProtectedEntry && t.preboardingEnabled === undefined) patch.preboardingEnabled = true;
+    if (t.preboardingEnabled === undefined) patch.preboardingEnabled = true;
     if (!Object.keys(patch).length) return t;
     changed = true;
     return { ...t, ...patch };
@@ -201,7 +198,8 @@ module.exports = async function handler(req, res) {
         isActive: true,
         isInternal: false,
         isProtected: false,
-        preboardingEnabled: false,
+        // On by default (owner decision 2026-09-17); a super-admin can switch it off.
+        preboardingEnabled: true,
         isBlank: !(startFrom === "nium-defaults" || startFrom === "nium-default"),
       });
 

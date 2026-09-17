@@ -319,7 +319,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Being built now instead:** `/preboarding?tenant=<id>` entry, per-tenant pre-boarding on/off switch, server check that the tenant exists and is active, analyst session bound to the verified tenant — with one shared analyst password.
 - **Area:** `api/preboarding-auth.js`, `lib/auth.js`, tenant settings UI.
 - **Status note (2026-09-16):** the tenant-scoped entry, registry checks and server-side gate shipped in Part 5; only the per-tenant password remains.
-- **AFTER DEPLOY — action required:** pre-boarding is opt-in per tenant (`preboardingEnabled` in the tenant registry). The deploy back-fills it ON only for protected/platform entries, so **every non-platform tenant defaults to OFF** and its analysts get "Pre-boarding is not available for this tenant" until a super-admin switches it on from the tenant card in `/super-admin` ("Enable pre-boarding"). That is the intended design, not a bug — but any existing tenant whose analysts use pre-boarding must be turned on by hand once.
+- **Pre-boarding default (owner decision 2026-09-17):** pre-boarding is ON by default for every tenant — existing tenants with no stored flag, newly created tenants, and legacy back-filled entries. A super-admin can switch a tenant OFF from its card in `/super-admin` ("Disable pre-boarding"); that explicit choice is never overwritten. Unknown or inactive tenants still can't open it. No per-tenant action is needed after deploy.
 
 ### BRAND-1 — Neutralize residual "Nium" brand naming (make the product brand-neutral / config-driven)
 - **Category:** UX / Architecture · **Priority:** P3 · **Status:** OPEN (discuss before actioning — 2026-09-12)

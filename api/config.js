@@ -124,10 +124,9 @@ async function readConfig(tenant) {
       lastPublishedAt: stored._publishedAt || null,
       isActive: true,
       isProtected: PLATFORM_TENANT_IDS.includes(tenant),
-      // Pre-boarding predates the per-tenant switch and was implicitly on for
-      // platform tenants; ordinary tenants stay opt-in (super-admin turns it
-      // on from the tenant card). Mirrors the back-fill in api/tenants.js.
-      preboardingEnabled: PLATFORM_TENANT_IDS.includes(tenant),
+      // On by default for every tenant (owner decision 2026-09-17); a
+      // super-admin can switch it off. Mirrors the back-fill in api/tenants.js.
+      preboardingEnabled: true,
       isInternal: false,
       isBlank: stored._isBlank === true,
     };
