@@ -2791,6 +2791,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setIsPubliclyListedOverride(false);
       stakeholdersRef.current = {}; setStakeholderVersion((v) => v + 1); setStakeholderErrors([]);
       setRevealedTs({});
+      // A person picked from the wrong company's officer list no longer applies.
+      setApplicantSelectedPerson(null); setApplicantAgentValues({}); setApplicantNotListed(false);
       setCorrectionError("We couldn't look up your company automatically. Please continue and fill in your application below.");
       setStep(stepsFor(journey || journeyType || "ai_only").applicant);
       return;
