@@ -137,11 +137,11 @@ module.exports = async function handler(req, res) {
       // data-modifying CTE — Postgres executes it exactly once even though
       // the outer UPDATE never references `snap` — and it shares the exact
       // same id/tenant/ownership re-check as the UPDATE below, so a write
-      // that will be refused leaves no history row, and a raced ownership
-      // flip between the permission SELECT and this statement can no longer
-      // leave an orphaned snapshot with no matching update (or vice versa):
-      // both halves see the same snapshot of the row and either both match
-      // or neither does. A concurrent save can compute the same next
+      // that will be refused normally leaves no history row. Under READ
+      // COMMITTED the UPDATE re-checks the latest row version while the
+      // INSERT read the statement snapshot, so an ownership flip landing in
+      // that instant can still leave one harmless extra history row with a
+      // 403 (never an update without a snapshot). A concurrent save can compute the same next
       // version number and hit entity_dossier_versions' UNIQUE(dossier_id,
       // version) (23505); that's handled by the retry below.
       const runSnapshotAndUpdate = () => sql`

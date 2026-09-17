@@ -2894,6 +2894,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         fallBackToManual({ stage: "search_cap", reason: "no_searches_left", message: CONTACT_ADMIN_MSG, jurisdiction: next.countryCode });
         return;
       }
+      // Paid for: if this run stops before research (e.g. a validation stop),
+      // the next attempt reuses this search instead of spending another.
+      searchGrantRef.current = true;
       const outcome = await doResearch(journeyType || "ai_only", { overrides: next, correction: true });
       if (!outcome) {
         // null = doResearch already fell back to manual entry with its own
