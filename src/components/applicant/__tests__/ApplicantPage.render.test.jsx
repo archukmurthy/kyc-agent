@@ -494,9 +494,9 @@ describe("correcting a foundational fact", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
     await settle(5000);
     await settle(5000);
-    // The fallback left the name fact disputed; re-tick it to reveal the section.
-    fireEvent.click(within(screen.getByTestId("foundational-facts-gate")).getByLabelText(/Confirm Company legal name/i));
-    await settle(0);
+    // The fallback closed the correction form, so the applicant section is back
+    // without re-ticking anything.
+    expect(within(screen.getByTestId("foundational-facts-gate")).getByLabelText(/Confirm Company legal name/i)).toBeChecked();
     expect(gapField("applicant email")).toHaveValue("jane@example.com");
 
     await correctName("Britannia Holdings Group Limited");

@@ -2710,6 +2710,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       reason,
       headers: getDossierAuthHeaders(),
     });
+    // Close the correction form: the customer continues by manual entry or a
+    // new search, and must not land back on a still-disputed gate.
+    cancelFactDispute();
     setError(message);
     setCorrectionError(message);
     setJourneyOpen(true);
