@@ -50,6 +50,7 @@ module.exports = async function handler(req, res) {
         id,
         tenant_id,
         owned_by,
+        customer_searches,
         company_name,
         country_code,
         country_name,
