@@ -628,3 +628,60 @@ describe("invite screen", () => {
     expect(bodyText()).toMatch(/Onboarding link/i);
   });
 });
+
+describe("dossier creation is idempotent", () => {
+  const saveBodies = () =>
+    global.fetch.mock.calls
+      .filter(([url]) => String(url).includes("/api/save-dossier"))
+      .map(([, init]) => JSON.parse(init.body));
+
+  it("a retried first save re-sends the SAME creation key", async () => {
+    let attempt = 0;
+    fetchRoutes["/api/save-dossier"] = () => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error("network lost after insert"))
+        : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    };
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].creationKey).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(bodies[1].creationKey).toBe(bodies[0].creationKey);
+    expect(bodies[0].dossierId).toBeFalsy();
+  });
+
+  it("a save of an existing dossier sends no creation key", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/^Update$/)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    const last = bodies[bodies.length - 1];
+    expect(last.dossierId).toBe("d-1");
+    expect(last).not.toHaveProperty("creationKey");
+  });
+
+  it("concurrent saves while one is in flight make only one request", async () => {
+    let resolveSave;
+    fetchRoutes["/api/save-dossier"] = () =>
+      new Promise((resolve) => {
+        resolveSave = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+      });
+    await driveToDossier(); // the auto-save is now in flight and unresolved
+    expect(saveBodies().length).toBe(1);
+    // A second trigger while in flight (e.g. the Retry/Save control) must not POST again.
+    const retry = buttonsWithText(/Save Dossier|Retry save/i)[0];
+    if (retry) fireEvent.click(retry);
+    await settle(0);
+    expect(saveBodies().length).toBe(1);
+    await act(async () => { resolveSave(); });
+    await settle(0);
+  });
+});

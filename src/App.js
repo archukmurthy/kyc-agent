@@ -357,6 +357,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // null on failure, which otherwise silently blocks the invite button later
   // with no explanation). Cleared on the next successful save.
   const [dossierSaveError, setDossierSaveError] = useState("");
+  // Part 4: one creation key per analyst research run, re-sent by every retry of
+  // the FIRST save so a lost response can never insert a duplicate dossier; and
+  // the in-flight save promise, shared by concurrent callers.
+  const creationKeyRef = useRef(null);
+  const saveInFlightRef = useRef(null);
 
   // Self-serve re-research (front-door "wrong company / wrong type") state.
   //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
@@ -824,7 +829,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
-    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); }
+    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); creationKeyRef.current = null; }
     setOnboardingSubmissionId(null);
     setDossierSaving(false);
     setDossierSaved(false);
@@ -2036,7 +2041,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // A customer keeps one application id for the whole session (a correction,
       // or a picker search after a fallback): the fresh-customer retry count and
       // the change_events trail are keyed on it, so rotating it would reset the cap.
-      if (!onboardingSubmissionId || (!correction && !isCustomerResearch)) setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+      if (!onboardingSubmissionId || (!correction && !isCustomerResearch)) {
+        setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+        // A brand-new analyst run must not re-send a stale creation key from a
+        // prior (already-saved-or-abandoned) run onto this one's first save.
+        if (!dossierId) creationKeyRef.current = null;
+      }
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
@@ -2240,6 +2250,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     };
     setResearch(tagged);
     setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+    if (!dossierId) creationKeyRef.current = null;
     setResearchTimestamp(dummyTs);
 
     // Demo coverage (Part 14). Gap recovery is skipped in demo mode.
@@ -2383,6 +2394,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         };
         setResearch(tagged);
         setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+        if (!dossierId) creationKeyRef.current = null;
         setResearchTimestamp(ts);
 
         const cov = computeCoverage(found, schema);
@@ -4892,6 +4904,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // (api/save-dossier.js), never re-inserted — a blind insert would
       // duplicate the row and orphan any invite link already built on this id.
       dossierId,
+      // Only a create carries the key; an update is keyed by dossierId.
+      ...(dossierId ? {} : { creationKey: creationKeyRef.current || (creationKeyRef.current = genUUID()) }),
       // Pre-boarding uses the tenant the server verified at the gate; the
       // customer flow has no gate, so it uses the URL-resolved tenant.
       tenantId: preboardingTenantId || tenantId,
@@ -4933,7 +4947,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Resolves true once the dossier is stored (a customer lock counts: it IS
   // saved, under the customer), false on a failed or unreachable save.
-  const saveDossier = async ({ reason } = {}) => {
+  const runSaveDossier = async ({ reason } = {}) => {
     setDossierSaving(true);
     const payload = { ...buildDossierPayload(), ...(reason ? { saveReason: reason } : {}) };
     // eslint-disable-next-line no-console
@@ -4960,6 +4974,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
         setDossierId(result.dossierId);
+        creationKeyRef.current = null;
         setDossierSaved(true);
         setDossierSaveError("");
         // eslint-disable-next-line no-console
@@ -5000,6 +5015,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return savedId !== null;
   };
 
+  const saveDossier = (options) => {
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+    const p = runSaveDossier(options).finally(() => { saveInFlightRef.current = null; });
+    saveInFlightRef.current = p;
+    return p;
+  };
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
