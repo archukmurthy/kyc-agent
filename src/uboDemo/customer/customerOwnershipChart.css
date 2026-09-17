@@ -265,6 +265,11 @@
 .ubo-resolution-evidence details, .ubo-resolution-evidence details p { color: var(--ubo-customer-muted); font-size: 9px; }
 .ubo-resolution-evidence summary { color: #725b16; font-weight: 800; cursor: pointer; }
 .ubo-resolution-evidence-boundary { padding: 9px 10px; border-left: 3px solid #dfc46f; background: white; }
+.ubo-resolution-evidence-file { margin: 10px 0; padding: 10px 12px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--ubo-customer-border); border-radius: 8px; background: white; }
+.ubo-resolution-evidence-file > span { color: var(--ubo-customer-green); font-size: 18px; }
+.ubo-resolution-evidence-file > div { display: grid; gap: 2px; }
+.ubo-resolution-evidence-file strong { color: var(--ubo-customer-ink); font-size: 10px; }
+.ubo-resolution-evidence-file small { color: var(--ubo-customer-muted); font-size: 8px; }
 .ubo-resolution-evidence > button { padding: 9px 12px; border: 1px solid #8d6a24; border-radius: 8px; background: white; color: #725b16; font-size: 10px; font-weight: 800; cursor: pointer; }
 .ubo-resolution-evidence-status { display: inline-flex; padding: 7px 9px; border-radius: 7px; background: white; color: #725b16; font-size: 9px; text-transform: uppercase; }
 .ubo-resolution-evidence.satisfied { border-color: #87bfae; background: #eef9f5; }

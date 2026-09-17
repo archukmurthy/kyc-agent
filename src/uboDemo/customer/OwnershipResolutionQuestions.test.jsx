@@ -179,6 +179,29 @@ test("a media mismatch explains the format problem and keeps re-upload available
   expect(within(evidence).getByText(/Accepted file formats: PDF, PNG or JPEG/i)).toBeInTheDocument();
 });
 
+test("a provider outage keeps the received filename and permits retrying the same file", async () => {
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  window.fetch.mockResolvedValueOnce({
+    ok: false,
+    status: 502,
+    json: async () => ({ success: false, code: "provider_unavailable", message: "We could not analyse this ownership chart. Please try again." }),
+  });
+
+  const evidence = screen.getByText(/Establish the declared nominee or bare-trust arrangement/i).closest("article");
+  const fileInput = container.querySelector('.ubo-resolution-evidence input[type="file"]');
+  fireEvent.change(fileInput, { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+
+  await waitFor(() => expect(within(evidence).getByText("analysis unavailable")).toBeInTheDocument());
+  expect(within(evidence).getByText("nominee-agreement.pdf")).toBeInTheDocument();
+  expect(within(evidence).getByText(/File received · analysis not completed/i)).toBeInTheDocument();
+  expect(within(evidence).getByText(/file itself was not rejected/i)).toBeInTheDocument();
+  fireEvent.click(within(evidence).getByRole("button", { name: "Retry analysis" }));
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+});
+
 test("nominee evidence stays with its issue after all follow-up questions are answered", async () => {
   render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
   const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");

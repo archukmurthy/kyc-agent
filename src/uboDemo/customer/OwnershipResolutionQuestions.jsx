@@ -57,9 +57,28 @@ function statusLabel(status) {
   }[status] || humanize(status);
 }
 
-function evidenceUploadError(payload) {
-  if (payload?.code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) return MEDIA_MISMATCH_MESSAGE;
-  return payload?.message || "Evidence validation failed";
+function evidenceUploadFailure(payload, responseStatus) {
+  const code = String(payload?.code || "evidence_validation_failed");
+  if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
+    return { status: EVIDENCE_STATUS.REJECTED, message: MEDIA_MISMATCH_MESSAGE };
+  }
+  const serviceMessages = {
+    provider_timeout: "Your file was received, but document analysis timed out. The file itself was not rejected.",
+    provider_unavailable: "Your file was received, but the document analysis service is unavailable. The file itself was not rejected.",
+    provider_not_configured: "Your file was received, but the document analysis service is not configured. The file itself was not rejected.",
+    provider_authentication_failed: "Your file was received, but the document analysis service could not authenticate. The file itself was not rejected.",
+    provider_failure: "Your file was received, but the document analysis service could not complete the request. The file itself was not rejected.",
+    provider_failed: "Your file was received, but the document analysis service could not complete the request. The file itself was not rejected.",
+    malformed_provider_result: "Your file was received, but document analysis returned an unusable result. The file itself was not rejected.",
+    provider_malformed_output: "Your file was received, but document analysis returned an unusable result. The file itself was not rejected.",
+    incomplete_interpretation: "Your file was received, but document analysis did not complete. The file itself was not rejected.",
+    provider_output_truncated: "Your file was received, but document analysis did not complete. The file itself was not rejected.",
+  };
+  if (serviceMessages[code] || Number(responseStatus) >= 500) return {
+    status: EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE,
+    message: `${serviceMessages[code] || "Your file was received, but document analysis could not complete. The file itself was not rejected."} Please retry.`,
+  };
+  return { status: EVIDENCE_STATUS.REJECTED, message: payload?.message || "Evidence validation failed" };
 }
 
 function resolutionContext(comparisonItemId, requirements, rows, company) {
@@ -109,7 +128,7 @@ function CustomerQuestion({ question, draft, error, onDraft, onSubmit }) {
   </article>;
 }
 
-function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, onDraft, onSubmit, onUpload }) {
+function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, retainedFiles, onDraft, onSubmit, onUpload }) {
   const answered = allQuestions.filter(({ status }) => status !== "OPEN").length;
   return <section className="ubo-resolution-question-group">
     <header>
@@ -126,7 +145,7 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
     {questions.length > 0 && <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>}
     {evidenceRecords.length > 0 && <div className="ubo-resolution-group-evidence">
       <p>Supporting evidence for this ownership issue</p>
-      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} onUpload={onUpload} />)}
+      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} retryAvailable={Boolean(retainedFiles[record.id])} onUpload={onUpload} onRetry={() => onUpload(record, retainedFiles[record.id])} />)}
     </div>}
   </section>;
 }
@@ -152,9 +171,9 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, on
   </article>;
 }
 
-function EvidenceRequest({ record, context, busy, message, onUpload }) {
+function EvidenceRequest({ record, context, busy, message, retryAvailable, onUpload, onRetry }) {
   const input = useRef(null);
-  const canChooseFile = record.status === EVIDENCE_STATUS.OPEN || record.status === EVIDENCE_STATUS.REJECTED;
+  const canChooseFile = [EVIDENCE_STATUS.OPEN, EVIDENCE_STATUS.REJECTED, EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE].includes(record.status);
   const chooseFile = () => {
     if (!input.current) return;
     input.current.value = "";
@@ -171,8 +190,10 @@ function EvidenceRequest({ record, context, busy, message, onUpload }) {
     <details><summary>Other accepted evidence</summary><p>{record.alternativeEvidenceTypes.map(humanize).join(", ")}.</p></details>
     <p className="ubo-resolution-evidence-boundary">This issue remains unresolved until supporting evidence passes the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue.</p>
     <p>Accepted file formats: PDF, PNG or JPEG, up to 3 MB.</p>
+    {record.filename && <div className="ubo-resolution-evidence-file"><span aria-hidden="true">▤</span><div><strong>{record.filename}</strong><small>{record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE ? "File received · analysis not completed" : record.status === EVIDENCE_STATUS.REJECTED ? "File received · evidence not accepted" : "File received"}</small></div></div>}
     <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.currentTarget.files?.[0] || null; event.currentTarget.value = ""; onUpload(record, file); }} />
-    {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.REJECTED ? "Choose another file" : "Choose supporting evidence"}</button>}
+    {record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE && retryAvailable && <button type="button" onClick={onRetry} disabled={busy}>Retry analysis</button>}
+    {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.OPEN ? "Choose supporting evidence" : "Choose another file"}</button>}
     {record.status !== EVIDENCE_STATUS.OPEN && <strong className="ubo-resolution-evidence-status">{humanize(record.status)}</strong>}
     {message && <p role="status">{message}</p>}
   </article>;
@@ -213,6 +234,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [errors, setErrors] = useState({});
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
+  const evidenceFiles = useRef({});
   const requestedRecalculations = useRef(new Set());
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
   const researchEntries = useMemo(() => partitionResearchEntriesForComparison(filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company)).primaryEntries, [researchResult, company]);
@@ -287,6 +309,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     setErrors({});
     setEditingQuestionId(null);
     setEvidenceState({ busyId: null, messages: {} });
+    evidenceFiles.current = {};
   };
   const uploadEvidence = async (record, file) => {
     if (!file) return;
@@ -294,6 +317,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       setEvidenceState((current) => ({ ...current, messages: { ...current.messages, [record.id]: "Upload a PDF, PNG or JPEG up to 3 MB." } }));
       return;
     }
+    evidenceFiles.current[record.id] = file;
     setEvidence((current) => ({ ...current, [record.id]: { status: EVIDENCE_STATUS.RECEIVED, filename: file.name } }));
     setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Evidence received and sent to the existing validation pipeline." } }));
     try {
@@ -308,13 +332,16 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         }),
       });
       const payload = await response.json();
-      if (!response.ok || !payload.success) throw new Error(evidenceUploadError(payload));
+      if (!response.ok || !payload.success) {
+        const failure = evidenceUploadFailure(payload, response.status);
+        throw Object.assign(new Error(failure.message), { evidenceStatus: failure.status });
+      }
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
       const outcome = evidenceResultStatus(payload.result, resolution, record);
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], ...outcome, artifactId: payload.result.artifact?.artifactId, validatedAt: new Date().toISOString() } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
     } catch (caught) {
-      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
+      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
     }
   };
@@ -344,6 +371,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       errors={errors}
       evidenceState={evidenceState}
       evidence={evidence}
+      retainedFiles={evidenceFiles.current}
       onDraft={(questionId, value) => setDrafts((current) => ({ ...current, [questionId]: value }))}
       onSubmit={submit}
       onUpload={uploadEvidence}
