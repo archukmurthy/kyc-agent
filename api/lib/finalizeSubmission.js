@@ -241,7 +241,7 @@ async function finalizeSubmission(payload, deps = {}) {
       await client.query(
         `UPDATE entity_dossiers
          SET owned_by = 'customer', last_customer_action_at = NOW()
-         WHERE id = $1 AND tenant_id = $2`,
+         WHERE id = $1 AND tenant_id = $2 AND status != 'deleted'`,
         [dossierId, tenantId]
       );
     }

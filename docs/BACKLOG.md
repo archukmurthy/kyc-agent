@@ -230,6 +230,16 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
 - **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
 
+### RERES-3 — Part 3 correction flow: known edges (final review)
+- **Category:** Reliability / UX · **Priority:** P3 · **Status:** OPEN (found in Part 3 final review 2026-09-17)
+- **What:**
+  - Overlapping correction saves can both snapshot the same version and hit `UNIQUE(dossier_id, version)` → `save_failed` (fails safe: the second save is refused, the customer sees the retry message).
+  - The version snapshot and the dossier UPDATE are two statements, not atomic; a single CTE (snapshot + UPDATE) would close the gap.
+  - Card A (upload documents) asks the dev paid-call confirm twice: once at the picker (the search is spent there) and again when research runs from the documents step.
+  - The picker's cap refusal (`CONTACT_ADMIN_MSG`) posts no re-research failure flag, unlike the Applicant-page correction path.
+  - Product question: after a fallback, a tenant with no `manualFormUrl` offers no manual-entry route.
+- **Area:** `api/save-dossier.js`, `src/App.js` (`proceedFromJourney`, `proceedFromDocuments`, `fallBackToManual`).
+
 ### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
 - **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
 - **What:** The cap lives in `/api/search-attempt` and `/api/research-attempt`, which the client calls before re-researching. A client that skips that call can still run research, bounded only by Part 2's per-caller rate limit. Real fix: have `/api/research` require a one-time attempt grant (e.g. a short-lived signed nonce issued by the attempt endpoints).
