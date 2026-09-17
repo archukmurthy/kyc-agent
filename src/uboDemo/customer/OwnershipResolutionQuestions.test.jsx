@@ -66,7 +66,7 @@ test("an unknown percentage is answered, re-evaluated by the existing endpoint a
   const request = JSON.parse(window.fetch.mock.calls[0][1].body);
   expect(request.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
   expect(request.savedResult.candidateFacts[0].measurement).toEqual({ type: "EXACT", value: 18 });
-  await waitFor(() => expect(within(container.querySelector(".ubo-resolution-question-list")).queryByText(/What percentage of Target Limited does Alice Morgan currently own/i)).not.toBeInTheDocument());
+  await waitFor(() => expect(within(container.querySelector(".ubo-resolution-question-groups")).queryByText(/What percentage of Target Limited does Alice Morgan currently own/i)).not.toBeInTheDocument());
   expect(screen.getByRole("heading", { name: "Answered questions" })).toBeInTheDocument();
   expect(screen.getByText("18%")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
@@ -89,6 +89,35 @@ test("an answered question can be edited without hiding an unanswered sibling", 
   await waitFor(() => expect(screen.getByText("30%")).toBeInTheDocument());
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
   await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+});
+
+test("start questions again clears saved answers and restores the initial journey", async () => {
+  render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
+  expect(window.localStorage.length).toBeGreaterThan(0);
+
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+
+  expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /What percentage of Target Limited does Alice Morgan currently own/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Start questions again" })).toBeDisabled();
+});
+
+test("questions and evidence identify the company and related ownership issue", () => {
+  render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+  expect(screen.getByRole("heading", { level: 3, name: "Alice Morgan → Target Limited" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 3, name: "Nominee arrangement for Target Limited" })).toBeInTheDocument();
+
+  const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
+  fireEvent.click(within(discrepancyQuestion).getByLabelText(/existing shares were transferred/i));
+  fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
+
+  const evidence = screen.getByText(/Establish the current shareholding after the reported share transfer/i).closest("article");
+  expect(within(evidence).getByText("Target Limited")).toBeInTheDocument();
+  expect(within(evidence).getByText("Alice Morgan")).toBeInTheDocument();
 });
 
 test("a discrepancy asks for its cause before showing transfer-specific questions and evidence", () => {
