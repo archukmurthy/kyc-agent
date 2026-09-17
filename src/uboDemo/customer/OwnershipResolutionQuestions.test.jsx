@@ -288,4 +288,5 @@ test("nominee evidence stays with its issue after all follow-up questions are an
   expect(within(group).getByText(/All questions for this issue are answered/i)).toBeInTheDocument();
   expect(within(group).getByRole("button", { name: "Choose supporting evidence" })).toBeInTheDocument();
   expect(within(group).getByText(/remains unresolved until supporting evidence passes/i)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
 });

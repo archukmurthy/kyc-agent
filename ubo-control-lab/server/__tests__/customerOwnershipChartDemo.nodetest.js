@@ -92,6 +92,20 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.comparison, "NOT_PERFORMED");
 });
 
+test("resolution evidence handoff adds only supported fact concepts to the existing Evidence extraction", async () => {
+  const observed = {};
+  await analyseCustomerOwnershipChart(input({
+    evidenceHandoff: {
+      contractVersion: "ubo-external-evidence-handoff-v1",
+      requestedConcepts: ["NOMINEE_RELATIONSHIP", "RELATIONSHIP_PERCENTAGE", "RELATIONSHIP_CURRENTNESS", "UNSUPPORTED_CONCEPT"],
+    },
+  }), { provider: provider(observed) });
+  assert.ok(observed.concepts.includes("nominee_relationship"));
+  assert.ok(observed.concepts.includes("ownership_percentage"));
+  assert.ok(observed.concepts.includes("temporal_state"));
+  assert.equal(observed.concepts.includes("UNSUPPORTED_CONCEPT"), false);
+});
+
 test("full assertion presentation preserves zero, registry ranges, unknown values and non-percentage rights", () => {
   const relationship = (factId, relationshipType, measurement) => ({
     factId, type: "RELATIONSHIP", relationship: relationshipType,

@@ -342,28 +342,42 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     } catch (_) { /* Customer questions remain usable when analyst trace persistence is unavailable. */ }
   }, [answers, context?.demoCaseId, engine]);
   useEffect(() => {
-    const pending = engine.resolutions.find((resolution) => resolution.resultingFact && !recalculations[resolution.comparisonItemId] && !requestedRecalculations.current.has(resolution.comparisonItemId));
-    if (!pending) return;
-    requestedRecalculations.current.add(pending.comparisonItemId);
+    const material = engine.resolutions.filter((resolution) => resolution.resultingFact?.type === "RELATIONSHIP" && resolution.resultingFact.relationship === "ECONOMIC_OWNERSHIP");
+    if (!material.length) return;
+    const signature = JSON.stringify(material.map(({ comparisonItemId, resultingFact }) => [comparisonItemId, resultingFact]));
+    if (requestedRecalculations.current.has(signature)) return;
+    requestedRecalculations.current.add(signature);
+    const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), result);
     let active = true;
     fetch("/api/ubo-demo-customer-ownership-chart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operation: "REEVALUATE_SAVED_EXTRACTION", demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId }, savedResult: applyResultingFact(result, pending.resultingFact) }),
+      body: JSON.stringify({ operation: "REEVALUATE_SAVED_EXTRACTION", demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId }, savedResult }),
     }).then(async (response) => {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.message || "UBO recalculation failed");
       if (!active) return;
-      setRecalculations((current) => ({ ...current, [pending.comparisonItemId]: {
-        determination: determinationFromChartAnalysis(payload.result.chartAnalysis, pending.resultingFact),
-        chartAnalysis: payload.result.chartAnalysis,
-        recalculatedAt: new Date().toISOString(),
-      } }));
+      setRecalculations((current) => {
+        const next = { ...current };
+        rows.forEach((row) => {
+          const sourceFact = row.chartFact || row.researchFact;
+          if (!sourceFact) return;
+          next[row.key] = {
+            determination: determinationFromChartAnalysis(payload.result.chartAnalysis, sourceFact),
+            chartAnalysis: payload.result.chartAnalysis,
+            recalculatedAt: new Date().toISOString(),
+          };
+        });
+        return next;
+      });
     }).catch((caught) => {
-      if (active) setRecalculations((current) => ({ ...current, [pending.comparisonItemId]: { determination: pending.uboImpact.determination, error: caught.message, recalculatedAt: new Date().toISOString() } }));
+      if (active) setRecalculations((current) => Object.fromEntries([
+        ...Object.entries(current),
+        ...material.map((resolution) => [resolution.comparisonItemId, { determination: resolution.uboImpact.determination, error: caught.message, recalculatedAt: new Date().toISOString() }]),
+      ]));
     });
     return () => { active = false; };
-  }, [context, engine.resolutions, recalculations, result]);
+  }, [context, engine.resolutions, result, rows]);
 
   const submit = (question) => {
     try {

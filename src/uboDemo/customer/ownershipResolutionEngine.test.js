@@ -91,6 +91,46 @@ test.each([
   expect(engine.evidenceRequirements[0].handoff).toEqual(expect.objectContaining({ contractVersion: "ubo-external-evidence-handoff-v1", executionRoute: "/api/ubo-demo-customer-ownership-chart" }));
 });
 
+test("registry-outdated explanation requests the current fact but not a fictional change date", () => {
+  const rows = [row("CONFLICT", { type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })];
+  const initial = evaluate({ comparisonRows: rows });
+  const engine = evaluate({ comparisonRows: rows, answers: answer(question(initial, FACT_REQUIREMENT_TYPE.EXPLAIN_OWNERSHIP_DIFFERENCE), OWNERSHIP_DIFFERENCE_REASON.REGISTRY_OUTDATED) });
+  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeDefined();
+  expect(question(engine, FACT_REQUIREMENT_TYPE.OWNERSHIP_CHANGE_EFFECTIVE_DATE)).toBeUndefined();
+});
+
+test("other discrepancy explanation is captured as free text for analyst review", () => {
+  const rows = [row("CONFLICT", { type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })];
+  const initial = evaluate({ comparisonRows: rows });
+  const mainQuestion = question(initial, FACT_REQUIREMENT_TYPE.EXPLAIN_OWNERSHIP_DIFFERENCE);
+  let answers = answer(mainQuestion, OWNERSHIP_DIFFERENCE_REASON.OTHER);
+  let engine = evaluate({ comparisonRows: rows, answers });
+  const detailQuestion = engine.questions.find(({ factRequirementId }) => engine.requirements.find(({ id }) => id === factRequirementId)?.role === "OTHER_DETAILS");
+  expect(detailQuestion).toEqual(expect.objectContaining({ type: "FREE_TEXT", status: QUESTION_STATUS.OPEN }));
+  answers = { ...answers, ...answer(detailQuestion, "The chart reflects a pending court-approved reorganisation.") };
+  engine = evaluate({ comparisonRows: rows, answers });
+  expect(engine.resolutions[0]).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW, resultingFact: null }));
+  expect(engine.resolutions[0].reason).toMatch(/captured for analyst review/i);
+});
+
+test("a registry-only holder is confirmed before exact ownership is requested", () => {
+  const rows = [row("NEEDS_CONFIRMATION", { type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, null)];
+  let engine = evaluate({ comparisonRows: rows });
+  const confirmation = question(engine, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING);
+  expect(confirmation.prompt).toMatch(/currently own shares/i);
+  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeUndefined();
+  engine = evaluate({ comparisonRows: rows, answers: answer(confirmation, "YES") });
+  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeDefined();
+});
+
+test("a registry-only holder reported as removed creates a structured removed requirement and analyst review", () => {
+  const rows = [row("NEEDS_CONFIRMATION", { type: "EXACT", value: 40 }, null)];
+  const initial = evaluate({ comparisonRows: rows });
+  const engine = evaluate({ comparisonRows: rows, answers: answer(question(initial, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING), "NO") });
+  expect(engine.requirements).toContainEqual(expect.objectContaining({ type: FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED, status: "RESOLVED", assertedValue: true }));
+  expect(engine.resolutions[0]).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW }));
+});
+
 test("a share transfer resolves only after current fact, date and matching evidence are present", () => {
   const rows = [row("CONFLICT", { type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })];
   let engine = evaluate({ comparisonRows: rows });
@@ -170,6 +210,20 @@ test("Evidence pipeline results satisfy only matching ownership assertions", () 
   const result = { artifact: { integrityVerified: true }, candidateFacts: [fact("proof", alice, target, { type: "EXACT", value: 30 }, "proof")] };
   expect(evidenceResultStatus(result, resolution, requirement).status).toBe(EVIDENCE_STATUS.SATISFIED);
   expect(evidenceResultStatus({ ...result, candidateFacts: [fact("wrong", alice, target, { type: "EXACT", value: 20 }, "proof")] }, resolution, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+});
+
+test("nominee evidence satisfies only the declared holder, principal and exact interest", () => {
+  const resolution = { resultingFact: { type: "NOMINEE_ARRANGEMENT", declaration: { REGISTERED_HOLDER: "ABC Nominees Ltd", UNDERLYING_OWNER: "Jane Smith", NOMINEE_INTEREST: 30 } } };
+  const requirement = { comparisonItemId: "ownership-comparison:nominee-declaration" };
+  const nomineeFact = {
+    type: "ENTITY_ATTRIBUTE",
+    subject: { name: "ABC Nominees Ltd" },
+    value: { relationshipType: "NOMINEE_FOR", object: { name: "Jane Smith" }, relationshipValue: { kind: "EXACT", exact: 30 } },
+  };
+  const result = { artifact: { integrityVerified: true }, candidateFacts: [nomineeFact] };
+  expect(evidenceResultStatus(result, resolution, requirement).status).toBe(EVIDENCE_STATUS.SATISFIED);
+  expect(evidenceResultStatus({ ...result, candidateFacts: [{ ...nomineeFact, value: { ...nomineeFact.value, relationshipValue: { kind: "EXACT", exact: 20 } } }] }, resolution, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  expect(evidenceResultStatus({ ...result, candidateFacts: [fact("unrelated", alice, target, { type: "EXACT", value: 30 }, "proof")] }, resolution, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
 });
 
 test("range threshold classification preserves definite and indeterminate outcomes", () => {

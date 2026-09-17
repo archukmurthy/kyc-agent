@@ -64,6 +64,7 @@ export const EVIDENCE_RULES = Object.freeze({
     purpose: "Establish the declared nominee or bare-trust arrangement and its underlying beneficial owner.",
     preferredEvidenceTypes: ["NOMINEE_AGREEMENT", "DECLARATION_OF_TRUST"],
     alternativeEvidenceTypes: ["BARE_TRUST_DOCUMENT", "CUSTODY_AGREEMENT", "OTHER_SUPPORTING_EVIDENCE"],
+    requestedConcepts: ["NOMINEE_RELATIONSHIP", "RELATIONSHIP_PERCENTAGE", "RELATIONSHIP_CURRENTNESS"],
   }),
 });
 
@@ -134,8 +135,24 @@ export function deriveFactRequirements(comparisonRows = [], { threshold = 25, an
           requirements.push({ ...requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.OWNERSHIP_CHANGE_OCCURRED, row, "CUSTOMER_EXPLANATION", explanationAnswer.value), status: "RESOLVED", assertedValue: true });
           requirements.push({ ...requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.OWNERSHIP_CHANGE_TYPE, row, "CUSTOMER_EXPLANATION", explanationAnswer.value), status: "RESOLVED", assertedValue: explanationAnswer.value });
         }
-        requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.OWNERSHIP_CHANGE_EFFECTIVE_DATE, row, "ESTABLISH_WHEN_CURRENT_OWNERSHIP_BECAME_EFFECTIVE", explanationAnswer.value));
+        if ([OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT].includes(explanationAnswer.value)) {
+          requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.OWNERSHIP_CHANGE_EFFECTIVE_DATE, row, "ESTABLISH_WHEN_CURRENT_OWNERSHIP_BECAME_EFFECTIVE", explanationAnswer.value));
+        }
         requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE, row, "ESTABLISH_CURRENT_SHAREHOLDING_AFTER_EXPLANATION", explanationAnswer.value));
+      }
+      if (explanationAnswer?.value === OWNERSHIP_DIFFERENCE_REASON.OTHER) {
+        requirements.push({ ...requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.EXPLAIN_OWNERSHIP_DIFFERENCE, row, "CAPTURE_OTHER_EXPLANATION_FOR_ANALYST_REVIEW", "other-details"), role: "OTHER_DETAILS" });
+      }
+      return;
+    }
+    if (row.researchFact && !row.chartFact) {
+      const confirmation = requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING, row, "RESEARCH_ONLY_REQUIRES_CUSTOMER_CONFIRMATION");
+      requirements.push(confirmation);
+      const confirmationAnswer = answers[id("question", confirmation.id)]?.value;
+      if (confirmationAnswer === "NO") {
+        requirements.push({ ...requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED, row, "CUSTOMER_REPORTS_REGISTRY_HOLDER_REMOVED"), status: "RESOLVED", assertedValue: true });
+      } else if (confirmationAnswer === "YES" && determineUboFromMeasurement(usableMeasurement(row), threshold) === UBO_DETERMINATION.INDETERMINATE) {
+        requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE, row, "REQUIRED_TO_DETERMINE_UBO_STATUS"));
       }
       return;
     }
@@ -144,10 +161,7 @@ export function deriveFactRequirements(comparisonRows = [], { threshold = 25, an
       preResolved.push({ comparisonItemId, resolutionStatus: RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT, uboDetermination: determination });
       return;
     }
-    requirements.push(requirement(comparisonItemId, row.researchFact && !row.chartFact
-      ? FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED
-      : FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE, row,
-    row.researchFact && !row.chartFact ? "RESEARCH_ONLY_REQUIRES_CUSTOMER_CONFIRMATION" : "REQUIRED_TO_DETERMINE_UBO_STATUS"));
+    requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE, row, "REQUIRED_TO_DETERMINE_UBO_STATUS"));
   });
 
   const nomineeComparisonItemId = "ownership-comparison:nominee-declaration";
@@ -169,6 +183,12 @@ function questionForRequirement(item, createdAt) {
     factRequirementId: item.id,
     status: QUESTION_STATUS.OPEN,
     createdAt,
+  };
+  if (item.type === FACT_REQUIREMENT_TYPE.EXPLAIN_OWNERSHIP_DIFFERENCE && item.role === "OTHER_DETAILS") return {
+    ...base,
+    type: QUESTION_TYPE.FREE_TEXT,
+    prompt: "Please tell us why the ownership information is different.",
+    explanation: "We will preserve your explanation for an analyst to review. We will not infer an ownership fact from free text.",
   };
   if (item.type === FACT_REQUIREMENT_TYPE.EXPLAIN_OWNERSHIP_DIFFERENCE) return {
     ...base,
@@ -236,7 +256,7 @@ function evidenceRequirement(comparisonItemId, factRequirementId, ruleKey, creat
       handoffType: "EXTERNAL_EVIDENCE_REQUIRED",
       status: "PENDING_EXTERNAL_ACTION",
       semanticEvidenceCategories: [...rule.preferredEvidenceTypes, ...rule.alternativeEvidenceTypes],
-      requestedConcepts: ["ECONOMIC_OWNERSHIP", "RELATIONSHIP_CURRENTNESS"],
+      requestedConcepts: [...(rule.requestedConcepts || ["ECONOMIC_OWNERSHIP", "RELATIONSHIP_CURRENTNESS"])],
       requestDoesNotResolveInformationNeed: true,
       acceptsFileBytes: false,
       createsEvidenceArtifact: false,
@@ -297,7 +317,11 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
     let resultingFact = null;
     if (explanationAnswer && isAnalystAnswer(explanationAnswer)) {
       resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
-      reason = "The customer explanation does not establish a deterministic ownership fact.";
+      const otherDetails = items.find((item) => item.role === "OTHER_DETAILS");
+      const detailAnswer = otherDetails && answerFor(otherDetails, answers)?.value;
+      reason = detailAnswer
+        ? "The customer's explanation was captured for analyst review and did not create a deterministic ownership fact."
+        : "The customer explanation does not establish a deterministic ownership fact.";
     } else if (explanationAnswer) {
       const ruleKey = evidenceKeyForExplanation(explanationAnswer);
       if (ruleKey) {
@@ -311,26 +335,30 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
           resultingFact = customerOwnershipFact(row, percentage.value, answers, dateAnswer?.value || null, now);
           determination = recalculations[row.key]?.determination || determineUboFromMeasurement({ type: "EXACT", value: percentage.value }, threshold);
         }
-        if (stored?.status === EVIDENCE_STATUS.SATISFIED && percentage && dateAnswer) {
+        const dateRequired = [OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT].includes(explanationAnswer);
+        if (stored?.status === EVIDENCE_STATUS.SATISFIED && percentage && (!dateRequired || dateAnswer)) {
           resolutionStatus = RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED;
           reason = "The ownership explanation, current percentage, effective date and supporting evidence have been established.";
         }
       }
     } else {
       const percentage = exactAnswerFor(requirements, answers, row.key);
-      const confirmation = items.find((item) => [FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING, FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED].includes(item.type));
+      const confirmation = items.find((item) => item.type === FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING);
       const confirmationAnswer = confirmation && answerFor(confirmation, answers)?.value;
       if (percentage) {
         resultingFact = customerOwnershipFact(row, percentage.value, answers, null, now);
         determination = recalculations[row.key]?.determination || determineUboFromMeasurement({ type: "EXACT", value: percentage.value }, threshold);
         resolutionStatus = RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED;
         reason = "The customer supplied the missing ownership percentage and the UBO assessment was recalculated.";
-      } else if (confirmation?.type === FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED && confirmationAnswer === "YES") {
-        resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
-        reason = "The customer says the registry-only shareholder has been removed; the change must be reviewed.";
       } else if (confirmationAnswer === "YES") {
-        resolutionStatus = RESOLUTION_STATUS.UNRESOLVED;
-        reason = "Current shareholding was confirmed; the exact interest is still required.";
+        determination = determineUboFromMeasurement(usableMeasurement(row), threshold);
+        if (determination === UBO_DETERMINATION.INDETERMINATE) {
+          resolutionStatus = RESOLUTION_STATUS.UNRESOLVED;
+          reason = "Current shareholding was confirmed; the exact interest is still required.";
+        } else {
+          resolutionStatus = RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED;
+          reason = "The customer confirmed the registry-only shareholder is current, and the existing ownership range determines UBO status.";
+        }
       } else if (confirmationAnswer === "NO") {
         resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
         reason = "The customer says the registry-only shareholder is no longer current.";
@@ -439,7 +467,7 @@ export function customerOwnershipFact(row, percentage, answers = {}, effectiveDa
 }
 
 export function applyResultingFact(savedResult, resultingFact) {
-  if (!savedResult || !Array.isArray(savedResult.candidateFacts) || !resultingFact) return savedResult;
+  if (!savedResult || !Array.isArray(savedResult.candidateFacts) || resultingFact?.type !== "RELATIONSHIP" || resultingFact.relationship !== "ECONOMIC_OWNERSHIP") return savedResult;
   const sameRelationship = (fact) => fact.type === "RELATIONSHIP" && fact.relationship === resultingFact.relationship
     && normalized(fact.subject?.name) === normalized(resultingFact.subject?.name)
     && normalized(fact.object?.name) === normalized(resultingFact.object?.name);
@@ -468,8 +496,19 @@ export function evidenceResultStatus(result, resolution, evidenceRequirementReco
   if (!result?.artifact?.integrityVerified || !Array.isArray(result?.candidateFacts)) return { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence pipeline did not return an integrity-checked structured result." };
   if (evidenceRequirementRecord?.reviewMode === "ANALYST_REVIEW") return { status: EVIDENCE_STATUS.ANALYST_REVIEW, reason: "The document passed through Evidence extraction and is queued for analyst review against the declared control or special-arrangement fact." };
   if (evidenceRequirementRecord?.comparisonItemId === "ownership-comparison:nominee-declaration") {
-    return result.candidateFacts.length ? { status: EVIDENCE_STATUS.SATISFIED, reason: "Evidence was staged and interpreted by the existing pipeline for analyst review." }
-      : { status: EVIDENCE_STATUS.REJECTED, reason: "No structured facts were extracted from the supporting evidence." };
+    const declaration = resolution?.resultingFact?.declaration || {};
+    const registeredHolder = normalized(declaration.REGISTERED_HOLDER);
+    const underlyingOwner = normalized(declaration.UNDERLYING_OWNER);
+    const interest = Number(declaration.NOMINEE_INTEREST);
+    const supporting = result.candidateFacts.some((fact) => fact.type === "ENTITY_ATTRIBUTE"
+      && fact.value?.relationshipType === "NOMINEE_FOR"
+      && normalized(fact.subject?.name) === registeredHolder
+      && normalized(fact.value?.object?.name) === underlyingOwner
+      && fact.value?.relationshipValue?.kind === "EXACT"
+      && Number(fact.value.relationshipValue.exact) === interest);
+    return supporting
+      ? { status: EVIDENCE_STATUS.SATISFIED, reason: "The existing Evidence pipeline extracted the declared nominee relationship and interest." }
+      : { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence result did not establish the declared nominee holder, underlying owner and interest; analyst review is required." };
   }
   const expected = resolution?.resultingFact;
   const supporting = result.candidateFacts.some((fact) => fact.type === "RELATIONSHIP"

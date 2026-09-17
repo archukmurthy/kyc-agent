@@ -26,6 +26,7 @@ const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
 const MAX_BYTES = 3 * 1024 * 1024;
 const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const SUPPORTED_HANDOFF_CONCEPTS = new Set(["ECONOMIC_OWNERSHIP", "RELATIONSHIP_CURRENTNESS", "RELATIONSHIP_PERCENTAGE", "NOMINEE_RELATIONSHIP"]);
 const CERTIFICATION_CONCEPTS = Object.freeze([
   ["certification_signer_name", "certification_signer_name", "Name of the person stated to certify or sign the chart"],
   ["certification_signer_postnominal", "certification_signer_postnominal", "Professional postnominal stated for the chart certifier"],
@@ -101,6 +102,9 @@ function validateRequest(input) {
       },
     },
     file: { ...file, bytes },
+    evidenceHandoff: input.evidenceHandoff?.contractVersion === "ubo-external-evidence-handoff-v1"
+      ? { requestedConcepts: [...new Set((input.evidenceHandoff.requestedConcepts || []).filter((concept) => SUPPORTED_HANDOFF_CONCEPTS.has(concept)))] }
+      : null,
   };
 }
 
@@ -916,6 +920,9 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
       { informationNeedId: randomUUID(), concepts: ["ECONOMIC_OWNERSHIP"] },
       { informationNeedId: randomUUID(), concepts: ["VOTING_RIGHTS"] },
       { informationNeedId: randomUUID(), concepts: ["SIGNIFICANT_INFLUENCE_OR_CONTROL", "APPOINTMENT_RIGHTS"] },
+      ...(input.evidenceHandoff?.requestedConcepts.length
+        ? [{ informationNeedId: randomUUID(), concepts: input.evidenceHandoff.requestedConcepts }]
+        : []),
     ],
     artifactEvidenceReferences: [{
       system: "evidence-platform-v1",
