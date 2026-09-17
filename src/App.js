@@ -2698,11 +2698,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // ── Foundational-facts confirmation gate handlers (slice 2 of 2) ──────────
   // The five-fact gate at the top of the Applicant page is controlled: these
-  // handlers own its check state and outcomes. A disputed fact (other than the
-  // ownership fork) — or an "ownership misclassified" choice — is a HARD reset to
-  // the fresh lookup page via resetAll() (nothing pre-filled). This deliberately
-  // replaces the old dossier-reseed dispute (which carried state forward); the
-  // re-research engine itself is untouched and still reachable elsewhere.
+  // handlers own its check state and outcomes. A wrong fact is corrected in place
+  // (applyCorrections, Part 3): entity type alone re-derives the schema, anything
+  // else re-researches with the corrected values and spends one server-counted
+  // search. Nothing resets the application; a search that cannot run falls back
+  // to manual entry (fallBackToManual). The ownership / registration-number
+  // "genuinely changed" forks request documents instead.
   const isFactConfirmed = (key) => factChecks[key] !== false;
 
   const toggleFact = (key) => {

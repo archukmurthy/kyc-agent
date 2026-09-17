@@ -25,7 +25,7 @@
  *   - selectedJourneyCard / manualOpened stay because proceedFromJourney and
  *     resetAll drive them, and ConfirmStep resets them on a re-search.
  *   - searchAttempts stays (read-only here); the server counter is authoritative
- *     and buildDossierPayload carries it.
+ *     (it is read from the dossier / attempt endpoints, never saved by the client).
  *   - companyName / countryCode are READ-ONLY here — three references, all in
  *     the Nium fixture check and the resolver button. They belong to the Company
  *     Lookup screen, which is still inline in App.js (its own later slice).
@@ -41,12 +41,10 @@
  *
  * NOTE ON THE LOCKED SEARCH-CAP BRANCH: the evaluateSearchCap lock (banner,
  * opacity-0.45 cards, not-allowed cursor, CONTACT_ADMIN_MSG) moved byte-identical
- * even though no test reaches it. It is currently unreachable in the running app
- * — `const [seededBy] = useState("analyst")` has no setter, so the increment in
- * proceedFromJourney never fires and searchAttempts is pinned at 0. That is a
- * pre-existing, separately-logged gap. It is NOT this move's business to fix,
- * and the wiring it uses is the same drilled searchAttempts the covered unlocked
- * state uses.
+ * even though no test reaches it. It is reachable once a customer (a link
+ * customer, or one who corrected a fact — App's isCustomerResearch) has used
+ * their server-counted searches; the wiring is the same drilled searchAttempts
+ * the covered unlocked state uses.
  */
 
 import React from "react";
