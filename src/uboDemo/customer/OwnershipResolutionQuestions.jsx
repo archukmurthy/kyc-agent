@@ -58,6 +58,17 @@ function statusLabel(status) {
   }[status] || humanize(status);
 }
 
+function measurementLabel(measurement) {
+  if (!measurement || measurement.type === "UNKNOWN") return "Not established";
+  if (measurement.type === "EXACT") return `${measurement.value}%`;
+  if (measurement.type === "RANGE") {
+    const lower = measurement.lowerBound == null ? "0" : measurement.lowerBound;
+    const upper = measurement.upperBound == null ? "100" : measurement.upperBound;
+    return `${measurement.lowerInclusive === false ? "(" : "["}${lower}%, ${upper}%${measurement.upperInclusive === false ? ")" : "]"}`;
+  }
+  return humanize(measurement.type);
+}
+
 function evidenceUploadFailure(payload, responseStatus) {
   const code = String(payload?.code || "evidence_validation_failed");
   if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
@@ -255,6 +266,40 @@ function AnalystTrace({ engine, rows }) {
   </details>;
 }
 
+function ResolutionOutcomes({ engine, rows }) {
+  const [open, setOpen] = useState(false);
+  const rowById = new Map(rows.map((row) => [row.key, row]));
+  const resolutions = engine.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration");
+  if (!resolutions.length) return null;
+  return <details className="ubo-resolution-outcomes">
+    <summary onClick={() => setOpen((current) => !current)}><div><small>Assessment details</small><strong>How we reached the ownership results</strong></div><span>{resolutions.length} check{resolutions.length === 1 ? "" : "s"}</span></summary>
+    {open && <><p>These are recorded assessment outcomes, not additional requirements for you. Expand a check to see which information was sufficient and how it affected the ownership result.</p>
+    <div>{resolutions.map((resolution) => {
+      const row = rowById.get(resolution.comparisonItemId);
+      const sourceFact = resolution.resultingFact || row?.chartFact || row?.researchFact;
+      const shareholder = sourceFact?.subject?.name || row?.chartFact?.subject?.name || row?.researchFact?.subject?.name || "Ownership relationship";
+      const ownedEntity = sourceFact?.object?.name || row?.chartFact?.object?.name || row?.researchFact?.object?.name || "Company under review";
+      const evidenceRecords = engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId);
+      const sufficientReason = resolution.reason || row?.detail || (resolution.resolutionStatus === RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT
+        ? "The recorded ownership value was precise enough to determine whether this relationship crosses the configured ownership threshold, so no further customer question was required."
+        : "The available facts produced this recorded assessment outcome.");
+      return <details key={resolution.id} className={resolution.resolutionStatus.toLowerCase()}>
+        <summary><div><span>{statusLabel(resolution.resolutionStatus)}</span><strong>{shareholder} → {ownedEntity}</strong></div><small>{resolution.uboImpact.determination === "INDETERMINATE" ? "Further assessment required" : resolution.uboImpact.idvRequired ? "Ownership threshold met · identity verification required" : "Ownership threshold not met · identity verification not required"}</small></summary>
+        <dl>
+          <div><dt>Why this result was recorded</dt><dd>{sufficientReason}</dd></div>
+          {row?.chartFact && <div><dt>Customer ownership chart</dt><dd>{measurementLabel(row.chartFact.measurement)}</dd></div>}
+          {row?.researchFact && <div><dt>Independent information</dt><dd>{measurementLabel(row.researchFact.measurement)}</dd></div>}
+          {resolution.resultingFact?.measurement && <div><dt>Established current ownership</dt><dd>{measurementLabel(resolution.resultingFact.measurement)}</dd></div>}
+          {row?.descriptor && <div><dt>Comparison result</dt><dd>{row.descriptor}</dd></div>}
+          {evidenceRecords.length > 0 && <div><dt>Supporting evidence</dt><dd>{evidenceRecords.map(({ status }) => humanize(status)).join(", ")}</dd></div>}
+          <div><dt>Threshold outcome</dt><dd>{humanize(resolution.uboImpact.determination)}</dd></div>
+          <div><dt>Identity verification</dt><dd>{resolution.uboImpact.idvRequired ? "Required" : "Not required"}</dd></div>
+        </dl>
+      </details>;
+    })}</div></>}
+  </details>;
+}
+
 export default function OwnershipResolutionQuestions({ researchResult, result, company, context }) {
   const restored = useMemo(() => readSession(context, result), [context, result]);
   const [answers, setAnswers] = useState(restored?.answers || {});
@@ -446,7 +491,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
-    <div className="ubo-resolution-outcomes">{engine.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration").map((resolution) => <article key={resolution.id} className={resolution.resolutionStatus.toLowerCase()}><span>{statusLabel(resolution.resolutionStatus)}</span><strong>{resolution.reason}</strong><small>{resolution.uboImpact.determination} · Identity verification {resolution.uboImpact.idvRequired ? "required" : "not required"}</small></article>)}</div>
+    <ResolutionOutcomes engine={engine} rows={rows} />
     {engine.uboAssessments?.length > 0 && <section className="ubo-resolution-ubo-results"><h3>People requiring identity verification</h3>{engine.uboAssessments.map((assessment) => <article key={assessment.personId}><strong>{assessment.personName}</strong><span>Definite UBO · {assessment.bases.map(humanize).join(", ")}</span><small>IDV required once for this person</small></article>)}</section>}
     {engine.fallback?.outcome && <section className="ubo-resolution-fallback"><h3>{humanize(engine.fallback.outcome)}</h3><p>{engine.fallback.reason}</p></section>}
     <AnalystTrace engine={engine} rows={rows} />
