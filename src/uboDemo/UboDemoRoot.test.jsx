@@ -244,11 +244,13 @@ test("open questions and analyst assertions use the same explicit collapse contr
   renderStart();
   fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
   const questions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
-  expect(within(questions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
-  expect(within(questions).getByText(/Nothing needed from you right now/)).toBeInTheDocument();
-  fireEvent.click(within(questions).getByRole("button", { name: "Collapse" }));
-  expect(within(questions).queryByText(/Nothing needed from you right now/)).not.toBeInTheDocument();
+  const investigationTopics = screen.getByRole("heading", { name: "Investigation topics" }).closest("section");
+  expect(investigationTopics.nextElementSibling).toBe(questions);
   expect(within(questions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  expect(within(questions).queryByText(/Nothing needed from you right now/)).not.toBeInTheDocument();
+  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
+  expect(within(questions).getByText(/Nothing needed from you right now/)).toBeInTheDocument();
+  expect(within(questions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
 
   const assertions = screen.getByText("Research assertions and source facts").closest("section");
   expect(within(assertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
@@ -275,6 +277,7 @@ test("Ask customer records an existing open cause beside the unchanged source as
   window.fetch = jest.fn(() => okJson(selectedSession));
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   const openQuestions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
+  fireEvent.click(within(openQuestions).getByRole("button", { name: "Expand" }));
   const ask = within(openQuestions).getByRole("button", { name: "Ask customer" });
   fireEvent.click(ask);
   expect(screen.getByRole("button", { name: "Added for customer" })).toHaveAttribute("aria-pressed", "true");
@@ -337,12 +340,13 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   fireEvent.click(within(disclosure).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
+  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
+  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
   expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
   expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();
   const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
-  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
   expect(graphCard.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
@@ -351,6 +355,8 @@ test("a response without an evaluated snapshot exposes no invented graph or ques
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: /Explicit review is required/ })).toBeInTheDocument();
   expect(screen.getByText(/2 candidate identity or claim decisions remain/)).toBeInTheDocument();
+  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
+  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText("Nothing needed from you right now.")).toBeInTheDocument();
   expect(screen.getByText("We are still reviewing parts of the ownership structure.")).toBeInTheDocument();
 });
