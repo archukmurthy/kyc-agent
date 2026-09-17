@@ -117,6 +117,34 @@ test("nominee declaration branches into holder, underlying owner and interest qu
   expect(engine.evidenceRequirements[0].preferredEvidenceTypes).toEqual(expect.arrayContaining(["NOMINEE_AGREEMENT", "DECLARATION_OF_TRUST"]));
 });
 
+test("completed nominee answers remain unresolved until supporting evidence is satisfied", () => {
+  let engine = evaluate({ comparisonRows: [] });
+  const nominee = question(engine, FACT_REQUIREMENT_TYPE.CONFIRM_NOMINEE_ARRANGEMENT);
+  let answers = answer(nominee, "YES");
+  engine = evaluate({ comparisonRows: [], answers });
+  const valuesByRole = { REGISTERED_HOLDER: "Registered Holder Limited", UNDERLYING_OWNER: "Underlying Owner Limited", NOMINEE_INTEREST: 30 };
+  engine.requirements.filter(({ role }) => role).forEach((requirement) => {
+    const relatedQuestion = engine.questions.find(({ factRequirementId }) => factRequirementId === requirement.id);
+    answers = { ...answers, ...answer(relatedQuestion, valuesByRole[requirement.role]) };
+  });
+
+  engine = evaluate({ comparisonRows: [], answers });
+  const unresolved = engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === "ownership-comparison:nominee-declaration");
+  expect(engine.openQuestions.filter(({ comparisonItemId }) => comparisonItemId === unresolved.comparisonItemId)).toHaveLength(0);
+  expect(unresolved).toEqual(expect.objectContaining({
+    resolutionStatus: RESOLUTION_STATUS.UNRESOLVED,
+    ownershipEstablishment: "NOT_ESTABLISHED",
+    reason: "Nominee facts were declared; supporting evidence is required.",
+  }));
+
+  const evidenceId = engine.evidenceRequirements[0].id;
+  engine = evaluate({ comparisonRows: [], answers, evidence: { [evidenceId]: { status: EVIDENCE_STATUS.SATISFIED, artifactId: "nominee-proof" } } });
+  expect(engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === unresolved.comparisonItemId)).toEqual(expect.objectContaining({
+    resolutionStatus: RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED,
+    ownershipEstablishment: "ESTABLISHED_EVIDENCE_VERIFIED",
+  }));
+});
+
 test.each([OWNERSHIP_DIFFERENCE_REASON.OTHER, OWNERSHIP_DIFFERENCE_REASON.NOT_SURE])("%s routes to analyst review without inventing a fact", (value) => {
   const rows = [row("CONFLICT", { type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })];
   const initial = evaluate({ comparisonRows: rows });

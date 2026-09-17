@@ -118,6 +118,8 @@ test("questions and evidence identify the company and related ownership issue", 
   const evidence = screen.getByText(/Establish the current shareholding after the reported share transfer/i).closest("article");
   expect(within(evidence).getByText("Target Limited")).toBeInTheDocument();
   expect(within(evidence).getByText("Alice Morgan")).toBeInTheDocument();
+  const issueGroup = screen.getByRole("heading", { level: 3, name: "Alice Morgan → Target Limited" }).closest("section");
+  expect(within(issueGroup).getByText(/Establish the current shareholding after the reported share transfer/i)).toBeInTheDocument();
 });
 
 test("web-sourced ownership assertions do not create customer resolution questions", () => {
@@ -175,4 +177,31 @@ test("a media mismatch explains the format problem and keeps re-upload available
   await waitFor(() => expect(within(evidence).getByText(/contents do not match that format/i)).toBeInTheDocument());
   expect(within(evidence).getByRole("button", { name: "Choose another file" })).toBeInTheDocument();
   expect(within(evidence).getByText(/Accepted file formats: PDF, PNG or JPEG/i)).toBeInTheDocument();
+});
+
+test("nominee evidence stays with its issue after all follow-up questions are answered", async () => {
+  render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+
+  let group = screen.getByRole("heading", { level: 3, name: "Nominee arrangement for Target Limited" }).closest("section");
+  expect(within(group).getByText(/Establish the declared nominee or bare-trust arrangement/i)).toBeInTheDocument();
+  const registeredHolder = within(group).getByRole("heading", { name: /Who holds the shares or ownership rights on record/i }).closest("article");
+  fireEvent.change(within(registeredHolder).getByLabelText("Your answer"), { target: { value: "Registered Holder Limited" } });
+  fireEvent.click(within(registeredHolder).getByRole("button", { name: /Save answer/i }));
+  group = screen.getByRole("heading", { level: 3, name: "Nominee arrangement for Target Limited" }).closest("section");
+  const underlyingOwner = within(group).getByRole("heading", { name: /For whom are those shares or ownership rights held/i }).closest("article");
+  fireEvent.change(within(underlyingOwner).getByLabelText("Your answer"), { target: { value: "Underlying Owner Limited" } });
+  fireEvent.click(within(underlyingOwner).getByRole("button", { name: /Save answer/i }));
+  group = screen.getByRole("heading", { level: 3, name: "Nominee arrangement for Target Limited" }).closest("section");
+  const interest = within(group).getByRole("heading", { name: /What percentage or ownership interest is held under this arrangement/i }).closest("article");
+  fireEvent.change(within(interest).getByLabelText("Ownership percentage"), { target: { value: "30" } });
+  fireEvent.click(within(interest).getByRole("button", { name: /Save answer/i }));
+
+  await waitFor(() => expect(screen.getByRole("heading", { name: "1 supporting evidence request remaining" })).toBeInTheDocument());
+  group = screen.getByRole("heading", { level: 3, name: "Nominee arrangement for Target Limited" }).closest("section");
+  expect(within(group).getByText(/All questions for this issue are answered/i)).toBeInTheDocument();
+  expect(within(group).getByRole("button", { name: "Choose supporting evidence" })).toBeInTheDocument();
+  expect(within(group).getByText(/remains unresolved until supporting evidence passes/i)).toBeInTheDocument();
 });

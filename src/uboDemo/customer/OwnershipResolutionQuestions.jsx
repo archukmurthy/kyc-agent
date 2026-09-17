@@ -109,19 +109,25 @@ function CustomerQuestion({ question, draft, error, onDraft, onSubmit }) {
   </article>;
 }
 
-function QuestionGroup({ questions, allQuestions, context, drafts, errors, onDraft, onSubmit }) {
+function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, onDraft, onSubmit, onUpload }) {
   const answered = allQuestions.filter(({ status }) => status !== "OPEN").length;
   return <section className="ubo-resolution-question-group">
     <header>
       <div><small>Ownership issue</small><h3>{context.label}</h3></div>
-      <span>{answered} of {allQuestions.length} answered</span>
+      <span>{answered} of {allQuestions.length} questions answered</span>
     </header>
     <dl>
       <div><dt>Company / structure</dt><dd>{context.companyName}</dd></div>
       {context.holderName && <div><dt>Shareholder or owner</dt><dd>{context.holderName}</dd></div>}
     </dl>
-    <p>Complete each open question in this group. Unanswered sibling questions stay here unless an answer makes them no longer applicable; new follow-ups may appear when your answer changes what is needed.</p>
-    <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>
+    {questions.length > 0
+      ? <p>Complete each open question in this group. Unanswered sibling questions stay here unless an answer makes them no longer applicable; new follow-ups may appear when your answer changes what is needed.</p>
+      : <p><strong>All questions for this issue are answered.</strong> Supporting evidence is still required before the issue can be resolved.</p>}
+    {questions.length > 0 && <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>}
+    {evidenceRecords.length > 0 && <div className="ubo-resolution-group-evidence">
+      <p>Supporting evidence for this ownership issue</p>
+      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} onUpload={onUpload} />)}
+    </div>}
   </section>;
 }
 
@@ -163,7 +169,7 @@ function EvidenceRequest({ record, context, busy, message, onUpload }) {
     </dl>
     <p>Preferred: {record.preferredEvidenceTypes.map(humanize).join(", ")}.</p>
     <details><summary>Other accepted evidence</summary><p>{record.alternativeEvidenceTypes.map(humanize).join(", ")}.</p></details>
-    <p className="ubo-resolution-evidence-boundary">Your document is sent through the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue.</p>
+    <p className="ubo-resolution-evidence-boundary">This issue remains unresolved until supporting evidence passes the existing Evidence staging, extraction and validation path. Uploading it does not itself resolve the issue.</p>
     <p>Accepted file formats: PDF, PNG or JPEG, up to 3 MB.</p>
     <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.currentTarget.files?.[0] || null; event.currentTarget.value = ""; onUpload(record, file); }} />
     {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.REJECTED ? "Choose another file" : "Choose supporting evidence"}</button>}
@@ -314,25 +320,33 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   };
 
   const answeredQuestions = engine.questions.filter((question) => Boolean(answers[question.id]));
-  const openQuestionGroups = Object.values(engine.openQuestions.reduce((groups, question) => {
-    const key = question.comparisonItemId;
-    if (!groups[key]) groups[key] = { comparisonItemId: key, questions: [] };
-    groups[key].questions.push(question);
+  const pendingEvidence = engine.evidenceRequirements.filter(({ status }) => status !== EVIDENCE_STATUS.SATISFIED);
+  const activeIssueGroups = Object.values([...engine.openQuestions, ...pendingEvidence].reduce((groups, item) => {
+    const key = item.comparisonItemId;
+    if (!groups[key]) groups[key] = { comparisonItemId: key };
     return groups;
-  }, {}));
+  }, {})).map((group) => ({
+    ...group,
+    questions: engine.openQuestions.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
+    evidenceRecords: pendingEvidence.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
+  }));
   const completed = engine.resolutions.filter(({ resolutionStatus }) => resolutionStatus !== RESOLUTION_STATUS.UNRESOLVED).length;
   return <section className="ubo-customer-card ubo-resolution-engine">
-    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} ownership question${engine.openQuestions.length === 1 ? "" : "s"} for you` : "No further ownership questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
+    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} ownership question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further ownership questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
     <p className="ubo-resolution-intro">We only ask for facts that remain unresolved after comparing the registry research with your ownership chart. Answers can change the questions shown below.</p>
-    {openQuestionGroups.length > 0 && <div className="ubo-resolution-question-groups">{openQuestionGroups.map((group) => <QuestionGroup
+    {activeIssueGroups.length > 0 && <div className="ubo-resolution-question-groups">{activeIssueGroups.map((group) => <QuestionGroup
       key={group.comparisonItemId}
       questions={group.questions}
       allQuestions={engine.questions.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId)}
+      evidenceRecords={group.evidenceRecords}
       context={resolutionContext(group.comparisonItemId, engine.requirements, rows, company)}
       drafts={drafts}
       errors={errors}
+      evidenceState={evidenceState}
+      evidence={evidence}
       onDraft={(questionId, value) => setDrafts((current) => ({ ...current, [questionId]: value }))}
       onSubmit={submit}
+      onUpload={uploadEvidence}
     />)}</div>}
     {answeredQuestions.length > 0 && <section className="ubo-resolution-answered">
       <header><div><small>Answer history</small><h3>Answered questions</h3></div><span>{answeredQuestions.length}</span></header>
@@ -351,7 +365,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
-    {engine.evidenceRequirements.length > 0 && <div className="ubo-resolution-evidence-list">{engine.evidenceRequirements.map((record) => <EvidenceRequest key={record.id} record={record} context={resolutionContext(record.comparisonItemId, engine.requirements, rows, company)} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} onUpload={uploadEvidence} />)}</div>}
     <div className="ubo-resolution-outcomes">{engine.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration").map((resolution) => <article key={resolution.id} className={resolution.resolutionStatus.toLowerCase()}><span>{statusLabel(resolution.resolutionStatus)}</span><strong>{resolution.reason}</strong><small>{resolution.uboImpact.determination} · Identity verification {resolution.uboImpact.idvRequired ? "required" : "not required"}</small></article>)}</div>
     <AnalystTrace engine={engine} rows={rows} />
   </section>;

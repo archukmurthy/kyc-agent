@@ -232,6 +232,8 @@
 .ubo-resolution-question-group dd, .ubo-resolution-evidence-context dd { margin: 0; color: var(--ubo-customer-ink); font-size: 10px; font-weight: 800; }
 .ubo-resolution-question-group > p { margin: 10px 0 14px; color: var(--ubo-customer-muted); font-size: 9px; line-height: 1.5; }
 .ubo-resolution-question-group > div { display: grid; gap: 10px; }
+.ubo-resolution-group-evidence { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ubo-customer-border); }
+.ubo-resolution-group-evidence > p { margin: 0; color: #725b16; font-size: 9px; font-weight: 850; text-transform: uppercase; }
 .ubo-resolution-answered { margin: 0 24px 22px; padding: 18px; border: 1px solid var(--ubo-customer-border); border-radius: 12px; background: #f7faf8; }
 .ubo-resolution-answered > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ubo-resolution-answered > header h3 { margin: 3px 0 0; font-size: 14px; }
