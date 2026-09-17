@@ -5,6 +5,10 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 **Status legend:** `OPEN` · `IN PROGRESS` · `DONE` · `WONTFIX`
 **Priority:** `P0` (blocker) · `P1` (high) · `P2` (medium) · `P3` (low)
 
+**Production readiness:** the audit-derived, ordered programme (Batches 0–6) lives in
+[`docs/PRODUCTION-READINESS-PLAN.md`](PRODUCTION-READINESS-PLAN.md). Items discovered
+while working a batch land here; the batch plan links back to them.
+
 ---
 
 ## Open dependencies (waiting on external input)
