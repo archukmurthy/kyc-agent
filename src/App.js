@@ -777,6 +777,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
+    // A brand-new application starts from an empty lookup and no saved draft —
+    // this is the shared root for Start Over and Start New Application.
+    setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
+    clearDraft();
+    setSeededBy("analyst"); setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
+    // A customer who arrived by link stays attached to the analyst's dossier
+    // (and keeps its server-counted searches) when starting again.
+    const keepDossierLink = landedViaLink && !!dossierId;
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
     setAffirmedFields({}); setInlineEditOpen({});
     dialogueStateRef.current = {}; // drop persisted change-dialogue answers on Start Over
@@ -814,16 +822,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
-    setDossierId(null);
+    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); }
     setOnboardingSubmissionId(null);
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
     setRegNumber("");
     setRegNumberSource(null);
-    // Wrong-company dispute → redirected to the lookup page: this is now a
-    // genuine KYC/lookup journey, so restore the full 7-step bar.
-    setLandedViaLink(false);
+    // Only a genuine lookup journey restores the full step bar; a link customer
+    // stays on the link journey.
+    if (!keepDossierLink) setLandedViaLink(false);
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -1739,8 +1747,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       startedAt: new Date().toISOString(),
     });
     const S = stepsFor(journey);
-    const schema = getSchemaFromConfig(facts.countryCode, facts.entityType, tenantConfig);
-    setActiveSchema(schema);
     setLoading(true); setLoaderIdx(0);
     // A correction stays on the Applicant page (the gate shows its own busy state).
     if (!correction) setStep(S.research);
@@ -1753,6 +1759,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setDossierStakeholders(null);
     }
     try {
+      // Moved inside the try (was computed before it): a correction can hand in
+      // a bad country/entity combo, and getSchemaFromConfig throwing here must
+      // reach the catch's fallback-to-manual path like every other failure below,
+      // not crash the component.
+      const schema = getSchemaFromConfig(facts.countryCode, facts.entityType, tenantConfig);
+      setActiveSchema(schema);
       // ─── Phase 1: extract from each uploaded document, in DOC_TYPES order ───
       const flow = schema.flow === "fi" ? "fi" : "corporate";
       const hasAnyDocs = DOC_TYPES.some(d => uploadedDocs[d.key]);
@@ -3248,7 +3260,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     try {
       const resp = await fetch("/api/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(tenantId) },
         body: JSON.stringify({
           // The idempotency key the ENTIRE pipeline is keyed on. Omitting it
           // makes /api/submit 400 every submission (missing required field) —
@@ -3256,6 +3268,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           // so a retry re-POSTs the SAME id and dedupes.
           submissionId: payload.submissionId,
           tenantId,
+          // The analyst dossier this application came from. The server keeps it
+          // only when this tab holds that dossier's customer link credential.
+          dossierId: dossierId || null,
           company: submitCompany,
           entityType,
           ownershipType,
