@@ -56,6 +56,7 @@ module.exports = async function handler(req, res) {
     rawResearch,
     seededBy,
     saveReason,
+    creationKey,
   } = req.body || {};
 
   // Self-serve re-research metadata. `seeded_by` records who triggered the
@@ -63,6 +64,11 @@ module.exports = async function handler(req, res) {
   // the default 'analyst'. The customer's re-search COUNT is server-owned
   // (api/search-attempt.js → customer_searches) and never written here.
   const seededByValue = seededBy === "customer" ? "customer" : "analyst";
+
+  // One key per analyst research run (Part 4): a retried first save with the
+  // same key returns the existing dossier instead of inserting a duplicate.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const creationKeyValue = typeof creationKey === "string" && UUID_RE.test(creationKey) ? creationKey.toLowerCase() : null;
 
   if (!company?.name) {
     return res.status(400).json({ error: "company.name required" });
@@ -236,6 +242,7 @@ module.exports = async function handler(req, res) {
         raw_research,
 
         seeded_by,
+        creation_key,
 
         status,
         saved_at
@@ -272,10 +279,13 @@ module.exports = async function handler(req, res) {
         ${JSON.stringify(rawResearch || {})},
 
         ${seededByValue},
+        ${creationKeyValue},
 
         'ready',
         NOW()
       )
+      ON CONFLICT (tenant_id, creation_key) WHERE creation_key IS NOT NULL
+      DO UPDATE SET creation_key = EXCLUDED.creation_key
       RETURNING id
       `;
     }

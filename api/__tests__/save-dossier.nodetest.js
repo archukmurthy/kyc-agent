@@ -297,3 +297,36 @@ test("an analyst save binds the new included/excluded fields and custom question
   assert.ok(update.values.includes(JSON.stringify(analystAuthored.customQuestions)));
   assert.ok(!update.values.includes(true), "the analyst path binds isCustomer=false everywhere");
 });
+
+test("a first save stores a valid creationKey and conflicts on (tenant, creation_key) instead of duplicating", async () => {
+  const sql = fakeSql({ insertId: "d-new" });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  const key = "3f2b8a4e-9c1d-4e6f-8a2b-7c9d0e1f2a3b";
+  const res = fakeRes();
+  await handler(req({ ...base, creationKey: key }), res);
+  assert.deepStrictEqual(res.body, { success: true, dossierId: "d-new" });
+  const insert = sql.log.find((l) => l.kind === "insert");
+  assert.match(insert.text, /creation_key/);
+  assert.match(insert.text, /ON CONFLICT\s*\(\s*tenant_id\s*,\s*creation_key\s*\)\s*WHERE\s+creation_key\s+IS\s+NOT\s+NULL/i);
+  assert.match(insert.text, /RETURNING id/i);
+  assert.ok(insert.values.includes(key));
+});
+
+test("a non-UUID creationKey is ignored (bound as null)", async () => {
+  for (const creationKey of ["not-a-uuid", 42, "x".repeat(40)]) {
+    const sql = fakeSql({ insertId: "d-new" });
+    handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+    await handler(req({ ...base, creationKey }), fakeRes());
+    const insert = sql.log.find((l) => l.kind === "insert");
+    assert.ok(!insert.values.includes(creationKey));
+    assert.ok(insert.values.includes(null));
+  }
+});
+
+test("an update never touches creation_key", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  await handler(req({ ...base, dossierId: "d-1", creationKey: "3f2b8a4e-9c1d-4e6f-8a2b-7c9d0e1f2a3b" }), fakeRes());
+  const update = sql.log.find((l) => l.kind === "update");
+  assert.doesNotMatch(update.text, /creation_key/);
+});

@@ -36,7 +36,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
 
@@ -626,5 +626,73 @@ describe("invite screen", () => {
 
     expect(bodyText()).not.toMatch(/Couldn't create the invite link\. Try again\./i);
     expect(bodyText()).toMatch(/Onboarding link/i);
+  });
+});
+
+describe("dossier creation is idempotent", () => {
+  const saveBodies = () =>
+    global.fetch.mock.calls
+      .filter(([url]) => String(url).includes("/api/save-dossier"))
+      .map(([, init]) => JSON.parse(init.body));
+
+  it("a retried first save re-sends the SAME creation key", async () => {
+    let attempt = 0;
+    fetchRoutes["/api/save-dossier"] = () => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error("network lost after insert"))
+        : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    };
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].creationKey).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(bodies[1].creationKey).toBe(bodies[0].creationKey);
+    expect(bodies[0].dossierId).toBeFalsy();
+  });
+
+  it("a save of an existing dossier sends no creation key", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/^Update$/)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    const last = bodies[bodies.length - 1];
+    expect(last.dossierId).toBe("d-1");
+    expect(last).not.toHaveProperty("creationKey");
+  });
+});
+
+describe("analyst resume", () => {
+  it("resuming a saved dossier returns the analyst to the dossier view with its registry documents", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    // Seed a registry document into the live draft the way the Documents step would,
+    // by writing the draft directly (the analyst journey has no self-source step in the dummy path).
+    await settle(1000); // let the debounced draft save run
+    const { DRAFT_KEY } = require("../../../utils/submissionDraft");
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    expect(draft && draft.state && draft.state.dossierId).toBe("d-1");
+    draft.state.selfSourceResults = {
+      results: [{ requirement: "Certificate of Incorporation", localEquivalent: "Companies House certificate", status: "retrieved", retrievedAt: "2026-09-16T10:00:00Z" }],
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+
+    cleanup();
+    await mountAtGate();
+    await unlock();
+    fireEvent.click(buttonsWithText(/^Resume$/)[0]);
+    await settle(0);
+
+    expect(bodyText()).toMatch(/Documents Sourced/);
+    expect(bodyText()).toMatch(/Companies House certificate/);
+    expect(bodyText()).not.toMatch(/Company Lookup/);
   });
 });

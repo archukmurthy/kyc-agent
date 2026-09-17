@@ -104,7 +104,7 @@ import {
   mergeResearchResults,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
-import { saveDraft, loadDraft, clearDraft } from "./utils/submissionDraft";
+import { saveDraft, loadDraft, clearDraft, draftableSelfSourceResults } from "./utils/submissionDraft";
 import { C } from "./constants/theme";
 import {
   SHOW_NIUM_REG_PANEL,
@@ -339,7 +339,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // so `dossierId || onboardingSubmissionId` always resolves to dossierId.
   const [onboardingSubmissionId, setOnboardingSubmissionId] = useState(null);
   // Journey-origin flag: true when the customer landed via an invite link
-  // (?dossierId&journey=customer or ?ref) and so never saw the lookup page —
+  // (?dossierId&journey=customer) and so never saw the lookup page —
   // Company/Research were done by the analyst before they arrived. This is the
   // SAME "dossier/invite journey" definition the reg-number "you provided this"
   // lock uses (the link-landing URL param; regNumberSource stays null on exactly
@@ -347,8 +347,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // because resetAll does not clear the URL: clearing this flag on a "wrong
   // company" dispute reset correctly returns the redirected-to-lookup customer
   // to the full 7-step bar. Drives which step-bar pills show (never routing) and,
-  // with dossierId, marks research as the customer's (isCustomerResearch). Set in the two link-landing paths (loadDossierAndStartOnboarding +
-  // the ?ref hydration effect); cleared in resetAll.
+  // with dossierId, marks research as the customer's (isCustomerResearch). Set in
+  // loadDossierAndStartOnboarding; cleared in resetAll.
   const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
   const [dossierSaved, setDossierSaved] = useState(false);
@@ -357,6 +357,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // null on failure, which otherwise silently blocks the invite button later
   // with no explanation). Cleared on the next successful save.
   const [dossierSaveError, setDossierSaveError] = useState("");
+  // Part 4: one creation key per analyst research run, re-sent by every retry of
+  // the FIRST save so a lost response can never insert a duplicate dossier; and
+  // the in-flight save promise, shared by concurrent callers.
+  const creationKeyRef = useRef(null);
+  const saveInFlightRef = useRef(null);
 
   // Self-serve re-research (front-door "wrong company / wrong type") state.
   //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
@@ -436,7 +441,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
   // the string is non-empty. Set to "customer" ONLY by the lookup-page input
   // handler (the customer typed it themselves this session). Every link-landing
-  // path (?dossierId / ?ref) leaves it null — even once `regNumber` is later
+  // path (?dossierId) leaves it null — even once `regNumber` is later
   // restored from a loaded dossier — so slice 2's FoundationalFactsGate locks
   // the "✓ You provided this" row only for the genuine lookup journey and keeps
   // it verifiable/uncheckable everywhere else.
@@ -824,7 +829,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
-    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); }
+    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); creationKeyRef.current = null; }
     setOnboardingSubmissionId(null);
     setDossierSaving(false);
     setDossierSaved(false);
@@ -847,7 +852,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // agentType (self-heals from the ?preboarding URL param, see resetAll),
   // landedViaLink (see the note below), authorityToActFile/
   // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
-  // JSON.stringify/localStorage; durable upload storage is PR-034), the
+  // JSON.stringify/localStorage; durable upload storage is PR-034).
+  // selfSourceResults IS saved, via draftableSelfSourceResults, which strips
+  // any manualUploadFile (a File object) off each result so the rest — and
+  // the dossier's "Documents Sourced" list — survives a resume. The
   // preboarding password gate (access gate over a hardcoded client constant,
   // not user data), newQuestion (in-progress "ask more" compose draft), and
   // pure UI toggles (expanded/open/hover/reveal state, transient loading and
@@ -880,6 +888,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         dialogueState: dialogueStateRef.current,
         coverage, gapRecoveryRan, researchTimestamp,
         docSearchResults,
+        selfSourceResults: draftableSelfSourceResults(selfSourceResults),
         acceptedDocTypes: Array.from(acceptedDocTypes),
         applicantNotListed, amendmentUploads,
         niumRegNumber, niumSearchResults, dossierStakeholders,
@@ -894,7 +903,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
       seededBy, searchAttempts,
       rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
-      researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
+      researchTimestamp, docSearchResults, selfSourceResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
       niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
 
   // Offer to resume an unfinished application found in localStorage (Task 9 —
@@ -945,11 +954,17 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCoverage(s.coverage || null); setGapRecoveryRan(!!s.gapRecoveryRan);
     setResearchTimestamp(s.researchTimestamp || "");
     setDocSearchResults(s.docSearchResults || null);
+    setSelfSourceResults(s.selfSourceResults || null);
     setAcceptedDocTypes(new Set(s.acceptedDocTypes || []));
     setApplicantNotListed(!!s.applicantNotListed);
     setAmendmentUploads(s.amendmentUploads || {});
     setNiumRegNumber(s.niumRegNumber || ""); setNiumSearchResults(s.niumSearchResults || null);
     setDossierStakeholders(s.dossierStakeholders || null);
+    // An analyst who saved a dossier and refreshed returns to the dossier view,
+    // not the confirm step behind it (re-derived; the flag itself is not saved).
+    if (agentType === "preboarding" && s.dossierId && s.step === stepsFor(s.journeyType || "ai_only").confirm) {
+      setShowDossierView(true);
+    }
     setStep(s.step || 0);
     setResumeOffer(null);
   };
@@ -1049,51 +1064,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCorrectionSave, dossierId]);
 
-  // Customer invite landing. When the app is opened via an invite link
-  // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
-  // send-time (localStorage, keyed by token) and drop the customer straight
-  // onto the populated Confirm page — the exact view "Preview Customer
-  // Onboarding" shows. Without this, a fresh page load has no in-memory
-  // research and lands on a blank onboarding step. Runs once on mount; if no
-  // snapshot is found (e.g. a different browser/device) it quietly falls back
-  // to the normal onboarding entry. (Cross-device hydration from the
-  // server-persisted invite record is future work — PR-029.)
-  const inviteHydratedRef = useRef(false);
-  useEffect(() => {
-    if (inviteHydratedRef.current) return;
-    const ref = new URLSearchParams(window.location.search).get("ref");
-    if (!ref) return;
-    inviteHydratedRef.current = true;
-    let snap = null;
-    try {
-      const raw = localStorage.getItem("nium_invite_" + ref);
-      if (raw) snap = JSON.parse(raw);
-    } catch (_) { /* ignore malformed/unavailable storage */ }
-    if (!snap || !snap.research) return;
-    const jt = snap.journeyType || "ai_only";
-    setCompanyName(snap.companyName || "");
-    setCountryCode(snap.countryCode || "");
-    setEntityType(snap.entityType || "");
-    setOwnershipType(snap.ownershipType || "");
-    setJourneyType(jt);
-    setActiveSchema(snap.activeSchema || null);
-    setResearch(snap.research);
-    setCoverage(snap.coverage || null);
-    setFieldMetadata(snap.fieldMetadata || []);
-    setChecks(snap.checks || {});
-    setAgentType("onboarding");
-    setStep(stepsFor(jt).confirm);
-    // Customer landed via the ?ref invite link — same dossier/invite journey
-    // marker as the ?dossierId path (drives the step-bar subset, display only).
-    setLandedViaLink(true);
-    trackEvent("invite_link_opened", { token: ref, companyName: snap.companyName || null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Customer invite landing (dossier-backed). When opened via the dossier link
   // (`?dossierId=<id>&journey=customer`), fetch the dossier server-side and drop
-  // the customer straight onto the standalone Applicant page. Works cross-device
-  // (unlike the localStorage `?ref` path). Runs once on mount.
+  // the customer straight onto the standalone Applicant page. Runs once on mount.
   const dossierHydratedRef = useRef(false);
   useEffect(() => {
     if (dossierHydratedRef.current) return;
@@ -2036,7 +2009,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // A customer keeps one application id for the whole session (a correction,
       // or a picker search after a fallback): the fresh-customer retry count and
       // the change_events trail are keyed on it, so rotating it would reset the cap.
-      if (!onboardingSubmissionId || (!correction && !isCustomerResearch)) setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+      if (!onboardingSubmissionId || (!correction && !isCustomerResearch)) {
+        setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+        // A brand-new analyst run must not re-send a stale creation key from a
+        // prior (already-saved-or-abandoned) run onto this one's first save.
+        if (!dossierId) creationKeyRef.current = null;
+      }
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
@@ -2240,6 +2218,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     };
     setResearch(tagged);
     setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+    if (!dossierId) creationKeyRef.current = null;
     setResearchTimestamp(dummyTs);
 
     // Demo coverage (Part 14). Gap recovery is skipped in demo mode.
@@ -2383,6 +2362,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         };
         setResearch(tagged);
         setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+        if (!dossierId) creationKeyRef.current = null;
         setResearchTimestamp(ts);
 
         const cov = computeCoverage(found, schema);
@@ -4892,6 +4872,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // (api/save-dossier.js), never re-inserted — a blind insert would
       // duplicate the row and orphan any invite link already built on this id.
       dossierId,
+      // Only a create carries the key; an update is keyed by dossierId.
+      ...(dossierId ? {} : { creationKey: creationKeyRef.current || (creationKeyRef.current = genUUID()) }),
       // Pre-boarding uses the tenant the server verified at the gate; the
       // customer flow has no gate, so it uses the URL-resolved tenant.
       tenantId: preboardingTenantId || tenantId,
@@ -4933,7 +4915,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Resolves true once the dossier is stored (a customer lock counts: it IS
   // saved, under the customer), false on a failed or unreachable save.
-  const saveDossier = async ({ reason } = {}) => {
+  const runSaveDossier = async ({ reason } = {}) => {
     setDossierSaving(true);
     const payload = { ...buildDossierPayload(), ...(reason ? { saveReason: reason } : {}) };
     // eslint-disable-next-line no-console
@@ -4960,6 +4942,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
         setDossierId(result.dossierId);
+        creationKeyRef.current = null;
         setDossierSaved(true);
         setDossierSaveError("");
         // eslint-disable-next-line no-console
@@ -5000,6 +4983,18 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return savedId !== null;
   };
 
+  const saveDossier = (options) => {
+    const running = saveInFlightRef.current;
+    // A first save (no dossier id yet) shares the running create, so a second
+    // trigger can never insert another row. An update of an existing dossier
+    // queues behind the running save instead, so newer state (e.g. a second
+    // customer correction) is still written.
+    if (running && !dossierId) return running;
+    const p = (running ? running.catch(() => {}).then(() => runSaveDossier(options)) : runSaveDossier(options))
+      .finally(() => { if (saveInFlightRef.current === p) saveInFlightRef.current = null; });
+    saveInFlightRef.current = p;
+    return p;
+  };
 
   // Agent routing — order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".

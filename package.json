@@ -23,7 +23,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "test": "react-scripts test",
-    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js",
+    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js",
     "test:smoke:db": "node scripts/real-db-smoke.js",
     "worker:finalize": "node -r dotenv/config scripts/run-finalize-worker.js dotenv_config_path=.env.local",
     "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js idv/__tests__/secureIdentity.nodetest.js idv/__tests__/metrics.nodetest.js idv/__tests__/productionGuards.nodetest.js",
