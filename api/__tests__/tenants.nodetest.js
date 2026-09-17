@@ -72,7 +72,7 @@ test("toggle-preboarding refuses an unknown tenant", async (t) => {
   assert.deepStrictEqual(res.body, { error: "tenant_not_found" });
 });
 
-test("a newly created tenant is unprotected with pre-boarding off", async (t) => {
+test("a newly created tenant is unprotected with pre-boarding on", async (t) => {
   withSuperAdmin(t);
   const storage = fakeStorage({ "tenant-registry": [] });
   handler.__setDeps({ storage });
@@ -87,7 +87,7 @@ test("a newly created tenant is unprotected with pre-boarding off", async (t) =>
   assert.strictEqual(res.statusCode, 200);
   const entry = storage.data["tenant-registry"].find((x) => x.tenantId === "newco");
   assert.strictEqual(entry.isProtected, false);
-  assert.strictEqual(entry.preboardingEnabled, false);
+  assert.strictEqual(entry.preboardingEnabled, true);
   assert.strictEqual(res.body.preboardingUrl, "/preboarding?tenant=newco");
 });
 
@@ -133,12 +133,14 @@ test("an unreadable registry is never reseeded — no write, error surfaces", as
 // Production KV already holds a registry, so the seeding branch never runs.
 // Without a back-fill every existing tenant — the platform one included —
 // resolves to preboardingEnabled: undefined and pre-boarding goes dark.
-// Ordinary tenants stay off on purpose: opt-in is the design.
-test("back-fill enables pre-boarding for protected entries only, and is idempotent", async (t) => {
+// Every tenant defaults ON (owner decision 2026-09-17); an explicit false a
+// super-admin set is never overwritten.
+test("back-fill turns pre-boarding on for every tenant that has no explicit setting, and is idempotent", async (t) => {
   withSuperAdmin(t);
   const storage = fakeStorage({ "tenant-registry": [
     { tenantId: "platform", isInternal: true },
     { tenantId: "acme", isActive: true },
+    { tenantId: "switched-off", isActive: true, preboardingEnabled: false },
   ] });
   handler.__setDeps({ storage });
   registry.__setDeps({ storage });
@@ -150,7 +152,8 @@ test("back-fill enables pre-boarding for protected entries only, and is idempote
   assert.strictEqual(first.res.statusCode, 200);
   assert.strictEqual(byId("platform").isProtected, true);
   assert.strictEqual(byId("platform").preboardingEnabled, true);
-  assert.strictEqual(byId("acme").preboardingEnabled, undefined, "ordinary tenants stay opt-in");
+  assert.strictEqual(byId("acme").preboardingEnabled, true);
+  assert.strictEqual(byId("switched-off").preboardingEnabled, false, "an explicit super-admin choice is kept");
 
   const snapshot = JSON.stringify(storage.data["tenant-registry"]);
   const second = fakeReqRes({ method: "GET" });
