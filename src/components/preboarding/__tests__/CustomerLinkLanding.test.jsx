@@ -108,7 +108,7 @@ test("a link customer's correction saves the committed corrected state and spend
       raw_research: { found: [{ field: "company_name", value: "Acme Ltd", verificationStatus: "verified", source: "Companies House" }] },
     },
   });
-  fetchRoutes["/api/search-attempt"] = () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 });
+  fetchRoutes["/api/search-attempt"] = () => ok({ allowed: true, attemptsUsed: 1, remaining: 1, grant: "grant-1" });
   // No companyName in the response: the saved name must come from committed state.
   fetchRoutes["/api/research"] = () => ok({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
   fetchRoutes["/api/save-dossier"] = () => ok({ success: true, dossierId: "d-1" });
@@ -130,6 +130,10 @@ test("a link customer's correction saves the committed corrected state and spend
   expect(body.saveReason).toBe("customer_correction");
   expect(body.company.name).toBe("Acme Holdings Ltd");
   expect(body).not.toHaveProperty("searchAttempts");
+  // Every research call of the run carries the grant the attempt counter issued.
+  const research = calls.filter((c) => /\/api\/research(\?|$)/.test(c.url));
+  expect(research.length).toBeGreaterThan(0);
+  research.forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-1"));
   // The correction is logged once as a change_event (spec §6.2 step 6).
   const events = calls
     .filter((c) => c.url.includes("/api/change-events"))
@@ -153,25 +157,45 @@ test("a link customer's correction saves the committed corrected state and spend
 // Continue must spend a dossier search BEFORE any research runs. The documents
 // step is reached here by resuming a saved draft on top of the link landing —
 // driving the Applicant step's identity checks to Confirm is not practical here.
-async function landOnDocumentsAsLinkCustomer(attemptBody) {
+const okJson = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+const researchJson = () => okJson({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
+async function resumeOnDocumentsAsLinkCustomer(attemptBody, { customerSearches = 0, draft = {} } = {}) {
   window.confirm = jest.fn(() => true);
-  const ok = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   localStorage.setItem("kyc_draft_v1", JSON.stringify({
     savedAt: new Date().toISOString(), tenantId: "nium", agentType: "onboarding",
-    state: { companyName: "Acme Ltd", countryCode: "GB", entityType: "Corporate", journeyType: "ai_documents", step: 1, dossierId: "d-1" },
+    state: { companyName: "Acme Ltd", countryCode: "GB", entityType: "Corporate", journeyType: "ai_documents", step: 1, dossierId: "d-1", ...draft },
   }));
-  fetchRoutes["/api/get-dossier"] = () => ok({
+  fetchRoutes["/api/get-dossier"] = () => okJson({
     success: true,
-    dossier: { id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB", owned_by: "analyst", customer_searches: 0, raw_research: { found: [] } },
+    dossier: { id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB", owned_by: "analyst", customer_searches: customerSearches, raw_research: { found: [] } },
   });
-  fetchRoutes["/api/search-attempt"] = () => ok(attemptBody);
-  fetchRoutes["/api/research"] = () => ok({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
+  fetchRoutes["/api/search-attempt"] = () => okJson(attemptBody);
+  fetchRoutes["/api/research"] = researchJson;
+  fetchRoutes["/api/change-events"] = () => okJson({ success: true });
   await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
   await screen.findByTestId("foundational-facts-gate");
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Resume" })); });
+}
+async function landOnDocumentsAsLinkCustomer(attemptBody) {
+  await resumeOnDocumentsAsLinkCustomer(attemptBody);
   const cont = await screen.findByRole("button", { name: /Continue →/ });
   await act(async () => { fireEvent.click(cont); });
 }
+const CARD_A = "Upload documents & let AI fill the rest";
+// Documents step → Back → the journey picker.
+async function backToPicker() {
+  const back = await screen.findByRole("button", { name: /← Back/ });
+  await act(async () => { fireEvent.click(back); });
+  await screen.findByText(CARD_A);
+}
+async function pickCardAndContinue(title) {
+  fireEvent.click(screen.getByText(title).parentElement);
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Continue →/ })); });
+}
+const flagEvents = () => calls
+  .filter((c) => c.url.includes("/api/change-events"))
+  .map((c) => JSON.parse(c.opts.body))
+  .filter((e) => e.fieldId === "reresearch.fallback");
 const researchCalls = () => calls.filter((c) => /\/api\/research(\?|$)/.test(c.url));
 
 test("a link customer's Continue from the documents step spends a dossier search before research runs", async () => {
@@ -189,4 +213,88 @@ test("a refused search from the documents step runs no research", async () => {
   await waitFor(() => expect(calls.some((c) => c.url.includes("/api/search-attempt"))).toBe(true));
   await act(async () => { await Promise.resolve(); });
   expect(researchCalls()).toHaveLength(0);
+  expect(flagEvents()).toHaveLength(1);
+  expect(flagEvents()[0].afterValue.stage).toBe("search_cap");
+});
+
+test("a refused search on the picker flags the refusal as a search-cap fallback", async () => {
+  await resumeOnDocumentsAsLinkCustomer({ allowed: false, attemptsUsed: 2, remaining: 0 });
+  await backToPicker();
+  await pickCardAndContinue(CARD_A);
+  await waitFor(() => expect(flagEvents()).toHaveLength(1));
+  expect(flagEvents()[0]).toMatchObject({ submissionId: "d-1", dossierId: "d-1", afterValue: { stage: "search_cap", reason: "no_searches_left" } });
+  expect(researchCalls()).toHaveLength(0);
+});
+
+test("resuming a draft on a link landing keeps the server's dossier and search count", async () => {
+  await resumeOnDocumentsAsLinkCustomer(
+    { allowed: false, attemptsUsed: 2, remaining: 0 },
+    { customerSearches: 1, draft: { searchAttempts: 0, dossierId: "d-stale" } },
+  );
+  await backToPicker();
+  // One search already used → the second-attempt tip.
+  expect(screen.getByTestId("legal-name-alert")).toBeInTheDocument();
+  await pickCardAndContinue(CARD_A);
+  await waitFor(() => expect(calls.some((c) => c.url.includes("/api/search-attempt"))).toBe(true));
+  expect(JSON.parse(calls.find((c) => c.url.includes("/api/search-attempt")).opts.body).dossierId).toBe("d-1");
+});
+
+test("card A asks the paid-call confirm once, not again when the documents step starts research", async () => {
+  await resumeOnDocumentsAsLinkCustomer({ allowed: true, attemptsUsed: 1, remaining: 1, grant: "grant-A" });
+  await backToPicker();
+  window.confirm.mockClear();
+  await pickCardAndContinue(CARD_A);
+  const cont = await screen.findByRole("button", { name: /Continue →/ });
+  await act(async () => { fireEvent.click(cont); });
+  await waitFor(() => expect(researchCalls().length).toBeGreaterThan(0), { timeout: 10000 });
+  expect(window.confirm).toHaveBeenCalledTimes(1);
+  expect(calls.filter((c) => c.url.includes("/api/search-attempt"))).toHaveLength(1);
+  researchCalls().forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-A"));
+});
+
+test("an unused card-A search pays for a later correction instead of spending another", async () => {
+  window.confirm = jest.fn(() => true);
+  const found = [{ field: "company_name", value: "Acme Ltd", verificationStatus: "verified", source: "Companies House" }];
+  // The Applicant-step draft is resumed only after card A was paid and abandoned.
+  localStorage.setItem("kyc_draft_v1", JSON.stringify({
+    savedAt: new Date().toISOString(), tenantId: "nium", agentType: "onboarding",
+    state: { companyName: "Acme Ltd", countryCode: "GB", entityType: "Corporate", journeyType: "ai_only", step: 2, dossierId: "d-1", research: { found } },
+  }));
+  fetchRoutes["/api/get-dossier"] = () => okJson({
+    success: true,
+    dossier: { id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB", owned_by: "analyst", customer_searches: 0, raw_research: { found } },
+  });
+  let attempt = 0;
+  fetchRoutes["/api/search-attempt"] = () => {
+    attempt += 1;
+    return okJson({ allowed: true, attemptsUsed: attempt, remaining: 2 - attempt, grant: "grant-" + attempt });
+  };
+  let researchOk = false;
+  fetchRoutes["/api/research"] = () => (researchOk
+    ? researchJson()
+    : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "research_failed" }) }));
+  fetchRoutes["/api/change-events"] = () => okJson({ success: true });
+  fetchRoutes["/api/save-dossier"] = () => okJson({ success: true, dossierId: "d-1" });
+  await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
+
+  const correctName = async (name) => {
+    const gate = await screen.findByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    fireEvent.change(await screen.findByTestId("correct-companyName"), { target: { value: name } });
+    await act(async () => { fireEvent.click(screen.getByTestId("facts-apply-corrections")); });
+  };
+  // Search 1: the correction's research fails → the picker.
+  await correctName("Acme Holdings Ltd");
+  await screen.findByText(CARD_A);
+  researchOk = true;
+  // Search 2: card A, then the customer backs out of the documents step.
+  await pickCardAndContinue(CARD_A);
+  await backToPicker();
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Resume" })); });
+  calls = [];
+  await correctName("Acme Group Ltd");
+  await waitFor(() => expect(researchCalls().length).toBeGreaterThan(0), { timeout: 10000 });
+  expect(calls.filter((c) => c.url.includes("/api/search-attempt"))).toHaveLength(0);
+  expect(attempt).toBe(2);
+  researchCalls().forEach((c) => expect(c.opts.headers["X-Research-Grant"]).toBe("grant-2"));
 });

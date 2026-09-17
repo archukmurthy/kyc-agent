@@ -380,6 +380,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const searchGrantRef = useRef(false);
   // Blocks a double-click from spending two searches.
   const searchSpendBusyRef = useRef(false);
+  // The server's one-time research grant for the search just paid for. Sent on
+  // every /api/research call of that run; cleared when the run ends, when a new
+  // search is paid for, and on resetAll.
+  const researchGrantRef = useRef(null);
 
   // Foundational-facts confirmation gate (slice 2 of 2). Shown at the top of the
   // Applicant page; the applicant section reveals only once all five facts are
@@ -788,7 +792,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // this is the shared root for Start Over and Start New Application.
     setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
     clearDraft();
-    setSeededBy("analyst"); searchGrantRef.current = false; setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
+    setSeededBy("analyst"); searchGrantRef.current = false; researchGrantRef.current = null; setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
     // A customer who arrived by link stays attached to the analyst's dossier
     // (and keeps its server-counted searches) when starting again.
     const keepDossierLink = landedViaLink && !!dossierId;
@@ -860,7 +864,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // not user data), newQuestion (in-progress "ask more" compose draft), and
   // pure UI toggles (expanded/open/hover/reveal state, transient loading and
   // error strings) that are harmless to lose and default back safely, and the
-  // in-flight search refs (searchGrantRef/searchSpendBusyRef). landedViaLink is
+  // in-flight search refs (searchGrantRef/searchSpendBusyRef/researchGrantRef). landedViaLink is
   // not saved: a link customer re-lands through their token URL, which sets it.
   // searchAttempts is saved for display only — the server count is authoritative.
   useEffect(() => {
@@ -939,10 +943,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setApplicantOverrides(s.applicantOverrides || []);
     setExcludedGapFields(new Set(s.excludedGapFields || []));
     setCustomQuestions(s.customQuestions || []);
-    setDossierId(s.dossierId || null); setOnboardingSubmissionId(s.onboardingSubmissionId || null);
+    // A link landing already loaded its dossier and server search count; a
+    // browser draft must not replace them with older copies.
+    const keepLinkState = landedViaLink && !!dossierId;
+    if (!keepLinkState) setDossierId(s.dossierId || null);
+    setOnboardingSubmissionId(s.onboardingSubmissionId || null);
     setDeclared(!!s.declared);
     setSeededBy(s.seededBy === "customer" ? "customer" : "analyst");
-    setSearchAttempts(Number(s.searchAttempts) || 0);
+    if (!keepLinkState) setSearchAttempts(Number(s.searchAttempts) || 0);
     setRejectedStakeholders(
       Object.fromEntries(
         Object.entries(s.rejectedStakeholders || {}).map(([k, v]) => [k, new Set(v || [])])
@@ -1671,6 +1679,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // honour it.
   const researchHeaders = () => {
     const headers = { ...getDossierAuthHeaders(preboardingTenantId || tenantId) };
+    if (researchGrantRef.current) headers["X-Research-Grant"] = researchGrantRef.current;
     if (inPreview) {
       try {
         const adminToken = sessionStorage.getItem("admin_token");
@@ -1714,6 +1723,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Past validation: this run uses (or never needed) any picker grant. Cleared
     // here, not earlier, so a validation stop doesn't throw away a paid-for grant.
     searchGrantRef.current = false;
+    // This run owns the grant until it ends (extraction, research, gap recovery).
+    const runGrant = researchGrantRef.current;
     setError("");
     // A fresh (non-correction) search starts clean: a correction's earlier
     // fallback message must not follow the customer onto the next page.
@@ -2080,7 +2091,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       }
       return null;
     }
-    finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
+    finally {
+      setLoading(false); setLoaderPhase(0); setResearchStatus("");
+      // One grant, one run: it never follows into a later search.
+      if (researchGrantRef.current === runGrant) researchGrantRef.current = null;
+    }
   };
 
   // Bypasses /api/research and synthesises a plausible result using
@@ -2441,13 +2456,15 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const proceedFromDocuments = async () => {
     setError("");
     if (demoMode) { doDummyResearch("ai_documents"); return; }
-    if (!isCustomerResearch || searchGrantRef.current) { doResearch(); return; }
+    if (!isCustomerResearch) { doResearch(); return; }
+    // Card A already paid for — and confirmed — this run.
+    if (searchGrantRef.current) { doResearch(undefined, { confirmed: true }); return; }
     if (searchSpendBusyRef.current) return;
     if (!confirmPaidResearch()) return;
     searchSpendBusyRef.current = true;
     let attempt;
     try { attempt = await consumeCustomerSearch(); } finally { searchSpendBusyRef.current = false; }
-    if (!attempt.allowed) { setError(CONTACT_ADMIN_MSG); return; }
+    if (!attempt.allowed) { flagSearchCap(countryCode); setError(CONTACT_ADMIN_MSG); return; }
     doResearch(undefined, { confirmed: true });
   };
 
@@ -2718,15 +2735,18 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // customer. Flag it as a data point against whichever id the application has,
   // then open manual entry. The caller passes the jurisdiction it searched with
   // (the closure's countryCode can predate a correction).
+  const flagReresearchFailure = ({ stage, reason, jurisdiction }) => postReresearchFailureFlag({
+    submissionId: dossierId || onboardingSubmissionId,
+    dossierId,
+    jurisdiction,
+    stage,
+    reason,
+    headers: getDossierAuthHeaders(),
+  });
+  // A picker/documents search refused for having no searches left.
+  const flagSearchCap = (jurisdiction) => flagReresearchFailure({ stage: "search_cap", reason: "no_searches_left", jurisdiction });
   const fallBackToManual = ({ stage, reason, message, journey, jurisdiction }) => {
-    postReresearchFailureFlag({
-      submissionId: dossierId || onboardingSubmissionId,
-      dossierId,
-      jurisdiction,
-      stage,
-      reason,
-      headers: getDossierAuthHeaders(),
-    });
+    flagReresearchFailure({ stage, reason, jurisdiction });
     // Close the correction form: the customer continues by manual entry or a
     // new search, and must not land back on a still-disputed gate.
     cancelFactDispute();
@@ -2740,6 +2760,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // count on the dossier; fresh customers on their application id. Anything but
   // an explicit allow is a refusal.
   const consumeCustomerSearch = async () => {
+    // A new spend replaces any earlier grant, whether or not it is allowed.
+    researchGrantRef.current = null;
     try {
       const resp = dossierId
         ? await fetch("/api/search-attempt", {
@@ -2757,7 +2779,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (!resp) return { allowed: false };
       const data = await resp.json();
       if (Number.isFinite(data.attemptsUsed)) setSearchAttempts(data.attemptsUsed);
-      return { allowed: resp.ok && data.allowed === true };
+      const allowed = resp.ok && data.allowed === true;
+      if (allowed && typeof data.grant === "string" && data.grant) researchGrantRef.current = data.grant;
+      return { allowed };
     } catch (_) {
       return { allowed: false };
     }
@@ -2811,12 +2835,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // kept and the existing (dummy) research stands. Real runs go below.
     if (demoMode) { cancelFactDispute(); return; }
 
+    // An unused, already-paid (and confirmed) picker search covers this run.
+    const prepaid = searchGrantRef.current && !!researchGrantRef.current;
     // Dev-context paid-call confirm BEFORE the attempt: cancelling spends nothing.
-    if (!confirmPaidResearch()) return;
+    if (!prepaid && !confirmPaidResearch()) return;
 
     setCorrectionBusy(true);
     try {
-      const attempt = await consumeCustomerSearch();
+      const attempt = prepaid ? { allowed: true } : await consumeCustomerSearch();
       if (!attempt.allowed) {
         fallBackToManual({ stage: "search_cap", reason: "no_searches_left", message: CONTACT_ADMIN_MSG, jurisdiction: next.countryCode });
         return;
@@ -2953,6 +2979,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
     // An unused, already-paid grant (card A, then Back) is still usable at the cap.
     if (isSearchCard && evaluateSearchCap(searchAttempts).locked && !searchGrantRef.current) {
+      flagSearchCap(countryCode);
       setError(CONTACT_ADMIN_MSG);
       return;
     }
@@ -2961,7 +2988,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // covers this run instead. The dev paid-call confirm runs first so cancelling
     // never spends a search; B/E then pass `confirmed` so doResearch doesn't ask
     // again. Demo mode never spends.
-    let confirmed = false;
+    // An unused grant was already confirmed when it was paid for.
+    let confirmed = searchGrantRef.current;
     if (isSearchCard && isCustomerResearch && !demoMode && !searchGrantRef.current) {
       if (searchSpendBusyRef.current) return;
       if (!confirmPaidResearch()) return;
@@ -2970,6 +2998,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       let attempt;
       try { attempt = await consumeCustomerSearch(); } finally { searchSpendBusyRef.current = false; }
       if (!attempt.allowed) {
+        flagSearchCap(countryCode);
         setError(CONTACT_ADMIN_MSG);
         return;
       }
