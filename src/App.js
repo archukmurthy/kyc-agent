@@ -1723,7 +1723,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // `confirmed`: the caller already ran confirmPaidResearch (a correction always has).
   const doResearch = async (journeyOverride, { overrides = null, correction = false, confirmed = false } = {}) => {
     if (!correction && !confirmed && !confirmPaidResearch()) return;
-    searchGrantRef.current = false; // this run uses (or never needed) any picker grant
     // A correction passes the corrected facts EXPLICITLY — state setters from the
     // same click have not re-rendered yet, so the closure values are stale.
     const facts = overrides
@@ -1739,7 +1738,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (!facts.companyName.trim()) { setError("Please enter a company name."); return; }
     if (!facts.entityType) { setError("Please select an entity type."); return; }
     if (!facts.countryCode) { setError("Please select a country."); return; }
+    // Past validation: this run uses (or never needed) any picker grant. Cleared
+    // here, not earlier, so a validation stop doesn't throw away a paid-for grant.
+    searchGrantRef.current = false;
     setError("");
+    // A fresh (non-correction) search starts clean: a correction's earlier
+    // fallback message must not follow the customer onto the next page.
+    if (!correction) setCorrectionError("");
     // Clear any prior cache badge; the response handler re-derives it.
     setServedFromCache(false); setCachedAt(null);
     // Fresh research run: clear prior research/extraction costs but keep the
@@ -2977,7 +2982,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Two-retry cap: search cards (A/B/E) are blocked once the customer has used
     // their searches — only manual entry (C) remains. Card C is never blocked.
     const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
-    if (isSearchCard && evaluateSearchCap(searchAttempts).locked) {
+    // An unused, already-paid grant (card A, then Back) is still usable at the cap.
+    if (isSearchCard && evaluateSearchCap(searchAttempts).locked && !searchGrantRef.current) {
       setError(CONTACT_ADMIN_MSG);
       return;
     }

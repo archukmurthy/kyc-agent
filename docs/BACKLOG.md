@@ -238,7 +238,11 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
   - Card A (upload documents) asks the dev paid-call confirm twice: once at the picker (the search is spent there) and again when research runs from the documents step.
   - The picker's cap refusal (`CONTACT_ADMIN_MSG`) posts no re-research failure flag, unlike the Applicant-page correction path.
   - Product question: after a fallback, a tenant with no `manualFormUrl` offers no manual-entry route.
-- **Area:** `api/save-dossier.js`, `src/App.js` (`proceedFromJourney`, `proceedFromDocuments`, `fallBackToManual`).
+  - A correction spends a new search even when an unused card-A grant is waiting (over-counts by one, never under-counts).
+  - The correction change_event is posted before the deferred dossier save, so a failed save still leaves "corrected" in the audit trail; a demo-mode re-derive also posts it.
+  - Resuming a saved draft on top of a link landing overwrites the server-loaded `dossierId` / `searchAttempts` with the draft's (the server still refuses a 3rd search).
+  - Entering the documents step auto-runs `/api/doc-search` and `/api/self-source` for link customers and analyst Preview — rate-limited (Part 2) but not counted against the 2-search cap.
+- **Area:** `api/save-dossier.js`, `src/App.js` (`proceedFromJourney`, `proceedFromDocuments`, `fallBackToManual`, `applyCorrections`, `applyResume`).
 
 ### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
 - **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
