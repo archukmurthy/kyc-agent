@@ -30,13 +30,10 @@
  * A surprising assertion is a recorded fact. After the move this file must stay
  * green UNCHANGED — editing it to make the move pass defeats the point.
  *
- * TWO PATHS ARE UNREACHABLE AND ARE NOT ASSERTED (both reported, not papered
- * over):
- *   1. The pendingReseedMode === "re_derive" short-circuit on Continue.
- *      setPendingReseedMode is never called with "re_derive" anywhere in src/ —
- *      its only call site passes null, inside applyReDerive itself. The branch
- *      is dead in the current build.
- *   2. The four inline validation messages ("Please enter a company name." etc).
+ * ONE PATH IS UNREACHABLE AND IS NOT ASSERTED (reported, not papered over).
+ * (The old pendingReseedMode "re_derive" short-circuit on Continue was dead and
+ * has been deleted: corrections now re-derive in place on the Applicant page.)
+ *   1. The four inline validation messages ("Please enter a company name." etc).
  *      Continue's disabled prop tests the SAME four conditions as its onClick
  *      guards, so the button cannot be clicked while any message would fire.
  *      Defensive code, currently unreachable through the UI.
