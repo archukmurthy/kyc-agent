@@ -10,15 +10,16 @@
 
 const { enqueue, markProcessing, markDone, markFailed } = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
+const dossierAccess = require("../lib/dossierAccess");
 
 // Injected deps (overridable in tests via __setDeps).
-let _deps = { enqueue, finalizeSubmission, markProcessing, markDone, markFailed };
+let _deps = { enqueue, finalizeSubmission, markProcessing, markDone, markFailed, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const body = req.body || {};
-  const { submissionId, tenantId, company } = body;
+  const rawBody = req.body || {};
+  const { submissionId, tenantId, company } = rawBody;
   if (!submissionId || !tenantId || !company || !company.name) {
     return res.status(400).json({
       error: "Missing required fields: submissionId, tenantId and company.name are required",
@@ -30,6 +31,26 @@ module.exports = async function handler(req, res) {
     console.error("[api/submit] No DATABASE_URL");
     return res.status(200).json({ status: "queued", submissionId });
   }
+
+  // A submission may name the analyst dossier it came from, but only the
+  // customer holding that dossier's signed link may claim it — otherwise anyone
+  // could attach a submission to (and lock the analyst out of) any dossier.
+  let verifiedDossierId = null;
+  if (rawBody.dossierId) {
+    try {
+      const actor = await _deps.access.resolveDossierActor(req);
+      if (
+        actor.kind === "customer" &&
+        actor.dossierId === String(rawBody.dossierId) &&
+        actor.tenantId === tenantId
+      ) {
+        verifiedDossierId = actor.dossierId;
+      }
+    } catch (err) {
+      console.warn("[api/submit] dossier link not verified:", err.message);
+    }
+  }
+  const body = { ...rawBody, dossierId: verifiedDossierId };
 
   // Phase 1: durable capture. If this throws, the request fails loudly (non-200) so
   // the browser keeps retrying from its saved draft — the bundle is NOT yet safe.

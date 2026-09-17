@@ -47,6 +47,7 @@ async function finalizeSubmission(payload, deps = {}) {
     fieldValues, fieldMetadata, stakeholders, stakeholderAttributes,
     amendmentDocuments, confirmMetrics, documents, costSummary, coverage,
     declaration, applicant, applicantProvenance, applicantOverrides, submittedAt,
+    dossierId,
   } = payload;
 
   if (!submissionId) throw new Error("finalizeSubmission: submissionId is required");
@@ -129,6 +130,7 @@ async function finalizeSubmission(payload, deps = {}) {
         verified_fill_rate,
 
         raw_result,
+        dossier_id,
         completed_at
       )
       VALUES (
@@ -171,6 +173,7 @@ async function finalizeSubmission(payload, deps = {}) {
         $28,
 
         $29,
+        $30,
         NOW()
       )
       ON CONFLICT (submission_id) WHERE submission_id IS NOT NULL DO UPDATE SET
@@ -226,9 +229,22 @@ async function finalizeSubmission(payload, deps = {}) {
           confirmMetrics: confirmMetrics || null,
           amendmentDocuments: amendmentDocuments || [],
         }),
+
+        dossierId || null,
       ]
     );
     const sessionId = sessionResult.rows[0].id;
+
+    // A verified customer submission (api/submit.js checked the link token)
+    // makes the dossier customer-owned: from now on the analyst may only read it.
+    if (dossierId) {
+      await client.query(
+        `UPDATE entity_dossiers
+         SET owned_by = 'customer', last_customer_action_at = NOW()
+         WHERE id = $1 AND tenant_id = $2`,
+        [dossierId, tenantId]
+      );
+    }
 
     // 4. Write individual field values (DELETE-then-insert so a re-run rewrites)
     //    — port api/submit.js:566-600

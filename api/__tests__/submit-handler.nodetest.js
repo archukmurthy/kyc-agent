@@ -160,3 +160,56 @@ test("returns 503 capture_failed when enqueue throws (finalize never called)", a
   assert.strictEqual(res.body.status, "capture_failed");
   assert.strictEqual(finalizeCalled, false);
 });
+
+const submitHandler = require("../submit");
+
+function linkDeps(actor, captured) {
+  const real = require("../../lib/dossierAccess");
+  return {
+    access: { ...real, resolveDossierActor: async () => actor },
+    enqueue: async (row) => { captured.enqueued = row.payload; },
+    markProcessing: async () => {},
+    finalizeSubmission: async (payload) => { captured.finalized = payload; return { sessionId: "s-1" }; },
+    markDone: async () => {},
+    markFailed: async () => {},
+  };
+}
+
+const LINK_BODY = { submissionId: "sub-9", tenantId: "acme", company: { name: "Acme Ltd" }, dossierId: "d-1" };
+const subReq = (body) => ({ method: "POST", body, headers: {}, query: {} });
+
+test("a verified customer's submission keeps its dossier link", async () => {
+  const captured = {};
+  submitHandler.__setDeps(linkDeps({ kind: "customer", tenantId: "acme", dossierId: "d-1", reason: null }, captured));
+  const res = fakeRes();
+  await submitHandler(subReq({ ...LINK_BODY }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(captured.enqueued.dossierId, "d-1");
+  assert.strictEqual(captured.finalized.dossierId, "d-1");
+});
+
+test("a dossier id without a matching customer credential is dropped", async () => {
+  for (const actor of [
+    { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" },
+    { kind: "analyst", tenantId: "acme", dossierId: null, reason: null },
+    { kind: "customer", tenantId: "acme", dossierId: "d-OTHER", reason: null },
+    { kind: "customer", tenantId: "other-tenant", dossierId: "d-1", reason: null },
+  ]) {
+    const captured = {};
+    submitHandler.__setDeps(linkDeps(actor, captured));
+    await submitHandler(subReq({ ...LINK_BODY }), fakeRes());
+    assert.strictEqual(captured.enqueued.dossierId, null, JSON.stringify(actor));
+    assert.strictEqual(captured.finalized.dossierId, null);
+  }
+});
+
+test("a credential check that throws drops the link but never blocks the submission", async () => {
+  const captured = {};
+  const deps = linkDeps(null, captured);
+  deps.access = { ...deps.access, resolveDossierActor: async () => { throw new Error("revocation store down"); } };
+  submitHandler.__setDeps(deps);
+  const res = fakeRes();
+  await submitHandler(subReq({ ...LINK_BODY }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(captured.enqueued.dossierId, null);
+});
