@@ -130,6 +130,19 @@ test("a link customer's correction saves the committed corrected state and spend
   expect(body.saveReason).toBe("customer_correction");
   expect(body.company.name).toBe("Acme Holdings Ltd");
   expect(body).not.toHaveProperty("searchAttempts");
+  // The correction is logged once as a change_event (spec §6.2 step 6).
+  const events = calls
+    .filter((c) => c.url.includes("/api/change-events"))
+    .map((c) => JSON.parse(c.opts.body))
+    .filter((e) => e.matchedRule === "CUSTOMER-FACT-CORRECTION");
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({
+    submissionId: "d-1", dossierId: "d-1", fieldId: "foundational_facts.correction",
+    workflow: "ops_review", escalation: false, jurisdiction: "GB",
+    afterValue: { action: "re_search", changed: ["companyName"] },
+  });
+  expect(events[0].beforeValue.companyName).toBe("Acme Ltd");
+  expect(calls.find((c) => c.url.includes("/api/change-events")).opts.headers.Authorization).toBe("Bearer dossier:signed.tok");
   // The corrected company must not offer the old company's directors.
   expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
   expect(screen.queryByText(/Olga Oldcompany/)).not.toBeInTheDocument();

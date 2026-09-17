@@ -79,6 +79,7 @@ import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendm
 // are still used by proceedFromJourney, which did not move.
 import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
+import { postCorrectionEvent } from "./reresearch/correctionEvent";
 import { isDemoToggleVisible } from "./utils/demoToggle";
 import { planCorrection } from "./reresearch/correctionPlan";
 import {
@@ -366,8 +367,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [searchAttempts, setSearchAttempts] = useState(0);
   // A search run by a customer spends one of their server-counted searches, keeps
   // their application id and keeps what they typed. A link customer is one from
-  // the moment they land, before correcting anything.
-  const isCustomerResearch = seededBy === "customer" || (landedViaLink && !!dossierId);
+  // the moment they land, before correcting anything. An analyst's Preview also
+  // lands through the dossier loader but is not a customer (preboardingUnlocked).
+  const isCustomerResearch = seededBy === "customer" || (landedViaLink && !!dossierId && !preboardingUnlocked);
   // Card A spends its search at the picker; the documents step then runs research
   // on that grant instead of spending again.
   const searchGrantRef = useRef(false);
@@ -2779,10 +2781,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // The customer corrected one or more foundational facts. Entity type alone
   // re-derives the schema; anything else re-researches with the corrected
   // values and spends one server-counted search. Never resets the application.
-  const applyCorrections = async (corrections) => {
+  // `shown.registrationNumber`: the number the gate displayed (and the customer
+  // edited against) — it can differ from regNumber state (e.g. research found one).
+  // With nothing shown the fact is not disputable, so regNumber is kept as-is.
+  const applyCorrections = async (corrections, shown = {}) => {
     const current = {
       companyName: research?.companyName || companyName,
-      registrationNumber: regNumber,
+      registrationNumber: shown.registrationNumber || regNumber,
       countryCode,
       entityType,
       ownershipType,
@@ -2795,6 +2800,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
 
     const next = plan.next;
+    // Audit trail (spec §6.2 step 6), once the corrected facts are applied.
+    const logCorrection = () => postCorrectionEvent({
+      submissionId: dossierId || onboardingSubmissionId,
+      dossierId,
+      before: current,
+      plan,
+      headers: getDossierAuthHeaders(),
+    });
     setCorrectionError("");
     setSeededBy("customer");
     setCompanyName(next.companyName);
@@ -2814,6 +2827,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         setActiveSchema(getSchemaFromConfig(next.countryCode, next.entityType, tenantConfig));
       } catch (_) { /* leave the schema as-is */ }
       cancelFactDispute();
+      logCorrection();
       if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
       return;
     }
@@ -2840,6 +2854,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         return;
       }
       cancelFactDispute();
+      logCorrection();
       if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
     } finally {
       setCorrectionBusy(false);

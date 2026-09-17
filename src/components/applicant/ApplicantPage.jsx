@@ -509,7 +509,7 @@ export function ApplicantPage({
           onRegNumberChangeResolved={resolveRegNumberChange}
           countryOptions={countryOptions}
           entityTypeOptions={entityTypeOptions}
-          onApplyCorrections={onApplyCorrections}
+          onApplyCorrections={(corrections) => onApplyCorrections(corrections, { registrationNumber: regValue })}
           correctionBusy={correctionBusy}
           correctionError={correctionError}
         />
