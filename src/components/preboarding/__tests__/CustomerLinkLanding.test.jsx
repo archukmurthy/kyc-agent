@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
 import { clearDossierCredentials } from "../../../utils/dossierCredential";
@@ -92,4 +92,44 @@ test("the dossier's ownership is recorded from the response", async () => {
   await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
   // A customer (not an analyst) never sees the review-only banner, even on a customer-owned dossier.
   expect(bodyText()).not.toMatch(/Review only/i);
+});
+
+test("a link customer's correction saves the committed corrected state and spends a dossier search", async () => {
+  window.confirm = jest.fn(() => true);
+  const ok = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+  fetchRoutes["/api/get-dossier"] = () => ok({
+    success: true,
+    dossier: {
+      id: "d-1", company_name: "Acme Ltd", entity_type: "Corporate", country_code: "GB",
+      owned_by: "analyst", customer_searches: 0,
+      // The old company's director: the person selector's fallback source.
+      stakeholders: { directors: [{ full_name: "Olga Oldcompany" }] },
+      raw_research: { found: [{ field: "company_name", value: "Acme Ltd", verificationStatus: "verified", source: "Companies House" }] },
+    },
+  });
+  fetchRoutes["/api/search-attempt"] = () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 });
+  // No companyName in the response: the saved name must come from committed state.
+  fetchRoutes["/api/research"] = () => ok({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });
+  fetchRoutes["/api/save-dossier"] = () => ok({ success: true, dossierId: "d-1" });
+  await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
+
+  const gate = await screen.findByTestId("foundational-facts-gate");
+  expect(screen.getAllByText(/Olga Oldcompany/).length).toBeGreaterThan(0);
+  fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+  fireEvent.change(await screen.findByTestId("correct-companyName"), { target: { value: "Acme Holdings Ltd" } });
+  await act(async () => { fireEvent.click(screen.getByTestId("facts-apply-corrections")); });
+
+  await waitFor(() => expect(calls.some((c) => c.url.includes("/api/save-dossier"))).toBe(true), { timeout: 10000 });
+  expect(calls.filter((c) => c.url.includes("/api/search-attempt"))).toHaveLength(1);
+  expect(calls.some((c) => c.url.includes("/api/research-attempt"))).toBe(false);
+  const saves = calls.filter((c) => c.url.includes("/api/save-dossier"));
+  expect(saves).toHaveLength(1);
+  const body = JSON.parse(saves[0].opts.body);
+  expect(body.seededBy).toBe("customer");
+  expect(body.saveReason).toBe("customer_correction");
+  expect(body.company.name).toBe("Acme Holdings Ltd");
+  expect(body).not.toHaveProperty("searchAttempts");
+  // The corrected company must not offer the old company's directors.
+  expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
+  expect(screen.queryByText(/Olga Oldcompany/)).not.toBeInTheDocument();
 });

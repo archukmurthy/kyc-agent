@@ -448,4 +448,60 @@ describe("correcting a foundational fact", () => {
     expect(flags).toHaveLength(1);
     expect(flags[0].submissionId).toBeTruthy();
   });
+
+  it("cancelling the paid-research confirm spends no search", async () => {
+    await driveToApplicant();
+    window.confirm = jest.fn(() => false);
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(calls("/api/research-attempt")).toHaveLength(0);
+    expect(calls("/api/research")).toHaveLength(0);
+  });
+
+  it("after a fallback, a picker search keeps the application id and the typed details", async () => {
+    await driveToApplicant();
+    fireEvent.change(gapField("applicant email"), { target: { value: "jane@example.com" } });
+    let researchOk = false;
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => (researchOk ? ok(researchBody) : { ok: false, status: 500, json: async () => ({ error: "research_failed" }) }),
+      "/api/change-events": () => ok({ success: true }),
+    });
+    const correctName = async (name) => {
+      const gate = screen.getByTestId("foundational-facts-gate");
+      fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+      await settle(0);
+      fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: name } });
+      fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+      await settle(5000);
+      await settle(5000);
+    };
+    await correctName("Britannia Holdings Limited"); // fails -> manual-entry fallback
+
+    researchOk = true;
+    fireEvent.click(screen.getByText("Let AI research your company").parentElement);
+    await settle(0);
+    fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
+    await settle(5000);
+    await settle(5000);
+    // The fallback left the name fact disputed; re-tick it to reveal the section.
+    fireEvent.click(within(screen.getByTestId("foundational-facts-gate")).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    expect(gapField("applicant email")).toHaveValue("jane@example.com");
+
+    await correctName("Britannia Holdings Group Limited");
+    const ids = calls("/api/research-attempt").map(([, init]) => JSON.parse(init.body).applicationId);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(1);
+  });
 });
