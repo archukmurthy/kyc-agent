@@ -39,6 +39,11 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **What:** Apply `db/migrations/027_customer_corrections.sql` to each database (`node db/apply.js db/migrations/027_customer_corrections.sql`) BEFORE deploying Part 3.
 - **Why:** Without it, dossier updates fail (the snapshot insert targets `entity_dossier_versions`), the customer re-search counter reads a missing `customer_searches` column, and submissions fail on `onboarding_sessions.dossier_id`.
 
+### DEP-6 — Part 4 deploy gate: migration 028
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
+- **What:** Apply `db/migrations/028_dossier_creation_key.sql` to each database (`node db/apply.js db/migrations/028_dossier_creation_key.sql`) BEFORE deploying Part 4.
+- **Why:** The dossier INSERT writes `creation_key` and uses `ON CONFLICT (tenant_id, creation_key)`; without the column and unique index every first save fails.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
