@@ -36,7 +36,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
 
@@ -683,5 +683,33 @@ describe("dossier creation is idempotent", () => {
     expect(saveBodies().length).toBe(1);
     await act(async () => { resolveSave(); });
     await settle(0);
+  });
+});
+
+describe("analyst resume", () => {
+  it("resuming a saved dossier returns the analyst to the dossier view with its registry documents", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    // Seed a registry document into the live draft the way the Documents step would,
+    // by writing the draft directly (the analyst journey has no self-source step in the dummy path).
+    await settle(1000); // let the debounced draft save run
+    const { DRAFT_KEY } = require("../../../utils/submissionDraft");
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    expect(draft && draft.state && draft.state.dossierId).toBe("d-1");
+    draft.state.selfSourceResults = {
+      results: [{ requirement: "Certificate of Incorporation", localEquivalent: "Companies House certificate", status: "retrieved", retrievedAt: "2026-09-16T10:00:00Z" }],
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+
+    cleanup();
+    await mountAtGate();
+    await unlock();
+    fireEvent.click(buttonsWithText(/^Resume$/)[0]);
+    await settle(0);
+
+    expect(bodyText()).toMatch(/Documents Sourced/);
+    expect(bodyText()).toMatch(/Companies House certificate/);
+    expect(bodyText()).not.toMatch(/Company Lookup/);
   });
 });

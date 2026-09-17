@@ -104,7 +104,7 @@ import {
   mergeResearchResults,
 } from "./pipeline";
 import { calcCostUsd, buildCostSummary } from "./utils/costs";
-import { saveDraft, loadDraft, clearDraft } from "./utils/submissionDraft";
+import { saveDraft, loadDraft, clearDraft, draftableSelfSourceResults } from "./utils/submissionDraft";
 import { C } from "./constants/theme";
 import {
   SHOW_NIUM_REG_PANEL,
@@ -852,7 +852,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // agentType (self-heals from the ?preboarding URL param, see resetAll),
   // landedViaLink (see the note below), authorityToActFile/
   // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
-  // JSON.stringify/localStorage; durable upload storage is PR-034), the
+  // JSON.stringify/localStorage; durable upload storage is PR-034).
+  // selfSourceResults IS saved, via draftableSelfSourceResults, which strips
+  // any manualUploadFile (a File object) off each result so the rest — and
+  // the dossier's "Documents Sourced" list — survives a resume. The
   // preboarding password gate (access gate over a hardcoded client constant,
   // not user data), newQuestion (in-progress "ask more" compose draft), and
   // pure UI toggles (expanded/open/hover/reveal state, transient loading and
@@ -885,6 +888,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         dialogueState: dialogueStateRef.current,
         coverage, gapRecoveryRan, researchTimestamp,
         docSearchResults,
+        selfSourceResults: draftableSelfSourceResults(selfSourceResults),
         acceptedDocTypes: Array.from(acceptedDocTypes),
         applicantNotListed, amendmentUploads,
         niumRegNumber, niumSearchResults, dossierStakeholders,
@@ -899,7 +903,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
       seededBy, searchAttempts,
       rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
-      researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
+      researchTimestamp, docSearchResults, selfSourceResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
       niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
 
   // Offer to resume an unfinished application found in localStorage (Task 9 —
@@ -950,11 +954,17 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCoverage(s.coverage || null); setGapRecoveryRan(!!s.gapRecoveryRan);
     setResearchTimestamp(s.researchTimestamp || "");
     setDocSearchResults(s.docSearchResults || null);
+    setSelfSourceResults(s.selfSourceResults || null);
     setAcceptedDocTypes(new Set(s.acceptedDocTypes || []));
     setApplicantNotListed(!!s.applicantNotListed);
     setAmendmentUploads(s.amendmentUploads || {});
     setNiumRegNumber(s.niumRegNumber || ""); setNiumSearchResults(s.niumSearchResults || null);
     setDossierStakeholders(s.dossierStakeholders || null);
+    // An analyst who saved a dossier and refreshed returns to the dossier view,
+    // not the confirm step behind it (re-derived; the flag itself is not saved).
+    if (agentType === "preboarding" && s.dossierId && s.step === stepsFor(s.journeyType || "ai_only").confirm) {
+      setShowDossierView(true);
+    }
     setStep(s.step || 0);
     setResumeOffer(null);
   };

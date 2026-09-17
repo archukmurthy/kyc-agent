@@ -1,4 +1,4 @@
-import { saveDraft, loadDraft, clearDraft, DRAFT_KEY } from "../submissionDraft";
+import { saveDraft, loadDraft, clearDraft, DRAFT_KEY, draftableSelfSourceResults } from "../submissionDraft";
 
 beforeEach(() => localStorage.clear());
 
@@ -60,4 +60,21 @@ describe('draft scoping', () => {
     saveDraft({ companyName: 'NoTenant' }, { tenantId: '', agentType: '' });
     expect(loadDraft({ tenantId: '', agentType: '' })).toBeNull();
   });
+});
+
+test("draftableSelfSourceResults drops File objects and keeps everything else", () => {
+  expect(draftableSelfSourceResults(null)).toBeNull();
+  const input = {
+    summary: { retrieved: 1 },
+    results: [
+      { requirement: "Certificate", status: "retrieved", sourceUrl: "https://x", manualUploadFile: new Blob(["x"]) },
+      { requirement: "Register extract", status: "manually_uploaded", manualUploadName: "extract.pdf" },
+    ],
+  };
+  const out = draftableSelfSourceResults(input);
+  expect(out.summary).toEqual({ retrieved: 1 });
+  expect(out.results[0]).toEqual({ requirement: "Certificate", status: "retrieved", sourceUrl: "https://x" });
+  expect(out.results[1]).toEqual({ requirement: "Register extract", status: "manually_uploaded", manualUploadName: "extract.pdf" });
+  expect(input.results[0].manualUploadFile).toBeDefined(); // the live state is not mutated
+  expect(() => JSON.stringify(out)).not.toThrow();
 });

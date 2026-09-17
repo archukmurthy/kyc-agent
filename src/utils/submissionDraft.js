@@ -38,3 +38,18 @@ export function loadDraft(scope) {
 export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch (_) { /* ignore */ }
 }
+
+// Registry self-source results can hold browser File objects (a manually
+// uploaded registry document) that cannot survive JSON. Keep everything else so
+// the dossier's "Documents Sourced" list survives a resume.
+export function draftableSelfSourceResults(selfSourceResults) {
+  if (!selfSourceResults || typeof selfSourceResults !== "object") return null;
+  const results = Array.isArray(selfSourceResults.results)
+    ? selfSourceResults.results.map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const { manualUploadFile, ...rest } = item;
+        return rest;
+      })
+    : selfSourceResults.results;
+  return { ...selfSourceResults, results };
+}
