@@ -140,7 +140,7 @@ describe("reaching the Applicant step", () => {
       .forEach((cb) => expect(cb).toBeChecked());
   });
 
-  it("hides the applicant section when a fact is disputed, and restores it", async () => {
+  it("hides the applicant section while a fact is being corrected, and restores it", async () => {
     await driveToApplicant();
     const gate = screen.getByTestId("foundational-facts-gate");
     const nameFact = within(gate).getByLabelText(/Confirm Company legal name/i);
@@ -148,7 +148,8 @@ describe("reaching the Applicant step", () => {
     fireEvent.click(nameFact);
     await settle(0);
     expect(screen.queryByText("Tell us about yourself")).not.toBeInTheDocument();
-    expect(screen.getByText(/This restarts your application/)).toBeInTheDocument();
+    expect(screen.getByTestId("correct-companyName")).toBeInTheDocument();
+    expect(screen.queryByText(/This restarts your application/)).not.toBeInTheDocument();
 
     fireEvent.click(nameFact);
     await settle(0);
@@ -325,5 +326,185 @@ describe("page navigation", () => {
   it("offers Start Over alongside Continue", async () => {
     await driveToApplicant();
     expect(screen.getByRole("button", { name: /Start Over/i })).toBeInTheDocument();
+  });
+});
+
+describe("correcting a foundational fact", () => {
+  const researchBody = { content: [{ type: "text", text: "{\"companyName\":\"Britannia Holdings Limited\",\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } };
+
+  function routeFetch(routes) {
+    global.fetch = jest.fn((url, init) => {
+      const path = String(url).split("?")[0];
+      const handler = routes[path];
+      if (!handler) return Promise.reject(new Error("offline test"));
+      return Promise.resolve(handler(init));
+    });
+  }
+  const calls = (path) => global.fetch.mock.calls.filter(([url]) => String(url).split("?")[0] === path);
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+
+  beforeEach(() => {
+    window.confirm = jest.fn(() => true);
+  });
+
+  it("entity type alone re-derives: no search, no attempt spent, gate re-confirmed", async () => {
+    await driveToApplicant();
+    routeFetch({});
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Entity type/i));
+    await settle(0);
+    const select = screen.getByTestId("correct-entityType");
+    const other = Array.from(select.options).find((o) => o.value && o.value !== select.value);
+    expect(other).toBeTruthy();
+    fireEvent.change(select, { target: { value: other.value } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+
+    expect(calls("/api/research")).toHaveLength(0);
+    expect(calls("/api/research-attempt")).toHaveLength(0);
+    expect(calls("/api/search-attempt")).toHaveLength(0);
+    expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
+  });
+
+  it("a company-name correction spends an attempt and re-researches with the corrected name, staying on the page", async () => {
+    await driveToApplicant();
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+    await settle(5000);
+
+    expect(calls("/api/research-attempt")).toHaveLength(1);
+    const attemptBody = JSON.parse(calls("/api/research-attempt")[0][1].body);
+    expect(attemptBody.applicationId).toMatch(/^[0-9a-f-]{36}$/i);
+    const researchCalls = calls("/api/research");
+    expect(researchCalls.length).toBeGreaterThanOrEqual(1);
+    const first = JSON.parse(researchCalls[0][1].body);
+    expect(first.mode).toBe("research");
+    expect(first.companyName).toBe("Britannia Holdings Limited");
+    expect(first.sourcedDocuments).toEqual([]);
+    expect(screen.getByTestId("foundational-facts-gate")).toBeInTheDocument();
+    expect(screen.queryByText(/We couldn't complete that search/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the applicant's typed details through a re-search", async () => {
+    await driveToApplicant();
+    fireEvent.change(gapField("applicant email"), { target: { value: "jane@example.com" } });
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+    await settle(5000);
+
+    expect(gapField("applicant email")).toHaveValue("jane@example.com");
+  });
+
+  it("with no searches left: no research, the cap message, manual entry offered", async () => {
+    await driveToApplicant();
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: false, attemptsUsed: 2, remaining: 0 }),
+      "/api/research": () => ok(researchBody),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+
+    expect(calls("/api/research")).toHaveLength(0);
+    expect(screen.getAllByText(/You've used your available searches/).length).toBeGreaterThan(0);
+  });
+
+  it("a failed re-search falls back to manual entry and flags the failure against the application", async () => {
+    await driveToApplicant();
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ({ ok: false, status: 500, json: async () => ({ error: "research_failed" }) }),
+      "/api/change-events": () => ok({ success: true }),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+    await settle(5000);
+
+    expect(screen.getAllByText(/We couldn't complete that search just now/).length).toBeGreaterThan(0);
+    const flags = calls("/api/change-events").map(([, init]) => JSON.parse(init.body)).filter((e) => e.fieldId === "reresearch.fallback");
+    expect(flags).toHaveLength(1);
+    expect(flags[0].submissionId).toBeTruthy();
+  });
+
+  it("cancelling the paid-research confirm spends no search", async () => {
+    await driveToApplicant();
+    window.confirm = jest.fn(() => false);
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => ok(researchBody),
+    });
+    const gate = screen.getByTestId("foundational-facts-gate");
+    fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+    await settle(0);
+    fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: "Britannia Holdings Limited" } });
+    fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+    await settle(5000);
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(calls("/api/research-attempt")).toHaveLength(0);
+    expect(calls("/api/research")).toHaveLength(0);
+  });
+
+  it("after a fallback, a picker search keeps the application id and the typed details", async () => {
+    await driveToApplicant();
+    fireEvent.change(gapField("applicant email"), { target: { value: "jane@example.com" } });
+    let researchOk = false;
+    routeFetch({
+      "/api/research-attempt": () => ok({ allowed: true, attemptsUsed: 1, remaining: 1 }),
+      "/api/research": () => (researchOk ? ok(researchBody) : { ok: false, status: 500, json: async () => ({ error: "research_failed" }) }),
+      "/api/change-events": () => ok({ success: true }),
+    });
+    const correctName = async (name) => {
+      const gate = screen.getByTestId("foundational-facts-gate");
+      fireEvent.click(within(gate).getByLabelText(/Confirm Company legal name/i));
+      await settle(0);
+      fireEvent.change(screen.getByTestId("correct-companyName"), { target: { value: name } });
+      fireEvent.click(screen.getByTestId("facts-apply-corrections"));
+      await settle(5000);
+      await settle(5000);
+    };
+    await correctName("Britannia Holdings Limited"); // fails -> manual-entry fallback
+
+    researchOk = true;
+    fireEvent.click(screen.getByText("Let AI research your company").parentElement);
+    await settle(0);
+    fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
+    await settle(5000);
+    await settle(5000);
+    // The fallback closed the correction form, so the applicant section is back
+    // without re-ticking anything.
+    expect(within(screen.getByTestId("foundational-facts-gate")).getByLabelText(/Confirm Company legal name/i)).toBeChecked();
+    // The earlier fallback message must not follow the customer onto the page
+    // after the successful search.
+    expect(screen.queryByTestId("facts-corrections-error")).not.toBeInTheDocument();
+    expect(gapField("applicant email")).toHaveValue("jane@example.com");
+
+    await correctName("Britannia Holdings Group Limited");
+    const ids = calls("/api/research-attempt").map(([, init]) => JSON.parse(init.body).applicationId);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(1);
   });
 });

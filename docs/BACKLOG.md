@@ -34,6 +34,11 @@ Persistent source of truth for deferred work, agreed future improvements, tech d
 - **What:** (1) Rate-limit counters live in `lib/storage.js`. On Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global; and the filesystem backend ignores TTLs, so `ratelimit:*` keys pile up in `.config-store.json` (local) or `/tmp` until the instance recycles. Provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
 - **Why:** Behaviour changes that are correct by design but surprise on first deploy.
 
+### DEP-5 — Part 3 deploy gate: migration 027
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
+- **What:** Apply `db/migrations/027_customer_corrections.sql` to each database (`node db/apply.js db/migrations/027_customer_corrections.sql`) BEFORE deploying Part 3.
+- **Why:** Without it, dossier updates fail (the snapshot insert targets `entity_dossier_versions`), the customer re-search counter reads a missing `customer_searches` column, and submissions fail on `onboarding_sessions.dossier_id`.
+
 ---
 
 ## Didit IDV integration — deferred to the production-hardening phase
@@ -225,6 +230,26 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.
 - **Status note (Part 2):** per-caller hourly rate limits shipped on research, doc-search, self-source, ubo-discovery and generate-policy (`lib/rateLimit.js`, `RATE_LIMIT_*`). A per-tenant daily spend cap is still open.
 
+### RERES-3 — Part 3 correction flow: known edges (final review)
+- **Category:** Reliability / UX · **Priority:** P3 · **Status:** OPEN (found in Part 3 final review 2026-09-17)
+- **What:**
+  - Overlapping correction saves can both snapshot the same version and hit `UNIQUE(dossier_id, version)` → `save_failed` (fails safe: the second save is refused, the customer sees the retry message).
+  - The version snapshot and the dossier UPDATE are two statements, not atomic; a single CTE (snapshot + UPDATE) would close the gap.
+  - Card A (upload documents) asks the dev paid-call confirm twice: once at the picker (the search is spent there) and again when research runs from the documents step.
+  - The picker's cap refusal (`CONTACT_ADMIN_MSG`) posts no re-research failure flag, unlike the Applicant-page correction path.
+  - Product question: after a fallback, a tenant with no `manualFormUrl` offers no manual-entry route.
+  - A correction spends a new search even when an unused card-A grant is waiting (over-counts by one, never under-counts).
+  - The correction change_event is posted before the deferred dossier save, so a failed save still leaves "corrected" in the audit trail; a demo-mode re-derive also posts it.
+  - Resuming a saved draft on top of a link landing overwrites the server-loaded `dossierId` / `searchAttempts` with the draft's (the server still refuses a 3rd search).
+  - Entering the documents step auto-runs `/api/doc-search` and `/api/self-source` for link customers and analyst Preview — rate-limited (Part 2) but not counted against the 2-search cap.
+- **Area:** `api/save-dossier.js`, `src/App.js` (`proceedFromJourney`, `proceedFromDocuments`, `fallBackToManual`, `applyCorrections`, `applyResume`).
+
+### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
+- **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
+- **What:** The cap lives in `/api/search-attempt` and `/api/research-attempt`, which the client calls before re-researching. A client that skips that call can still run research, bounded only by Part 2's per-caller rate limit. Real fix: have `/api/research` require a one-time attempt grant (e.g. a short-lived signed nonce issued by the attempt endpoints).
+- **Also:** fresh-customer counts are keyed by a client-held application id, so a new id gets a new allowance (PLAT-7 territory), and the storage counter is read-modify-write, not atomic.
+- **Area:** `api/research.js`, `api/search-attempt.js`, `api/research-attempt.js`.
+
 ### RERES-1 — Revisit: re-search on ANY corrected core fact (not just identity facts)
 - **Category:** Product / UX · **Priority:** P3 · **Status:** OPEN (revisit later — user decision 2026-09-15)
 - **What:** Being built now (user-refined 2026-09-15): wrong company name / country / registration number / ownership type → full re-search (uses a retry); wrong entity type ONLY → re-derive from existing research (no search, no retry). Alternative to revisit: entity-type corrections also trigger a full re-search.
@@ -253,6 +278,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 1 final review 2026-09-16)
 - **What:** A customer holding their own dossier token can overwrite `search_attempts`, `seeded_by`, `excluded_fields`, `required_documents`, `verified_data` through `POST /api/save-dossier`. Restrict the customer UPDATE to customer-editable columns; keep the retry count server-owned (Part 3 already stops the client writing `searchAttempts`).
 - **Why not now:** customer can only touch their own dossier, and `/api/submit` accepts client-sent data anyway.
+- **Progress (Part 3 final review 2026-09-17):** a customer UPDATE now keeps the stored `included_fields`, `excluded_fields` and `custom_questions` (and `search_attempts` is never written). Still open: `seeded_by`, `required_documents`, `verified_data` (and the other research columns).
 - **Area:** `api/save-dossier.js`.
 
 ### PREB-6 — Revocation store must be shared and fail closed in production

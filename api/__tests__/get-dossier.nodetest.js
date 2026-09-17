@@ -104,3 +104,13 @@ test("a dossier that does not exist in the actor's tenant is a 404", async () =>
   assert.strictEqual(res.statusCode, 404);
   assert.deepStrictEqual(res.body, { success: false, error: "dossier_not_found" });
 });
+
+test("the dossier read includes the customer's re-search count", async () => {
+  const sql = fakeSql({ ...ROW, customer_searches: 1 });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  const res = fakeRes();
+  await handler(req(), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.match(sql.calls[0].text, /customer_searches/);
+  assert.strictEqual(res.body.dossier.customer_searches, 1);
+});

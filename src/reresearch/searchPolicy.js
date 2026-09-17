@@ -5,8 +5,9 @@
  * No I/O, no React. CommonJS-in-src (the engine / pipeline.js precedent) so it's
  * requireable by node --test AND importable by App.js via the CJS↔ESM interop,
  * while staying inside src/ for CRA's ModuleScopePlugin. The authoritative
- * attempt COUNT lives server-side on entity_dossiers.search_attempts
- * (api/search-attempt.js); this module only interprets a count into UI decisions,
+ * attempt COUNT lives server-side: entity_dossiers.customer_searches
+ * for link customers (api/search-attempt.js) and lib/storage.js for fresh
+ * customers (api/research-attempt.js); this module only interprets a count into UI decisions,
  * and maps the one-question dialogue answer to the lifecycle dispute kind.
  *
  * Cap semantics (exactly as specified):

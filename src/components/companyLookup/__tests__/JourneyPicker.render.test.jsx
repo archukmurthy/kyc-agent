@@ -43,11 +43,12 @@
  *                          visible test change rather than a silent one.
  *
  * KNOWN UNREACHABLE (see the report, not a gap in the assertions):
- *   The locked search-cap state. `const [seededBy] = useState("analyst")` has no
- *   setter (App.js ~314), and proceedFromJourney only increments searchAttempts
- *   when seededBy === "customer" (~2521). searchAttempts is therefore pinned at
- *   0 for the whole life of the app, so evaluateSearchCap never returns
- *   locked/isSecondAttempt. The unlocked state is characterised instead, as a
+ *   The locked search-cap state, from this driver. seededBy only becomes
+ *   "customer" after a foundational-fact correction on the Applicant page, and
+ *   searchAttempts is then set from the server's count (/api/search-attempt or
+ *   /api/research-attempt) — this net never corrects a fact, so it stays 0 and
+ *   evaluateSearchCap never returns locked/isSecondAttempt here (the cap is
+ *   covered by the correction tests). The unlocked state is characterised instead, as a
  *   positive assertion that NEITHER banner renders and NO card is disabled.
  *
  * CHARACTERISATION, not specification: these assert what the picker does TODAY.

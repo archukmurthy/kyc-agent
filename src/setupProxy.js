@@ -50,6 +50,7 @@ const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-ev
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
+const researchAttemptHandler = require(path.join(__dirname, "..", "api", "research-attempt.js"));
 const revokeDossierTokenHandler = require(path.join(__dirname, "..", "api", "revoke-dossier-token.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
@@ -489,6 +490,17 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(searchAttemptHandler)(req, res);
+    });
+  });
+
+  // Fresh-customer re-search counter (no dossier). POST; parse the JSON body.
+  app.post("/api/research-attempt", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(researchAttemptHandler)(req, res);
     });
   });
 

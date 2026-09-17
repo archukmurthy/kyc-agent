@@ -79,6 +79,9 @@ import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendm
 // are still used by proceedFromJourney, which did not move.
 import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
 import { postReresearchFailureFlag } from "./reresearch/failureFlag";
+import { postCorrectionEvent } from "./reresearch/correctionEvent";
+import { isDemoToggleVisible } from "./utils/demoToggle";
+import { planCorrection } from "./reresearch/correctionPlan";
 import {
   SOURCE_TRUST,
   isStakeholderField,
@@ -235,20 +238,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setDemoModeState(next);
     try { sessionStorage.setItem("demo_mode", next ? "true" : "false"); } catch (_) { /* ignore */ }
   }, []);
-  // Visibility gate — the toggle is hidden on production end-customer URLs.
-  // Surfaces when ?demo=true is in the URL, on localhost, or when a ?tenant=
-  // override is being used (admin/dev/testing contexts).
-  const demoToggleVisible = (() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const p = new URLSearchParams(window.location.search);
-      if (p.get("demo") === "true") return true;
-      if (p.get("tenant")) return true;
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1") return true;
-    } catch (_) { /* ignore */ }
-    return false;
-  })();
+  // Visibility gate — see utils/demoToggle.js.
+  const demoToggleVisible = typeof window !== "undefined"
+    && isDemoToggleVisible({ search: window.location.search, hostname: window.location.hostname });
 
   useEffect(() => {
     let cancelled = false;
@@ -354,8 +346,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // this journey). Captured as reactive state — not read live from the URL —
   // because resetAll does not clear the URL: clearing this flag on a "wrong
   // company" dispute reset correctly returns the redirected-to-lookup customer
-  // to the full 7-step bar. Display-only: drives which step-bar pills show, never
-  // routing. Set in the two link-landing paths (loadDossierAndStartOnboarding +
+  // to the full 7-step bar. Drives which step-bar pills show (never routing) and,
+  // with dossierId, marks research as the customer's (isCustomerResearch). Set in the two link-landing paths (loadDossierAndStartOnboarding +
   // the ?ref hydration effect); cleared in resetAll.
   const [landedViaLink, setLandedViaLink] = useState(false);
   const [dossierSaving, setDossierSaving] = useState(false);
@@ -369,14 +361,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Self-serve re-research (front-door "wrong company / wrong type") state.
   //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
   //  searchAttempts    — searches already consumed for this dossier (server-read)
-  //  pendingReseedMode — null | 'full_research' | 're_derive', set after a dispute
-  // seededBy is now always 'analyst': the only writer was the old dossier-reseed
-  // dispute, which the foundational-facts gate (slice 2) supersedes with a full
-  // reset. Kept as a read-only value so the downstream re-research wiring is
-  // unchanged; revive a setter here if customer-seeded reseed is reintroduced.
-  const [seededBy] = useState("analyst");
+  // 'customer' once the customer has corrected a foundational fact; recorded on
+  // the dossier as seeded_by and used to route a failed re-search to manual entry.
+  const [seededBy, setSeededBy] = useState("analyst");
   const [searchAttempts, setSearchAttempts] = useState(0);
-  const [pendingReseedMode, setPendingReseedMode] = useState(null);
+  // A search run by a customer spends one of their server-counted searches, keeps
+  // their application id and keeps what they typed. A link customer is one from
+  // the moment they land, before correcting anything. An analyst's Preview also
+  // lands through the dossier loader but is not a customer (preboardingUnlocked).
+  const isCustomerResearch = seededBy === "customer" || (landedViaLink && !!dossierId && !preboardingUnlocked);
+  // Card A spends its search at the picker; the documents step then runs research
+  // on that grant instead of spending again.
+  const searchGrantRef = useRef(false);
+  // Blocks a double-click from spending two searches.
+  const searchSpendBusyRef = useRef(false);
 
   // Foundational-facts confirmation gate (slice 2 of 2). Shown at the top of the
   // Applicant page; the applicant section reveals only once all five facts are
@@ -392,6 +390,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // the jurisdiction-appropriate change document, then resolve the gate).
   const [regNumberFork, setRegNumberFork] = useState(null); // null | 'choose' | 'changed'
   const [regNumberChangeDeclared, setRegNumberChangeDeclared] = useState(null);
+  // Inline correction of the foundational facts (Part 3): busy while a re-search
+  // runs from the Applicant page, and the message shown in the gate.
+  const [correctionBusy, setCorrectionBusy] = useState(false);
+  const [correctionError, setCorrectionError] = useState("");
+  // A customer correction's dossier save, deferred to the next render so it
+  // reads the committed corrected state (not the click handler's stale closure).
+  const [pendingCorrectionSave, setPendingCorrectionSave] = useState(null);
   const [showDossierView, setShowDossierView] = useState(false);
   const [showInviteScreen, setShowInviteScreen] = useState(false);
   const [inviteContactName, setInviteContactName] = useState('');
@@ -774,6 +779,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
+    // A brand-new application starts from an empty lookup and no saved draft —
+    // this is the shared root for Start Over and Start New Application.
+    setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
+    clearDraft();
+    setSeededBy("analyst"); searchGrantRef.current = false; setCorrectionBusy(false); setCorrectionError(""); setPendingCorrectionSave(null);
+    // A customer who arrived by link stays attached to the analyst's dossier
+    // (and keeps its server-counted searches) when starting again.
+    const keepDossierLink = landedViaLink && !!dossierId;
     setChecks({}); setRejectedStakeholders({}); setExpandedStakeholders({}); setIsPubliclyListedOverride(false); setRevealedTs({}); setResearchTimestamp("");
     setAffirmedFields({}); setInlineEditOpen({});
     dialogueStateRef.current = {}; // drop persisted change-dialogue answers on Start Over
@@ -811,16 +824,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCustomQuestions([]);
     setAskMoreOpenSection(null);
     setNewQuestion({ text: "", fieldType: "text", required: true, options: "" });
-    setDossierId(null);
+    if (!keepDossierLink) { setDossierId(null); setSearchAttempts(0); }
     setOnboardingSubmissionId(null);
     setDossierSaving(false);
     setDossierSaved(false);
     setShowDossierView(false);
     setRegNumber("");
     setRegNumberSource(null);
-    // Wrong-company dispute → redirected to the lookup page: this is now a
-    // genuine KYC/lookup journey, so restore the full 7-step bar.
-    setLandedViaLink(false);
+    // Only a genuine lookup journey restores the full step bar; a link customer
+    // stays on the link journey.
+    if (!keepDossierLink) setLandedViaLink(false);
     setNiumRegNumber("");
     setNiumSearchResults(null);
     setNiumSearchError("");
@@ -832,13 +845,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // KEEP IN SYNC with resetAll() — every data-bearing atom resetAll clears must
   // be saved here AND restored in applyResume(). Intentionally NOT saved:
   // agentType (self-heals from the ?preboarding URL param, see resetAll),
-  // landedViaLink (display-only step-bar flag), authorityToActFile/
+  // landedViaLink (see the note below), authorityToActFile/
   // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
   // JSON.stringify/localStorage; durable upload storage is PR-034), the
   // preboarding password gate (access gate over a hardcoded client constant,
   // not user data), newQuestion (in-progress "ask more" compose draft), and
   // pure UI toggles (expanded/open/hover/reveal state, transient loading and
-  // error strings) that are harmless to lose and default back safely.
+  // error strings) that are harmless to lose and default back safely, and the
+  // in-flight search refs (searchGrantRef/searchSpendBusyRef). landedViaLink is
+  // not saved: a link customer re-lands through their token URL, which sets it.
+  // searchAttempts is saved for display only — the server count is authoritative.
   useEffect(() => {
     if (done) return;
     const t = setTimeout(() => {
@@ -856,6 +872,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         applicantSelectedPerson, applicantAgentValues, applicantOverrides,
         excludedGapFields: Array.from(excludedGapFields),
         customQuestions, dossierId, onboardingSubmissionId, declared,
+        seededBy, searchAttempts,
         rejectedStakeholders: Object.fromEntries(
           Object.entries(rejectedStakeholders).map(([k, v]) => [k, Array.from(v || [])])
         ),
@@ -875,6 +892,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       journeyType, regNumber, regNumberSource, idvVerification, idvVerifiedFields, idvResult,
       stakeholderFieldChecks, applicantSelectedPerson, applicantAgentValues, applicantOverrides,
       excludedGapFields, customQuestions, dossierId, onboardingSubmissionId, declared,
+      seededBy, searchAttempts,
       rejectedStakeholders, isPubliclyListedOverride, affirmedFields, coverage, gapRecoveryRan,
       researchTimestamp, docSearchResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
       niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
@@ -914,6 +932,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setCustomQuestions(s.customQuestions || []);
     setDossierId(s.dossierId || null); setOnboardingSubmissionId(s.onboardingSubmissionId || null);
     setDeclared(!!s.declared);
+    setSeededBy(s.seededBy === "customer" ? "customer" : "analyst");
+    setSearchAttempts(Number(s.searchAttempts) || 0);
     setRejectedStakeholders(
       Object.fromEntries(
         Object.entries(s.rejectedStakeholders || {}).map(([k, v]) => [k, new Set(v || [])])
@@ -988,12 +1008,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // doDummyResearch / the Nium lookup all advance to stepsFor(journey).confirm
   // when research genuinely completes, which is the correct trigger.
   useEffect(() => {
-    // The dossier auto-saves for the analyst pre-boarding flow AND for a customer
-    // self-serve re-research (seededBy 'customer') — same engine, same audit
-    // record, only the trigger differs. The customer reaches confirm only after
-    // clearing the applicant gate, so the gate stays ahead of the saved dossier.
+    // The dossier auto-saves only for the analyst pre-boarding flow. A customer
+    // correction saves explicitly (applyCorrections), and a fresh customer has
+    // no dossier to save.
     if (
-      ((agentType === "preboarding" && preboardingUnlocked) || seededBy === "customer") &&
+      agentType === "preboarding" && preboardingUnlocked &&
       step === stepsFor(journeyType).confirm &&
       research?.found?.length > 0 &&
       !showDossierView &&
@@ -1005,7 +1024,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // resume-at-confirm is still needless churn (a redundant UPDATE), and the
       // dossierSaved guard resets to false on resume so it can't suppress it.
       // A non-null dossierId blocks the redundant auto-save; the explicit
-      // Save/Update buttons and applyReDerive still upsert intentionally.
+      // Save/Update buttons and a customer correction still upsert intentionally.
       !dossierId
     ) {
       // Small delay to ensure all state is settled after research.
@@ -1016,6 +1035,19 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentType, preboardingUnlocked, step, journeyType, research?.found, dossierId, dossierSaved]);
+
+  // A customer correction's save (queued by applyCorrections). By the time this
+  // runs, every setter from the correction has committed, so buildDossierPayload
+  // sees seededBy 'customer', the corrected facts, schema, research and checks.
+  useEffect(() => {
+    if (!pendingCorrectionSave || !dossierId) return;
+    const { reason } = pendingCorrectionSave;
+    setPendingCorrectionSave(null);
+    saveDossier({ reason }).then((saved) => {
+      if (!saved) setCorrectionError("We updated your details but couldn't save them. Please try again.");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCorrectionSave, dossierId]);
 
   // Customer invite landing. When the app is opened via an invite link
   // (`?ref=<token>`), restore the dossier snapshot the analyst captured at
@@ -1240,6 +1272,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
         setDossierId(d.id);
         setDossierOwnedBy(d.owned_by || null);
+        // The customer's server-counted re-searches, and the registration number
+        // the analyst researched with (so a correction compares against it). The
+        // source stays null: a restored number is not customer-typed.
+        setSearchAttempts(Number(d.customer_searches) || 0);
+        setRegNumber(d.raw_research?.registrationNumber || "");
+        setRegNumberSource(null);
         trackEvent("invite_link_opened", { dossierId: d.id, companyName: d.company_name || null, via: "dossier_link" });
       }
     } catch (err) {
@@ -1670,19 +1708,43 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
   const previewDraftBody = () => (inPreview && tenantConfig ? { draftConfig: tenantConfig } : {});
 
-  const doResearch = async (journeyOverride) => {
-    // Safety net: doResearch is the REAL, paid path (Anthropic + web search). In
-    // dev/testing contexts (demo toggle available) confirm before spending, so an
-    // accidental non-demo run can't silently bill. Real end-customer URLs
-    // (demoToggleVisible false) are unaffected — that's the intended paid path.
+  // Safety net: doResearch is the REAL, paid path (Anthropic + web search). In
+  // dev/testing contexts (demo toggle available) confirm before spending, so an
+  // accidental non-demo run can't silently bill. Real end-customer URLs
+  // (demoToggleVisible false) are unaffected — that's the intended paid path.
+  // Customer paths call this BEFORE spending a server-counted search.
+  const confirmPaidResearch = () => {
     if (!demoMode && demoToggleVisible && typeof window !== "undefined" && typeof window.confirm === "function") {
-      const ok = window.confirm("Demo mode is OFF - this runs a REAL research call (Anthropic API + web search) and will COST money. Continue?");
-      if (!ok) return;
+      return window.confirm("Demo mode is OFF - this runs a REAL research call (Anthropic API + web search) and will COST money. Continue?");
     }
-    if (!companyName.trim()) { setError("Please enter a company name."); return; }
-    if (!entityType) { setError("Please select an entity type."); return; }
-    if (!countryCode) { setError("Please select a country."); return; }
+    return true;
+  };
+
+  // `confirmed`: the caller already ran confirmPaidResearch (a correction always has).
+  const doResearch = async (journeyOverride, { overrides = null, correction = false, confirmed = false } = {}) => {
+    if (!correction && !confirmed && !confirmPaidResearch()) return;
+    // A correction passes the corrected facts EXPLICITLY — state setters from the
+    // same click have not re-rendered yet, so the closure values are stale.
+    const facts = overrides
+      ? {
+          companyName: overrides.companyName,
+          countryCode: overrides.countryCode,
+          entityType: overrides.entityType,
+          ownershipType: overrides.ownershipType,
+          regNumber: overrides.registrationNumber || "",
+        }
+      : { companyName, countryCode, entityType, ownershipType, regNumber };
+    const factsCountry = COUNTRIES.find((c) => c.code === facts.countryCode);
+    if (!facts.companyName.trim()) { setError("Please enter a company name."); return; }
+    if (!facts.entityType) { setError("Please select an entity type."); return; }
+    if (!facts.countryCode) { setError("Please select a country."); return; }
+    // Past validation: this run uses (or never needed) any picker grant. Cleared
+    // here, not earlier, so a validation stop doesn't throw away a paid-for grant.
+    searchGrantRef.current = false;
     setError("");
+    // A fresh (non-correction) search starts clean: a correction's earlier
+    // fallback message must not follow the customer onto the next page.
+    if (!correction) setCorrectionError("");
     // Clear any prior cache badge; the response handler re-derives it.
     setServedFromCache(false); setCachedAt(null);
     // Fresh research run: clear prior research/extraction costs but keep the
@@ -1691,23 +1753,37 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     const journey = journeyOverride || journeyType || "ai_only";
     const researchStartTime = Date.now();
     trackEvent("research_started", {
-      companyName,
-      countryCode,
-      entityType,
-      ownershipType,
+      companyName: facts.companyName,
+      countryCode: facts.countryCode,
+      entityType: facts.entityType,
+      ownershipType: facts.ownershipType,
       journeyType: journey,
       agentType: agentType || "onboarding",
       startedAt: new Date().toISOString(),
     });
     const S = stepsFor(journey);
-    const schema = getSchemaFromConfig(countryCode, entityType, tenantConfig);
-    setActiveSchema(schema);
-    setLoading(true); setStep(S.research); setLoaderIdx(0);
+    setLoading(true); setLoaderIdx(0);
+    // A correction stays on the Applicant page (the gate shows its own busy state).
+    if (!correction) setStep(S.research);
+    if (correction) {
+      // Documents found for the wrong company must not follow the customer.
+      setSelfSourceResults(null);
+      setDocSearchResults(null);
+      setAcceptedDocTypes(new Set());
+      // …nor the old company's directors (the person selector's fallback).
+      setDossierStakeholders(null);
+    }
     try {
+      // Moved inside the try (was computed before it): a correction can hand in
+      // a bad country/entity combo, and getSchemaFromConfig throwing here must
+      // reach the catch's fallback-to-manual path like every other failure below,
+      // not crash the component.
+      const schema = getSchemaFromConfig(facts.countryCode, facts.entityType, tenantConfig);
+      setActiveSchema(schema);
       // ─── Phase 1: extract from each uploaded document, in DOC_TYPES order ───
       const flow = schema.flow === "fi" ? "fi" : "corporate";
       const hasAnyDocs = DOC_TYPES.some(d => uploadedDocs[d.key]);
-      const runDocPhase = journey === "ai_documents" && hasAnyDocs;
+      const runDocPhase = !correction && journey === "ai_documents" && hasAnyDocs;
 
       let docFound = [];                  // sourceTier:"document" rows, ordered by DOC_TYPES priority
       let wolfsbergFields = {};           // legacy obj for prompt injection
@@ -1753,19 +1829,19 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // The server builds the prompt from this tenant's schema, including the
       // PRIMARY COMPANY IDENTIFIER (reg number) and AUTOMATICALLY SOURCED
       // DOCUMENTS blocks (lib/researchPrompts.js).
-      const trimmedRegNumber = regNumber.trim();
-      const acceptedDocs = (docSearchResults?.documents || [])
+      const trimmedRegNumber = facts.regNumber.trim();
+      const acceptedDocs = correction ? [] : (docSearchResults?.documents || [])
         .filter(d => acceptedDocTypes.has(d.type));
       const resp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...researchHeaders() },
         body: JSON.stringify({
           mode: "research",
-          companyName,
-          countryCode,
-          countryName: countryObj ? countryObj.name : countryCode,
-          entityType,
-          ownershipType,
+          companyName: facts.companyName,
+          countryCode: facts.countryCode,
+          countryName: factsCountry ? factsCountry.name : facts.countryCode,
+          entityType: facts.entityType,
+          ownershipType: facts.ownershipType,
           // Optional reg number → primary search key and the Companies House
           // officers layer. Undefined when blank.
           registrationNumber: trimmedRegNumber || undefined,
@@ -1817,7 +1893,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         const isWolfsbergSrc = !!(item.source && /wolfsberg/i.test(item.source));
         const tier = isWolfsbergSrc
           ? "document"
-          : classifySourceFromConfig([item.source, item.sourceUrl].filter(Boolean).join(" "), countryCode, tenantConfig);
+          : classifySourceFromConfig([item.source, item.sourceUrl].filter(Boolean).join(" "), facts.countryCode, tenantConfig);
         return {
           ...item,
           sourceUrl: item.sourceUrl || null,
@@ -1885,11 +1961,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             headers: { "Content-Type": "application/json", ...researchHeaders() },
             body: JSON.stringify({
               mode: "gap_recovery",
-              companyName,
-              countryCode,
-              countryName: countryObj ? countryObj.name : countryCode,
-              entityType,
-              ownershipType,
+              companyName: facts.companyName,
+              countryCode: facts.countryCode,
+              countryName: factsCountry ? factsCountry.name : facts.countryCode,
+              entityType: facts.entityType,
+              ownershipType: facts.ownershipType,
               missingFields: cov.missingFields.map((f) => f.field),
               upgradeableFields: upgradeable.map((r) => r.field),
               ...previewDraftBody(),
@@ -1944,7 +2020,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // so tier-1 registry data survives this overwrite and reaches Confirm. The
       // runRealSelfSource merge remains the backup for the case where self-source
       // finishes AFTER this research pass.
-      const selfSourcedRows = selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema);
+      const selfSourcedRows = correction ? [] : selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema);
       // Use this SAME list for research, metadata, and checks below — otherwise
       // the appended registry rows get no checks entry and wrongly surface as
       // "unchecked" corrections on Confirm / Fill Gaps.
@@ -1957,13 +2033,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // enrichment and before results reach state. See validateAllDirectors().
       const validatedFound = validateAllDirectors(mergedFound);
       setResearch({ ...parsed, found: validatedFound });
-      setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
+      // A customer keeps one application id for the whole session (a correction,
+      // or a picker search after a fallback): the fresh-customer retry count and
+      // the change_events trail are keyed on it, so rotating it would reset the cap.
+      if (!onboardingSubmissionId || (!correction && !isCustomerResearch)) setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
       setResearchTimestamp(webFetchTs);
       setCoverage(cov);
       setGapRecoveryRan(ranGapRecovery);
 
       trackEvent("research_completed", {
-        companyName,
+        companyName: facts.companyName,
         fieldsFound: merged?.length || 0,
         fillRate: cov?.fillRate ?? null,
         verifiedFields: cov?.verifiedFields ?? null,
@@ -1998,31 +2077,30 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setStakeholderVersion(v => v + 1);
       setStakeholderErrors([]);
       setRevealedTs({});
-      gapRef.current = {};
-      setFormVersion(v => v + 1);
+      // A correcting customer keeps everything they already typed (applicant
+      // details and gap answers live in gapRef) — also on a later picker search.
+      if (!correction && !isCustomerResearch) {
+        gapRef.current = {};
+        setFormVersion(v => v + 1);
+      }
       // Onboarding inserts the Applicant step between Research and Confirm;
       // pre-boarding skips it (Company → Research → Dossier).
-      setStep(agentType === "preboarding" ? S.confirm : S.applicant);
+      if (!correction) setStep(agentType === "preboarding" ? S.confirm : S.applicant);
+      return { research: { ...parsed, found: validatedFound }, coverage: cov };
     } catch (err) {
-      // Failure fallback. For a customer self-serve re-research, never leave them
-      // hanging and never hand them to an analyst mid-session: flag the failure
-      // as a first-class data point (reused change_events store) and fall through
-      // to manual entry so they can proceed.
-      if (seededBy === "customer") {
-        postReresearchFailureFlag({
-          dossierId,
-          jurisdiction: countryCode,
+      if (correction || isCustomerResearch) {
+        fallBackToManual({
           stage: "re_research",
           reason: err.message,
-          headers: getDossierAuthHeaders(),
+          message: "We couldn't complete that search just now. You can continue by entering your application manually below.",
+          journey,
+          jurisdiction: facts.countryCode,
         });
-        setError("We couldn't complete that search just now. You can continue by entering your application manually below.");
-        setJourneyOpen(true);
-        setStep(S.input);
       } else {
         setError("Research failed: " + err.message);
         setStep(S.input);
       }
+      return null;
     }
     finally { setLoading(false); setLoaderPhase(0); setResearchStatus(""); }
   };
@@ -2377,10 +2455,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Continue handler from Documents step → triggers research with whatever
   // was uploaded (zero docs is fine; web search runs alone). In demo mode
   // we skip the API entirely and synthesise sample data.
-  const proceedFromDocuments = () => {
+  // A customer's run spends a server-counted search here unless card A already
+  // spent one for it (a link customer can reach documents from Confirm's
+  // "Upload docs" without passing the picker).
+  const proceedFromDocuments = async () => {
     setError("");
     if (demoMode) { doDummyResearch("ai_documents"); return; }
-    doResearch();
+    if (!isCustomerResearch || searchGrantRef.current) { doResearch(); return; }
+    if (searchSpendBusyRef.current) return;
+    if (!confirmPaidResearch()) return;
+    searchSpendBusyRef.current = true;
+    let attempt;
+    try { attempt = await consumeCustomerSearch(); } finally { searchSpendBusyRef.current = false; }
+    if (!attempt.allowed) { setError(CONTACT_ADMIN_MSG); return; }
+    doResearch(undefined, { confirmed: true });
   };
 
   // ─── Doc search agent (Step 2 — Document Intelligence, Section A) ───
@@ -2615,11 +2703,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // ── Foundational-facts confirmation gate handlers (slice 2 of 2) ──────────
   // The five-fact gate at the top of the Applicant page is controlled: these
-  // handlers own its check state and outcomes. A disputed fact (other than the
-  // ownership fork) — or an "ownership misclassified" choice — is a HARD reset to
-  // the fresh lookup page via resetAll() (nothing pre-filled). This deliberately
-  // replaces the old dossier-reseed dispute (which carried state forward); the
-  // re-research engine itself is untouched and still reachable elsewhere.
+  // handlers own its check state and outcomes. A wrong fact is corrected in place
+  // (applyCorrections, Part 3): entity type alone re-derives the schema, anything
+  // else re-researches with the corrected values and spends one server-counted
+  // search. Nothing resets the application; a search that cannot run falls back
+  // to manual entry (fallBackToManual). The ownership / registration-number
+  // "genuinely changed" forks request documents instead.
   const isFactConfirmed = (key) => factChecks[key] !== false;
 
   const toggleFact = (key) => {
@@ -2643,6 +2732,139 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setOwnershipChangeDeclared(null);
     setRegNumberFork(null);
     setRegNumberChangeDeclared(null);
+    setCorrectionError("");
+  };
+
+  // Re-search could not run (failure or no searches left): never strand the
+  // customer. Flag it as a data point against whichever id the application has,
+  // then open manual entry. The caller passes the jurisdiction it searched with
+  // (the closure's countryCode can predate a correction).
+  const fallBackToManual = ({ stage, reason, message, journey, jurisdiction }) => {
+    postReresearchFailureFlag({
+      submissionId: dossierId || onboardingSubmissionId,
+      dossierId,
+      jurisdiction,
+      stage,
+      reason,
+      headers: getDossierAuthHeaders(),
+    });
+    // Close the correction form: the customer continues by manual entry or a
+    // new search, and must not land back on a still-disputed gate.
+    cancelFactDispute();
+    setError(message);
+    setCorrectionError(message);
+    setJourneyOpen(true);
+    setStep(stepsFor(journey || journeyType || "ai_only").input);
+  };
+
+  // Ask the server for one of the customer's two re-searches. Link customers
+  // count on the dossier; fresh customers on their application id. Anything but
+  // an explicit allow is a refusal.
+  const consumeCustomerSearch = async () => {
+    try {
+      const resp = dossierId
+        ? await fetch("/api/search-attempt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
+            body: JSON.stringify({ dossierId }),
+          })
+        : onboardingSubmissionId
+          ? await fetch("/api/research-attempt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ applicationId: onboardingSubmissionId }),
+            })
+          : null;
+      if (!resp) return { allowed: false };
+      const data = await resp.json();
+      if (Number.isFinite(data.attemptsUsed)) setSearchAttempts(data.attemptsUsed);
+      return { allowed: resp.ok && data.allowed === true };
+    } catch (_) {
+      return { allowed: false };
+    }
+  };
+
+  // The customer corrected one or more foundational facts. Entity type alone
+  // re-derives the schema; anything else re-researches with the corrected
+  // values and spends one server-counted search. Never resets the application.
+  // `shown.registrationNumber`: the number the gate displayed (and the customer
+  // edited against) — it can differ from regNumber state (e.g. research found one).
+  // With nothing shown the fact is not disputable, so regNumber is kept as-is.
+  const applyCorrections = async (corrections, shown = {}) => {
+    const current = {
+      companyName: research?.companyName || companyName,
+      registrationNumber: shown.registrationNumber || regNumber,
+      countryCode,
+      entityType,
+      ownershipType,
+    };
+    const plan = planCorrection(current, corrections);
+    if (plan.action === "none") { cancelFactDispute(); return; }
+    if (plan.action === "invalid") {
+      setCorrectionError("Please fill in every value you're correcting.");
+      return;
+    }
+
+    const next = plan.next;
+    // Audit trail (spec §6.2 step 6), once the corrected facts are applied.
+    const logCorrection = () => postCorrectionEvent({
+      submissionId: dossierId || onboardingSubmissionId,
+      dossierId,
+      before: current,
+      plan,
+      headers: getDossierAuthHeaders(),
+    });
+    setCorrectionError("");
+    setSeededBy("customer");
+    setCompanyName(next.companyName);
+    setCountryCode(next.countryCode);
+    setEntityType(next.entityType);
+    setOwnershipType(next.ownershipType);
+    // An untouched number keeps its provenance (e.g. null for a dossier-restored one).
+    if (plan.changed.includes("registrationNumber")) {
+      setRegNumber(next.registrationNumber);
+      setRegNumberSource(next.registrationNumber ? "customer" : null);
+    }
+
+    // Saves are queued, not awaited here: this closure still holds the pre-
+    // correction state, so the deferred-save effect runs them on the next render.
+    if (plan.action === "re_derive") {
+      try {
+        setActiveSchema(getSchemaFromConfig(next.countryCode, next.entityType, tenantConfig));
+      } catch (_) { /* leave the schema as-is */ }
+      cancelFactDispute();
+      logCorrection();
+      if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
+      return;
+    }
+
+    // ponytail: demo mode never spends a paid search — the corrected facts are
+    // kept and the existing (dummy) research stands. Real runs go below.
+    if (demoMode) { cancelFactDispute(); return; }
+
+    // Dev-context paid-call confirm BEFORE the attempt: cancelling spends nothing.
+    if (!confirmPaidResearch()) return;
+
+    setCorrectionBusy(true);
+    try {
+      const attempt = await consumeCustomerSearch();
+      if (!attempt.allowed) {
+        fallBackToManual({ stage: "search_cap", reason: "no_searches_left", message: CONTACT_ADMIN_MSG, jurisdiction: next.countryCode });
+        return;
+      }
+      const outcome = await doResearch(journeyType || "ai_only", { overrides: next, correction: true });
+      if (!outcome) {
+        // null = doResearch already fell back to manual entry with its own
+        // message; anything else falsy (e.g. a validation stop) needs one here.
+        if (outcome !== null) setCorrectionError("We couldn't update your details. Please try again.");
+        return;
+      }
+      cancelFactDispute();
+      logCorrection();
+      if (dossierId) setPendingCorrectionSave({ reason: "customer_correction" });
+    } finally {
+      setCorrectionBusy(false);
+    }
   };
 
   // Ownership genuinely changed → record the declared change and move to the
@@ -2752,47 +2974,37 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setRegNumberFork(null);
   };
 
-  // Wrong-TYPE correction (interpretation): keep the existing research, re-resolve
-  // the schema from the corrected classifier, re-save as customer-seeded. No new
-  // AI search, no attempt spent. Per this slice's scope we do NOT auto-strip/add
-  // type-conditional questions or fire any EDD behaviour (deferred) — the field
-  // set is left to the existing schema resolution.
-  const applyReDerive = () => {
-    try { setActiveSchema(getSchemaFromConfig(countryCode, entityType, tenantConfig)); }
-    catch (_) { /* leave schema as-is */ }
-    setPendingReseedMode(null);
-    setDossierSaved(false);
-    saveDossier(); // persists seeded_by:customer (seededBy state is 'customer')
-    scrollAndSetStep(STEPS.applicant); // applicant gate stays AHEAD of confirm
-  };
-
   // Journey-screen Continue → routes per selected card.
-  const proceedFromJourney = () => {
+  const proceedFromJourney = async () => {
     if (!selectedJourneyCard) { setError("Please choose an option to continue."); return; }
     setError("");
 
     // Two-retry cap: search cards (A/B/E) are blocked once the customer has used
     // their searches — only manual entry (C) remains. Card C is never blocked.
     const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
-    if (isSearchCard && evaluateSearchCap(searchAttempts).locked) {
+    // An unused, already-paid grant (card A, then Back) is still usable at the cap.
+    if (isSearchCard && evaluateSearchCap(searchAttempts).locked && !searchGrantRef.current) {
       setError(CONTACT_ADMIN_MSG);
       return;
     }
-    // A customer re-search consumes an attempt — increment the server-authoritative
-    // counter (optimistic locally, reconciled from the server response). The new
-    // dossier carries the count forward via buildDossierPayload.
-    if (isSearchCard && seededBy === "customer") {
-      setSearchAttempts((n) => n + 1);
-      if (dossierId) {
-        fetch("/api/search-attempt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getDossierAuthHeaders() },
-          body: JSON.stringify({ dossierId }),
-        })
-          .then((r) => r.json())
-          .then((d) => { if (d && Number.isFinite(d.attempts)) setSearchAttempts(d.attempts); })
-          .catch(() => {});
+    // A customer spends a server-counted search on any search card; the server
+    // refuses the third. An unused card-A grant (they went back from documents)
+    // covers this run instead. The dev paid-call confirm runs first so cancelling
+    // never spends a search; B/E then pass `confirmed` so doResearch doesn't ask
+    // again. Demo mode never spends.
+    let confirmed = false;
+    if (isSearchCard && isCustomerResearch && !demoMode && !searchGrantRef.current) {
+      if (searchSpendBusyRef.current) return;
+      if (!confirmPaidResearch()) return;
+      confirmed = true;
+      searchSpendBusyRef.current = true;
+      let attempt;
+      try { attempt = await consumeCustomerSearch(); } finally { searchSpendBusyRef.current = false; }
+      if (!attempt.allowed) {
+        setError(CONTACT_ADMIN_MSG);
+        return;
       }
+      searchGrantRef.current = true;
     }
 
     if (selectedJourneyCard === "A") {
@@ -2808,7 +3020,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setManualOpened(false);
       // STEPS in this branch is { input:0, research:1, ... }
       if (demoMode) { doDummyResearch("ai_only"); return; }
-      doResearch("ai_only");
+      doResearch("ai_only", { confirmed });
     } else if (selectedJourneyCard === "C") {
       setJourneyType("manual");
       window.open(manualFormUrl_, "_blank", "noopener,noreferrer");
@@ -2822,7 +3034,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setJourneyOpen(false);
       setManualOpened(false);
       if (demoMode) { doDummyResearch("max_prefill"); return; }
-      doResearch("max_prefill");
+      doResearch("max_prefill", { confirmed });
     }
   };
 
@@ -3093,7 +3305,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     try {
       const resp = await fetch("/api/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(tenantId) },
         body: JSON.stringify({
           // The idempotency key the ENTIRE pipeline is keyed on. Omitting it
           // makes /api/submit 400 every submission (missing required field) —
@@ -3101,6 +3313,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           // so a retry re-POSTs the SAME id and dedupes.
           submissionId: payload.submissionId,
           tenantId,
+          // The analyst dossier this application came from. The server keeps it
+          // only when this tab holds that dossier's customer link credential.
+          dossierId: dossierId || null,
           company: submitCompany,
           entityType,
           ownershipType,
@@ -4711,15 +4926,16 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // selfSourceResults persistence above; reuses the raw_research JSONB column.
       rawResearch: { found: research?.found || [], timestamp: researchTimestamp, registrationNumber, registrationNumberSource, selfSourceResults, amendmentUploads, docSearchResults },
       // Self-serve re-research audit data: who triggered the search that produced
-      // this dossier, and the carried search-attempt count (migration 008).
+      // this dossier. The search count is server-owned (api/search-attempt).
       seededBy,
-      searchAttempts: seededBy === "customer" ? Math.max(1, searchAttempts) : 1,
     };
   };
 
-  const saveDossier = async () => {
+  // Resolves true once the dossier is stored (a customer lock counts: it IS
+  // saved, under the customer), false on a failed or unreachable save.
+  const saveDossier = async ({ reason } = {}) => {
     setDossierSaving(true);
-    const payload = buildDossierPayload();
+    const payload = { ...buildDossierPayload(), ...(reason ? { saveReason: reason } : {}) };
     // eslint-disable-next-line no-console
     console.log("PRE_BOARDING_DOSSIER", JSON.stringify(payload, null, 2));
 
@@ -4739,7 +4955,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         // succeed.
         setDossierSaveError("");
         setDossierOwnedBy("customer");
-        return;
+        return true;
       }
       if (result.success !== false && result.dossierId) {
         savedId = result.dossierId;
@@ -4768,17 +4984,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setDossierSaving(false);
     }
 
-    setShowDossierView(true);
+    // Only the analyst works in the dossier screen; a customer's save (a
+    // correction) stays on the page they are on.
+    if (agentType === "preboarding") setShowDossierView(true);
 
     trackEvent("dossier_generated", {
       dossierId: savedId,
-      companyName: dossierCompany().name,
+      companyName: payload.company.name,
       verifiedFields: coverage?.verifiedFields || 0,
       totalToRequest: includedGapFieldObjs().length + customQuestions.length,
       customQuestionsAdded: customQuestions.length,
       excludedFields: excludedGapFields.size || 0,
       costUsd: payload.costSummary?.totals?.totalCostUsd || null,
     });
+    return savedId !== null;
   };
 
 
@@ -4996,8 +5215,6 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             companyName_={companyName_}
             forceRefresh={forceRefresh}
             setForceRefresh={setForceRefresh}
-            pendingReseedMode={pendingReseedMode}
-            applyReDerive={applyReDerive}
             setSelectedJourneyCard={setSelectedJourneyCard}
             setManualOpened={setManualOpened}
             setJourneyOpen={setJourneyOpen}
@@ -5170,6 +5387,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             resolveOwnershipChange={resolveOwnershipChange}
             declareRegNumberChanged={declareRegNumberChanged}
             resolveRegNumberChange={resolveRegNumberChange}
+            onApplyCorrections={applyCorrections}
+            correctionBusy={correctionBusy}
+            correctionError={correctionError}
+            factsReadOnly={preboardingUnlocked}
+            countryOptions={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
+            entityTypeOptions={activeEntityTypes.map((e) => ({ value: e.id, label: e.label || e.id }))}
             applicantSelectedPerson={applicantSelectedPerson}
             setApplicantSelectedPerson={setApplicantSelectedPerson}
             applicantAgentValues={applicantAgentValues}

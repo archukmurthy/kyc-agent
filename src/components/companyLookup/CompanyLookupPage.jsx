@@ -34,9 +34,9 @@
  *      <Btn> renders no `disabled` attribute; it only dims the button and
  *      withholds onClick. Assistive tech sees an enabled button that does
  *      nothing. Separate a11y decision — unchanged here.
- *   2. The pendingReseedMode === "re_derive" short-circuit is currently dead:
- *      nothing in src/ ever sets that value (the only setter call passes null,
- *      inside applyReDerive itself). Possibly an unwired feature — kept intact.
+ *   2. (Removed.) The dead pendingReseedMode === "re_derive" short-circuit is
+ *      gone: a wrong entity type is now corrected inline on the Applicant page
+ *      (App.js applyCorrections).
  *   3. The four inline validation messages cannot fire, because Continue's
  *      gating condition tests the same four fields as its onClick guards.
  *      Defensive code — kept intact.
@@ -80,8 +80,6 @@ export function CompanyLookupPage({
   forceRefresh,
   setForceRefresh,
   // ── the Continue path ──
-  pendingReseedMode,
-  applyReDerive,
   setSelectedJourneyCard,
   setManualOpened,
   setJourneyOpen,
@@ -208,9 +206,6 @@ export function CompanyLookupPage({
                   if (!ownershipType) { setError("Please select an ownership type."); return; }
                   if (!countryCode) { setError("Please select a country."); return; }
                   setError("");
-                  // Wrong-TYPE re-derive: skip the search journey entirely — keep
-                  // the existing research and re-resolve from the corrected type.
-                  if (pendingReseedMode === "re_derive") { applyReDerive(); return; }
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
                   // Both the onboarding AND pre-boarding flows now show the

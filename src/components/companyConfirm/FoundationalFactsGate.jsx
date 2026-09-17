@@ -1,32 +1,33 @@
 /**
- * FoundationalFactsGate.jsx — slice 2 of 2. The five foundational facts used to
- * research the company, shown at the TOP of the Applicant page (NOT a new step),
- * each with a confirm checkbox (checked by default). The applicant section below
- * is revealed by the parent only once all five are confirmed.
+ * FoundationalFactsGate.jsx — the five foundational facts used to research the
+ * company, shown at the TOP of the Applicant page (NOT a new step), each with a
+ * confirm checkbox (checked by default). The applicant section below is
+ * revealed by the parent only once all five are confirmed.
  *
- * STRICT boundary (mirrors the old CompanyConfirmGate): this component is
- * PRESENTATIONAL and CONTROLLED. It owns no state machine — App.js holds the
- * check state, computes "all confirmed", and supplies the outcome handlers. The
- * gate only renders the facts + dispute panels and CALLS BACK. It imports
- * nothing from the journey/engine and triggers no I/O.
+ * PRESENTATIONAL and CONTROLLED for everything the parent owns (check state,
+ * the ownership / registration-number "genuinely changed" forks, the outcome
+ * of a correction). The only local state is the text the customer is typing
+ * into a correction input before they press "Update my details".
  *
- * Dispute outcomes (decided by the parent's handlers):
- *   - name / reg number / country / entity type disputed → onReset() (full clean
- *     reset to the fresh lookup page; nothing pre-filled).
- *   - ownership type disputed → fork:
- *       "misclassified"      → onReset()            (same as the four above)
- *       "genuinely changed"  → onOwnershipChanged() (document-request path; the
- *         specific document is a PENDING mapping owned by ops — this gate only
- *         records the declared change and surfaces a "document required — to be
- *         specified" placeholder. It NEVER guesses a document and does NOT let
- *         the customer continue to the applicant section.)
+ * Outcomes:
+ *   - company name / country / entity type unticked → an inline input
+ *     pre-filled with the current value appears under the fact.
+ *   - ownership type / registration number unticked → a fork:
+ *       "You got it wrong - correct it" → the same inline correction input
+ *       "It genuinely changed"          → the existing document-request path
+ *   - "Update my details" → onApplyCorrections({ <changed keys only> }). The
+ *     parent decides re-derive vs re-search (src/reresearch/correctionPlan.js).
+ *     Nothing here resets the application.
  *
  * The registration number is display-only/pre-confirmed when the customer
- * provided it themselves (they already asserted it on the lookup page); it is
- * only a checkbox-verifiable fact when research retrieved it (provenance prop).
+ * provided it themselves; it is only checkbox-verifiable when research
+ * retrieved it (provenance decided by the parent via `disputable`).
+ *
+ * `readOnly` (an analyst's Preview, spec §4.2): the facts show, but nothing can
+ * be unticked, corrected or declared changed.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 const CARD = {
   background: "#F8FAFC",
@@ -57,16 +58,16 @@ const PANEL = (tone) => ({
   marginTop: 14,
   padding: "14px 16px",
   borderRadius: 8,
-  background: tone === "warn" ? "#FEF9EF" : "#fef2f2",
-  border: `1px solid ${tone === "warn" ? "#FCD9A8" : "#fecaca"}`,
+  background: tone === "warn" ? "#FEF9EF" : "#EEF6F4",
+  border: `1px solid ${tone === "warn" ? "#FCD9A8" : "#BFE0D8"}`,
 });
 const PANEL_TITLE = (tone) => ({
   fontSize: 13, fontWeight: 700, margin: "0 0 4px",
-  color: tone === "warn" ? "#7a4f00" : "#b91c1c",
+  color: tone === "warn" ? "#7a4f00" : "#1a3a4a",
 });
 const PANEL_BODY = (tone) => ({
   fontSize: 12.5, lineHeight: 1.5, margin: "0 0 12px",
-  color: tone === "warn" ? "#7a4f00cc" : "#7f1d1dcc",
+  color: tone === "warn" ? "#7a4f00cc" : "#1a3a4acc",
 });
 const ROW_BTNS = { display: "flex", gap: 8, flexWrap: "wrap" };
 const BTN = {
@@ -74,8 +75,25 @@ const BTN = {
   color: "#1a3a4a", background: "#fff", border: "1px solid #CBD5E1",
   borderRadius: 6, fontFamily: "inherit",
 };
-const BTN_DANGER = { ...BTN, background: "#b91c1c", color: "#fff", border: "1px solid #b91c1c" };
+const BTN_PRIMARY = { ...BTN, background: "#4a9e8e", color: "#fff", border: "1px solid #4a9e8e" };
 const BTN_WARN = { ...BTN, background: "#7a4f00", color: "#fff", border: "1px solid #7a4f00" };
+const DISABLED = { opacity: 0.5, cursor: "not-allowed" };
+const FIELD = {
+  width: "100%", padding: "9px 12px", margin: "6px 0 4px",
+  border: "1px solid #CBD5E1", borderRadius: 6, fontSize: 13,
+  fontFamily: "inherit", background: "#fff", color: "#1a3a4a", boxSizing: "border-box",
+};
+const ERROR = { fontSize: 12.5, color: "#b91c1c", margin: "0 0 10px" };
+
+// Gate fact key → correction key sent to the parent.
+const CORRECTION_KEY = {
+  companyName: "companyName",
+  registrationNumber: "registrationNumber",
+  country: "countryCode",
+  entityType: "entityType",
+  ownershipType: "ownershipType",
+};
+const DIRECT_KEYS = ["companyName", "country", "entityType"];
 
 export function FoundationalFactsGate({
   facts = [],
@@ -83,7 +101,6 @@ export function FoundationalFactsGate({
   onToggle,
   ownershipFork = null,
   ownershipChangeFrom = "",
-  onReset,
   onOwnershipChanged,
   onCancel,
   ownershipTypeOptions = [],
@@ -92,78 +109,176 @@ export function FoundationalFactsGate({
   regNumberChangeFrom = "",
   onRegNumberChanged,
   onRegNumberChangeResolved,
+  countryOptions = [],
+  entityTypeOptions = [],
+  onApplyCorrections,
+  correctionBusy = false,
+  correctionError = "",
+  readOnly = false,
 }) {
-  // Any of the reset-only facts disputed → full reset. Ownership AND registration
-  // number each have their own fork (misclassified vs genuinely changed).
-  const fourDisputed = facts.some(
-    (f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && !isConfirmed(f.key)
-  );
   const ownershipDisputed = !isConfirmed("ownershipType");
   const regNumberDisputed = !isConfirmed("registrationNumber");
-  // Transient input values for the "changed to?" controls (not journey state —
-  // the resolved value is handed up via the on…Resolved callbacks).
+
+  // Typed-but-not-yet-submitted correction values, keyed by fact key.
+  const [drafts, setDrafts] = useState({});
+  // "You got it wrong" chosen on the ownership / registration-number forks.
+  const [correctingOwnership, setCorrectingOwnership] = useState(false);
+  const [correctingRegNumber, setCorrectingRegNumber] = useState(false);
+  // Transient values for the "genuinely changed" controls (unchanged flow).
   const [newOwnershipType, setNewOwnershipType] = useState("");
   const [newRegNumber, setNewRegNumber] = useState("");
+
+  // A fact that is re-confirmed (by re-ticking, or by the parent after a
+  // correction / cancel) drops its local correction state.
+  useEffect(() => { if (!ownershipDisputed) setCorrectingOwnership(false); }, [ownershipDisputed]);
+  useEffect(() => { if (!regNumberDisputed) setCorrectingRegNumber(false); }, [regNumberDisputed]);
+
+  const isCorrecting = (fact) => {
+    if (readOnly || !fact.disputable || isConfirmed(fact.key)) return false;
+    if (DIRECT_KEYS.includes(fact.key)) return true;
+    if (fact.key === "ownershipType") return correctingOwnership;
+    if (fact.key === "registrationNumber") return correctingRegNumber;
+    return false;
+  };
+  const draftFor = (fact) =>
+    Object.prototype.hasOwnProperty.call(drafts, fact.key) ? drafts[fact.key] : (fact.editValue ?? "");
+  const setDraft = (key, value) => setDrafts((prev) => ({ ...prev, [key]: value }));
+
+  const correcting = facts.filter(isCorrecting);
+  const allFilled = correcting.every((f) => String(draftFor(f)).trim() !== "");
+  const changedFacts = correcting.filter((f) => String(draftFor(f)).trim() !== String(f.editValue ?? "").trim());
+  const canApply = correcting.length > 0 && allFilled && changedFacts.length > 0 && !correctionBusy;
+
+  const handleToggle = (key) => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    onToggle(key);
+  };
+  const handleCancel = () => {
+    setDrafts({});
+    setCorrectingOwnership(false);
+    setCorrectingRegNumber(false);
+    onCancel();
+  };
+  const handleApply = () => {
+    if (!canApply) return;
+    const corrections = {};
+    changedFacts.forEach((f) => { corrections[CORRECTION_KEY[f.key]] = String(draftFor(f)).trim(); });
+    onApplyCorrections(corrections);
+  };
+
+  const renderCorrectionInput = (fact) => {
+    const common = {
+      value: draftFor(fact),
+      onChange: (e) => setDraft(fact.key, e.target.value),
+      "data-testid": `correct-${fact.key}`,
+      "aria-label": `Correct ${fact.label}`,
+      style: FIELD,
+      disabled: correctionBusy,
+    };
+    const options =
+      fact.key === "country" ? countryOptions
+        : fact.key === "entityType" ? entityTypeOptions
+        : fact.key === "ownershipType" ? ownershipTypeOptions
+        : null;
+    if (options) {
+      return (
+        <select {...common}>
+          <option value="">Select…</option>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      );
+    }
+    return (
+      <input
+        {...common}
+        type="text"
+        placeholder={fact.key === "companyName" ? "Registered company name" : "Registration / company number"}
+      />
+    );
+  };
 
   return (
     <div style={CARD} data-testid="foundational-facts-gate">
       <h3 style={TITLE}>Before you continue - confirm the company we researched</h3>
       <p style={SUMMARY}>
         These are the five facts we used to research your company. Leave a box ticked to confirm it,
-        or untick anything that's wrong. We'll only show the rest of this page once all five are confirmed.
+        or untick anything that's wrong and tell us the right value. We'll only show the rest of this
+        page once all five are confirmed.
       </p>
 
       {facts.map((f) => {
         const confirmed = isConfirmed(f.key);
         const showDisputed = f.disputable && !confirmed;
         return (
-          <label
-            key={f.key}
-            style={{
-              ...ROW,
-              cursor: f.disputable ? "pointer" : "default",
-            }}
-            data-testid={`fact-${f.key}`}
-          >
-            <input
-              type="checkbox"
-              checked={confirmed}
-              disabled={!f.disputable}
-              onChange={() => f.disputable && onToggle(f.key)}
-              style={{
-                width: 15, height: 15, flexShrink: 0,
-                accentColor: "#4a9e8e",
-                cursor: f.disputable ? "pointer" : "not-allowed",
-              }}
-              aria-label={`Confirm ${f.label}`}
-            />
-            <span style={FACT_LABEL}>{f.label}</span>
-            <span style={FACT_VALUE}>{f.value}</span>
-            {f.note && !showDisputed && <span style={NOTE}>{f.note}</span>}
-            {showDisputed && <span style={DISPUTED_TAG}>marked incorrect</span>}
-          </label>
+          <React.Fragment key={f.key}>
+            <label
+              style={{ ...ROW, cursor: f.disputable ? "pointer" : "default" }}
+              data-testid={`fact-${f.key}`}
+            >
+              <input
+                type="checkbox"
+                checked={confirmed}
+                disabled={readOnly || !f.disputable || correctionBusy}
+                onChange={() => !readOnly && f.disputable && handleToggle(f.key)}
+                style={{
+                  width: 15, height: 15, flexShrink: 0,
+                  accentColor: "#4a9e8e",
+                  cursor: f.disputable ? "pointer" : "not-allowed",
+                }}
+                aria-label={`Confirm ${f.label}`}
+              />
+              <span style={FACT_LABEL}>{f.label}</span>
+              <span style={FACT_VALUE}>{f.value}</span>
+              {f.note && !showDisputed && <span style={NOTE}>{f.note}</span>}
+              {showDisputed && <span style={DISPUTED_TAG}>marked incorrect</span>}
+            </label>
+            {isCorrecting(f) && renderCorrectionInput(f)}
+          </React.Fragment>
         );
       })}
 
-      {/* Outcome panels. A disputed reset-fact takes precedence (its outcome is a
-          full reset regardless of ownership). Otherwise the ownership fork. */}
-      {fourDisputed ? (
-        <div style={PANEL("danger")} data-testid="facts-reset-panel">
-          <p style={PANEL_TITLE("danger")}>This restarts your application</p>
-          <p style={PANEL_BODY("danger")}>
-            You've marked one of the core company facts as wrong, so the research was based on the wrong
-            premise. We'll take you back to a fresh company lookup to start over - nothing will be pre-filled.
+      {/* Outside the panel: a deferred save can fail after the panel has closed. */}
+      {correctionError && (
+        <p style={{ ...ERROR, marginTop: 12 }} data-testid="facts-corrections-error" role="alert">{correctionError}</p>
+      )}
+
+      {correcting.length > 0 && (
+        <div style={PANEL("info")} data-testid="facts-corrections-panel">
+          <p style={PANEL_TITLE("info")}>Update your company details</p>
+          <p style={PANEL_BODY("info")}>
+            We'll use your corrections to update what we found. You won't lose anything you've already
+            entered on this page.
           </p>
           <div style={ROW_BTNS}>
-            <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="facts-reset-confirm">
-              Start a fresh lookup
+            <button
+              type="button"
+              style={canApply ? BTN_PRIMARY : { ...BTN_PRIMARY, ...DISABLED }}
+              disabled={!canApply}
+              onClick={handleApply}
+              data-testid="facts-apply-corrections"
+            >
+              {correctionBusy ? "Updating your details…" : "Update my details"}
             </button>
-            <button type="button" style={BTN} onClick={onCancel} data-testid="facts-reset-cancel">
+            <button
+              type="button"
+              style={correctionBusy ? { ...BTN, ...DISABLED } : BTN}
+              disabled={correctionBusy}
+              onClick={handleCancel}
+              data-testid="facts-corrections-cancel"
+            >
               Cancel - keep my answers
             </button>
           </div>
         </div>
-      ) : ownershipDisputed ? (
+      )}
+
+      {!readOnly && ownershipDisputed && !correctingOwnership && (
         ownershipFork === "changed" ? (
           <div style={PANEL("warn")} data-testid="ownership-changed-panel">
             <p style={PANEL_TITLE("warn")}>What did the ownership type change to?</p>
@@ -176,11 +291,7 @@ export function FoundationalFactsGate({
               value={newOwnershipType}
               onChange={(e) => setNewOwnershipType(e.target.value)}
               data-testid="ownership-new-type"
-              style={{
-                width: "100%", padding: "9px 12px", marginBottom: 12,
-                border: "1px solid #FCD9A8", borderRadius: 6, fontSize: 13,
-                fontFamily: "inherit", background: "#fff", color: "#1a3a4a",
-              }}
+              style={{ ...FIELD, border: "1px solid #FCD9A8", margin: "0 0 12px" }}
             >
               <option value="">Select the new ownership type…</option>
               {ownershipTypeOptions.map((o) => (
@@ -190,14 +301,14 @@ export function FoundationalFactsGate({
             <div style={ROW_BTNS}>
               <button
                 type="button"
-                style={newOwnershipType ? BTN_WARN : { ...BTN_WARN, opacity: 0.5, cursor: "not-allowed" }}
+                style={newOwnershipType ? BTN_WARN : { ...BTN_WARN, ...DISABLED }}
                 disabled={!newOwnershipType}
                 onClick={() => newOwnershipType && onOwnershipChangeResolved(newOwnershipType)}
                 data-testid="ownership-changed-confirm"
               >
                 Confirm change
               </button>
-              <button type="button" style={BTN} onClick={onCancel} data-testid="ownership-changed-cancel">
+              <button type="button" style={BTN} onClick={handleCancel} data-testid="ownership-changed-cancel">
                 Cancel - keep my answers
               </button>
             </div>
@@ -210,19 +321,21 @@ export function FoundationalFactsGate({
               (for example a re-filing from private to public, or a conversion to a partnership/LLP)?
             </p>
             <div style={ROW_BTNS}>
-              <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="ownership-misclassified">
-                You got it wrong - start over
+              <button type="button" style={BTN_PRIMARY} onClick={() => setCorrectingOwnership(true)} data-testid="ownership-misclassified">
+                You got it wrong - correct it
               </button>
               <button type="button" style={BTN_WARN} onClick={onOwnershipChanged} data-testid="ownership-genuinely-changed">
                 It genuinely changed
               </button>
-              <button type="button" style={BTN} onClick={onCancel} data-testid="ownership-fork-cancel">
+              <button type="button" style={BTN} onClick={handleCancel} data-testid="ownership-fork-cancel">
                 Cancel
               </button>
             </div>
           </div>
         )
-      ) : regNumberDisputed ? (
+      )}
+
+      {!readOnly && regNumberDisputed && !correctingRegNumber && (
         regNumberFork === "changed" ? (
           <div style={PANEL("warn")} data-testid="regnumber-changed-panel">
             <p style={PANEL_TITLE("warn")}>What's the new registration / company number?</p>
@@ -237,23 +350,19 @@ export function FoundationalFactsGate({
               onChange={(e) => setNewRegNumber(e.target.value)}
               data-testid="regnumber-new-value"
               placeholder="New registration / company number"
-              style={{
-                width: "100%", padding: "9px 12px", marginBottom: 12,
-                border: "1px solid #FCD9A8", borderRadius: 6, fontSize: 13,
-                fontFamily: "inherit", background: "#fff", color: "#1a3a4a", boxSizing: "border-box",
-              }}
+              style={{ ...FIELD, border: "1px solid #FCD9A8", margin: "0 0 12px" }}
             />
             <div style={ROW_BTNS}>
               <button
                 type="button"
-                style={newRegNumber.trim() ? BTN_WARN : { ...BTN_WARN, opacity: 0.5, cursor: "not-allowed" }}
+                style={newRegNumber.trim() ? BTN_WARN : { ...BTN_WARN, ...DISABLED }}
                 disabled={!newRegNumber.trim()}
                 onClick={() => newRegNumber.trim() && onRegNumberChangeResolved(newRegNumber)}
                 data-testid="regnumber-changed-confirm"
               >
                 Confirm change
               </button>
-              <button type="button" style={BTN} onClick={onCancel} data-testid="regnumber-changed-cancel">
+              <button type="button" style={BTN} onClick={handleCancel} data-testid="regnumber-changed-cancel">
                 Cancel - keep my answers
               </button>
             </div>
@@ -266,19 +375,19 @@ export function FoundationalFactsGate({
               re-registration or conversion that issued a new number)?
             </p>
             <div style={ROW_BTNS}>
-              <button type="button" style={BTN_DANGER} onClick={onReset} data-testid="regnumber-misclassified">
-                You got it wrong - start over
+              <button type="button" style={BTN_PRIMARY} onClick={() => setCorrectingRegNumber(true)} data-testid="regnumber-misclassified">
+                You got it wrong - correct it
               </button>
               <button type="button" style={BTN_WARN} onClick={onRegNumberChanged} data-testid="regnumber-genuinely-changed">
                 It genuinely changed
               </button>
-              <button type="button" style={BTN} onClick={onCancel} data-testid="regnumber-fork-cancel">
+              <button type="button" style={BTN} onClick={handleCancel} data-testid="regnumber-fork-cancel">
                 Cancel
               </button>
             </div>
           </div>
         )
-      ) : null}
+      )}
     </div>
   );
 }

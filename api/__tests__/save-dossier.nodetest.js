@@ -19,10 +19,11 @@ function fakeSql({ lookupRow = null, updateRows = [{ id: "d-1" }], insertId = "d
   const log = [];
   const sql = (strings, ...values) => {
     const text = strings.join(" ");
+    if (/INSERT INTO entity_dossier_versions/i.test(text)) { log.push({ kind: "snapshot", text, values }); return Promise.resolve([]); }
     if (/INSERT INTO tenants/i.test(text)) { log.push({ kind: "tenants_upsert", values }); return Promise.resolve([]); }
     if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) { log.push({ kind: "lookup", values }); return Promise.resolve(lookupRow ? [lookupRow] : []); }
     if (/UPDATE entity_dossiers/i.test(text)) { log.push({ kind: "update", text, values }); return Promise.resolve(updateRows); }
-    if (/INSERT INTO entity_dossiers/i.test(text)) { log.push({ kind: "insert", values }); return Promise.resolve([{ id: insertId }]); }
+    if (/INSERT INTO entity_dossiers/i.test(text)) { log.push({ kind: "insert", text, values }); return Promise.resolve([{ id: insertId }]); }
     log.push({ kind: "unknown", values });
     return Promise.resolve([]);
   };
@@ -93,7 +94,7 @@ test("an analyst updates its own analyst-owned dossier in place", async () => {
   await handler(req({ ...base, dossierId: "d-1" }), res);
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.dossierId, "d-1");
-  assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "update"]);
+  assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "snapshot", "update"]);
   // The UPDATE itself must re-check ownership (TOCTOU guard) — not just the
   // earlier permission SELECT. Removing this clause from the SQL must fail
   // this test.
@@ -123,7 +124,7 @@ test("TOCTOU: the row flips to customer-owned between the permission SELECT and 
   await handler(req({ ...base, dossierId: "d-1" }), res);
   assert.strictEqual(res.statusCode, 403);
   assert.deepStrictEqual(res.body, { error: "dossier_locked" });
-  assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "update"]);
+  assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "snapshot", "update"]);
   assert.ok(!sql.kinds().includes("insert"), "must never fall through to INSERT after a raced UPDATE");
 });
 
@@ -198,4 +199,101 @@ test("no DATABASE_URL → 200 with warning, database never touched", async () =>
   } finally {
     if (prev === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prev;
   }
+});
+
+test("every update of an existing dossier snapshots the current row first", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler(req({ ...base, dossierId: "d-1" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const kinds = sql.kinds();
+  assert.ok(kinds.indexOf("snapshot") !== -1, "expected a snapshot");
+  assert.ok(kinds.indexOf("snapshot") < kinds.indexOf("update"), "snapshot must precede the update");
+  const snap = sql.log.find((l) => l.kind === "snapshot");
+  assert.match(snap.text, /to_jsonb/i);
+  assert.match(snap.text, /MAX\(\s*v\.version\s*\)/i);
+  assert.ok(snap.values.includes("d-1"));
+  assert.ok(snap.values.includes("acme"));
+  assert.ok(snap.values.includes("analyst"));
+  assert.ok(snap.values.includes("analyst_update"));
+});
+
+test("a customer correction snapshot records who and why", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  await handler(req({ ...base, dossierId: "d-1", saveReason: "customer_correction" }), fakeRes());
+  const snap = sql.log.find((l) => l.kind === "snapshot");
+  assert.ok(snap.values.includes("customer"));
+  assert.ok(snap.values.includes("customer_correction"));
+});
+
+test("an unknown saveReason falls back to the actor's default", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  await handler(req({ ...base, dossierId: "d-1", saveReason: "drop table" }), fakeRes());
+  const snap = sql.log.find((l) => l.kind === "snapshot");
+  assert.ok(snap.values.includes("customer_update"));
+  assert.ok(!snap.values.includes("drop table"));
+});
+
+test("the snapshot re-checks ownership so a locked analyst write leaves no history row", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  await handler(req({ ...base, dossierId: "d-1" }), fakeRes());
+  const snap = sql.log.find((l) => l.kind === "snapshot");
+  assert.match(snap.text, /owned_by\s*<>\s*'customer'/);
+});
+
+test("a first save (insert) writes no snapshot", async () => {
+  const sql = fakeSql({ insertId: "d-new" });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  await handler(req({ ...base }), fakeRes());
+  assert.ok(!sql.kinds().includes("snapshot"));
+});
+
+test("searchAttempts in the body is ignored; search_attempts is never written", async () => {
+  for (const lookupRow of [null, { id: "d-1", tenant_id: "acme", owned_by: "analyst" }]) {
+    const sql = fakeSql({ lookupRow });
+    handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+    await handler(req({ ...base, dossierId: lookupRow ? "d-1" : undefined, searchAttempts: 99 }), fakeRes());
+    for (const entry of sql.log) {
+      assert.ok(!entry.values.includes(99), `${entry.kind} bound searchAttempts`);
+      if (entry.text) assert.doesNotMatch(entry.text, /search_attempts/);
+    }
+  }
+});
+
+// A customer's link landing never restores the analyst-authored question set,
+// so a customer save must keep the stored values rather than wipe them.
+const ANALYST_COLUMNS = ["included_fields", "excluded_fields", "custom_questions"];
+const analystAuthored = {
+  includedFields: ["inc_a"], excludedFields: ["exc_b"],
+  customQuestions: [{ text: "Why?", fieldType: "text" }],
+};
+
+test("a customer save keeps the analyst-authored included/excluded fields and custom questions", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
+  const res = fakeRes();
+  await handler(req({ ...base, dossierId: "d-1", includedFields: [], excludedFields: [], customQuestions: [] }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const update = sql.log.find((l) => l.kind === "update");
+  for (const col of ANALYST_COLUMNS) {
+    // A bound `true` (isCustomer) picks the stored column over the body value.
+    assert.match(update.text, new RegExp(`${col}\\s*=\\s*CASE WHEN\\s+THEN ${col} ELSE\\s+END`));
+  }
+});
+
+test("an analyst save binds the new included/excluded fields and custom questions", async () => {
+  const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" } });
+  handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
+  const res = fakeRes();
+  await handler(req({ ...base, dossierId: "d-1", ...analystAuthored }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const update = sql.log.find((l) => l.kind === "update");
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.includedFields)));
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.excludedFields)));
+  assert.ok(update.values.includes(JSON.stringify(analystAuthored.customQuestions)));
+  assert.ok(!update.values.includes(true), "the analyst path binds isCustomer=false everywhere");
 });

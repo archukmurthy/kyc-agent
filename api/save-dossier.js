@@ -10,6 +10,7 @@
 // name (or create) a tenant. A customer may only refresh its own dossier
 // (never create one, never touch another); its write flips `owned_by` to
 // 'customer', after which an analyst can no longer write that row.
+// Every UPDATE first appends the current row to entity_dossier_versions (migration 027).
 //
 // Upsert-by-id: a caller that already has a dossierId (a re-research / an
 // analyst "Update" re-save) must refresh THAT row, never insert a second one —
@@ -54,16 +55,14 @@ module.exports = async function handler(req, res) {
     costSummary,
     rawResearch,
     seededBy,
-    searchAttempts,
+    saveReason,
   } = req.body || {};
 
-  // Self-serve re-research metadata (migration 008). `seeded_by` records who
-  // triggered the search that produced this dossier: 'customer' (self-serve
-  // re-research) vs the default 'analyst'. `search_attempts` seeds the
-  // server-authoritative two-retry counter — one search has run by the time a
-  // dossier exists, so a first save is attempt 1 unless the caller says otherwise.
+  // Self-serve re-research metadata. `seeded_by` records who triggered the
+  // search that produced this dossier: 'customer' (self-serve re-research) vs
+  // the default 'analyst'. The customer's re-search COUNT is server-owned
+  // (api/search-attempt.js → customer_searches) and never written here.
   const seededByValue = seededBy === "customer" ? "customer" : "analyst";
-  const searchAttemptsValue = Number.isFinite(searchAttempts) ? searchAttempts : 1;
 
   if (!company?.name) {
     return res.status(400).json({ error: "company.name required" });
@@ -103,6 +102,10 @@ module.exports = async function handler(req, res) {
 
     const isCustomer = actor.kind === "customer";
 
+    // Why this version is being replaced — whitelisted, never free text.
+    const SAVE_REASONS = ["customer_correction", "analyst_update", "customer_update"];
+    const reason = SAVE_REASONS.includes(saveReason) ? saveReason : isCustomer ? "customer_update" : "analyst_update";
+
     // Ensure the Postgres tenants row exists (slug is NOT NULL). The tenant id
     // here is the VERIFIED one from the credential — the historical hole was
     // that it came from the request body, letting any caller create tenants.
@@ -122,6 +125,24 @@ module.exports = async function handler(req, res) {
       // race a concurrent customer write that flips owned_by in between
       // (TOCTOU) — the analyst's UPDATE would then silently land on a
       // dossier the customer has just taken over.
+
+      // Keep every version: copy the row as it is NOW into the append-only
+      // history before overwriting it, so the analyst's original and every
+      // customer revision stay recoverable. Same ownership re-check as the
+      // UPDATE below, so a write that will be refused leaves no history row.
+      await sql`
+        INSERT INTO entity_dossier_versions (dossier_id, tenant_id, version, snapshot, created_by, reason)
+        SELECT
+          d.id,
+          d.tenant_id,
+          COALESCE((SELECT MAX(v.version) FROM entity_dossier_versions v WHERE v.dossier_id = d.id), 0) + 1,
+          to_jsonb(d),
+          ${actor.kind},
+          ${reason}
+        FROM entity_dossiers d
+        WHERE d.id = ${dossierId} AND d.tenant_id = ${tenantId} AND (${isCustomer} OR d.owned_by <> 'customer')
+      `;
+
       rows = await sql`
         UPDATE entity_dossiers
         SET
@@ -139,9 +160,11 @@ module.exports = async function handler(req, res) {
           fill_rate = ${coverage?.fillRate != null ? Math.round(coverage.fillRate * 100) : null},
           verified_fill_rate = ${coverage?.verifiedFillRate != null ? Math.round(coverage.verifiedFillRate * 100) : null},
 
-          included_fields = ${JSON.stringify(includedFields || [])},
-          excluded_fields = ${JSON.stringify(excludedFields || [])},
-          custom_questions = ${JSON.stringify(customQuestions || [])},
+          -- Analyst-authored: a customer's link landing never restores these,
+          -- so a customer save keeps the stored values instead of wiping them.
+          included_fields = CASE WHEN ${isCustomer} THEN included_fields ELSE ${JSON.stringify(includedFields || [])} END,
+          excluded_fields = CASE WHEN ${isCustomer} THEN excluded_fields ELSE ${JSON.stringify(excludedFields || [])} END,
+          custom_questions = CASE WHEN ${isCustomer} THEN custom_questions ELSE ${JSON.stringify(customQuestions || [])} END,
 
           verified_data = ${JSON.stringify(verifiedData || [])},
           probable_data = ${JSON.stringify(probableData || [])},
@@ -155,7 +178,6 @@ module.exports = async function handler(req, res) {
           raw_research = ${JSON.stringify(rawResearch || {})},
 
           seeded_by = ${seededByValue},
-          search_attempts = ${searchAttemptsValue},
 
           owned_by = CASE WHEN ${isCustomer} THEN ${"customer"} ELSE owned_by END,
           last_customer_action_at = CASE WHEN ${isCustomer} THEN NOW() ELSE last_customer_action_at END,
@@ -214,7 +236,6 @@ module.exports = async function handler(req, res) {
         raw_research,
 
         seeded_by,
-        search_attempts,
 
         status,
         saved_at
@@ -251,7 +272,6 @@ module.exports = async function handler(req, res) {
         ${JSON.stringify(rawResearch || {})},
 
         ${seededByValue},
-        ${searchAttemptsValue},
 
         'ready',
         NOW()
