@@ -43,7 +43,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
+beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -62,6 +62,14 @@ test("analyst journey progress contains company, ownership research and analyst 
   const auditLink = screen.getByRole("link", { name: "Open Audit" });
   expect(auditLink).toHaveAttribute("href", DEMO_AUDIT_PATH);
   expect(progress).not.toContainElement(auditLink);
+});
+test("analyst routes reset the viewport to the top on arrival", async () => {
+  renderStart();
+  expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: "auto" });
+  window.scrollTo.mockClear();
+  completeRequiredFields();
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: "auto" }));
 });
 test("analyst Review and Audit routes render the persisted customer resolution trace", () => {
   const demoCase = { demoCaseId: "review-case", company: { legalName: "Review Limited", registrationNumber: "123", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" }, analysisContext: {} };

@@ -229,6 +229,7 @@ export default function UboDemoRoot() {
   const skipNextSave = useRef(false);
 
   useEffect(() => { const onPop = () => setPathname(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
   useEffect(() => {
     const capture = restored?.researchResult?.replayCapture;
     if (!capture) return;
