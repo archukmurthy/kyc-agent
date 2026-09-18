@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
-import { graphForChartPresentation, projectGraph, provisionalUboLabel } from "./ChartAnalysisPanel";
+import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcileSubjectIdentity } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
@@ -421,6 +421,25 @@ test("British Airways-style downstream source charts render in full by default w
   expect(relevant.nodes).toHaveLength(1);
   expect(relevant.relationships).toHaveLength(0);
   expect(relevant.summary).toEqual(expect.objectContaining({ totalEntities: 1, totalRelationships: 0 }));
+});
+
+test("the onboarding subject and an uppercase chart occurrence resolve to one British Airways node", () => {
+  const graph = {
+    subject: { entityId: "customer", displayName: "British Airways PLC", semantics: ["SUBJECT"] },
+    summary: { totalEntities: 3, totalRelationships: 1 },
+    nodes: [
+      { entityId: "customer", displayName: "British Airways PLC", semantics: ["SUBJECT"] },
+      { entityId: "chart-duplicate", displayName: "BRITISHAIRWAYS PLC", semantics: [] },
+      { entityId: "cargo", displayName: "BA Demo Cargo Ltd", semantics: [] },
+    ],
+    relationships: [{ relationshipId: "ba-cargo", sourceEntityId: "chart-duplicate", targetEntityId: "cargo" }],
+  };
+
+  const reconciled = reconcileSubjectIdentity(graph, "British Airways PLC");
+  expect(reconciled.nodes.map(({ entityId }) => entityId)).toEqual(["customer", "cargo"]);
+  expect(reconciled.relationships[0]).toEqual(expect.objectContaining({ sourceEntityId: "customer", targetEntityId: "cargo" }));
+  expect(reconciled.summary).toEqual(expect.objectContaining({ totalEntities: 2, totalRelationships: 1 }));
+  expect(graph.nodes).toHaveLength(3);
 });
 
 test("chart presentation keeps the complete source graph when the operative engine graph contains only one safe edge", () => {

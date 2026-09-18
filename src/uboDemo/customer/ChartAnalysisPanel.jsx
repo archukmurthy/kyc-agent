@@ -33,8 +33,51 @@ function projectGraph(graph, scope, dimension) {
   };
 }
 
-function graphForChartPresentation(viewGraph, sourceProjection) {
-  return sourceProjection || viewGraph || null;
+function normalizedLegalName(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\bPUBLIC\s+LIMITED\s+COMPANY\b/g, "PLC")
+    .replace(/\bLIMITED\b/g, "LTD")
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
+function reconcileSubjectIdentity(graph, companyName) {
+  if (!graph) return graph;
+  const subjectEntityId = graph.subjectEntityId || graph.subject?.entityId;
+  const subjectNode = (graph.nodes || []).find((node) => node.entityId === subjectEntityId) || graph.subject;
+  const canonicalName = normalizedLegalName(companyName || subjectNode?.displayName || subjectNode?.primaryName || subjectNode?.name);
+  if (!subjectEntityId || !canonicalName) return graph;
+  const duplicateIds = new Set((graph.nodes || [])
+    .filter((node) => node.entityId !== subjectEntityId
+      && normalizedLegalName(node.displayName || node.primaryName || node.name) === canonicalName)
+    .map((node) => node.entityId));
+  if (!duplicateIds.size) return graph;
+  const remap = (entityId) => duplicateIds.has(entityId) ? subjectEntityId : entityId;
+  const duplicateSemantics = (graph.nodes || []).filter((node) => duplicateIds.has(node.entityId)).flatMap((node) => node.semantics || []);
+  const nodes = (graph.nodes || []).filter((node) => !duplicateIds.has(node.entityId)).map((node) => node.entityId === subjectEntityId ? {
+    ...node,
+    semantics: [...new Set([...(node.semantics || []), ...duplicateSemantics, "SUBJECT"])],
+  } : node);
+  const relationships = (graph.relationships || []).map((edge) => ({
+    ...edge,
+    ...(edge.sourceEntityId ? { sourceEntityId: remap(edge.sourceEntityId) } : {}),
+    ...(edge.targetEntityId ? { targetEntityId: remap(edge.targetEntityId) } : {}),
+    ...(edge.subjectEntityId ? { subjectEntityId: remap(edge.subjectEntityId) } : {}),
+    ...(edge.objectEntityId ? { objectEntityId: remap(edge.objectEntityId) } : {}),
+  }));
+  return {
+    ...graph,
+    subject: graph.subject ? { ...graph.subject, entityId: subjectEntityId } : graph.subject,
+    nodes,
+    relationships,
+    summary: graph.summary ? { ...graph.summary, totalEntities: nodes.length, totalRelationships: relationships.length } : graph.summary,
+  };
+}
+
+function graphForChartPresentation(viewGraph, sourceProjection, companyName) {
+  return reconcileSubjectIdentity(sourceProjection || viewGraph || null, companyName);
 }
 
 function sourceOwnershipSteps(projection) {
@@ -65,7 +108,7 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   const [calculationExpanded, setCalculationExpanded] = useState(true);
   const people = useMemo(() => calculationPeople(view, method, analysis?.entityLabels), [view, method, analysis?.entityLabels]);
   const ownershipSteps = useMemo(() => sourceOwnershipSteps(sourceProjection), [sourceProjection]);
-  const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection), scope, dimension), [view?.graph, sourceProjection, scope, dimension]);
+  const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection, companyName), scope, dimension), [view?.graph, sourceProjection, companyName, scope, dimension]);
   if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}{afterGraph}</section>;
   const incomplete = coverage?.state === "REVIEW_REQUIRED";
   return <section className="ubo-customer-chart-analysis" aria-label="Uploaded chart analysis">
@@ -89,4 +132,4 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   </section>;
 }
 
-export { graphForChartPresentation, projectGraph, provisionalUboLabel, sourceOwnershipSteps };
+export { graphForChartPresentation, normalizedLegalName, projectGraph, provisionalUboLabel, reconcileSubjectIdentity, sourceOwnershipSteps };
