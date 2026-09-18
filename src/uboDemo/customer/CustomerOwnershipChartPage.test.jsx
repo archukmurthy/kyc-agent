@@ -176,7 +176,8 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   const nextStepCard = screen.getByRole("heading", { name: "Continue to questions and resolution" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(graphCard.compareDocumentPosition(chartAssertions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(chartAssertions.compareDocumentPosition(nextStepCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(chartAssertions.compareDocumentPosition(calculationCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(calculationCard.compareDocumentPosition(nextStepCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
   expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
   expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();

@@ -176,8 +176,7 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
     <UploadedChartReceipt result={result} preview={preview} onReplace={onReplace} />
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
     <CertificationCard certification={result.certification} />
-    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} />
-    <ChartAssertions result={result} />
+    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} afterGraph={<ChartAssertions result={result} />} />
     {/* Temporarily hidden: the owner-summary cards repeat information already available in the chart interpretation and assertions. */}
     {/* <OwnersCard owners={result.owners || []} /> */}
     <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
