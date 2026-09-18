@@ -29,8 +29,10 @@ jobs:
           node-version: 24
           cache: npm
 
+      # See the note in the audit job: `npm ci` cannot be used until the
+      # lockfile is repaired on Linux (PROC-5).
       - name: Install
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Node suite
         run: npm run test:node
@@ -62,5 +64,9 @@ jobs:
           # there - CRA 5 is sensitive to the Node major version.
           node-version: 24
           cache: npm
-      - run: npm ci
+      # `npm ci` fails: package-lock.json is missing Linux-only transitive deps
+      # (@emnapi/*, pulled in by @napi-rs/wasm-runtime). Regenerating the lock on
+      # Windows does not add them. See PROC-5 in docs/BACKLOG.md - restore
+      # `npm ci` once the lock is regenerated on Linux.
+      - run: npm install --no-audit --no-fund
       - run: npm audit --omit=dev

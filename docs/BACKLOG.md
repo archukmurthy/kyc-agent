@@ -398,3 +398,10 @@ they exist, every rule in that file depends on someone recalling it.
 - **What:** no `.github/` exists. Add build, full test suite, lint, dependency scan and migration check on every pull request, with a red result blocking the merge. No secrets in the workflow.
 - **Why:** makes the "full suite before merge" rule compulsory instead of voluntary, and moves the waiting off session time.
 - **Area:** `.github/workflows/`, repository settings (owner).
+
+### PROC-5 — `package-lock.json` is incomplete; CI cannot use `npm ci`
+- **Category:** Build / CI · **Priority:** P2 · **Status:** OPEN (found by the first CI run, 2026-09-18)
+- **What:** `npm ci` fails on Linux with "Missing: @emnapi/core@1.11.3 … from lock file". `@napi-rs/wasm-runtime` is in the lock and declares `@emnapi/core`/`@emnapi/runtime` as dependencies, but those entries are absent. Regenerating the lock on Windows does not add them (`npm install --package-lock-only`, with and without `--os=linux --cpu=x64`, reports "up to date"; deleting the lock and regenerating produced a gutted 27-line file, which was restored from backup, not committed). CI therefore runs `npm install --no-audit --no-fund`.
+- **Why it matters:** without `npm ci` the dependency tree is resolved fresh on every run, so CI can install patch versions the local machine has never used — a green run here is not proof of the same tree there. It also makes installs slower.
+- **Fix:** regenerate the lockfile in a Linux environment (a one-off `workflow_dispatch` job that runs `rm -rf node_modules package-lock.json && npm install` and commits the result, or the same in a container), confirm `npm ci` succeeds, then restore `npm ci` in both jobs of `.github/workflows/ci.yml`.
+- **Area:** `package-lock.json`, `.github/workflows/ci.yml`.
