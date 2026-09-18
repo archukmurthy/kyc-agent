@@ -37,8 +37,13 @@ One Guarded file makes the whole change Guarded. No splitting hairs.
 3. **Prove** — full suite and a clean build before every pull request, always.
    Guarded also gets an adversarial reviewer told exactly what to attack, and
    database changes get a tested way to undo them.
-4. **Gate** — automatic checks on the pull request block the merge when red.
-   No exceptions, including for Claude.
+4. **Gate** — automatic checks run on every pull request (`.github/workflows/ci.yml`).
+   GitHub cannot enforce the block on a private personal repo, so **nothing red
+   gets merged is an agreement, not a wall** (PROC-4). Two backstops: the checks
+   are visible on every pull request, and `.githooks/pre-push` runs the suites
+   before a push. Enable it once per clone:
+   `git config core.hooksPath .githooks`. Skipping it with `--no-verify` is for
+   emergencies, and the next push runs it anyway.
 5. **Learn** — every bug adds the test that would have caught it, in the same
    pull request. One line recorded on where it was caught.
 
@@ -117,10 +122,14 @@ PROC-1 to PROC-4 in `docs/BACKLOG.md`.
 | 1 | `CLAUDE.md` rewritten as a true map of the system | Not built |
 | 2 | Lint + covering tests run automatically after each edit | Not built |
 | 3 | Rule-tests (route table first, then one per bug class) | Not built |
-| 4 | Automatic checks blocking a merge | Not built — needs repository settings from the owner |
+| 4 | Automatic checks on every pull request | Built (`.github/workflows/ci.yml`) |
+| 5 | Those checks *blocking* a merge | Blocked — GitHub does not enforce rulesets on a private personal repo; the ruleset is saved and activates if the repo moves to an organization on Team |
+| 6 | `.githooks/pre-push` backstop | Built — run `git config core.hooksPath .githooks` once per clone |
 
-Until #4 exists, the full suite before a pull request is a promise rather than a
-gate. Treat it as compulsory anyway.
+The merge block is the one piece the platform will not give us for free, so
+treat the full suite before a pull request as compulsory anyway. The owner chose
+to stay on the free plan for now (2026-09-18); revisit when the repo moves to an
+organization.
 
 ---
 
