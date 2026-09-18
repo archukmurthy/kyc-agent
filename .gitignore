@@ -9,7 +9,11 @@ build
 .vercel
 .config-store.json
 .didit-store.json
-.claude/
+# Claude Code: local settings stay private, the shared project hooks are tracked.
+# (Must be `.claude/*` not `.claude/` — git cannot re-include a file whose
+# parent directory is excluded.)
+.claude/*
+!.claude/settings.json
 
 # Benchmark scratch output + local DB migration (applied directly to Neon)
 *-benchmark.json

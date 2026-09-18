@@ -120,7 +120,7 @@ PROC-1 to PROC-4 in `docs/BACKLOG.md`.
 | # | Tool | Status |
 | --- | --- | --- |
 | 1 | `CLAUDE.md` rewritten as a true map of the system | Built (`23b875e`) |
-| 2 | Lint + covering tests run automatically after each edit | Not built |
+| 2 | Lint + covering tests run automatically after each edit | Built — `scripts/after-edit.js`, wired in `.claude/settings.json`. Lints the edited file and runs the one test file that covers it (sibling `__tests__`/`tests`, same base name); reports failures back and stops there. Full suites stay before the pull request. |
 | 3 | Rule-tests (route table first, then one per bug class) | Not built |
 | 4 | Automatic checks on every pull request | Built (`.github/workflows/ci.yml`) |
 | 5 | Those checks *blocking* a merge | Blocked — GitHub does not enforce rulesets on a private personal repo; the ruleset is saved and activates if the repo moves to an organization on Team |
