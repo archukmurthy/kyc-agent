@@ -30,6 +30,7 @@ const { getRequirements } = require("../documentRequirements.js");
 const { persistBenchmarkEntity } = require("../lib/persist");
 const { readConfigForTenant, authorizeAdminForTenant } = require("./config");
 const { readBearer } = require("../lib/dossierAccess");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps).
 let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
@@ -197,11 +198,8 @@ async function benchmarkCompany(input, tenantConfig) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
-  res.setHeader("Cache-Control", "no-store");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });

@@ -31,6 +31,7 @@ const store = require("../lib/storage.js");
 const dossierAccess = require("../lib/dossierAccess");
 const dossierToken = require("../lib/dossierToken");
 const { readConfigForTenant } = require("./config");
+const { applyCors } = require("../lib/routeAuth");
 
 const INVITE_RECORD_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
@@ -70,11 +71,7 @@ function resolveOrigin(req, bodyOrigin) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
-
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

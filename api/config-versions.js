@@ -13,6 +13,7 @@ const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const tenantRegistry = require("../lib/tenantRegistry");
 const adminAuth = require("../lib/adminAuth");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
@@ -56,11 +57,8 @@ function readBody(req) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
 
   const tenant = getTenantIdFromRequest(req);
   if (!tenant) {

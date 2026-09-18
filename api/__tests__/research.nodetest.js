@@ -395,10 +395,31 @@ test("an actor resolution failure fails closed with a fixed code", async () => {
   assert.strictEqual(calls.fetch.length, 0);
 });
 
-test("CORS allows the X-Research-Grant header", async () => {
-  const res = fakeRes();
-  await research({ method: "OPTIONS", headers: {}, query: {}, url: "/api/research" }, res);
-  assert.match(res.headers["Access-Control-Allow-Headers"], /X-Research-Grant/);
+test("CORS advertises the X-Research-Grant header to an allow-listed origin", async () => {
+  const saved = process.env.ALLOWED_ORIGINS;
+  process.env.ALLOWED_ORIGINS = "https://app.example.com";
+  try {
+    const res = fakeRes();
+    await research({ method: "OPTIONS", headers: { origin: "https://app.example.com" }, query: {}, url: "/api/research" }, res);
+    assert.match(res.headers["Access-Control-Allow-Headers"], /X-Research-Grant/);
+  } finally {
+    if (saved === undefined) delete process.env.ALLOWED_ORIGINS;
+    else process.env.ALLOWED_ORIGINS = saved;
+  }
+});
+
+test("CORS tells an origin that is not allow-listed nothing at all", async () => {
+  const saved = process.env.ALLOWED_ORIGINS;
+  process.env.ALLOWED_ORIGINS = "https://app.example.com";
+  try {
+    const res = fakeRes();
+    await research({ method: "OPTIONS", headers: { origin: "https://evil.example.com" }, query: {}, url: "/api/research" }, res);
+    assert.strictEqual(res.headers["Access-Control-Allow-Origin"], undefined);
+    assert.strictEqual(res.headers["Access-Control-Allow-Headers"], undefined);
+  } finally {
+    if (saved === undefined) delete process.env.ALLOWED_ORIGINS;
+    else process.env.ALLOWED_ORIGINS = saved;
+  }
 });
 
 // ── Consume-later: the grant is burned right before spend, not on arrival ──

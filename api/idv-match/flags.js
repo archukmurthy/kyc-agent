@@ -4,13 +4,14 @@
 // bands feature is on (api/document-requirements is protected, so we don't add it
 // there). Returns a boolean only — no config, no PII.
 const { bandsEnabled } = require("./config");
+const { applyCors } = require("../../lib/routeAuth");
 
 function getFlags() {
   return { idvDiscrepancyBands: bandsEnabled() };
 }
 
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
   return res.status(200).json(getFlags());
 }
 

@@ -9,15 +9,13 @@
 const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 const dossierToken = require("../lib/dossierToken");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess, dossierToken };
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const actor = await _deps.access.resolveDossierActor(req);

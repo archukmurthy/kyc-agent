@@ -34,6 +34,7 @@ const { resolveDossierActor } = require("../lib/dossierAccess");
 const researchGrant = require("../lib/researchGrant");
 const { buildAnthropicRequest, ResearchInputError, CLIENT_OWNED_KEYS } = require("../lib/researchPrompts");
 const config = require("./config");
+const { applyCors } = require("../lib/routeAuth");
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -57,10 +58,7 @@ function header(req, name) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id, X-Admin-Token, X-Research-Grant");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const body = req.body && typeof req.body === "object" ? req.body : {};

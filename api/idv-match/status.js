@@ -4,6 +4,7 @@
 // It never calls Didit, never writes, and never returns identity PII: only the
 // lifecycle status plus booleans. The identity result stays server-side.
 const attemptStore = require("./attemptStore");
+const { applyCors } = require("../../lib/routeAuth");
 
 async function getAttemptStatus(attemptId, deps = {}) {
   const store = deps.attemptStore || attemptStore;
@@ -20,7 +21,7 @@ async function getAttemptStatus(attemptId, deps = {}) {
 }
 
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
   const attemptId = (req.query && req.query.attemptId) || (req.body && req.body.attemptId);
   if (!attemptId) return res.status(400).json({ error: "attemptId_required" });
   try {

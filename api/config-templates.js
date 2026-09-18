@@ -12,6 +12,7 @@ const tenantRegistry = require("../lib/tenantRegistry");
 const adminAuth = require("../lib/adminAuth");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { listTemplates, buildTemplateConfig } = require("../lib/configTemplates");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
@@ -24,11 +25,8 @@ function authorizeAdmin(tenant, token) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const tenant = getTenantIdFromRequest(req);
