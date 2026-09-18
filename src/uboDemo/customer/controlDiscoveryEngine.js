@@ -108,7 +108,7 @@ function addQuestionMetadata(question, item, answer, now, status) {
   };
 }
 
-function baseOwnershipSummary(base, comparisonRows) {
+function baseOwnershipSummary(base, comparisonRows, sourceCoverage) {
   const ownershipResolutions = base.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration");
   const nominee = base.resolutions.find(({ comparisonItemId }) => comparisonItemId === "ownership-comparison:nominee-declaration");
   const pendingEvidence = base.evidenceRequirements.some(({ status }) => status !== "SATISFIED");
@@ -133,9 +133,9 @@ function baseOwnershipSummary(base, comparisonRows) {
     const graphId = subject?.entityId || Object.entries(labels).find(([, label]) => String(label).trim().toUpperCase() === String(subject?.name || "").trim().toUpperCase())?.[0];
     return !graphId || !incomingTargets.has(graphId);
   });
-  const traversalIncomplete = pendingCorporateTraversal.length > 0;
+  const traversalIncomplete = sourceCoverage?.state === "CONNECTED" ? false : pendingCorporateTraversal.length > 0;
   const status = pendingEvidence ? OWNERSHIP_RESOLUTION_STATUS.EVIDENCE_REQUIRED : review ? OWNERSHIP_RESOLUTION_STATUS.CONFLICTED : unresolved || traversalIncomplete ? OWNERSHIP_RESOLUTION_STATUS.INDETERMINATE : OWNERSHIP_RESOLUTION_STATUS.COMPLETE;
-  return { status, naturalPersonUboCount: definite.length, ubos: definite, pendingCorporateTraversalCount: pendingCorporateTraversal.length };
+  return { status, naturalPersonUboCount: definite.length, ubos: definite, pendingCorporateTraversalCount: traversalIncomplete ? pendingCorporateTraversal.length : 0 };
 }
 
 function addBooleanRoute(requirements, type, stage, reason, originType, activations, prompt, explanation, targetEntityId) {
@@ -355,7 +355,7 @@ function discoveryEvidenceRequirements(requirements, answers, control, now) {
 }
 
 export function extendResolutionWithInvestigation({ base, comparisonRows = [], answers = {}, evidence = {}, topicActivations = [], analystCustomerRequests = [], ownershipContext = {}, controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL, customerEntityId = "CUSTOMER_ENTITY", now }) {
-  let ownership = baseOwnershipSummary(base, comparisonRows);
+  let ownership = baseOwnershipSummary(base, comparisonRows, ownershipContext.sourceCoverage);
   const decoratedBase = base.requirements.map((item) => ({
     ...item,
     semanticKey: semanticFactKey(item.type, {

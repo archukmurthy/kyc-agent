@@ -12,6 +12,7 @@ import {
   RESOLUTION_STATUS,
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
+import { chartSourceCoverage } from "./customerOwnershipChartSession";
 import { applyCurrentVerificationAssessment, isReadyForIdentityVerification } from "./verificationAssessment";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
@@ -277,7 +278,10 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const topicActivations = useMemo(() => researchResult?.investigationTopicActivations || [], [researchResult]);
   const analystCustomerRequests = useMemo(() => researchResult?.analystCustomerRequests || [], [researchResult]);
   const customerEntityId = company?.registrationNumber || company?.legalName || "CUSTOMER_ENTITY";
-  const ownershipContext = useMemo(() => ({ customerDocumentEffectiveDate: result?.certification?.certificationDate || null }), [result]);
+  const ownershipContext = useMemo(() => ({
+    customerDocumentEffectiveDate: result?.certification?.certificationDate || null,
+    sourceCoverage: chartSourceCoverage(result),
+  }), [result]);
   const engine = useMemo(() => evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current }), [rows, answers, evidence, recalculations, result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId]);
   const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 

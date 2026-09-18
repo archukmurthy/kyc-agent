@@ -51,6 +51,31 @@ test("completed ownership with no natural-person UBO starts voting-right discove
   expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_VOTING_RIGHT_HOLDER)).toEqual(expect.objectContaining({ originTypes: [QUESTION_ORIGIN.SYSTEM_CONTROL_DISCOVERY], status: "OPEN" }));
 });
 
+test("a connected chart ending at a legal-entity owner advances to control discovery", () => {
+  const holding = company("Holding Limited");
+  const rows = [row(holding, 100)];
+  const chartAnalysis = {
+    entityLabels: { [holding.entityId]: holding.name, [target.entityId]: target.name },
+    view: {
+      graph: {
+        nodes: [
+          { entityId: holding.entityId, primaryName: holding.name, category: "LEGAL_ENTITY" },
+          { entityId: target.entityId, primaryName: target.name, category: "LEGAL_ENTITY" },
+        ],
+        relationships: [{ relationshipId: rows[0].chartFact.factId, subjectEntityId: holding.entityId, objectEntityId: target.entityId, measurement: { type: "EXACT", value: 100 } }],
+      },
+      qualificationBases: [],
+      qualifications: [],
+    },
+  };
+  const first = run({ comparisonRows: rows, chartAnalysis, ownershipContext: { sourceCoverage: { state: "CONNECTED" } } });
+  const nominee = question(first, FACT_REQUIREMENT_TYPE.CONFIRM_NOMINEE_ARRANGEMENT);
+  const engine = run({ comparisonRows: rows, chartAnalysis, answers: answer(nominee, "NO"), ownershipContext: { sourceCoverage: { state: "CONNECTED" } } });
+
+  expect(engine.ownershipResolution).toEqual(expect.objectContaining({ status: OWNERSHIP_RESOLUTION_STATUS.COMPLETE, pendingCorporateTraversalCount: 0 }));
+  expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_VOTING_RIGHT_HOLDER)).toEqual(expect.objectContaining({ status: "OPEN" }));
+});
+
 test("unresolved ownership does not prematurely start control", () => {
   const rows = [{ ...row(person("Alice Morgan"), 20, "NEEDS_CONFIRMATION"), researchFact: { ...fact(person("Alice Morgan"), target, 20), measurement: { type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true } }, chartFact: { ...fact(person("Alice Morgan"), target, 20), measurement: { type: "UNKNOWN" } } }];
   const { answers } = answerNomineeNo(rows);
