@@ -14,7 +14,7 @@ import {
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
-import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
+import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import "./customerOwnershipChart.css";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
@@ -153,7 +153,7 @@ function ChartAssertions({ result }) {
   return <section className="ubo-customer-card ubo-customer-assertions"><div className="ubo-demo-assertion-heading"><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong><span>{result.assertions?.length || 0} reduced assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-legacy-assertions" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>{expanded && <div id="ubo-customer-legacy-assertions"><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></div>}</section>;
 }
 
-function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice, context }) {
+function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice }) {
   const coverage = chartSourceCoverage(result);
   return <div className="ubo-customer-results">
     <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
@@ -163,7 +163,7 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
     <OwnersCard owners={result.owners || []} />
     <ChartAssertions result={result} />
     <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
-    <OwnershipResolutionQuestions researchResult={researchResult} result={result} company={result.company} context={context} />
+    <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Ownership comparison complete</small><h2 id="ubo-customer-next-step-title">Continue to questions and resolution</h2><p>We’ll ask only for ownership or control information that still needs your input. Your chart and comparison will remain available on this step.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section>
     <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
   </div>;
 }
@@ -278,7 +278,7 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} context={context} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
   </div>;

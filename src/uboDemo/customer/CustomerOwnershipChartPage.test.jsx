@@ -11,7 +11,7 @@ import {
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
-import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
+import { CUSTOMER_OWNERSHIP_CHART_PATH, CUSTOMER_QUESTIONS_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
 
 const demoCase = {
   demoCaseId: "demo-customer-1",
@@ -103,6 +103,16 @@ test("direct customer route renders from seeded company and case context", () =>
   expect(screen.getByText("Questions")).toHaveClass("ubo-customer-progress-label");
   expect(screen.queryByText("Review")).not.toBeInTheDocument();
   expect(screen.queryByText("Research")).not.toBeInTheDocument();
+});
+
+test("processed ownership continues to the separate questions step", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.queryByText("Questions & resolution")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Continue to questions/i })).toHaveAttribute("href", CUSTOMER_QUESTIONS_PATH);
+  expect(screen.getByRole("heading", { name: /Continue to questions and resolution/i })).toBeInTheDocument();
 });
 
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {

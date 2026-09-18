@@ -35,6 +35,7 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   "src/uboDemo/customer/crossSourcePartyResolution.test.js",
   "src/uboDemo/customer/CustomerCompanyPage.test.jsx",
   "src/uboDemo/customer/CustomerOwnershipChartPage.test.jsx",
+  "src/uboDemo/customer/CustomerQuestionsPage.test.jsx",
   "src/uboDemo/customer/ownershipResolutionEngine.test.js",
   "src/uboDemo/customer/OwnershipResolutionQuestions.test.jsx",
   `--moduleNameMapper=${JSON.stringify({
