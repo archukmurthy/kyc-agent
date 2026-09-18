@@ -239,18 +239,12 @@ test("engine output and ownership structure start expanded, collapse independent
   expect(within(ownership).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
 });
 
-test("open questions and analyst assertions use the same explicit collapse control", async () => {
+test("analyst open questions are hidden while source assertions retain their collapse control", async () => {
   window.fetch = jest.fn(() => okJson(aliceSession));
   renderStart();
   fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
-  const questions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
-  const investigationTopics = screen.getByRole("heading", { name: "Investigation topics" }).closest("section");
-  expect(investigationTopics.nextElementSibling).toBe(questions);
-  expect(within(questions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
-  expect(within(questions).queryByText(/Nothing needed from you right now/)).not.toBeInTheDocument();
-  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
-  expect(within(questions).getByText(/Nothing needed from you right now/)).toBeInTheDocument();
-  expect(within(questions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+  await screen.findByRole("heading", { name: "Investigation topics" });
+  expect(screen.queryByRole("heading", { name: "Open questions" })).not.toBeInTheDocument();
 
   const assertions = screen.getByText("Research assertions and source facts").closest("section");
   expect(within(assertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
@@ -260,7 +254,7 @@ test("open questions and analyst assertions use the same explicit collapse contr
   expect(within(assertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
 });
 
-test("Ask customer records an existing open cause beside the unchanged source assertions", async () => {
+test("hidden analyst open questions do not alter existing causes or source assertions", async () => {
   const view = evaluatedSession.snapshots[0].view;
   const selectedSession = {
     ...evaluatedSession,
@@ -276,15 +270,10 @@ test("Ask customer records an existing open cause beside the unchanged source as
   };
   window.fetch = jest.fn(() => okJson(selectedSession));
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  const openQuestions = (await screen.findByRole("heading", { name: "Open questions" })).closest("aside");
-  fireEvent.click(within(openQuestions).getByRole("button", { name: "Expand" }));
-  const ask = within(openQuestions).getByRole("button", { name: "Ask customer" });
-  fireEvent.click(ask);
-  expect(screen.getByRole("button", { name: "Added for customer" })).toHaveAttribute("aria-pressed", "true");
-  await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.analystCustomerRequests).toEqual([
-    expect.objectContaining({ informationNeedId: "need-trust", title: "Trust status", question: expect.stringMatching(/trust or similar legal arrangement/i), requirementIds: ["UBO-R11"] }),
-  ]));
+  await screen.findByTitle("Ownership structure");
+  expect(screen.queryByRole("heading", { name: "Open questions" })).not.toBeInTheDocument();
   const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult;
+  expect(saved.analystCustomerRequests || []).toEqual([]);
   expect(saved.candidateSources[0].candidateFacts).toEqual([fact]);
 });
 
@@ -329,7 +318,7 @@ test("method presentation preserves recorded 24 percent effective and 40 percent
   expect(demoCalculationPeople(view, "PSC_CONDITION_ATTRIBUTION")[0].selectedBases[0].attributionChains[0].majoritySteps[0]).toEqual(expect.objectContaining({ relationshipType: "VOTING_RIGHTS", measurement: "60%" }));
 });
 
-test("reviewed fixture makes no provider call and renders graph, collapsed source assertions and only executable customer work", async () => {
+test("reviewed fixture renders graph and collapsed source assertions without legacy analyst open questions", async () => {
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByLabelText(/Reviewed ASDA fixture/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByTitle("Ownership structure");
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
@@ -340,14 +329,10 @@ test("reviewed fixture makes no provider call and renders graph, collapsed sourc
   fireEvent.click(within(disclosure).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
-  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
-  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
-  expect(screen.getByText(/Provide the remaining ownership or control details/)).toBeInTheDocument();
-  expect(screen.queryByText(/Provide supporting ownership evidence/)).not.toBeInTheDocument();
-  expect(screen.getByText(/Internal review is still in progress/)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Open questions" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Provide the remaining ownership or control details/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Internal review is still in progress/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();
-  const graphCard = screen.getByRole("heading", { name: "Ownership structure" }).closest("section");
-  expect(graphCard.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("a response without an evaluated snapshot exposes no invented graph or questions", async () => {
@@ -355,10 +340,8 @@ test("a response without an evaluated snapshot exposes no invented graph or ques
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: /Explicit review is required/ })).toBeInTheDocument();
   expect(screen.getByText(/2 candidate identity or claim decisions remain/)).toBeInTheDocument();
-  const questions = screen.getByRole("heading", { name: "Open questions" }).closest("aside");
-  fireEvent.click(within(questions).getByRole("button", { name: "Expand" }));
-  expect(screen.getByText("Nothing needed from you right now.")).toBeInTheDocument();
-  expect(screen.getByText("We are still reviewing parts of the ownership structure.")).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Open questions" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Nothing needed from you right now.")).not.toBeInTheDocument();
 });
 
 test("refresh restores the normalized result and Start new case clears it", async () => {
