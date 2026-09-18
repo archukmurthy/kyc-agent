@@ -27,3 +27,11 @@ test("local demo start stages every graph iframe dependency from the approved so
     fs.rmSync(temporaryPublic, { recursive: true, force: true });
   }
 });
+
+test("customer ownership chart opens with the complete extracted graph in view", () => {
+  const root = path.resolve(__dirname, "..", "..");
+  const graphDocument = fs.readFileSync(path.join(root, "public", "ubo-demo-graph.html"), "utf8");
+
+  assert.match(graphDocument, /initialView:\s*"OVERVIEW"/);
+  assert.doesNotMatch(graphDocument, /initialView:\s*"FIT_WIDTH"/);
+});
