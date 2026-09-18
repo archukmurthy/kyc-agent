@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
 import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
-import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
+import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
@@ -47,17 +47,30 @@ beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, 
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
-test("analyst journey progress is Company, Research and Review without an ownership stage", () => {
+test("analyst journey progress exposes ownership, questions, review and audit", () => {
   renderStart();
   const progress = screen.getByLabelText("Demo journey progress");
   expect(progress).toHaveTextContent("Company");
-  expect(progress).toHaveTextContent("Research");
-  expect(progress).toHaveTextContent("Review");
-  expect(progress).not.toHaveTextContent("Ownership");
-  expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
+  expect(progress).toHaveTextContent("Ownership");
+  expect(progress).toHaveTextContent("Questions");
+  expect(progress).toHaveTextContent("Analyst Review");
+  expect(progress).toHaveTextContent("Audit");
+  expect(within(progress).getAllByRole("listitem")).toHaveLength(5);
   expect(within(progress).getByText("Company")).toHaveClass("ubo-demo-progress-label");
-  expect(within(progress).getByText("Research")).toHaveClass("ubo-demo-progress-label");
-  expect(within(progress).getByText("Review")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Ownership")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Analyst Review")).toHaveClass("ubo-demo-progress-label");
+});
+test("analyst Review and Audit routes render the persisted customer resolution trace", () => {
+  const demoCase = { demoCaseId: "review-case", company: { legalName: "Review Limited", registrationNumber: "123", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" }, analysisContext: {} };
+  const researchResult = { ownershipResolutionTrace: { ownershipResolution: { status: "COMPLETE" }, controlResolution: { status: "NOT_STARTED" }, fallback: {}, uboAssessments: [], ownershipFacts: [], personOwnershipAssessments: [], questions: [], evidence: [], auditTrail: {} } };
+  writeDemoSession({ draft: emptyDemoDraft(), demoCase, researchResult });
+  window.history.replaceState({}, "", DEMO_REVIEW_PATH);
+  const view = render(<UboDemoRoot />);
+  expect(screen.getByRole("heading", { name: "Assessment Details" })).toBeInTheDocument();
+  view.unmount();
+  window.history.replaceState({}, "", DEMO_AUDIT_PATH);
+  render(<UboDemoRoot />);
+  expect(screen.getByRole("heading", { name: "Analyst reasoning and traceability" })).toBeInTheDocument();
 });
 test("country, ownership type and effective ownership inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /Effective ownership/ })).toBeChecked(); });
 test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });

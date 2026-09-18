@@ -384,6 +384,24 @@
 .ubo-demo-handoff-status.accepted { color: var(--ubo-demo-green); }
 .ubo-demo-handoff-status.error { color: #9b2525; background: #fff0f0; }
 .ubo-demo-failure { border-color: #e5b6b6; }
+.ubo-demo-progress li > a { display: contents; color: inherit; text-decoration: none; }
+.ubo-analyst-resolution { display: grid; gap: 22px; }
+.ubo-analyst-summary, .ubo-analyst-section { padding: 22px; border: 1px solid var(--ubo-demo-border); border-radius: 18px; background: white; box-shadow: 0 12px 34px rgba(27,64,70,.06); }
+.ubo-analyst-summary h2, .ubo-analyst-section > h2 { margin: 0 0 10px; }
+.ubo-analyst-summary > dl, .ubo-analyst-assessment-card > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ubo-analyst-summary dl > div, .ubo-analyst-assessment-card > dl > div { padding: 12px; border-radius: 9px; background: #f4f8f7; }
+.ubo-analyst-summary dt, .ubo-analyst-assessment-card dt, .ubo-analyst-audit-card dt { color: var(--ubo-demo-muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.ubo-analyst-summary dd, .ubo-analyst-assessment-card dd { margin: 5px 0 0; font-weight: 800; }
+.ubo-analyst-section { display: grid; gap: 12px; }
+.ubo-analyst-assessment-card, .ubo-analyst-audit-card { padding: 18px; border: 1px solid var(--ubo-demo-border); border-radius: 12px; background: #fbfcfc; }
+.ubo-analyst-assessment-card > header { display: flex; justify-content: space-between; gap: 16px; }
+.ubo-analyst-assessment-card header span { color: var(--ubo-demo-green); font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.ubo-analyst-assessment-card h3, .ubo-analyst-audit-card h3 { margin: 5px 0 0; }
+.ubo-analyst-assessment-card details { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--ubo-demo-border); }
+.ubo-analyst-assessment-card details > section { margin-top: 10px; padding: 12px; border-radius: 9px; background: white; }
+.ubo-analyst-assessment-card details dl { display: grid; grid-template-columns: 180px 1fr; gap: 6px 10px; }
+.ubo-analyst-assessment-card details dd, .ubo-analyst-audit-card dd { margin: 0; }
+.ubo-analyst-audit-card > dl { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 8px 12px; line-height: 1.45; }
 
 @media (max-width: 640px) {
   .ubo-demo-header { height: 64px; padding: 0 18px; }
