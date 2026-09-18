@@ -52,7 +52,7 @@ function resultDetail(row) {
 }
 
 export default function ChartResearchComparison({ researchResult, chartFacts, company = null }) {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [needsAttention, setNeedsAttention] = useState(false);
   const [aiResolutions, setAiResolutions] = useState(readIdentityCache);
   const [identityCheck, setIdentityCheck] = useState({ state: "IDLE", requestKey: null });
@@ -97,9 +97,9 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
   if (!researchEntries.length) return <section className="ubo-customer-card ubo-customer-comparison"><header><div><small>Read-only comparison</small><h2>No research result available to compare</h2></div></header><p>The uploaded chart remains a separate candidate source. No registry corroboration has been inferred.</p></section>;
   const displayed = needsAttention ? rows.filter((row) => row.status !== "INDEPENDENTLY_VERIFIED") : rows;
   return <section className="ubo-customer-card ubo-customer-comparison">
-    <header><div><small>Separate source datasets</small><h2>Ownership assertions compared with saved research</h2></div><button type="button" onClick={() => setVisible((value) => !value)}>{visible ? "Hide comparison" : "Compare with research"}</button></header>
+    <header><div><small>Separate source datasets</small><h2>Ownership assertions compared with saved research</h2></div><button type="button" aria-expanded={visible} aria-controls="ubo-customer-comparison-content" onClick={() => setVisible((value) => !value)}>{visible ? "Hide comparison" : "Compare with research"}</button></header>
     <p>This read-only check compares economic ownership on directed paths to the customer only. Sibling and other off-path facts remain inspectable in the full source graph and source assertions. The comparison does not merge facts, approve identities, treat certification as ownership evidence or replace independent review.</p>
-    {visible && <>
+    {visible && <div id="ubo-customer-comparison-content">
       {identityCheck.state === "CHECKING" && <p className="ubo-customer-identity-status" role="status">Checking unresolved party identities using the bounded identity-only matcher…</p>}
       {identityCheck.state === "UNAVAILABLE" && <p className="ubo-customer-identity-status warning" role="status">AI-assisted identity matching is unavailable. Deterministic matches remain applied; unresolved identities still need confirmation.</p>}
       <div className="ubo-customer-comparison-summary">
@@ -133,6 +133,6 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
           </React.Fragment>)}
         </div>
       </details>}
-    </>}
+    </div>}
   </section>;
 }

@@ -25,7 +25,7 @@ test("customer exact ownership inside an independent registry range renders the 
     relationship("chart-control", "FORMAL_CONTROL_RIGHT", null, "customer-artifact"),
   ];
   render(<ChartResearchComparison researchResult={researchResult} chartFacts={chartFacts} />);
-  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
+  expect(screen.getByRole("button", { name: /Hide comparison/i })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByText("Independently verified", { selector: ".ubo-customer-comparison-summary span" })).toBeInTheDocument();
   expect(screen.getByText("✓ Independently verified")).toBeInTheDocument();
   expect(screen.getByText("Verified against independent registry range")).toBeInTheDocument();
@@ -55,7 +55,6 @@ test("unresolved parties use one bounded identity-only request and high-confiden
     };
   });
   render(<ChartResearchComparison researchResult={{ candidateSources: [{ requestId: "registry", candidateFacts: [registryFact] }] }} chartFacts={[chartFact]} />);
-  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
   await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(screen.getByText("✓ Independently verified")).toBeInTheDocument());
   fireEvent.click(screen.getByText("How the parties were matched"));
@@ -84,7 +83,6 @@ test("comparison hides sibling ownership outside the directed customer path whil
     chartFacts={chartFacts}
     company={{ legalName: "Better Comms (VOIP) Ltd", registrationNumber: "01234567", countryCode: "GB" }}
   />);
-  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
 
   expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Better Holdco Limited").length).toBeGreaterThan(0);
@@ -101,7 +99,6 @@ test("web-sourced ownership is collapsed outside the core comparison and exclude
     researchResult={{ candidateSources: [{ requestId: "mixed-research", candidateFacts: [registryFact, webFact] }] }}
     chartFacts={[chartFact]}
   />);
-  fireEvent.click(screen.getByRole("button", { name: /Compare with research/i }));
 
   const core = within(container.querySelector('[aria-label="Core ownership comparison"]'));
   const supplementary = within(container.querySelector('[aria-label="Additional web-sourced ownership information"]'));
