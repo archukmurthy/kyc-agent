@@ -91,7 +91,7 @@ beforeEach(() => {
 afterEach(() => { jest.restoreAllMocks(); });
 
 function openOwnershipAnalysis() {
-  fireEvent.click(screen.getByRole("button", { name: /View ownership analysis/i }));
+  fireEvent.click(screen.getByRole("link", { name: /View ownership analysis/i }));
 }
 
 test("direct customer route renders from seeded company and case context", () => {
@@ -117,9 +117,21 @@ test("processed ownership continues to the separate questions step", () => {
   render(<CustomerOwnershipChartPage />);
   expect(screen.queryByText("Questions & resolution")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Continue to questions/i })).toHaveAttribute("href", CUSTOMER_QUESTIONS_PATH);
-  expect(screen.getByRole("heading", { name: /Continue to questions/i })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /View ownership analysis/i })).toBeInTheDocument();
+  const nextStep = screen.getByRole("heading", { name: /Continue to questions/i }).closest("section");
+  expect(screen.getByRole("link", { name: /View ownership analysis/i })).toHaveAttribute("href", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
+  expect(within(nextStep).queryByRole("link", { name: /View ownership analysis/i })).not.toBeInTheDocument();
+  expect(within(nextStep).getAllByRole("link")).toHaveLength(1);
   expect(screen.queryByRole("heading", { name: "Calculation view" })).not.toBeInTheDocument();
+});
+
+test("the top ownership-analysis link opens a restored analysis directly", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+  window.history.replaceState({}, "", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: "Calculation view" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /View ownership analysis/i })).toHaveAttribute("aria-current", "page");
 });
 
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
@@ -162,7 +174,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(body.file).toEqual(expect.objectContaining({ originalFilename: "ownership-chart.png", declaredMediaType: "image/png", sizeBytes: 12 }));
   expect(body.file.contentBase64).toBeTruthy();
   expect(body.demoContext.researchResult).toBeUndefined();
-  await screen.findByRole("button", { name: /View ownership analysis/i });
+  await screen.findByRole("heading", { name: /Continue to questions/i });
   openOwnershipAnalysis();
   expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View chart" }));

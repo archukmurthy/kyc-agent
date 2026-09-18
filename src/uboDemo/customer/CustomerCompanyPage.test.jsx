@@ -12,8 +12,9 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/ubo-demo/customer/");
 });
 
-test("customer screens link to Analyst Review and Audit", () => {
+test("customer screens link to ownership analysis, Analyst Review and Audit", () => {
   render(<CustomerCompanyPage />);
+  expect(screen.getByRole("link", { name: "View Ownership Analysis" })).toHaveAttribute("href", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
   expect(screen.getByRole("link", { name: "Open Analyst Review" })).toHaveAttribute("href", DEMO_REVIEW_PATH);
   expect(screen.getByRole("link", { name: "Open Audit" })).toHaveAttribute("href", DEMO_AUDIT_PATH);
 });
