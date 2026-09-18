@@ -28,12 +28,19 @@ export const EVIDENCE_STATUS = Object.freeze({ OPEN: "OPEN", RECEIVED: "RECEIVED
 export const RESOLUTION_STATUS = Object.freeze({
   RESOLVED_CUSTOMER_CONFIRMED: "RESOLVED_CUSTOMER_CONFIRMED",
   RESOLVED_EVIDENCE_VERIFIED: "RESOLVED_EVIDENCE_VERIFIED",
+  RESOLVED_INDEPENDENTLY_VERIFIED: "RESOLVED_INDEPENDENTLY_VERIFIED",
+  RESOLVED_NOT_MATERIAL_TO_UBO_OUTCOME: "RESOLVED_NOT_MATERIAL_TO_UBO_OUTCOME",
   RESOLVED_EXISTING_INFORMATION_SUFFICIENT: "RESOLVED_EXISTING_INFORMATION_SUFFICIENT",
   REQUIRES_ANALYST_REVIEW: "REQUIRES_ANALYST_REVIEW",
   UNRESOLVED: "UNRESOLVED",
 });
 
 export const UBO_DETERMINATION = Object.freeze({ DEFINITE_UBO: "DEFINITE_UBO", DEFINITE_NON_UBO: "DEFINITE_NON_UBO", INDETERMINATE: "INDETERMINATE" });
+export const OWNERSHIP_LINK_OUTCOME = Object.freeze({
+  OWNERSHIP_THRESHOLD_EXCEEDED: "OWNERSHIP_THRESHOLD_EXCEEDED",
+  OWNERSHIP_THRESHOLD_NOT_EXCEEDED: "OWNERSHIP_THRESHOLD_NOT_EXCEEDED",
+  OWNERSHIP_RANGE_AMBIGUOUS: "OWNERSHIP_RANGE_AMBIGUOUS",
+});
 
 export const OWNERSHIP_DIFFERENCE_REASON = Object.freeze({
   SHARE_TRANSFER: "SHARE_TRANSFER",
@@ -92,6 +99,20 @@ function usableMeasurement(row) {
   return chart || research || { type: "UNKNOWN" };
 }
 
+function canonicalPartyType(value) {
+  const type = normalized(value).replaceAll(" ", "_");
+  if (["NATURAL_PERSON", "PERSON", "INDIVIDUAL"].includes(type)) return "NATURAL_PERSON";
+  if (["LEGAL_ENTITY", "COMPANY", "LLP", "PARTNERSHIP", "PUBLIC_COMPANY", "GOVERNMENT"].includes(type)) return "LEGAL_ENTITY";
+  return type || "UNKNOWN_OR_OTHER";
+}
+
+function rowHolderParty(row) { return row?.chartFact?.subject || row?.researchFact?.subject || null; }
+
+export function idvRequiredForSubject(subject = {}) {
+  return canonicalPartyType(subject.partyType || subject.entityType) === "NATURAL_PERSON"
+    && (subject.isUbo === true || subject.requiresSeniorManagementFallbackIdv === true);
+}
+
 export function determineUboFromMeasurement(measurement, threshold = 25) {
   if (!measurement || measurement.type === "UNKNOWN") return UBO_DETERMINATION.INDETERMINATE;
   if (measurement.type === "EXACT") return Number(measurement.value) >= threshold ? UBO_DETERMINATION.DEFINITE_UBO : UBO_DETERMINATION.DEFINITE_NON_UBO;
@@ -103,6 +124,142 @@ export function determineUboFromMeasurement(measurement, threshold = 25) {
   if (minimumQualifies) return UBO_DETERMINATION.DEFINITE_UBO;
   if (maximumCannotQualify) return UBO_DETERMINATION.DEFINITE_NON_UBO;
   return UBO_DETERMINATION.INDETERMINATE;
+}
+
+export function ownershipLinkOutcome(measurement, threshold = 25) {
+  const determination = determineUboFromMeasurement(measurement, threshold);
+  if (determination === UBO_DETERMINATION.DEFINITE_UBO) return OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_EXCEEDED;
+  if (determination === UBO_DETERMINATION.DEFINITE_NON_UBO) return OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_NOT_EXCEEDED;
+  return OWNERSHIP_LINK_OUTCOME.OWNERSHIP_RANGE_AMBIGUOUS;
+}
+
+function measurementBound(measurement, bound) {
+  if (!measurement || measurement.type === "UNKNOWN") return null;
+  if (measurement.type === "EXACT") return Number(measurement.value);
+  if (measurement.type !== "RANGE") return null;
+  const value = bound === "lower" ? measurement.lowerBound : measurement.upperBound;
+  return value == null ? (bound === "lower" ? 0 : 100) : Number(value);
+}
+
+function qualifies(value, threshold = {}) {
+  if (!Number.isFinite(value)) return false;
+  const limit = Number(threshold.value ?? 25);
+  return threshold.comparator === ">" ? value > limit : value >= limit;
+}
+
+function graphEntityName(entityId, graph, labels) {
+  const node = (graph?.nodes || []).find((item) => item.entityId === entityId);
+  return labels?.[entityId] || node?.primaryName || node?.displayName || node?.name || entityId;
+}
+
+function assessmentStateToDetermination(state) {
+  if (["SATISFIED", "QUALIFIES", "ROUTE_SATISFIED"].includes(state)) return UBO_DETERMINATION.DEFINITE_UBO;
+  if (["NOT_SATISFIED", "DOES_NOT_QUALIFY", "ROUTE_NOT_SATISFIED"].includes(state)) return UBO_DETERMINATION.DEFINITE_NON_UBO;
+  return UBO_DETERMINATION.INDETERMINATE;
+}
+
+export function personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, threshold = 25) {
+  const view = chartAnalysis?.view;
+  const graph = view?.graph;
+  if (!graph) return [];
+  const labels = chartAnalysis.entityLabels || {};
+  const nodes = new Map((graph.nodes || []).map((node) => [node.entityId, node]));
+  const relationships = new Map((graph.relationships || []).map((edge) => [edge.relationshipId, edge]));
+  const qualifications = new Map((view.qualifications || graph.personQualificationAssessments || []).map((item) => [item.personEntityId, item]));
+  const bases = (view.qualificationBases || graph.qualificationBasisRecords || []).filter(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
+  return bases.map((basis) => {
+    const node = nodes.get(basis.personEntityId) || {};
+    const partyType = canonicalPartyType(node.category || node.partyType || node.entityType || node.profile?.partyType || (qualification ? "NATURAL_PERSON" : null));
+    if (partyType !== "NATURAL_PERSON") return null;
+    const qualification = qualifications.get(basis.personEntityId);
+    const determination = assessmentStateToDetermination(basis.assessmentState || qualification?.routeStatus);
+    const policyThreshold = basis.threshold || { comparator: ">=", value: threshold, dimension: "ECONOMIC" };
+    const ownershipPaths = (basis.orderedPathReferences || []).map((path) => {
+      const edges = (path.relationshipIds || []).map((relationshipId) => relationships.get(relationshipId)).filter(Boolean);
+      const route = edges.length
+        ? [graphEntityName(edges[0].subjectEntityId || edges[0].sourceEntityId, graph, labels), ...edges.map((edge) => graphEntityName(edge.objectEntityId || edge.targetEntityId, graph, labels))]
+        : "Recorded ownership path";
+      return {
+        pathId: path.pathId,
+        relationshipIds: path.relationshipIds || [],
+        route: Array.isArray(route) ? route.join(" → ") : route,
+        directOwnership: edges[0]?.measurement || null,
+        downstreamOwnership: edges.length > 1 ? edges.slice(1).map((edge) => edge.measurement) : [],
+        inputMeasurements: edges.map((edge) => edge.measurement),
+        effectiveOwnership: path.contribution || null,
+      };
+    });
+    const assessment = {
+      assessmentId: `person-ownership-assessment:${basis.personEntityId}`,
+      personId: basis.personEntityId,
+      personName: graphEntityName(basis.personEntityId, graph, labels),
+      partyType,
+      basis: "SHARE_OWNERSHIP",
+      ownershipPaths,
+      aggregateEffectiveOwnership: basis.recordedCalculation?.value || basis.aggregatedTargetRightValue || null,
+      threshold: policyThreshold,
+      policyId: basis.policyId || basis.method || "ubo-effective-ownership",
+      policyVersion: basis.policyVersion || chartAnalysis.calculationSemanticsVersion || "recorded",
+      determination,
+      idvRequired: false,
+    };
+    return { ...assessment, idvRequired: idvRequiredForSubject({ partyType, isUbo: determination === UBO_DETERMINATION.DEFINITE_UBO }) };
+  }).filter(Boolean);
+}
+
+function matchingPersonAssessment(row, personAssessments) {
+  const subject = rowHolderParty(row);
+  const entityId = subject?.entityId;
+  const name = normalized(subject?.name);
+  return personAssessments.find((item) => (entityId && item.personId === entityId) || normalized(item.personName) === name) || null;
+}
+
+function relationshipIdsForRow(row, chartAnalysis) {
+  const graph = chartAnalysis?.view?.graph;
+  if (!graph) return [];
+  const factIds = new Set([row?.chartFact?.factId, row?.researchFact?.factId].filter(Boolean));
+  const subjectName = normalized(rowHolderParty(row)?.name);
+  const objectName = normalized(row?.chartFact?.object?.name || row?.researchFact?.object?.name);
+  const labels = chartAnalysis.entityLabels || {};
+  const exactMatches = (graph.relationships || []).filter((edge) => factIds.has(edge.relationshipId)).map(({ relationshipId }) => relationshipId);
+  if (exactMatches.length) return exactMatches;
+  return (graph.relationships || []).filter((edge) => {
+    const source = graphEntityName(edge.subjectEntityId || edge.sourceEntityId, graph, labels);
+    const target = graphEntityName(edge.objectEntityId || edge.targetEntityId, graph, labels);
+    return normalized(source) === subjectName && normalized(target) === objectName;
+  }).map(({ relationshipId }) => relationshipId);
+}
+
+export function ownershipFactMateriality(row, personAssessments = [], chartAnalysis = null, threshold = 25) {
+  const holderPartyType = canonicalPartyType(rowHolderParty(row)?.entityType || rowHolderParty(row)?.partyType);
+  const relationshipIds = new Set(relationshipIdsForRow(row, chartAnalysis));
+  const affected = personAssessments.filter((assessment) => assessment.ownershipPaths.some((path) => path.relationshipIds.some((id) => relationshipIds.has(id))));
+  if (!affected.length) return {
+    material: true,
+    reason: holderPartyType === "LEGAL_ENTITY"
+      ? "This legal-entity ownership link may affect traversal to an ultimate natural person and cannot be dismissed at edge level."
+      : "No complete aggregate natural-person assessment proves that this ownership fact cannot affect the UBO outcome.",
+  };
+  for (const assessment of affected) {
+    if (assessment.determination === UBO_DETERMINATION.INDETERMINATE) return { material: true, reason: "The affected person's aggregate ownership assessment remains indeterminate." };
+    const policyThreshold = assessment.threshold || { comparator: ">=", value: threshold };
+    if (assessment.determination === UBO_DETERMINATION.DEFINITE_UBO) {
+      const aggregateLower = measurementBound(assessment.aggregateEffectiveOwnership, "lower");
+      const affectedUpper = assessment.ownershipPaths
+        .filter((path) => path.relationshipIds.some((id) => relationshipIds.has(id)))
+        .reduce((sum, path) => sum + (measurementBound(path.effectiveOwnership, "upper") || 0), 0);
+      if (!qualifies((aggregateLower ?? 0) - affectedUpper, policyThreshold)) return { material: true, reason: "Removing or changing this ownership path could change the person's aggregate UBO result." };
+    } else {
+      const aggregateUpper = measurementBound(assessment.aggregateEffectiveOwnership, "upper");
+      if (aggregateUpper == null || qualifies(aggregateUpper, policyThreshold)) return { material: true, reason: "The available aggregate range does not prove that this fact is immaterial to the person's UBO result." };
+    }
+  }
+  return {
+    material: false,
+    reason: affected.every(({ determination }) => determination === UBO_DETERMINATION.DEFINITE_NON_UBO)
+      ? "No further ownership verification is required for the UBO determination. Even at the highest value supported by the aggregate calculation, each affected person's ownership remains below the applicable threshold. The source claim is not independently verified."
+      : "No further ownership verification is required for the UBO determination. After all ownership paths are aggregated, changing this fact cannot alter any affected person's UBO result. The source claim is not independently verified.",
+  };
 }
 
 function requirement(comparisonItemId, type, row, reason, sequence = "base") {
@@ -117,13 +274,19 @@ function requirement(comparisonItemId, type, row, reason, sequence = "base") {
   };
 }
 
-export function deriveFactRequirements(comparisonRows = [], { threshold = 25, answers = {} } = {}) {
+export function deriveFactRequirements(comparisonRows = [], {
+  threshold = 25, answers = {}, chartAnalysis = null, personAssessments = personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, threshold),
+} = {}) {
   const requirements = [];
   const preResolved = [];
   comparisonRows.forEach((row) => {
     const comparisonItemId = row.key;
     if (row.status === "INDEPENDENTLY_VERIFIED") {
-      preResolved.push({ comparisonItemId, resolutionStatus: RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT, uboDetermination: determineUboFromMeasurement(usableMeasurement(row), threshold) });
+      preResolved.push({
+        comparisonItemId,
+        resolutionStatus: RESOLUTION_STATUS.RESOLVED_INDEPENDENTLY_VERIFIED,
+        reason: "The customer ownership assertion is corroborated by independent information.",
+      });
       return;
     }
     if (row.status === "CONFLICT") {
@@ -156,12 +319,28 @@ export function deriveFactRequirements(comparisonRows = [], { threshold = 25, an
       }
       return;
     }
-    const determination = determineUboFromMeasurement(usableMeasurement(row), threshold);
-    if (determination !== UBO_DETERMINATION.INDETERMINATE) {
-      preResolved.push({ comparisonItemId, resolutionStatus: RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT, uboDetermination: determination });
+    const unresolvedRequirement = requirement(
+      comparisonItemId,
+      FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE,
+      row,
+      "REQUIRED_TO_DETERMINE_UBO_STATUS",
+    );
+    const existingAnswer = answers[id("question", unresolvedRequirement.id)];
+    if (existingAnswer) {
+      requirements.push(unresolvedRequirement);
       return;
     }
-    requirements.push(requirement(comparisonItemId, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE, row, "REQUIRED_TO_DETERMINE_UBO_STATUS"));
+    const materiality = ownershipFactMateriality(row, personAssessments, chartAnalysis, threshold);
+    if (!materiality.material) {
+      preResolved.push({
+        comparisonItemId,
+        resolutionStatus: RESOLUTION_STATUS.RESOLVED_NOT_MATERIAL_TO_UBO_OUTCOME,
+        reason: materiality.reason,
+        materiality,
+      });
+      return;
+    }
+    requirements.push(unresolvedRequirement);
   });
 
   const nomineeComparisonItemId = "ownership-comparison:nominee-declaration";
@@ -281,14 +460,45 @@ function evidenceKeyForExplanation(answer) {
   return null;
 }
 
-function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25, now = new Date().toISOString() } = {}) {
-  const { requirements, preResolved } = deriveFactRequirements(comparisonRows, { threshold, answers });
+function relationshipAssessment(row, resolution, personAssessments, threshold) {
+  const holderParty = rowHolderParty(row) || {};
+  const holderPartyType = canonicalPartyType(holderParty.entityType || holderParty.partyType);
+  const measurement = resolution.resultingFact?.measurement || usableMeasurement(row);
+  const personAssessment = holderPartyType === "NATURAL_PERSON" ? matchingPersonAssessment(row, personAssessments) : null;
+  const determination = personAssessment?.determination || UBO_DETERMINATION.INDETERMINATE;
+  return {
+    ...resolution,
+    holderPartyType,
+    ownershipLink: {
+      outcome: ownershipLinkOutcome(measurement, threshold),
+      measurement,
+      ownershipLinkEstablished: resolution.ownershipEstablishment !== "NOT_ESTABLISHED",
+      qualifyingOwnershipInterest: ownershipLinkOutcome(measurement, threshold) === OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_EXCEEDED,
+      continueOwnershipTraversal: holderPartyType === "LEGAL_ENTITY",
+    },
+    uboImpact: holderPartyType === "NATURAL_PERSON"
+      ? {
+        assessmentLevel: "PERSON_AGGREGATE",
+        determination,
+        personAssessmentId: personAssessment?.assessmentId || null,
+        idvRequired: idvRequiredForSubject({ partyType: holderPartyType, isUbo: determination === UBO_DETERMINATION.DEFINITE_UBO }),
+      }
+      : {
+        assessmentLevel: holderPartyType === "LEGAL_ENTITY" ? "NOT_APPLICABLE_LEGAL_ENTITY" : "NOT_ASSESSED_UNKNOWN_PARTY_TYPE",
+        determination: null,
+        idvRequired: false,
+      },
+  };
+}
+
+function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, chartAnalysis = null, threshold = 25, now = new Date().toISOString() } = {}) {
+  const latestChartAnalysis = Object.values(recalculations).map((record) => record?.chartAnalysis).filter(Boolean).at(-1) || chartAnalysis;
+  const personOwnershipAssessments = personOwnershipAssessmentsFromChartAnalysis(latestChartAnalysis, threshold);
+  const { requirements, preResolved } = deriveFactRequirements(comparisonRows, { threshold, answers, chartAnalysis: latestChartAnalysis, personAssessments: personOwnershipAssessments });
   const questions = requirements.filter(({ status }) => status !== "RESOLVED").map((item) => {
     const question = questionForRequirement(item, now);
     const answer = answers[question.id];
     if (!answer) {
-      const recalculated = recalculations[item.comparisonItemId]?.determination;
-      if (item.type === FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE && recalculated && recalculated !== UBO_DETERMINATION.INDETERMINATE) return { ...question, status: QUESTION_STATUS.SUPERSEDED };
       return question;
     }
     let status = QUESTION_STATUS.RESOLVED;
@@ -299,12 +509,16 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
     return { ...question, status, answeredAt: answer.answeredAt || now };
   });
   const evidenceRequirements = [];
-  const resolutions = new Map(preResolved.map((item) => [item.comparisonItemId, {
-    ...item,
-    id: id("resolution", item.comparisonItemId),
-    ownershipEstablishment: "ESTABLISHED_EXISTING_INFORMATION",
-    uboImpact: { determination: item.uboDetermination, idvRequired: item.uboDetermination === UBO_DETERMINATION.DEFINITE_UBO },
-  }]));
+  const rowById = new Map(comparisonRows.map((row) => [row.key, row]));
+  const resolutions = new Map(preResolved.map((item) => {
+    const resolution = {
+      ...item,
+      id: id("resolution", item.comparisonItemId),
+      ownershipEstablishment: item.resolutionStatus === RESOLUTION_STATUS.RESOLVED_INDEPENDENTLY_VERIFIED
+        ? "ESTABLISHED_INDEPENDENTLY_VERIFIED" : "ASSERTED_NOT_MATERIAL_TO_UBO_OUTCOME",
+    };
+    return [item.comparisonItemId, relationshipAssessment(rowById.get(item.comparisonItemId), resolution, personOwnershipAssessments, threshold)];
+  }));
 
   comparisonRows.forEach((row) => {
     if (resolutions.has(row.key)) return;
@@ -313,7 +527,6 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
     const explanationAnswer = explanation && answerFor(explanation, answers)?.value;
     let resolutionStatus = RESOLUTION_STATUS.UNRESOLVED;
     let reason = row.detail || "Ownership fact remains unresolved.";
-    let determination = UBO_DETERMINATION.INDETERMINATE;
     let resultingFact = null;
     if (explanationAnswer && isAnalystAnswer(explanationAnswer)) {
       resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
@@ -333,7 +546,6 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
         const dateAnswer = dateRequirement && answerFor(dateRequirement, answers);
         if (percentage) {
           resultingFact = customerOwnershipFact(row, percentage.value, answers, dateAnswer?.value || null, now);
-          determination = recalculations[row.key]?.determination || determineUboFromMeasurement({ type: "EXACT", value: percentage.value }, threshold);
         }
         const dateRequired = [OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT].includes(explanationAnswer);
         if (stored?.status === EVIDENCE_STATUS.SATISFIED && percentage && (!dateRequired || dateAnswer)) {
@@ -347,7 +559,6 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
       const confirmationAnswer = confirmation && answerFor(confirmation, answers)?.value;
       if (percentage) {
         resultingFact = customerOwnershipFact(row, percentage.value, answers, null, now);
-        determination = recalculations[row.key]?.determination || determineUboFromMeasurement({ type: "EXACT", value: percentage.value }, threshold);
         resolutionStatus = RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED;
         reason = "The customer supplied the missing ownership percentage and the UBO assessment was recalculated.";
       } else if (confirmationAnswer === "YES") {
@@ -366,7 +577,7 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
         resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
       }
     }
-    resolutions.set(row.key, {
+    resolutions.set(row.key, relationshipAssessment(row, {
       id: id("resolution", row.key),
       comparisonItemId: row.key,
       resolutionStatus,
@@ -374,9 +585,8 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
       resultingFact,
       ownershipEstablishment: resolutionStatus === RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED ? "ESTABLISHED_EVIDENCE_VERIFIED"
         : resolutionStatus === RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED ? "ESTABLISHED_CUSTOMER_DECLARATION"
-          : resolutionStatus === RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT ? "ESTABLISHED_EXISTING_INFORMATION" : "NOT_ESTABLISHED",
-      uboImpact: { determination, idvRequired: determination === UBO_DETERMINATION.DEFINITE_UBO },
-    });
+          : "NOT_ESTABLISHED",
+    }, personOwnershipAssessments, threshold));
   });
 
   const nomineeItem = requirements.find((item) => item.type === FACT_REQUIREMENT_TYPE.CONFIRM_NOMINEE_ARRANGEMENT);
@@ -416,22 +626,24 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
   return {
     contractVersion: "ubo-ownership-resolution-state-v1",
     generatedAt: now,
+    chartAnalysis: latestChartAnalysis,
     requirements,
     questions,
     evidenceRequirements,
     resolutions: [...resolutions.values()],
+    personOwnershipAssessments,
     openQuestions: questions.filter(({ status }) => status === QUESTION_STATUS.OPEN),
   };
 }
 
 export function evaluateOwnershipResolution({
-  comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, threshold = 25,
+  comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, chartAnalysis = null, threshold = 25,
   topicActivations = [], analystCustomerRequests = [],
   ownershipContext = {},
   controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL,
   customerEntityId = "CUSTOMER_ENTITY", now = new Date().toISOString(),
 } = {}) {
-  const base = evaluateOwnershipResolutionBase({ comparisonRows, answers, evidence, recalculations, threshold, now });
+  const base = evaluateOwnershipResolutionBase({ comparisonRows, answers, evidence, recalculations, chartAnalysis, threshold, now });
   return extendResolutionWithInvestigation({ base, comparisonRows, answers, evidence, topicActivations, analystCustomerRequests, ownershipContext, controlDiscoveryMode, customerEntityId, now });
 }
 
@@ -480,9 +692,16 @@ export function determinationFromChartAnalysis(chartAnalysis, resultingFact, thr
   const name = normalized(resultingFact?.subject?.name);
   const labels = chartAnalysis?.entityLabels || {};
   const personIds = Object.entries(labels).filter(([, label]) => normalized(label) === name).map(([entityId]) => entityId);
+  const nodes = chartAnalysis?.view?.graph?.nodes || [];
+  const eligiblePersonIds = personIds.filter((entityId) => {
+    const node = nodes.find((item) => item.entityId === entityId);
+    const isRecordedPerson = (chartAnalysis?.view?.qualifications || []).some((item) => item.personEntityId === entityId);
+    return canonicalPartyType(node?.category || node?.partyType || node?.entityType || node?.profile?.partyType || (isRecordedPerson ? "NATURAL_PERSON" : null)) === "NATURAL_PERSON";
+  });
+  if (!eligiblePersonIds.length) return UBO_DETERMINATION.INDETERMINATE;
   const assessments = chartAnalysis?.view?.qualifications || [];
-  const match = assessments.find(({ personEntityId }) => personIds.includes(personEntityId));
-  const effectiveBasis = (chartAnalysis?.view?.qualificationBases || []).find(({ personEntityId, route, dimension }) => personIds.includes(personEntityId) && route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
+  const match = assessments.find(({ personEntityId }) => eligiblePersonIds.includes(personEntityId));
+  const effectiveBasis = (chartAnalysis?.view?.qualificationBases || []).find(({ personEntityId, route, dimension }) => eligiblePersonIds.includes(personEntityId) && route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
   if (effectiveBasis?.assessmentState === "SATISFIED") return UBO_DETERMINATION.DEFINITE_UBO;
   if (effectiveBasis?.assessmentState === "NOT_SATISFIED") return UBO_DETERMINATION.DEFINITE_NON_UBO;
   if (["INDETERMINATE", "REVIEW_REQUIRED"].includes(effectiveBasis?.assessmentState)) return UBO_DETERMINATION.INDETERMINATE;

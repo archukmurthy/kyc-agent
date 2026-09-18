@@ -9,7 +9,26 @@ const target = company("Target Limited");
 const row = (owner, value, status = "INDEPENDENTLY_VERIFIED") => ({ key: `${owner.entityId}:${target.entityId}`, status, researchFact: fact(owner, target, value), chartFact: fact(owner, target, value) });
 const question = (engine, type) => engine.questions.find((item) => engine.requirements.find((requirement) => requirement.id === item.factRequirementId)?.type === type);
 const answer = (questionRecord, value, answeredAt = "2026-09-17T11:00:00.000Z") => ({ [questionRecord.id]: { value, answeredAt, factRequirementId: questionRecord.factRequirementId, comparisonItemId: questionRecord.comparisonItemId } });
-const run = (input = {}) => evaluateOwnershipResolution({ now: "2026-09-17T10:00:00.000Z", customerEntityId: target.entityId, ...input });
+const directPersonAnalysis = (rows = []) => {
+  const naturalRows = rows.filter((item) => item.status === "INDEPENDENTLY_VERIFIED" && (item.chartFact?.subject || item.researchFact?.subject)?.entityType === "NATURAL_PERSON" && item.chartFact?.measurement?.type === "EXACT");
+  if (!naturalRows.length) return null;
+  const nodes = [{ entityId: target.entityId, primaryName: target.name, category: "LEGAL_ENTITY" }];
+  const relationships = [];
+  const qualificationBases = [];
+  const qualifications = [];
+  const entityLabels = { [target.entityId]: target.name };
+  naturalRows.forEach((item) => {
+    const subject = item.chartFact?.subject || item.researchFact?.subject;
+    const value = Number((item.chartFact?.measurement?.type === "EXACT" ? item.chartFact.measurement.value : item.researchFact?.measurement?.value) || 0);
+    nodes.push({ entityId: subject.entityId, primaryName: subject.name, category: "NATURAL_PERSON" });
+    entityLabels[subject.entityId] = subject.name;
+    relationships.push({ relationshipId: item.chartFact?.factId || item.key, subjectEntityId: subject.entityId, objectEntityId: target.entityId, measurement: { type: "EXACT", value } });
+    qualificationBases.push({ personEntityId: subject.entityId, route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: value >= 25 ? "SATISFIED" : "NOT_SATISFIED", threshold: { comparator: ">=", value: 25 }, recordedCalculation: { value: { type: "EXACT", value: String(value) } }, orderedPathReferences: [{ pathId: `${subject.entityId}:direct`, relationshipIds: [item.chartFact?.factId || item.key], contribution: { type: "EXACT", value: String(value) } }] });
+    qualifications.push({ personEntityId: subject.entityId, routeStatus: value >= 25 ? "ROUTE_SATISFIED" : "ROUTE_NOT_SATISFIED" });
+  });
+  return { entityLabels, view: { graph: { nodes, relationships }, qualificationBases, qualifications } };
+};
+const run = (input = {}) => evaluateOwnershipResolution({ now: "2026-09-17T10:00:00.000Z", customerEntityId: target.entityId, ...input, chartAnalysis: input.chartAnalysis === undefined ? directPersonAnalysis(input.comparisonRows) : input.chartAnalysis });
 const answerNomineeNo = (rows, input = {}) => {
   const first = run({ comparisonRows: rows, ...input });
   const nominee = question(first, FACT_REQUIREMENT_TYPE.CONFIRM_NOMINEE_ARRANGEMENT);
@@ -171,7 +190,7 @@ test("an unasked manual control topic is superseded when a later ownership answe
   const exact = question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE);
   const nominee = question(engine, FACT_REQUIREMENT_TYPE.CONFIRM_NOMINEE_ARRANGEMENT);
   const answers = { ...answer(nominee, "NO"), ...answer(exact, 40, "2026-09-17T11:00:00.000Z") };
-  engine = run({ comparisonRows: rows, answers, recalculations: { [rows[0].key]: { determination: "DEFINITE_UBO" } }, topicActivations: [activation] });
+  engine = run({ comparisonRows: rows, answers, recalculations: { [rows[0].key]: { chartAnalysis: directPersonAnalysis([{ ...rows[0], status: "INDEPENDENTLY_VERIFIED", chartFact: { ...rows[0].chartFact, measurement: { type: "EXACT", value: 40 } } }]) } }, topicActivations: [activation] });
   expect(question(engine, DISCOVERY_FACT_REQUIREMENT_TYPE.IDENTIFY_SIGNIFICANT_VOTING_RIGHT_HOLDER)).toBeUndefined();
   expect(engine.topicActivations[0].displayStatus).toBe("SUPERSEDED");
 });

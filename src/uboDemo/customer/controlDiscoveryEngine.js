@@ -114,18 +114,28 @@ function baseOwnershipSummary(base, comparisonRows) {
   const pendingEvidence = base.evidenceRequirements.some(({ status }) => status !== "SATISFIED");
   const unresolved = ownershipResolutions.some(({ resolutionStatus }) => resolutionStatus === "UNRESOLVED") || (!nominee || nominee.resolutionStatus === "UNRESOLVED");
   const review = ownershipResolutions.some(({ resolutionStatus }) => resolutionStatus === "REQUIRES_ANALYST_REVIEW") || nominee?.resolutionStatus === "REQUIRES_ANALYST_REVIEW";
-  const definite = ownershipResolutions.filter(({ uboImpact, comparisonItemId }) => {
-    if (uboImpact?.determination !== "DEFINITE_UBO") return false;
+  const definite = (base.personOwnershipAssessments || []).filter(({ partyType, determination }) => partyType === "NATURAL_PERSON" && determination === "DEFINITE_UBO").map((assessment) => ({
+    personId: assessment.personId,
+    personName: assessment.personName,
+    partyType: "NATURAL_PERSON",
+    bases: [UBO_BASIS.SHARE_OWNERSHIP],
+    determination: "DEFINITE_UBO",
+    idvRequired: true,
+    personOwnershipAssessmentId: assessment.assessmentId,
+  }));
+  const graph = base.chartAnalysis?.view?.graph;
+  const labels = base.chartAnalysis?.entityLabels || {};
+  const incomingTargets = new Set((graph?.relationships || []).map((edge) => edge.objectEntityId || edge.targetEntityId));
+  const pendingCorporateTraversal = !graph ? [] : ownershipResolutions.filter(({ comparisonItemId, holderPartyType }) => {
+    if (holderPartyType !== "LEGAL_ENTITY") return false;
     const row = comparisonRows.find(({ key }) => key === comparisonItemId);
     const subject = row?.chartFact?.subject || row?.researchFact?.subject;
-    return subject?.entityType === "NATURAL_PERSON";
-  }).map(({ comparisonItemId }) => {
-    const row = comparisonRows.find(({ key }) => key === comparisonItemId);
-    const subject = row?.chartFact?.subject || row?.researchFact?.subject;
-    return { personId: subject?.entityId || safe(subject?.name), personName: subject?.name, bases: [UBO_BASIS.SHARE_OWNERSHIP], determination: "DEFINITE_UBO", idvRequired: true };
+    const graphId = subject?.entityId || Object.entries(labels).find(([, label]) => String(label).trim().toUpperCase() === String(subject?.name || "").trim().toUpperCase())?.[0];
+    return !graphId || !incomingTargets.has(graphId);
   });
-  const status = pendingEvidence ? OWNERSHIP_RESOLUTION_STATUS.EVIDENCE_REQUIRED : review ? OWNERSHIP_RESOLUTION_STATUS.CONFLICTED : unresolved ? OWNERSHIP_RESOLUTION_STATUS.INDETERMINATE : OWNERSHIP_RESOLUTION_STATUS.COMPLETE;
-  return { status, naturalPersonUboCount: definite.length, ubos: definite };
+  const traversalIncomplete = pendingCorporateTraversal.length > 0;
+  const status = pendingEvidence ? OWNERSHIP_RESOLUTION_STATUS.EVIDENCE_REQUIRED : review ? OWNERSHIP_RESOLUTION_STATUS.CONFLICTED : unresolved || traversalIncomplete ? OWNERSHIP_RESOLUTION_STATUS.INDETERMINATE : OWNERSHIP_RESOLUTION_STATUS.COMPLETE;
+  return { status, naturalPersonUboCount: definite.length, ubos: definite, pendingCorporateTraversalCount: pendingCorporateTraversal.length };
 }
 
 function addBooleanRoute(requirements, type, stage, reason, originType, activations, prompt, explanation, targetEntityId) {
@@ -212,7 +222,7 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
       votingPercentageRequirements.forEach((item) => {
         const value = Number(answerFor(item, answers)?.value);
         if (!Number.isFinite(value)) return;
-        assessment.push({ personId: item.targetPersonId, personName: item.role, customerEntityId: targetEntityId, basis: UBO_BASIS.VOTING_RIGHTS, percentage: value, directness: "UNKNOWN", policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: "ASSERTED", outcome: value >= 25 ? CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO : CONTROL_ASSESSMENT_OUTCOME.NOT_CONTROL_UBO });
+        assessment.push({ personId: item.targetPersonId, personName: item.role, partyType: "NATURAL_PERSON", customerEntityId: targetEntityId, basis: UBO_BASIS.VOTING_RIGHTS, percentage: value, directness: "UNKNOWN", policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: "ASSERTED", outcome: value >= 25 ? CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO : CONTROL_ASSESSMENT_OUTCOME.NOT_CONTROL_UBO });
       });
       votingResolvedWithoutUbo = holderNames.length > 0
         && votingPercentageRequirements.length === holderNames.length
@@ -236,7 +246,7 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
       requirements.filter(({ type }) => type === TYPE.ESTABLISH_BOARD_CONTROL_RIGHT).forEach((item) => {
         const right = answerFor(item, answers)?.value;
         if (!right) return;
-        assessment.push({ personId: item.targetPersonId, personName: item.role, customerEntityId: targetEntityId, basis: UBO_BASIS.BOARD_CONTROL, controlRight: right, policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: right === "OTHER" ? "ANALYST_REVIEW" : "ASSERTED", outcome: right === "OTHER" ? CONTROL_ASSESSMENT_OUTCOME.INDETERMINATE : CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO });
+        assessment.push({ personId: item.targetPersonId, personName: item.role, partyType: "NATURAL_PERSON", customerEntityId: targetEntityId, basis: UBO_BASIS.BOARD_CONTROL, controlRight: right, policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: right === "OTHER" ? "ANALYST_REVIEW" : "ASSERTED", outcome: right === "OTHER" ? CONTROL_ASSESSMENT_OUTCOME.INDETERMINATE : CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO });
       });
     }
   }
@@ -258,7 +268,7 @@ function controlRequirements({ requirements, answers, activations, ownership, mo
         const influenceType = answerFor(item, answers)?.value;
         const explanation = requirements.find(({ type, targetPersonId }) => type === TYPE.EXPLAIN_SIGNIFICANT_INFLUENCE && targetPersonId === item.targetPersonId);
         if (!influenceType || !answerFor(explanation, answers)?.value) return;
-        assessment.push({ personId: item.targetPersonId, personName: item.role, customerEntityId: targetEntityId, basis: UBO_BASIS.SIGNIFICANT_INFLUENCE, controlType: influenceType, explanation: answerFor(explanation, answers).value, policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: "ANALYST_REVIEW", outcome: CONTROL_ASSESSMENT_OUTCOME.INDETERMINATE });
+        assessment.push({ personId: item.targetPersonId, personName: item.role, partyType: "NATURAL_PERSON", customerEntityId: targetEntityId, basis: UBO_BASIS.SIGNIFICANT_INFLUENCE, controlType: influenceType, explanation: answerFor(explanation, answers).value, policyId: "uk-ubo-control", policyVersion: "1.0", evidenceStatus: "ANALYST_REVIEW", outcome: CONTROL_ASSESSMENT_OUTCOME.INDETERMINATE });
       });
     }
   }
@@ -287,7 +297,7 @@ function seniorRequirements(requirements, answers, activations, ownership, contr
     const authority = requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName));
     const role = requirements.find(({ type, targetPersonId }) => type === TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE && targetPersonId === safe(personName));
     return Boolean(answerFor(authority, answers)?.value && answerFor(role, answers)?.value);
-  }).map((personName) => ({ personId: safe(personName), personName, role: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE && targetPersonId === safe(personName)), answers).value, authority: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName)), answers).value, entityId: targetEntityId, cddIdentityVerificationRequired: true }));
+  }).map((personName) => ({ personId: safe(personName), personName, partyType: "NATURAL_PERSON", role: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.IDENTIFY_SENIOR_MANAGEMENT_ROLE && targetPersonId === safe(personName)), answers).value, authority: answerFor(requirements.find(({ type, targetPersonId }) => type === TYPE.ESTABLISH_SENIOR_MANAGEMENT_AUTHORITY && targetPersonId === safe(personName)), answers).value, entityId: targetEntityId, cddIdentityVerificationRequired: true }));
   return {
     outcome: identified.length && identified.length === officials.length ? "FALLBACK_SENIOR_MANAGING_OFFICIAL_IDENTIFIED" : "FALLBACK_SENIOR_MANAGING_OFFICIAL_REQUIRED",
     people: identified,
@@ -302,8 +312,9 @@ function customRequirements(requirements, analystCustomerRequests, targetEntityI
 function mergeUboAssessments(ownership, control) {
   const people = new Map();
   [...ownership.ubos, ...control.assessments.filter(({ outcome }) => outcome === CONTROL_ASSESSMENT_OUTCOME.CONTROL_UBO)].forEach((item) => {
+    if ((item.partyType || "NATURAL_PERSON") !== "NATURAL_PERSON") return;
     const key = safe(item.personName || item.personId);
-    const existing = people.get(key) || { personId: key, personName: item.personName, determination: "DEFINITE_UBO", bases: [], idvRequired: true };
+    const existing = people.get(key) || { personId: item.personId || key, personName: item.personName, partyType: "NATURAL_PERSON", determination: "DEFINITE_UBO", bases: [], idvRequired: true };
     existing.bases = [...new Set([...existing.bases, ...(item.bases || [item.basis])])];
     people.set(key, existing);
   });
@@ -406,6 +417,7 @@ export function extendResolutionWithInvestigation({ base, comparisonRows = [], a
     openQuestions,
     evidenceRequirements: allEvidenceRequirements,
     ownershipResolution: ownership,
+    personOwnershipAssessments: base.personOwnershipAssessments || [],
     controlResolution: control,
     fallback,
     uboAssessments: mergeUboAssessments(ownership, control),

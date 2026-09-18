@@ -9,6 +9,9 @@ import {
   QUESTION_STATUS,
   RESOLUTION_STATUS,
   UBO_DETERMINATION,
+  personOwnershipAssessmentsFromChartAnalysis,
+  idvRequiredForSubject,
+  ownershipFactMateriality,
 } from "./ownershipResolutionEngine";
 
 const person = (name) => ({ name, entityType: "NATURAL_PERSON", jurisdiction: "GB" });
@@ -27,19 +30,40 @@ const question = (engine, type) => engine.questions.find((item) => engine.requir
 const answer = (questionRecord, value) => ({ [questionRecord.id]: { value, answeredAt: "2026-09-17T10:00:00.000Z" } });
 const evaluate = (input) => evaluateOwnershipResolution({ now: "2026-09-17T09:00:00.000Z", ...input });
 
+const chartAnalysis = ({ people = [{ id: "alice", name: "Alice Morgan", aggregate: 40, state: "SATISFIED", paths: [{ id: "alice-direct", relationshipIds: ["chart"], contribution: 40 }] }], extraNodes = [], extraRelationships = [] } = {}) => ({
+  calculationSemanticsVersion: "test-v1",
+  entityLabels: Object.fromEntries([...people.map(({ id, name }) => [id, name]), ["target", "Target Limited"], ...extraNodes.map(({ entityId, primaryName }) => [entityId, primaryName])]),
+  view: {
+    graph: {
+      nodes: [...people.map(({ id, name }) => ({ entityId: id, primaryName: name, category: "NATURAL_PERSON" })), { entityId: "target", primaryName: "Target Limited", category: "LEGAL_ENTITY" }, ...extraNodes],
+      relationships: [
+        ...people.flatMap(({ paths }) => paths.flatMap(({ edges, relationshipIds, contribution }) => edges || relationshipIds.map((relationshipId, index) => ({ relationshipId, subjectEntityId: index === 0 ? people.find(({ paths: candidatePaths }) => candidatePaths.some(({ relationshipIds: ids }) => ids.includes(relationshipId)))?.id : "holdco", objectEntityId: index === relationshipIds.length - 1 ? "target" : "holdco", measurement: { type: "EXACT", value: relationshipIds.length === 1 ? contribution : index === 0 ? 60 : 60 } })))),
+        ...extraRelationships,
+      ],
+    },
+    qualifications: people.map(({ id, state }) => ({ personEntityId: id, routeStatus: state === "SATISFIED" ? "ROUTE_SATISFIED" : state === "NOT_SATISFIED" ? "ROUTE_NOT_SATISFIED" : "ROUTE_INDETERMINATE" })),
+    qualificationBases: people.map(({ id, aggregate, state, paths }) => ({
+      personEntityId: id, route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: state,
+      policyId: "UK_UBO_POLICY_TEST", policyVersion: "1", threshold: { comparator: ">", value: 25 },
+      recordedCalculation: { value: { type: "EXACT", value: String(aggregate) } },
+      orderedPathReferences: paths.map(({ id: pathId, relationshipIds, contribution }) => ({ pathId, relationshipIds, contribution: { type: "EXACT", value: String(contribution) } })),
+    })),
+  },
+});
+
 test("independently verified comparisons create no ownership-resolution question", () => {
-  const engine = evaluate({ comparisonRows: [row("INDEPENDENTLY_VERIFIED", { type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })] });
+  const engine = evaluate({ comparisonRows: [row("INDEPENDENTLY_VERIFIED", { type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })], chartAnalysis: chartAnalysis() });
   expect(engine.requirements.some(({ comparisonItemId }) => comparisonItemId === "registry:chart")).toBe(false);
   expect(engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === "registry:chart")).toEqual(expect.objectContaining({
-    resolutionStatus: RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT,
-    uboImpact: { determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true },
+    resolutionStatus: RESOLUTION_STATUS.RESOLVED_INDEPENDENTLY_VERIFIED,
+    uboImpact: expect.objectContaining({ determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true, assessmentLevel: "PERSON_AGGREGATE" }),
   }));
 });
 
-test("a registry range that already proves UBO status avoids an exact-percentage question", () => {
+test("a qualifying edge does not suppress a material aggregate ownership question", () => {
   const engine = evaluate({ comparisonRows: [row("NEEDS_CONFIRMATION", { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })] });
-  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeUndefined();
-  expect(engine.resolutions[0].uboImpact).toEqual({ determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true });
+  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeDefined();
+  expect(engine.resolutions[0]?.uboImpact?.idvRequired).not.toBe(true);
 });
 
 test("a threshold-straddling range asks for exact ownership and closes that question after recalculation", () => {
@@ -48,22 +72,25 @@ test("a threshold-straddling range asks for exact ownership and closes that ques
   const exact = question(initial, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE);
   expect(exact.status).toBe(QUESTION_STATUS.OPEN);
 
-  const answered = evaluate({ comparisonRows: rows, answers: answer(exact, 18), recalculations: { "registry:chart": { determination: UBO_DETERMINATION.DEFINITE_NON_UBO } } });
+  const answered = evaluate({ comparisonRows: rows, answers: answer(exact, 18), recalculations: { "registry:chart": { chartAnalysis: chartAnalysis({ people: [{ id: "alice", name: "Alice Morgan", aggregate: 18, state: "NOT_SATISFIED", paths: [{ id: "alice-direct", relationshipIds: ["customer-resolution-fact:registry:chart"], contribution: 18 }] }] }) } } });
   expect(question(answered, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE).status).toBe(QUESTION_STATUS.RESOLVED);
   expect(answered.openQuestions).not.toContainEqual(expect.objectContaining({ id: exact.id }));
   expect(answered.resolutions[0]).toEqual(expect.objectContaining({
     resolutionStatus: RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED,
     ownershipEstablishment: "ESTABLISHED_CUSTOMER_DECLARATION",
-    uboImpact: { determination: UBO_DETERMINATION.DEFINITE_NON_UBO, idvRequired: false },
+    uboImpact: expect.objectContaining({ determination: UBO_DETERMINATION.DEFINITE_NON_UBO, idvRequired: false, assessmentLevel: "PERSON_AGGREGATE" }),
   }));
   expect(answered.resolutions[0].resultingFact.evidenceReferences[0]).toEqual(expect.objectContaining({ referenceType: "CUSTOMER_DECLARATION", system: "ubo-questions-resolution" }));
 });
 
-test("a later deterministic recalculation can supersede an exact-percentage question that no longer matters", () => {
+test("a deterministic aggregate calculation suppresses only an immaterial ownership question", () => {
   const rows = [row("NEEDS_CONFIRMATION", { type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })];
-  const engine = evaluate({ comparisonRows: rows, recalculations: { "registry:chart": { determination: UBO_DETERMINATION.DEFINITE_NON_UBO } } });
-  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE).status).toBe(QUESTION_STATUS.SUPERSEDED);
+  const analysis = chartAnalysis({ people: [{ id: "alice", name: "Alice Morgan", aggregate: 60, state: "SATISFIED", paths: [{ id: "certain", relationshipIds: ["certain-60"], contribution: 60 }, { id: "uncertain", relationshipIds: ["chart"], contribution: 10 }] }] });
+  expect(ownershipFactMateriality(rows[0], personOwnershipAssessmentsFromChartAnalysis(analysis), analysis)).toEqual(expect.objectContaining({ material: false }));
+  const engine = evaluate({ comparisonRows: rows, chartAnalysis: analysis });
+  expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeUndefined();
   expect(engine.openQuestions).not.toContainEqual(expect.objectContaining({ comparisonItemId: "registry:chart" }));
+  expect(engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === "registry:chart")).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.RESOLVED_NOT_MATERIAL_TO_UBO_OUTCOME, reason: expect.stringContaining("not independently verified") }));
 });
 
 test("a genuine discrepancy asks for an explanation before creating evidence work", () => {
@@ -230,4 +257,52 @@ test("range threshold classification preserves definite and indeterminate outcom
   expect(determineUboFromMeasurement({ type: "RANGE", lowerBound: 30, upperBound: 50, lowerInclusive: true, upperInclusive: true })).toBe(UBO_DETERMINATION.DEFINITE_UBO);
   expect(determineUboFromMeasurement({ type: "RANGE", lowerBound: 5, upperBound: 25, lowerInclusive: true, upperInclusive: false })).toBe(UBO_DETERMINATION.DEFINITE_NON_UBO);
   expect(determineUboFromMeasurement({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true })).toBe(UBO_DETERMINATION.INDETERMINATE);
+});
+
+test("a corporate owner above threshold remains an ownership link and never becomes an IDV subject", () => {
+  const holdco = company("Holding Limited");
+  const corporateRow = {
+    key: "holdco:target",
+    status: "INDEPENDENTLY_VERIFIED",
+    researchFact: fact("holdco-target-research", holdco, target, { type: "EXACT", value: 80 }, "registry"),
+    chartFact: fact("holdco-target", holdco, target, { type: "EXACT", value: 80 }, "chart"),
+  };
+  const analysis = {
+    entityLabels: { holdco: holdco.name, target: target.name },
+    view: { graph: { nodes: [{ entityId: "holdco", primaryName: holdco.name, category: "LEGAL_ENTITY" }, { entityId: "target", primaryName: target.name, category: "LEGAL_ENTITY" }], relationships: [{ relationshipId: "holdco-target", subjectEntityId: "holdco", objectEntityId: "target", measurement: { type: "EXACT", value: 80 } }] }, qualificationBases: [], qualifications: [] },
+  };
+  const engine = evaluate({ comparisonRows: [corporateRow], chartAnalysis: analysis });
+  const resolution = engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === corporateRow.key);
+  expect(resolution.ownershipLink).toEqual(expect.objectContaining({ outcome: "OWNERSHIP_THRESHOLD_EXCEEDED", qualifyingOwnershipInterest: true, continueOwnershipTraversal: true }));
+  expect(resolution.uboImpact).toEqual(expect.objectContaining({ assessmentLevel: "NOT_APPLICABLE_LEGAL_ENTITY", determination: null, idvRequired: false }));
+  expect(engine.uboAssessments).toHaveLength(0);
+  expect(idvRequiredForSubject({ partyType: "LEGAL_ENTITY", isUbo: true })).toBe(false);
+});
+
+test("person ownership is classified once from the aggregate of all recorded paths", () => {
+  const analysis = chartAnalysis({ people: [{ id: "alice", name: "Alice Morgan", aggregate: 26, state: "SATISFIED", paths: [{ id: "direct", relationshipIds: ["direct-10"], contribution: 10 }, { id: "indirect", relationshipIds: ["alice-holdco", "holdco-target"], contribution: 16 }] }], extraNodes: [{ entityId: "holdco", primaryName: "Holding Limited", category: "LEGAL_ENTITY" }] });
+  const assessments = personOwnershipAssessmentsFromChartAnalysis(analysis);
+  expect(assessments).toHaveLength(1);
+  expect(assessments[0]).toEqual(expect.objectContaining({ personName: "Alice Morgan", determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true, aggregateEffectiveOwnership: { type: "EXACT", value: "26" } }));
+  expect(assessments[0].ownershipPaths.map(({ effectiveOwnership }) => effectiveOwnership.value)).toEqual(["10", "16"]);
+});
+
+test("indirect corporate traversal produces a person aggregate UBO while the company remains non-IDV", () => {
+  const holdco = company("Holding Limited");
+  const jane = person("Jane Smith");
+  const rows = [
+    { key: "jane-holdco", status: "INDEPENDENTLY_VERIFIED", researchFact: fact("jane-holdco-r", jane, holdco, { type: "EXACT", value: 60 }, "registry"), chartFact: fact("jane-holdco", jane, holdco, { type: "EXACT", value: 60 }, "chart") },
+    { key: "holdco-target", status: "INDEPENDENTLY_VERIFIED", researchFact: fact("holdco-target-r", holdco, target, { type: "EXACT", value: 60 }, "registry"), chartFact: fact("holdco-target", holdco, target, { type: "EXACT", value: 60 }, "chart") },
+  ];
+  const analysis = {
+    entityLabels: { jane: jane.name, holdco: holdco.name, target: target.name },
+    view: {
+      graph: { nodes: [{ entityId: "jane", primaryName: jane.name, category: "NATURAL_PERSON" }, { entityId: "holdco", primaryName: holdco.name, category: "LEGAL_ENTITY" }, { entityId: "target", primaryName: target.name, category: "LEGAL_ENTITY" }], relationships: [{ relationshipId: "jane-holdco", subjectEntityId: "jane", objectEntityId: "holdco", measurement: { type: "EXACT", value: 60 } }, { relationshipId: "holdco-target", subjectEntityId: "holdco", objectEntityId: "target", measurement: { type: "EXACT", value: 60 } }] },
+      qualifications: [{ personEntityId: "jane", routeStatus: "ROUTE_SATISFIED" }],
+      qualificationBases: [{ personEntityId: "jane", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", threshold: { comparator: ">", value: 25 }, recordedCalculation: { value: { type: "EXACT", value: "36" } }, orderedPathReferences: [{ pathId: "jane-indirect", relationshipIds: ["jane-holdco", "holdco-target"], contribution: { type: "EXACT", value: "36" } }] }],
+    },
+  };
+  const engine = evaluate({ comparisonRows: rows, chartAnalysis: analysis });
+  expect(engine.personOwnershipAssessments[0]).toEqual(expect.objectContaining({ personName: "Jane Smith", determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true }));
+  expect(engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === "holdco-target").uboImpact).toEqual(expect.objectContaining({ determination: null, idvRequired: false }));
 });
