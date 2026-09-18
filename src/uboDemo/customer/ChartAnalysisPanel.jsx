@@ -24,7 +24,13 @@ function projectGraph(graph, scope, dimension) {
   const scoped = relationships.filter((edge) => scope === "FULL" || (relevant.has(sourceId(edge)) && relevant.has(targetId(edge))));
   const visibleRelationships = scoped.filter((edge) => dimension === "ALL" || dimensionOf(edge) === dimension);
   const visibleNodes = new Set([subjectEntityId, ...visibleRelationships.flatMap((edge) => [sourceId(edge), targetId(edge)])]);
-  return { ...graph, nodes: (graph.nodes || []).filter((node) => visibleNodes.has(node.entityId)), relationships: visibleRelationships };
+  const nodes = (graph.nodes || []).filter((node) => visibleNodes.has(node.entityId));
+  return {
+    ...graph,
+    nodes,
+    relationships: visibleRelationships,
+    summary: graph.summary ? { ...graph.summary, totalEntities: nodes.length, totalRelationships: visibleRelationships.length } : graph.summary,
+  };
 }
 
 function graphForChartPresentation(viewGraph, sourceProjection) {
@@ -54,7 +60,7 @@ function provisionalUboLabel(state, method) {
 
 export default function ChartAnalysisPanel({ analysis, method, onMethodChange, legacyProjection = null, sourceProjection = null, coverage = null, companyName = "the customer under review", afterGraph = null }) {
   const view = analysis?.view;
-  const [scope, setScope] = useState("RELEVANT");
+  const [scope, setScope] = useState("FULL");
   const [dimension, setDimension] = useState("ALL");
   const [calculationExpanded, setCalculationExpanded] = useState(true);
   const people = useMemo(() => calculationPeople(view, method, analysis?.entityLabels), [view, method, analysis?.entityLabels]);

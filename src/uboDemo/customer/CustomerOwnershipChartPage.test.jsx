@@ -178,7 +178,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(graphCard.compareDocumentPosition(chartAssertions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(chartAssertions.compareDocumentPosition(calculationCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(calculationCard.compareDocumentPosition(nextStepCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Full source graph" })).toBeChecked();
   expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
   expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();
   expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculations small" })).toBeInTheDocument();
@@ -392,6 +392,35 @@ test("graph filters preserve source-projection nodes and relationship endpoints"
   expect(projected.nodes.map(({ entityId }) => entityId)).toEqual(["alice", "customer"]);
   expect(projected.relationships).toHaveLength(1);
   expect(source.nodes).toHaveLength(2);
+});
+
+test("British Airways-style downstream source charts render in full by default with honest counts", () => {
+  const source = {
+    subject: { entityId: "british-airways", displayName: "British Airways PLC" },
+    summary: { totalEntities: 10, totalRelationships: 8 },
+    nodes: ["british-airways", "cargo", "digital", "northstar", "holdco", "owner-a", "owner-b", "owner-c", "owner-d", "owner-e"]
+      .map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "r1", sourceEntityId: "british-airways", targetEntityId: "cargo", dimension: "ECONOMIC" },
+      { relationshipId: "r2", sourceEntityId: "british-airways", targetEntityId: "digital", dimension: "ECONOMIC" },
+      { relationshipId: "r3", sourceEntityId: "owner-a", targetEntityId: "northstar", dimension: "ECONOMIC" },
+      { relationshipId: "r4", sourceEntityId: "owner-b", targetEntityId: "holdco", dimension: "ECONOMIC" },
+      { relationshipId: "r5", sourceEntityId: "owner-c", targetEntityId: "cargo", dimension: "VOTING" },
+      { relationshipId: "r6", sourceEntityId: "owner-d", targetEntityId: "digital", dimension: "CONTROL" },
+      { relationshipId: "r7", sourceEntityId: "northstar", targetEntityId: "holdco", dimension: "ECONOMIC" },
+      { relationshipId: "r8", sourceEntityId: "owner-e", targetEntityId: "holdco", dimension: "VOTING" },
+    ],
+  };
+
+  const full = projectGraph(source, "FULL", "ALL");
+  expect(full.nodes).toHaveLength(10);
+  expect(full.relationships).toHaveLength(8);
+  expect(full.summary).toEqual(expect.objectContaining({ totalEntities: 10, totalRelationships: 8 }));
+
+  const relevant = projectGraph(source, "RELEVANT", "ALL");
+  expect(relevant.nodes).toHaveLength(1);
+  expect(relevant.relationships).toHaveLength(0);
+  expect(relevant.summary).toEqual(expect.objectContaining({ totalEntities: 1, totalRelationships: 0 }));
 });
 
 test("chart presentation keeps the complete source graph when the operative engine graph contains only one safe edge", () => {
