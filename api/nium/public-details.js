@@ -17,6 +17,7 @@
  */
 
 const { fetchPublicDetails, NiumAPIError } = require("../../lib/niumClient");
+const { applyCors, requireAdmin } = require("../../lib/routeAuth");
 
 // TODO(step1-mapping): `type` and `region` are hardcoded to the verified
 // working preprod test values for now. They must be derived from the Step 1
@@ -26,6 +27,9 @@ const DEFAULT_TYPE = "PUBLIC_COMPANY";
 const DEFAULT_REGION = "GB";
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: this route had no credential check. It calls a paid third-party lookup, so an anonymous caller could spend our money.
+  if (!(await requireAdmin(req, res))) return undefined;
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }

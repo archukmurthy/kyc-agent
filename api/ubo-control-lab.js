@@ -1,6 +1,7 @@
 "use strict";
 
 const legacyDiscoveryHandler = require("./ubo-discovery");
+const { applyCors, requireAdmin } = require("../lib/routeAuth");
 const {
   applyCustomerAction,
   applyReviewerDecisions,
@@ -58,6 +59,9 @@ function send(res, status, payload) {
 }
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: this route had no credential check. It is an internal tool with no caller in the app.
+  if (!(await requireAdmin(req, res))) return undefined;
   if (req.method === "GET") return send(res, 200, fixtureCatalogue());
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
