@@ -49,27 +49,6 @@ function answerValue(question, raw) {
   return value;
 }
 function humanize(value) { return String(value || "").replaceAll("_", " ").toLowerCase(); }
-function statusLabel(status) {
-  return {
-    [RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED]: "Resolved by customer answer",
-    [RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED]: "Resolved with supporting evidence",
-    [RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT]: "Existing information sufficient",
-    [RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW]: "Analyst review required",
-    [RESOLUTION_STATUS.UNRESOLVED]: "Still being resolved",
-  }[status] || humanize(status);
-}
-
-function measurementLabel(measurement) {
-  if (!measurement || measurement.type === "UNKNOWN") return "Not established";
-  if (measurement.type === "EXACT") return `${measurement.value}%`;
-  if (measurement.type === "RANGE") {
-    const lower = measurement.lowerBound == null ? "0" : measurement.lowerBound;
-    const upper = measurement.upperBound == null ? "100" : measurement.upperBound;
-    return `${measurement.lowerInclusive === false ? "(" : "["}${lower}%, ${upper}%${measurement.upperInclusive === false ? ")" : "]"}`;
-  }
-  return humanize(measurement.type);
-}
-
 function evidenceUploadFailure(payload, responseStatus) {
   const code = String(payload?.code || "evidence_validation_failed");
   if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
@@ -236,69 +215,6 @@ function EvidenceRequest({ record, context, busy, message, retainedFile, retryAv
     {record.status !== EVIDENCE_STATUS.OPEN && <strong className="ubo-resolution-evidence-status">{humanize(record.status)}</strong>}
     {message && <p role="status">{message}</p>}
   </article>;
-}
-
-function AnalystTrace({ engine, rows }) {
-  const rowById = new Map(rows.map((row) => [row.key, row]));
-  return <details className="ubo-resolution-trace">
-    <summary>Analyst reasoning and traceability</summary>
-    {engine.topicActivations?.length > 0 && <div>{engine.topicActivations.map((topic) => <article key={topic.id}><h4>{humanize(topic.topicCode)}</h4><dl><dt>Origin</dt><dd>Analyst topic</dd><dt>Why activated</dt><dd>{topic.analystReason || topic.reason || "Selected by analyst"}</dd><dt>Status</dt><dd>{humanize(topic.displayStatus)}</dd></dl></article>)}</div>}
-    <div>{engine.resolutions.map((resolution) => {
-      const row = rowById.get(resolution.comparisonItemId);
-      const requirements = engine.requirements.filter((item) => item.comparisonItemId === resolution.comparisonItemId);
-      const questions = engine.questions.filter((item) => item.comparisonItemId === resolution.comparisonItemId);
-      const evidence = engine.evidenceRequirements.filter((item) => item.comparisonItemId === resolution.comparisonItemId);
-      return <article key={resolution.id}>
-        <h4>{row?.chartFact?.subject?.name || row?.researchFact?.subject?.name || "Nominee declaration"} → {row?.chartFact?.object?.name || row?.researchFact?.object?.name || "ownership structure"}</h4>
-        <dl>
-          <dt>Original comparison</dt><dd>{row?.status || "DECLARATION"} · {row?.detail || "Nominee arrangement check"}</dd>
-          <dt>Fact requirements</dt><dd>{requirements.map(({ type }) => type).join(", ") || "None"}</dd>
-          <dt>Question states</dt><dd>{questions.map(({ type, status }) => `${type}: ${status}`).join(", ") || "No question required"}</dd>
-          <dt>Evidence</dt><dd>{evidence.map(({ status }) => status).join(", ") || "Not required"}</dd>
-          <dt>Resulting fact</dt><dd>{resolution.resultingFact ? JSON.stringify(resolution.resultingFact) : "None"}</dd>
-          <dt>Ownership establishment</dt><dd>{resolution.ownershipEstablishment}</dd>
-          <dt>UBO impact</dt><dd>{resolution.uboImpact.determination} · IDV {resolution.uboImpact.idvRequired ? "required" : "not required"}</dd>
-          <dt>Resolution</dt><dd>{resolution.resolutionStatus}</dd>
-        </dl>
-      </article>;
-    })}</div>
-    {engine.controlResolution?.assessments?.length > 0 && <div>{engine.controlResolution.assessments.map((assessment) => <article key={`${assessment.personId}:${assessment.basis}`}><h4>{assessment.personName} · {humanize(assessment.basis)}</h4><dl><dt>Fact established</dt><dd>{assessment.percentage != null ? `${assessment.percentage}% voting rights` : assessment.controlRight || assessment.controlType}</dd><dt>Evidence</dt><dd>{humanize(assessment.evidenceStatus)}</dd><dt>UBO impact</dt><dd>{assessment.outcome} · IDV {assessment.outcome === "CONTROL_UBO" ? "required" : "not yet required"}</dd><dt>Policy</dt><dd>{assessment.policyId} · {assessment.policyVersion}</dd></dl></article>)}</div>}
-    {engine.fallback?.outcome && <article><h4>Senior managing official fallback</h4><dl><dt>Resolution</dt><dd>{humanize(engine.fallback.outcome)}</dd><dt>Why fallback was used</dt><dd>{engine.fallback.reason}</dd><dt>Earlier routes</dt><dd>{[...(engine.auditTrail?.ownershipRoutesAssessed || []), ...(engine.auditTrail?.controlRoutesAssessed || [])].map(humanize).join(", ")}</dd></dl></article>}
-  </details>;
-}
-
-function ResolutionOutcomes({ engine, rows }) {
-  const [open, setOpen] = useState(false);
-  const rowById = new Map(rows.map((row) => [row.key, row]));
-  const resolutions = engine.resolutions.filter(({ comparisonItemId }) => comparisonItemId !== "ownership-comparison:nominee-declaration");
-  if (!resolutions.length) return null;
-  return <details className="ubo-resolution-outcomes">
-    <summary onClick={() => setOpen((current) => !current)}><div><small>Assessment details</small><strong>How we reached the ownership results</strong></div><span>{resolutions.length} check{resolutions.length === 1 ? "" : "s"}</span></summary>
-    {open && <><p>These are recorded assessment outcomes, not additional requirements for you. Expand a check to see which information was sufficient and how it affected the ownership result.</p>
-    <div>{resolutions.map((resolution) => {
-      const row = rowById.get(resolution.comparisonItemId);
-      const sourceFact = resolution.resultingFact || row?.chartFact || row?.researchFact;
-      const shareholder = sourceFact?.subject?.name || row?.chartFact?.subject?.name || row?.researchFact?.subject?.name || "Ownership relationship";
-      const ownedEntity = sourceFact?.object?.name || row?.chartFact?.object?.name || row?.researchFact?.object?.name || "Company under review";
-      const evidenceRecords = engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId);
-      const sufficientReason = resolution.reason || row?.detail || (resolution.resolutionStatus === RESOLUTION_STATUS.RESOLVED_EXISTING_INFORMATION_SUFFICIENT
-        ? "The recorded ownership value was precise enough to determine whether this relationship crosses the configured ownership threshold, so no further customer question was required."
-        : "The available facts produced this recorded assessment outcome.");
-      return <details key={resolution.id} className={resolution.resolutionStatus.toLowerCase()}>
-        <summary><div><span>{statusLabel(resolution.resolutionStatus)}</span><strong>{shareholder} → {ownedEntity}</strong></div><small>{resolution.uboImpact.determination === "INDETERMINATE" ? "Further assessment required" : resolution.uboImpact.idvRequired ? "Ownership threshold met · identity verification required" : "Ownership threshold not met · identity verification not required"}</small></summary>
-        <dl>
-          <div><dt>Why this result was recorded</dt><dd>{sufficientReason}</dd></div>
-          {row?.chartFact && <div><dt>Customer ownership chart</dt><dd>{measurementLabel(row.chartFact.measurement)}</dd></div>}
-          {row?.researchFact && <div><dt>Independent information</dt><dd>{measurementLabel(row.researchFact.measurement)}</dd></div>}
-          {resolution.resultingFact?.measurement && <div><dt>Established current ownership</dt><dd>{measurementLabel(resolution.resultingFact.measurement)}</dd></div>}
-          {row?.descriptor && <div><dt>Comparison result</dt><dd>{row.descriptor}</dd></div>}
-          {evidenceRecords.length > 0 && <div><dt>Supporting evidence</dt><dd>{evidenceRecords.map(({ status }) => humanize(status)).join(", ")}</dd></div>}
-          <div><dt>Threshold outcome</dt><dd>{humanize(resolution.uboImpact.determination)}</dd></div>
-          <div><dt>Identity verification</dt><dd>{resolution.uboImpact.idvRequired ? "Required" : "Not required"}</dd></div>
-        </dl>
-      </details>;
-    })}</div></>}
-  </details>;
 }
 
 export default function OwnershipResolutionQuestions({ researchResult, result, company, context }) {

@@ -169,9 +169,9 @@ export function personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, thres
   const bases = (view.qualificationBases || graph.qualificationBasisRecords || []).filter(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
   return bases.map((basis) => {
     const node = nodes.get(basis.personEntityId) || {};
+    const qualification = qualifications.get(basis.personEntityId);
     const partyType = canonicalPartyType(node.category || node.partyType || node.entityType || node.profile?.partyType || (qualification ? "NATURAL_PERSON" : null));
     if (partyType !== "NATURAL_PERSON") return null;
-    const qualification = qualifications.get(basis.personEntityId);
     const determination = assessmentStateToDetermination(basis.assessmentState || qualification?.routeStatus);
     const policyThreshold = basis.threshold || { comparator: ">=", value: threshold, dimension: "ECONOMIC" };
     const ownershipPaths = (basis.orderedPathReferences || []).map((path) => {

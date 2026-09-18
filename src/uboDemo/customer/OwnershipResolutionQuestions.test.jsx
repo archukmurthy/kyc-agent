@@ -49,23 +49,13 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-test("verified ownership creates no question and explains the collapsed sufficient outcome", () => {
+test("verified ownership creates no customer question and keeps analyst assessment details off the customer page", () => {
   render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
   expect(screen.queryByText(/What percentage of Target Limited/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/Has the company's ownership changed/i)).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
-  const outcomes = screen.getByText("How we reached the ownership results").closest("details");
-  expect(outcomes).not.toHaveAttribute("open");
-  fireEvent.click(within(outcomes).getByText("How we reached the ownership results"));
-  expect(outcomes).toHaveAttribute("open");
-  const outcome = within(outcomes).getByText("Alice Morgan → Target Limited").closest("details");
-  expect(outcome).not.toHaveAttribute("open");
-  fireEvent.click(within(outcome).getByText("Alice Morgan → Target Limited"));
-  expect(outcome).toHaveAttribute("open");
-  expect(within(outcome).getByText(/independently sourced registry assertion matches the customer ownership value exactly/i)).toBeInTheDocument();
-  expect(within(outcome).getByText("Customer ownership chart")).toBeInTheDocument();
-  expect(within(outcome).getByText("Independent information")).toBeInTheDocument();
-  expect(within(outcome).getAllByText("40%")).toHaveLength(2);
+  expect(screen.queryByText("How we reached the ownership results")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Analyst reasoning and traceability/i)).not.toBeInTheDocument();
 });
 
 test("analyst topic and custom requests share the existing customer Questions experience", () => {
@@ -91,9 +81,8 @@ test("an unknown percentage is answered, re-evaluated by the existing endpoint a
   expect(screen.getByRole("heading", { name: "Answered questions" })).toBeInTheDocument();
   expect(screen.getByText("18%")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
-  const outcomes = screen.getByText("How we reached the ownership results").closest("details");
-  fireEvent.click(within(outcomes).getByText("How we reached the ownership results"));
-  expect(within(outcomes).getByText(/Ownership threshold not met · identity verification not required/i)).toBeInTheDocument();
+  expect(screen.queryByText("How we reached the ownership results")).not.toBeInTheDocument();
+  expect(screen.queryByText(/identity verification not required/i)).not.toBeInTheDocument();
 });
 
 test("an answered question can be edited without hiding an unanswered sibling", async () => {
@@ -174,14 +163,13 @@ test("a discrepancy asks for its cause before showing transfer-specific question
   expect(screen.getByText(/existing Evidence staging, extraction and validation path/i)).toBeInTheDocument();
 });
 
-test("an uncertain explanation routes to analyst review and creates no evidence request", () => {
+test("an uncertain explanation remains in answer history without exposing analyst review internals", () => {
   render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
   const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
   fireEvent.click(within(discrepancyQuestion).getByLabelText("I'm not sure"));
   fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
-  const outcomes = screen.getByText("How we reached the ownership results").closest("details");
-  fireEvent.click(within(outcomes).getByText("How we reached the ownership results"));
-  expect(within(outcomes).getByText("Analyst review required")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Answered questions" })).toBeInTheDocument();
+  expect(screen.queryByText("Analyst review required")).not.toBeInTheDocument();
   expect(screen.queryByText(/Choose supporting evidence/i)).not.toBeInTheDocument();
 });
 
