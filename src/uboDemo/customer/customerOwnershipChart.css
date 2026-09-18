@@ -312,6 +312,10 @@
 .ubo-resolution-ubo-results h3, .ubo-resolution-fallback h3 { margin: 0 0 10px; color: var(--ubo-customer-green-dark); font-size: 13px; text-transform: capitalize; }
 .ubo-resolution-ubo-results article { display: grid; gap: 3px; margin-top: 7px; padding: 10px; border-radius: 8px; background: white; font-size: 10px; }
 .ubo-resolution-ubo-results article span, .ubo-resolution-ubo-results article small, .ubo-resolution-fallback p { color: var(--ubo-customer-muted); font-size: 9px; }
+.ubo-resolution-ubo-results article > div { display: grid; gap: 4px; }
+.ubo-resolution-ubo-results article > button { justify-self: start; margin-top: 7px; padding: 8px 11px; border: 1px solid var(--ubo-customer-green); border-radius: 8px; background: white; color: var(--ubo-customer-green); font-size: 10px; font-weight: 800; cursor: pointer; }
+.ubo-resolution-ubo-results article.completed { border: 1px solid #a8d5c8; }
+.ubo-idv-completed { margin-top: 7px; color: var(--ubo-customer-green); font-size: 10px; }
 .ubo-resolution-fallback { border-color: #dfc46f; background: #fffaf0; }
 .ubo-resolution-fallback p { margin: 0; line-height: 1.5; }
 .ubo-resolution-trace { margin: 0 24px 22px; border-top: 1px solid var(--ubo-customer-border); color: var(--ubo-customer-muted); font-size: 9px; }
@@ -330,6 +334,7 @@
 .ubo-customer-next-step h2 { margin: 0; font-size: 18px; }
 .ubo-customer-next-step p { max-width: 610px; margin: 2px 0 0; color: var(--ubo-customer-muted); font-size: 10px; line-height: 1.5; }
 .ubo-customer-next-step .ubo-customer-primary { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; white-space: nowrap; }
+.ubo-customer-next-step .ubo-customer-primary:disabled { cursor: not-allowed; }
 .ubo-customer-questions-back { display: inline-flex; margin: -10px 0 18px; color: var(--ubo-customer-green); font-size: 10px; font-weight: 800; text-decoration: none; }
 .ubo-customer-empty { width: min(620px, calc(100% - 40px)); margin: 90px auto; padding: 48px; border: 1px solid var(--ubo-customer-border); border-radius: 18px; background: white; text-align: center; }
 .ubo-customer-empty > span { color: var(--ubo-customer-green); font-size: 10px; font-weight: 850; text-transform: uppercase; }

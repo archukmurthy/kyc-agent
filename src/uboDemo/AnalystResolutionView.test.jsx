@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import AnalystResolutionView from "./AnalystResolutionView";
+import { applyCurrentVerificationAssessment, completeIdentityVerification } from "./customer/verificationAssessment";
 
 const trace = {
   ownershipResolution: { status: "COMPLETE" },
@@ -45,4 +46,19 @@ test("Audit separates ownership facts from natural-person aggregate assessments"
   expect(screen.getByText(/20%/)).toBeInTheDocument();
   expect(screen.getAllByText(/80%/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/16%/).length).toBeGreaterThan(0);
+});
+
+test("Review and Audit consume the same completed verification assessment", () => {
+  const assessed = applyCurrentVerificationAssessment(trace, null, { finalized: true, now: "2026-09-19T09:00:00.000Z" });
+  const completed = completeIdentityVerification(assessed, "alice", "2026-09-19T09:30:00.000Z");
+  const shared = { demoCase: props.demoCase, result: { ownershipResolutionTrace: completed } };
+  const view = render(<AnalystResolutionView mode="REVIEW" {...shared} />);
+  expect(screen.getByRole("heading", { name: "Current ownership/control assessment" })).toBeInTheDocument();
+  expect(screen.getByText("1 of 1")).toBeInTheDocument();
+  expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
+  expect(screen.getByText(completed.verificationAssessment.assessmentVersionId)).toBeInTheDocument();
+  view.unmount();
+  render(<AnalystResolutionView mode="AUDIT" {...shared} />);
+  expect(screen.getByRole("heading", { name: "Assessment and identity-verification history" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "identity verification completed" })).toBeInTheDocument();
 });

@@ -40,6 +40,11 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   "src/uboDemo/customer/controlDiscoveryEngine.test.js",
   "src/uboDemo/customer/investigationTopics.test.js",
   "src/uboDemo/customer/OwnershipResolutionQuestions.test.jsx",
+  "src/uboDemo/customer/verificationAssessment.test.js",
+  "src/uboDemo/customer/idvSubjects.test.js",
+  "src/uboDemo/customer/CustomerIdvPage.test.jsx",
+  "src/uboDemo/customer/CustomerCompletePage.test.jsx",
+  "src/uboDemo/AnalystResolutionView.test.jsx",
   `--moduleNameMapper=${JSON.stringify({
     "^react$": "<rootDir>/node_modules/react",
     "^react-dom$": "<rootDir>/node_modules/react-dom",
