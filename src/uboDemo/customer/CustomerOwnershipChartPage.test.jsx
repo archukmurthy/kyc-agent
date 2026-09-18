@@ -165,7 +165,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(screen.getByRole("heading", { name: "How we understood your chart" })).toBeInTheDocument();
   expect(screen.getByTitle("Visualised ownership structure")).toBeInTheDocument();
   expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText(/Candidate fact · not a UBO conclusion/i)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "1 owner identified" })).not.toBeInTheDocument();
   const chartAssertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
   fireEvent.click(within(chartAssertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
@@ -173,10 +173,10 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   const certificationCard = screen.getByRole("heading", { name: "Certification found" }).closest("section");
   const graphCard = screen.getByRole("heading", { name: "How we understood your chart" }).closest("section");
   const calculationCard = screen.getByRole("heading", { name: "Calculation view" }).closest("section");
-  const ownersCard = screen.getByRole("heading", { name: "1 owner identified" }).closest("section");
+  const nextStepCard = screen.getByRole("heading", { name: "Continue to questions and resolution" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(graphCard.compareDocumentPosition(chartAssertions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(chartAssertions.compareDocumentPosition(ownersCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(chartAssertions.compareDocumentPosition(nextStepCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
   expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
   expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();
@@ -186,7 +186,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(screen.getByText("Provisional chart assessment")).toBeInTheDocument();
   expect(screen.queryByText(/Source assertion map/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/Calculation scope/i)).not.toBeInTheDocument();
-  [certificationCard, graphCard, calculationCard, ownersCard].forEach((card) => {
+  [certificationCard, graphCard, calculationCard].forEach((card) => {
     const collapse = within(card).getByRole("button", { name: "Collapse" });
     expect(collapse).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(collapse);

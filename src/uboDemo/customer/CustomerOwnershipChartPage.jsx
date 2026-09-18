@@ -134,6 +134,7 @@ function CertificationCard({ certification }) {
   </section>;
 }
 
+// eslint-disable-next-line no-unused-vars -- Temporarily retained while its render call remains commented out.
 function OwnersCard({ owners }) {
   const [expanded, setExpanded] = useState(true);
   return <section className="ubo-customer-card ubo-customer-result-card">
@@ -177,7 +178,8 @@ function Results({ result, researchResult, calculationMethod, onCalculationMetho
     <CertificationCard certification={result.certification} />
     <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} />
     <ChartAssertions result={result} />
-    <OwnersCard owners={result.owners || []} />
+    {/* Temporarily hidden: the owner-summary cards repeat information already available in the chart interpretation and assertions. */}
+    {/* <OwnersCard owners={result.owners || []} /> */}
     <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
     <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Ownership comparison complete</small><h2 id="ubo-customer-next-step-title">Continue to questions and resolution</h2><p>We’ll ask only for ownership or control information that still needs your input. Your chart and comparison will remain available on this step.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section>
     <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
