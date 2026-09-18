@@ -12,6 +12,7 @@ import {
   RESOLUTION_STATUS,
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
+import { applyCurrentVerificationAssessment, isReadyForIdentityVerification } from "./verificationAssessment";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 const SESSION_PREFIX = "ubo-demo.ownership-resolution.v1";
@@ -33,6 +34,13 @@ function saveSession(context, result, state) {
 function clearSession(context, result) {
   try { window.localStorage.removeItem(sessionKey(context, result)); }
   catch (_) { /* In-memory reset still works when browser-local persistence is unavailable. */ }
+}
+function readCurrentTrace(context) {
+  try {
+    const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+    if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId) return null;
+    return session.researchResult?.ownershipResolutionTrace || null;
+  } catch (_) { return null; }
 }
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -89,6 +97,40 @@ function resolutionContext(comparisonItemId, requirements, rows, company) {
     stageLabel,
     label: nominee ? `Nominee arrangement for ${companyName}` : stage === "CONTROL" ? `Control of ${companyName}` : stage === "FALLBACK" ? `Senior management of ${companyName}` : stage === "ADDITIONAL" ? `Additional information for ${companyName}` : holderName ? `${holderName} → ${companyName}` : `Ownership of ${companyName}`,
   };
+}
+
+function customerRecalculationPending(engine, recalculations) {
+  return engine.resolutions.some((resolution) => resolution.resultingFact?.qualifiers?.customerResolution === true
+    && (!recalculations[resolution.comparisonItemId]?.chartAnalysis || recalculations[resolution.comparisonItemId]?.error));
+}
+
+function resolutionTrace({ engine, rows, answers, previousTrace, recalculations, finalized = false, now = new Date().toISOString() }) {
+  const baseTrace = {
+    contractVersion: "ubo-investigation-trace-v2",
+    updatedAt: now,
+    policy: engine.policy,
+    ownershipResolution: engine.ownershipResolution,
+    controlResolution: { ...engine.controlResolution, assessments: engine.controlResolution?.assessments || [] },
+    fallback: engine.fallback,
+    personOwnershipAssessments: engine.personOwnershipAssessments,
+    uboAssessments: engine.uboAssessments,
+    auditTrail: engine.auditTrail,
+    ownershipFacts: engine.resolutions.map((resolution) => {
+      const row = rows.find(({ key }) => key === resolution.comparisonItemId);
+      return {
+        ...resolution,
+        originalComparison: row ? { status: row.status, detail: row.detail, descriptor: row.descriptor } : null,
+        customerAssertion: row?.chartFact || null,
+        independentAssertion: row?.researchFact || null,
+        factRequirements: engine.requirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
+        questions: engine.questions.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId).map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
+        evidence: engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
+      };
+    }),
+    questions: engine.questions.map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
+    evidence: engine.evidenceRequirements.map((item) => ({ ...item })),
+  };
+  return applyCurrentVerificationAssessment(baseTrace, previousTrace, { pendingRecalculation: customerRecalculationPending(engine, recalculations), finalized, now });
 }
 
 function answerLabel(question, answer) {
@@ -237,6 +279,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const customerEntityId = company?.registrationNumber || company?.legalName || "CUSTOMER_ENTITY";
   const ownershipContext = useMemo(() => ({ customerDocumentEffectiveDate: result?.certification?.certificationDate || null }), [result]);
   const engine = useMemo(() => evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current }), [rows, answers, evidence, recalculations, result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId]);
+  const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 
   useEffect(() => { saveSession(context, result, { createdAt: createdAt.current, answers, evidence, recalculations }); }, [answers, context, evidence, recalculations, result]);
   useEffect(() => {
@@ -247,29 +290,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       const nextResearch = {
         ...session.researchResult,
         investigationTopicActivations: (session.researchResult.investigationTopicActivations || []).map((item) => ({ ...item, ...(activationStatus.get(item.id) ? { displayStatus: activationStatus.get(item.id).displayStatus, statusReason: activationStatus.get(item.id).reason } : {}) })),
-        ownershipResolutionTrace: {
-          contractVersion: "ubo-investigation-trace-v1", updatedAt: new Date().toISOString(),
-          ownershipResolution: engine.ownershipResolution, controlResolution: { ...engine.controlResolution, assessments: engine.controlResolution?.assessments || [] },
-          fallback: engine.fallback, personOwnershipAssessments: engine.personOwnershipAssessments, uboAssessments: engine.uboAssessments, auditTrail: engine.auditTrail,
-          ownershipFacts: engine.resolutions.map((resolution) => {
-            const row = rows.find(({ key }) => key === resolution.comparisonItemId);
-            return {
-              ...resolution,
-              originalComparison: row ? { status: row.status, detail: row.detail, descriptor: row.descriptor } : null,
-              customerAssertion: row?.chartFact || null,
-              independentAssertion: row?.researchFact || null,
-              factRequirements: engine.requirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
-              questions: engine.questions.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId).map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
-              evidence: engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
-            };
-          }),
-          questions: engine.questions.map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
-          evidence: engine.evidenceRequirements.map((item) => ({ ...item })),
-        },
+        ownershipResolutionTrace: currentTrace,
       };
       window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: nextResearch }));
     } catch (_) { /* Customer questions remain usable when analyst trace persistence is unavailable. */ }
-  }, [answers, context?.demoCaseId, engine, rows]);
+  }, [context?.demoCaseId, currentTrace, engine.topicActivations]);
   useEffect(() => {
     const material = engine.resolutions.filter((resolution) => resolution.resultingFact?.type === "RELATIONSHIP" && resolution.resultingFact.relationship === "ECONOMIC_OWNERSHIP");
     if (!material.length) return;
@@ -399,10 +424,17 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     evidenceRecords: engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === group.comparisonItemId),
   }));
   const completed = engine.resolutions.filter(({ resolutionStatus }) => resolutionStatus !== RESOLUTION_STATUS.UNRESOLVED).length;
-  const questionsComplete = engine.openQuestions.length === 0
-    && pendingEvidence.length === 0
-    && engine.ownershipResolution?.status === "COMPLETE"
-    && (engine.uboAssessments?.length > 0 || engine.fallback?.outcome === "FALLBACK_SENIOR_MANAGING_OFFICIAL_IDENTIFIED");
+  const readyForIdv = isReadyForIdentityVerification(currentTrace);
+  const readinessMessage = currentTrace.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions to continue.";
+  const finalizeCurrentAssessment = () => {
+    const finalEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: new Date().toISOString() });
+    const finalTrace = resolutionTrace({ engine: finalEngine, rows, answers, previousTrace: readCurrentTrace(context), recalculations, finalized: true });
+    try {
+      const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+      if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return;
+      window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: finalTrace } }));
+    } catch (_) { /* The browser will continue to IDV, where the missing final state fails closed. */ }
+  };
   return <section className="ubo-customer-card ubo-resolution-engine">
     <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
     <p className="ubo-resolution-intro">We ask only for facts that remain relevant after comparing the registry research with your ownership chart. Ownership is resolved first; control and fallback questions appear progressively under the active policy.</p>
@@ -438,6 +470,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
-    {questionsComplete && <section className="ubo-customer-next-step"><div><small>Questions complete</small><h3>Continue to identity verification</h3><p>We have recalculated the final set of people who need identity verification.</p></div><a className="ubo-customer-primary" href={CUSTOMER_IDV_PATH}>Continue to IDV <span>→</span></a></section>}
+    <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p></div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>
   </section>;
 }

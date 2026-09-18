@@ -2,6 +2,8 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
+import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
+import { DISCOVERY_STATE } from "./verificationAssessment";
 
 const context = {
   demoCaseId: "case-questions",
@@ -24,6 +26,17 @@ function props(researchMeasurement, chartMeasurement) {
       artifact: { artifactId: "chart-artifact", capturedAt: "2026-09-17T09:00:00.000Z", integrityVerified: true },
       ubo: { operationEvidenceReferences: [], issues: [] },
       candidateFacts: [ownership("chart-fact", chartMeasurement, "chart-ref")],
+    },
+  };
+}
+
+function qualifyingChartAnalysis() {
+  return {
+    entityLabels: { alice: "Alice Morgan", target: "Target Limited" },
+    view: {
+      graph: { nodes: [{ entityId: "alice", primaryName: "Alice Morgan", category: "NATURAL_PERSON" }, { entityId: "target", primaryName: "Target Limited", category: "LEGAL_ENTITY" }], relationships: [{ relationshipId: "chart-fact", subjectEntityId: "alice", objectEntityId: "target", measurement: { type: "EXACT", value: 40 } }] },
+      qualifications: [{ personEntityId: "alice", routeStatus: "ROUTE_SATISFIED" }],
+      qualificationBases: [{ personEntityId: "alice", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", policyId: "UK_UBO_POLICY", policyVersion: "1", threshold: { comparator: ">", value: 25 }, recordedCalculation: { value: { type: "EXACT", value: "40" } }, orderedPathReferences: [{ pathId: "alice-direct", relationshipIds: ["chart-fact"], contribution: { type: "EXACT", value: "40" } }] }],
     },
   };
 }
@@ -56,6 +69,24 @@ test("verified ownership creates no customer question and keeps analyst assessme
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
   expect(screen.queryByText("How we reached the ownership results")).not.toBeInTheDocument();
   expect(screen.queryByText(/Analyst reasoning and traceability/i)).not.toBeInTheDocument();
+});
+
+test("Continue stays disabled until discovery is ready and finalizes the shared verification assessment", async () => {
+  const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
+  input.result.chartAnalysis = qualifyingChartAnalysis();
+  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase: { demoCaseId: context.demoCaseId, company: context.company }, researchResult: input.researchResult }));
+  render(<OwnershipResolutionQuestions {...input} />);
+  const continueButton = screen.getByRole("button", { name: /Continue to identity verification/i });
+  expect(continueButton).toBeDisabled();
+  const nominee = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(nominee).getByLabelText("No"));
+  fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
+  await waitFor(() => expect(continueButton).toBeEnabled());
+  fireEvent.submit(continueButton.closest("form"));
+  const trace = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace;
+  expect(trace.discoveryState).toBe(DISCOVERY_STATE.IDV_IN_PROGRESS);
+  expect(trace.verificationAssessment.finalized).toBe(true);
+  expect(trace.verificationPopulation).toEqual([expect.objectContaining({ personName: "Alice Morgan", verificationStatus: "NOT_STARTED" })]);
 });
 
 test("analyst topic and custom requests share the existing customer Questions experience", () => {
