@@ -367,3 +367,34 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What:** Several small inefficiencies in `api/research.js`'s request path: (1) it reads the tenant config from KV before validating the request body, so a malformed request still costs one KV read; (2) a preview analyst without a dossier credential shares the per-IP research rate-limit bucket with every other unauthenticated caller on that IP; (3) both a cache hit and a validation failure still count against the caller's research rate limit, even though neither spends an Anthropic call; (4) rate-limit caller identity trusts `x-forwarded-for`, which is only safe behind Vercel's own edge (spoofable if ever exposed elsewhere).
 - **Also:** the research cache key has no tenant config version, so after a schema publish, results cached under the old schema can be served for up to 30 days. Add `_version` to the key (or clear the tenant's rows on publish).
 - **Area:** `api/research.js`, `lib/rateLimit.js`, `lib/researchCache.js`.
+
+---
+
+## Process enforcement (working agreement — `docs/HOW-WE-BUILD.md`)
+
+These four make the working agreement enforced rather than remembered. Until
+they exist, every rule in that file depends on someone recalling it.
+
+### PROC-1 — `CLAUDE.md` rewritten as a true map of the system
+- **Category:** Process / Docs · **Priority:** P1 · **Status:** OPEN (agreed 2026-09-18)
+- **What:** `CLAUDE.md` still describes a single-file app with one serverless function and "no tests"; the repo is 660+ files with several suites. Every agent starts from a wrong map and burns turns rediscovering the truth. Rewrite it as boundaries and invariants only — where each concern lives, what there is exactly one of, the Guarded path list, what must never happen — plus a pointer to `docs/HOW-WE-BUILD.md`. Keep it one page; long maps rot.
+- **Why:** cheapest change in the programme — it pays back on every task afterwards.
+- **Area:** `CLAUDE.md`, optionally a short `api/CLAUDE.md`.
+
+### PROC-2 — Lint + covering tests run automatically after each edit
+- **Category:** Process / Tooling · **Priority:** P1 · **Status:** OPEN (agreed 2026-09-18)
+- **What:** a Claude Code hook that runs lint and the tests covering an edited file straight after the edit, so mistakes surface in seconds instead of at review. Needs a fast targeted test command (`test:fast`) alongside the existing full suite.
+- **Why:** removes a whole review → fix → re-review cycle for ordinary slips without weakening any gate.
+- **Area:** `.claude/settings.json` hooks, `package.json` scripts.
+
+### PROC-3 — Rule-tests that encode what reviewers currently check by eye
+- **Category:** Process / Security · **Priority:** P1 · **Status:** OPEN (agreed 2026-09-18)
+- **What:** executable invariants, starting with the route table Batch 0 needs anyway: every `api/` route declares who may call it; no route reads the tenant from the query string; nothing writes PII to browser storage; every new table carries a tenant column; no logging of whole request bodies. Then every `*.nodetest.js` is covered by a `package.json` glob, and every `process.env.X` appears in `.env.example`.
+- **Why:** each rule retires a class of human review permanently and catches what a tired reviewer misses — it raises the floor while removing work. Standing rule: every bug found adds one.
+- **Area:** `api/__tests__/`, `lib/__tests__/`, `package.json`.
+
+### PROC-4 — Automatic checks blocking a merge
+- **Category:** Process / CI · **Priority:** P1 · **Status:** OPEN (blocked on owner — repository settings)
+- **What:** no `.github/` exists. Add build, full test suite, lint, dependency scan and migration check on every pull request, with a red result blocking the merge. No secrets in the workflow.
+- **Why:** makes the "full suite before merge" rule compulsory instead of voluntary, and moves the waiting off session time.
+- **Area:** `.github/workflows/`, repository settings (owner).
