@@ -562,8 +562,8 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
         resolutionStatus = RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED;
         reason = "The customer supplied the missing ownership percentage and the UBO assessment was recalculated.";
       } else if (confirmationAnswer === "YES") {
-        determination = determineUboFromMeasurement(usableMeasurement(row), threshold);
-        if (determination === UBO_DETERMINATION.INDETERMINATE) {
+        const confirmationDetermination = determineUboFromMeasurement(usableMeasurement(row), threshold);
+        if (confirmationDetermination === UBO_DETERMINATION.INDETERMINATE) {
           resolutionStatus = RESOLUTION_STATUS.UNRESOLVED;
           reason = "Current shareholding was confirmed; the exact interest is still required.";
         } else {
