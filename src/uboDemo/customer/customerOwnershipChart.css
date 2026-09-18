@@ -86,6 +86,14 @@
 .ubo-customer-file-row > div strong { font-size: 12px; overflow-wrap: anywhere; }
 .ubo-customer-file-row > div small { color: var(--ubo-customer-muted); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .ubo-customer-file-row button, .ubo-customer-received button { border: 0; background: transparent; color: var(--ubo-customer-green); font-size: 11px; font-weight: 800; cursor: pointer; }
+.ubo-customer-received-actions { display: flex; align-items: center; gap: 15px; }
+.ubo-customer-chart-preview > header { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ubo-customer-border); }
+.ubo-customer-chart-preview h2 { margin: 4px 0 0; font-size: 16px; }
+.ubo-customer-chart-preview header button { padding: 8px 12px; border: 1px solid var(--ubo-customer-border); border-radius: 8px; background: white; color: var(--ubo-customer-green); font-size: 10px; font-weight: 800; cursor: pointer; }
+.ubo-customer-chart-preview iframe, .ubo-customer-chart-preview img { width: 100%; min-height: 620px; display: block; border: 0; background: #eef2f1; object-fit: contain; }
+.ubo-customer-chart-preview-unavailable { padding: 30px; text-align: center; }
+.ubo-customer-chart-preview-unavailable strong { font-size: 13px; }
+.ubo-customer-chart-preview-unavailable p { max-width: 580px; margin: 8px auto 0; color: var(--ubo-customer-muted); font-size: 11px; line-height: 1.55; }
 .ubo-customer-error { margin: 12px 0 0 !important; color: #aa2f2f !important; font-size: 11px !important; font-weight: 700; }
 .ubo-customer-upload-actions { margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .ubo-customer-upload-actions > small { color: var(--ubo-customer-muted); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: none; }
@@ -341,6 +349,8 @@
   .ubo-customer-company-actions { align-items: stretch; flex-direction: column; }
   .ubo-customer-cert-grid, .ubo-customer-owner-grid { grid-template-columns: 1fr; }
   .ubo-customer-upload-actions { align-items: stretch; flex-direction: column; }
+  .ubo-customer-received { align-items: start; flex-wrap: wrap; }
+  .ubo-customer-received-actions { width: 100%; justify-content: flex-end; }
   .ubo-customer-primary { width: 100%; }
   .ubo-customer-result-card > header { align-items: start; flex-direction: column; }
   .ubo-customer-heading-actions { width: 100%; justify-content: space-between; }

@@ -15,6 +15,7 @@ import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
 import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
+import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, writeCustomerOwnershipChartPreview } from "./customerOwnershipChartPreview";
 import "./customerOwnershipChart.css";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
@@ -153,10 +154,25 @@ function ChartAssertions({ result }) {
   return <section className="ubo-customer-card ubo-customer-assertions"><div className="ubo-demo-assertion-heading"><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong><span>{result.assertions?.length || 0} reduced assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-legacy-assertions" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>{expanded && <div id="ubo-customer-legacy-assertions"><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></div>}</section>;
 }
 
-function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice }) {
+function UploadedChartReceipt({ result, preview, onReplace }) {
+  const [showPreview, setShowPreview] = useState(false);
+  const previewSource = preview ? `data:${preview.mediaType};base64,${preview.contentBase64}` : null;
+  return <>
+    <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><div className="ubo-customer-received-actions"><button type="button" onClick={() => setShowPreview((value) => !value)}>{showPreview ? "Hide chart" : "View chart"}</button><button type="button" onClick={onReplace}>Replace chart</button></div></section>
+    {showPreview && <section className="ubo-customer-card ubo-customer-chart-preview" aria-label="Uploaded ownership chart preview">
+      <header><div><small>Uploaded ownership chart</small><h2>{result.artifact.originalFilename}</h2></div><button type="button" onClick={() => setShowPreview(false)}>Close preview</button></header>
+      {previewSource ? (preview.mediaType === "application/pdf"
+        ? <iframe src={previewSource} title={`Preview of ${preview.originalFilename}`} />
+        : <img src={previewSource} alt={`Preview of ${preview.originalFilename}`} />)
+        : <div className="ubo-customer-chart-preview-unavailable"><strong>The original file is not available in this browser tab.</strong><p>This result was restored from the saved structured extraction, which deliberately does not retain document bytes. Choose “Replace chart” and upload the file again to enable preview.</p></div>}
+    </section>}
+  </>;
+}
+
+function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice, preview }) {
   const coverage = chartSourceCoverage(result);
   return <div className="ubo-customer-results">
-    <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><button type="button" onClick={onReplace}>Replace chart</button></section>
+    <UploadedChartReceipt result={result} preview={preview} onReplace={onReplace} />
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
     <CertificationCard certification={result.certification} />
     <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} />
@@ -176,6 +192,7 @@ export default function CustomerOwnershipChartPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
+  const [preview, setPreview] = useState(() => customerOwnershipChartPreviewFor({ context, result: restored?.result }));
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || "EFFECTIVE_INTEREST");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
@@ -220,9 +237,10 @@ export default function CustomerOwnershipChartPage() {
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
-  const replace = () => { clearCustomerOwnershipChartSession(); setResult(null); setPersistenceNotice(null); remove(); };
+  const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); remove(); };
   const useSaved = (record) => {
     setResult(record.result);
+    setPreview(customerOwnershipChartPreviewFor({ context, result: record.result }));
     setCalculationMethod(record.calculationMethod || "EFFECTIVE_INTEREST");
     setPersistenceNotice({ kind: "success", message: "Saved extraction loaded from this browser. No provider call was made." });
     try { writeCustomerOwnershipChartSession({ context, result: record.result, calculationMethod: record.calculationMethod }); }
@@ -249,11 +267,13 @@ export default function CustomerOwnershipChartPage() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
       setResult(payload.result);
+      try { setPreview(writeCustomerOwnershipChartPreview({ context, result: payload.result, file, contentBase64 })); }
+      catch (_) { setPreview(null); }
       try {
         writeCustomerOwnershipChartSession({ context, result: payload.result });
         saveCustomerOwnershipChartExtraction({ context, result: payload.result });
         setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
-        setPersistenceNotice({ kind: "success", message: "Extraction saved in this browser for future no-cost replay. Document bytes were not retained." });
+        setPersistenceNotice({ kind: "success", message: "Extraction saved in this browser for future no-cost replay. The original file remains available for preview only in this browser tab." });
       } catch (saveError) {
         setPersistenceNotice({ kind: "warning", message: `Analysis completed, but the browser could not save this extraction: ${saveError.message || "local storage unavailable"}` });
       }
@@ -278,7 +298,7 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
   </div>;

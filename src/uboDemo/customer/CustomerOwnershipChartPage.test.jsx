@@ -83,6 +83,7 @@ function seed(overrides = {}) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   window.history.replaceState({}, "", CUSTOMER_OWNERSHIP_CHART_PATH);
   window.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ success: true, result: analysis }) }));
 });
@@ -156,6 +157,9 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(body.file.contentBase64).toBeTruthy();
   expect(body.demoContext.researchResult).toBeUndefined();
   expect(await screen.findByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "View chart" }));
+  expect(screen.getByRole("img", { name: "Preview of ownership-chart.png" })).toHaveAttribute("src", expect.stringMatching(/^data:image\/png;base64,/));
+  expect(screen.getByRole("button", { name: "Hide chart" })).toBeInTheDocument();
   expect(screen.getByText("Alex Palmer")).toBeInTheDocument();
   expect(screen.getByText(/Verification of this certification is still required/i)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "How we understood your chart" })).toBeInTheDocument();
@@ -190,6 +194,16 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("status")).toHaveTextContent(/saved in this browser for future no-cost replay/i);
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+});
+
+test("a restored structured extraction explains when the original chart bytes are unavailable", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+  render(<CustomerOwnershipChartPage />);
+  fireEvent.click(screen.getByRole("button", { name: "View chart" }));
+  expect(screen.getByText(/original file is not available in this browser tab/i)).toBeInTheDocument();
+  expect(screen.getByText(/upload the file again to enable preview/i)).toBeInTheDocument();
 });
 
 test("a saved same-company extraction can be replayed without a provider call", () => {
