@@ -119,7 +119,7 @@ PROC-1 to PROC-4 in `docs/BACKLOG.md`.
 
 | # | Tool | Status |
 | --- | --- | --- |
-| 1 | `CLAUDE.md` rewritten as a true map of the system | Not built |
+| 1 | `CLAUDE.md` rewritten as a true map of the system | Built (`23b875e`) |
 | 2 | Lint + covering tests run automatically after each edit | Not built |
 | 3 | Rule-tests (route table first, then one per bug class) | Not built |
 | 4 | Automatic checks on every pull request | Built (`.github/workflows/ci.yml`) |
