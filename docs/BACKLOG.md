@@ -394,7 +394,10 @@ they exist, every rule in that file depends on someone recalling it.
 - **Area:** `api/__tests__/`, `lib/__tests__/`, `package.json`.
 
 ### PROC-4 — Automatic checks blocking a merge
-- **Category:** Process / CI · **Priority:** P1 · **Status:** OPEN (blocked on owner — repository settings)
+- **Category:** Process / CI · **Priority:** P1 · **Status:** PARTIAL (2026-09-18) — checks run, enforcement blocked on the GitHub plan
+- **Done:** `.github/workflows/ci.yml` runs the node suite, the IDV suite, the frontend suite and a production build on every pull request; green on run 35310296155 in 2m47s. A `main protection` ruleset requiring the `tests and build` check was created.
+- **Blocked:** GitHub does not enforce rulesets on a private repository owned by a personal account — "Your rulesets won't be enforced on this private repository until you move to GitHub Team organization account." The ruleset is saved and starts enforcing by itself once the repo moves to an organization on Team (~$4/user/month). Until then a red merge is prevented by agreement only, not by the platform.
+- **Note:** moving the repo to an organization is worth doing on its own merits — a company codebase owned by a personal account is a finding in investor technical due diligence (readiness plan 6.10).
 - **What:** no `.github/` exists. Add build, full test suite, lint, dependency scan and migration check on every pull request, with a red result blocking the merge. No secrets in the workflow.
 - **Why:** makes the "full suite before merge" rule compulsory instead of voluntary, and moves the waiting off session time.
 - **Area:** `.github/workflows/`, repository settings (owner).
