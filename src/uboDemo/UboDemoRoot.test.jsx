@@ -47,18 +47,21 @@ beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, 
 afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
-test("analyst journey progress exposes ownership, questions, review and audit", () => {
+test("analyst journey progress contains company, ownership research and analyst review only", () => {
   renderStart();
   const progress = screen.getByLabelText("Demo journey progress");
   expect(progress).toHaveTextContent("Company");
-  expect(progress).toHaveTextContent("Ownership");
-  expect(progress).toHaveTextContent("Questions");
+  expect(progress).toHaveTextContent("Ownership Research");
   expect(progress).toHaveTextContent("Analyst Review");
-  expect(progress).toHaveTextContent("Audit");
-  expect(within(progress).getAllByRole("listitem")).toHaveLength(5);
+  expect(progress).not.toHaveTextContent("Questions");
+  expect(progress).not.toHaveTextContent("Audit");
+  expect(within(progress).getAllByRole("listitem")).toHaveLength(3);
   expect(within(progress).getByText("Company")).toHaveClass("ubo-demo-progress-label");
-  expect(within(progress).getByText("Ownership")).toHaveClass("ubo-demo-progress-label");
+  expect(within(progress).getByText("Ownership Research")).toHaveClass("ubo-demo-progress-label");
   expect(within(progress).getByText("Analyst Review")).toHaveClass("ubo-demo-progress-label");
+  const auditLink = screen.getByRole("link", { name: "Open Audit" });
+  expect(auditLink).toHaveAttribute("href", DEMO_AUDIT_PATH);
+  expect(progress).not.toContainElement(auditLink);
 });
 test("analyst Review and Audit routes render the persisted customer resolution trace", () => {
   const demoCase = { demoCaseId: "review-case", company: { legalName: "Review Limited", registrationNumber: "123", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" }, analysisContext: {} };
@@ -67,10 +70,12 @@ test("analyst Review and Audit routes render the persisted customer resolution t
   window.history.replaceState({}, "", DEMO_REVIEW_PATH);
   const view = render(<UboDemoRoot />);
   expect(screen.getByRole("heading", { name: "Assessment Details" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open Audit" })).toBeInTheDocument();
   view.unmount();
   window.history.replaceState({}, "", DEMO_AUDIT_PATH);
   render(<UboDemoRoot />);
   expect(screen.getByRole("heading", { name: "Analyst reasoning and traceability" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open Audit" })).toHaveAttribute("aria-current", "page");
 });
 test("country, ownership type and effective ownership inspection use approved defaults", () => { renderStart(); expect(screen.getByLabelText(/Country of registration/)).toHaveValue("GB"); expect(screen.getByLabelText(/Ownership type/)).toHaveValue("PRIVATE_LIMITED"); expect(screen.getByRole("radio", { name: /Effective ownership/ })).toBeChecked(); });
 test("required fields are validated and case reference stays optional", () => { renderStart(); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); expect(screen.getByText("Enter the registered company name.")).toBeInTheDocument(); expect(screen.getByText("Enter the company registration number.")).toBeInTheDocument(); });

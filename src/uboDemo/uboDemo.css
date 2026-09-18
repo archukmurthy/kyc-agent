@@ -213,7 +213,12 @@
 .ubo-demo-summary dd { margin: 0; font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
 .ubo-demo-secondary { padding: 10px; }
 .ubo-demo-empty { text-align: center; }
-.ubo-demo-footer { padding: 24px; color: #78908f; font-size: 10px; text-align: center; }
+.ubo-demo-footer { padding: 32px 24px 24px; color: #78908f; font-size: 10px; text-align: center; }
+.ubo-demo-footer nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; font-size: 12px; }
+.ubo-demo-footer nav span { color: var(--ubo-demo-muted); }
+.ubo-demo-footer nav a { color: var(--ubo-demo-green); font-weight: 800; text-underline-offset: 3px; }
+.ubo-demo-footer nav a[aria-current="page"] { text-decoration-thickness: 2px; }
+.ubo-demo-footer small { font-size: inherit; }
 
 .ubo-demo-source { padding: 18px; display: flex; flex-wrap: wrap; gap: 14px 22px; border: 1px solid var(--ubo-demo-border); border-radius: 12px; }
 .ubo-demo-source legend { padding: 0 7px; font-size: 12px; font-weight: 800; }
