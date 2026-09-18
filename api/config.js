@@ -24,8 +24,8 @@
 const storage = require("../lib/storage");
 const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
-const { verifyPassword, verifyEnvBearer } = require("../lib/auth");
 const tenantRegistry = require("../lib/tenantRegistry");
+const adminAuth = require("../lib/adminAuth");
 const { PLATFORM_TENANT_IDS, entryIsProtected } = tenantRegistry;
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
@@ -39,34 +39,15 @@ function versionKey(tenant, version) {
   return `config:${tenant}:v${version}`;
 }
 
-function authKey(tid) {
-  return `tenant-auth:${tid}`;
-}
-
 // Authorize an admin write for a specific tenant. Two paths:
 //   1. tenant-auth:{tenant} hash matches the bearer token (the per-tenant
 //      password set by /super-admin or the auto-seeded Nium entry)
 //   2. Platform-tenant-only fallback: bearer token equals ADMIN_PASSWORD env
 //      var. Lets the first-ever publish succeed before the auto-seed runs.
-async function authorizeAdmin(tenant, token) {
-  if (!token) return false;
-  try {
-    const stored = await _deps.storage.get(authKey(tenant));
-    if (stored && verifyPassword(token, stored.passwordHash)) return true;
-  } catch (_) {}
-  // Platform tenants keep the env-password path so the very first publish
-  // works before the per-tenant auth entry is seeded.
-  //
-  // Deliberately NOT isProtectedTenant: that predicate fails CLOSED (an
-  // unreadable registry answers "protected"), which is right for the
-  // destructive guards below but catastrophic here — it would let the one
-  // shared ADMIN_PASSWORD authenticate as ANY tenant during a storage blip.
-  // PLATFORM_TENANT_IDS is static and storage-independent, so it cannot fail
-  // open into "yes".
-  if (PLATFORM_TENANT_IDS.includes(tenant)) {
-    if (verifyEnvBearer(token, "ADMIN_PASSWORD")) return true;
-  }
-  return false;
+function authorizeAdmin(tenant, token) {
+  // One implementation, in lib/adminAuth.js. The injected storage is passed
+  // through so this handler's tests keep controlling what the lookup sees.
+  return adminAuth.authorizeAdmin(tenant, token, { storage: _deps.storage });
 }
 
 // Seed a tenant that doesn't yet have a config. Only tenants that exist (a
