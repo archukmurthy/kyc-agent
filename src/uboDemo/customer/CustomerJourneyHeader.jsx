@@ -1,6 +1,6 @@
 import React from "react";
 
-const STEPS = ["Company", "Ownership", "Questions"];
+const STEPS = ["Company", "Ownership", "Questions", "IDV", "Complete"];
 
 export default function CustomerJourneyHeader({ currentStep }) {
   return <>

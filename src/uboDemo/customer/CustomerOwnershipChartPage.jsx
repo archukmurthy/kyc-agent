@@ -23,6 +23,11 @@ const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
 
+export function showCustomerOwnershipAnalysis(value = process.env.REACT_APP_SHOW_CUSTOMER_OWNERSHIP_ANALYSIS) {
+  if (value == null || value === "") return true;
+  return !["0", "false", "off", "no"].includes(String(value).trim().toLowerCase());
+}
+
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -170,18 +175,20 @@ function UploadedChartReceipt({ result, preview, onReplace }) {
   </>;
 }
 
-function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice, preview }) {
+function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice, preview, analysisVisible, onShowAnalysis }) {
   const coverage = chartSourceCoverage(result);
   return <div className="ubo-customer-results">
     <UploadedChartReceipt result={result} preview={preview} onReplace={onReplace} />
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
-    <CertificationCard certification={result.certification} />
-    <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} afterGraph={<ChartAssertions result={result} />} />
-    {/* Temporarily hidden: the owner-summary cards repeat information already available in the chart interpretation and assertions. */}
-    {/* <OwnersCard owners={result.owners || []} /> */}
-    <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
-    <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Ownership comparison complete</small><h2 id="ubo-customer-next-step-title">Continue to questions and resolution</h2><p>We’ll ask only for ownership or control information that still needs your input. Your chart and comparison will remain available on this step.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section>
-    <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
+    {!analysisVisible ? <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Ownership chart processed</small><h2 id="ubo-customer-next-step-title">Continue to questions</h2><p>The ownership comparison and deterministic calculations have completed in the background. We’ll ask only for information that still matters.</p></div><div className="ubo-customer-received-actions"><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a>{showCustomerOwnershipAnalysis() && <button type="button" onClick={onShowAnalysis}>View ownership analysis</button>}</div></section> : <>
+      <CertificationCard certification={result.certification} />
+      <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} afterGraph={<ChartAssertions result={result} />} />
+      {/* Temporarily hidden: the owner-summary cards repeat information already available in the chart interpretation and assertions. */}
+      {/* <OwnersCard owners={result.owners || []} /> */}
+      <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
+      <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Optional ownership analysis</small><h2 id="ubo-customer-next-step-title">Continue to questions</h2><p>This detailed analysis is informational and is not an approval gate.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section>
+      <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
+    </>}
   </div>;
 }
 
@@ -197,6 +204,7 @@ export default function CustomerOwnershipChartPage() {
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || "EFFECTIVE_INTEREST");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
+  const [analysisVisible, setAnalysisVisible] = useState(false);
   const reevaluationAttempts = useRef(new Set());
 
   useEffect(() => {
@@ -238,9 +246,10 @@ export default function CustomerOwnershipChartPage() {
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
-  const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); remove(); };
+  const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); setAnalysisVisible(false); remove(); };
   const useSaved = (record) => {
     setResult(record.result);
+    setAnalysisVisible(false);
     setPreview(customerOwnershipChartPreviewFor({ context, result: record.result }));
     setCalculationMethod(record.calculationMethod || "EFFECTIVE_INTEREST");
     setPersistenceNotice({ kind: "success", message: "Saved extraction loaded from this browser. No provider call was made." });
@@ -268,6 +277,7 @@ export default function CustomerOwnershipChartPage() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
       setResult(payload.result);
+      setAnalysisVisible(false);
       try { setPreview(writeCustomerOwnershipChartPreview({ context, result: payload.result, file, contentBase64 })); }
       catch (_) { setPreview(null); }
       try {
@@ -299,7 +309,7 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} analysisVisible={analysisVisible} onShowAnalysis={() => setAnalysisVisible(true)} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
   </div>;

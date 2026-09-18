@@ -45,7 +45,9 @@ test("the third customer step restores the processed chart into the existing que
   expect(screen.getByRole("heading", { name: /Resolve the remaining ownership and control questions/i })).toBeInTheDocument();
   expect(screen.getByText("Questions & resolution")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Back to ownership comparison/i })).toHaveAttribute("href", CUSTOMER_OWNERSHIP_CHART_PATH);
+  expect(screen.queryByText(/Analyst reasoning and traceability/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Assessment details/i)).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Back to ownership chart/i })).toHaveAttribute("href", CUSTOMER_OWNERSHIP_CHART_PATH);
 });
 
 test("the questions route sends a customer without a processed chart back to ownership", () => {

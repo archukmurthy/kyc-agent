@@ -90,6 +90,10 @@ beforeEach(() => {
 
 afterEach(() => { jest.restoreAllMocks(); });
 
+function openOwnershipAnalysis() {
+  fireEvent.click(screen.getByRole("button", { name: /View ownership analysis/i }));
+}
+
 test("direct customer route renders from seeded company and case context", () => {
   seed();
   render(<CustomerOwnershipChartPage />);
@@ -113,7 +117,9 @@ test("processed ownership continues to the separate questions step", () => {
   render(<CustomerOwnershipChartPage />);
   expect(screen.queryByText("Questions & resolution")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Continue to questions/i })).toHaveAttribute("href", CUSTOMER_QUESTIONS_PATH);
-  expect(screen.getByRole("heading", { name: /Continue to questions and resolution/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /Continue to questions/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /View ownership analysis/i })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Calculation view" })).not.toBeInTheDocument();
 });
 
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
@@ -156,7 +162,9 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(body.file).toEqual(expect.objectContaining({ originalFilename: "ownership-chart.png", declaredMediaType: "image/png", sizeBytes: 12 }));
   expect(body.file.contentBase64).toBeTruthy();
   expect(body.demoContext.researchResult).toBeUndefined();
-  expect(await screen.findByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+  await screen.findByRole("button", { name: /View ownership analysis/i });
+  openOwnershipAnalysis();
+  expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "View chart" }));
   expect(screen.getByRole("img", { name: "Preview of ownership-chart.png" })).toHaveAttribute("src", expect.stringMatching(/^data:image\/png;base64,/));
   expect(screen.getByRole("button", { name: "Hide chart" })).toBeInTheDocument();
@@ -173,7 +181,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   const certificationCard = screen.getByRole("heading", { name: "Certification found" }).closest("section");
   const graphCard = screen.getByRole("heading", { name: "How we understood your chart" }).closest("section");
   const calculationCard = screen.getByRole("heading", { name: "Calculation view" }).closest("section");
-  const nextStepCard = screen.getByRole("heading", { name: "Continue to questions and resolution" }).closest("section");
+  const nextStepCard = screen.getByRole("heading", { name: "Continue to questions" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(graphCard.compareDocumentPosition(chartAssertions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(chartAssertions.compareDocumentPosition(calculationCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -220,6 +228,7 @@ test("a saved same-company extraction can be replayed without a provider call", 
 
   expect(window.fetch).not.toHaveBeenCalled();
   expect(screen.getByRole("status")).toHaveTextContent(/No provider call was made/i);
+  openOwnershipAnalysis();
   expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
 });
 
@@ -241,6 +250,7 @@ test("a stale saved calculation is re-evaluated through the current engine witho
 
   await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
   expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
+  openOwnershipAnalysis();
   expect(screen.getByText(/Recorded aggregate: 75%/i)).toBeInTheDocument();
   expect(screen.getByText(/75% = 75%/i)).toBeInTheDocument();
   expect(screen.getByText("Provisional UBO · qualifies")).toBeInTheDocument();
@@ -255,6 +265,7 @@ test("an unevaluated chart still lists its ownership steps instead of leaving th
   };
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: unevaluated });
   render(<CustomerOwnershipChartPage />);
+  openOwnershipAnalysis();
   expect(screen.getByText(/No effective-ownership result has been recorded yet/i)).toBeInTheDocument();
   expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculation-empty li strong" }).closest("li")).toHaveTextContent(/Better Comms VOIP Ltd: 75%/i);
 });
@@ -273,6 +284,7 @@ test("a disconnected Vodafone extraction remains inspectable but is explicitly m
   writeCustomerOwnershipChartSession({ context, result: incomplete });
 
   render(<CustomerOwnershipChartPage />);
+  openOwnershipAnalysis();
   expect(screen.getAllByRole("alert")).toHaveLength(1);
   expect(screen.getByRole("alert")).toHaveTextContent(/Incomplete ownership map/);
   expect(screen.getByRole("alert")).toHaveTextContent(/relationship chain does not reach Better Comms VOIP Ltd/i);
@@ -351,6 +363,7 @@ test("the result page offers read-only source comparison without open-question c
   seed();
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: analysis });
   render(<CustomerOwnershipChartPage />);
+  openOwnershipAnalysis();
   expect(screen.getByText(/Chart analysis remains provisional/i)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /No research result available to compare/i })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: /Open questions/i })).not.toBeInTheDocument();

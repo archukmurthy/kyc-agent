@@ -30,7 +30,7 @@ export default function CustomerQuestionsPage() {
     <main className="ubo-customer-main">
       <QuestionContext context={context} />
       <div className="ubo-customer-intro"><span>Step 3 · Questions</span><h1>Resolve the remaining ownership and control questions</h1><p>We’ll show only the questions and supporting evidence still needed after comparing your chart with the available independent information.</p></div>
-      <a className="ubo-customer-questions-back" href={CUSTOMER_OWNERSHIP_CHART_PATH}>← Back to ownership comparison</a>
+      <a className="ubo-customer-questions-back" href={CUSTOMER_OWNERSHIP_CHART_PATH}>← Back to ownership chart</a>
       <OwnershipResolutionQuestions researchResult={context.researchResult} result={chartSession.result} company={chartSession.result.company || context.company} context={context} />
     </main>
     <footer className="ubo-customer-footer">Demo experience · Browser-local result · Questions and resolution</footer>
