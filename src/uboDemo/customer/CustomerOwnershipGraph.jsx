@@ -26,7 +26,7 @@ export default function CustomerOwnershipGraph({ projection, entityLabels = {} }
       <div className="ubo-customer-heading-actions"><span>Ownership · Voting · Control</span><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-graph-content" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>
     </header>
     {expanded && <div id="ubo-customer-graph-content"><p className="ubo-customer-graph-intro">This visual uses the existing ownership-graph projection for the supported chart facts. Select an entity or relationship to inspect the recorded context.</p>
-      <iframe ref={frame} onLoad={send} title="Visualised ownership structure" src="/ubo-demo-graph.html" />
+      <iframe ref={frame} onLoad={send} title="Visualised ownership structure" src="/ubo-demo-graph.html?v=overview-1" />
       <p className="ubo-customer-graph-note">Candidate identity, currentness and UBO status have not been independently verified by this chart analysis.</p></div>}
   </section>;
 }

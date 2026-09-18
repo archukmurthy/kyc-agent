@@ -31,7 +31,11 @@ test("local demo start stages every graph iframe dependency from the approved so
 test("customer ownership chart opens with the complete extracted graph in view", () => {
   const root = path.resolve(__dirname, "..", "..");
   const graphDocument = fs.readFileSync(path.join(root, "public", "ubo-demo-graph.html"), "utf8");
+  const analystComposition = fs.readFileSync(path.join(root, "src", "uboDemo", "UboDemoRoot.jsx"), "utf8");
+  const customerComposition = fs.readFileSync(path.join(root, "src", "uboDemo", "customer", "CustomerOwnershipGraph.jsx"), "utf8");
 
   assert.match(graphDocument, /initialView:\s*"OVERVIEW"/);
   assert.doesNotMatch(graphDocument, /initialView:\s*"FIT_WIDTH"/);
+  assert.match(analystComposition, /src="\/ubo-demo-graph\.html\?v=overview-1"/);
+  assert.match(customerComposition, /src="\/ubo-demo-graph\.html\?v=overview-1"/);
 });

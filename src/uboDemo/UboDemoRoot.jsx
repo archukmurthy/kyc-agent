@@ -97,7 +97,7 @@ function GraphFrame({ projection, entityLabels, registryContexts, reviewPresenta
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [onSelectionChange]);
-  return <iframe ref={frame} onLoad={send} className="ubo-demo-graph-frame" title="Ownership structure" src="/ubo-demo-graph.html" />;
+  return <iframe ref={frame} onLoad={send} className="ubo-demo-graph-frame" title="Ownership structure" src="/ubo-demo-graph.html?v=overview-1" />;
 }
 
 function Assertions({ result }) {
