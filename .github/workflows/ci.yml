@@ -1,0 +1,72 @@
+name: ci
+
+# Runs on every pull request and on pushes to main.
+# No secrets are used or needed: the suites pass with ANTHROPIC_API_KEY and
+# DATABASE_URL unset, and must stay that way. A test that needs a real
+# credential belongs behind `npm run test:smoke:db`, which this does not run.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the local dev version. Changing it risks green here, red
+          # there - CRA 5 is sensitive to the Node major version.
+          node-version: 24
+          cache: npm
+
+      # See the note in the audit job: `npm ci` cannot be used until the
+      # lockfile is repaired on Linux (PROC-5).
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Node suite
+        run: npm run test:node
+
+      - name: IDV module suite
+        run: npm run idv:test
+
+      - name: Frontend suite
+        run: npx react-scripts test --watchAll=false
+        env:
+          CI: true
+
+      - name: Production build
+        run: npm run build
+
+  audit:
+    name: dependency scan (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Reports, never blocks: 44 known advisories are tracked as item 6.2 in
+    # docs/PRODUCTION-READINESS-PLAN.md. Drop continue-on-error once that lands,
+    # so new advisories start blocking merges.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the local dev version. Changing it risks green here, red
+          # there - CRA 5 is sensitive to the Node major version.
+          node-version: 24
+          cache: npm
+      # `npm ci` fails: package-lock.json is missing Linux-only transitive deps
+      # (@emnapi/*, pulled in by @napi-rs/wasm-runtime). Regenerating the lock on
+      # Windows does not add them. See PROC-5 in docs/BACKLOG.md - restore
+      # `npm ci` once the lock is regenerated on Linux.
+      - run: npm install --no-audit --no-fund
+      - run: npm audit --omit=dev

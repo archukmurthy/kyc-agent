@@ -1,0 +1,25 @@
+#!/bin/sh
+# Runs before every push. GitHub cannot enforce our merge gate on a private
+# personal repo (PROC-4), so this is the backstop: it catches an accidental
+# push of broken code from this machine.
+#
+# It is not a wall - `git push --no-verify` skips it, and it only protects
+# machines that have run:  git config core.hooksPath .githooks
+#
+# Fast suites always (~2s). The frontend suite (~60s) when src/ changed - and
+# also whenever the comparison cannot be resolved, which is the safe default.
+
+set -e
+
+echo "pre-push: node suites"
+npm run test:node --silent
+npm run idv:test --silent
+
+if git diff --quiet HEAD @{push} -- src 2>/dev/null; then
+  echo "pre-push: src/ unchanged, skipping frontend suite"
+else
+  echo "pre-push: frontend suite (src/ changed)"
+  CI=true npx react-scripts test --watchAll=false
+fi
+
+echo "pre-push: ok"
