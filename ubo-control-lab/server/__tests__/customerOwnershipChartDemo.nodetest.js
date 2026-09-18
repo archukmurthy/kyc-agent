@@ -341,6 +341,147 @@ test("Bettercomms subject punctuation variant maps to one customer node in sourc
   assert.equal(analysis.view.graph.relationships[0].objectEntityId, analysis.view.graph.subjectEntityId);
 });
 
+function canonicalParty(name, externalIdentifiers = []) {
+  return { name, entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers, sourcePartySnapshot: { description: name } };
+}
+
+function canonicalRelationship(factId, subject, object) {
+  return {
+    factId,
+    type: "RELATIONSHIP",
+    subject,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object,
+    measurement: { type: "EXACT", value: 100 },
+    qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "canonical-test-chart" }],
+  };
+}
+
+function canonicalGraph(facts, company = { legalName: "Customer Limited", registrationNumber: "CUSTOMER-1", countryCode: "GB" }) {
+  return buildSourceGraph(facts, company, { artifactId: "canonical-test-chart", digest: "canonical123", capturedAt: "2026-09-18T00:00:00.000Z" }, "canonical-test");
+}
+
+test("canonical legal-name equality reconciles British Airways PLC with BRITISHAIRWAYS PLC before projection", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("owner-to-customer", canonicalParty("Parent Aviation Ltd"), canonicalParty("BRITISHAIRWAYS PLC")),
+  ], { legalName: "British Airways PLC", registrationNumber: "01777777", countryCode: "GB" });
+
+  assert.equal(graph.nodes.length, 2);
+  assert.equal(graph.relationships[0].targetEntityId, graph.subject.entityId);
+  assert.equal(graph.nodes.filter(({ semantics }) => semantics.includes("SUBJECT")).length, 1);
+});
+
+test("configured legal-form equality reconciles ABC Holdings Ltd with ABC Holdings Limited", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("holdings-ltd", canonicalParty("ABC Holdings Ltd"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("holdings-limited", canonicalParty("ABC Holdings Limited"), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+  const [first, second] = graph.relationships;
+
+  assert.equal(first.sourceEntityId, second.sourceEntityId);
+  assert.equal(graph.nodes.filter(({ sourceAliases = [] }) => sourceAliases.some(({ name }) => name.startsWith("ABC Holdings"))).length, 1);
+});
+
+test("duplicate intermediate HoldCo names across Evidence relationships resolve once before nodes are created", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("owner-one-holdco", canonicalParty("Owner One Ltd"), canonicalParty("Intermediate HoldCo Ltd")),
+    canonicalRelationship("owner-two-holdco", canonicalParty("Owner Two Ltd"), canonicalParty("INTERMEDIATE HOLDCO LIMITED")),
+  ]);
+
+  assert.equal(graph.relationships[0].targetEntityId, graph.relationships[1].targetEntityId);
+  assert.equal(graph.nodes.filter(({ sourceAliases = [] }) => sourceAliases.some(({ name }) => /intermediate holdco/i.test(name))).length, 1);
+});
+
+test("the same company used as relationship target and source keeps one canonical endpoint", () => {
+  const facts = [
+    canonicalRelationship("parent-to-holdco", canonicalParty("Parent Ltd"), canonicalParty("Formatting HoldCo Ltd")),
+    canonicalRelationship("holdco-to-customer", canonicalParty("FORMATTING HOLDCO LIMITED"), canonicalParty("Customer Limited")),
+  ];
+  const graph = canonicalGraph(facts);
+
+  assert.equal(graph.relationships[0].targetEntityId, graph.relationships[1].sourceEntityId);
+  assert.equal(graph.relationships[1].targetEntityId, graph.subject.entityId);
+
+  const analysis = buildChartAnalysis({
+    candidateFacts: facts,
+    operationEvidenceReferences: [],
+    issues: [],
+    company: { legalName: "Customer Limited", registrationNumber: "CUSTOMER-1", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "canonical-test-chart", digest: "canonical123", capturedAt: "2026-09-18T00:00:00.000Z" },
+    requestId: "canonical-analysis-test",
+  });
+  const parentToHoldco = analysis.view.graph.relationships.find(({ supportingClaimIds }) => supportingClaimIds.some((claimId) => claimId.endsWith(":parent-to-holdco")));
+  const holdcoToCustomer = analysis.view.graph.relationships.find(({ supportingClaimIds }) => supportingClaimIds.some((claimId) => claimId.endsWith(":holdco-to-customer")));
+  assert.equal(parentToHoldco.objectEntityId, holdcoToCustomer.subjectEntityId);
+  assert.equal(holdcoToCustomer.objectEntityId, analysis.view.graph.subjectEntityId);
+});
+
+test("a trusted company identifier reconciles formatting-independent names before name equality", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("identified-one", canonicalParty("Legacy Name Ltd", [{ namespace: "COMPANY_NUMBER", value: "01234567", jurisdiction: "GB" }]), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("identified-two", canonicalParty("Renamed Company Plc", [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01234567", jurisdiction: "GB" }]), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+
+  assert.equal(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("conflicting trusted company identifiers prevent a same-name merge", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("identified-one", canonicalParty("Same Name Ltd", [{ namespace: "COMPANY_NUMBER", value: "11111111", jurisdiction: "GB" }]), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("identified-two", canonicalParty("SAME NAME LIMITED", [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "22222222", jurisdiction: "GB" }]), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("canonicalization does not merge ABC Holdings Ltd with ABC Trading Ltd", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("holdings", canonicalParty("ABC Holdings Ltd"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("trading", canonicalParty("ABC Trading Ltd"), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("canonicalization does not remove the meaningful Holdings token from ABC Holdings Ltd", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("abc", canonicalParty("ABC Ltd"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("abc-holdings", canonicalParty("ABC Holdings Ltd"), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("canonical nodes retain literal Evidence labels and endpoint provenance without mutating source facts", () => {
+  const facts = [
+    canonicalRelationship("parent-to-holdco", canonicalParty("Parent Ltd"), canonicalParty("Evidence HoldCo Ltd")),
+    canonicalRelationship("holdco-to-customer", canonicalParty("EVIDENCE HOLDCO LIMITED"), canonicalParty("Customer Limited")),
+  ];
+  const originalFacts = structuredClone(facts);
+  const graph = canonicalGraph(facts);
+  const holdco = graph.nodes.find(({ sourceAliases = [] }) => sourceAliases.some(({ name }) => name === "Evidence HoldCo Ltd"));
+
+  assert.ok(holdco);
+  assert.deepEqual(holdco.sourceAliases
+    .filter(({ provenance }) => provenance.source === "EVIDENCE")
+    .map(({ name, provenance }) => ({ name, factId: provenance.factId, endpointRole: provenance.endpointRole })), [
+    { name: "Evidence HoldCo Ltd", factId: "parent-to-holdco", endpointRole: "OBJECT" },
+    { name: "EVIDENCE HOLDCO LIMITED", factId: "holdco-to-customer", endpointRole: "SUBJECT" },
+  ]);
+  assert.deepEqual(facts, originalFacts);
+});
+
+test("person identity remains on the conservative non-legal-entity path", () => {
+  const person = (name) => ({ name, entityType: "NATURAL_PERSON", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: { description: name } });
+  const graph = canonicalGraph([
+    canonicalRelationship("alice-one", person("Alice Morgan"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("alice-two", person("Alice M. Morgan"), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
 test("a sibling subsidiary does not make a customer-connected Bettercomms chart incomplete", () => {
   const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "14605186", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
   const party = (name, entityType = "LEGAL_ENTITY") => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });

@@ -286,10 +286,11 @@ function normalizedGraphName(value) {
 }
 
 function graphCategory(party) {
-  if (["NATURAL_PERSON", "LEGAL_ENTITY", "TRUST_OR_LEGAL_ARRANGEMENT"].includes(party?.entityType)) {
-    return party.entityType;
-  }
-  return party?.entityType ? "OTHER" : "UNKNOWN";
+  const entityType = String(party?.entityType || party?.partyType || "").trim().toUpperCase();
+  if (entityType === "NATURAL_PERSON") return "NATURAL_PERSON";
+  if (["LEGAL_ENTITY", "COMPANY", "CORPORATE", "PUBLIC_COMPANY", "REGISTERED_ENTITY"].includes(entityType)) return "LEGAL_ENTITY";
+  if (entityType === "TRUST_OR_LEGAL_ARRANGEMENT") return entityType;
+  return entityType ? "OTHER" : "UNKNOWN";
 }
 
 function graphEntityId(party) {
@@ -303,30 +304,200 @@ function graphDimension(relationship) {
   return "CONTROL";
 }
 
+const TRUSTED_ENTITY_IDENTIFIER_NAMESPACE = /COMPANIES[_ -]?HOUSE|COMPANY[_ -]?(NUMBER|NO)|REGISTRY|LEI|LEGAL[_ -]?ENTITY[_ -]?IDENTIFIER/;
+
+function trustedEntityIdentifiers(party) {
+  const identifiers = [...(party?.externalIdentifiers || []), ...(party?.identifiers || [])];
+  return identifiers.flatMap((identifier) => {
+    const suppliedNamespace = String(identifier?.namespace || identifier?.scheme || identifier?.type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_");
+    const jurisdiction = String(identifier?.jurisdiction || party?.jurisdiction || "").trim().toUpperCase();
+    const namespace = /\bLEI\b|LEGAL_ENTITY_IDENTIFIER/.test(suppliedNamespace)
+      ? "LEI"
+      : (/COMPANIES_HOUSE/.test(suppliedNamespace)
+        ? "COMPANY_REGISTRATION_NUMBER:GB"
+        : (/COMPANY_(NUMBER|NO)|REGISTRY/.test(suppliedNamespace)
+          ? `COMPANY_REGISTRATION_NUMBER:${jurisdiction || "UNKNOWN"}`
+          : suppliedNamespace));
+    const value = String(identifier?.value || identifier?.id || identifier?.identifier || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "");
+    return namespace && value && TRUSTED_ENTITY_IDENTIFIER_NAMESPACE.test(suppliedNamespace)
+      ? [{ namespace, value, key: `${namespace}:${value}` }]
+      : [];
+  });
+}
+
+function identifierMapsConflict(left, right) {
+  const leftByNamespace = new Map(left.map(({ namespace, value }) => [namespace, value]));
+  return right.some(({ namespace, value }) => leftByNamespace.has(namespace) && leftByNamespace.get(namespace) !== value);
+}
+
+function canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityIdOverride = null) {
+  const companyParty = {
+    entityType: "LEGAL_ENTITY",
+    name: company.legalName,
+    jurisdiction: company.countryCode,
+    externalIdentifiers: company.registrationNumber ? [{
+      namespace: "COMPANIES_HOUSE_COMPANY_NUMBER",
+      value: company.registrationNumber,
+      jurisdiction: company.countryCode,
+    }] : [],
+  };
+  const subjectNameKey = normalizedPartyName(company.legalName);
+  const endpoints = [{
+    party: companyParty,
+    occurrenceKey: "onboarding-subject",
+    factId: null,
+    endpointRole: "ONBOARDING_SUBJECT",
+    onboardingSubject: true,
+  }];
+
+  relationships.forEach((fact, index) => {
+    [["subject", "SUBJECT"], ["object", "OBJECT"]].forEach(([field, endpointRole]) => {
+      const party = fact[field];
+      const isKnownSubject = normalizedPartyName(party?.name) === subjectNameKey;
+      if (graphCategory(party) !== "LEGAL_ENTITY" && !isKnownSubject) return;
+      endpoints.push({
+        party,
+        occurrenceKey: `${index}:${field}`,
+        factId: fact.factId,
+        endpointRole,
+        onboardingSubject: false,
+      });
+    });
+  });
+
+  const parent = endpoints.map((_, index) => index);
+  const find = (index) => {
+    while (parent[index] !== index) {
+      parent[index] = parent[parent[index]];
+      index = parent[index];
+    }
+    return index;
+  };
+  const identifiersForRoot = (root) => endpoints.flatMap((endpoint, index) => (
+    find(index) === root ? trustedEntityIdentifiers(endpoint.party) : []
+  ));
+  const union = (leftIndex, rightIndex) => {
+    const leftRoot = find(leftIndex);
+    const rightRoot = find(rightIndex);
+    if (leftRoot === rightRoot) return true;
+    const leftIdentifiers = identifiersForRoot(leftRoot);
+    const rightIdentifiers = identifiersForRoot(rightRoot);
+    if (identifierMapsConflict(leftIdentifiers, rightIdentifiers) || identifierMapsConflict(rightIdentifiers, leftIdentifiers)) return false;
+    const leftIsSubject = endpoints.some((endpoint, index) => endpoint.onboardingSubject && find(index) === leftRoot);
+    const rightIsSubject = endpoints.some((endpoint, index) => endpoint.onboardingSubject && find(index) === rightRoot);
+    if (rightIsSubject && !leftIsSubject) parent[leftRoot] = rightRoot;
+    else parent[rightRoot] = leftRoot;
+    return true;
+  };
+
+  const indexByTrustedIdentifier = new Map();
+  endpoints.forEach((endpoint, index) => {
+    trustedEntityIdentifiers(endpoint.party).forEach(({ key }) => {
+      if (indexByTrustedIdentifier.has(key)) union(indexByTrustedIdentifier.get(key), index);
+      else indexByTrustedIdentifier.set(key, index);
+    });
+  });
+
+  endpoints.forEach((endpoint, index) => {
+    if (index > 0 && normalizedPartyName(endpoint.party?.name) === subjectNameKey) union(0, index);
+  });
+
+  const indexByCanonicalName = new Map();
+  endpoints.forEach((endpoint, index) => {
+    const nameKey = normalizedPartyName(endpoint.party?.name);
+    if (!nameKey) return;
+    if (indexByCanonicalName.has(nameKey)) union(indexByCanonicalName.get(nameKey), index);
+    else indexByCanonicalName.set(nameKey, index);
+  });
+
+  const groups = new Map();
+  endpoints.forEach((endpoint, index) => {
+    const root = find(index);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(endpoint);
+  });
+
+  const records = [];
+  const endpointIds = new Map();
+  groups.forEach((group) => {
+    const containsSubject = group.some(({ onboardingSubject }) => onboardingSubject);
+    const identifiers = [...new Map(group
+      .flatMap(({ party }) => trustedEntityIdentifiers(party))
+      .map((identifier) => [identifier.key, identifier])).values()]
+      .sort((left, right) => left.key.localeCompare(right.key));
+    const sourceEndpoints = group.filter(({ onboardingSubject }) => !onboardingSubject);
+    const representative = containsSubject
+      ? companyParty
+      : (sourceEndpoints.find(({ party }) => trustedEntityIdentifiers(party).length)?.party || sourceEndpoints[0]?.party || group[0].party);
+    const canonicalNameKey = normalizedPartyName(representative?.name);
+    const identitySeed = identifiers[0]?.key
+      || (containsSubject ? `ONBOARDING_SUBJECT:${String(company.countryCode || "").toUpperCase()}:${subjectNameKey}` : `LEGAL_NAME:${canonicalNameKey}`);
+    const entityId = containsSubject && subjectEntityIdOverride
+      ? subjectEntityIdOverride
+      : `source-entity:${createHash("sha256").update(`LEGAL_ENTITY|${identitySeed}`).digest("hex").slice(0, 20)}`;
+    const sourceAliases = group.map((endpoint) => ({
+      name: endpoint.party?.name || endpoint.party?.sourcePartySnapshot?.description || "Unknown party",
+      entityType: endpoint.party?.entityType || endpoint.party?.partyType || null,
+      jurisdiction: endpoint.party?.jurisdiction || null,
+      externalIdentifiers: structuredClone(endpoint.party?.externalIdentifiers || endpoint.party?.identifiers || []),
+      sourcePartySnapshot: structuredClone(endpoint.party?.sourcePartySnapshot || {}),
+      provenance: endpoint.onboardingSubject
+        ? { source: "ONBOARDING_CONTEXT" }
+        : { source: "EVIDENCE", factId: endpoint.factId, endpointRole: endpoint.endpointRole },
+    }));
+    const record = {
+      entityId,
+      displayName: containsSubject ? company.legalName : (representative?.name || representative?.sourcePartySnapshot?.description || "Unknown party"),
+      category: "LEGAL_ENTITY",
+      jurisdiction: containsSubject ? company.countryCode : (representative?.jurisdiction || null),
+      semantics: containsSubject ? ["SUBJECT"] : [],
+      sourceAliases,
+      canonicalResolution: {
+        priority: identifiers.length ? "TRUSTED_ENTITY_IDENTIFIER" : (containsSubject ? "ONBOARDING_ENTITY" : (sourceEndpoints.length > 1 ? "EXACT_CANONICAL_LEGAL_NAME" : "DISTINCT_ENTITY")),
+        canonicalNameKey,
+        trustedIdentifierKeys: identifiers.map(({ key }) => key),
+      },
+    };
+    records.push(record);
+    group.forEach(({ occurrenceKey }) => endpointIds.set(occurrenceKey, entityId));
+  });
+
+  return {
+    endpointIds,
+    records,
+    subjectEntityId: endpointIds.get("onboarding-subject"),
+  };
+}
+
 function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
-  const nodesById = new Map();
-  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
-  const isChartSubject = (party) => normalizedPartyName(party?.name) === normalizedPartyName(company.legalName);
+  const canonicalEntities = canonicalizeLegalEntityEndpoints(relationships, company);
+  const nodesById = new Map(canonicalEntities.records.map((record) => [record.entityId, record]));
   const addNode = (party, semantics = []) => {
-    const graphParty = isChartSubject(party) ? { ...party, ...companyParty } : party;
-    const name = graphParty?.name || graphParty?.sourcePartySnapshot?.description || "Unknown party";
-    const entityId = graphEntityId(graphParty);
+    const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
+    const entityId = graphEntityId(party);
     const current = nodesById.get(entityId);
     const nextSemantics = [...new Set([...(current?.semantics || []), ...semantics])];
     nodesById.set(entityId, {
       entityId,
       displayName: current?.displayName || name,
-      category: current?.category || graphCategory(graphParty),
-      jurisdiction: current?.jurisdiction || graphParty?.jurisdiction || null,
+      category: current?.category || graphCategory(party),
+      jurisdiction: current?.jurisdiction || party?.jurisdiction || null,
       semantics: nextSemantics,
     });
     return entityId;
   };
-  const subjectEntityId = addNode(companyParty, ["SUBJECT"]);
-  const projectedRelationships = relationships.map((fact) => {
-    const sourceEntityId = addNode(fact.subject, fact.subject?.entityType === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
-    const targetEntityId = addNode(fact.object, isChartSubject(fact.object) ? ["SUBJECT"] : []);
+  const subjectEntityId = canonicalEntities.subjectEntityId;
+  const projectedRelationships = relationships.map((fact, index) => {
+    const sourceEntityId = canonicalEntities.endpointIds.get(`${index}:subject`)
+      || addNode(fact.subject, graphCategory(fact.subject) === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
+    const targetEntityId = canonicalEntities.endpointIds.get(`${index}:object`) || addNode(fact.object);
     return {
       relationshipId: fact.factId,
       sourceEntityId,
@@ -458,7 +629,8 @@ function isExplicitTypedChartShareOwnership(fact, entityProfile) {
 }
 
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {
-  const subjectName = normalizedPartyName(company.legalName);
+  const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
+  const canonicalEntities = canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityId);
   const subjectParty = {
     name: company.legalName,
     entityType: entityProfile,
@@ -467,15 +639,19 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     sourcePartySnapshot: {},
     entityId: subjectEntityId,
   };
-  const mappedParty = (party) => {
-    if (normalizedPartyName(party?.name) === subjectName) return { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} };
+  const mappedParty = (party, occurrenceKey) => {
+    const canonicalEntityId = canonicalEntities.endpointIds.get(occurrenceKey);
+    if (canonicalEntityId === subjectEntityId) return { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} };
+    if (canonicalEntityId) return { ...party, entityId: canonicalEntityId };
     if (!party?.name || party.entityId) return party;
     const category = graphCategory(party);
     const identitySeed = `${category}|${String(party.jurisdiction || company.countryCode || "").toUpperCase()}|${normalizedPartyName(party.name)}`;
     return { ...party, entityId: `chart-party:${createHash("sha256").update(identitySeed).digest("hex").slice(0, 20)}` };
   };
+  let relationshipIndex = 0;
   return candidateFacts.map((fact) => {
     const cloned = structuredClone(fact);
+    const currentRelationshipIndex = cloned.type === "RELATIONSHIP" ? relationshipIndex++ : null;
     const sourceCurrentState = cloned.qualifiers?.currentState || "UNKNOWN";
     const useAsDepictedOwnership = cloned.type === "RELATIONSHIP"
       && cloned.relationship === "ECONOMIC_OWNERSHIP"
@@ -483,8 +659,8 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     const useExplicitTypedShareSemantics = isExplicitTypedChartShareOwnership(cloned, entityProfile);
     return {
       ...cloned,
-      ...(cloned.subject ? { subject: mappedParty(cloned.subject) } : {}),
-      ...(cloned.object ? { object: mappedParty(cloned.object) } : {}),
+      ...(cloned.subject ? { subject: mappedParty(cloned.subject, currentRelationshipIndex == null ? null : `${currentRelationshipIndex}:subject`) } : {}),
+      ...(cloned.object ? { object: mappedParty(cloned.object, currentRelationshipIndex == null ? null : `${currentRelationshipIndex}:object`) } : {}),
       ...((useAsDepictedOwnership || useExplicitTypedShareSemantics) ? { qualifiers: {
         ...(cloned.qualifiers || {}),
         ...(useAsDepictedOwnership ? {
