@@ -106,7 +106,11 @@ function entityTypeFromLegacy(type, metadata = {}) {
 }
 
 function partyFromLegacy(node, request, rootEntityId) {
-  if (String(node.id) === String(rootEntityId)) {
+  const sourceRegistration = node.registrationNumber ? String(node.registrationNumber).trim().toUpperCase() : null;
+  const requestedRegistration = registrationNumberFrom(request.subject);
+  const isRegisteredSubject = sourceRegistration && requestedRegistration
+    && sourceRegistration === String(requestedRegistration).trim().toUpperCase();
+  if (String(node.id) === String(rootEntityId) || isRegisteredSubject) {
     const party = cloneData(request.subject);
     const entityType = entityTypeFromLegacy(node.type, node.metadata);
     if (entityType) party.entityType = entityType;
@@ -135,6 +139,8 @@ function evidenceReferenceFromLegacy(evidence) {
   if (evidence.source) locator.source = String(evidence.source);
   if (evidence.sourceUrl) locator.sourceUrl = String(evidence.sourceUrl);
   if (evidence.publishedAt) locator.publishedAt = String(evidence.publishedAt);
+  if (evidence.fetchedAt) locator.retrievedAt = String(evidence.fetchedAt);
+  if (evidence.apiPath) locator.apiPath = String(evidence.apiPath);
   const reference = {
     system: "legacy-ubo-discovery",
     referenceType: evidence.sourceUrl ? "SOURCE_REFERENCE" : "LEGACY_SOURCE_REFERENCE",
@@ -175,13 +181,22 @@ function rangeFromNature(nature) {
   const match = normalized.match(/-(\d+(?:\.\d+)?)-to-(\d+(?:\.\d+)?)-percent(?:age)?(?:-limited-liability-partnership)?$/);
   if (!match) return null;
   const lowerBound = Number(match[1]);
+  const upperBound = Number(match[2]);
   return {
     type: PERCENTAGE_VALUE_TYPE.RANGE,
     lowerBound,
-    upperBound: Number(match[2]),
-    lowerInclusive: normalized.includes("surplus-assets") && lowerBound === 75,
+    upperBound,
+    lowerInclusive: lowerBound === 75 && upperBound === 100,
     upperInclusive: true,
   };
+}
+
+function normalizeCandidateFactSourceMeasurement(fact) {
+  if (!isPlainObject(fact) || !isPlainObject(fact.qualifiers)) return fact;
+  if (![RELATIONSHIP_TYPE.ECONOMIC_OWNERSHIP, RELATIONSHIP_TYPE.VOTING_RIGHTS].includes(fact.relationship)) return fact;
+  const sourceMeasurement = rangeFromNature(fact.qualifiers.sourceNatureOfControl);
+  if (!sourceMeasurement) return fact;
+  return { ...fact, measurement: sourceMeasurement };
 }
 
 function relationshipDescriptors(edge, evidenceItems, adapterIssues, sourceIndex) {
@@ -319,6 +334,28 @@ function translateLegacyResponse(request, body) {
   const candidateFacts = [];
   const candidateFactSignatures = new Set();
   let candidateLikeAssertions = 0;
+
+  (body.evidence || []).forEach((evidence, sourceIndex) => {
+    const assertion = evidence?.registryContextAssertion;
+    if (!isPlainObject(assertion) || !isPlainObject(assertion.subject) || !isPlainObject(assertion.value)) return;
+    const subject = partyFromLegacy(assertion.subject, request, body.ownershipGraph.rootEntityId);
+    const evidenceReference = evidenceReferenceFromLegacy(evidence);
+    if (!evidenceReference) return;
+    candidateLikeAssertions += 1;
+    const fact = {
+      factId: `${request.requestId}:legacy-registry-context:${sourceIndex}`,
+      type: CANDIDATE_FACT_TYPE.ENTITY_ATTRIBUTE,
+      subject,
+      attribute: "REGISTRY_CONTEXT",
+      value: cloneData(assertion.value),
+      evidenceReferences: [evidenceReference],
+    };
+    const signature = JSON.stringify({ subject: fact.subject, attribute: fact.attribute, value: fact.value, evidenceReferences: fact.evidenceReferences });
+    if (!candidateFactSignatures.has(signature)) {
+      candidateFactSignatures.add(signature);
+      candidateFacts.push(fact);
+    }
+  });
 
   body.ownershipGraph.edges.forEach((edge, sourceIndex) => {
     if (!isPlainObject(edge)) {
@@ -506,4 +543,5 @@ module.exports = Object.freeze({
   createHttpLegacyDiscoveryTransport,
   createLegacyDiscoveryAdapter,
   createLegacyDiscoveryComposition,
+  normalizeCandidateFactSourceMeasurement,
 });

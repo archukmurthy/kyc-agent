@@ -10,12 +10,14 @@ const {
   startFixture,
   startLive,
   startReplay,
+  validateDiscoveryReplayRecord,
 } = require("../ubo-control-lab/server/labEngine");
 const {
   applyReviewDecisions,
   catalogue: reviewCatalogue,
   changeReviewProfile,
   normalizedFixtureInput,
+  startDemoCalculationFixture,
   startReviewFixture,
   startReviewReplay,
 } = require("../ubo-control-lab/server/reviewLabEngine");
@@ -37,7 +39,7 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
-const { autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
+const { autoReviewDemoReplaySession, autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -50,6 +52,8 @@ const OPERATIONS = Object.freeze({
   START_REVIEW_FIXTURE: "START_REVIEW_FIXTURE",
   START_REVIEW_LIVE: "START_REVIEW_LIVE",
   START_DEMO_REVIEW_LIVE: "START_DEMO_REVIEW_LIVE",
+  START_DEMO_REVIEW_REPLAY: "START_DEMO_REVIEW_REPLAY",
+  START_DEMO_CALCULATION_FIXTURE: "START_DEMO_CALCULATION_FIXTURE",
   START_REVIEW_REPLAY: "START_REVIEW_REPLAY",
   APPLY_REVIEW_DECISIONS: "APPLY_REVIEW_DECISIONS",
   CHANGE_REVIEW_PROFILE: "CHANGE_REVIEW_PROFILE",
@@ -191,6 +195,13 @@ module.exports = async function handler(req, res) {
         return send(res, 200, startReviewFixture(input.payload));
       case OPERATIONS.START_REVIEW_REPLAY:
         return send(res, 200, startReviewReplay(input.payload));
+      case OPERATIONS.START_DEMO_REVIEW_REPLAY: {
+        const validated = validateDiscoveryReplayRecord(input.payload?.replayRecord);
+        const prepared = prepareDemoReplayRecord(validated);
+        const replay = startReviewReplay({ ...input.payload, replayRecord: prepared.replayRecord });
+        replay.demoProfileReconciliation = prepared.reconciliation;
+        return send(res, 200, autoReviewDemoReplaySession(replay));
+      }
       case OPERATIONS.START_REVIEW_LIVE: {
         return send(res, 200, await startSuccessorLive(input.payload));
       }
@@ -199,6 +210,8 @@ module.exports = async function handler(req, res) {
           demoProfileReconciliation: true,
           prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
         })));
+      case OPERATIONS.START_DEMO_CALCULATION_FIXTURE:
+        return send(res, 200, startDemoCalculationFixture(input.payload));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:
         return send(res, 200, applyReviewDecisions(input.payload));
       case OPERATIONS.CHANGE_REVIEW_PROFILE:

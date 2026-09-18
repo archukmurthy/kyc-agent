@@ -1,15 +1,17 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
-import { projectGraph } from "./ChartAnalysisPanel";
+import { graphForChartPresentation, projectGraph, provisionalUboLabel } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
+  CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
   readCustomerDemoContext,
+  saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
-import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
+import { CUSTOMER_OWNERSHIP_CHART_PATH, CUSTOMER_QUESTIONS_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
 
 const demoCase = {
   demoCaseId: "demo-customer-1",
@@ -25,6 +27,7 @@ const demoCase = {
 
 const analysis = {
   contractVersion: "ubo-demo-customer-ownership-chart-result-v1",
+  company: { ...demoCase.company },
   artifact: { artifactId: "artifact-1", originalFilename: "ownership-chart.png", mediaType: "image/png", sizeBytes: 2048, integrityVerified: true },
   certification: {
     status: "FOUND",
@@ -50,10 +53,17 @@ const analysis = {
     decision: { snapshotId: "source-1", snapshotHash: "sha256:abc", checkpoint: { type: "SOURCE_INTERPRETATION" }, orchestrationState: "SOURCE_INTERPRETATION_ONLY" },
     summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
   },
+  sourceCoverage: { state: "CONNECTED", sourceRelationshipCount: 1, subjectConnectedRelationshipCount: 1, disconnectedRelationshipIds: [] },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
+    calculationSemanticsVersion: "ubo-demo-chart-calculation-v2",
     state: "EVALUATED",
-    view: { graph: null, qualifications: [], qualificationBases: [] },
+    entityLabels: { "person-1": "Mitchell Fortescue", "company-1": "Better Comms VOIP Ltd" },
+    view: {
+      graph: null,
+      qualifications: [{ personEntityId: "person-1", routeStatus: "SATISFIED" }],
+      qualificationBases: [{ basisId: "effective-75", personEntityId: "person-1", route: "EFFECTIVE_INTEREST", dimension: "ECONOMIC", assessmentState: "SATISFIED", recordedCalculation: { value: { type: "EXACT", value: "75" } }, orderedPathReferences: [{ pathId: "direct-75", relationshipIds: ["fact-1"], contribution: { type: "EXACT", value: "75" } }] }],
+    },
   },
   candidateFacts: [{ factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Mitchell Fortescue", entityType: "NATURAL_PERSON" }, object: { name: "Better Holdco", entityType: "LEGAL_ENTITY" }, measurement: { type: "EXACT", value: 75 }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "artifact-1" }] }],
   owners: [{ name: "Mitchell Fortescue", partyType: "NATURAL_PERSON", relationshipLabel: "Economic ownership in Better Holdco", measurement: { type: "EXACT", value: 75 } }],
@@ -73,6 +83,7 @@ function seed(overrides = {}) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   window.history.replaceState({}, "", CUSTOMER_OWNERSHIP_CHART_PATH);
   window.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ success: true, result: analysis }) }));
 });
@@ -89,18 +100,33 @@ test("direct customer route renders from seeded company and case context", () =>
   expect(screen.getByText("CASE-42")).toBeInTheDocument();
   expect(screen.getByText(/certified chart can make verification quicker/i)).toBeInTheDocument();
   expect(screen.getByText("Ownership").closest("li")).toHaveClass("current");
+  expect(screen.getByText("Company")).toHaveClass("ubo-customer-progress-label");
+  expect(screen.getByText("Questions")).toHaveClass("ubo-customer-progress-label");
+  expect(screen.queryByText("Review")).not.toBeInTheDocument();
   expect(screen.queryByText("Research")).not.toBeInTheDocument();
 });
 
+test("processed ownership continues to the separate questions step", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.queryByText("Questions & resolution")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Continue to questions/i })).toHaveAttribute("href", CUSTOMER_QUESTIONS_PATH);
+  expect(screen.getByRole("heading", { name: /Continue to questions and resolution/i })).toBeInTheDocument();
+});
+
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
-  seed({ researchResult: { candidateSources: [{ requestId: "request-1", candidateFacts: [
+  seed({ researchResult: { analystCustomerRequests: [{ requestId: "request-need-1", informationNeedId: "need-1", title: "Trust status", question: "Whether a trust is present in the ownership chain." }], candidateSources: [{ requestId: "request-1", candidateFacts: [
     { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Alice" }, object: { name: "Target Ltd" }, measurement: { type: "EXACT", value: 10 }, evidenceReferences: [{ referenceId: "ref-1" }] },
     { factId: "fact-2", type: "RELATIONSHIP", relationship: "VOTING_RIGHTS", subject: { name: "Bob" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, evidenceReferences: [{ referenceId: "ref-2" }] },
   ] }] } });
   render(<CustomerOwnershipChartPage />);
-  expect(screen.getByText(/Registry assertions already available/i)).toBeInTheDocument();
-  expect(screen.getByText(/2 assertions · click to inspect/)).toBeInTheDocument();
-  fireEvent.click(screen.getByText(/Registry assertions already available/i));
+  expect(screen.queryByRole("heading", { name: "Questions to help complete this review" })).not.toBeInTheDocument();
+  const registryAssertions = screen.getByText(/Registry assertions already available/i).closest("section");
+  expect(within(registryAssertions).getByText(/2 assertions/)).toBeInTheDocument();
+  expect(within(registryAssertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(within(registryAssertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Alice → economic ownership → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("10%")).toBeInTheDocument();
   expect(screen.getByText(/Bob → voting rights → Target Ltd/i)).toBeInTheDocument();
@@ -112,7 +138,7 @@ test("the customer ownership step can inspect every registry assertion handed ov
 test("direct route fails closed when demo context has not been seeded", () => {
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: /Start with a demo company/i })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Enter company details/i })).toHaveAttribute("href", "/ubo-demo/");
+  expect(screen.getByRole("link", { name: /Enter company details/i })).toHaveAttribute("href", "/ubo-demo/customer/");
 });
 
 test("one uploaded chart is sent to the isolated Evidence demo endpoint and renders source-backed results", async () => {
@@ -131,19 +157,141 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   expect(body.file.contentBase64).toBeTruthy();
   expect(body.demoContext.researchResult).toBeUndefined();
   expect(await screen.findByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "View chart" }));
+  expect(screen.getByRole("img", { name: "Preview of ownership-chart.png" })).toHaveAttribute("src", expect.stringMatching(/^data:image\/png;base64,/));
+  expect(screen.getByRole("button", { name: "Hide chart" })).toBeInTheDocument();
   expect(screen.getByText("Alex Palmer")).toBeInTheDocument();
   expect(screen.getByText(/Verification of this certification is still required/i)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "How we understood your chart" })).toBeInTheDocument();
   expect(screen.getByTitle("Visualised ownership structure")).toBeInTheDocument();
-  expect(screen.getByText("Mitchell Fortescue")).toBeInTheDocument();
-  expect(screen.getByText(/Candidate fact · not a UBO conclusion/i)).toBeInTheDocument();
+  expect(screen.getAllByText("Mitchell Fortescue").length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByRole("heading", { name: "1 owner identified" })).not.toBeInTheDocument();
+  const chartAssertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
+  fireEvent.click(within(chartAssertions).getByRole("button", { name: "Expand" }));
   expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
   expect(screen.getByText(/not analyst-approved or independently verified/i)).toBeInTheDocument();
   const certificationCard = screen.getByRole("heading", { name: "Certification found" }).closest("section");
   const graphCard = screen.getByRole("heading", { name: "How we understood your chart" }).closest("section");
-  const ownersCard = screen.getByRole("heading", { name: "1 owner identified" }).closest("section");
+  const calculationCard = screen.getByRole("heading", { name: "Calculation view" }).closest("section");
+  const nextStepCard = screen.getByRole("heading", { name: "Continue to questions and resolution" }).closest("section");
   expect(certificationCard.compareDocumentPosition(graphCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(graphCard.compareDocumentPosition(ownersCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(graphCard.compareDocumentPosition(chartAssertions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(chartAssertions.compareDocumentPosition(calculationCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(calculationCard.compareDocumentPosition(nextStepCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("radio", { name: "Relevant to customer" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "All", exact: true })).toBeChecked();
+  expect(within(calculationCard).getByRole("radio", { name: /Effective ownership/ })).toBeChecked();
+  expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculations small" })).toBeInTheDocument();
+  expect(screen.getByText(/Mitchell Fortescue → Better Comms VOIP Ltd/)).toBeInTheDocument();
+  expect(calculationCard).not.toHaveTextContent(/person-1|chart-party:/i);
+  expect(screen.getByText("Provisional chart assessment")).toBeInTheDocument();
+  expect(screen.queryByText(/Source assertion map/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Calculation scope/i)).not.toBeInTheDocument();
+  [certificationCard, graphCard, calculationCard].forEach((card) => {
+    const collapse = within(card).getByRole("button", { name: "Collapse" });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(collapse);
+    expect(within(card).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
+  });
+  expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("status")).toHaveTextContent(/saved in this browser for future no-cost replay/i);
+  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+});
+
+test("a restored structured extraction explains when the original chart bytes are unavailable", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+  render(<CustomerOwnershipChartPage />);
+  fireEvent.click(screen.getByRole("button", { name: "View chart" }));
+  expect(screen.getByText(/original file is not available in this browser tab/i)).toBeInTheDocument();
+  expect(screen.getByText(/upload the file again to enable preview/i)).toBeInTheDocument();
+});
+
+test("a saved same-company extraction can be replayed without a provider call", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  saveCustomerOwnershipChartExtraction({ context, result: analysis });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
+  expect(screen.getByText(/original document bytes are not retained/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Use saved extraction — no provider call/i }));
+
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(screen.getByRole("status")).toHaveTextContent(/No provider call was made/i);
+  expect(screen.getByRole("heading", { name: "Certification found" })).toBeInTheDocument();
+});
+
+test("a stale saved calculation is re-evaluated through the current engine without uploading bytes", async () => {
+  seed();
+  const stale = {
+    ...analysis,
+    chartAnalysis: { ...analysis.chartAnalysis, calculationSemanticsVersion: "ubo-demo-chart-calculation-v1" },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    expect(body.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
+    expect(JSON.stringify(body)).not.toContain("contentBase64");
+    return { ok: true, json: async () => ({ success: true, result: analysis }) };
+  });
+
+  render(<CustomerOwnershipChartPage />);
+
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
+  expect(screen.getByText(/Recorded aggregate: 75%/i)).toBeInTheDocument();
+  expect(screen.getByText(/75% = 75%/i)).toBeInTheDocument();
+  expect(screen.getByText("Provisional UBO · qualifies")).toBeInTheDocument();
+});
+
+test("an unevaluated chart still lists its ownership steps instead of leaving the calculation panel blank", () => {
+  seed();
+  const unevaluated = {
+    ...analysis,
+    candidateFacts: [],
+    chartAnalysis: { ...analysis.chartAnalysis, view: { ...analysis.chartAnalysis.view, qualifications: [], qualificationBases: [] } },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: unevaluated });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByText(/No effective-ownership result has been recorded yet/i)).toBeInTheDocument();
+  expect(screen.getByText("Mitchell Fortescue", { selector: ".ubo-customer-calculation-empty li strong" }).closest("li")).toHaveTextContent(/Better Comms VOIP Ltd: 75%/i);
+});
+
+test("a disconnected Vodafone extraction remains inspectable but is explicitly marked incomplete", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  const incomplete = {
+    ...analysis,
+    sourceCoverage: undefined,
+    sourceGraph: {
+      ...analysis.sourceGraph,
+      relationships: [{ ...analysis.sourceGraph.relationships[0], targetEntityId: "disconnected-company" }],
+    },
+  };
+  writeCustomerOwnershipChartSession({ context, result: incomplete });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByRole("alert")).toHaveTextContent(/Incomplete ownership map/);
+  expect(screen.getByRole("alert")).toHaveTextContent(/relationship chain does not reach Better Comms VOIP Ltd/i);
+  const assertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
+  expect(screen.getByText(/Mitchell Fortescue → economic ownership/i)).toBeInTheDocument();
+});
+
+test("replacing a rendered chart preserves the saved extraction for no-cost replay", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  saveCustomerOwnershipChartExtraction({ context, result: analysis });
+  writeCustomerOwnershipChartSession({ context, result: analysis });
+
+  render(<CustomerOwnershipChartPage />);
+  fireEvent.click(screen.getByRole("button", { name: /Replace chart/i }));
+
+  expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
 
 test("invalid file types are rejected before any request", () => {
@@ -180,6 +328,25 @@ test("customer result refresh restore is case-bound and preserves an opaque rese
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.opaqueResearchReference).toEqual(context.opaqueResearchReference);
 });
 
+test("an active extraction from another company is never restored even when a reused case ID matches", () => {
+  seed();
+  const current = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({
+    context: {
+      ...current,
+      company: { ...current.company, legalName: "Old Company Limited", registrationNumber: "00999999" },
+    },
+    result: {
+      ...analysis,
+      company: { ...analysis.company, legalName: "Old Company Limited", registrationNumber: "00999999" },
+    },
+  });
+
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: /Upload your ownership chart/i })).toBeInTheDocument();
+  expect(screen.queryByText("ownership-chart.png")).not.toBeInTheDocument();
+});
+
 test("the result page offers read-only source comparison without open-question consumption or final decisioning", () => {
   seed();
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: analysis });
@@ -206,6 +373,12 @@ test("graph scope and relationship filters are presentation-only", () => {
   expect(graph.relationships).toHaveLength(4);
 });
 
+test("effective-ownership route states use clear provisional UBO labels", () => {
+  expect(provisionalUboLabel("SATISFIED", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · qualifies");
+  expect(provisionalUboLabel("NOT_SATISFIED", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · does not qualify");
+  expect(provisionalUboLabel("INDETERMINATE", "EFFECTIVE_INTEREST")).toBe("Provisional UBO · cannot determine");
+});
+
 test("graph filters preserve source-projection nodes and relationship endpoints", () => {
   const source = {
     subject: { entityId: "customer", displayName: "Customer Ltd" },
@@ -219,4 +392,23 @@ test("graph filters preserve source-projection nodes and relationship endpoints"
   expect(projected.nodes.map(({ entityId }) => entityId)).toEqual(["alice", "customer"]);
   expect(projected.relationships).toHaveLength(1);
   expect(source.nodes).toHaveLength(2);
+});
+
+test("chart presentation keeps the complete source graph when the operative engine graph contains only one safe edge", () => {
+  const operative = {
+    nodes: [{ entityId: "subject" }, { entityId: "direct-owner" }],
+    relationships: [{ relationshipId: "operative-1", sourceEntityId: "direct-owner", targetEntityId: "subject", dimension: "ECONOMIC" }],
+  };
+  const source = {
+    nodes: ["subject", "direct-owner", "holdco", "parent", "person"].map((entityId) => ({ entityId })),
+    relationships: [
+      { relationshipId: "source-1", sourceEntityId: "direct-owner", targetEntityId: "subject", dimension: "ECONOMIC" },
+      { relationshipId: "source-2", sourceEntityId: "holdco", targetEntityId: "direct-owner", dimension: "ECONOMIC" },
+      { relationshipId: "source-3", sourceEntityId: "parent", targetEntityId: "holdco", dimension: "ECONOMIC" },
+      { relationshipId: "source-4", sourceEntityId: "person", targetEntityId: "parent", dimension: "ECONOMIC" },
+    ],
+  };
+
+  expect(graphForChartPresentation(operative, source)).toBe(source);
+  expect(projectGraph(graphForChartPresentation(operative, source), "FULL", "ALL").relationships).toHaveLength(4);
 });

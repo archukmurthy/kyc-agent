@@ -22,6 +22,7 @@ const {
 } = require("../fixtures/bettercomms-source-reviewed.js");
 
 const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
+const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
 const MAX_BYTES = 3 * 1024 * 1024;
 const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -35,6 +36,24 @@ const CERTIFICATION_CONCEPTS = Object.freeze([
   ["certification_scope", "certification_scope", "Scope of the ownership chart certification"],
   ["certification_signature_presence", "certification_signature_presence", "Whether a visible signature or signature-like mark is stated or shown"],
 ]);
+const CHART_RELATIONSHIP_CONCEPTS = new Set([
+  "economic_ownership",
+  "voting_rights",
+  "appointment_rights",
+  "removal_rights",
+  "formal_control",
+  "significant_influence_or_control",
+]);
+
+function chartRequestedConcepts(requestedConcepts, company) {
+  return requestedConcepts.map((item) => {
+    if (!CHART_RELATIONSHIP_CONCEPTS.has(item.concept)) return item;
+    return {
+      ...item,
+      description: `${item.description}. Ownership-chart enumeration requirement: inspect every visible connector and arrow through every intermediate person or entity down to ${company.legalName}. Return one separate Fact and one typed_relationship row for each source-supported directed relationship. Preserve each exact percentage or range on its own connector. Never collapse several relationships into one array or omit intermediate layers. Do not infer a missing connector, direction, value or relationship type.`,
+    };
+  });
+}
 
 function demoError(code, message, statusCode = 400) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -287,25 +306,27 @@ function graphDimension(relationship) {
 function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
   const nodesById = new Map();
+  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
+  const isChartSubject = (party) => normalizedPartyName(party?.name) === normalizedPartyName(company.legalName);
   const addNode = (party, semantics = []) => {
-    const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
-    const entityId = graphEntityId(party);
+    const graphParty = isChartSubject(party) ? { ...party, ...companyParty } : party;
+    const name = graphParty?.name || graphParty?.sourcePartySnapshot?.description || "Unknown party";
+    const entityId = graphEntityId(graphParty);
     const current = nodesById.get(entityId);
     const nextSemantics = [...new Set([...(current?.semantics || []), ...semantics])];
     nodesById.set(entityId, {
       entityId,
       displayName: current?.displayName || name,
-      category: current?.category || graphCategory(party),
-      jurisdiction: current?.jurisdiction || party?.jurisdiction || null,
+      category: current?.category || graphCategory(graphParty),
+      jurisdiction: current?.jurisdiction || graphParty?.jurisdiction || null,
       semantics: nextSemantics,
     });
     return entityId;
   };
-  const companyParty = { entityType: "LEGAL_ENTITY", name: company.legalName, jurisdiction: company.countryCode };
   const subjectEntityId = addNode(companyParty, ["SUBJECT"]);
   const projectedRelationships = relationships.map((fact) => {
     const sourceEntityId = addNode(fact.subject, fact.subject?.entityType === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
-    const targetEntityId = addNode(fact.object, normalizedGraphName(fact.object?.name) === normalizedGraphName(company.legalName) ? ["SUBJECT"] : []);
+    const targetEntityId = addNode(fact.object, isChartSubject(fact.object) ? ["SUBJECT"] : []);
     return {
       relationshipId: fact.factId,
       sourceEntityId,
@@ -355,12 +376,85 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
   };
 }
 
+function sourceGraphCoverage(graph) {
+  const relationships = graph?.relationships || [];
+  const subjectEntityId = graph?.subject?.entityId || null;
+  if (!relationships.length) return {
+    state: "NO_RELATIONSHIPS",
+    sourceRelationshipCount: 0,
+    subjectConnectedRelationshipCount: 0,
+    disconnectedRelationshipIds: [],
+  };
+  const connectedNodes = new Set(subjectEntityId ? [subjectEntityId] : []);
+  const connectedRelationships = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      if (!connectedNodes.has(relationship.targetEntityId)) return;
+      connectedRelationships.add(relationship.relationshipId);
+      if (!connectedNodes.has(relationship.sourceEntityId)) {
+        connectedNodes.add(relationship.sourceEntityId);
+        changed = true;
+      }
+    });
+  }
+
+  // A chart can legitimately show another subsidiary of an entity that is on
+  // the customer's ownership path. Keep that source context in the full graph,
+  // but do not treat the downstream sibling branch as evidence that the chart
+  // failed to reach the customer.
+  const contextualNodes = new Set(connectedNodes);
+  const contextualRelationships = new Set(connectedRelationships);
+  changed = true;
+  while (changed) {
+    changed = false;
+    relationships.forEach((relationship) => {
+      if (!contextualNodes.has(relationship.sourceEntityId)) return;
+      contextualRelationships.add(relationship.relationshipId);
+      if (!contextualNodes.has(relationship.targetEntityId)) {
+        contextualNodes.add(relationship.targetEntityId);
+        changed = true;
+      }
+    });
+  }
+  const disconnectedRelationshipIds = relationships
+    .filter(({ relationshipId }) => !contextualRelationships.has(relationshipId))
+    .map(({ relationshipId }) => relationshipId);
+  return {
+    state: disconnectedRelationshipIds.length ? "REVIEW_REQUIRED" : "CONNECTED",
+    sourceRelationshipCount: relationships.length,
+    subjectConnectedRelationshipCount: connectedRelationships.size,
+    disconnectedRelationshipIds,
+  };
+}
+
 function chartEntityProfile(ownershipType) {
   return ["LLP", "PARTNERSHIP"].includes(String(ownershipType || "").toUpperCase()) ? "LLP" : "COMPANY";
 }
 
 function normalizedPartyName(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\bPUBLIC\s+LIMITED\s+COMPANY\b/g, "PLC")
+    .replace(/\bLIMITED\b/g, "LTD")
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
+function isExplicitTypedChartShareOwnership(fact, entityProfile) {
+  const qualifiers = fact?.qualifiers || {};
+  const evidenceValue = qualifiers.evidenceValue || {};
+  return entityProfile === "COMPANY"
+    && fact?.type === "RELATIONSHIP"
+    && fact.relationship === "ECONOMIC_OWNERSHIP"
+    && qualifiers.economicInterestConcept == null
+    && qualifiers.evidenceRelationshipType === "ECONOMIC_OWNERSHIP"
+    && evidenceValue.measurementType === "percentage"
+    && ["EXACT", "RANGE"].includes(fact.measurement?.type)
+    && Boolean(qualifiers.evidenceMapping?.method)
+    && qualifiers.evidenceSupportState === "supported";
 }
 
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {
@@ -373,12 +467,38 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     sourcePartySnapshot: {},
     entityId: subjectEntityId,
   };
-  const mappedParty = (party) => normalizedPartyName(party?.name) === subjectName ? { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} } : party;
-  return candidateFacts.map((fact) => ({
-    ...structuredClone(fact),
-    ...(fact.subject ? { subject: mappedParty(structuredClone(fact.subject)) } : {}),
-    ...(fact.object ? { object: mappedParty(structuredClone(fact.object)) } : {}),
-  }));
+  const mappedParty = (party) => {
+    if (normalizedPartyName(party?.name) === subjectName) return { ...party, ...subjectParty, sourcePartySnapshot: party.sourcePartySnapshot || {} };
+    if (!party?.name || party.entityId) return party;
+    const category = graphCategory(party);
+    const identitySeed = `${category}|${String(party.jurisdiction || company.countryCode || "").toUpperCase()}|${normalizedPartyName(party.name)}`;
+    return { ...party, entityId: `chart-party:${createHash("sha256").update(identitySeed).digest("hex").slice(0, 20)}` };
+  };
+  return candidateFacts.map((fact) => {
+    const cloned = structuredClone(fact);
+    const sourceCurrentState = cloned.qualifiers?.currentState || "UNKNOWN";
+    const useAsDepictedOwnership = cloned.type === "RELATIONSHIP"
+      && cloned.relationship === "ECONOMIC_OWNERSHIP"
+      && sourceCurrentState === "UNKNOWN";
+    const useExplicitTypedShareSemantics = isExplicitTypedChartShareOwnership(cloned, entityProfile);
+    return {
+      ...cloned,
+      ...(cloned.subject ? { subject: mappedParty(cloned.subject) } : {}),
+      ...(cloned.object ? { object: mappedParty(cloned.object) } : {}),
+      ...((useAsDepictedOwnership || useExplicitTypedShareSemantics) ? { qualifiers: {
+        ...(cloned.qualifiers || {}),
+        ...(useAsDepictedOwnership ? {
+          sourceCurrentState,
+          currentState: "CURRENT",
+          chartEvaluationTemporalScope: "AS_DEPICTED_IN_UPLOADED_CHART",
+        } : {}),
+        ...(useExplicitTypedShareSemantics ? {
+          economicInterestConcept: "SHARE_OWNERSHIP",
+          chartEvaluationEconomicConceptBasis: "EXPLICIT_TYPED_ECONOMIC_OWNERSHIP_PERCENTAGE",
+        } : {}),
+      } } : {}),
+    };
+  });
 }
 
 function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }) {
@@ -423,6 +543,7 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
   const entityLabels = Object.fromEntries((reviewed.entityDirectory || []).filter((item) => item.entityId && item.party?.name).map((item) => [item.entityId, item.party.name]));
   return {
     contractVersion: "ubo-demo-chart-analysis-v1",
+    calculationSemanticsVersion: CHART_CALCULATION_SEMANTICS_VERSION,
     sourceMode: "CUSTOMER_UPLOADED_DOCUMENT",
     heading: "Based on your uploaded chart — not independently verified",
     provisionalDecisions: {
@@ -435,8 +556,45 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
     entityLabels,
     limitations: [
       "Chart CandidateFacts were evaluated separately from saved research.",
+      "Repeated named parties are linked only within this chart for provisional calculation; original extracted party representations remain unchanged.",
+      "Source-backed economic ownership is calculated as depicted in the uploaded chart; present-day currentness is not independently verified.",
       "Provisional demo document analysis is not analyst approval or final case completion.",
     ],
+  };
+}
+
+function reevaluateSavedCustomerOwnershipChart(rawInput) {
+  const demoContext = rawInput?.demoContext;
+  const savedResult = rawInput?.savedResult;
+  const company = demoContext?.company;
+  if (!demoContext?.demoCaseId || !company?.legalName || !company?.registrationNumber || !company?.countryCode) {
+    throw demoError("invalid_demo_context", "Seeded demo company and case context is required.");
+  }
+  if (savedResult?.contractVersion !== RESULT_VERSION || !savedResult?.artifact?.artifactId || !Array.isArray(savedResult?.candidateFacts)) {
+    throw demoError("invalid_saved_extraction", "A structured saved chart extraction is required.");
+  }
+  if (savedResult.candidateFacts.length > 250) throw demoError("saved_extraction_too_large", "The saved chart extraction is too large to re-evaluate.", 413);
+  const sameCompany = String(savedResult.company?.countryCode || "").toUpperCase() === String(company.countryCode).toUpperCase()
+    && String(savedResult.company?.registrationNumber || "").toUpperCase() === String(company.registrationNumber).toUpperCase()
+    && normalizedPartyName(savedResult.company?.legalName) === normalizedPartyName(company.legalName);
+  if (!sameCompany) throw demoError("saved_extraction_company_mismatch", "The saved chart extraction belongs to a different company.", 409);
+  if (!savedResult.artifact.capturedAt) throw demoError("invalid_saved_extraction", "The saved chart extraction has no original capture time.");
+  const artifact = {
+    artifactId: savedResult.artifact.artifactId,
+    digest: savedResult.artifact.digest || "saved-extraction-no-digest",
+    capturedAt: savedResult.artifact.capturedAt,
+  };
+  const operationEvidenceReferences = savedResult.ubo?.operationEvidenceReferences || [];
+  const issues = savedResult.ubo?.issues || [];
+  const requestId = `saved-chart-analysis:${artifact.artifactId}`;
+  const candidateFacts = structuredClone(savedResult.candidateFacts);
+  const sourceGraph = buildSourceGraph(candidateFacts, company, artifact, requestId);
+  return {
+    ...structuredClone(savedResult),
+    company: structuredClone(company),
+    sourceGraph,
+    sourceCoverage: sourceGraphCoverage(sourceGraph),
+    chartAnalysis: buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }),
   };
 }
 
@@ -554,10 +712,18 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
   const evidenceConsumer = {
     async interpretArtifacts(trustedAuthorization, request) {
       const requestedConcepts = [
-        ...request.requestedConcepts,
+        ...chartRequestedConcepts(request.requestedConcepts, input.demoContext.company),
         ...CERTIFICATION_CONCEPTS.map((concept) => certificationConcept(concept, input.demoContext.company)),
       ];
-      interpretationEnvelope = await baseConsumer.interpretArtifacts(trustedAuthorization, { ...request, requestedConcepts });
+      interpretationEnvelope = await baseConsumer.interpretArtifacts(trustedAuthorization, {
+        ...request,
+        requestedConcepts,
+        extractionContext: {
+          ...request.extractionContext,
+          jurisdiction: input.demoContext.company.countryCode,
+          purpose: `Complete source-faithful ownership chart relationship enumeration for ${input.demoContext.company.legalName} (${input.demoContext.company.registrationNumber}); no UBO or policy conclusion`,
+        },
+      });
       return interpretationEnvelope;
     },
   };
@@ -609,6 +775,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
   }, requestId);
+  const sourceCoverage = sourceGraphCoverage(sourceGraph);
   const chartAnalysis = buildChartAnalysis({
     candidateFacts: capabilityResult.candidateFacts,
     operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
@@ -654,6 +821,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     candidateFacts: structuredClone(capabilityResult.candidateFacts),
     certification: certificationFrom(capabilityResult.candidateFacts),
     sourceGraph,
+    sourceCoverage,
     chartAnalysis,
     owners: displayed.owners,
     assertions: displayed.assertions,
@@ -663,14 +831,18 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
 
 module.exports = Object.freeze({
   CUSTOMER_PROVIDER_TIMEOUT_MS,
+  CHART_CALCULATION_SEMANTICS_VERSION,
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
+  chartRequestedConcepts,
   certificationFrom,
   presentation,
+  reevaluateSavedCustomerOwnershipChart,
   selectSemanticProvider,
+  sourceGraphCoverage,
   statusForEvidenceFailure,
   validateRequest,
 });

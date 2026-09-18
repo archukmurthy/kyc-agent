@@ -2,6 +2,7 @@
 
 const { createHash } = require("node:crypto");
 const { applyDemoAutoReviewDecisions } = require("./reviewLabEngine");
+const { normalizeCandidateFactSourceMeasurement } = require("../../integrations/ubo-control/legacy-discovery");
 
 const SAFE_RELATIONSHIPS = new Set([
   "ECONOMIC_OWNERSHIP",
@@ -59,10 +60,38 @@ function sourceBacked(fact) {
   return Array.isArray(fact?.evidenceReferences) && fact.evidenceReferences.some((reference) => reference?.referenceId);
 }
 
+function sourceReferenceKeys(fact) {
+  return new Set((fact?.evidenceReferences || []).filter((reference) => reference?.referenceId).map((reference) => [
+    normalize(reference.system),
+    normalize(reference.referenceType),
+    normalize(reference.referenceId),
+  ].join(":")));
+}
+
+function isOneSourcePartyOccurrence(targets, factByClaimId) {
+  if (targets.length === 1) return true;
+  const endpoints = new Set(targets.map(({ endpoint }) => normalize(endpoint)));
+  if (endpoints.size !== 1 || ![...endpoints][0]) return false;
+  const facts = targets.map(({ claimId }) => factByClaimId.get(claimId));
+  if (facts.some((fact) => !fact) || new Set(facts.map(({ relationship }) => relationship)).size !== facts.length) return false;
+  const sourceSets = facts.map(sourceReferenceKeys);
+  if (sourceSets.some((references) => references.size === 0)) return false;
+  return [...sourceSets[0]].some((reference) => sourceSets.every((references) => references.has(reference)));
+}
+
+function isSourceBackedCombinedControlRight(fact) {
+  const sourceNature = String(fact?.qualifiers?.sourceNatureOfControl || "").toLowerCase();
+  return fact?.relationship === "FORMAL_CONTROL_RIGHT"
+    && fact.measurement === undefined
+    && fact.qualifiers?.controlConcept === "APPOINT_OR_REMOVE_PERSONS"
+    && fact.qualifiers?.sourceStatementMode === "COMBINED_ALTERNATIVE"
+    && /right-to-appoint-and-remove-(directors|persons?)\b/.test(sourceNature);
+}
+
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
 function prepareDemoLiveDiscoveryBody(body) {
-  return { ...clone(body), forceRefresh: true };
+  return { ...clone(body), forceRefresh: true, demoRegistryContext: true };
 }
 
 function sameRegisteredSubject(party, subject) {
@@ -74,6 +103,14 @@ function sameRegisteredSubject(party, subject) {
 
 function prepareDemoReplayRecord(replayRecord) {
   const prepared = clone(replayRecord);
+  const capturedFacts = prepared?.discoveryResult?.candidateFacts || [];
+  const normalizedFacts = capturedFacts.map(normalizeCandidateFactSourceMeasurement);
+  const normalizedSourceMeasurementFactIds = normalizedFacts
+    .filter((fact, index) => JSON.stringify(fact.measurement || null) !== JSON.stringify(capturedFacts[index]?.measurement || null))
+    .map(({ factId }) => factId)
+    .filter(Boolean)
+    .sort();
+  if (prepared?.discoveryResult) prepared.discoveryResult.candidateFacts = normalizedFacts;
   const requestedProfile = normalize(prepared?.companyContext?.entityProfile) || "COMPANY";
   const targetFacts = (prepared?.discoveryResult?.candidateFacts || []).filter((fact) =>
     fact.type === "RELATIONSHIP" && sameRegisteredSubject(fact.object, prepared.subject));
@@ -95,7 +132,6 @@ function prepareDemoReplayRecord(replayRecord) {
   if (effectiveProfile !== requestedProfile) {
     prepared.companyContext.entityProfile = effectiveProfile;
     prepared.subject.entityType = effectiveProfile;
-    prepared.replayId = `${prepared.replayId}:demo-profile:${effectiveProfile}`;
   }
   return {
     replayRecord: prepared,
@@ -109,6 +145,7 @@ function prepareDemoReplayRecord(replayRecord) {
       registryLegalForm,
       registryCompanyType,
       sourceCandidateFactIds: supportingFacts.map(({ factId }) => factId).filter(Boolean).sort(),
+      normalizedSourceMeasurementFactIds,
     },
   };
 }
@@ -141,11 +178,18 @@ function buildPlan(session) {
     targetsByClaim.get(target.claimId).push(target);
   }
 
-  const nameOnlyCounts = new Map();
+  const factByClaimId = new Map(claimTargets.map((target) => [
+    target.claimId,
+    factById.get(target.originatingCandidateFact?.candidateFactId),
+  ]));
+
+  const nameOnlyGroups = new Map();
   for (const target of partyTargets) {
     if (target.party?.entityId || identifierKey(target.party)) continue;
     const key = nameKey(target.party);
-    if (key) nameOnlyCounts.set(key, (nameOnlyCounts.get(key) || 0) + 1);
+    if (!key) continue;
+    if (!nameOnlyGroups.has(key)) nameOnlyGroups.set(key, []);
+    nameOnlyGroups.get(key).push(target);
   }
 
   const conflictGroups = new Map();
@@ -165,7 +209,8 @@ function buildPlan(session) {
   const identityDecisions = partyTargets.map((target) => {
     const strongKey = target.party?.entityId ? `ENTITY:${target.party.entityId}` : identifierKey(target.party);
     const weakKey = nameKey(target.party);
-    const ambiguousName = !strongKey && (!weakKey || nameOnlyCounts.get(weakKey) !== 1);
+    const weakTargets = weakKey ? nameOnlyGroups.get(weakKey) || [] : [];
+    const ambiguousName = !strongKey && (!weakKey || !isOneSourcePartyOccurrence(weakTargets, factByClaimId));
     if (ambiguousName) return { candidatePartyKey: target.candidatePartyKey, action: "LEAVE_UNRESOLVED" };
     const identityKey = strongKey || weakKey;
     const existingEntityId = entityIdByStrongIdentity.get(identityKey);
@@ -179,10 +224,12 @@ function buildPlan(session) {
   const otherwiseSafeByClaim = new Map(claimTargets.map((target) => {
     const fact = factById.get(target.originatingCandidateFact?.candidateFactId);
     const endpointsSafe = (targetsByClaim.get(target.claimId) || []).every((partyTarget) => identityDecisionByPartyKey.get(partyTarget.candidatePartyKey)?.action !== "LEAVE_UNRESOLVED");
-    const safe = fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
+    const safeRegistryContext = fact?.type === "ENTITY_ATTRIBUTE" && fact.attribute === "REGISTRY_CONTEXT"
+      && fact.value && typeof fact.value === "object" && !Array.isArray(fact.value) && sourceBacked(fact);
+    const safe = (safeRegistryContext || (fact && fact.type === "RELATIONSHIP" && SAFE_RELATIONSHIPS.has(fact.relationship)
       && sourceBacked(fact) && validMeasurement(fact) && explicitEconomicSemantics(fact)
-      && fact.qualifiers?.requiresInterpretation !== true
-      && !conflictingFactIds.has(fact.factId) && endpointsSafe;
+      && (fact.qualifiers?.requiresInterpretation !== true || isSourceBackedCombinedControlRight(fact))
+      && !conflictingFactIds.has(fact.factId))) && endpointsSafe;
     return [target.claimId, safe];
   }));
 
@@ -222,15 +269,26 @@ function buildPlan(session) {
   };
 }
 
+function reviewDemoSession(session, recordedAt, sourceLabel) {
+  const plan = buildPlan(session);
+  const reviewed = applyDemoAutoReviewDecisions({ session, identityDecisions: plan.identityDecisions, claimDecisions: plan.claimDecisions, recordedAt });
+  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true, ...(session.demoProfileReconciliation ? { profileReconciliation: clone(session.demoProfileReconciliation) } : {}) };
+  reviewed.sourceLabel = sourceLabel(reviewed);
+  return reviewed;
+}
+
 function autoReviewDemoSession(session, recordedAt = new Date().toISOString()) {
   if (!session || session.sourceState !== "LIVE" || session.mode !== "SUCCESSOR_REVIEW") {
     throw new TypeError("Demo automatic review requires a live successor-review session");
   }
-  const plan = buildPlan(session);
-  const reviewed = applyDemoAutoReviewDecisions({ session, identityDecisions: plan.identityDecisions, claimDecisions: plan.claimDecisions, recordedAt });
-  reviewed.demoAutoReview = { contractVersion: "ubo-demo-auto-review-v1", ...plan.summary, recordedAt, provisional: true, ...(session.demoProfileReconciliation ? { profileReconciliation: clone(session.demoProfileReconciliation) } : {}) };
-  reviewed.sourceLabel = `Live Discovery · ${reviewed.companyContext.legalEntityName} · provisional demo result`;
-  return reviewed;
+  return reviewDemoSession(session, recordedAt, (reviewed) => `Live Discovery · ${reviewed.companyContext.legalEntityName} · provisional demo result`);
 }
 
-module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });
+function autoReviewDemoReplaySession(session, recordedAt = new Date().toISOString()) {
+  if (!session || session.sourceState !== "REPLAY" || session.mode !== "SUCCESSOR_REVIEW") {
+    throw new TypeError("Demo replay review requires a zero-provider-call successor replay session");
+  }
+  return reviewDemoSession(session, recordedAt, (reviewed) => `Saved live replay · ${reviewed.companyContext.legalEntityName} · provisional demo result · no provider call`);
+}
+
+module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });

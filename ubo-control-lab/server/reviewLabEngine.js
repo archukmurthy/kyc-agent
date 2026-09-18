@@ -80,6 +80,23 @@ const TDR_PEOPLE = [
 const range = (lowerBound, upperBound, lowerInclusive = false, upperInclusive = true) => ({ type: "RANGE", lowerBound, upperBound, lowerInclusive, upperInclusive });
 const exact = (value) => ({ type: "EXACT", value });
 
+const DEMO_ALICE_28_FIXTURE = simpleFixture(
+  "DEMO-ALICE-28",
+  "Alice — direct + indirect ownership",
+  "The accepted engine multiplies the indirect chain and aggregates it with Alice's independent direct interest.",
+  "COMPANY",
+  [
+    { entityId: "demo-alice-target", category: "LEGAL_ENTITY", name: "EXAMPLE TRADING LTD", profile: "COMPANY" },
+    { entityId: "demo-alice", category: "NATURAL_PERSON", name: "Alice Example" },
+    { entityId: "demo-alice-holdco", category: "LEGAL_ENTITY", name: "EXAMPLE HOLDINGS LTD", profile: "COMPANY" },
+  ],
+  [
+    { id: "demo-alice-direct-10", from: "demo-alice", to: "demo-alice-target", type: "ECONOMIC_OWNERSHIP", value: exact(10), concept: "SHARE_OWNERSHIP" },
+    { id: "demo-alice-holdco-60", from: "demo-alice", to: "demo-alice-holdco", type: "ECONOMIC_OWNERSHIP", value: exact(60), concept: "SHARE_OWNERSHIP" },
+    { id: "demo-holdco-target-30", from: "demo-alice-holdco", to: "demo-alice-target", type: "ECONOMIC_OWNERSHIP", value: exact(30), concept: "SHARE_OWNERSHIP" },
+  ],
+);
+
 const FIXTURES = Object.freeze([
   simpleFixture("V2-LAB-01", "Direct statutory owner", "A direct 40% economic interest runs through the successor engine.", "COMPANY", [TARGET, PERSON], [
     { id: "v2-direct-40", from: PERSON.entityId, to: TARGET.entityId, type: "ECONOMIC_OWNERSHIP", value: exact(40), concept: "SHARE_OWNERSHIP" },
@@ -306,9 +323,7 @@ function evaluateResolvedFixture(reviewApp, response, fixture, profile, profileI
   return reviewApp.evaluate({ ...baseRequest, resolutionInputs: resolutionInputsFor(fixture, profile, preliminary), expectedHeadSnapshotId: null });
 }
 
-function startReviewFixture({ fixtureId = "V2-LAB-07", profileId } = {}) {
-  const fixture = FIXTURES.find(({ id }) => id === fixtureId);
-  if (!fixture) throw new TypeError("Unknown successor Lab fixture");
+function startResolvedFixture(fixture, profileId) {
   const selectedProfileId = profileId || fixture.defaultProfileId || "NOT_PROVIDED";
   const profile = profileById(selectedProfileId);
   const reviewApp = app();
@@ -324,6 +339,18 @@ function startReviewFixture({ fixtureId = "V2-LAB-07", profileId } = {}) {
   response = applyAllFixtureDecisions(reviewApp, response, fixture, NOW);
   const evaluation = evaluateResolvedFixture(reviewApp, response, fixture, profile, selectedProfileId);
   return clone(sessionFrom({ fixture, response, result: evaluation, profileId: selectedProfileId, candidateSources: [{ sourceRecordId: `${fixture.id}:source:1`, capability: "DISCOVERY", sourceState: "FIXTURE", outcomeState: result.outcome.state, requestId, candidateFacts: result.candidateFacts, operationEvidenceReferences: result.operationEvidenceReferences, issues: result.issues }] }));
+}
+
+function startReviewFixture({ fixtureId = "V2-LAB-07", profileId } = {}) {
+  const fixture = FIXTURES.find(({ id }) => id === fixtureId);
+  if (!fixture) throw new TypeError("Unknown successor Lab fixture");
+  return startResolvedFixture(fixture, profileId);
+}
+
+function startDemoCalculationFixture({ fixtureId } = {}) {
+  if (fixtureId === DEMO_ALICE_28_FIXTURE.id) return startResolvedFixture(DEMO_ALICE_28_FIXTURE, "NOT_PROVIDED");
+  if (fixtureId === "V2-LAB-02") return startReviewFixture({ fixtureId, profileId: "NOT_PROVIDED" });
+  throw new TypeError("Unknown demo calculation fixture");
 }
 
 function validateSession(value) {
@@ -504,7 +531,9 @@ function startReviewReplay({ replayRecord, profileId = "NOT_PROVIDED" } = {}) {
   let response = reviewApp.intake({ contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION, caseInput: { caseId: `ubo-review-lab:replay:${randomUUID()}`, subjectReference: clone(replayRecord.subject), externalReferences: [{ system: "ubo-control-lab-replay", referenceId: replayRecord.replayId }], createdAt: new Date().toISOString() }, capabilityResult: clone(replayRecord.discoveryResult), operationId: `review-replay:${randomUUID()}`, recordedAt: new Date().toISOString() });
   const subjectTargets = response.decisionTargets.candidateParties.filter(({ party }) => party.entityId === subject.entityId);
   response = reviewApp.applyDecisions({ contractVersion: UBO_REVIEW_APPLICATION_CONTRACT_VERSION, caseState: response.caseState, entityRegistrations: [registration(subject, new Date().toISOString())], identityDecisions: subjectTargets.map((target, index) => ({ decisionId: `review-replay-subject:${index}`, candidatePartyKey: target.candidatePartyKey, status: "RESOLVED", entityId: subject.entityId, basisReasonCodes: ["EXPLICIT_REPLAY_SUBJECT"], evidenceReferences: [], decidedAt: new Date().toISOString(), decisionOrigin: "UBO_CONTROL_LAB_REPLAY" })), claimAdjudications: [] });
-  return clone(sessionFrom({ fixture, response, result: null, profileId, sourceState: "REPLAY", sourceLabel: `Replayed Discovery · ${subject.name}`, candidateSources: [{ sourceRecordId: `${response.caseState.caseReference.caseId}:source:1`, capability: "DISCOVERY", sourceState: "REPLAY", outcomeState: replayRecord.discoveryResult.outcome.state, requestId: replayRecord.discoveryResult.requestId, candidateFacts: replayRecord.discoveryResult.candidateFacts, operationEvidenceReferences: replayRecord.discoveryResult.operationEvidenceReferences, issues: replayRecord.discoveryResult.issues }], replay: { replayId: replayRecord.replayId, originalSavedAt: replayRecord.savedAt, replayedAt: new Date().toISOString(), transportCalls: 0 } }));
+  const session = sessionFrom({ fixture, response, result: null, profileId, sourceState: "REPLAY", sourceLabel: `Replayed Discovery · ${subject.name}`, candidateSources: [{ sourceRecordId: `${response.caseState.caseReference.caseId}:source:1`, capability: "DISCOVERY", sourceState: "REPLAY", outcomeState: replayRecord.discoveryResult.outcome.state, requestId: replayRecord.discoveryResult.requestId, candidateFacts: replayRecord.discoveryResult.candidateFacts, operationEvidenceReferences: replayRecord.discoveryResult.operationEvidenceReferences, issues: replayRecord.discoveryResult.issues }], replay: { replayId: replayRecord.replayId, originalSavedAt: replayRecord.savedAt, replayedAt: new Date().toISOString(), transportCalls: 0 } });
+  session.companyContext = clone(replayRecord.companyContext);
+  return clone(session);
 }
 
 module.exports = Object.freeze({
@@ -516,6 +545,7 @@ module.exports = Object.freeze({
   catalogue,
   changeReviewProfile,
   normalizedFixtureInput,
+  startDemoCalculationFixture,
   startReviewFixture,
   startReviewReplay,
 });

@@ -10,7 +10,7 @@ import {
 } from "../demoSession";
 import { listenForCustomerHandoff } from "../customerHandoff";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
-import { writeCustomerDemoCase } from "./customerOwnershipChartSession";
+import { sameCustomerCompany, writeCustomerDemoCase } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import "./customerOwnershipChart.css";
 
@@ -39,7 +39,8 @@ export default function CustomerCompanyPage() {
       return;
     }
     const created = createDemoCase(draft);
-    writeCustomerDemoCase({ draft, demoCase: demoCase?.demoCaseId ? { ...created, demoCaseId: demoCase.demoCaseId } : created });
+    const continuingSameCompany = demoCase?.demoCaseId && sameCustomerCompany(demoCase.company, created.company);
+    writeCustomerDemoCase({ draft, demoCase: continuingSameCompany ? { ...created, demoCaseId: demoCase.demoCaseId } : created });
   };
   const assertionCount = (researchResult?.candidateSources || []).reduce((count, source) => count + (source.candidateFacts || []).length, 0);
 

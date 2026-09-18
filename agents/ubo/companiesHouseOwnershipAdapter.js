@@ -66,21 +66,63 @@ function registryProfileFromPsc(psc = {}) {
 }
 function authHeader() { return `Basic ${Buffer.from(`${process.env.COMPANIES_HOUSE_API_KEY}:`).toString("base64")}`; }
 
-function jurisdictionFromCompaniesHousePsc(psc, fallback) {
+const SOURCE_JURISDICTION_CODES = Object.freeze({
+  england: "GB", wales: "GB", scotland: "GB", "northern ireland": "GB", "united kingdom": "GB", "great britain": "GB",
+  "united states": "US", "united states of america": "US", usa: "US", us: "US",
+  denmark: "DK", danmark: "DK", singapore: "SG", ireland: "IE", jersey: "JE", guernsey: "GG", "isle of man": "IM",
+  spain: "ES",
+});
+
+function jurisdictionFromCompaniesHousePsc(psc, fallback, preserveSourceJurisdiction = false) {
   const country = String(psc.identification?.country_registered || psc.address?.country || "").trim().toLowerCase();
   if (!country) return fallback;
-  if (["england", "wales", "scotland", "northern ireland", "united kingdom", "great britain"].includes(country)) return "GB";
-  if (["united states", "united states of america", "usa", "us"].includes(country)) return "US";
-  if (["denmark", "danmark"].includes(country)) return "DK";
-  if (country === "singapore") return "SG";
-  if (country === "ireland") return "IE";
-  if (country === "jersey") return "JE";
-  if (country === "guernsey") return "GG";
-  if (country === "isle of man") return "IM";
-  return fallback;
+  return SOURCE_JURISDICTION_CODES[country] || (preserveSourceJurisdiction ? country.toUpperCase() : fallback);
 }
 
-async function companiesHouseOwnershipAdapter({ entity, fetchImpl = fetch }) {
+function companyRegistryContext(profile, registryProfile, number) {
+  return {
+    legalName: profile.company_name || null,
+    registrationNumber: number,
+    legalForm: registryProfile?.legalForm || null,
+    companyType: registryProfile?.companyType || profile.type || null,
+    incorporatedIn: profile.registered_office_address?.country || "United Kingdom",
+    jurisdiction: profile.jurisdiction || null,
+    registryName: "Companies House",
+  };
+}
+
+function pscRegistryContext(psc) {
+  return {
+    legalName: psc.name || null,
+    registrationNumber: psc.identification?.registration_number || null,
+    legalForm: psc.identification?.legal_form || null,
+    governingLaw: psc.identification?.legal_authority || null,
+    incorporatedIn: psc.identification?.country_registered || psc.address?.country || null,
+    placeRegistered: psc.identification?.place_registered || null,
+    registryName: psc.identification?.place_registered || null,
+  };
+}
+
+function activePscExemption(data = {}) {
+  const entries = Object.values(data.exemptions || {}).filter((entry) => String(entry.exemption_type || "").startsWith("psc-exempt"))
+    .flatMap((entry) => (entry.items || [])
+    .filter((item) => !item.exempt_to)
+    .map((item) => ({ exemptionType: entry.exemption_type, effectiveFrom: item.exempt_from })));
+  const preferred = entries.find(({ exemptionType }) => exemptionType === "psc-exempt-as-trading-on-eu-regulated-market") || entries[0];
+  if (!preferred) return null;
+  const reasons = {
+    "psc-exempt-as-trading-on-eu-regulated-market": "Voting shares admitted to trading on an EU regulated market",
+    "psc-exempt-as-trading-on-regulated-market": "Voting shares admitted to trading on a regulated market",
+  };
+  return {
+    pscStatus: "EXEMPT",
+    pscExemptionReason: reasons[preferred.exemptionType] || preferred.exemptionType.replaceAll("-", " "),
+    pscExemptionEffectiveFrom: preferred.effectiveFrom,
+    pscExemptionType: preferred.exemptionType,
+  };
+}
+
+async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetchImpl = fetch }) {
   if (String(entity.jurisdiction).toUpperCase() !== "GB" || !entity.registrationNumber) return { statements: [], evidence: [], missingInformation: [] };
   if (!process.env.COMPANIES_HOUSE_API_KEY) return { statements: [], evidence: [], missingInformation: [{ entity: entity.name, source: "Companies House", reason: "COMPANIES_HOUSE_API_KEY is not configured" }] };
   const number = normalizeCompaniesHouseNumber(entity.registrationNumber);
@@ -88,26 +130,67 @@ async function companiesHouseOwnershipAdapter({ entity, fetchImpl = fetch }) {
   const url = `${BASE}/company/${encodeURIComponent(number)}/persons-with-significant-control`;
   const headers = { Authorization: authHeader(), accept: "application/json" };
   const missingInformation = [];
+  const evidence = [];
+  const includeRegistryContext = tenantConfig.demoRegistryContext === true;
+  let profileData = null;
   let registryProfile = entity.metadata?.registryEntityProfile ? {
     entityProfile: entity.metadata.registryEntityProfile,
     legalForm: entity.metadata.registryLegalForm,
     companyType: entity.metadata.registryCompanyType,
     companySubtype: entity.metadata.registryCompanySubtype,
   } : null;
-  if (!registryProfile) {
+  if (!registryProfile || includeRegistryContext) {
     try {
       const profileResponse = await fetchImpl(profileUrl, { headers });
-      if (profileResponse.ok) registryProfile = registryProfileFromCompanyProfile(await profileResponse.json());
+      if (profileResponse.ok) {
+        profileData = await profileResponse.json();
+        registryProfile = registryProfileFromCompanyProfile(profileData);
+      }
       else missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House company-profile lookup returned ${profileResponse.status}` });
     } catch (error) {
       missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House company-profile lookup failed: ${error.message}` });
+    }
+  }
+  if (includeRegistryContext && profileData) {
+    const evidenceId = `companies-house:${number}:profile`;
+    evidence.push({
+      id: evidenceId,
+      source: "Companies House company profile",
+      sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}`,
+      apiPath: `/company/${number}`,
+      fetchedAt: new Date().toISOString(),
+      registryContextAssertion: {
+        subject: { name: profileData.company_name || entity.name, type: "company", registrationNumber: number, jurisdiction: "GB" },
+        value: companyRegistryContext(profileData, registryProfile, number),
+      },
+    });
+    if (profileData.links?.exemptions) {
+      try {
+        const exemptionResponse = await fetchImpl(`${BASE}${profileData.links.exemptions}`, { headers });
+        if (exemptionResponse.ok) {
+          const exemption = activePscExemption(await exemptionResponse.json());
+          if (exemption) evidence.push({
+            id: `companies-house:${number}:exemptions`,
+            source: "Companies House PSC exemptions",
+            sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}/persons-with-significant-control`,
+            apiPath: profileData.links.exemptions,
+            fetchedAt: new Date().toISOString(),
+            registryContextAssertion: {
+              subject: { name: profileData.company_name || entity.name, type: "company", registrationNumber: number, jurisdiction: "GB" },
+              value: exemption,
+            },
+          });
+        } else missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House PSC-exemptions lookup returned ${exemptionResponse.status}` });
+      } catch (error) {
+        missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House PSC-exemptions lookup failed: ${error.message}` });
+      }
     }
   }
   const response = await fetchImpl(url, { headers });
   if (!response.ok) {
     const configurationFailure = response.status === 401 || response.status === 403;
     return {
-      statements: [], evidence: [],
+      statements: [], evidence,
       missingInformation: [{ entity: entity.name, source: "Companies House", reason: configurationFailure ? `Companies House API key was rejected (${response.status}). Update COMPANIES_HOUSE_API_KEY before running paid fallback research.` : `Companies House PSC lookup returned ${response.status}` }],
       // Do not spend on a secondary source when the primary-source failure is
       // an account/configuration issue rather than an absence of registry data.
@@ -121,21 +204,31 @@ async function companiesHouseOwnershipAdapter({ entity, fetchImpl = fetch }) {
     ...(registryProfile ? { metadata: { ...(entity.metadata || {}), registryEntityProfile: registryProfile.entityProfile, registryLegalForm: registryProfile.legalForm, registryCompanyType: registryProfile.companyType, ...(registryProfile.companySubtype ? { registryCompanySubtype: registryProfile.companySubtype } : {}) } } : {}),
   };
   const data = await response.json();
-  const evidence = [];
   const statements = (data.items || []).flatMap((psc, index) => {
     const natures = psc.natures_of_control || [];
     if (psc.ceased_on) return [];
     const evidenceId = `companies-house:${number}:psc:${index}`;
-    evidence.push({ id: evidenceId, source: "Companies House PSC register", sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}/persons-with-significant-control`, sourceReliability: 98, extractionConfidence: 100, jurisdictionRelevant: true, fetchedAt: new Date().toISOString(), naturesOfControl: natures });
     const corporate = psc.kind === "corporate-entity-person-with-significant-control" || Boolean(psc.identification?.registration_number);
     const ownerRegistryProfile = corporate ? registryProfileFromPsc(psc) : null;
     const owner = {
       name: psc.name,
       type: corporate ? "company" : "individual",
       registrationNumber: corporate ? normalizeCompaniesHouseNumber(psc.identification?.registration_number) || null : null,
-      jurisdiction: corporate ? jurisdictionFromCompaniesHousePsc(psc, entity.jurisdiction) : "GB",
+      jurisdiction: corporate ? jurisdictionFromCompaniesHousePsc(psc, entity.jurisdiction, includeRegistryContext) : "GB",
       ...(ownerRegistryProfile ? { metadata: { registryEntityProfile: ownerRegistryProfile.entityProfile, registryLegalForm: ownerRegistryProfile.legalForm } } : {}),
     };
+    evidence.push({
+      id: evidenceId,
+      source: "Companies House PSC register",
+      sourceUrl: `https://find-and-update.company-information.service.gov.uk/company/${number}/persons-with-significant-control`,
+      apiPath: `/company/${number}/persons-with-significant-control`,
+      sourceReliability: 98,
+      extractionConfidence: 100,
+      jurisdictionRelevant: true,
+      fetchedAt: new Date().toISOString(),
+      naturesOfControl: natures,
+      ...(includeRegistryContext && corporate ? { registryContextAssertion: { subject: owner, value: pscRegistryContext(psc) } } : {}),
+    });
     return natures.flatMap((nature, natureIndex) => {
       const semantic = relationshipFromNature(nature);
       if (!semantic) return [];

@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, selectSemanticProvider, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -27,6 +27,7 @@ function provider(observed) {
     async extract({ artifactInputs, requestedConcepts }) {
       observed.bytes = Buffer.from(artifactInputs[0].verifiedContent);
       observed.concepts = requestedConcepts.map(({ concept }) => concept);
+      observed.requestedConcepts = structuredClone(requestedConcepts);
       const artifactId = artifactInputs[0].artifact.id;
       const company = { partyType: "legal_entity", name: "Better Comms VOIP Ltd", jurisdiction: "GB", identifiers: [] };
       const person = { partyType: "natural_person", name: "Mitchell Fortescue", jurisdiction: "GB", identifiers: [] };
@@ -59,6 +60,7 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   const result = await analyseCustomerOwnershipChart(input(), { provider: provider(observed) });
   assert.deepEqual(observed.bytes, PNG);
   assert.ok(observed.concepts.includes("economic_ownership"));
+  assert.match(observed.requestedConcepts.find(({ concept }) => concept === "economic_ownership").description, /every visible connector.*one separate Fact.*typed_relationship.*intermediate layers/i);
   assert.ok(observed.concepts.includes("certification_signer_name"));
   assert.equal(result.artifact.integrityVerified, true);
   assert.equal(result.artifact.persistence, "EPHEMERAL_DEMO_ONLY");
@@ -74,11 +76,19 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.sourceGraph.contractVersion, "ubo-ownership-graph-projection-v1");
   assert.equal(result.sourceGraph.subject.displayName, "Better Comms VOIP Ltd");
   assert.equal(result.sourceGraph.relationships.length, 1);
+  assert.equal(result.sourceCoverage.state, "CONNECTED");
   assert.equal(result.sourceGraph.qualifications.length, 0);
   assert.equal(result.chartAnalysis.contractVersion, "ubo-demo-chart-analysis-v1");
   assert.equal(result.chartAnalysis.state, "EVALUATED");
   assert.ok(result.chartAnalysis.view.graph.relationships.length >= 1);
+  assert.equal(result.chartAnalysis.view.qualifications.length, 1);
+  const effective = result.chartAnalysis.view.qualificationBases.find(({ route }) => route === "EFFECTIVE_INTEREST");
+  assert.equal(effective.assessmentState, "SATISFIED");
+  assert.equal(effective.recordedCalculation.value.value, "75");
+  assert.equal(effective.orderedPathReferences.length, 1);
+  assert.equal(effective.orderedPathReferences[0].contribution.value, "75");
   assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").measurement.value, 75);
+  assert.equal(result.candidateFacts.find((fact) => fact.relationship === "ECONOMIC_OWNERSHIP").qualifiers.currentState, "UNKNOWN");
   assert.equal(result.comparison, "NOT_PERFORMED");
 });
 
@@ -121,6 +131,61 @@ test("chart-only analysis uses the shared engine for direct plus indirect owners
   assert.equal(effective.recordedCalculation.value.type, "EXACT");
   assert.equal(effective.recordedCalculation.value.value, "28");
   assert.equal(effective.orderedPathReferences.length, 2);
+});
+
+test("typed source-backed chart percentages identify Alice as a provisional UBO across direct and indirect paths", () => {
+  const party = (name, entityType) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const alice = party("Alice Morgan", "NATURAL_PERSON");
+  const sophia = party("Sophia Patel", "NATURAL_PERSON");
+  const vodafone = party("Vodafone Limited", "LEGAL_ENTITY");
+  const vodafoneThree = party("Vodafonethree Holdings Limited", "LEGAL_ENTITY");
+  const international = party("Vodafone International Operations Limited", "LEGAL_ENTITY");
+  const european = party("Vodafone European Investments", "LEGAL_ENTITY");
+  const group = party("Vodafone Group Plc", "LEGAL_ENTITY");
+  const relationship = (factId, from, to, value) => ({
+    factId,
+    type: "RELATIONSHIP",
+    subject: from,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: to,
+    measurement: { type: "EXACT", value },
+    qualifiers: {
+      currentState: "UNKNOWN",
+      evidenceRelationshipType: "ECONOMIC_OWNERSHIP",
+      evidenceValue: { kind: "EXACT", measurementType: "percentage", exact: value, unit: "percentage_points" },
+      evidenceMapping: { method: "provider_structured", id: "chart-provider", version: "1" },
+      evidenceSupportState: "supported",
+    },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-vodafone" }],
+  });
+  const candidateFacts = [
+    relationship("three-vodafone", vodafoneThree, vodafone, 80),
+    relationship("alice-three", alice, vodafoneThree, 20),
+    relationship("group-european", group, european, 100),
+    relationship("sophia-vodafone", sophia, vodafone, 10),
+    relationship("european-international", european, international, 100),
+    relationship("alice-vodafone", alice, vodafone, 10),
+    relationship("international-three", international, vodafoneThree, 80),
+  ];
+  const analysis = buildChartAnalysis({
+    candidateFacts,
+    operationEvidenceReferences: [],
+    issues: [],
+    company: { legalName: "Vodafone Limited", registrationNumber: "01471587", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-vodafone", capturedAt: "2026-09-17T10:00:00.000Z" },
+    requestId: "chart-vodafone",
+  });
+  const aliceEntityId = Object.entries(analysis.entityLabels).find(([, name]) => name === "Alice Morgan")?.[0];
+  const effective = analysis.view.qualificationBases.find((basis) => basis.personEntityId === aliceEntityId && basis.route === "EFFECTIVE_INTEREST");
+  const qualification = analysis.view.qualifications.find((item) => item.personEntityId === aliceEntityId);
+
+  assert.equal(analysis.provisionalDecisions.operativeClaims, 7);
+  assert.equal(effective.recordedCalculation.value.type, "EXACT");
+  assert.equal(effective.recordedCalculation.value.value, "26");
+  assert.equal(effective.assessmentState, "SATISFIED");
+  assert.equal(effective.orderedPathReferences.length, 2);
+  assert.equal(qualification.routeStatus, "ROUTE_SATISFIED");
+  assert.equal(candidateFacts.some((fact) => fact.qualifiers.economicInterestConcept), false, "source CandidateFacts remain unchanged");
 });
 
 test("chart-only analysis preserves ownership with no explicit share basis without crashing evaluation", () => {
@@ -182,6 +247,151 @@ test("source visualization groups repeated chart names without inventing a UBO c
   assert.equal(graph.decision.terminalOutcome, "NOT_PERFORMED");
 });
 
+test("Bettercomms chart-local identities produce separate 75 and 25 percent effective-ownership results without altering source facts", () => {
+  const party = (name, entityType) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const mitchell = party("Mitchell Fortescue", "NATURAL_PERSON");
+  const lee = party("Lee Taylor", "NATURAL_PERSON");
+  const holdco = party("Better Holdco", "LEGAL_ENTITY");
+  const subject = party("Better Comms VOIP Ltd", "LEGAL_ENTITY");
+  const relationship = (factId, from, to, value) => ({
+    factId, type: "RELATIONSHIP", subject: from, relationship: "ECONOMIC_OWNERSHIP", object: to,
+    measurement: { type: "EXACT", value },
+    qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-bettercomms" }],
+  });
+  const candidateFacts = [
+    relationship("mitchell-holdco", mitchell, holdco, 75),
+    relationship("lee-holdco", lee, holdco, 25),
+    relationship("holdco-subject", holdco, subject, 100),
+  ];
+  const analysis = buildChartAnalysis({
+    candidateFacts,
+    operationEvidenceReferences: [], issues: [],
+    company: { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "14605186", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-bettercomms", capturedAt: "2026-09-16T10:00:00.000Z" }, requestId: "chart-bettercomms",
+  });
+  const byName = Object.fromEntries(Object.entries(analysis.entityLabels).map(([entityId, name]) => [name, entityId]));
+  const basisFor = (name) => analysis.view.qualificationBases.find((basis) => basis.personEntityId === byName[name] && basis.route === "EFFECTIVE_INTEREST");
+  const qualificationFor = (name) => analysis.view.qualifications.find((qualification) => qualification.personEntityId === byName[name]);
+  const mitchellBasis = basisFor("Mitchell Fortescue");
+  const leeBasis = basisFor("Lee Taylor");
+  assert.equal(mitchellBasis.recordedCalculation.value.type, "EXACT");
+  assert.equal(mitchellBasis.recordedCalculation.value.value, "75");
+  assert.equal(mitchellBasis.assessmentState, "SATISFIED");
+  assert.equal(qualificationFor("Mitchell Fortescue").routeStatus, "ROUTE_SATISFIED");
+  assert.equal(leeBasis.recordedCalculation.value.type, "EXACT");
+  assert.equal(leeBasis.recordedCalculation.value.value, "25");
+  assert.equal(leeBasis.assessmentState, "NOT_SATISFIED");
+  assert.notEqual(qualificationFor("Lee Taylor").routeStatus, "ROUTE_SATISFIED");
+  assert.equal(mitchellBasis.orderedPathReferences[0].relationshipIds.length, 2);
+  assert.equal(leeBasis.orderedPathReferences[0].relationshipIds.length, 2);
+  assert.equal(candidateFacts.every((fact) => fact.qualifiers.currentState === "UNKNOWN"), true);
+  assert.equal(candidateFacts.some((fact) => fact.subject.entityId || fact.object.entityId), false);
+});
+
+test("saved structured chart facts re-enter the shared engine without document bytes or a provider call", () => {
+  const party = (name, entityType, id) => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [{ namespace: entityType === "NATURAL_PERSON" ? "DEMO_PERSON" : "COMPANIES_HOUSE_COMPANY_NUMBER", value: id, jurisdiction: "GB" }], sourcePartySnapshot: {} });
+  const alice = party("Alice Morgan", "NATURAL_PERSON", "ALICE-1");
+  const holdco = party("Overseas HoldCo", "LEGAL_ENTITY", "HOLDCO-1");
+  const subject = party("Example Trading Ltd", "LEGAL_ENTITY", "DEMO0028");
+  const relationship = (factId, from, to, value) => ({ factId, type: "RELATIONSHIP", subject: from, relationship: "ECONOMIC_OWNERSHIP", object: to, measurement: { type: "EXACT", value }, qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" }, evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-alice" }] });
+  const savedResult = {
+    contractVersion: "ubo-demo-customer-ownership-chart-result-v1",
+    company: { legalName: "Example Trading Ltd", registrationNumber: "DEMO0028", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-alice", digest: "abc123", capturedAt: "2026-09-16T10:00:00.000Z" },
+    candidateFacts: [relationship("direct", alice, subject, 10), relationship("upper", alice, holdco, 60), relationship("lower", holdco, subject, 30)],
+    ubo: { operationEvidenceReferences: [], issues: [] },
+    chartAnalysis: { state: "EVALUATED", view: { qualifications: [], qualificationBases: [] } },
+  };
+  const refreshed = reevaluateSavedCustomerOwnershipChart({
+    operation: "REEVALUATE_SAVED_EXTRACTION",
+    demoContext: { demoCaseId: "alice-case", company: savedResult.company },
+    savedResult,
+  });
+  const effective = refreshed.chartAnalysis.view.qualificationBases.find(({ route }) => route === "EFFECTIVE_INTEREST");
+  assert.equal(effective.recordedCalculation.value.value, "28");
+  assert.equal(effective.orderedPathReferences.length, 2);
+  assert.equal(JSON.stringify(refreshed).includes("contentBase64"), false);
+  assert.deepEqual(savedResult.chartAnalysis.view.qualificationBases, [], "the saved source record is not mutated");
+});
+
+test("Bettercomms subject punctuation variant maps to one customer node in source and evaluated graphs", () => {
+  const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "09000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
+  const holdco = { name: "Better Holdco Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} };
+  const extractedSubject = { name: "Better Comms VOIP Ltd", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} };
+  const candidateFact = {
+    factId: "better-holdco-to-comms",
+    type: "RELATIONSHIP",
+    subject: holdco,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: extractedSubject,
+    measurement: { type: "EXACT", value: 100 },
+    qualifiers: { currentState: "CURRENT", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "bettercomms-chart" }],
+  };
+  const artifact = { artifactId: "artifact-bettercomms-punctuation", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" };
+  const sourceGraph = buildSourceGraph([candidateFact], company, artifact, "bettercomms-punctuation");
+  const analysis = buildChartAnalysis({ candidateFacts: [candidateFact], operationEvidenceReferences: [], issues: [], company, artifact, requestId: "bettercomms-punctuation" });
+
+  assert.equal(sourceGraph.nodes.length, 2);
+  assert.equal(sourceGraph.nodes.filter(({ semantics }) => semantics.includes("SUBJECT")).length, 1);
+  assert.equal(sourceGraph.relationships[0].targetEntityId, sourceGraph.subject.entityId);
+  assert.equal(sourceGraphCoverage(sourceGraph).state, "CONNECTED");
+  assert.equal(analysis.view.graph.nodes.length, 2);
+  assert.equal(analysis.view.graph.relationships[0].objectEntityId, analysis.view.graph.subjectEntityId);
+});
+
+test("a sibling subsidiary does not make a customer-connected Bettercomms chart incomplete", () => {
+  const company = { legalName: "BETTER COMMS (VOIP) LTD", registrationNumber: "14605186", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" };
+  const party = (name, entityType = "LEGAL_ENTITY") => ({ name, entityType, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const fact = (factId, subject, object, value) => ({
+    factId,
+    type: "RELATIONSHIP",
+    subject,
+    relationship: "ECONOMIC_OWNERSHIP",
+    object,
+    measurement: { type: "EXACT", value },
+    qualifiers: { currentState: "UNKNOWN", economicInterestConcept: "SHARE_OWNERSHIP" },
+    evidenceReferences: [{ referenceId: "bettercomms-chart" }],
+  });
+  const holdco = party("Better Holdco");
+  const subject = party("Better Comms VOIP Ltd");
+  const graph = buildSourceGraph([
+    fact("mitchell-holdco", party("Mitchell Fortescue", "NATURAL_PERSON"), holdco, 75),
+    fact("holdco-customer", holdco, subject, 100),
+    fact("holdco-sibling", holdco, party("Better Network Services"), 100),
+  ], company, { artifactId: "artifact-bettercomms", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" }, "request-bettercomms");
+
+  assert.deepEqual(sourceGraphCoverage(graph), {
+    state: "CONNECTED",
+    sourceRelationshipCount: 3,
+    subjectConnectedRelationshipCount: 2,
+    disconnectedRelationshipIds: [],
+  });
+});
+
+test("a Vodafone source map that stops above the customer is marked incomplete instead of presented as a complete chart", () => {
+  const company = { legalName: "Vodafone Limited", countryCode: "GB" };
+  const party = (name) => ({ name, entityType: "LEGAL_ENTITY", externalIdentifiers: [], sourcePartySnapshot: {} });
+  const graph = buildSourceGraph([{
+    factId: "vodafone-group-to-european-investments",
+    type: "RELATIONSHIP",
+    subject: party("Vodafone Group Plc"),
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: party("Vodafone European Investments"),
+    measurement: { type: "EXACT", value: 100 },
+    qualifiers: { currentState: "UNKNOWN" },
+    evidenceReferences: [{ referenceId: "vodafone-chart" }],
+  }], company, { artifactId: "artifact-vodafone", digest: "abc123", capturedAt: "2026-09-16T00:00:00.000Z" }, "request-vodafone");
+
+  assert.deepEqual(sourceGraphCoverage(graph), {
+    state: "REVIEW_REQUIRED",
+    sourceRelationshipCount: 1,
+    subjectConnectedRelationshipCount: 0,
+    disconnectedRelationshipIds: ["vodafone-group-to-european-investments"],
+  });
+});
+
 test("invalid bytes and unsupported media fail before provider interpretation", () => {
   assert.throws(() => validateRequest(input({ file: { originalFilename: "chart.txt", declaredMediaType: "text/plain", sizeBytes: 3, contentBase64: Buffer.from("bad").toString("base64") } })), /PDF, PNG or JPEG/);
 });
@@ -218,4 +428,17 @@ test("API handler is POST-only and returns a bounded customer error", async () =
   assert.equal(response.statusCode, 500);
   assert.equal(response.body.message, "We could not analyse this ownership chart. Please try again.");
   assert.doesNotMatch(JSON.stringify(response.body), /secret details/);
+});
+
+test("API dispatches saved-extraction re-evaluation separately from document analysis", async () => {
+  let analysisCalls = 0;
+  let reevaluationCalls = 0;
+  const handler = api.createHandler(async () => { analysisCalls += 1; }, async (body) => { reevaluationCalls += 1; return { contractVersion: body.savedResult.contractVersion }; });
+  const response = { statusCode: null, body: null, headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+  await handler({ method: "POST", body: { operation: "REEVALUATE_SAVED_EXTRACTION", savedResult: { contractVersion: "saved" } } }, response);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.result.contractVersion, "saved");
+  assert.equal(analysisCalls, 0);
+  assert.equal(reevaluationCalls, 1);
 });
