@@ -18,7 +18,15 @@ const {
   deriveOnboardingCountry,
 } = require('../documentRequirements.js');
 
-module.exports = function handler(req, res) {
+const { applyCors } = require("../lib/routeAuth");
+const { enforceRateLimit } = require("../lib/rateLimit");
+
+module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: open to anyone until Batch 1 gives the wizard a session, so the
+  // limiter is the only brake on abuse and cost.
+  if (!(await enforceRateLimit(req, res, "document-requirements"))) return undefined;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

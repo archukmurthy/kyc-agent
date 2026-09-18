@@ -51,6 +51,10 @@ test("the count lives under research-attempts:<applicationId> with a 30-day TTL"
   assert.strictEqual(ttls[`research-attempts:${APP_ID}`], 30 * 24 * 3600);
 });
 
+// The route is rate-limited (Batch 0). These tests are about the counter, so
+// they stand in a limiter that always allows; the refusal is asserted below.
+handler.__setDeps({ enforceRateLimit: async () => true });
+
 test("applications are counted independently", async () => {
   await handler(post({ applicationId: APP_ID }), fakeRes());
   await handler(post({ applicationId: APP_ID }), fakeRes());
@@ -111,4 +115,17 @@ test("no grant secret still allows and counts the search — the grant is unenfo
     restoreEnv("RESEARCH_GRANT_SECRET", saved.r);
     restoreEnv("DOSSIER_TOKEN_SECRET", saved.d);
   }
+});
+
+test("the route refuses a caller over the rate limit before touching storage", async () => {
+  const writes = [];
+  handler.__setDeps({
+    enforceRateLimit: async (_req, res) => { res.status(429).json({ error: "rate_limited" }); return false; },
+    storage: { get: async () => { writes.push("get"); return 0; }, set: async () => { writes.push("set"); } },
+  });
+  const res = fakeRes();
+  await handler(post({ applicationId: APP_ID }), res);
+  assert.strictEqual(res.statusCode, 429);
+  assert.deepStrictEqual(writes, [], "nothing may be stored for a refused caller");
+  handler.__setDeps({ enforceRateLimit: async () => true });
 });
