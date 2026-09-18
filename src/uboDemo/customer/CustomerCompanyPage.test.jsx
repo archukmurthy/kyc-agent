@@ -3,12 +3,19 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import CustomerCompanyPage from "./CustomerCompanyPage";
 import { DEMO_SESSION_KEY } from "../demoSession";
+import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerCompanyPath } from "./customerRoute";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customerOwnershipChartSession";
 
 beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState({}, "", "/ubo-demo/customer/");
+});
+
+test("customer screens link to Analyst Review and Audit", () => {
+  render(<CustomerCompanyPage />);
+  expect(screen.getByRole("link", { name: "Open Analyst Review" })).toHaveAttribute("href", DEMO_REVIEW_PATH);
+  expect(screen.getByRole("link", { name: "Open Audit" })).toHaveAttribute("href", DEMO_AUDIT_PATH);
 });
 
 test("customer company input continues directly to ownership with no research step", () => {

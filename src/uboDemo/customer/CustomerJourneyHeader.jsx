@@ -1,4 +1,5 @@
 import React from "react";
+import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 
 const STEPS = ["Company", "Ownership", "Questions", "IDV", "Complete"];
 
@@ -6,7 +7,13 @@ export default function CustomerJourneyHeader({ currentStep }) {
   return <>
     <header className="ubo-customer-header">
       <a className="ubo-customer-brand" href="/ubo-demo/customer/"><span>N</span><strong>Ownership review</strong></a>
-      <span className="ubo-customer-secure">Customer journey · Demo</span>
+      <div className="ubo-customer-header-actions">
+        <span className="ubo-customer-secure">Customer journey · Demo</span>
+        <nav className="ubo-customer-analyst-links" aria-label="Analyst views">
+          <a href={DEMO_REVIEW_PATH}>Open Analyst Review</a>
+          <a href={DEMO_AUDIT_PATH}>Open Audit</a>
+        </nav>
+      </div>
     </header>
     <ol className="ubo-customer-progress" aria-label="Customer journey progress">
       {STEPS.map((label, index) => {
