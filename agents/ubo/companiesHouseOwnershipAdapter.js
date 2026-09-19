@@ -70,7 +70,8 @@ function registryProfileFromPsc(psc = {}) {
 function authHeader() { return `Basic ${Buffer.from(`${process.env.COMPANIES_HOUSE_API_KEY}:`).toString("base64")}`; }
 
 const SOURCE_JURISDICTION_CODES = Object.freeze({
-  england: "GB", wales: "GB", scotland: "GB", "northern ireland": "GB", "united kingdom": "GB", "great britain": "GB",
+  england: "GB", wales: "GB", scotland: "GB", "northern ireland": "GB", "england and wales": "GB", "england wales": "GB",
+  "united kingdom": "GB", "great britain": "GB", uk: "GB", gb: "GB",
   "united states": "US", "united states of america": "US", usa: "US", us: "US",
   denmark: "DK", danmark: "DK", singapore: "SG", ireland: "IE", jersey: "JE", guernsey: "GG", "isle of man": "IM",
   spain: "ES",
@@ -79,7 +80,8 @@ const SOURCE_JURISDICTION_CODES = Object.freeze({
 function jurisdictionFromCompaniesHousePsc(psc, fallback, preserveSourceJurisdiction = false) {
   const country = String(psc.identification?.country_registered || psc.address?.country || "").trim().toLowerCase();
   if (!country) return fallback;
-  return SOURCE_JURISDICTION_CODES[country] || (preserveSourceJurisdiction ? country.toUpperCase() : fallback);
+  const canonicalKey = country.replace(/&/g, " and ").replace(/[-_/]+/g, " ").replace(/\s+/g, " ").trim();
+  return SOURCE_JURISDICTION_CODES[canonicalKey] || (preserveSourceJurisdiction ? country.toUpperCase() : fallback);
 }
 
 function companyRegistryContext(profile, registryProfile, number) {

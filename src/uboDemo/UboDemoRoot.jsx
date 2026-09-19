@@ -246,7 +246,11 @@ export default function UboDemoRoot() {
     try { setReplays(saveLabReplay(capture)); setReplayLibraryStatus({ kind: "success", message: "Recovered the last completed live result into the saved replay library." }); }
     catch (cause) { setReplayLibraryStatus({ kind: "error", message: cause.message || "The last live replay could not be restored." }); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (skipNextSave.current) { skipNextSave.current = false; return; } writeDemoSession({ draft, demoCase, researchResult }); }, [draft, demoCase, researchResult]);
+  useEffect(() => {
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
+    try { writeDemoSession({ draft, demoCase, researchResult }); }
+    catch (cause) { setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local demo-session storage failed."} The current live result remains available until this page is closed.` }); }
+  }, [draft, demoCase, researchResult]);
   useEffect(() => {
     const receiveCustomerProgress = (event) => {
       if (event.key !== "ubo-demo.case.v1" || !event.newValue) return;

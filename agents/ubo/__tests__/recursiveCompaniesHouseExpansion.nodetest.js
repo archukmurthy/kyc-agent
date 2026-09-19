@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { CAPABILITY_CONTRACT_VERSION, PERCENTAGE_VALUE_TYPE, RELATIONSHIP_TYPE } = require("../../../ubo-control");
 const { createLegacyDiscoveryAdapter } = require("../../../integrations/ubo-control/legacy-discovery");
-const { companiesHouseOwnershipAdapter, normalizeCompaniesHouseNumber } = require("../companiesHouseOwnershipAdapter");
+const { companiesHouseOwnershipAdapter, jurisdictionFromCompaniesHousePsc, normalizeCompaniesHouseNumber } = require("../companiesHouseOwnershipAdapter");
+const { expandOwnership, expansionEligibility } = require("../recursiveOwnershipExpansionAgent");
 const { runUboFramework } = require("../uboOrchestrator");
 
 const PROFILES = Object.freeze({
@@ -12,19 +13,29 @@ const PROFILES = Object.freeze({
   OC302604: { company_name: "TDR CAPITAL LLP", type: "llp" },
   SC707592: { company_name: "TDR CAPITAL GENERAL PARTNER V LIMITED", type: "private-limited-guarant-nsc-limited-exemption" },
   13578722: { company_name: "TDR CAPITAL NOMINEES 2021 LIMITED", type: "ltd" },
+  OC435996: { company_name: "HIGGS LLP", type: "llp" },
+  16543185: { company_name: "PROJECT CASTLE BIDCO LIMITED", type: "ltd" },
+  16543048: { company_name: "PROJECT CASTLE FINCO LIMITED", type: "ltd" },
+  16542524: { company_name: "PROJECT CASTLE MIDCO LIMITED", type: "ltd" },
+  16542425: { company_name: "PROJECT CASTLE TOPCO LIMITED", type: "ltd" },
+  16542085: { company_name: "PROJECT CASTLE AEP CO LIMITED", type: "ltd" },
+  OC443193: { company_name: "AUGUST EQUITY PARTNERS VI GENERAL PARTNER LLP", type: "llp" },
+  14233106: { company_name: "AUGUST EQUITY PARTNERS VI GP LIMITED", type: "ltd" },
+  "04261261": { company_name: "AUGUST EQUITY MANAGEMENT LIMITED", type: "ltd" },
+  OC313101: { company_name: "AUGUST EQUITY LLP", type: "llp" },
 });
 
-function corporate(name, registrationNumber, legalForm, nature) {
+function corporate(name, registrationNumber, legalForm, nature, countryRegistered = "United Kingdom") {
   return {
     kind: "corporate-entity-person-with-significant-control",
     name,
-    identification: { registration_number: registrationNumber, country_registered: "United Kingdom", legal_form: legalForm },
+    identification: { registration_number: registrationNumber, country_registered: countryRegistered, legal_form: legalForm },
     natures_of_control: Array.isArray(nature) ? nature : [nature],
   };
 }
 
-function person(name) {
-  return { kind: "individual-person-with-significant-control", name, natures_of_control: ["voting-rights-25-to-50-percent-limited-liability-partnership"] };
+function person(name, nature = "voting-rights-25-to-50-percent-limited-liability-partnership") {
+  return { kind: "individual-person-with-significant-control", name, natures_of_control: Array.isArray(nature) ? nature : [nature] };
 }
 
 const PSC = Object.freeze({
@@ -44,6 +55,16 @@ const PSC = Object.freeze({
     "voting-rights-75-to-100-percent",
     "right-to-appoint-and-remove-directors",
   ])],
+  OC435996: [corporate("PROJECT CASTLE BIDCO LIMITED", "16543185", "Private Limited Company", "significant-influence-or-control-limited-liability-partnership")],
+  16543185: [corporate("PROJECT CASTLE FINCO LIMITED", "16543048", "Private Limited Company", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"])],
+  16543048: [corporate("PROJECT CASTLE MIDCO LIMITED", "16542524", "Private Limited Company", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"])],
+  16542524: [corporate("PROJECT CASTLE TOPCO LIMITED", "16542425", "Private Limited Company", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"])],
+  16542425: [corporate("PROJECT CASTLE AEP CO LIMITED", "16542085", "Private Limited Company", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"])],
+  16542085: [corporate("AUGUST EQUITY PARTNERS VI GENERAL PARTNER LLP", "OC443193", "Limited Liability Partnership", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent", "right-to-appoint-and-remove-directors"], "England & Wales")],
+  OC443193: [corporate("AUGUST EQUITY PARTNERS VI GP LIMITED", "14233106", "Private Limited Company", ["voting-rights-75-to-100-percent-limited-liability-partnership", "right-to-share-surplus-assets-75-to-100-percent-limited-liability-partnership"], "England and Wales")],
+  14233106: [corporate("AUGUST EQUITY MANAGEMENT LIMITED", "04261261", "Private Limited Company", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent"])],
+  "04261261": [corporate("AUGUST EQUITY LLP", "OC313101", "Limited Liability Partnership", ["ownership-of-shares-75-to-100-percent", "voting-rights-75-to-100-percent"])],
+  OC313101: [person("MR DAVID LONSDALE", ["voting-rights-25-to-50-percent-limited-liability-partnership", "right-to-share-surplus-assets-25-to-50-percent-limited-liability-partnership"])],
 });
 
 function response(body, status = 200) {
@@ -59,10 +80,10 @@ function companiesHouseFixture() {
     if (!PROFILES[registrationNumber]) return response({}, 404);
     return response(match?.[2] ? { items: PSC[registrationNumber] } : PROFILES[registrationNumber]);
   };
-  return { calls, adapter: ({ entity }) => companiesHouseOwnershipAdapter({ entity, fetchImpl }) };
+  return { calls, adapter: ({ entity, tenantConfig }) => companiesHouseOwnershipAdapter({ entity, tenantConfig, fetchImpl }) };
 }
 
-async function runRoot(registrationNumber, entityName) {
+async function runRoot(registrationNumber, entityName, { demoRegistryContext = false } = {}) {
   const fixture = companiesHouseFixture();
   const previousKey = process.env.COMPANIES_HOUSE_API_KEY;
   process.env.COMPANIES_HOUSE_API_KEY = "offline-test-key";
@@ -71,7 +92,7 @@ async function runRoot(registrationNumber, entityName) {
       entityName,
       registrationNumber,
       jurisdiction: "GB",
-      tenantConfig: { uboRules: { budgets: { maxEntitiesToInvestigate: 10, maxDocumentsToDownload: 10, maxSearchIterations: 10 } } },
+      tenantConfig: { demoRegistryContext, uboRules: { budgets: { maxEntitiesToInvestigate: 20, maxDocumentsToDownload: 20, maxSearchIterations: 20 } } },
       adapters: { companiesHouse: fixture.adapter },
     });
     return { result, calls: fixture.calls };
@@ -99,6 +120,20 @@ test("Companies House identifiers normalize prefixes while preserving leading ze
   assert.equal(normalizeCompaniesHouseNumber(" Oc302604 "), "OC302604");
   assert.equal(normalizeCompaniesHouseNumber("sc707592"), "SC707592");
   assert.equal(normalizeCompaniesHouseNumber("00445790"), "00445790");
+});
+
+test("Companies House canonicalises UK source-jurisdiction variants while registry metadata retains source wording", () => {
+  ["England & Wales", "England and Wales", "England-Wales", "England", "Wales", "Scotland", "Northern Ireland", "United Kingdom", "UK", "GB"].forEach((country) => {
+    assert.equal(jurisdictionFromCompaniesHousePsc({ identification: { country_registered: country } }, "GB", true), "GB", country);
+  });
+  assert.equal(jurisdictionFromCompaniesHousePsc({ identification: { country_registered: "Spain" } }, "GB", true), "ES");
+});
+
+test("recursive eligibility records distinct natural-person, jurisdiction, type and registration boundaries", () => {
+  assert.equal(expansionEligibility({ type: "individual", jurisdiction: "GB" }).code, "NATURAL_PERSON_REACHED");
+  assert.equal(expansionEligibility({ type: "company", jurisdiction: "ES", registrationNumber: "A1" }).code, "UNSUPPORTED_JURISDICTION");
+  assert.equal(expansionEligibility({ type: "trust", jurisdiction: "GB", registrationNumber: "00112233" }).code, "UNSUPPORTED_ENTITY_TYPE");
+  assert.equal(expansionEligibility({ type: "company", jurisdiction: "GB", registrationNumber: "not-valid" }).code, "INVALID_REGISTRATION_NUMBER");
 });
 
 test("demo registry context preserves IAG source identity without changing its three relationship dimensions", async () => {
@@ -191,4 +226,67 @@ test("OC302604 expands identically as a root and as a recursively discovered con
   assert.equal(firstLevel.find(({ relationship }) => relationship === RELATIONSHIP_TYPE.FORMAL_CONTROL_RIGHT).qualifiers.requiresInterpretation, true);
   assert.equal(firstLevel[0].object.entityType, "LLP");
   assert.equal(firstLevel[0].qualifiers.objectRegistryLegalForm, "Limited partnership / PFLP");
+});
+
+test("Higgs recursively expands England & Wales LLP holders through August Equity to a natural person", async () => {
+  const { result, calls } = await runRoot("OC435996", "HIGGS LLP", { demoRegistryContext: true });
+  const expanded = new Set(result.expansion.expandedRegistryIds);
+  ["OC435996", "16543185", "16543048", "16542524", "16542425", "16542085", "OC443193", "14233106", "04261261", "OC313101"]
+    .forEach((number) => assert.ok(expanded.has(`GB:REGISTRY:${number}`), number));
+  assert.equal(calls.filter((url) => url.endsWith("/company/OC443193/persons-with-significant-control")).length, 1);
+
+  const august = result.ownershipGraph.nodes.find(({ registrationNumber }) => registrationNumber === "OC443193");
+  assert.equal(august.jurisdiction, "GB");
+  assert.equal(august.metadata.registryEntityProfile, "LLP");
+  assert.ok(result.ownershipGraph.nodes.some(({ name, type }) => name === "MR DAVID LONSDALE" && type === "individual"));
+  assert.ok(result.investigationLog.some(({ entity, code }) => entity === "MR DAVID LONSDALE" && code === "NATURAL_PERSON_REACHED"));
+  assert.equal(result.missingInformation.some(({ entity }) => /AUGUST EQUITY PARTNERS VI GENERAL PARTNER LLP/i.test(entity || "")), false);
+
+  const concepts = new Set(result.ownershipGraph.edges.map(({ metadata }) => metadata.relationshipConcept));
+  ["ECONOMIC_OWNERSHIP", "VOTING_RIGHTS", "SURPLUS_ASSET_RIGHTS", "SIGNIFICANT_INFLUENCE_OR_CONTROL"]
+    .forEach((concept) => assert.ok(concepts.has(concept), concept));
+  const candidates = await translate(result, "OC435996", "HIGGS LLP");
+  assert.ok(candidates.candidateFacts.some(({ relationship, qualifiers }) => relationship === RELATIONSHIP_TYPE.FORMAL_CONTROL_RIGHT && qualifiers.controlConcept === "APPOINT_OR_REMOVE_PERSONS"));
+});
+
+test("unsupported recursive jurisdiction produces an explicit terminal reason", async () => {
+  const result = await runUboFramework({
+    entityName: "UK ROOT LIMITED", registrationNumber: "00112233", jurisdiction: "GB",
+    adapters: { registry: async ({ entity }) => ({
+      statements: entity.registrationNumber === "00112233" ? [{ owner: { name: "FOREIGN HOLDCO", type: "company", jurisdiction: "ES", registrationNumber: "A123" }, ownedEntity: entity, type: "control", evidenceIds: [] }] : [],
+      evidence: [], missingInformation: [], sufficient: true,
+    }) },
+  });
+  assert.ok(result.missingInformation.some(({ entity, code }) => entity === "FOREIGN HOLDCO" && code === "UNSUPPORTED_JURISDICTION"));
+  assert.ok(result.investigationLog.some(({ entity, code }) => entity === "FOREIGN HOLDCO" && code === "UNSUPPORTED_JURISDICTION"));
+});
+
+test("cycle and budget exhaustion retain distinct recursive termination reasons", async () => {
+  const rootEntity = { name: "CYCLE ROOT LIMITED", type: "company", registrationNumber: "00112233", jurisdiction: "GB" };
+  const cycle = await expandOwnership({
+    rootEntity,
+    discovery: async ({ entity }) => ({
+      statements: [{ owner: { ...entity }, ownedEntity: entity, type: "control", evidenceIds: [] }],
+      evidence: [], missingInformation: [], sufficient: true, providerOutcomes: [], searchEvents: [],
+    }),
+    adapters: {}, rules: { tenantConfig: {}, discoveryThreshold: 0 },
+    budget: { consume: () => true, exhausted: () => false },
+  });
+  assert.ok(cycle.missingInformation.some(({ code }) => code === "CYCLE_DETECTED"));
+
+  let entitiesInvestigated = 0;
+  const budget = await expandOwnership({
+    rootEntity: { ...rootEntity, name: "BUDGET ROOT LIMITED" },
+    discovery: async ({ entity }) => ({
+      statements: entity.registrationNumber === "00112233" ? [{ owner: { name: "NEXT UK HOLDCO LIMITED", type: "company", jurisdiction: "GB", registrationNumber: "00223344" }, ownedEntity: entity, type: "control", evidenceIds: [] }] : [],
+      evidence: [], missingInformation: [], sufficient: true, providerOutcomes: [], searchEvents: [],
+    }),
+    adapters: {}, rules: { tenantConfig: {}, discoveryThreshold: 0 },
+    budget: {
+      consume: (kind) => kind !== "entitiesInvestigated" || ++entitiesInvestigated <= 1,
+      exhausted: () => entitiesInvestigated >= 1,
+    },
+  });
+  assert.ok(budget.missingInformation.some(({ entity, code }) => entity === "NEXT UK HOLDCO LIMITED" && code === "BUDGET_EXHAUSTED"));
+  assert.equal(budget.missingInformation.some(({ code }) => code === "CYCLE_DETECTED"), false);
 });

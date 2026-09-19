@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
+import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch, saveLastSuccessfulResearch } from "./demoResearch";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
@@ -133,6 +133,11 @@ test("browser research timeout terminates instead of remaining pending", async (
   const pending = runDemoResearch(input, jest.fn(() => new Promise(() => {})), { timeoutMs: 25 });
   jest.advanceTimersByTime(30);
   await expect(pending).rejects.toMatchObject({ code: "BROWSER_RESEARCH_TIMEOUT" });
+});
+
+test("a browser cache quota failure cannot turn a usable live result into a failed refresh", () => {
+  const storage = { setItem() { throw new DOMException("quota reached", "QuotaExceededError"); } };
+  expect(saveLastSuccessfulResearch({ countryCode: "GB", registrationNumber: "OC435996" }, { status: "PARTIAL", candidateSources: [{ candidateFacts: [fact] }] }, storage)).toBe(false);
 });
 
 test("failed live research reaches FAILED UI instead of returning to an indefinite spinner", async () => {
@@ -604,9 +609,11 @@ test("demo presenter preserves planner routes, keeps evidence as evidence and gr
   expect(presented.flatMap(({ informationNeedIds }) => informationNeedIds)).not.toContain("need-internal");
 });
 
-test("compact result projects source-backed foreign and PSC-exempt registry context without changing graph semantics", () => {
+test("compact result projects UK variants as expandable while preserving foreign and PSC-exempt registry context", () => {
   const registryFacts = [
     { factId: "iag", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "IAG S.A.", jurisdiction: "ES", externalIdentifiers: [{ namespace: "legacy-company-register:ES", value: "M-492,129" }] }, value: { legalForm: "Spanish Public Company-Sociedad Anonima", governingLaw: "Law Of Spain", incorporatedIn: "Spain", placeRegistered: "Madrid Mercantile Register", registrationNumber: "M-492,129" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:ba:psc" }] },
+    { factId: "august-amp", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "AUGUST EQUITY PARTNERS VI GENERAL PARTNER LLP", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "OC443193" }] }, value: { legalForm: "Limited Liability Partnership", incorporatedIn: "England & Wales", registrationNumber: "OC443193" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:august:profile" }] },
+    { factId: "august-and", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "AUGUST EQUITY PARTNERS VI GP LIMITED", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "14233106" }] }, value: { legalForm: "Private limited company (Ltd)", incorporatedIn: "England and Wales", registrationNumber: "14233106" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:august-gp:profile" }] },
     { factId: "law-profile", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { legalForm: "Public limited company (PLC)", incorporatedIn: "United Kingdom", registrationNumber: "00030397" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:profile" }] },
     { factId: "law-exemption", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", subject: { name: "THE LAW DEBENTURE CORPORATION P.L.C.", jurisdiction: "GB", externalIdentifiers: [{ namespace: "legacy-company-register:GB", value: "00030397" }] }, value: { pscStatus: "EXEMPT", pscExemptionReason: "Voting shares admitted to trading on an EU regulated market", pscExemptionEffectiveFrom: "2021-05-25" }, evidenceReferences: [{ system: "legacy-ubo-discovery", referenceType: "SOURCE_REFERENCE", referenceId: "ch:law:exemptions" }] },
   ];
@@ -615,11 +622,16 @@ test("compact result projects source-backed foreign and PSC-exempt registry cont
     candidateSources: [{ sourceRecordId: "registry", candidateFacts: registryFacts }],
     entityDirectory: [
       { entityId: "iag-id", party: registryFacts[0].subject },
-      { entityId: "law-id", party: registryFacts[1].subject },
+      { entityId: "august-amp-id", party: registryFacts[1].subject },
+      { entityId: "august-and-id", party: registryFacts[2].subject },
+      { entityId: "law-id", party: registryFacts[3].subject },
     ],
   }, "LIVE");
   expect(compact.registryContexts["iag-id"]).toEqual(expect.objectContaining({ incorporatedIn: "Spain", researchCoverage: expect.objectContaining({ state: "UNSUPPORTED_JURISDICTION" }) }));
   expect(compact.registryContexts["iag-id"].badges.map(({ label }) => label)).toEqual(["SPAIN", "Public company", "Research frontier"]);
+  expect(compact.registryContexts["august-amp-id"]).toEqual(expect.objectContaining({ incorporatedIn: "England & Wales", researchCoverage: expect.objectContaining({ state: "EXPANDABLE" }) }));
+  expect(compact.registryContexts["august-and-id"]).toEqual(expect.objectContaining({ incorporatedIn: "England and Wales", researchCoverage: expect.objectContaining({ state: "EXPANDABLE" }) }));
+  expect(compact.registryContexts["august-amp-id"].badges.map(({ semantic }) => semantic)).not.toContain("RESEARCH_FRONTIER");
   expect(compact.registryContexts["law-id"]).toEqual(expect.objectContaining({ pscStatus: "EXEMPT", pscExemptionEffectiveFrom: "2021-05-25" }));
   expect(compact.registryContexts["law-id"].badges.map(({ label }) => label)).toEqual(["PLC", "PSC exempt"]);
   expect(compact.view.graph).toBe(projection);

@@ -17,9 +17,15 @@ function registryIdentity(entity = {}) {
 }
 
 function supportedUkLegalEntity(entity = {}) {
-  return String(entity.jurisdiction || "").trim().toUpperCase() === "GB"
-    && entity.type === NODE_TYPES.COMPANY
-    && /^(?:[A-Z]{2}\d{6}|\d{8})$/.test(normalizeUkRegistrationNumber(entity.registrationNumber));
+  return expansionEligibility(entity).eligible;
+}
+
+function expansionEligibility(entity = {}) {
+  if (entity.type === NODE_TYPES.INDIVIDUAL) return { eligible: false, code: "NATURAL_PERSON_REACHED", reason: "Natural person reached; recursive legal-entity expansion is complete for this path" };
+  if (String(entity.jurisdiction || "").trim().toUpperCase() !== "GB") return { eligible: false, code: "UNSUPPORTED_JURISDICTION", reason: "No supported automatic registry source is configured for this jurisdiction" };
+  if (entity.type !== NODE_TYPES.COMPANY) return { eligible: false, code: "UNSUPPORTED_ENTITY_TYPE", reason: "This entity type requires a different discovery workflow" };
+  if (!/^(?:[A-Z]{2}\d{6}|\d{8})$/.test(normalizeUkRegistrationNumber(entity.registrationNumber))) return { eligible: false, code: "INVALID_REGISTRATION_NUMBER", reason: "A valid Companies House registration number is required for automatic expansion" };
+  return { eligible: true, code: null, reason: null };
 }
 
 function canonicalEntity(entity, directory) {
@@ -48,16 +54,24 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
   const discovered = new Set([rootIdentity]);
   const expanded = new Set();
   const currentlyExpanding = new Set();
+  const reportedStops = new Set();
+  const recordStop = (entity, code, reason, { unresolved = false } = {}) => {
+    const stopKey = `${registryIdentity(entity)}:${code}`;
+    if (reportedStops.has(stopKey)) return;
+    reportedStops.add(stopKey);
+    investigationLog.push({ entity: entity.name, registrationNumber: entity.registrationNumber || null, jurisdiction: entity.jurisdiction, outcome: reason, code });
+    if (unresolved) missingInformation.push({ entity: entity.name, registrationNumber: entity.registrationNumber || null, jurisdiction: entity.jurisdiction, reason, code, status: "partial" });
+  };
   const queue = [{ entity: normalizedRoot, pathPercentage: 100, ancestry: new Set() }];
   while (queue.length && !budget.exhausted()) {
     const current = queue.shift();
     const entityId = registryIdentity(current.entity);
-    if (current.ancestry.has(entityId)) { missingInformation.push({ entity: current.entity.name, reason: "Ownership cycle detected" }); continue; }
-    if (expanded.has(entityId) || currentlyExpanding.has(entityId)) continue;
+    if (current.ancestry.has(entityId)) { recordStop(current.entity, "CYCLE_DETECTED", "Ownership cycle detected", { unresolved: true }); continue; }
+    if (expanded.has(entityId) || currentlyExpanding.has(entityId)) { recordStop(current.entity, "ALREADY_VISITED", "Entity already expanded in this research run"); continue; }
     if (TERMINAL_NODE_TYPES.has(current.entity.type)) {
+      const terminalCode = current.entity.type === NODE_TYPES.INDIVIDUAL ? "NATURAL_PERSON_REACHED" : "UNSUPPORTED_ENTITY_TYPE";
       onProgress?.({ stage: "terminal", entity: current.entity.name, message: `${current.entity.name}: terminal ${current.entity.type}` });
-      investigationLog.push({ entity: current.entity.name, jurisdiction: current.entity.jurisdiction, outcome: `Terminal ${current.entity.type}` });
-      if ([NODE_TYPES.TRUST, NODE_TYPES.FOUNDATION].includes(current.entity.type)) missingInformation.push({ entity: current.entity.name, reason: `${current.entity.type} workflow required` });
+      recordStop(current.entity, terminalCode, `Terminal ${current.entity.type}`, { unresolved: [NODE_TYPES.TRUST, NODE_TYPES.FOUNDATION].includes(current.entity.type) });
       continue;
     }
     if (!budget.consume("entitiesInvestigated")) break;
@@ -77,7 +91,11 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
     searchEvents.push(...(found.searchEvents || []));
     providerOutcomes.push(...(found.providerOutcomes || []));
     for (const statement of canonicalStatements) {
-      if (!supportedUkLegalEntity(statement.owner)) continue;
+      const eligibility = expansionEligibility(statement.owner);
+      if (!eligibility.eligible) {
+        recordStop(statement.owner, eligibility.code, eligibility.reason, { unresolved: eligibility.code !== "NATURAL_PERSON_REACHED" });
+        continue;
+      }
       let nextPathPercentage = 100;
       if (!statement.type || statement.type === EDGE_TYPES.OWNERSHIP) {
         const materiality = evaluateMateriality({ pathPercentage: current.pathPercentage, nextOwnershipPercentage: Number(statement.ownershipPercentage), discoveryThreshold: rules.discoveryThreshold });
@@ -86,15 +104,21 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
       }
       const ownerIdentity = registryIdentity(statement.owner);
       discovered.add(ownerIdentity);
-      if (!expanded.has(ownerIdentity) && !currentlyExpanding.has(ownerIdentity)) {
-        queue.push({ entity: statement.owner, pathPercentage: nextPathPercentage, ancestry: new Set([...current.ancestry, entityId]) });
+      if (ownerIdentity === entityId || current.ancestry.has(ownerIdentity)) {
+        recordStop(statement.owner, "CYCLE_DETECTED", "Ownership cycle detected", { unresolved: true });
+        continue;
       }
+      if (expanded.has(ownerIdentity) || currentlyExpanding.has(ownerIdentity)) {
+        recordStop(statement.owner, "ALREADY_VISITED", "Entity already expanded in this research run");
+        continue;
+      }
+      queue.push({ entity: statement.owner, pathPercentage: nextPathPercentage, ancestry: new Set([...current.ancestry, entityId]) });
     }
   }
   if (budget.exhausted()) {
     const pending = queue.filter(({ entity }) => !expanded.has(registryIdentity(entity)));
-    if (pending.length) pending.forEach(({ entity }) => missingInformation.push({ entity: entity.name, registrationNumber: entity.registrationNumber || null, reason: "Search budget exhausted before this discovered registry entity could be expanded", status: "partial" }));
-    else missingInformation.push({ reason: "search budget exhausted", status: "partial" });
+    if (pending.length) pending.forEach(({ entity }) => recordStop(entity, "BUDGET_EXHAUSTED", "Search budget exhausted before this discovered registry entity could be expanded", { unresolved: true }));
+    else missingInformation.push({ code: "BUDGET_EXHAUSTED", reason: "search budget exhausted", status: "partial" });
   }
   return {
     statements, evidence, missingInformation, investigationLog, providerOutcomes, searchEvents,
@@ -106,4 +130,4 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
   };
 }
 
-module.exports = { expandOwnership, normalizeUkRegistrationNumber, registryIdentity, supportedUkLegalEntity };
+module.exports = { expandOwnership, expansionEligibility, normalizeUkRegistrationNumber, registryIdentity, supportedUkLegalEntity };

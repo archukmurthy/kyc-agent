@@ -183,8 +183,13 @@ function companyResearchKey(company = {}) {
 }
 
 export function saveLastSuccessfulResearch(company, result, storage = window.localStorage) {
-  if (!result || result.status === "FAILED") return;
-  storage.setItem(LAST_SUCCESSFUL_RESEARCH_KEY, JSON.stringify({ companyKey: companyResearchKey(company), savedAt: new Date().toISOString(), result }));
+  if (!result || result.status === "FAILED") return false;
+  try {
+    storage.setItem(LAST_SUCCESSFUL_RESEARCH_KEY, JSON.stringify({ companyKey: companyResearchKey(company), savedAt: new Date().toISOString(), result }));
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 export function readLastSuccessfulResearch(company, storage = window.localStorage) {
@@ -268,8 +273,9 @@ function sameParty(left, right) {
 }
 
 function isUkContext(context) {
-  const country = normalized(context.incorporatedIn || context.jurisdiction);
-  return ["GB", "UNITED KINGDOM", "GREAT BRITAIN", "ENGLAND", "WALES", "SCOTLAND", "NORTHERN IRELAND", "ENGLAND-WALES"].includes(country);
+  const country = normalized(context.incorporatedIn || context.jurisdiction)
+    .replace(/&/g, " AND ").replace(/[-_/]+/g, " ").replace(/\s+/g, " ").trim();
+  return ["GB", "UK", "UNITED KINGDOM", "GREAT BRITAIN", "ENGLAND", "WALES", "SCOTLAND", "NORTHERN IRELAND", "ENGLAND WALES", "ENGLAND AND WALES"].includes(country);
 }
 
 function registryPresentation(context) {
