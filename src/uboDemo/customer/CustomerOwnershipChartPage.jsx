@@ -8,6 +8,7 @@ import {
   customerOwnershipChartExtractionsForContext,
   customerOwnershipChartSessionForContext,
   readCustomerDemoContext,
+  reusableCustomerOwnershipChartExtraction,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
@@ -30,6 +31,12 @@ function fileAsBase64(file) {
     reader.onerror = () => reject(new Error("We could not read that file. Please choose it again."));
     reader.readAsDataURL(file);
   });
+}
+
+async function fileSha256(file) {
+  if (!file?.arrayBuffer || !window.crypto?.subtle) return null;
+  const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function validateFile(file) {
@@ -158,8 +165,17 @@ function ChartAssertions({ result }) {
 function UploadedChartReceipt({ result, preview, onReplace }) {
   const [showPreview, setShowPreview] = useState(false);
   const previewSource = preview ? `data:${preview.mediaType};base64,${preview.contentBase64}` : null;
+  const quality = result.extractionQuality;
+  const qualityState = quality?.state || ((result.sourceGraph?.relationships || []).length ? "EXTRACTION_SUCCESS_COMPLETE" : "EXTRACTION_INCOMPLETE");
+  const qualityMessage = qualityState === "EXTRACTION_SUCCESS_COMPLETE" ? "Ownership chart analysed successfully"
+    : qualityState === "EXTRACTION_SUCCESS_PARTIAL" ? "Most ownership structure reconstructed; review required"
+      : qualityState === "NO_OWNERSHIP_DATA_CONFIRMED" ? "No ownership relationships were confirmed in the uploaded document"
+        : "Could not confidently reconstruct the complete ownership structure";
+  const qualityCounts = quality?.metrics
+    ? `${quality.metrics.ownershipEdgeCount || 0} ownership relationship${quality.metrics.ownershipEdgeCount === 1 ? "" : "s"} · ${quality.metrics.unresolvedPartyCount || 0} unresolved ${quality.metrics.unresolvedPartyCount === 1 ? "party" : "parties"}`
+    : null;
   return <>
-    <section className="ubo-customer-received"><span aria-hidden="true">✓</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · Evidence analysis complete</p></div><div className="ubo-customer-received-actions"><button type="button" onClick={() => setShowPreview((value) => !value)}>{showPreview ? "Hide chart" : "View chart"}</button><button type="button" onClick={onReplace}>Replace chart</button></div></section>
+    <section className="ubo-customer-received"><span aria-hidden="true">{qualityState === "EXTRACTION_SUCCESS_COMPLETE" ? "✓" : "!"}</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · {qualityMessage}</p>{qualityCounts && <p>{qualityCounts}</p>}</div><div className="ubo-customer-received-actions"><button type="button" onClick={() => setShowPreview((value) => !value)}>{showPreview ? "Hide chart" : "View chart"}</button><button type="button" onClick={onReplace}>Replace chart</button></div></section>
     {showPreview && <section className="ubo-customer-card ubo-customer-chart-preview" aria-label="Uploaded ownership chart preview">
       <header><div><small>Uploaded ownership chart</small><h2>{result.artifact.originalFilename}</h2></div><button type="button" onClick={() => setShowPreview(false)}>Close preview</button></header>
       {previewSource ? (preview.mediaType === "application/pdf"
@@ -172,16 +188,18 @@ function UploadedChartReceipt({ result, preview, onReplace }) {
 
 function Results({ result, researchResult, calculationMethod, onCalculationMethod, onReplace, persistenceNotice, preview, analysisVisible }) {
   const coverage = chartSourceCoverage(result);
+  const canContinue = result.extractionQuality?.canContinueToQuestions ?? ((result.sourceGraph?.relationships || []).length > 0);
+  const continuePanel = (eyebrow, description) => <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>{canContinue ? eyebrow : "Ownership extraction needs attention"}</small><h2 id="ubo-customer-next-step-title">{canContinue ? "Continue to questions" : "Review or replace the ownership chart"}</h2><p>{canContinue ? description : "We have kept every supported fact and unresolved item, but cannot safely continue from an empty or incomplete ownership reconstruction."}</p></div>{canContinue ? <a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a> : <button className="ubo-customer-primary" type="button" onClick={onReplace}>Replace chart</button>}</section>;
   return <div className="ubo-customer-results">
     <UploadedChartReceipt result={result} preview={preview} onReplace={onReplace} />
     {persistenceNotice && <p role="status" className={`ubo-customer-extraction-save ${persistenceNotice.kind}`}>{persistenceNotice.message}</p>}
-    {!analysisVisible ? <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Ownership chart processed</small><h2 id="ubo-customer-next-step-title">Continue to questions</h2><p>The ownership comparison and deterministic calculations have completed in the background. We’ll ask only for information that still matters.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section> : <>
+    {!analysisVisible ? continuePanel("Ownership chart processed", "The ownership comparison and deterministic calculations have completed in the background. We’ll ask only for information that still matters.") : <>
       <CertificationCard certification={result.certification} />
-      <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} companyName={result.company?.legalName || "the customer under review"} afterGraph={<ChartAssertions result={result} />} />
+      <ChartAnalysisPanel analysis={result.chartAnalysis} sourceProjection={result.sourceGraph} legacyProjection={result.chartAnalysis ? null : result.sourceGraph} method={calculationMethod} onMethodChange={onCalculationMethod} coverage={coverage} extractionQuality={result.extractionQuality} companyName={result.company?.legalName || "the customer under review"} afterGraph={<ChartAssertions result={result} />} />
       {/* Temporarily hidden: the owner-summary cards repeat information already available in the chart interpretation and assertions. */}
       {/* <OwnersCard owners={result.owners || []} /> */}
       <ChartResearchComparison researchResult={researchResult} chartFacts={result.candidateFacts || []} company={result.company} />
-      <section className="ubo-customer-next-step" aria-labelledby="ubo-customer-next-step-title"><div><small>Optional ownership analysis</small><h2 id="ubo-customer-next-step-title">Continue to questions</h2><p>This detailed analysis is informational and is not an approval gate.</p></div><a className="ubo-customer-primary" href={CUSTOMER_QUESTIONS_PATH}>Continue to questions <span>→</span></a></section>
+      {continuePanel("Optional ownership analysis", "This detailed analysis is informational and is not an approval gate.")}
       <div className="ubo-customer-stop"><strong>Chart analysis remains provisional.</strong><p>The uploaded chart and saved research remain distinct sources. This comparison does not merge, overwrite or approve either dataset.</p></div>
     </>}
   </div>;
@@ -257,6 +275,17 @@ export default function CustomerOwnershipChartPage() {
     setBusy(true); setError("");
     try {
       const contentBase64 = await fileAsBase64(file);
+      const digest = await fileSha256(file);
+      const reusable = reusableCustomerOwnershipChartExtraction(savedExtractions, digest);
+      if (reusable) {
+        setResult(reusable.result);
+        setAnalysisVisible(false);
+        setPreview(writeCustomerOwnershipChartPreview({ context, result: reusable.result, file, contentBase64 }));
+        writeCustomerOwnershipChartSession({ context, result: reusable.result, calculationMethod: reusable.calculationMethod });
+        setCalculationMethod(reusable.calculationMethod || "EFFECTIVE_INTEREST");
+        setPersistenceNotice({ kind: "success", message: "Validated extraction reused for this exact file and extraction profile. No provider call was made." });
+        return;
+      }
       const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

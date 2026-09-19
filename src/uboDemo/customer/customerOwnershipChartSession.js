@@ -4,6 +4,12 @@ export const CUSTOMER_OWNERSHIP_CHART_SESSION_KEY = "ubo-demo.customer-ownership
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION = "ubo-demo-customer-ownership-chart-session-v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY = "ubo-demo.customer-ownership-chart-library.v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION = "ubo-demo-customer-ownership-chart-library-v1";
+export const CURRENT_OWNERSHIP_EXTRACTION_PROFILE = Object.freeze({
+  profileVersion: "ownership-chart-extraction-v2",
+  schemaVersion: "ownership-chart-schema-v2",
+  instructionVersion: "ownership-chart-instructions-v2",
+  verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
+});
 const MAX_SAVED_EXTRACTIONS = 12;
 
 const RESEARCH_REFERENCE_KEYS = Object.freeze([
@@ -107,6 +113,21 @@ export function customerOwnershipChartExtractionsForContext(context, storage = w
   const key = customerCompanyKey(context?.company);
   return readCustomerOwnershipChartExtractions(storage).filter((record) => record.companyKey === key
     && (!record.result?.company || sameCustomerCompany(record.result.company, context.company)));
+}
+
+export function reusableCustomerOwnershipChartExtraction(records, digest, profile = CURRENT_OWNERSHIP_EXTRACTION_PROFILE) {
+  const normalizedDigest = normalized(digest);
+  if (!normalizedDigest) return null;
+  return (records || []).find((record) => {
+    const result = record?.result;
+    const diagram = result?.evidence?.ownershipDiagramCompleteness;
+    return normalized(result?.artifact?.digest) === normalizedDigest
+      && result?.extractionQuality?.state === "EXTRACTION_SUCCESS_COMPLETE"
+      && diagram?.profileVersion === profile.profileVersion
+      && diagram?.schemaVersion === profile.schemaVersion
+      && diagram?.instructionVersion === profile.instructionVersion
+      && diagram?.verificationStrategyVersion === profile.verificationStrategyVersion;
+  }) || null;
 }
 
 export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = window.localStorage) {

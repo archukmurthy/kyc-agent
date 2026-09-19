@@ -25,6 +25,7 @@ function provider(observed) {
     configuration() { return { provider: "fixture-provider", model: "fixture-v1", instructionReference: "fixture-instruction-v1" }; },
     capabilities() { return { contentKinds: ["image"], maxRequestBytes: 1024 * 1024, mediaTypes: ["image/png"] }; },
     async extract({ artifactInputs, requestedConcepts }) {
+      observed.calls = (observed.calls || 0) + 1;
       observed.bytes = Buffer.from(artifactInputs[0].verifiedContent);
       observed.concepts = requestedConcepts.map(({ concept }) => concept);
       observed.requestedConcepts = structuredClone(requestedConcepts);
@@ -35,7 +36,7 @@ function provider(observed) {
       const facts = [
         {
           concept: "economic_ownership", value: "75%", raw: "Mitchell Fortescue 75%", requested: true, valueFound: true, semanticRole: "business_fact", sampled: false, supportingArtifactIds: [artifactId],
-          typedRelationshipCandidate: { directionEstablished: true, relationshipType: "ECONOMIC_OWNERSHIP", subject: person, object: company, value: { kind: "EXACT", measurementType: "percentage", value: 75, unit: "percentage_points" }, temporal: { state: "unknown" }, qualifications: ["economic_interest_concept:SHARE_OWNERSHIP"] },
+          typedRelationshipCandidate: { directionEstablished: true, relationshipType: "ECONOMIC_OWNERSHIP", subject: person, object: company, value: { kind: "EXACT", measurementType: "percentage", value: 75, unit: "percentage_points" }, temporal: { state: "unknown" }, sourceSpecificMetadata: { connectorInventoryId: "connector-1", subjectInventoryId: "party-person", objectInventoryId: "party-company" }, qualifications: ["economic_interest_concept:SHARE_OWNERSHIP"] },
         },
         { concept: "certification_signer_name", value: certValue("certification_signer_name", "Alex Palmer"), raw: "Alex Palmer ACA", requested: true, valueFound: true, semanticRole: "business_fact", sampled: false, supportingArtifactIds: [artifactId] },
         { concept: "certification_signer_postnominal", value: certValue("certification_signer_postnominal", "ACA"), raw: "ACA", requested: true, valueFound: true, semanticRole: "business_fact", sampled: false, supportingArtifactIds: [artifactId] },
@@ -45,10 +46,17 @@ function provider(observed) {
         { concept: "certification_declaration", value: certValue("certification_declaration", "I certify that this chart is true and correct"), raw: "I certify that this chart is true and correct", requested: true, valueFound: true, semanticRole: "business_fact", sampled: false, supportingArtifactIds: [artifactId] },
         { concept: "certification_signature_presence", value: certValue("certification_signature_presence", "Visible signature-like mark"), raw: "Signed", requested: true, valueFound: true, semanticRole: "business_fact", sampled: false, supportingArtifactIds: [artifactId] },
       ];
+      facts.forEach((fact) => { fact.supportLocators = [{ artifact_id: artifactId, excerpt: fact.raw, description: fact.raw, locator_method: "fixture", qualified: true }]; });
       return {
         facts,
         requestedConceptOutcomes: requestedConcepts.map(({ concept }) => ({ concept, status: facts.some((fact) => fact.concept === concept) ? "found" : "not_found" })),
         completeness: { state: "complete", limitations: [] },
+        ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+        ownershipPartyInventory: [
+          { inventoryId: "party-person", visibleLabel: person.name, partyType: person.partyType, disposition: "RELATIONSHIP_ENDPOINT" },
+          { inventoryId: "party-company", visibleLabel: company.name, partyType: company.partyType, disposition: "RELATIONSHIP_ENDPOINT" },
+        ],
+        ownershipConnectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-person", objectInventoryId: "party-company", visibleLabel: "75%", percentageText: "75%", disposition: "RELATIONSHIP_MAPPED" }],
         support: { state: "supported", signals: { readability: "clear" } },
       };
     },
@@ -77,6 +85,9 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.sourceGraph.subject.displayName, "Better Comms VOIP Ltd");
   assert.equal(result.sourceGraph.relationships.length, 1);
   assert.equal(result.sourceCoverage.state, "CONNECTED");
+  assert.equal(result.extractionQuality.state, "EXTRACTION_SUCCESS_COMPLETE", JSON.stringify(result.evidence.ownershipDiagramCompleteness));
+  assert.equal(result.extractionQuality.canContinueToQuestions, true);
+  assert.equal(observed.calls, 1);
   assert.equal(result.sourceGraph.qualifications.length, 0);
   assert.equal(result.chartAnalysis.contractVersion, "ubo-demo-chart-analysis-v1");
   assert.equal(result.chartAnalysis.state, "EVALUATED");
@@ -493,6 +504,38 @@ test("person identity remains on the conservative non-legal-entity path", () => 
     canonicalRelationship("alice-two", person("Alice M. Morgan"), canonicalParty("Subsidiary Two Ltd")),
   ]);
 
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("confirmed zero relationships remains a non-progressable quality outcome rather than ordinary success", async () => {
+  const emptyProvider = {
+    configuration() { return { provider: "empty-fixture", model: "none", instructionReference: "empty-v1" }; },
+    capabilities() { return { contentKinds: ["image"], maxRequestBytes: 1024 * 1024, mediaTypes: ["image/png"] }; },
+    async extract({ requestedConcepts }) {
+      return {
+        facts: [],
+        requestedConceptOutcomes: requestedConcepts.map(({ concept }) => ({ concept, status: "not_found" })),
+        completeness: { state: "complete", limitations: [] },
+        ownershipDataStatus: "NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED",
+        ownershipPartyInventory: [],
+        ownershipConnectorInventory: [],
+      };
+    },
+  };
+  const result = await analyseCustomerOwnershipChart(input(), { provider: emptyProvider });
+  assert.equal(result.sourceGraph.relationships.length, 0);
+  assert.equal(result.extractionQuality.state, "NO_OWNERSHIP_DATA_CONFIRMED");
+  assert.equal(result.extractionQuality.canContinueToQuestions, false);
+});
+
+test("same-name natural people remain distinct when Evidence supplies separate source inventory identities", () => {
+  const person = (sourcePartyId) => ({ name: "Alex Morgan", entityType: "NATURAL_PERSON", sourcePartyId, jurisdiction: "GB", externalIdentifiers: [], sourcePartySnapshot: { description: "Alex Morgan" } });
+  const graph = canonicalGraph([
+    canonicalRelationship("alex-one", person("artifact:party-1"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("alex-two", person("artifact:party-2"), canonicalParty("Subsidiary Two Ltd")),
+  ]);
+  const alexNodes = graph.nodes.filter(({ displayName }) => displayName === "Alex Morgan");
+  assert.equal(alexNodes.length, 2);
   assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
 });
 

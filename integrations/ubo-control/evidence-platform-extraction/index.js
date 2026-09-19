@@ -172,7 +172,7 @@ function artifactIds(request) {
     .map((reference) => reference.referenceId))];
 }
 
-function candidateParty(party) {
+function candidateParty(party, sourcePartyId = null) {
   const type = {
     natural_person: "NATURAL_PERSON",
     legal_entity: "LEGAL_ENTITY",
@@ -194,6 +194,7 @@ function candidateParty(party) {
   };
   if (party?.name) mapped.name = party.name;
   if (party?.jurisdiction) mapped.jurisdiction = party.jurisdiction;
+  if (sourcePartyId) mapped.sourcePartyId = String(sourcePartyId);
   return mapped;
 }
 
@@ -300,6 +301,7 @@ function relationshipQualifiers(relationship, fact) {
     evidenceRequestRelation: fact.requestRelation || null,
     evidenceGroundingType: fact.groundingType || null,
     evidenceSupportState: fact.supportState || null,
+    evidenceSourceSpecificMetadata: clone(relationship.sourceSpecificMetadata || {}),
     ...(economicConcept ? { economicInterestConcept: economicConcept } : {}),
   };
 }
@@ -346,8 +348,12 @@ function mapTypedFact(fact, interpretation, artifactById, factScope) {
       },
     };
   }
-  const subject = candidateParty(relationship.subject);
-  const object = candidateParty(relationship.object);
+  const sourceMetadata = relationship.sourceSpecificMetadata || {};
+  const sourcePartyId = (inventoryId) => inventoryId
+    ? `${fact.primaryArtifactId || fact.supportingArtifactIds?.[0] || "evidence-artifact"}:${inventoryId}`
+    : null;
+  const subject = candidateParty(relationship.subject, sourcePartyId(sourceMetadata.subjectInventoryId));
+  const object = candidateParty(relationship.object, sourcePartyId(sourceMetadata.objectInventoryId));
   const mappedRelationship = RELATIONSHIP_MAP[relationship.relationshipType];
   if (mappedRelationship) {
     const mapped = {

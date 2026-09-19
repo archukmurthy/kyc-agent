@@ -7,6 +7,7 @@ const {
   ANTHROPIC_R4_INSTRUCTION_REFERENCE,
   AnthropicSemanticProvider,
 } = require("../../evidence/a3/providers.js");
+const { EXTRACTION_QUALITY_STATE, OWNERSHIP_CHART_PROFILE } = require("../../evidence/a3/ownershipChartProfile.js");
 const { createEvidenceConsumer, CONTRACT_VERSIONS } = require("../../evidence/consumer/v1/index.js");
 const { MemoryR1Repository } = require("../../evidence/r1/repository.js");
 const { PrivateArtifactIngestionService } = require("../../evidence/r1/service.js");
@@ -133,7 +134,7 @@ function defaultProvider() {
   });
 }
 
-function providerRelationship(relationship) {
+function providerRelationship(relationship, sourceSpecificMetadata = {}) {
   const source = relationship.value || {};
   let value = { kind: source.kind, measurementType: source.measurementType, unit: source.unit || null };
   if (source.kind === "EXACT") value.value = source.exact;
@@ -147,6 +148,7 @@ function providerRelationship(relationship) {
     value,
     temporal: relationship.temporal,
     qualifications: relationship.qualifications,
+    sourceSpecificMetadata,
   };
 }
 
@@ -172,6 +174,20 @@ function reviewedBettercommsProvider() {
       const reviewed = buildBettercommsServiceResult({ operationKey: "customer-upload-reviewed-fixture", correlation: {} });
       const sourceFacts = [...reviewed.responsiveFacts, ...reviewed.discoveredFacts];
       const requested = new Set(requestedConcepts.map(({ concept }) => concept));
+      const partyRows = new Map();
+      sourceFacts.forEach((fact) => {
+        if (!fact.typedRelationship) return;
+        [fact.typedRelationship.subject, fact.typedRelationship.object].forEach((party) => {
+          const key = `${party.partyType}:${party.name}`;
+          if (!partyRows.has(key)) partyRows.set(key, {
+            inventoryId: `party-${partyRows.size + 1}`,
+            visibleLabel: party.name,
+            partyType: party.partyType,
+            sourceLocator: {},
+            disposition: "RELATIONSHIP_ENDPOINT",
+          });
+        });
+      });
       const facts = sourceFacts.map((fact) => ({
         concept: fact.semanticConceptId,
         value: fact.value,
@@ -181,8 +197,14 @@ function reviewedBettercommsProvider() {
         semanticRole: "business_fact",
         sampled: false,
         supportingArtifactIds: [selected.artifact.id],
-        typedRelationshipCandidate: fact.typedRelationship ? providerRelationship(fact.typedRelationship) : null,
+        supportLocators: [{ artifact_id: selected.artifact.id, excerpt: fact.supportLocators?.[0]?.excerpt || "Source-reviewed ownership-chart assertion", description: fact.supportLocators?.[0]?.description || "Source-reviewed ownership-chart assertion", locator_method: "manual_source_review_fixture", qualified: true }],
+        typedRelationshipCandidate: fact.typedRelationship ? providerRelationship(fact.typedRelationship, {
+          connectorInventoryId: `connector-${fact.id}`,
+          subjectInventoryId: partyRows.get(`${fact.typedRelationship.subject.partyType}:${fact.typedRelationship.subject.name}`).inventoryId,
+          objectInventoryId: partyRows.get(`${fact.typedRelationship.object.partyType}:${fact.typedRelationship.object.name}`).inventoryId,
+        }) : null,
       }));
+      const ownershipFacts = sourceFacts.filter((fact) => fact.typedRelationship);
       return {
         facts,
         requestedConceptOutcomes: requestedConcepts.map(({ concept }) => ({
@@ -193,6 +215,17 @@ function reviewedBettercommsProvider() {
           state: "complete",
           limitations: ["Exact SHA-256 match to the source-backed, manually reviewed Bettercomms demo fixture."],
         },
+        ownershipDataStatus: ownershipFacts.length ? "OWNERSHIP_RELATIONSHIPS_PRESENT" : "NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED",
+        ownershipPartyInventory: [...partyRows.values()],
+        ownershipConnectorInventory: ownershipFacts.map((fact) => ({
+          connectorId: `connector-${fact.id}`,
+          subjectInventoryId: partyRows.get(`${fact.typedRelationship.subject.partyType}:${fact.typedRelationship.subject.name}`).inventoryId,
+          objectInventoryId: partyRows.get(`${fact.typedRelationship.object.partyType}:${fact.typedRelationship.object.name}`).inventoryId,
+          visibleLabel: fact.typedRelationship.relationshipType,
+          percentageText: fact.typedRelationship.value?.exact == null ? "" : `${fact.typedRelationship.value.exact}%`,
+          sourceLocator: {},
+          disposition: "RELATIONSHIP_MAPPED",
+        })),
         support: { state: "supported", signals: { reviewedFixtureDigestMatched: true } },
       };
     },
@@ -298,6 +331,7 @@ function graphCategory(party) {
 }
 
 function graphEntityId(party) {
+  if (party?.sourcePartyId) return `source-entity:${createHash("sha256").update(`SOURCE_PARTY|${party.sourcePartyId}`).digest("hex").slice(0, 20)}`;
   const name = party?.name || party?.sourcePartySnapshot?.description || "Unknown party";
   return `source-entity:${createHash("sha256").update(`${graphCategory(party)}|${normalizedGraphName(name)}`).digest("hex").slice(0, 20)}`;
 }
@@ -649,7 +683,9 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
     if (canonicalEntityId) return { ...party, entityId: canonicalEntityId };
     if (!party?.name || party.entityId) return party;
     const category = graphCategory(party);
-    const identitySeed = `${category}|${String(party.jurisdiction || company.countryCode || "").toUpperCase()}|${normalizedPartyName(party.name)}`;
+    const identitySeed = party.sourcePartyId
+      ? `${category}|SOURCE_PARTY|${party.sourcePartyId}`
+      : `${category}|${String(party.jurisdiction || company.countryCode || "").toUpperCase()}|${normalizedPartyName(party.name)}`;
     return { ...party, entityId: `chart-party:${createHash("sha256").update(identitySeed).digest("hex").slice(0, 20)}` };
   };
   let relationshipIndex = 0;
@@ -828,6 +864,48 @@ function presentation(candidateFacts, issues = []) {
   return { owners, assertions };
 }
 
+function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, sourceCoverage }) {
+  const diagram = interpretation?.ownershipDiagramCompleteness || null;
+  const ownershipEdgeCount = sourceGraph?.relationships?.length || 0;
+  const issues = capabilityResult?.issues || [];
+  const rejectionReasonCodes = [...new Set([
+    ...(diagram?.relationshipValidationFailures || []).flatMap((item) => item.reasonCodes || []),
+    ...issues.map((item) => item.code).filter(Boolean),
+  ])];
+  let state = diagram?.state || EXTRACTION_QUALITY_STATE.EXTRACTION_INCOMPLETE;
+  if (ownershipEdgeCount === 0 && state !== EXTRACTION_QUALITY_STATE.NO_OWNERSHIP_DATA_CONFIRMED) {
+    state = EXTRACTION_QUALITY_STATE.EXTRACTION_INCOMPLETE;
+  } else if (sourceCoverage?.state === "REVIEW_REQUIRED" && state === EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE) {
+    state = EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL;
+  }
+  const canContinueToQuestions = ownershipEdgeCount > 0 && [
+    EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE,
+    EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL,
+  ].includes(state);
+  return {
+    contractVersion: "ubo-demo-ownership-extraction-quality-v1",
+    state,
+    canContinueToQuestions,
+    unresolvedParties: structuredClone(diagram?.unresolvedParties || []),
+    unresolvedRelationships: structuredClone(diagram?.unresolvedRelationships || []),
+    unmatchedInventoryItems: structuredClone(diagram?.unmatchedInventoryItems || []),
+    relationshipValidationFailures: structuredClone(diagram?.relationshipValidationFailures || []),
+    metrics: {
+      candidateFactCount: capabilityResult?.candidateFacts?.length || 0,
+      ownershipEdgeCount,
+      completenessState: state === EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE ? "COMPLETE"
+        : state === EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL ? "PARTIAL"
+          : "INCOMPLETE",
+      verificationPassUsed: diagram?.metrics?.verificationPassUsed === true,
+      relationshipRejectedCount: diagram?.metrics?.rejectedRelationshipCount || 0,
+      unmappedFactCount: issues.filter((item) => item.code === "EVIDENCE_FACT_NOT_TYPED").length,
+      unresolvedPartyCount: diagram?.metrics?.unresolvedPartyCount || 0,
+      unresolvedConnectorCount: diagram?.metrics?.unresolvedConnectorCount || 0,
+    },
+    rejectionReasonCodes,
+  };
+}
+
 async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
   const input = validateRequest(rawInput);
   const tenantId = "ubo-demo-customer";
@@ -901,6 +979,9 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
         extractionContext: {
           ...request.extractionContext,
           jurisdiction: input.demoContext.company.countryCode,
+          schemaReference: OWNERSHIP_CHART_PROFILE.profileVersion,
+          schemaVersionReference: OWNERSHIP_CHART_PROFILE.schemaVersion,
+          tenantConfigVersion: `${OWNERSHIP_CHART_PROFILE.instructionVersion}:${OWNERSHIP_CHART_PROFILE.verificationStrategyVersion}`,
           purpose: `Complete source-faithful ownership chart relationship enumeration for ${input.demoContext.company.legalName} (${input.demoContext.company.registrationNumber}); no UBO or policy conclusion`,
         },
       });
@@ -959,6 +1040,12 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     capturedAt: ingestion.capturedAt,
   }, requestId);
   const sourceCoverage = sourceGraphCoverage(sourceGraph);
+  const extractionQuality = extractionQualityFor({
+    interpretation: interpretationEnvelope.result,
+    capabilityResult,
+    sourceGraph,
+    sourceCoverage,
+  });
   const chartAnalysis = buildChartAnalysis({
     candidateFacts: capabilityResult.candidateFacts,
     operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
@@ -990,6 +1077,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
       model: interpretationEnvelope.result.extractionRun?.model || null,
       inputCompleteness: interpretationEnvelope.result.completeness?.input || null,
       extractionCompleteness: interpretationEnvelope.result.completeness?.extraction || null,
+      ownershipDiagramCompleteness: interpretationEnvelope.result.ownershipDiagramCompleteness || null,
       limitations: interpretationEnvelope.result.limitations || [],
       downstreamEvaluation: interpretationEnvelope.result.downstreamEvaluation,
     },
@@ -1005,6 +1093,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     certification: certificationFrom(capabilityResult.candidateFacts),
     sourceGraph,
     sourceCoverage,
+    extractionQuality,
     chartAnalysis,
     owners: displayed.owners,
     assertions: displayed.assertions,

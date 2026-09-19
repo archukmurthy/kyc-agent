@@ -124,6 +124,21 @@ test("processed ownership continues to the separate questions step", () => {
   expect(screen.queryByRole("heading", { name: "Calculation view" })).not.toBeInTheDocument();
 });
 
+test("an incomplete empty extraction never appears successful or enables questions", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  const incomplete = {
+    ...analysis,
+    extractionQuality: { state: "EXTRACTION_INCOMPLETE", canContinueToQuestions: false, metrics: { ownershipEdgeCount: 0, unresolvedPartyCount: 2 } },
+    sourceGraph: { ...analysis.sourceGraph, relationships: [] },
+  };
+  writeCustomerOwnershipChartSession({ context, result: incomplete });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByText(/Could not confidently reconstruct the complete ownership structure/i)).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /Continue to questions/i })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: /Replace chart/i }).length).toBeGreaterThan(0);
+});
+
 test("the top ownership-analysis link opens a restored analysis directly", () => {
   seed();
   const context = readCustomerDemoContext();

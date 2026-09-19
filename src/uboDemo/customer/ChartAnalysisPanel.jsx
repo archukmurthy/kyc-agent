@@ -101,7 +101,7 @@ function provisionalUboLabel(state, method) {
   return "Provisional UBO · review required";
 }
 
-export default function ChartAnalysisPanel({ analysis, method, onMethodChange, legacyProjection = null, sourceProjection = null, coverage = null, companyName = "the customer under review", afterGraph = null }) {
+export default function ChartAnalysisPanel({ analysis, method, onMethodChange, legacyProjection = null, sourceProjection = null, coverage = null, extractionQuality = null, companyName = "the customer under review", afterGraph = null }) {
   const view = analysis?.view;
   const [scope, setScope] = useState("FULL");
   const [dimension, setDimension] = useState("ALL");
@@ -110,9 +110,12 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   const ownershipSteps = useMemo(() => sourceOwnershipSteps(sourceProjection), [sourceProjection]);
   const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection, companyName), scope, dimension), [view?.graph, sourceProjection, companyName, scope, dimension]);
   if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}{afterGraph}</section>;
-  const incomplete = coverage?.state === "REVIEW_REQUIRED";
+  const qualityState = extractionQuality?.state || null;
+  const incomplete = coverage?.state === "REVIEW_REQUIRED" || ["EXTRACTION_INCOMPLETE", "NO_OWNERSHIP_DATA_CONFIRMED"].includes(qualityState);
+  const partial = qualityState === "EXTRACTION_SUCCESS_PARTIAL";
+  const warning = incomplete || partial;
   return <section className="ubo-customer-chart-analysis" aria-label="Uploaded chart analysis">
-    <div className={`ubo-customer-analysis-status ${incomplete ? "warning" : ""}`} role={incomplete ? "alert" : undefined}><div><small>Chart analysis status</small><strong>{incomplete ? "Incomplete ownership map" : "Provisional chart assessment"}</strong></div><p>{incomplete ? <>The extracted relationship chain does not reach {companyName}. The visible source facts remain available, but this result is not the complete chart.</> : <>This is a separate assessment of the uploaded chart. Filters change the presentation only; effective ownership uses the source-backed ownership chain. The chart has not been independently verified as current.</>}</p></div>
+    <div className={`ubo-customer-analysis-status ${warning ? "warning" : ""}`} role={warning ? "alert" : undefined}><div><small>Chart analysis status</small><strong>{incomplete ? "Incomplete ownership map" : partial ? "Partial ownership map — review required" : "Provisional chart assessment"}</strong></div><p>{incomplete ? <>The extracted relationship chain does not reach {companyName} with sufficient confidence. Every supported fact and unresolved inventory item remains available below; this is not a complete chart.</> : partial ? <>Most of the ownership structure was reconstructed, but unresolved parties, connectors or rejected relationship mappings still require review. The mapped facts remain provisional.</> : <>This is a separate assessment of the uploaded chart. Filters change the presentation only; effective ownership uses the source-backed ownership chain. The chart has not been independently verified as current.</>}</p></div>
     <div className="ubo-customer-graph-controls"><fieldset><legend>Graph scope</legend><label><input type="radio" name="chart-graph-scope" checked={scope === "RELEVANT"} onChange={() => setScope("RELEVANT")} />Relevant to customer</label><label><input type="radio" name="chart-graph-scope" checked={scope === "FULL"} onChange={() => setScope("FULL")} />Full source graph</label></fieldset><fieldset><legend>Relationships</legend>{["ALL", "OWNERSHIP", "VOTING", "CONTROL"].map((value) => <label key={value}><input type="radio" name="chart-graph-dimension" checked={dimension === value} onChange={() => setDimension(value)} />{value === "ALL" ? "All" : value[0] + value.slice(1).toLowerCase()}</label>)}</fieldset></div>
     <CustomerOwnershipGraph projection={graph} entityLabels={analysis.entityLabels} />
     {afterGraph}
