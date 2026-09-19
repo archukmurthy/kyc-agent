@@ -2,12 +2,15 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { identity } = require("./uboPersistence");
+const { withTimeout } = require("./boundedAsync");
 
-async function persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh, result }) {
+const DATABASE_AUDIT_TIMEOUT_MS = Number(process.env.UBO_DATABASE_AUDIT_TIMEOUT_MS || 2500);
+
+async function persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh, result, timeoutMs = DATABASE_AUDIT_TIMEOUT_MS }) {
   if (!process.env.DATABASE_URL) return { persisted: false, reason: "DATABASE_URL not configured" };
   try {
     const sql = neon(process.env.DATABASE_URL);
-    await sql`
+    await withTimeout(() => sql`
       INSERT INTO ubo_investigations (
         tenant_id, entity_identity_hash, entity_name, jurisdiction, registration_number,
         status, cache_hit, force_refresh, cached_at, valid_until, source_config,
@@ -19,7 +22,7 @@ async function persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh
         ${JSON.stringify(result.searchEvents || [])}, ${JSON.stringify(result.investigationLog || [])}, ${JSON.stringify(result.ownershipGraph || {})}, ${JSON.stringify(result.evidence || [])}, ${JSON.stringify(result.resolutions || [])},
         ${JSON.stringify({ ubos: result.ubos || [], explanations: result.explanations || []})}, ${JSON.stringify(result.missingInformation || [])}, ${JSON.stringify(result.budget || {})}
       )
-    `;
+    `, { label: "UBO database audit persistence", timeoutMs });
     return { persisted: true };
   } catch (error) {
     console.warn("[uboDatabaseAudit]", error.message);

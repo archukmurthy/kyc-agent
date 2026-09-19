@@ -94,6 +94,13 @@ function prepareDemoLiveDiscoveryBody(body) {
   return { ...clone(body), forceRefresh: true, demoRegistryContext: true };
 }
 
+function discoveryTerminalState(replayCapture) {
+  const outcome = replayCapture?.discoveryResult?.outcome?.state;
+  if (outcome === "COMPLETE") return "COMPLETE";
+  if (["PARTIAL", "NO_DATA", "INCONCLUSIVE"].includes(outcome) || replayCapture?.discoveryResult?.candidateFacts?.length) return "PARTIAL";
+  return "FAILED";
+}
+
 function sameRegisteredSubject(party, subject) {
   if (!party || !subject) return false;
   if (party.entityId && subject.entityId && party.entityId === subject.entityId) return true;
@@ -291,4 +298,4 @@ function autoReviewDemoReplaySession(session, recordedAt = new Date().toISOStrin
   return reviewDemoSession(session, recordedAt, (reviewed) => `Saved live replay · ${reviewed.companyContext.legalEntityName} · provisional demo result · no provider call`);
 }
 
-module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });
+module.exports = Object.freeze({ SAFE_RELATIONSHIPS, autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, discoveryTerminalState, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord });

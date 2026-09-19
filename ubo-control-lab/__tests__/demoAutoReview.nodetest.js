@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
+const { autoReviewDemoReplaySession, autoReviewDemoSession, buildPlan, discoveryTerminalState, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../server/demoAutoReview");
 const { createDiscoveryReplayRecord, validateDiscoveryReplayRecord } = require("../server/labEngine");
 const { normalizedFixtureInput, startReviewReplay } = require("../server/reviewLabEngine");
 const tdrPscFixture = require("../fixtures/tdr-psc.json");
@@ -20,6 +20,12 @@ function replaySession(fixtureId) {
   session.sourceLabel = `Live Discovery · ${session.companyContext.legalEntityName}`;
   return session;
 }
+
+test("source-limited and no-data discovery remain terminal PARTIAL rather than becoming FAILED", () => {
+  assert.equal(discoveryTerminalState({ discoveryResult: { outcome: { state: "PARTIAL" }, candidateFacts: [] } }), "PARTIAL");
+  assert.equal(discoveryTerminalState({ discoveryResult: { outcome: { state: "NO_DATA" }, candidateFacts: [] } }), "PARTIAL");
+  assert.equal(discoveryTerminalState({ discoveryResult: { outcome: { state: "FAILED" }, candidateFacts: [] } }), "FAILED");
+});
 
 function threeEdgeNormalizedResult() {
   const baseline = normalizedFixtureInput({ fixtureId: "V2-LAB-01" });

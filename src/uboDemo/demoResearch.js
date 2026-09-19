@@ -3,6 +3,10 @@ export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
 export const DEMO_GRAPH_DIMENSIONS = Object.freeze({ ALL: "ALL", OWNERSHIP: "OWNERSHIP", VOTING: "VOTING", CONTROL: "CONTROL" });
 export const DEMO_CALCULATION_FIXTURES = Object.freeze({ ALICE_28: "DEMO-ALICE-28", METHOD_60_40: "V2-LAB-02" });
+export const BROWSER_RESEARCH_TIMEOUT_MS = 70000;
+export const LAST_SUCCESSFUL_RESEARCH_KEY = "ubo-demo.last-successful-research.v1";
+
+const activeResearchJobs = new Map();
 
 function entityProfile(ownershipType) {
   return ["LLP", "PARTNERSHIP"].includes(ownershipType) ? "LLP" : "COMPANY";
@@ -31,20 +35,163 @@ export function buildResearchRequest({ demoCase, sourceMode, replayRecord, demoF
   };
 }
 
-export async function runDemoResearch(input, fetchImpl = window.fetch) {
-  const request = buildResearchRequest(input);
-  const response = await fetchImpl("/api/ubo-control-lab", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(request),
-  });
+function researchJobId(input) {
+  return input.jobId || input.demoCase?.analysisContext?.researchJobId || input.demoCase?.demoCaseId || `ubo-browser-${Date.now()}`;
+}
+
+function emitSseFrame(frame, notify) {
+  const line = frame.split("\n").find((item) => item.startsWith("data: "));
+  if (!line) return null;
+  const event = JSON.parse(line.slice(6));
+  notify(event);
+  if (event.stage === "error") {
+    const error = new Error(event.message || "Research could not be completed safely.");
+    error.code = event.code || "RESEARCH_FAILED";
+    throw error;
+  }
+  return event.stage === "complete" ? event.result : null;
+}
+
+async function readResearchResponse(response, notify) {
+  const contentType = response.headers?.get?.("content-type") || "";
+  if (contentType.includes("text/event-stream") && response.body?.getReader) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let terminalResult = null;
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() || "";
+      for (const frame of frames) terminalResult = emitSseFrame(frame, notify) || terminalResult;
+      if (done) break;
+    }
+    if (buffer.trim()) terminalResult = emitSseFrame(buffer, notify) || terminalResult;
+    if (!terminalResult) throw new Error("Research stream ended without a terminal result.");
+    return terminalResult;
+  }
   const result = await response.json();
+  notify({ jobId: result?.jobId, stage: "complete", terminalState: result?.terminalState, message: "Research response received" });
+  return result;
+}
+
+export async function runDemoResearch(input, fetchImpl = window.fetch, { signal, timeoutMs = BROWSER_RESEARCH_TIMEOUT_MS, onProgress = () => {} } = {}) {
+  const request = buildResearchRequest(input);
+  const jobId = researchJobId(input);
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener?.("abort", abortFromCaller, { once: true });
+  let timer;
+  let response;
+  let result;
+  try {
+    console.info(`[ubo-research:${jobId}] browser request started`);
+    const operation = async () => {
+      response = await fetchImpl("/api/ubo-control-lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ ...request, jobId }),
+        signal: controller.signal,
+      });
+      result = await readResearchResponse(response, onProgress);
+    };
+    await Promise.race([
+      operation(),
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+          reject(new Error("browser timeout"));
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (cause) {
+    if (timedOut) {
+      const error = new Error(`Browser research request timed out after ${timeoutMs}ms`);
+      error.code = "BROWSER_RESEARCH_TIMEOUT";
+      throw error;
+    }
+    if (controller.signal.aborted) {
+      const error = new Error("Research request was superseded by a newer job.");
+      error.code = "RESEARCH_ABORTED";
+      throw error;
+    }
+    throw cause;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+    signal?.removeEventListener?.("abort", abortFromCaller);
+  }
   if (!response.ok) {
     const error = new Error(result?.message || result?.error || "Research could not be completed safely.");
     error.code = result?.code;
     throw error;
   }
+  console.info(`[ubo-research:${jobId}] browser terminal ${result?.terminalState || "COMPLETE"}`);
   return result;
+}
+
+export function acquireDemoResearch(input, { fetchImpl = window.fetch, timeoutMs = BROWSER_RESEARCH_TIMEOUT_MS, onProgress = () => {} } = {}) {
+  const jobId = researchJobId(input);
+  for (const [otherJobId, other] of activeResearchJobs) {
+    if (otherJobId !== jobId) {
+      other.controller.abort("superseded");
+      activeResearchJobs.delete(otherJobId);
+    }
+  }
+  let entry = activeResearchJobs.get(jobId);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = { controller, listeners: new Set(), subscribers: 0, releaseTimer: null, settled: false, promise: null };
+    const notify = (event) => entry.listeners.forEach((listener) => listener(event));
+    entry.promise = runDemoResearch({ ...input, jobId }, fetchImpl, { signal: controller.signal, timeoutMs, onProgress: notify })
+      .finally(() => { entry.settled = true; if (entry.subscribers === 0) activeResearchJobs.delete(jobId); });
+    activeResearchJobs.set(jobId, entry);
+  }
+  if (entry.releaseTimer) { window.clearTimeout(entry.releaseTimer); entry.releaseTimer = null; }
+  entry.subscribers += 1;
+  entry.listeners.add(onProgress);
+  let released = false;
+  return {
+    jobId,
+    promise: entry.promise,
+    release() {
+      if (released) return;
+      released = true;
+      entry.listeners.delete(onProgress);
+      entry.subscribers = Math.max(0, entry.subscribers - 1);
+      if (entry.subscribers === 0) {
+        entry.releaseTimer = window.setTimeout(() => {
+          if (entry.subscribers !== 0) return;
+          if (!entry.settled) entry.controller.abort("unmounted");
+          activeResearchJobs.delete(jobId);
+        }, 0);
+      }
+    },
+  };
+}
+
+export function abortActiveDemoResearchJobs() {
+  for (const entry of activeResearchJobs.values()) entry.controller.abort("superseded");
+  activeResearchJobs.clear();
+}
+
+function companyResearchKey(company = {}) {
+  return [company.countryCode, company.registrationNumber].map((value) => String(value || "").trim().toUpperCase()).join(":");
+}
+
+export function saveLastSuccessfulResearch(company, result, storage = window.localStorage) {
+  if (!result || result.status === "FAILED") return;
+  storage.setItem(LAST_SUCCESSFUL_RESEARCH_KEY, JSON.stringify({ companyKey: companyResearchKey(company), savedAt: new Date().toISOString(), result }));
+}
+
+export function readLastSuccessfulResearch(company, storage = window.localStorage) {
+  try {
+    const record = JSON.parse(storage.getItem(LAST_SUCCESSFUL_RESEARCH_KEY));
+    return record?.companyKey === companyResearchKey(company) && record?.result ? record : null;
+  } catch (_) { return null; }
 }
 
 export function latestReviewView(session) {
@@ -69,7 +216,8 @@ export function compactResearchResult(session, sourceMode, calculationMethod = "
     }];
   }));
   return {
-    status: "COMPLETE",
+    status: ["COMPLETE", "PARTIAL", "FAILED"].includes(session?.terminalState) ? session.terminalState : "COMPLETE",
+    jobId: session?.jobId || null,
     sourceMode,
     sourceLabel: session?.sourceLabel || sourceMode,
     candidateSources: session?.candidateSources || [],

@@ -3,9 +3,37 @@
 const { runUboFramework } = require("../agents/ubo/uboOrchestrator");
 const { webResearchOwnershipAdapter } = require("../agents/ubo/webResearchOwnershipAdapter");
 const { companiesHouseOwnershipAdapter } = require("../agents/ubo/companiesHouseOwnershipAdapter");
-const { getFresh, resultKey, cacheResult, appendAudit, identity } = require("../agents/ubo/uboPersistence");
+const { getFresh, resultKey, cacheResult, appendAudit, identity, CACHE_TTL } = require("../agents/ubo/uboPersistence");
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
+const { withTimeout } = require("../agents/ubo/boundedAsync");
 const { randomUUID } = require("crypto");
+
+const PERSISTENCE_TIMEOUT_MS = Number(process.env.UBO_PERSISTENCE_TIMEOUT_MS || 2500);
+
+function terminalState(result) {
+  if (!result) return "FAILED";
+  if (String(result.status).toLowerCase() === "resolved") return "COMPLETE";
+  return (result.ownershipGraph?.edges?.length || result.evidence?.length || result.missingInformation?.length) ? "PARTIAL" : "FAILED";
+}
+
+function cacheMetadata(result, layer) {
+  const ttlSeconds = CACHE_TTL[result.status] || CACHE_TTL.partial;
+  const cachedAt = new Date().toISOString();
+  return { hit: layer === "investigation", cachedAt, validUntil: new Date(Date.now() + ttlSeconds * 1000).toISOString(), layer };
+}
+
+function schedulePersistence({ jobId, tenantId, input, cacheHit, forceRefresh, result, cacheKey, auditId }) {
+  const tasks = [
+    ["cache", () => cacheResult(input, tenantId, result)],
+    ["audit", () => appendAudit({ id: auditId, tenantId, entityIdentityHash: identity(input), cacheHit, forceRefresh, cacheKey, status: result.status, result })],
+    ["database", () => persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh, result })],
+  ];
+  tasks.forEach(([label, operation]) => {
+    void withTimeout(operation, { label: `UBO ${label} persistence`, timeoutMs: PERSISTENCE_TIMEOUT_MS })
+      .then((value) => console.info(`[ubo-research:${jobId}] persistence ${label} complete${value?.persisted === false ? " (degraded)" : ""}`))
+      .catch((error) => console.warn(`[ubo-research:${jobId}] persistence ${label} failed: ${error.code || error.message}`));
+  });
+}
 
 function forReviewer(result) {
   return {
@@ -24,16 +52,20 @@ function forReviewer(result) {
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false, demoRegistryContext = false } = req.body || {};
+  const suppliedJobId = String(req.body?.jobId || "");
+  const jobId = /^[A-Za-z0-9:_-]{8,120}$/.test(suppliedJobId) ? suppliedJobId : `ubo-${randomUUID()}`;
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
   const threshold = Number(uboThreshold || 25);
   const discovery = Number(discoveryThreshold || 5);
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) return res.status(400).json({ error: "uboThreshold must be a number from 0 to 100" });
   if (!Number.isFinite(discovery) || discovery <= 0 || discovery > 100) return res.status(400).json({ error: "discoveryThreshold must be a number from 0 to 100" });
   const streaming = String(req.headers?.accept || "").includes("text/event-stream");
-  const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify(event)}\n\n`); };
+  const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify({ jobId, ...event })}\n\n`); };
   const finish = (payload) => {
-    if (!streaming) return res.status(200).json(payload);
-    emit({ stage: "complete", message: "Investigation complete", result: payload });
+    const completed = { ...payload, jobId, terminalState: terminalState(payload) };
+    console.info(`[ubo-research:${jobId}] terminal ${completed.terminalState}`);
+    if (!streaming) return res.status(200).json(completed);
+    emit({ stage: "complete", message: "Investigation complete", terminalState: completed.terminalState, result: completed });
     return res.end();
   };
   if (streaming) {
@@ -44,7 +76,8 @@ module.exports = async function handler(req, res) {
   }
   try {
     const input = { entityName, registrationNumber, jurisdiction: String(jurisdiction).toUpperCase() };
-    const run = { id: randomUUID(), requestedEntity: input, startedAt: new Date().toISOString() };
+    const run = { id: randomUUID(), jobId, requestedEntity: input, startedAt: new Date().toISOString() };
+    console.info(`[ubo-research:${jobId}] started`);
     const key = resultKey(input, tenantId);
     emit({ stage: "cache_check", message: "Checking previous investigation cache" });
     if (!forceRefresh) {
@@ -52,28 +85,27 @@ module.exports = async function handler(req, res) {
       if (cached) {
         emit({ stage: "cache_hit", message: "Reusing cached investigation — no live research needed" });
         const response = { ...cached.result, cache: { hit: true, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "investigation" } };
-        const auditId = await appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: true, forceRefresh: false, cacheKey: key, status: response.status, result: response });
-        const database = await persistUboInvestigation({ tenantId, input, cacheHit: true, forceRefresh: false, result: response });
-        return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persisted: true, database } }));
+        const auditId = randomUUID();
+        schedulePersistence({ jobId, tenantId, input, cacheHit: true, forceRefresh: false, result: response, cacheKey: key, auditId });
+        return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
       }
     }
     const result = await runUboFramework({
       entityName,
       registrationNumber: registrationNumber || null,
       jurisdiction: String(jurisdiction).toUpperCase(),
-      tenantConfig: { tenantId, forceRefresh: forceRefresh === true || forceRefresh === "true", demoRegistryContext: demoRegistryContext === true, uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
+      tenantConfig: { tenantId, signal: req.signal, forceRefresh: forceRefresh === true || forceRefresh === "true", demoRegistryContext: demoRegistryContext === true, uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
       adapters: { companiesHouse: companiesHouseOwnershipAdapter, webResearch: webResearchOwnershipAdapter },
       onProgress: emit,
     });
-    const cached = await cacheResult(input, tenantId, result);
-    const response = { ...result, cache: { hit: false, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "live" } };
-    const auditId = await appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: false, forceRefresh: Boolean(forceRefresh), cacheKey: key, status: response.status, result: response });
-    const database = await persistUboInvestigation({ tenantId, input, cacheHit: false, forceRefresh: Boolean(forceRefresh), result: response });
-    emit({ stage: "audit", message: "Saving audit snapshot" });
-    return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persisted: true, database } }));
+    const response = { ...result, cache: cacheMetadata(result, "live") };
+    const auditId = randomUUID();
+    schedulePersistence({ jobId, tenantId, input, cacheHit: false, forceRefresh: Boolean(forceRefresh), result: response, cacheKey: key, auditId });
+    emit({ stage: "persistence_queued", message: "Research complete; audit persistence queued" });
+    return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
   } catch (error) {
-    console.error("[api/ubo-discovery]", error);
-    if (streaming) { emit({ stage: "error", message: error.message }); return res.end(); }
-    return res.status(500).json({ error: "UBO discovery failed", message: error.message });
+    console.error(`[ubo-research:${jobId}] failed`, error.code || error.message);
+    if (streaming) { emit({ stage: "error", terminalState: "FAILED", code: error.code || "UBO_DISCOVERY_FAILED", message: error.message }); return res.end(); }
+    return res.status(500).json({ error: "UBO discovery failed", terminalState: "FAILED", jobId, code: error.code || "UBO_DISCOVERY_FAILED", message: error.message });
   }
 };

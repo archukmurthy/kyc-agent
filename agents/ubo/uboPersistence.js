@@ -28,7 +28,7 @@ async function cacheResult(input, tenantId, result) {
 async function appendAudit(record) {
   // Immutable, retrieval-oriented audit snapshots. KV/Redis gives this durable
   // storage in deployment; filesystem supports local development only.
-  const id = randomUUID();
+  const id = record.id || randomUUID();
   await storage.set(`ubo:audit:${id}`, { id, createdAt: new Date().toISOString(), ...record });
   return id;
 }

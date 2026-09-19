@@ -1,6 +1,9 @@
 "use strict";
 
 const { EDGE_TYPES } = require("./constants");
+const { fetchWithTimeout } = require("./boundedAsync");
+
+const COMPANIES_HOUSE_TIMEOUT_MS = Number(process.env.UBO_COMPANIES_HOUSE_TIMEOUT_MS || 8000);
 
 const BASE = "https://api.company-information.service.gov.uk";
 function normalizeCompaniesHouseNumber(value) {
@@ -122,7 +125,7 @@ function activePscExemption(data = {}) {
   };
 }
 
-async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetchImpl = fetch }) {
+async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetchImpl = fetch, timeoutMs = COMPANIES_HOUSE_TIMEOUT_MS }) {
   if (String(entity.jurisdiction).toUpperCase() !== "GB" || !entity.registrationNumber) return { statements: [], evidence: [], missingInformation: [] };
   if (!process.env.COMPANIES_HOUSE_API_KEY) return { statements: [], evidence: [], missingInformation: [{ entity: entity.name, source: "Companies House", reason: "COMPANIES_HOUSE_API_KEY is not configured" }] };
   const number = normalizeCompaniesHouseNumber(entity.registrationNumber);
@@ -131,6 +134,7 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
   const headers = { Authorization: authHeader(), accept: "application/json" };
   const missingInformation = [];
   const evidence = [];
+  const timedFetch = (target, options, label) => fetchWithTimeout(fetchImpl, target, options, { label, timeoutMs });
   const includeRegistryContext = tenantConfig.demoRegistryContext === true;
   let profileData = null;
   let registryProfile = entity.metadata?.registryEntityProfile ? {
@@ -141,7 +145,7 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
   } : null;
   if (!registryProfile || includeRegistryContext) {
     try {
-      const profileResponse = await fetchImpl(profileUrl, { headers });
+      const profileResponse = await timedFetch(profileUrl, { headers, signal: tenantConfig.signal }, "Companies House company profile");
       if (profileResponse.ok) {
         profileData = await profileResponse.json();
         registryProfile = registryProfileFromCompanyProfile(profileData);
@@ -166,7 +170,7 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
     });
     if (profileData.links?.exemptions) {
       try {
-        const exemptionResponse = await fetchImpl(`${BASE}${profileData.links.exemptions}`, { headers });
+        const exemptionResponse = await timedFetch(`${BASE}${profileData.links.exemptions}`, { headers, signal: tenantConfig.signal }, "Companies House PSC exemptions");
         if (exemptionResponse.ok) {
           const exemption = activePscExemption(await exemptionResponse.json());
           if (exemption) evidence.push({
@@ -186,7 +190,17 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
       }
     }
   }
-  const response = await fetchImpl(url, { headers });
+  let response;
+  try {
+    response = await timedFetch(url, { headers, signal: tenantConfig.signal }, "Companies House PSC register");
+  } catch (error) {
+    return {
+      statements: [], evidence,
+      missingInformation: [{ entity: entity.name, source: "Companies House", code: error.code || "COMPANIES_HOUSE_UNAVAILABLE", reason: error.message }],
+      sufficient: false,
+      searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", cacheHit: false, outcome: error.code === "UBO_TIMEOUT" ? "Official registry timed out" : "Official registry request failed" }],
+    };
+  }
   if (!response.ok) {
     const configurationFailure = response.status === 401 || response.status === 403;
     return {

@@ -39,7 +39,10 @@ const {
   usePreingestedBettercommsArtifact,
   validateSession: validatePreingestedEvidenceSession,
 } = require("../ubo-control-lab/server/preingestedEvidenceDemo");
-const { autoReviewDemoReplaySession, autoReviewDemoSession, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
+const { autoReviewDemoReplaySession, autoReviewDemoSession, discoveryTerminalState, prepareDemoLiveDiscoveryBody, prepareDemoReplayRecord } = require("../ubo-control-lab/server/demoAutoReview");
+const { withTimeout } = require("../agents/ubo/boundedAsync");
+
+const NESTED_DISCOVERY_TIMEOUT_MS = Number(process.env.UBO_NESTED_DISCOVERY_TIMEOUT_MS || 60000);
 
 const OPERATIONS = Object.freeze({
   FIXTURE_CATALOGUE: "FIXTURE_CATALOGUE",
@@ -115,25 +118,47 @@ function comparisonSummary(baseline, successor) {
   };
 }
 
-function invokeLegacyDiscovery(body) {
-  return new Promise((resolve, reject) => {
-    const request = { method: "POST", body, headers: { accept: "application/json" } };
+function invokeLegacyDiscovery(body, { onProgress, timeoutMs = NESTED_DISCOVERY_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const operation = new Promise((resolve, reject) => {
+    const request = { method: "POST", body, signal: controller.signal, headers: { accept: onProgress ? "text/event-stream" : "application/json" } };
     let statusCode = 200;
+    let streamBuffer = "";
+    let streamedResult = null;
     const response = {
       status(code) { statusCode = code; return this; },
       setHeader() { return this; },
       json(payload) { resolve({ status: statusCode, body: payload }); return this; },
       end(payload) {
-        if (!payload) resolve({ status: statusCode, body: null });
+        if (!payload) resolve({ status: statusCode, body: streamedResult });
         else {
           try { resolve({ status: statusCode, body: JSON.parse(payload) }); }
           catch { resolve({ status: statusCode, body: payload }); }
         }
         return this;
       },
-      write() { return true; },
+      write(chunk) {
+        streamBuffer += String(chunk || "");
+        const frames = streamBuffer.split("\n\n");
+        streamBuffer = frames.pop() || "";
+        frames.forEach((frame) => {
+          const line = frame.split("\n").find((item) => item.startsWith("data: "));
+          if (!line) return;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.result) streamedResult = event.result;
+            onProgress?.(event.stage === "complete" ? { ...event, stage: "discovery_complete", result: undefined } : event);
+          } catch (_) { /* Ignore malformed progress frames; terminal JSON remains authoritative. */ }
+        });
+        return true;
+      },
     };
     Promise.resolve(legacyDiscoveryHandler(request, response)).catch(reject);
+  });
+  return withTimeout(() => operation, {
+    label: "Nested UBO discovery",
+    timeoutMs,
+    onTimeout: () => controller.abort(),
   });
 }
 
@@ -143,10 +168,10 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
-async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body } = {}) {
+async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body, jobId, onProgress } = {}) {
   const baseline = await startLive({
     ...payload,
-    transport: { invoke: ({ body }) => invokeLegacyDiscovery(prepareDiscoveryBody(body)) },
+    transport: { invoke: ({ body }) => invokeLegacyDiscovery({ ...prepareDiscoveryBody(body), jobId }, { onProgress }) },
   });
   const prepared = demoProfileReconciliation
     ? prepareDemoReplayRecord(baseline.replayCapture)
@@ -155,6 +180,8 @@ async function startSuccessorLive(payload, { demoProfileReconciliation = false, 
   successor.sourceState = "LIVE";
   successor.sourceLabel = `Live Discovery · ${successor.companyContext.legalEntityName}`;
   successor.replayCapture = baseline.replayCapture;
+  successor.jobId = jobId;
+  successor.terminalState = discoveryTerminalState(baseline.replayCapture);
   if (prepared.reconciliation) successor.demoProfileReconciliation = prepared.reconciliation;
   return successor;
 }
@@ -173,6 +200,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   try {
     const input = req.body || {};
+    const jobId = /^[A-Za-z0-9:_-]{8,120}$/.test(String(input.jobId || "")) ? String(input.jobId) : `ubo-job-${Date.now()}`;
     switch (input.operation) {
       case OPERATIONS.FIXTURE_CATALOGUE:
         return send(res, 200, fixtureCatalogue());
@@ -205,11 +233,35 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_REVIEW_LIVE: {
         return send(res, 200, await startSuccessorLive(input.payload));
       }
-      case OPERATIONS.START_DEMO_REVIEW_LIVE:
+      case OPERATIONS.START_DEMO_REVIEW_LIVE: {
+        const streaming = String(req.headers?.accept || "").includes("text/event-stream");
+        if (streaming) {
+          res.status(200);
+          res.setHeader("Content-Type", "text/event-stream");
+          res.setHeader("Cache-Control", "no-cache, no-store");
+          res.setHeader("Connection", "keep-alive");
+          res.flushHeaders?.();
+          const emit = (event) => res.write(`data: ${JSON.stringify({ jobId, ...event })}\n\n`);
+          try {
+            emit({ stage: "job_started", message: "Research job accepted" });
+            const session = autoReviewDemoSession(await startSuccessorLive(input.payload, {
+              demoProfileReconciliation: true,
+              prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
+              jobId,
+              onProgress: emit,
+            }));
+            emit({ stage: "complete", message: "Analyst research ready", terminalState: session.terminalState, result: session });
+          } catch (error) {
+            emit({ stage: "error", terminalState: "FAILED", code: error.code || "RESEARCH_FAILED", message: error.message });
+          }
+          return res.end();
+        }
         return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, {
           demoProfileReconciliation: true,
           prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
+          jobId,
         })));
+      }
       case OPERATIONS.START_DEMO_CALCULATION_FIXTURE:
         return send(res, 200, startDemoCalculationFixture(input.payload));
       case OPERATIONS.APPLY_REVIEW_DECISIONS:

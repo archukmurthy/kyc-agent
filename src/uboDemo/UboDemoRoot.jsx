@@ -8,7 +8,7 @@ import {
 import {
   accountOpenItems, allCandidateFacts, compactResearchResult, DEMO_CALCULATION_FIXTURES, demoCalculationPeople, demoOpenQuestions, demoReviewPresentations,
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
-  demoSourceRelevantEntityIds, projectDemoGraph, runDemoResearch,
+  abortActiveDemoResearchJobs, acquireDemoResearch, demoSourceRelevantEntityIds, projectDemoGraph, readLastSuccessfulResearch, saveLastSuccessfulResearch,
 } from "./demoResearch";
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isDemoAuditPath, isDemoResearchPath, isDemoReviewPath, navigateDemo } from "./demoRoute";
@@ -76,8 +76,10 @@ function CompanyStart({ draft, errors, replays, replayLibraryStatus, onChange, o
   </main>;
 }
 
-function ResearchProgress({ company }) {
-  return <main className="ubo-demo-main"><section className="ubo-demo-research-card" aria-live="polite"><div className="ubo-demo-spinner" /><span className="ubo-demo-eyebrow">Research in progress</span><h1>Researching {company.legalName}</h1><ul className="ubo-demo-stage-list"><li>Researching company records</li><li>Following ownership and control relationships</li><li>Building ownership structure</li><li>Checking what is still unresolved</li></ul><p>These labels describe the operation in progress; they do not claim a stage has completed.</p></section></main>;
+function ResearchProgress({ company, progress }) {
+  const events = progress?.events || [];
+  const current = events[events.length - 1];
+  return <main className="ubo-demo-main"><section className="ubo-demo-research-card" aria-live="polite"><div className="ubo-demo-spinner" /><span className="ubo-demo-eyebrow">Research in progress</span><h1>Researching {company.legalName}</h1><p role="status">{current?.message || "Starting a bounded live research job…"}</p><ul className="ubo-demo-stage-list">{events.map((event, index) => <li key={`${event.stage}:${index}`}>{event.message}</li>)}</ul>{progress?.jobId && <small>Research job {progress.jobId}</small>}</section></main>;
 }
 
 function GraphFrame({ projection, entityLabels, registryContexts, reviewPresentations, selectionCommand, onSelectionChange }) {
@@ -203,7 +205,8 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
   };
   const calculationMethod = result.analysisContext?.calculationMethod || demoCase.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST";
   return <main className="ubo-demo-results">
-    <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : "LIVE RESEARCH — PROVISIONAL DEMO RESULT"}</span></header>
+    <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.fallback ? "CACHED FALLBACK — LIVE REFRESH FAILED" : result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : `${result.status} LIVE RESEARCH — PROVISIONAL DEMO RESULT`}</span></header>
+    {result.fallback && <section className="ubo-demo-review-wait" role="status"><strong>Showing the last usable result saved {new Date(result.fallback.savedAt).toLocaleString("en-GB")}.</strong><p>The live refresh failed: {result.fallback.reason}. This cached result may be stale and is reported as PARTIAL, not as a successful live refresh.</p></section>}
     {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button><button className="ubo-demo-primary" onClick={onSwitchCustomer}>Switch to customer view</button></div>
     {customerSwitchState && <p className={`ubo-demo-handoff-status ${customerSwitchState.kind}`} role="status">{customerSwitchState.message}</p>}
@@ -222,7 +225,8 @@ export default function UboDemoRoot() {
   const [errors, setErrors] = useState({});
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [runToken, setRunToken] = useState(0);
-  const [researchError, setResearchError] = useState("");
+  const [researchError, setResearchError] = useState(() => restored?.researchResult?.status === "FAILED" ? restored.researchResult.error || "The previous research job failed." : "");
+  const [researchProgress, setResearchProgress] = useState({ jobId: null, events: [] });
   const [customerSwitchState, setCustomerSwitchState] = useState(null);
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
@@ -250,7 +254,7 @@ export default function UboDemoRoot() {
   }, [demoCase?.demoCaseId]);
   useEffect(() => {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
-    let active = true;
+    let subscribed = true;
     const sourceMode = demoCase.analysisContext?.sourceMode || draft.sourceMode;
     const replayId = demoCase.analysisContext?.replayId || draft.replayId;
     const replayRecord = sourceMode === "REPLAY" ? findReplayById(replays, replayId) : null;
@@ -259,8 +263,13 @@ export default function UboDemoRoot() {
       setResearchResult(null);
       return undefined;
     }
-    runDemoResearch({ demoCase, sourceMode, replayRecord, demoFixtureId: demoCase.analysisContext?.demoFixtureId }).then((session) => {
-      if (!active) return;
+    const lease = acquireDemoResearch(
+      { demoCase, sourceMode, replayRecord, demoFixtureId: demoCase.analysisContext?.demoFixtureId },
+      { onProgress: (event) => { if (subscribed) setResearchProgress((current) => ({ jobId: event.jobId || current.jobId || lease.jobId, events: [...current.events, event].slice(-8) })); } },
+    );
+    setResearchProgress({ jobId: lease.jobId, events: [] });
+    lease.promise.then((session) => {
+      if (!subscribed) return;
       if (sourceMode === "REPLAY") {
         const returned = session?.companyContext || {};
         if (String(returned.registrationNumber || "").trim().toUpperCase() !== demoCase.company.registrationNumber.trim().toUpperCase()
@@ -268,13 +277,26 @@ export default function UboDemoRoot() {
           throw new TypeError("The saved replay result does not match the selected researched company.");
         }
       }
-      if (session.replayCapture) {
+      const compact = compactResearchResult(session, sourceMode, demoCase.analysisContext?.calculationMethod);
+      if (session.replayCapture && compact.status !== "FAILED") {
         try { setReplays(saveLabReplay(session.replayCapture)); setReplayLibraryStatus({ kind: "success", message: "Live research saved locally. Future replay will make no provider call." }); }
         catch (cause) { setReplays((current) => availableLabReplays({ replayCapture: session.replayCapture })); setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local replay storage failed."} Export this replay before leaving the page.` }); }
       }
-      setResearchResult(compactResearchResult(session, sourceMode, demoCase.analysisContext?.calculationMethod));
-    }).catch((cause) => { if (active) { setResearchError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); setResearchResult(null); } });
-    return () => { active = false; };
+      if (sourceMode === "LIVE" && compact.status !== "FAILED") saveLastSuccessfulResearch(demoCase.company, compact);
+      setResearchResult(compact);
+    }).catch((cause) => {
+      if (!subscribed || cause.code === "RESEARCH_ABORTED") return;
+      const message = `${cause.code ? `${cause.code}: ` : ""}${cause.message}`;
+      const fallback = sourceMode === "LIVE" ? readLastSuccessfulResearch(demoCase.company) : null;
+      if (fallback) {
+        setResearchError("");
+        setResearchResult({ ...fallback.result, status: "PARTIAL", fallback: { savedAt: fallback.savedAt, reason: message }, completedAt: new Date().toISOString() });
+      } else {
+        setResearchError(message);
+        setResearchResult({ status: "FAILED", sourceMode, jobId: lease.jobId, error: message, completedAt: new Date().toISOString() });
+      }
+    });
+    return () => { subscribed = false; lease.release(); };
   }, [pathname, demoCase, researchResult?.status, runToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateDraft = (field, value) => {
@@ -310,11 +332,13 @@ export default function UboDemoRoot() {
     if (Object.keys(next).length) return;
     setDraft(cleanDraft);
     const nextCase = createDemoCase(cleanDraft);
+    abortActiveDemoResearchJobs();
     setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH);
   };
   const loadCalculationExample = (fixtureId) => {
     const alice = fixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28;
     const nextDraft = { ...draft, legalName: alice ? "Example Trading Ltd" : "V2 Review Customer Limited", registrationNumber: alice ? "DEMO0028" : "DEMO6040", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", sourceMode: "FIXTURE", replayId: "", calculationMethod: "EFFECTIVE_INTEREST", demoFixtureId: fixtureId };
+    abortActiveDemoResearchJobs();
     setDraft(nextDraft); setDemoCase(createDemoCase(nextDraft)); setErrors({}); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: "FIXTURE" }); navigateDemo(DEMO_RESEARCH_PATH);
   };
   const changeCalculationMethod = (calculationMethod) => {
@@ -364,9 +388,10 @@ export default function UboDemoRoot() {
       catch (cause) { setResearchError(`${cause.message} No live search was started.`); setResearchResult(null); return; }
     }
     const nextCase = createDemoCase(nextDraft);
+    abortActiveDemoResearchJobs();
     setDraft(nextDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
   };
-  const startNewCase = () => { skipNextSave.current = true; clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
+  const startNewCase = () => { abortActiveDemoResearchJobs(); skipNextSave.current = true; clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
   const edit = () => navigateDemo(DEMO_START_PATH);
   const exportReplays = () => {
     try {
@@ -404,9 +429,9 @@ export default function UboDemoRoot() {
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (review && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="REVIEW" demoCase={demoCase} result={researchResult} />;
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
-  else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} />;
-  else if (researchError) content = <ResearchError error={researchError} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
+  else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
+  else if (researchResult?.status === "FAILED" || researchError) content = <ResearchError error={researchError || researchResult?.error || "Research failed."} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
   else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
-  else content = <ResearchProgress company={demoCase.company} />;
+  else content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
   return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{content}<DemoFooter pathname={pathname} /></div>;
 }

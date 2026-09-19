@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import UboDemoRoot from "./UboDemoRoot";
-import { accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory } from "./demoResearch";
+import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
@@ -44,7 +44,7 @@ function britishAirwaysSession(replayId) {
 }
 
 beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
-afterEach(() => { window.localStorage.clear(); jest.restoreAllMocks(); });
+afterEach(() => { abortActiveDemoResearchJobs(); window.localStorage.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
 test("analyst journey progress contains company, ownership research and analyst review only", () => {
@@ -98,6 +98,65 @@ test("Start research invokes the existing live Lab composition and preserves a l
   expect(JSON.stringify(body)).not.toContain("calculationMethod");
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
+});
+
+test("the actual research route under StrictMode joins one logical live job", async () => {
+  const draft = { ...emptyDemoDraft(), legalName: "Acme Holdings Limited", registrationNumber: "0012AB34" };
+  const demoCase = { demoCaseId: "strict-job-001", referenceCaseId: "", company: { legalName: draft.legalName, registrationNumber: draft.registrationNumber, countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" }, analysisContext: { sourceMode: "LIVE", calculationMethod: "EFFECTIVE_INTEREST" } };
+  writeDemoSession({ draft, demoCase, researchResult: { status: "LOADING", sourceMode: "LIVE" } });
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  let finish;
+  window.fetch = jest.fn((_url, request) => new Promise((resolve) => { finish = () => resolve({ ok: true, headers: { get: () => "application/json" }, json: async () => ({ ...evaluatedSession, jobId: "strict-job-001", terminalState: "PARTIAL" }) }); expect(request.signal).toBeDefined(); }));
+  render(<React.StrictMode><UboDemoRoot /></React.StrictMode>);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  finish();
+  expect(await screen.findByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
+  expect(screen.getByText(/PARTIAL LIVE RESEARCH/)).toBeInTheDocument();
+});
+
+test("leaving an in-flight analyst job aborts the browser request", async () => {
+  const draft = { ...emptyDemoDraft(), legalName: "Abort Limited", registrationNumber: "00112233" };
+  const demoCase = { demoCaseId: "abort-job-001", referenceCaseId: "", company: { legalName: draft.legalName, registrationNumber: draft.registrationNumber, countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" }, analysisContext: { sourceMode: "LIVE", calculationMethod: "EFFECTIVE_INTEREST" } };
+  writeDemoSession({ draft, demoCase, researchResult: { status: "LOADING", sourceMode: "LIVE" } });
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  let requestSignal;
+  window.fetch = jest.fn((_url, request) => { requestSignal = request.signal; return new Promise(() => {}); });
+  render(<UboDemoRoot />);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Start new case" }));
+  expect(requestSignal.aborted).toBe(true);
+});
+
+test("browser research timeout terminates instead of remaining pending", async () => {
+  jest.useFakeTimers();
+  const input = { demoCase: { demoCaseId: "timeout-job-001", company: { legalName: "Timeout Ltd", registrationNumber: "00112233", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" } }, sourceMode: "LIVE" };
+  const pending = runDemoResearch(input, jest.fn(() => new Promise(() => {})), { timeoutMs: 25 });
+  jest.advanceTimersByTime(30);
+  await expect(pending).rejects.toMatchObject({ code: "BROWSER_RESEARCH_TIMEOUT" });
+});
+
+test("failed live research reaches FAILED UI instead of returning to an indefinite spinner", async () => {
+  window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByRole("heading", { name: "We could not complete this research" })).toBeInTheDocument();
+  expect(screen.getByText(/PROVIDER_UNAVAILABLE/)).toBeInTheDocument();
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("FAILED");
+});
+
+test("retry uses a new job and falls back to the same-company last successful result when refresh fails", async () => {
+  window.fetch = jest.fn()
+    .mockImplementationOnce(() => okJson({ ...evaluatedSession, terminalState: "PARTIAL" }))
+    .mockImplementationOnce(async () => { const error = new Error("refresh provider timeout"); error.code = "BROWSER_RESEARCH_TIMEOUT"; throw error; });
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
+  const firstJobId = JSON.parse(window.fetch.mock.calls[0][1].body).jobId;
+  fireEvent.click(screen.getByRole("button", { name: "Run again" }));
+  expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
+  expect(screen.getByText(/This cached result may be stale/)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
+  const secondJobId = JSON.parse(window.fetch.mock.calls[1][1].body).jobId;
+  expect(secondJobId).not.toBe(firstJobId);
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("PARTIAL");
 });
 
 test("a successful live result is saved locally and enables replay without storing a second capture in the demo session", async () => {
@@ -226,7 +285,7 @@ test("Alice example uses one fixture operation and presents the recorded 10 plus
   fireEvent.click(screen.getByRole("button", { name: /Load Alice example/ }));
   await screen.findByRole("heading", { name: "How this result was calculated" });
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
-  expect(body).toEqual({ operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: DEMO_CALCULATION_FIXTURES.ALICE_28 } });
+  expect(body).toEqual(expect.objectContaining({ operation: "START_DEMO_CALCULATION_FIXTURE", payload: { fixtureId: DEMO_CALCULATION_FIXTURES.ALICE_28 }, jobId: expect.any(String) }));
   expect(window.fetch).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
   expect(screen.getAllByText("Threshold satisfied under effective ownership")).toHaveLength(2);
@@ -348,7 +407,7 @@ test("reviewed fixture renders graph and collapsed source assertions without leg
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByLabelText(/Reviewed ASDA fixture/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByTitle("Ownership structure");
   const body = JSON.parse(window.fetch.mock.calls[0][1].body);
-  expect(body).toEqual({ operation: "START_REVIEW_FIXTURE", payload: { fixtureId: "V2-LAB-08" } });
+  expect(body).toEqual(expect.objectContaining({ operation: "START_REVIEW_FIXTURE", payload: { fixtureId: "V2-LAB-08" }, jobId: expect.any(String) }));
   expect(window.fetch.mock.calls[0][0]).toBe("/api/ubo-control-lab");
   const disclosure = screen.getByText("Research assertions and source facts").closest("section");
   expect(within(disclosure).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");

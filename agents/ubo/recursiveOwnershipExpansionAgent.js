@@ -62,7 +62,7 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
     if (!budget.consume("entitiesInvestigated")) break;
     currentlyExpanding.add(entityId);
     onProgress?.({ stage: "research_start", entity: current.entity.name, message: `Researching ${current.entity.name}` });
-    const found = await discovery({ entity: current.entity, tenantConfig: rules.tenantConfig, adapters, budget });
+    const found = await discovery({ entity: current.entity, tenantConfig: rules.tenantConfig, adapters, budget, onProgress });
     currentlyExpanding.delete(entityId);
     expanded.add(entityId);
     const canonicalStatements = found.statements.map((statement) => ({
