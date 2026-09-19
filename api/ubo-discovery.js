@@ -13,7 +13,28 @@ const PERSISTENCE_TIMEOUT_MS = Number(process.env.UBO_PERSISTENCE_TIMEOUT_MS || 
 function terminalState(result) {
   if (!result) return "FAILED";
   if (String(result.status).toLowerCase() === "resolved") return "COMPLETE";
+  const providerOutcomes = result.providerOutcomes || [];
+  if (!(result.ownershipGraph?.edges?.length) && providerOutcomes.length && providerOutcomes.every(({ outcome }) => outcome === "FAILED")) return "FAILED";
   return (result.ownershipGraph?.edges?.length || result.evidence?.length || result.missingInformation?.length) ? "PARTIAL" : "FAILED";
+}
+
+function createResearchJobController(req, res) {
+  const controller = new AbortController();
+  const abort = () => { if (!controller.signal.aborted) controller.abort(); };
+  const upstream = req.researchSignal;
+  if (upstream?.aborted) abort();
+  else upstream?.addEventListener?.("abort", abort, { once: true });
+  req.once?.("aborted", abort);
+  const abortOnPrematureClose = () => { if (!res.writableEnded && !res.finished) abort(); };
+  res.once?.("close", abortOnPrematureClose);
+  return {
+    signal: controller.signal,
+    cleanup() {
+      upstream?.removeEventListener?.("abort", abort);
+      req.removeListener?.("aborted", abort);
+      res.removeListener?.("close", abortOnPrematureClose);
+    },
+  };
 }
 
 function cacheMetadata(result, layer) {
@@ -90,14 +111,20 @@ module.exports = async function handler(req, res) {
         return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
       }
     }
-    const result = await runUboFramework({
-      entityName,
-      registrationNumber: registrationNumber || null,
-      jurisdiction: String(jurisdiction).toUpperCase(),
-      tenantConfig: { tenantId, signal: req.signal, forceRefresh: forceRefresh === true || forceRefresh === "true", demoRegistryContext: demoRegistryContext === true, uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
-      adapters: { companiesHouse: companiesHouseOwnershipAdapter, webResearch: webResearchOwnershipAdapter },
-      onProgress: emit,
-    });
+    const jobController = createResearchJobController(req, res);
+    let result;
+    try {
+      result = await runUboFramework({
+        entityName,
+        registrationNumber: registrationNumber || null,
+        jurisdiction: String(jurisdiction).toUpperCase(),
+        tenantConfig: { tenantId, jobId, signal: jobController.signal, forceRefresh: forceRefresh === true || forceRefresh === "true", demoRegistryContext: demoRegistryContext === true, uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
+        adapters: { companiesHouse: companiesHouseOwnershipAdapter, webResearch: webResearchOwnershipAdapter },
+        onProgress: emit,
+      });
+    } finally {
+      jobController.cleanup();
+    }
     const response = { ...result, cache: cacheMetadata(result, "live") };
     const auditId = randomUUID();
     schedulePersistence({ jobId, tenantId, input, cacheHit: false, forceRefresh: Boolean(forceRefresh), result: response, cacheKey: key, auditId });
@@ -109,3 +136,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "UBO discovery failed", terminalState: "FAILED", jobId, code: error.code || "UBO_DISCOVERY_FAILED", message: error.message });
   }
 };
+
+module.exports.createResearchJobController = createResearchJobController;
+module.exports.terminalState = terminalState;

@@ -118,10 +118,13 @@ function comparisonSummary(baseline, successor) {
   };
 }
 
-function invokeLegacyDiscovery(body, { onProgress, timeoutMs = NESTED_DISCOVERY_TIMEOUT_MS } = {}) {
+function invokeLegacyDiscovery(body, { onProgress, signal, timeoutMs = NESTED_DISCOVERY_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener?.("abort", abortFromCaller, { once: true });
   const operation = new Promise((resolve, reject) => {
-    const request = { method: "POST", body, signal: controller.signal, headers: { accept: onProgress ? "text/event-stream" : "application/json" } };
+    const request = { method: "POST", body, researchSignal: controller.signal, headers: { accept: onProgress ? "text/event-stream" : "application/json" } };
     let statusCode = 200;
     let streamBuffer = "";
     let streamedResult = null;
@@ -159,7 +162,19 @@ function invokeLegacyDiscovery(body, { onProgress, timeoutMs = NESTED_DISCOVERY_
     label: "Nested UBO discovery",
     timeoutMs,
     onTimeout: () => controller.abort(),
-  });
+  }).finally(() => signal?.removeEventListener?.("abort", abortFromCaller));
+}
+
+function createOuterResearchController(req, res) {
+  const controller = new AbortController();
+  const abort = () => { if (!controller.signal.aborted) controller.abort(); };
+  req.once?.("aborted", abort);
+  const abortOnPrematureClose = () => { if (!res.writableEnded && !res.finished) abort(); };
+  res.once?.("close", abortOnPrematureClose);
+  return {
+    signal: controller.signal,
+    cleanup() { req.removeListener?.("aborted", abort); res.removeListener?.("close", abortOnPrematureClose); },
+  };
 }
 
 function send(res, status, payload) {
@@ -168,11 +183,18 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
-async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body, jobId, onProgress } = {}) {
+async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body, jobId, onProgress, signal } = {}) {
   const baseline = await startLive({
     ...payload,
-    transport: { invoke: ({ body }) => invokeLegacyDiscovery({ ...prepareDiscoveryBody(body), jobId }, { onProgress }) },
+    transport: { invoke: ({ body }) => invokeLegacyDiscovery({ ...prepareDiscoveryBody(body), jobId }, { onProgress, signal }) },
   });
+  if (!baseline.replayCapture) {
+    baseline.sourceState = "LIVE";
+    baseline.sourceLabel = `Live Discovery · ${payload?.companyContext?.legalEntityName || "company"}`;
+    baseline.jobId = jobId;
+    baseline.terminalState = "FAILED";
+    return baseline;
+  }
   const prepared = demoProfileReconciliation
     ? prepareDemoReplayRecord(baseline.replayCapture)
     : { replayRecord: baseline.replayCapture, reconciliation: null };
@@ -234,6 +256,7 @@ module.exports = async function handler(req, res) {
         return send(res, 200, await startSuccessorLive(input.payload));
       }
       case OPERATIONS.START_DEMO_REVIEW_LIVE: {
+        const jobController = createOuterResearchController(req, res);
         const streaming = String(req.headers?.accept || "").includes("text/event-stream");
         if (streaming) {
           res.status(200);
@@ -244,23 +267,33 @@ module.exports = async function handler(req, res) {
           const emit = (event) => res.write(`data: ${JSON.stringify({ jobId, ...event })}\n\n`);
           try {
             emit({ stage: "job_started", message: "Research job accepted" });
-            const session = autoReviewDemoSession(await startSuccessorLive(input.payload, {
+            const live = await startSuccessorLive(input.payload, {
               demoProfileReconciliation: true,
               prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
               jobId,
               onProgress: emit,
-            }));
+              signal: jobController.signal,
+            });
+            const session = live.terminalState === "FAILED" ? live : autoReviewDemoSession(live);
             emit({ stage: "complete", message: "Analyst research ready", terminalState: session.terminalState, result: session });
           } catch (error) {
             emit({ stage: "error", terminalState: "FAILED", code: error.code || "RESEARCH_FAILED", message: error.message });
+          } finally {
+            jobController.cleanup();
           }
           return res.end();
         }
-        return send(res, 200, autoReviewDemoSession(await startSuccessorLive(input.payload, {
-          demoProfileReconciliation: true,
-          prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
-          jobId,
-        })));
+        try {
+          const live = await startSuccessorLive(input.payload, {
+            demoProfileReconciliation: true,
+            prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
+            jobId,
+            signal: jobController.signal,
+          });
+          return send(res, 200, live.terminalState === "FAILED" ? live : autoReviewDemoSession(live));
+        } finally {
+          jobController.cleanup();
+        }
       }
       case OPERATIONS.START_DEMO_CALCULATION_FIXTURE:
         return send(res, 200, startDemoCalculationFixture(input.payload));

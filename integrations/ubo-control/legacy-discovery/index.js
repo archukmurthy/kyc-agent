@@ -20,6 +20,7 @@ const ADAPTER_ISSUE_CODE = Object.freeze({
   MISSING_DURABLE_EVIDENCE_REFERENCE: "LEGACY_MISSING_DURABLE_EVIDENCE_REFERENCE",
   MALFORMED_SOURCE_ASSERTION: "LEGACY_MALFORMED_SOURCE_ASSERTION",
   KNOWN_COVERAGE_LIMITATION: "LEGACY_KNOWN_COVERAGE_LIMITATION",
+  PROVIDER_OUTCOME: "LEGACY_PROVIDER_OUTCOME",
 });
 
 const SUPPORTED_NEED_PATTERN = /(OWNERSHIP|CONTROL|SHARE|VOTING|PSC|BENEFICIAL[_ -]?OWNER)/i;
@@ -159,6 +160,24 @@ function operationReferences(body) {
     references.push({ system: "legacy-ubo-discovery", referenceType: "DISCOVERY_AUDIT", referenceId: String(body.audit.id) });
   }
   return references;
+}
+
+function providerOutcomeIssues(body) {
+  return (Array.isArray(body.providerOutcomes) ? body.providerOutcomes : []).filter(isPlainObject).map((item) => issue(
+    ADAPTER_ISSUE_CODE.PROVIDER_OUTCOME,
+    String(item.reasonText || "Provider outcome recorded."),
+    {
+      provider: String(item.provider || "UNKNOWN"),
+      stage: String(item.stage || "DISCOVERY"),
+      outcome: ["COMPLETE", "PARTIAL", "FAILED"].includes(item.outcome) ? item.outcome : "FAILED",
+      reasonCode: String(item.reasonCode || "PROVIDER_UNAVAILABLE"),
+      reasonText: String(item.reasonText || "Provider outcome recorded."),
+      correlationId: item.correlationId ? String(item.correlationId) : null,
+      attempts: Number(item.attempts || 1),
+      httpStatus: item.httpStatus !== null && item.httpStatus !== undefined && Number.isFinite(Number(item.httpStatus)) ? Number(item.httpStatus) : null,
+      factCount: Number(item.factCount || 0),
+    },
+  ));
 }
 
 function explicitRange(value) {
@@ -325,7 +344,8 @@ function translateLegacyResponse(request, body) {
     });
   }
 
-  const adapterIssues = [issue(
+  const recordedProviderIssues = providerOutcomeIssues(body);
+  const adapterIssues = [...recordedProviderIssues, issue(
     ADAPTER_ISSUE_CODE.KNOWN_COVERAGE_LIMITATION,
     "Legacy Discovery is lossy and cannot establish exhaustive current ownership and control",
   )];
@@ -431,6 +451,15 @@ function translateLegacyResponse(request, body) {
       code: "LEGACY_SAFE_CANDIDATES_NON_EXHAUSTIVE",
       message: "Safe candidate facts were translated, but legacy coverage is not exhaustive",
       candidateFacts,
+      operationEvidenceReferences: operationReferences(body),
+      issues: adapterIssues,
+    });
+  }
+  if (recordedProviderIssues.length && recordedProviderIssues.every(({ details }) => details.outcome === "FAILED")) {
+    return makeResult(request, CAPABILITY_OUTCOME_STATE.UNAVAILABLE, {
+      code: "LEGACY_PROVIDERS_UNAVAILABLE",
+      message: "Live ownership providers were unavailable; no ownership conclusion was produced",
+      retryable: true,
       operationEvidenceReferences: operationReferences(body),
       issues: adapterIssues,
     });

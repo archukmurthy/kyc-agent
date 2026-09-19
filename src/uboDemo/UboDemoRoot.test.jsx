@@ -138,9 +138,39 @@ test("browser research timeout terminates instead of remaining pending", async (
 test("failed live research reaches FAILED UI instead of returning to an indefinite spinner", async () => {
   window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  expect(await screen.findByRole("heading", { name: "We could not complete this research" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Live research could not be completed" })).toBeInTheDocument();
   expect(screen.getByText(/PROVIDER_UNAVAILABLE/)).toBeInTheDocument();
   expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("FAILED");
+});
+
+test("terminal provider failure shows source reasons and no ownership conclusion", async () => {
+  window.fetch = jest.fn(() => okJson({
+    terminalState: "FAILED", jobId: "failed-provider-job", sourceLabel: "Live Discovery · Failed Ltd", entityDirectory: [], snapshots: [],
+    decisionTargets: { candidateParties: [], candidateClaims: [] },
+    candidateSources: [{ candidateFacts: [], issues: [
+      { code: "LEGACY_PROVIDER_OUTCOME", message: "Registry unavailable", details: { provider: "COMPANIES_HOUSE", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "NETWORK_ACCESS_DENIED", reasonText: "The runtime was not permitted to open the provider network connection.", correlationId: "failed-provider-job" } },
+      { code: "LEGACY_PROVIDER_OUTCOME", message: "Web timed out", details: { provider: "WEB_RESEARCH", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "TIMEOUT", reasonText: "The provider did not respond within the configured time limit.", correlationId: "failed-provider-job" } },
+    ] }],
+  }));
+  renderStart(); completeRequiredFields({ name: "Failed Ltd", number: "00112233" }); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByRole("heading", { name: "Live research could not be completed" })).toBeInTheDocument();
+  expect(screen.getByText("Companies House")).toBeInTheDocument();
+  expect(screen.getByText("Web research")).toBeInTheDocument();
+  expect(screen.getByText(/No conclusion about the ownership structure has been made/)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Ownership structure" })).not.toBeInTheDocument();
+});
+
+test("usable partial result renders assertions while showing the degraded provider", async () => {
+  window.fetch = jest.fn(() => okJson({ ...evaluatedSession, terminalState: "PARTIAL", candidateSources: [{ ...evaluatedSession.candidateSources[0], issues: [
+    { code: "LEGACY_PROVIDER_OUTCOME", message: "Registry returned facts", details: { provider: "COMPANIES_HOUSE", stage: "DISCOVERY", outcome: "COMPLETE", reasonCode: "FACTS_RETURNED", reasonText: "Companies House returned one relationship.", correlationId: "partial-provider-job", httpStatus: 200, factCount: 1 } },
+    { code: "LEGACY_PROVIDER_OUTCOME", message: "Web timed out", details: { provider: "WEB_RESEARCH", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "TIMEOUT", reasonText: "The provider did not respond within the configured time limit.", correlationId: "partial-provider-job" } },
+  ] }] }));
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
+  expect(screen.getByText("Web research")).toBeInTheDocument();
+  const assertions = screen.getByText("Research assertions and source facts").closest("section");
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
+  expect(screen.getByText(/Owner Ltd → economic ownership → Target Ltd/i)).toBeInTheDocument();
 });
 
 test("retry uses a new job and falls back to the same-company last successful result when refresh fails", async () => {

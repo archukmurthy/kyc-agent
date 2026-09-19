@@ -51,6 +51,39 @@ function findUnrelatedStatements(graph) {
     .map((edge) => ({ edgeId: edge.id, reason: "Ownership link is not connected to the customer entity" }));
 }
 
+function aggregateProviderOutcomes(outcomes = [], correlationId) {
+  const grouped = new Map();
+  outcomes.forEach((item) => {
+    if (!item?.provider) return;
+    if (!grouped.has(item.provider)) grouped.set(item.provider, []);
+    grouped.get(item.provider).push(item);
+  });
+  return [...grouped].map(([provider, attempts]) => {
+    const failures = attempts.filter(({ outcome }) => outcome === "FAILED");
+    const partials = attempts.filter(({ outcome }) => outcome === "PARTIAL");
+    const outcome = failures.length === attempts.length ? "FAILED" : failures.length || partials.length ? "PARTIAL" : "COMPLETE";
+    const representative = failures[0] || attempts.find(({ outcome: state }) => state === "PARTIAL") || attempts[0];
+    const factCount = attempts.reduce((total, item) => total + Number(item.factCount || 0), 0);
+    const providerLabel = provider === "COMPANIES_HOUSE" ? "Companies House" : "Web research";
+    const completeReason = factCount
+      ? { reasonCode: "FACTS_RETURNED", reasonText: `${providerLabel} returned ${factCount} ownership/control relationship${factCount === 1 ? "" : "s"} across ${attempts.length} lookup${attempts.length === 1 ? "" : "s"}.` }
+      : { reasonCode: "NO_USABLE_FACTS", reasonText: `${providerLabel} completed ${attempts.length} lookup${attempts.length === 1 ? "" : "s"} without a usable ownership/control relationship.` };
+    const reason = outcome === "COMPLETE" ? completeReason
+      : outcome === "PARTIAL" && failures.length ? { reasonCode: "DEGRADED_SOURCE_COVERAGE", reasonText: `Some ${providerLabel} lookups failed; usable results were preserved.` }
+        : { reasonCode: representative.reasonCode, reasonText: representative.reasonText };
+    return {
+      provider,
+      stage: "DISCOVERY",
+      outcome,
+      ...reason,
+      correlationId: correlationId || representative.correlationId || null,
+      attempts: attempts.length,
+      httpStatus: representative.httpStatus ?? null,
+      factCount,
+    };
+  });
+}
+
 function resolveOwnershipStatements(statements, evidence) {
   const evidenceById = new Map(evidence.map((item) => [item.id, item]));
   const groups = new Map();
@@ -99,12 +132,14 @@ async function runUboFramework({ entityName, registrationNumber, jurisdiction, t
   const determination = determineUbos({ ownership, control, rules });
   onProgress?.({ stage: "determination", message: "Determining beneficial owners" });
   const status = outcome({ budget, missingInformation: expanded.missingInformation, unresolvedPaths: ownership.unresolvedPaths });
+  const providerOutcomes = aggregateProviderOutcomes(expanded.providerOutcomes, tenantConfig.jobId);
   return {
     status,
     ownershipGraph: graph,
     evidence: expanded.evidence,
     investigationLog: expanded.investigationLog,
     searchEvents: expanded.searchEvents,
+    providerOutcomes,
     expansion: expanded.expansion,
     resolutions: resolutions.decisions,
     confidence: { ownership: determination.ubos.map((ubo) => ({ personId: ubo.personId, confidence: 100 })) },
@@ -117,4 +152,4 @@ async function runUboFramework({ entityName, registrationNumber, jurisdiction, t
   };
 }
 
-module.exports = { runUboFramework, createBudget, resolveOwnershipStatements };
+module.exports = { aggregateProviderOutcomes, runUboFramework, createBudget, resolveOwnershipStatements };

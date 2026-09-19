@@ -1,7 +1,7 @@
 "use strict";
 
 const { EDGE_TYPES } = require("./constants");
-const { fetchWithTimeout } = require("./boundedAsync");
+const { classifyProviderError, fetchWithTimeout, providerOutcome } = require("./boundedAsync");
 
 const COMPANIES_HOUSE_TIMEOUT_MS = Number(process.env.UBO_COMPANIES_HOUSE_TIMEOUT_MS || 8000);
 
@@ -127,7 +127,10 @@ function activePscExemption(data = {}) {
 
 async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetchImpl = fetch, timeoutMs = COMPANIES_HOUSE_TIMEOUT_MS }) {
   if (String(entity.jurisdiction).toUpperCase() !== "GB" || !entity.registrationNumber) return { statements: [], evidence: [], missingInformation: [] };
-  if (!process.env.COMPANIES_HOUSE_API_KEY) return { statements: [], evidence: [], missingInformation: [{ entity: entity.name, source: "Companies House", reason: "COMPANIES_HOUSE_API_KEY is not configured" }] };
+  if (!process.env.COMPANIES_HOUSE_API_KEY) return {
+    statements: [], evidence: [], missingInformation: [{ entity: entity.name, source: "Companies House", reason: "COMPANIES_HOUSE_API_KEY is not configured" }],
+    providerOutcome: providerOutcome({ provider: "COMPANIES_HOUSE", stage: "CONFIGURATION", outcome: "FAILED", correlationId: tenantConfig.jobId, reasonCode: "CONFIGURATION_MISSING", reasonText: "Companies House is not configured for this runtime." }),
+  };
   const number = normalizeCompaniesHouseNumber(entity.registrationNumber);
   const profileUrl = `${BASE}/company/${encodeURIComponent(number)}`;
   const url = `${BASE}/company/${encodeURIComponent(number)}/persons-with-significant-control`;
@@ -136,6 +139,7 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
   const evidence = [];
   const timedFetch = (target, options, label) => fetchWithTimeout(fetchImpl, target, options, { label, timeoutMs });
   const includeRegistryContext = tenantConfig.demoRegistryContext === true;
+  let profileLimitation = null;
   let profileData = null;
   let registryProfile = entity.metadata?.registryEntityProfile ? {
     entityProfile: entity.metadata.registryEntityProfile,
@@ -150,9 +154,13 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
         profileData = await profileResponse.json();
         registryProfile = registryProfileFromCompanyProfile(profileData);
       }
-      else missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House company-profile lookup returned ${profileResponse.status}` });
+      else {
+        profileLimitation = { reasonCode: profileResponse.status === 401 || profileResponse.status === 403 ? "AUTHENTICATION_FAILED" : "PROFILE_HTTP_ERROR", reasonText: `Companies House profile lookup returned HTTP ${profileResponse.status}.` };
+        missingInformation.push({ entity: entity.name, source: "Companies House", reason: profileLimitation.reasonText });
+      }
     } catch (error) {
-      missingInformation.push({ entity: entity.name, source: "Companies House", reason: `Companies House company-profile lookup failed: ${error.message}` });
+      profileLimitation = classifyProviderError(error);
+      missingInformation.push({ entity: entity.name, source: "Companies House", code: profileLimitation.reasonCode, reason: profileLimitation.reasonText });
     }
   }
   if (includeRegistryContext && profileData) {
@@ -194,18 +202,24 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
   try {
     response = await timedFetch(url, { headers, signal: tenantConfig.signal }, "Companies House PSC register");
   } catch (error) {
+    const failure = classifyProviderError(error);
     return {
       statements: [], evidence,
-      missingInformation: [{ entity: entity.name, source: "Companies House", code: error.code || "COMPANIES_HOUSE_UNAVAILABLE", reason: error.message }],
+      missingInformation: [...missingInformation, { entity: entity.name, source: "Companies House", code: failure.reasonCode, reason: failure.reasonText }],
+      providerOutcome: providerOutcome({ provider: "COMPANIES_HOUSE", stage: "PSC_REGISTER", outcome: "FAILED", correlationId: tenantConfig.jobId, ...failure }),
       sufficient: false,
       searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", cacheHit: false, outcome: error.code === "UBO_TIMEOUT" ? "Official registry timed out" : "Official registry request failed" }],
     };
   }
   if (!response.ok) {
     const configurationFailure = response.status === 401 || response.status === 403;
+    const failure = configurationFailure
+      ? { reasonCode: "AUTHENTICATION_FAILED", reasonText: "Companies House rejected the configured credential." }
+      : { reasonCode: `HTTP_${response.status}`, reasonText: `Companies House PSC lookup returned HTTP ${response.status}.` };
     return {
       statements: [], evidence,
-      missingInformation: [{ entity: entity.name, source: "Companies House", reason: configurationFailure ? `Companies House API key was rejected (${response.status}). Update COMPANIES_HOUSE_API_KEY before running paid fallback research.` : `Companies House PSC lookup returned ${response.status}` }],
+      missingInformation: [...missingInformation, { entity: entity.name, source: "Companies House", code: failure.reasonCode, reason: failure.reasonText }],
+      providerOutcome: providerOutcome({ provider: "COMPANIES_HOUSE", stage: "PSC_REGISTER", outcome: "FAILED", correlationId: tenantConfig.jobId, httpStatus: response.status, ...failure }),
       // Do not spend on a secondary source when the primary-source failure is
       // an account/configuration issue rather than an absence of registry data.
       sufficient: configurationFailure,
@@ -273,7 +287,15 @@ async function companiesHouseOwnershipAdapter({ entity, tenantConfig = {}, fetch
       }];
     });
   });
-  return { statements, evidence, missingInformation, sufficient: statements.length > 0, searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", registrationNumber: number, cacheHit: false, outcome: statements.length ? `Official PSC register returned ${statements.length} ownership/control relationship${statements.length === 1 ? "" : "s"}` : "No usable PSC ownership/control relationship found" }] };
+  const providerState = profileLimitation ? "PARTIAL" : "COMPLETE";
+  const providerReason = profileLimitation || (statements.length
+    ? { reasonCode: "FACTS_RETURNED", reasonText: `Companies House returned ${statements.length} current ownership/control relationship${statements.length === 1 ? "" : "s"}.` }
+    : { reasonCode: "NO_USABLE_FACTS", reasonText: "Companies House completed successfully but returned no current usable ownership/control relationship." });
+  return {
+    statements, evidence, missingInformation, sufficient: statements.length > 0,
+    providerOutcome: providerOutcome({ provider: "COMPANIES_HOUSE", stage: "PSC_REGISTER", outcome: providerState, correlationId: tenantConfig.jobId, httpStatus: response.status, factCount: statements.length, ...providerReason }),
+    searchEvents: [{ source: "companies_house", entity: entity.name, jurisdiction: "GB", registrationNumber: number, cacheHit: false, outcome: statements.length ? `Official PSC register returned ${statements.length} ownership/control relationship${statements.length === 1 ? "" : "s"}` : "No usable PSC ownership/control relationship found" }],
+  };
 }
 
 module.exports = { companiesHouseOwnershipAdapter, jurisdictionFromCompaniesHousePsc, normalizeCompaniesHouseNumber, ownershipMinimum, percentageRangeFromNature, registryProfileFromCompanyProfile, registryProfileFromPsc, relationshipFromNature };

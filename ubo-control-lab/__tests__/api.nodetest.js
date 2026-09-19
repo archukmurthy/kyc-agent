@@ -107,3 +107,30 @@ test("Lab API runs the demo-only Alice calculation fixture without Discovery", a
   const view = result.payload.snapshots.at(-1).view;
   assert.equal(view.graph.calculations.find(({ subjectEntityId }) => subjectEntityId === "demo-alice").aggregateKnownValue.value, "28");
 });
+
+test("demo live research returns an explicit failed session when every provider is unavailable", async () => {
+  const previousCompaniesHouse = process.env.COMPANIES_HOUSE_API_KEY;
+  const previousAnthropic = process.env.ANTHROPIC_API_KEY;
+  delete process.env.COMPANIES_HOUSE_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const result = await invoke("POST", {
+      operation: "START_DEMO_REVIEW_LIVE",
+      jobId: "all-providers-failed-job",
+      payload: { companyContext: { legalEntityName: "Unavailable Ltd", registrationNumber: "05556668", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" }, profileId: "NOT_PROVIDED" },
+    });
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.payload.terminalState, "FAILED");
+    assert.equal(result.payload.replayCapture, null);
+    assert.equal(result.payload.candidateSources[0].outcomeState, "UNAVAILABLE");
+    assert.deepEqual(result.payload.candidateSources[0].issues.filter(({ code }) => code === "LEGACY_PROVIDER_OUTCOME").map(({ details }) => [details.provider, details.outcome]), [
+      ["COMPANIES_HOUSE", "FAILED"],
+      ["WEB_RESEARCH", "FAILED"],
+    ]);
+  } finally {
+    if (previousCompaniesHouse === undefined) delete process.env.COMPANIES_HOUSE_API_KEY;
+    else process.env.COMPANIES_HOUSE_API_KEY = previousCompaniesHouse;
+    if (previousAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = previousAnthropic;
+  }
+});

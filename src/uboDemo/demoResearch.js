@@ -198,6 +198,23 @@ export function latestReviewView(session) {
   return session?.snapshots?.[session.snapshots.length - 1]?.view || null;
 }
 
+export function providerOutcomesForSession(session) {
+  const outcomes = (session?.candidateSources || []).flatMap((source) => (source.issues || [])
+    .filter(({ code }) => code === "LEGACY_PROVIDER_OUTCOME")
+    .map(({ details = {}, message }) => ({
+      provider: details.provider || "UNKNOWN",
+      stage: details.stage || "DISCOVERY",
+      outcome: details.outcome || "FAILED",
+      reasonCode: details.reasonCode || "PROVIDER_UNAVAILABLE",
+      reasonText: details.reasonText || message || "Provider outcome recorded.",
+      correlationId: details.correlationId || session?.jobId || null,
+      attempts: Number(details.attempts || 1),
+      httpStatus: details.httpStatus ?? null,
+      factCount: Number(details.factCount || 0),
+    })));
+  return [...new Map(outcomes.map((item) => [item.provider, item])).values()];
+}
+
 export function compactResearchResult(session, sourceMode, calculationMethod = "EFFECTIVE_INTEREST") {
   const replayCapture = session?.replayCapture || null;
   const entityLabels = Object.fromEntries((session?.entityDirectory || [])
@@ -220,6 +237,7 @@ export function compactResearchResult(session, sourceMode, calculationMethod = "
     jobId: session?.jobId || null,
     sourceMode,
     sourceLabel: session?.sourceLabel || sourceMode,
+    providerOutcomes: providerOutcomesForSession(session),
     candidateSources: session?.candidateSources || [],
     decisionTargets: session?.decisionTargets || { candidateParties: [], candidateClaims: [] },
     view: latestReviewView(session),

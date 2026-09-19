@@ -41,6 +41,7 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
   const missingInformation = [];
   const investigationLog = [];
   const searchEvents = [];
+  const providerOutcomes = [];
   const entityDirectory = new Map();
   const normalizedRoot = canonicalEntity(rootEntity, entityDirectory);
   const rootIdentity = registryIdentity(normalizedRoot);
@@ -74,6 +75,7 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
     investigationLog.push({ entity: current.entity.name, registrationNumber: current.entity.registrationNumber || null, jurisdiction: current.entity.jurisdiction, outcome: canonicalStatements.length ? `Found ${canonicalStatements.length} direct ownership/control relationship${canonicalStatements.length === 1 ? "" : "s"}` : "No usable direct ownership/control relationships found" });
     statements.push(...canonicalStatements); evidence.push(...found.evidence); missingInformation.push(...found.missingInformation);
     searchEvents.push(...(found.searchEvents || []));
+    providerOutcomes.push(...(found.providerOutcomes || []));
     for (const statement of canonicalStatements) {
       if (!supportedUkLegalEntity(statement.owner)) continue;
       let nextPathPercentage = 100;
@@ -95,7 +97,7 @@ async function expandOwnership({ rootEntity, discovery, adapters, rules, budget,
     else missingInformation.push({ reason: "search budget exhausted", status: "partial" });
   }
   return {
-    statements, evidence, missingInformation, investigationLog, searchEvents,
+    statements, evidence, missingInformation, investigationLog, providerOutcomes, searchEvents,
     expansion: {
       discoveredRegistryIds: [...discovered].sort(),
       expandedRegistryIds: [...expanded].sort(),

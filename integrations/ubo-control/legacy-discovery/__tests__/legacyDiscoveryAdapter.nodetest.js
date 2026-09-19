@@ -507,6 +507,34 @@ test("TDR PSC evidence natures retain one-source/one-semantic-fact fidelity thro
   assert.equal(projection.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferenceCount === 1), true);
 });
 
+test("all failed provider outcomes terminate as unavailable and remain observable", async () => {
+  const body = response({ edges: [] });
+  body.providerOutcomes = [
+    { provider: "COMPANIES_HOUSE", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "NETWORK_ACCESS_DENIED", reasonText: "The runtime was not permitted to open the provider network connection.", correlationId: "job-all-failed", attempts: 1, httpStatus: null, factCount: 0 },
+    { provider: "WEB_RESEARCH", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "TIMEOUT", reasonText: "The provider did not respond within the configured time limit.", correlationId: "job-all-failed", attempts: 1, httpStatus: null, factCount: 0 },
+  ];
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.UNAVAILABLE);
+  assert.equal(result.outcome.code, "LEGACY_PROVIDERS_UNAVAILABLE");
+  assert.equal(result.candidateFacts.length, 0);
+  assert.deepEqual(result.issues.filter(({ code }) => code === ADAPTER_ISSUE_CODE.PROVIDER_OUTCOME).map(({ details }) => ({ provider: details.provider, outcome: details.outcome, correlationId: details.correlationId })), [
+    { provider: "COMPANIES_HOUSE", outcome: "FAILED", correlationId: "job-all-failed" },
+    { provider: "WEB_RESEARCH", outcome: "FAILED", correlationId: "job-all-failed" },
+  ]);
+});
+
+test("a usable fact survives as partial when the other provider fails", async () => {
+  const body = response({ edges: [edge("control", "legacy-owner-node", "legacy-root-node", { ownershipPercentage: null, type: "control", metadata: { naturesOfControl: ["significant-influence-or-control"] } })] });
+  body.providerOutcomes = [
+    { provider: "COMPANIES_HOUSE", stage: "DISCOVERY", outcome: "COMPLETE", reasonCode: "FACTS_RETURNED", reasonText: "Companies House returned one control relationship.", correlationId: "job-partial", attempts: 1, httpStatus: 200, factCount: 1 },
+    { provider: "WEB_RESEARCH", stage: "DISCOVERY", outcome: "FAILED", reasonCode: "TIMEOUT", reasonText: "The provider did not respond within the configured time limit.", correlationId: "job-partial", attempts: 1, httpStatus: null, factCount: 0 },
+  ];
+  const result = await createLegacyDiscoveryAdapter({ transport: transportReturning(body) }).discover(discoveryRequest());
+  assert.equal(result.outcome.state, CAPABILITY_OUTCOME_STATE.PARTIAL);
+  assert.equal(result.candidateFacts[0].relationship, RELATIONSHIP_TYPE.SIGNIFICANT_INFLUENCE_OR_CONTROL);
+  assert.equal(result.issues.filter(({ code }) => code === ADAPTER_ISSUE_CODE.PROVIDER_OUTCOME).length, 2);
+});
+
 test("unknown legacy relationship type is quarantined with the stable unsupported-field issue", async () => {
   const body = response({ edges: [edge("unknown", "legacy-owner-node", "legacy-root-node", {
     type: "legacy_magic_control", ownershipPercentage: null,
