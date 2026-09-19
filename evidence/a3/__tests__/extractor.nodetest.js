@@ -151,3 +151,25 @@ test("real semantic adapter reports authentication and malformed output truthful
   await t.test("output truncation", async () => { const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", maxOutputTokens: 4000, fetchImpl: async () => ({ ok: true, status: 200, async json() { return { stop_reason: "max_tokens", content: [{ type: "text", text: '{"facts":[' }] }; } }) }); await assert.rejects(() => adapter.extract({ decodedText: "x" }), (e) => e.code === "provider_output_truncated" && /4000-token/.test(e.message)); });
   await t.test("timeout", async () => { const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", timeoutMs: 5, fetchImpl: async (_url, options) => new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))) }); await assert.rejects(() => adapter.extract({ decodedText: "x" }), (e) => e.code === "provider_timeout"); });
 });
+
+test("semantic adapter retries one transient provider failure and reports attempts", async () => {
+  let calls = 0;
+  const adapter = new AnthropicSemanticProvider({
+    apiKey: "x", model: "m", maxAttempts: 2,
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return { ok: false, status: 503, async json() { return {}; } };
+      return { ok: true, status: 200, async json() { return { content: [{ type: "text", text: JSON.stringify({ facts: [], requested_concept_outcomes: [], completeness: { state: "complete", limitations: [] }, support: { state: "not_supported" } }) }] }; } };
+    },
+  });
+  const result = await adapter.extract({ decodedText: "x", requestedConcepts: [] });
+  assert.equal(calls, 2);
+  assert.equal(result.providerAttemptCount, 2);
+});
+
+test("semantic adapter bounds repeated transient retries at two attempts", async () => {
+  let calls = 0;
+  const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", maxAttempts: 10, fetchImpl: async () => { calls += 1; return { ok: false, status: 503, async json() { return {}; } }; } });
+  await assert.rejects(() => adapter.extract({ decodedText: "x", requestedConcepts: [] }), (error) => error.code === "provider_failed");
+  assert.equal(calls, 2);
+});

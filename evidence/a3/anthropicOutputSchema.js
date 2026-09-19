@@ -1,6 +1,6 @@
 "use strict";
 
-const ANTHROPIC_R4_INSTRUCTION_REFERENCE = "evidence-r4-live-v4-typed-relations-shallow";
+const ANTHROPIC_R4_INSTRUCTION_REFERENCE = "evidence-r4-live-v5-ownership-inventory";
 
 function strictObject(properties, required = Object.keys(properties), description) {
   return { type: "object", ...(description ? { description } : {}), properties, required, additionalProperties: false };
@@ -8,6 +8,9 @@ function strictObject(properties, required = Object.keys(properties), descriptio
 
 const typedRelationship = strictObject({
   fact_index: { type: "integer", description: "Zero-based index of the related item in facts." },
+  connector_inventory_id: { type: "string", description: "The matching ownership_connector_inventory connector_id, or an empty string when this is not an ownership-diagram relationship." },
+  subject_inventory_id: { type: "string", description: "The matching ownership_party_inventory inventory_id for the subject, or an empty string when unavailable." },
+  object_inventory_id: { type: "string", description: "The matching ownership_party_inventory inventory_id for the object, or an empty string when unavailable." },
   direction_established: { type: "boolean" },
   relationship_type: { type: "string", enum: [
     "ECONOMIC_OWNERSHIP", "VOTING_RIGHTS", "APPOINTMENT_RIGHTS", "REMOVAL_RIGHTS",
@@ -54,6 +57,23 @@ const fact = strictObject({
 });
 
 const ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA = strictObject({
+  ownership_data_status: { type: "string", enum: ["OWNERSHIP_RELATIONSHIPS_PRESENT", "NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED", "UNRESOLVED", "NOT_APPLICABLE"] },
+  ownership_party_inventory: { type: "array", items: strictObject({
+    inventory_id: { type: "string" },
+    visible_label: { type: "string" },
+    party_type: { type: "string", enum: ["natural_person", "legal_entity", "trust_or_legal_arrangement", "unknown_or_other"] },
+    source_locator_json: { type: "string", description: "Safe JSON locator containing page/region/description where available; use {} when unavailable." },
+    disposition: { type: "string", enum: ["UNRESOLVED", "INTENTIONALLY_NON_OWNERSHIP"] },
+  }) },
+  ownership_connector_inventory: { type: "array", items: strictObject({
+    connector_id: { type: "string" },
+    subject_inventory_id: { type: "string" },
+    object_inventory_id: { type: "string" },
+    relationship_label: { type: "string" },
+    percentage_text: { type: "string" },
+    source_locator_json: { type: "string", description: "Safe JSON locator containing page/region/description where available; use {} when unavailable." },
+    disposition: { type: "string", enum: ["UNRESOLVED", "INTENTIONALLY_NON_OWNERSHIP"] },
+  }) },
   facts: { type: "array", items: fact },
   support_locators: { type: "array", items: supportLocator },
   typed_relationships: { type: "array", items: typedRelationship },

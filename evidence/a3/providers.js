@@ -77,11 +77,16 @@ function mapTypedRelationshipCandidate(input) {
     else if (input.value_kind === "RANGE") { value.lower = input.range_lower; value.upper = input.range_upper; value.lowerInclusive = input.lower_inclusive; value.upperInclusive = input.upper_inclusive; }
     else if (input.value_kind === "QUALITATIVE") value.value = input.qualitative_value;
     const temporalDetails = parsedJson(input.temporal_json, {});
+    const inventoryMetadata = {
+      ...(input.connector_inventory_id ? { connectorInventoryId: input.connector_inventory_id } : {}),
+      ...(input.subject_inventory_id ? { subjectInventoryId: input.subject_inventory_id } : {}),
+      ...(input.object_inventory_id ? { objectInventoryId: input.object_inventory_id } : {}),
+    };
     return {
       directionEstablished: input.direction_established, relationshipType: input.relationship_type,
       subject: party("subject"), object: party("object"), value,
       temporal: { state: input.temporal_state, effectiveFrom: temporalDetails.effective_from, effectiveTo: temporalDetails.effective_to, sourceEffectiveDate: temporalDetails.source_effective_date, precision: temporalDetails.precision || {} },
-      sourceSpecificMetadata: metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), qualifications: parsedJson(input.qualifications_json, []),
+      sourceSpecificMetadata: { ...metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), ...inventoryMetadata }, qualifications: parsedJson(input.qualifications_json, []),
     };
   }
   if (input.present === false) return null;
@@ -175,21 +180,22 @@ function parseProviderJson(text) {
 }
 
 class AnthropicSemanticProvider extends SemanticExtractionProvider {
-  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE } = {}) {
-    super(); this.apiKey = apiKey; this.model = model; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference;
+  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE, maxAttempts = 2 } = {}) {
+    super(); this.apiKey = apiKey; this.model = model; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference; this.maxAttempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
   }
   configuration() { return { provider: "anthropic", model: this.model || null, instructionReference: this.instructionReference, ready: !!(this.apiKey && this.model) }; }
   capabilities() { return { contentKinds: ["text", "image", "document"], maxRequestBytes: 32 * 1024 * 1024, mediaTypes: ["application/json", "text/html", "application/pdf", "image/png", "image/jpeg"] }; }
   async extract({ artifact, artifactInputs = [], contentItems = [], decodedText, requestedConcepts = [], context = {}, sourceMetadata = {} }) {
     if (!this.apiKey || !this.model) throw Object.assign(new Error("Live semantic interpretation requires ANTHROPIC_API_KEY and EVIDENCE_A3_ANTHROPIC_MODEL"), { code: "provider_not_configured" });
     if (typeof this.fetchImpl !== "function") throw Object.assign(new Error("Semantic provider transport is unavailable"), { code: "provider_unavailable" });
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const requested = requestedConcepts.map((item) => ({ concept: item.concept, description: item.description || item.concept }));
     const inputs = artifactInputs.length ? artifactInputs : [{ artifact, decodedText, sourceMetadata, order: 1 }];
     const items = contentItems.length ? contentItems : inputs.map((input) => ({ artifactId: input.artifact?.id, kind: "text", mediaType: input.artifact?.mediaType || "text/html", text: String(input.decodedText || ""), artifact: input.artifact, order: input.order, sourceMetadata: input.sourceMetadata || {} }));
     const instruction = [
       "Interpret only the verified preserved evidence supplied below.",
       "Return one JSON object with facts, requested_concept_outcomes, completeness, and support.",
+      "When Lab extraction context schemaReference is ownership-chart-extraction-v2, also build ownership_party_inventory and ownership_connector_inventory before extracting relationships. Identify every visible person, legal entity, trust/arrangement, and unclear party. Do not omit a party because its relationship is unclear; retain it with disposition UNRESOLVED. Inventory every visible connector and percentage separately. Link each ownership typed_relationship to its connector, subject, and object inventory IDs. If a visible item cannot be reconciled, retain it in the inventory rather than inventing a relationship.",
+      "For ownership-chart-extraction-v2, ownership_data_status is OWNERSHIP_RELATIONSHIPS_PRESENT when at least one relationship is visible, NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED only when the complete source was inspected and contains no ownership relationship, and UNRESOLVED when visibility or interpretation is incomplete. Use NOT_APPLICABLE for other profiles.",
       "Return shallow indexed transport lists: facts, support_locators, and typed_relationships. value_json and supporting_artifact_ids_json are valid JSON encoded as strings. Each support or relationship row uses fact_index, the zero-based index of its Fact. Omit rows instead of inventing unsupported locators or relationships.",
       "Each facts item must contain concept, value_json, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids_json, semanticAmbiguity, and ambiguous. value_json preserves the Fact's natural scalar, array, or object shape. semantic_role must be business_fact for a persistable semantic fact.",
       "A typed_relationship is optional and must describe exactly the same single source assertion as its ordinary Fact. Never put several independent relationships in one typed relationship or relationship array; emit one Fact per directed relationship.",
@@ -226,12 +232,26 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const requestContent = items.every((item) => item.kind === "text") ? content.map((item) => item.text).join("\n\n") : content;
     const requestBody = JSON.stringify({ model: this.model, max_tokens: this.maxOutputTokens, messages: [{ role: "user", content: requestContent }], output_config: { format: { type: "json_schema", schema: ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA } } });
     let response;
-    try {
-      response = await this.fetchImpl("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" }, body: requestBody, signal: controller.signal });
-    } catch (error) {
-      if (error?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout" });
-      throw Object.assign(new Error("Semantic provider request failed"), { code: "provider_unavailable" });
-    } finally { clearTimeout(timer); }
+    let attemptsUsed = 0;
+    let lastTransportError = null;
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      attemptsUsed = attempt;
+      const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        response = await this.fetchImpl("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" }, body: requestBody, signal: controller.signal });
+        if (!(response.status === 429 || response.status >= 500) || attempt === this.maxAttempts) break;
+      } catch (error) {
+        lastTransportError = error;
+        if (attempt === this.maxAttempts) {
+          if (error?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout", attemptsUsed });
+          throw Object.assign(new Error("Semantic provider request failed"), { code: "provider_unavailable", attemptsUsed });
+        }
+      } finally { clearTimeout(timer); }
+    }
+    if (!response) {
+      if (lastTransportError?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout", attemptsUsed });
+      throw Object.assign(new Error("Semantic provider request failed"), { code: "provider_unavailable", attemptsUsed });
+    }
     let payload;
     try { payload = await response.json(); } catch (_) { throw Object.assign(new Error("Semantic provider returned malformed output"), { code: "provider_malformed_output" }); }
     if (!response.ok) {
@@ -257,7 +277,13 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
     const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) && parsed.completeness.source_record_count >= 0 ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) && parsed.completeness.represented_record_count >= 0 ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
     const requestedConceptOutcomes = requestedConcepts.map((request) => { const reported = reportedOutcomes.get(request.concept); const found = facts.some((fact) => fact.concept === request.concept && fact.valueFound && fact.semanticRole === "business_fact"); return { concept: request.concept, status: found ? "found" : reported === "not_found" ? "not_found" : completeness.state === "complete" ? "not_found" : "not_evaluated" }; });
-    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null };
+    const ownershipPartyInventory = (Array.isArray(parsed.ownership_party_inventory) ? parsed.ownership_party_inventory : []).map((item) => ({
+      inventoryId: String(item?.inventory_id || ""), visibleLabel: String(item?.visible_label || ""), partyType: String(item?.party_type || "unknown_or_other"), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
+    }));
+    const ownershipConnectorInventory = (Array.isArray(parsed.ownership_connector_inventory) ? parsed.ownership_connector_inventory : []).map((item) => ({
+      connectorId: String(item?.connector_id || ""), subjectInventoryId: String(item?.subject_inventory_id || ""), objectInventoryId: String(item?.object_inventory_id || ""), visibleLabel: String(item?.relationship_label || ""), percentageText: String(item?.percentage_text || ""), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
+    }));
+    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed };
   }
 }
 

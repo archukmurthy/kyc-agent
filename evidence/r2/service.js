@@ -40,6 +40,7 @@ function buildResult(operation, interpreted, request, completedAt) {
     completeness,
     limitations:[...new Set([...(completeness.input?.limitations||[]),...(completeness.extraction?.limitations||[])])],
     typedRelationshipCount:uniqueFacts.filter((fact)=>fact.typedRelationship).length,
+    ownershipDiagramCompleteness:interpreted.ownershipDiagramCompleteness||interpreted.providerOutputEvaluation?.ownershipDiagramCompleteness||null,
     correlation:request.correlation,
     downstreamEvaluation:"not_performed",
   };
