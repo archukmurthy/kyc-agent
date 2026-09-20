@@ -37,6 +37,7 @@ while working a batch land here; the batch plan links back to them.
 - **Category:** Deploy · **Priority:** P2 · **Status:** OPEN (manual step for the owner)
 - **What:** (1) Rate-limit counters live in `lib/storage.js`. On Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global; and the filesystem backend ignores TTLs, so `ratelimit:*` keys pile up in `.config-store.json` (local) or `/tmp` until the instance recycles. Provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
 - **Why:** Behaviour changes that are correct by design but surprise on first deploy.
+- **Raised 2026-09-20:** this now matters more. `lib/loginThrottle.js` (AUTH-1) and the per-person rate limits both count through `lib/storage.js`. Without KV/Redis each serverless instance counts separately, so an attacker gets 5 password guesses *per instance* rather than 5 in total, and a caller gets their hourly allowance per instance. Both work correctly locally and are weaker in production in proportion to how many instances are running. One integration, one env var, no code change.
 
 ### DEP-5 — Part 3 deploy gate: migration 027
 - **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
@@ -355,6 +356,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Category:** UX · **Priority:** P3 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
 - **What:** `public/ubo-lab.html` and the UBO lab's `START_LIVE` operation don't special-case a rate-limited response from `/api/ubo-discovery`; a 429 surfaces as a generic "No completed result was returned" / failure rather than telling the user to slow down or retry later.
 - **Area:** `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js`.
+- **Update 2026-09-20:** the server half is done. A 429 now carries `scope`, `limit`, `retryAfterSeconds` and a readable `message` ("You have used all 15 requests for this hour. Try again in 12 minutes."). What remains is client-side: show `body.message` instead of collapsing every non-200 into "No completed result was returned".
 
 ### AUTH-1 — No brute-force protection on admin password checks
 - **Category:** Security · **Priority:** P2 · **Status:** DONE (2026-09-20) —  guards all three login routes: 5 failures per account per 15 minutes, 20 per address per hour, counted on failures only and cleared by a success. Fails open on a storage error, deliberately: locking every admin out of every tenant during a KV blip is worse than a guessing window, and the failure is logged. Wiring is covered end to end in , because a correct library proves nothing if a route forgets to call it. The duplicate  comparisons were already merged onto one constant-time check in Batch 0.
@@ -408,3 +410,34 @@ they exist, every rule in that file depends on someone recalling it.
 - **Why it matters:** without `npm ci` the dependency tree is resolved fresh on every run, so CI can install patch versions the local machine has never used — a green run here is not proof of the same tree there. It also makes installs slower.
 - **Fix:** regenerate the lockfile in a Linux environment (a one-off `workflow_dispatch` job that runs `rm -rf node_modules package-lock.json && npm install` and commits the result, or the same in a container), confirm `npm ci` succeeds, then restore `npm ci` in both jobs of `.github/workflows/ci.yml`.
 - **Area:** `package-lock.json`, `.github/workflows/ci.yml`.
+
+---
+
+## Found while building UBO trial access (2026-09-20)
+
+### TEST-1 — Node tests write to the real filesystem store
+- **Category:** Test hygiene · **Priority:** P2 · **Status:** PARTIAL — fixed in `api/__tests__/ubo-discovery-tenant.nodetest.js` only
+- **What:** Several `node:test` suites exercise handlers that reach `lib/storage.js`, which falls back to `.config-store.json` locally. Cached results and rate-limit counters therefore survive between runs and between suites. One UBO test was passing because an earlier run of the same test had cached the answer — it had quietly stopped testing what it claimed to.
+- **Why it matters:** a test that passes for the wrong reason is worse than no test. It also makes the suite order-dependent and unrepeatable on a clean machine.
+- **Fix:** give the affected suites an injected in-memory store, the way `lib/__tests__/rateLimit.nodetest.js` does. Candidates: anything touching `research`, `ubo-discovery`, `search-attempt`, `research-attempt`.
+- **Area:** `api/__tests__/*`, `lib/storage.js`.
+
+### PLAT-9 — Dead `"nium"` defaults in the UBO persistence keys
+- **Category:** Security / Tidiness · **Priority:** P3 · **Status:** OPEN
+- **What:** `agents/ubo/uboPersistence.js` builds cache keys with `normalise(tenantId || "nium")` in both `resultKey` and `entityKey`. UBO-1 made the route always pass a real tenant, so the default is unreachable from `api/ubo-discovery.js` — but it is still there for any future caller that forgets.
+- **Why:** the same defaulting that UBO-1 was about. An unreachable bad default is a trap, not a safety net.
+- **Area:** `agents/ubo/uboPersistence.js`. Owned by the UBO side — worth raising rather than editing.
+
+### PLAT-10 — Five pre-existing lint errors in `api/idv-match/`
+- **Category:** Code quality · **Priority:** P3 · **Status:** OPEN
+- **What:** `identityVault.js` calls a function named `useDurable` from four non-component functions, which trips `react-hooks/rules-of-hooks` (it is not a React hook; the name is the problem). `media/index.js` uses `globalThis`, which the CRA ESLint env does not declare.
+- **Why:** they are the only errors in the repo, so "lint is clean" currently needs an asterisk, and an asterisk is how real errors hide.
+- **Fix:** rename `useDurable` to `withDurable`, and declare the env for the media module.
+- **Area:** `api/idv-match/identityVault.js`, `api/idv-match/media/index.js`.
+
+### PROC-6 — Two mains, drifting
+- **Category:** Process · **Priority:** P1 · **Status:** OPEN (decision taken 2026-09-20: keep two repos for now)
+- **What:** `archukmurthy/kyc-agent` holds the UBO work; `ManasBorole/kyc-agent-remote` holds that plus the tenancy and security work. Ours merged theirs on 2026-09-20; theirs has none of ours. Both sides are committing.
+- **Why:** every day of parallel work makes the eventual reconciliation larger. Today's auth work already touched files the other side owns (`src/index.js`, three `api/ubo-*` routes, `package.json`, `vercel.json`).
+- **Options:** send our work as a PR into theirs; or agree one main and have the other fork from it.
+- **Also open, both on the other repo:** PR #64 holds ~370 lines that never reached their main, including "Keep ambiguous chart ownership provisional", which reads like a real fix; and `vercel.json` now carries both `routes` and `rewrites`, a combination Vercel has historically refused — it came from their side and will be found on the first deploy.
