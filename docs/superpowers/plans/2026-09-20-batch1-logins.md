@@ -38,8 +38,12 @@ refused rather than silently preferred.
 
 ## Tasks
 
-1. `lib/password.js` + tests - scrypt hash/verify, legacy verify, needsRehash.
-2. `lib/session.js` + tests - mint/verify/revoke, expiry, tamper, domain separation.
+**Paused after task 2 on 2026-09-20** - other work took priority. Tasks 1 and 2
+are merged and inert: the libraries exist with tests, nothing imports them yet,
+and no behaviour changed. Resume at task 3; nothing is half-wired.
+
+1. DONE (30d1a6d) `lib/password.js` + tests - scrypt hash/verify, legacy verify, needsRehash.
+2. DONE (30d1a6d) `lib/session.js` + tests - mint/verify/revoke, expiry, tamper, domain separation.
 3. Login routes - issue sessions, throttle guessing, rehash on success.
 4. `lib/routeAuth.js#requireAdmin` - verify session, derive tenant from it.
 5. Clients - AdminRoot, SuperAdminRoot, dashboard, App.js preview, benchmark script.
