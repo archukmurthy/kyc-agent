@@ -1,7 +1,7 @@
 "use strict";
 
 const { createDemoEntityMatcher } = require("../ubo-control-lab/server/demoEntityMatching.js");
-const { applyCors } = require("../lib/routeAuth");
+const { applyCors, requireStaff } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
 function createHandler(matchEntities = createDemoEntityMatcher()) {
@@ -10,6 +10,9 @@ function createHandler(matchEntities = createDemoEntityMatcher()) {
     // Merged from the UBO demo with no credential and no limit. Calls Anthropic per request, so an anonymous caller can spend our money.
     // Clerk gives these a real caller identity; the limiter is what holds until then.
     if (!(await enforceRateLimit(req, res, "ubo-demo-entity"))) return undefined;
+    // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
+    // route behaves exactly as before until the keys land.
+    if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ success: false, code: "method_not_allowed" });

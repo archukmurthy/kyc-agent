@@ -93,8 +93,9 @@ const ROUTES = {
   "idv-match/resolve.js": "unguessable-id",
 
   // Provider callbacks. Signature verification is IDV-3.
-  // UBO demo. Both reach Anthropic, both are rate-limited, neither has a
-  // caller identity yet - that arrives with Clerk.
+  // UBO. All three reach Anthropic, all three are rate-limited, and all three
+  // now call requireStaff - which is inert until CLERK_SECRET_KEY is set, so
+  // they are still counted as open until the key lands in an environment.
   "ubo-demo-customer-ownership-chart.js": "open-limited",
   "ubo-demo-entity-resolution.js": "open-limited",
 
@@ -181,4 +182,14 @@ test("the Evidence Lab routes stay undeployable", () => {
 
   const ignore = fs.readFileSync(path.join(API_DIR, "..", ".vercelignore"), "utf8");
   assert.ok(ignore.includes("api/evidence"), ".vercelignore must keep the lab functions out of the upload");
+});
+
+test("the UBO routes ask Clerk who is calling", () => {
+  // The gate is inert without CLERK_SECRET_KEY, so this cannot assert a
+  // refusal. What it can assert is that the call is wired at all - a UBO route
+  // added later without it would otherwise be open the day Clerk is switched on
+  // and nobody would notice.
+  const uboRoutes = ["ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js"];
+  const missing = uboRoutes.filter((f) => !read(f).includes("requireStaff"));
+  assert.deepEqual(missing, [], "UBO routes must go through requireStaff");
 });

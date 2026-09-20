@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
+    "@clerk/backend": "^3.18.1",
+    "@clerk/clerk-react": "^5.61.10",
     "@complycube/api": "^1.1.14",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.8.0",

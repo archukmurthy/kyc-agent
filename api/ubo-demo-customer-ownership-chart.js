@@ -1,7 +1,7 @@
 "use strict";
 
 const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
-const { applyCors } = require("../lib/routeAuth");
+const { applyCors, requireStaff } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
 function createHandler(analyse = analyseCustomerOwnershipChart, reevaluate = reevaluateSavedCustomerOwnershipChart) {
@@ -10,6 +10,9 @@ function createHandler(analyse = analyseCustomerOwnershipChart, reevaluate = ree
     // Merged from the UBO demo with no credential and no limit. Reaches document extraction and Anthropic, so an anonymous caller can spend our money.
     // Clerk gives these a real caller identity; the limiter is what holds until then.
     if (!(await enforceRateLimit(req, res, "ubo-demo-chart"))) return undefined;
+    // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
+    // route behaves exactly as before until the keys land.
+    if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
