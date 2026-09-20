@@ -110,6 +110,15 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  // Local parity with middleware.js: without this, npm start would serve
+  // routes the deployed UBO site refuses, and we would develop against a
+  // product that does not exist.
+  const productMode = require(path.join(__dirname, "..", "lib", "productMode.js"));
+  app.use((req, res, next) => {
+    if (productMode.refuseIfHidden(req, res)) return undefined;
+    return next();
+  });
+
   // CRA serves the staged UBO graph assets from build/ in production, but
   // `npm start` does not run the staging script. Expose the same canonical
   // files in local development so the ownership-graph iframe receives JS/CSS

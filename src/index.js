@@ -14,6 +14,11 @@ import ClerkGate from "./auth/ClerkGate";
 import TrialGate from "./trials/TrialGate";
 import TrialAdmin from "./trials/TrialAdmin";
 
+// One codebase, two products. A deployment built with REACT_APP_PRODUCT_MODE=ubo
+// shows the ownership review module and nothing else. The server refuses the
+// rest as well (middleware.js) - this half only stops the screens rendering.
+const UBO_ONLY = (process.env.REACT_APP_PRODUCT_MODE || "platform").toLowerCase() === "ubo";
+
 const path = window.location.pathname;
 const search = new URLSearchParams(window.location.search);
 // Pre-boarding has its own path (/preboarding?tenant=<id>), mirroring /admin.
@@ -49,6 +54,19 @@ if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
 } else if (isUboDemoPath(path)) {
   tree = <ClerkGate><TrialGate><UboDemoRoot /></TrialGate></ClerkGate>;
   title = "Ownership review demo";
+} else if (UBO_ONLY) {
+  // Anything outside the UBO surfaces simply does not exist here. Deliberately
+  // plain: a page that says "this is disabled in this deployment" tells a
+  // stranger what else to go looking for.
+  tree = (
+    <div style={{ fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif", padding: "64px 24px", textAlign: "center", color: "#57606a" }}>
+      <h1 style={{ fontSize: 20, color: "#24292f" }}>Page not found</h1>
+      <p>
+        <a href="/ubo-demo" style={{ color: "#1a3a4a" }}>Go to the ownership review</a>
+      </p>
+    </div>
+  );
+  title = "Not found";
 } else if (isPolicySimulator) {
   tree = <PolicySimulator />;
   title = "UK KYB Policy Simulator";

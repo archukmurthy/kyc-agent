@@ -489,9 +489,13 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Category:** Security · **Priority:** P1 · **Status:** OPEN
 - **What:** A test asserts the vercel.json denial and the .vercelignore rules; nothing has confirmed it against a real deployment. One curl after the first deploy.
 
-### TEST-2 — `PolicySimulator.test.jsx` times out under parallel load
+### TEST-2 — Heavy frontend suites time out under parallel load
 - **Category:** Test hygiene · **Priority:** P2 · **Status:** OPEN (seen 2026-09-20)
 - **What:** In a full `npm test` run the suite failed after 56s; run alone it passes 9/9 in a few seconds, and an immediate re-run of the full suite passed 742/742. It is slow enough that Jest's default timeout is reached when workers compete for CPU.
 - **Why it matters:** a flaky test is worse than a missing one. Once people learn that a red run might mean nothing, red runs stop being read - and the CI gate we just built depends on red meaning something.
 - **Fix:** find what takes tens of seconds (likely a real timer or a large fixture rendered repeatedly), and either fake the timers or shrink the fixture. Raising the timeout hides it rather than fixing it.
-- **Area:** `src/policySimulator/PolicySimulator.test.jsx`.
+- **Seen twice, on different suites (2026-09-20):** `PolicySimulator.test.jsx` failed at 56s in one full run; `src/uboDemo/UboDemoRoot.test.jsx` failed at 61s in the next. Each passes alone in seconds (9/9 and 35/35), and a re-run of the full suite passed 742/742. Two different suites means this is about how the suite is run, not one badly written test.
+- **Likely cause:** Jest defaults to a worker per core; on a machine already running a dev server and a watcher, each worker gets a fraction of a CPU and a 5s default timeout is reached by any test doing real rendering work.
+- **Fix options, in order of honesty:** find what actually takes tens of seconds and fix it (real timers, large fixtures re-rendered per test); or cap workers (`--maxWorkers=50%`) so each gets enough CPU. Raising the timeout hides it rather than fixing it, and the CI gate depends on red meaning something.
+- **Note:** CI itself has been green throughout (3 minutes, dedicated runner). This bites locally and would bite a busier CI machine.
+- **Area:** `src/policySimulator/PolicySimulator.test.jsx`, `src/uboDemo/UboDemoRoot.test.jsx`, `package.json` test script.
