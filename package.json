@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
+    "@clerk/backend": "^3.18.1",
+    "@clerk/clerk-react": "^5.61.10",
     "@complycube/api": "^1.1.14",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.8.0",
@@ -38,7 +40,8 @@
     "idv:db:seed": "node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local",
     "idv:db:seed:populated": "node -r dotenv/config scripts/demo/seed-populated.js dotenv_config_path=.env.local",
     "idv:harness": "node idv/harness/server.js",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "access": "node -r dotenv/config scripts/access.js"
   },
   "eslintConfig": {
     "extends": [

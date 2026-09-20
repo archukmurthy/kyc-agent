@@ -191,3 +191,22 @@ Read before you write — this is the point of the whole setup: `get_diagram` op
 Session start: begin every session with `get_product_plan` and `get_diagram` for system-architecture. Items marked HUMAN-ADDED were placed by a person and are intent to act on; items marked proposed are yours and not yet accepted; items listed as REJECTED were dismissed by a person with a reason — do not re-propose them unchanged.
 
 Drift check before the PR: run the dependency script, then call `map_plan` with the same payload and `dryRun: true`. It writes nothing and lists every connector the change would add, spelled out as "from → to". A new connector into a layer that should not import it is an architecture violation — fix the code or justify it in the PR description before mapping for real.
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec

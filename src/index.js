@@ -10,6 +10,7 @@ import { isUboDemoPath } from "./uboDemo/demoRoute";
 import CustomerOwnershipChartPage from "./uboDemo/customer/CustomerOwnershipChartPage";
 import CustomerCompanyPage from "./uboDemo/customer/CustomerCompanyPage";
 import { isCustomerCompanyPath, isCustomerOwnershipChartPath } from "./uboDemo/customer/customerRoute";
+import ClerkGate from "./auth/ClerkGate";
 
 const path = window.location.pathname;
 const search = new URLSearchParams(window.location.search);
@@ -29,14 +30,17 @@ let title = "KYC Onboarding Agent";
 const isPolicySimulator = path === "/policy-simulator" || path.startsWith("/policy-simulator/");
 document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
 
+// The UBO surfaces sit behind a Clerk login. ClerkGate is inert until
+// REACT_APP_CLERK_PUBLISHABLE_KEY is set, so these render unchanged until the
+// keys land - the same switch the API uses with CLERK_SECRET_KEY.
 if (isCustomerOwnershipChartPath(path)) {
-  tree = <CustomerOwnershipChartPage />;
+  tree = <ClerkGate><CustomerOwnershipChartPage /></ClerkGate>;
   title = "Upload ownership chart | Ownership review demo";
 } else if (isCustomerCompanyPath(path)) {
-  tree = <CustomerCompanyPage />;
+  tree = <ClerkGate><CustomerCompanyPage /></ClerkGate>;
   title = "Company details | Ownership review demo";
 } else if (isUboDemoPath(path)) {
-  tree = <UboDemoRoot />;
+  tree = <ClerkGate><UboDemoRoot /></ClerkGate>;
   title = "Ownership review demo";
 } else if (isPolicySimulator) {
   tree = <PolicySimulator />;
