@@ -1,0 +1,2 @@
+"use strict";
+const {CANONICALIZATION_VERSION,MANIFEST_VERSION,PURPOSE_CODES}=require("../../evidence/a5b/domain");module.exports=function(req,res){if(req.method!=="GET"){res.setHeader("Allow","GET");return res.status(405).json({error:"Method not allowed"});}return res.status(200).json({stage:"A5b",database:!!process.env.DATABASE_URL,manifestVersion:MANIFEST_VERSION,canonicalizationVersion:CANONICALIZATION_VERSION,purposeCodes:PURPOSE_CODES,sourceCall:false,providerCall:false,export:false});};

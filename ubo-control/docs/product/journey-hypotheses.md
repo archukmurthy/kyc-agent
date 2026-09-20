@@ -2,6 +2,12 @@
 
 This register records product research hypotheses and their Control Room product decisions. Entries are not regulatory authority or Policy Pack content. Source evidence `PRACTITIONER-001` remains explicitly classified `PRACTITIONER_EVIDENCE` with `NON_POLICY` authority; approved statuses below authorize only the stated product behavior.
 
+## Wave 11B1 implementation note
+
+The review-only successor applicant Lab now exercises the approved fact-led journey through actual JourneyProjection v2 customer bundles. It presents one coherent task per bundle, suppresses customer forms during system/internal/specialist work, distinguishes customer-input completion from final case completion, and retains the established ownership story as context without exposing the analyst graph.
+
+Only projection-carried approved question content is executable. Real-policy A-02, A-04 and A-17 blocks remain visible to Lab diagnostics and fail closed in the applicant view. External Evidence and delegation are data-only handoffs; no upload, ingestion, message delivery, authorization or production onboarding behavior is implied.
+
 ## JH-001 — Suppress unnecessary customer questions
 
 **Statement:** A customer question should normally be suppressed when the relevant policy requirement has already been resolved to the required evidential standard.
@@ -111,6 +117,14 @@ Discovery and interpretation of already-held artifacts share the zero-customer-f
 > `Document checked = YES` is not a UBO resolution state.
 
 One artifact may yield several candidate facts, each affecting a different policy requirement. Capturing those candidate facts does not itself evaluate or resolve R04, R05 or R06.
+
+## JH-008 — Existing Artifact demonstration boundary
+
+**Statement:** A review-only journey may satisfy a plan-derived Evidence handoff from an already-ingested, authorized Artifact, provided the host keeps Artifact correlation outside the immutable handoff, exposes extracted facts as candidates, and requires explicit identity/claim decisions before re-evaluation.
+
+**Status:** `SUPPORTED / WAVE 11B2A DEMONSTRATED`
+
+**Caution:** This proves an existing-Artifact Evidence-to-UBO cycle. It is not a private-upload, trusted-ingestion, persistence, onboarding or production-authorization design.
 
 ## Practitioner research backlog
 

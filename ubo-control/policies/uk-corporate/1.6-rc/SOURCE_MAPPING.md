@@ -88,7 +88,7 @@ The runtime hash is SHA-256 over the parsed policy's `ubo-canonical-json-v1` rep
 | Customer-listed route | Yes, review-only | A-14 | Route is declared but production-blocking until evidence rule approval |
 | Listed consolidated-subsidiary route | No | A-07 | No automatic treatment |
 | Intermediate listed-parent terminus | No | A-01 | Deferred and OFF |
-| Predictive RegistryCapabilityProfile planning | No | A-15 | No entitlement/capability prediction |
+| Predictive RegistryCapabilityProfile planning | No (production); private LAB review implementation only | A-15 | Version/hash/entitlement-pinned planning may be characterized under `REVIEW_ONLY`; no production prediction or evidence conclusion |
 | Semantic lifecycle events | No | A-16 | E-codes remain unresolved |
 | Firm layer-holder collection | No | A-18 | Deferred and no runtime behavior |
 | Declaration-band operational sufficiency | No | A-03 | Corroborated is not exact verified |

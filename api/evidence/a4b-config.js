@@ -1,0 +1,2 @@
+"use strict";
+module.exports=function(req,res){if(req.method!=="GET"){res.setHeader("Allow","GET");return res.status(405).json({error:"Method not allowed"});}return res.status(200).json({stage:"A4b",database:!!process.env.DATABASE_URL,providerCall:false,comparatorProfile:{name:"evidence_conservative_comparison",version:"1"},outcomes:["coverage","completeness","comparable_disagreement","temporal_applicability","empty_set_state","input_sufficiency"]});};

@@ -4,8 +4,13 @@ const { createUboControl } = require("./composition/createUboControl");
 const {
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  DECISION_APPLICATION_CONTRACT_VERSION_V3,
   createUboDecisionApplication,
 } = require("./application/createUboDecisionApplication");
+const {
+  CUSTOMER_ACTION_RESULT_V2,
+  CUSTOMER_ACTION_V2,
+} = require("./application/applyCustomerInputV2");
 const {
   APPLICABILITY_MODEL_VERSION,
   APPLICABILITY_RESULT,
@@ -40,6 +45,14 @@ const { validateEvidenceReference } = require("./contracts/evidenceReference");
 const { validateIdentityResolutionDecision } = require("./contracts/identityResolutionDecision");
 const { validatePercentageValue } = require("./contracts/percentageValue");
 const {
+  TEMPORAL_SUPPORT_ASSESSMENT_V1,
+  TEMPORAL_SUPPORT_DATE_BASIS,
+  TEMPORAL_SUPPORT_DATE_PRECISION,
+  TEMPORAL_SUPPORT_REVIEW_DISPOSITION,
+  TEMPORAL_SUPPORT_REVIEW_RESULT_V1,
+  TEMPORAL_SUPPORT_REVIEW_V1,
+} = require("./contracts/temporalSupportReview");
+const {
   DECISION_APPLICATION_ERROR_CODE,
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
   UBO_JOURNEY_PROJECTION_ERROR_CODE,
@@ -64,6 +77,16 @@ const {
   UBO_JOURNEY_PROJECTION_CONTRACT_VERSION,
   projectUboJourney,
 } = require("./projection/uboJourneyProjection");
+const {
+  CUSTOMER_ACTION_TYPE_V2,
+  CUSTOMER_WORK_BUNDLE_V2,
+  CUSTOMER_WORK_DELEGATION_V1,
+  CUSTOMER_WORK_STATE_V2,
+  EXTERNAL_EVIDENCE_HANDOFF_V1,
+  JOURNEY_PROJECTION_V2,
+  SUBMISSION_CONTRACT,
+  projectUboJourneyV2,
+} = require("./projection/uboJourneyProjectionV2");
 const {
   UBO_RESOLUTION_PLAN_CONTRACT_VERSION,
   UBO_RESOLUTION_PLANNER_VERSION,
@@ -91,6 +114,22 @@ module.exports = Object.freeze({
   CONDITION_LANGUAGE_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION,
   DECISION_APPLICATION_CONTRACT_VERSION_V2,
+  DECISION_APPLICATION_CONTRACT_VERSION_V3,
+  CUSTOMER_ACTION_RESULT_V2,
+  CUSTOMER_ACTION_TYPE_V2,
+  CUSTOMER_ACTION_V2,
+  CUSTOMER_WORK_BUNDLE_V2,
+  CUSTOMER_WORK_DELEGATION_V1,
+  CUSTOMER_WORK_STATE_V2,
+  EXTERNAL_EVIDENCE_HANDOFF_V1,
+  JOURNEY_PROJECTION_V2,
+  SUBMISSION_CONTRACT,
+  TEMPORAL_SUPPORT_ASSESSMENT_V1,
+  TEMPORAL_SUPPORT_DATE_BASIS,
+  TEMPORAL_SUPPORT_DATE_PRECISION,
+  TEMPORAL_SUPPORT_REVIEW_DISPOSITION,
+  TEMPORAL_SUPPORT_REVIEW_RESULT_V1,
+  TEMPORAL_SUPPORT_REVIEW_V1,
   DECISION_APPLICATION_ERROR_CODE,
   OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION,
   OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE,
@@ -133,6 +172,7 @@ module.exports = Object.freeze({
   loadPolicyPack,
   projectOwnershipGraph,
   projectUboJourney,
+  projectUboJourneyV2,
   planUboResolution,
   validateCandidateFact,
   validateCandidatePartyReference,

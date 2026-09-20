@@ -86,9 +86,18 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "CLAIM_STATE",
     "CLAIM_STATE_MODEL_VERSION",
     "CONDITION_LANGUAGE_VERSION",
+    "CUSTOMER_ACTION_RESULT_V2",
+    "CUSTOMER_ACTION_TYPE_V2",
+    "CUSTOMER_ACTION_V2",
+    "CUSTOMER_WORK_BUNDLE_V2",
+    "CUSTOMER_WORK_DELEGATION_V1",
+    "CUSTOMER_WORK_STATE_V2",
     "DECISION_APPLICATION_CONTRACT_VERSION",
     "DECISION_APPLICATION_CONTRACT_VERSION_V2",
+    "DECISION_APPLICATION_CONTRACT_VERSION_V3",
     "DECISION_APPLICATION_ERROR_CODE",
+    "EXTERNAL_EVIDENCE_HANDOFF_V1",
+    "JOURNEY_PROJECTION_V2",
     "OWNERSHIP_GRAPH_PROJECTION_CONTRACT_VERSION",
     "OWNERSHIP_GRAPH_PROJECTION_ERROR_CODE",
     "UBO_JOURNEY_PROJECTION_CONTRACT_VERSION",
@@ -119,6 +128,13 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "RESOLUTION_STRATEGY",
     "RISK_LEVEL",
     "RISK_LEVEL_MODEL_VERSION",
+    "SUBMISSION_CONTRACT",
+    "TEMPORAL_SUPPORT_ASSESSMENT_V1",
+    "TEMPORAL_SUPPORT_DATE_BASIS",
+    "TEMPORAL_SUPPORT_DATE_PRECISION",
+    "TEMPORAL_SUPPORT_REVIEW_DISPOSITION",
+    "TEMPORAL_SUPPORT_REVIEW_RESULT_V1",
+    "TEMPORAL_SUPPORT_REVIEW_V1",
     "UBO_CONFIGURATION_ERROR_CODE",
     "UboConfigurationError",
     "UboContractError",
@@ -130,6 +146,7 @@ test("the public entry point exposes only the approved deliberate surface", () =
     "loadPolicyPack",
     "projectOwnershipGraph",
     "projectUboJourney",
+    "projectUboJourneyV2",
     "planUboResolution",
     "validateCandidateFact",
     "validateCandidatePartyReference",
@@ -160,6 +177,32 @@ test("the resolution planner is advisory, host neutral, and contains no opaque s
   assert.doesNotMatch(source, /\.discover\s*\(|\.extract\s*\(|fetch\s*\(|createUboDecisionApplication|orchestrateResolution/);
 });
 
+test("Wave 9 capability/profile planning remains private, deterministic and execution-free", () => {
+  const planner = fs.readFileSync(path.join(PRODUCT_ROOT, "planning", "resolutionPlanV2.js"), "utf8");
+  const profile = fs.readFileSync(path.join(PRODUCT_ROOT, "planning", "registryCapabilityProfileV1.js"), "utf8");
+  for (const source of [planner, profile]) {
+    assert.doesNotMatch(source, /React|DOM|screenId|pageId|formId|buttonId|src[\\/]App/i);
+    assert.doesNotMatch(source, /frictionScore|costScore|priorityScore|providerRank|vendorRank/i);
+    assert.doesNotMatch(source, /\.discover\s*\(|\.extract\s*\(|fetch\s*\(|EvidencePlatform|upload|fileBytes|raw provider/i);
+    assert.doesNotMatch(source, /Date\.now\s*\(|new Date\s*\(/);
+  }
+  const publicSource = fs.readFileSync(path.join(PRODUCT_ROOT, "index.js"), "utf8");
+  assert.doesNotMatch(publicSource, /registryCapabilityProfileV1|resolutionPlanV2|planUboResolutionV2/);
+});
+
+test("Wave 10 review entry is deliberate and the successor Lab crosses only that boundary", () => {
+  const reviewEntry = fs.readFileSync(path.join(PRODUCT_ROOT, "review", "index.js"), "utf8");
+  const reviewApplication = fs.readFileSync(path.join(PRODUCT_ROOT, "application", "createUboReviewApplication.js"), "utf8");
+  const reviewLab = fs.readFileSync(path.resolve(PRODUCT_ROOT, "..", "ubo-control-lab", "server", "reviewLabEngine.js"), "utf8");
+  assert.match(reviewLab, /require\("\.\.\/\.\.\/ubo-control\/review"\)/);
+  assert.equal((reviewLab.match(/require\([^\n]*ubo-control/g) || []).length, 1);
+  assert.doesNotMatch(reviewLab, /ubo-control\/(application|domain|planning|projection|policy|calculation)\//);
+  for (const source of [reviewEntry, reviewApplication, reviewLab]) {
+    assert.doesNotMatch(source, /EvidencePlatform|ExtractionService|src[\\/]App|entity_dossiers|journey_state|@vercel|@neondatabase|fetch\s*\(/i);
+  }
+  assert.doesNotMatch(reviewApplication, /applyCustomerInput|CustomerAction|JourneyProjection/);
+});
+
 test("the journey projection is host/UI neutral and contains no resolution ranking logic", () => {
   const source = fs.readFileSync(path.join(PRODUCT_ROOT, "projection", "uboJourneyProjection.js"), "utf8");
   assert.doesNotMatch(source, /React|DOM|screenId|pageId|routeId|formId|buttonId/);
@@ -173,6 +216,20 @@ test("customer-input application remains standalone, data-only, and cannot execu
   assert.doesNotMatch(source, /fetch\s*\(|\/api\/research|Blob|base64|fileBytes|rawFile/);
   assert.doesNotMatch(source, /senior_managing_official_fallback/);
   assert.doesNotMatch(source, /fuzzy|similar name|normalized name|confidence/i);
+});
+
+test("Wave 11A application and projection contracts remain provider-neutral, deterministic, and execution-free", () => {
+  const sources = [
+    path.join(PRODUCT_ROOT, "application", "applyCustomerInputV2.js"),
+    path.join(PRODUCT_ROOT, "application", "createUboDecisionApplicationV3.js"),
+    path.join(PRODUCT_ROOT, "projection", "uboJourneyProjectionV2.js"),
+  ].map((file) => fs.readFileSync(file, "utf8"));
+  for (const source of sources) {
+    assert.doesNotMatch(source, /React|\bdocument\b|\bwindow\b|screenId|pageId|src[\\/]App|entity_dossiers|journey_state/i);
+    assert.doesNotMatch(source, /fetch\s*\(|EvidencePlatform|ExtractionService|upload|Blob|base64|filesystem|@vercel|@neondatabase/i);
+    assert.doesNotMatch(source, /Date\.now\s*\(|new Date\s*\(/);
+  }
+  assert.match(sources[0], /acceptsFileBytes: false/);
 });
 
 test("the standalone Lab stays outside onboarding, Evidence, and persistence boundaries", () => {

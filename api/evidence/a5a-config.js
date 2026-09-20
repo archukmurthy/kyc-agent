@@ -1,0 +1,2 @@
+"use strict";
+const {AVAILABILITY_RULES_VERSION}=require("../../evidence/a5a/domain");module.exports=function(req,res){if(req.method!=="GET"){res.setHeader("Allow","GET");return res.status(405).json({error:"Method not allowed"});}return res.status(200).json({stage:"A5a",database:!!process.env.DATABASE_URL,availabilityRulesVersion:AVAILABILITY_RULES_VERSION,sourceCall:false,providerCall:false,writes:false,downstreamDecision:false});};

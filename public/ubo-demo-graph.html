@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/ubo-control-lab/vendor/ownership-graph.css" />
+  <style>html,body,#root{height:100%;margin:0;background:#fff;font-family:Inter,system-ui,sans-serif}</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="/ubo-control-lab/vendor/react.production.min.js"></script>
+  <script src="/ubo-control-lab/vendor/react-dom.production.min.js"></script>
+  <script src="/ubo-control-lab/vendor/OwnershipGraph.js"></script>
+  <script>
+    (function () {
+      var root = ReactDOM.createRoot(document.getElementById("root"));
+      var lastSelectionCommand = null;
+      window.addEventListener("message", function (event) {
+        if (event.origin !== window.location.origin || !event.data || event.data.type !== "ubo-demo-graph-projection-v1") return;
+        var labels = event.data.entityLabels || {};
+        var registryContexts = event.data.registryContexts || {};
+        var reviewPresentations = event.data.reviewPresentations || {};
+        var selectionCommand = event.data.selectionCommand || null;
+        var projection = Object.assign({}, event.data.projection, {
+          nodes: event.data.projection.nodes.map(function (node) {
+            return Object.assign({}, node, labels[node.entityId] ? { primaryName: labels[node.entityId] } : {}, registryContexts[node.entityId] ? { registryContext: registryContexts[node.entityId] } : {});
+          }),
+          reviewRequirements: (event.data.projection.reviewRequirements || []).map(function (review) {
+            return Object.assign({}, review, reviewPresentations[review.reviewRequirementId] ? { demoPresentation: reviewPresentations[review.reviewRequirementId] } : {});
+          })
+        });
+        var externalSelection = selectionCommand && selectionCommand.commandId !== lastSelectionCommand ? selectionCommand.selection : undefined;
+        if (selectionCommand) lastSelectionCommand = selectionCommand.commandId;
+        root.render(React.createElement(UboControlUI.OwnershipGraph, {
+          projection: projection,
+          detailLevel: "CUSTOMER",
+          height: event.data.viewportHeight || 600,
+          initialView: "FIT_WIDTH",
+          collapseIdleInspector: true,
+          fixedViewportHeight: true,
+          boundedViewportNavigation: true,
+          externalSelection: externalSelection,
+          onSelectionChange: function (selection) {
+            event.source.postMessage({ type: "ubo-demo-graph-selection-v1", selection: selection }, event.origin);
+          }
+        }));
+      });
+    }());
+  </script>
+</body>
+</html>

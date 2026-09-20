@@ -1007,7 +1007,12 @@
       "assertion": "Discovery-led when capability profile predicts coverage;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-002",
@@ -1018,7 +1023,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-003",
@@ -1027,7 +1037,12 @@
       "assertion": "pivot before paid attempt where configured capability proves unavailable;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-004",
@@ -1036,7 +1051,10 @@
       "assertion": "repeated NO_DATA and common structural cause collapse into one structure request;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-005",
@@ -1045,7 +1063,10 @@
       "assertion": "chart offered as candidate structure, not proof;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-006",
@@ -1063,7 +1084,10 @@
       "assertion": "residual unsupported edges batched;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-008",
@@ -1072,7 +1096,10 @@
       "assertion": "no oscillation without material change;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-009",
@@ -1083,7 +1110,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-09-010",
@@ -1092,7 +1124,10 @@
       "assertion": "provider outage does not burden customer;",
       "classification": "WAVE_9_PLANNER",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE",
+      "productionExecutable": false,
+      "requiredSignoffs": []
     },
     {
       "assertionId": "F07-09-011",
@@ -1443,7 +1478,9 @@
       "assertion": "ownership-first graph with control toggles;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-13-010",
@@ -1452,7 +1489,9 @@
       "assertion": "no blanket unresolved nodes;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-13-011",
@@ -1484,7 +1523,9 @@
       "assertion": "data-rich confirmation only;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-002",
@@ -1493,7 +1534,9 @@
       "assertion": "known information not re-requested;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-003",
@@ -1520,7 +1563,9 @@
       "assertion": "no-chart guided builder;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-006",
@@ -1541,7 +1586,9 @@
       "assertion": "separate structured statements;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-008",
@@ -1550,7 +1597,9 @@
       "assertion": "Something Changed route preserves history/conflict;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-009",
@@ -1559,7 +1608,9 @@
       "assertion": "delegation;",
       "classification": "WAVE_11_APPLICANT",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-14-010",
@@ -1586,7 +1637,9 @@
       "assertion": "one graph;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-002",
@@ -1595,7 +1648,9 @@
       "assertion": "ownership default;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-003",
@@ -1604,7 +1659,9 @@
       "assertion": "control toggles;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-004",
@@ -1613,7 +1670,9 @@
       "assertion": "Fit width/overview;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-005",
@@ -1622,7 +1681,9 @@
       "assertion": "deterministic unresolved list;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-006",
@@ -1631,7 +1692,9 @@
       "assertion": "edge status vocabulary;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-007",
@@ -1640,7 +1703,9 @@
       "assertion": "node not blanket unresolved;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-008",
@@ -1649,7 +1714,9 @@
       "assertion": "qualification explanation by route;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-009",
@@ -1658,7 +1725,9 @@
       "assertion": "effective-interest and attribution shown separately;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-010",
@@ -1667,7 +1736,9 @@
       "assertion": "evidence states visible;",
       "classification": "WAVE_10_LAB",
       "signoffDependencies": [],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_IN_LAB",
+      "productionExecutable": false
     },
     {
       "assertionId": "F07-15-011",
@@ -1755,7 +1826,12 @@
       "signoffDependencies": [
         "A-15"
       ],
-      "executableNow": false
+      "executableNow": true,
+      "executionStatus": "REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE",
+      "productionExecutable": false,
+      "requiredSignoffs": [
+        "A-15"
+      ]
     },
     {
       "assertionId": "F07-06-EFFECTIVE-INTEREST-001",

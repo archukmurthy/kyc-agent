@@ -1,8 +1,8 @@
 # UBO Control test matrix
 
-## Freeze Wave 7 traceability
+## Freeze implementation traceability
 
-`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Wave 7 advances exactly `F07-08-007` and `F07-08-008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL`, with `productionExecutable=false`, requirement compatibility v1 and planner compatibility v1. Successor InformationNeed v2 and ResolutionPlan v2 remain unimplemented.
+`policies/uk-corporate/1.6-rc/test-assertion-plan.json` contains the one-to-one File 07 assertion inventory. Waves 7 and 8 remain reconstructable through their pinned compatibility algorithms. Wave 9 advances only the protected planner/profile assertions listed below; all remain review-only and production-unauthorised.
 
 | Frozen doctrine | Test / policy | Implementation version | Current status | Sign-off dependency |
 |---|---|---|---|---|
@@ -14,15 +14,15 @@
 | File 01 §6 Qualification/calculation | `qualificationBasisV2.nodetest.js`; `companyPscAttributionV1.nodetest.js`; `llpPscAttributionV1.nodetest.js`; v1.6 route test; File 07 §6 inventory | percentage v1 retained; separate company and LLP/mixed attribution v1 operations; determination v2 still absent | Effective arithmetic preserved; attribution review-only and unwired | A-09; LLP A-06; appoint/remove A-12; joint A-13 |
 | File 01 §7 Control/action gating | v1.6 gating test; File 07 §§8,10,14 inventories | Policy data now; needs/applicant v2 later | Last-resort gated; customer features disabled | A-02, A-04, A-17 |
 | File 01 §8 Listed/exhaustion/fallback/terminal states | v1.6 listed/exhaustion tests; existing async orchestration suite | orchestration v1 retained; planner v2 later | Listed routes gated; exhaustion runtime unchanged | A-01, A-07, A-10, A-14 |
-| File 01 §9 Structure acquisition | v1.6 allowed-strategy test; File 07 §9 inventory | planner v2 / RegistryCapabilityProfile v1 required | Declared, not executable | A-15 |
+| File 01 §9 Structure acquisition | `resolutionPlanV2.nodetest.js`; File 07 §9 inventory | `ubo-low-friction-planner-v2` / `ubo-registry-capability-profile-v1` | Internal review-mode executable | A-15 for profile-driven behavior |
 | File 01 §10 Unwrap boundary | R01–R14 successor-intent and File 07 attribution/frontier inventory | determination/needs v2 required | Data only | A-06/A-09 as applicable |
-| File 01 §11 InformationNeeds | `phasedEvaluationV1.nodetest.js`; File 07 §8 inventory | `ubo-requirement-resolution-v1-compat` | R02/R03/R07 derived applicability executable; frontier needs pending Wave 8 | A-04/A-12/A-13 where applicable |
+| File 01 §11 InformationNeeds | `informationNeedV2.nodetest.js`; `phasedEvaluationV1.nodetest.js`; File 07 §8 inventory | `ubo-requirement-resolution-v2` | Causal frontier needs executable in review mode | A-04/A-12/A-13 where applicable |
 | File 01 §12 Evaluation order | `phasedEvaluationV1.nodetest.js` | `ubo-phased-evaluation-v1`; `ubo-decision-snapshot-v2` | Internal review-mode executable, exact nine-phase order | None |
 | File 01 §13 Applicant versus Lab | File 07 §§14–15 inventory; current UI/Lab suites | v1 UI retained; v2 projections later | Current behavior unchanged | A-02/A-04/A-17 for applicant content |
 | File 01 §14 ASDA characterization | Existing v1 tests plus `asdaSuccessorCharacterization.nodetest.js` | separate internal v1.6/v2 fixture | 12 entities; TDR LLP voting retained; no economic substitution/mixed multiplication/final named conclusion | A-06/A-09/A-13 where applicable |
 | File 01 §15 Prohibited shortcuts | architecture/source scans, readiness and v1.6 no-execution test | Wave 2 | Protected now | None |
 | File 02 §§1–19 v1.6 container content | `__tests__/ukPolicyPack16.nodetest.js` | UK Corporate 1.6-RC / schema 1.3 | Schema/readiness protected | A-01–A-18 recorded; none approved |
-| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; prior Wave 3–6 assertions retained and exactly two Wave 7 assertions advanced transitionally | Per-entry `signoffDependencies` / `requiredSignoffs` |
+| File 07 §§3–16 assertion matrix | `test-assertion-plan.json` one-to-one source-bullet check | Mixed current/future versions per classification | 163 total entries; prior Waves 3–8 retained and exact Wave 9 assignments advanced | Per-entry `signoffDependencies` / `requiredSignoffs` |
 
 ### QualificationBasis v2 and effective-interest wrapper
 
@@ -331,6 +331,42 @@ Only `F07-08-007` and `F07-08-008` advance in Wave 7, as `REVIEW_MODE_EXECUTABLE
 
 Wave 8 advances `F07-08-001`–`006`, `009`–`011`, `F07-12-001`–`004`, `006`, and `F07-13-007`–`008` as `REVIEW_MODE_EXECUTABLE_TRANSITIONAL_PLANNER`. `F07-12-005` remains deferred because Wave 8 records no regulatory report candidate. Production execution remains false.
 
+## Freeze Wave 9 RegistryCapabilityProfile and ResolutionPlan v2
+
+| Invariant | Protection |
+|---|---|
+| Immutable profile/entry identity, canonical hash, JSON round-trip, exact matching, specificity precedence, ambiguity rejection and secret rejection | `resolutionPlanV2.nodetest.js` |
+| SUPPORTED/PARTIAL/UNSUPPORTED/RESTRICTED/UNKNOWN and ENTITLED/NOT_ENTITLED/UNKNOWN/NOT_APPLICABLE remain planning context, never case evidence | profile tests and architecture scans |
+| Explicit evaluation-time freshness; stale/future profiles cannot drive predictive skip | profile/planner freshness tests |
+| Per-causal-group `DISCOVERY_LED`, `CHART_ASSISTED`, `SPECIALIST`, `NOT_APPLICABLE`; mixed strategies remain possible | strategy/grouping tests |
+| Tiered system-first behavior; Discovery and held-artifact work may share a SYSTEM wave | low-friction tests |
+| NO_DATA/UNSUPPORTED/final INCONCLUSIVE suppression; PARTIAL residual-only work; UNAVAILABLE retry and FAILED hold | attempt/failure tests |
+| Material change enables retry; display-only change does not; predecessor/strategy/wave pins prevent oscillation | no-oscillation tests |
+| Six operational plan states and branch-specific versus case-wide specialist behavior | plan-state tests |
+| Causal packages retain every need/requirement ID; diagnostics and paths never become groups/actions | grouping and ASDA characterization tests |
+| Phase 8 is `ubo-resolution-plan-v2`; exact plan/profile/entry/strategy/predecessor pins are hashed before Snapshot v2 | `phasedEvaluationV1.nodetest.js` |
+| Recorded Wave 7, Wave 8 and Wave 9 snapshots reconstruct by their pinned algorithms without re-planning | Snapshot/history dispatcher tests |
+| ASDA A remains system-first; ASDA B uses a coherent TDR structure/governance package while residual content blocks and reviews stay separate | `asdaSuccessorCharacterization.nodetest.js` |
+| Public exports, current v1 Lab/ASDA/planner/projections, legacy Discovery and Evidence/onboarding boundaries remain unchanged | architecture and full regression suites |
+
+Wave 9 advances exactly `F07-09-001`–`005`, `F07-09-007`–`010`, and `F07-16-007`. Profile-driven assertions use `REVIEW_MODE_EXECUTABLE_UNDER_PROFILE_GOVERNANCE`, retain `productionExecutable=false`, and require A-15. `F07-09-006`, `F07-09-011`, `F07-09-012`, all A-10 measure-category execution, Wave 10/11, Evidence, public v3 and onboarding assertions remain deferred.
+
+## Freeze Wave 10 review entry and Lab v2
+
+| Invariant | Protection |
+|---|---|
+| Review entry exact exports; application exact three operations; LAB-only/readiness/typed failures; pinned plan identity | `reviewApplication.nodetest.js`, architecture suite |
+| Stable main entry unchanged; successor Lab imports only the review entry; no host/Evidence/customer-v2 execution | architecture suite |
+| Ten fixtures use the real successor engine; ASDA A is 10 groups/7 system actions and ASDA B is 6 groups/3 customer actions | `reviewLabEngine.nodetest.js` |
+| Session v2 pins policy/snapshot/profile/evaluation/history while v1 remains supported | review Lab and complete baseline Lab suites |
+| Replay uses the same normalized facts with zero transport calls; comparison makes no second search | review Lab/API tests |
+| Projection v2 renders flags, independent relationship/evidence state, causal needs and one canonical node | OwnershipGraph and review Lab tests |
+| Ownership/Voting/Control/All are presentation filters; default ownership, hidden-overlay notice and one graph | successor browser characterization |
+| Qualification routes, 60/40 distinction, TDR provisional state, truthful causal counts and exact plan | review Lab engine/browser characterization |
+| Profile change creates linked immutable history with changed profile/plan/snapshot hashes | review application and Lab tests |
+
+Wave 10 advances `F07-13-009`, `F07-13-010`, and `F07-15-001`–`010` as `REVIEW_MODE_EXECUTABLE_IN_LAB`; every entry retains `productionExecutable=false`. Wave 11 applicant/customer behavior, Evidence execution and production authorization remain deferred.
+
 ## UK Corporate supplied assertion plan
 
 These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B still protects representability and input setup. The current honest execution inventory is one `G2_1_EXECUTABLE`, four `G2_2_EXECUTABLE`, five `G2_3_EXECUTABLE`, six `G2_4A_EXECUTABLE`, five `G2_4B_EXECUTABLE`, and one `G2_4C_EXECUTABLE`. G2.4C now protects the actual immutable R10 measures-taken DecisionSnapshot; persistence and host integrations remain later work.
@@ -359,3 +395,74 @@ These are the 22 behavioral assertions carried into UK Corporate 1.4-RC. G1.2B s
 | UBO-R10 | Fallback cannot activate merely because DiscoveryService returned NO_DATA. | `G2_4B_EXECUTABLE` | S06, P03 + attempt fixture | Protected: NO_DATA remains a no-resolution attempt and cannot derive eligibility |
 | UBO-R10 | Fallback cannot activate when required measures were not actually completed. | `G2_4B_EXECUTABLE` | P03 + candidate-precondition fixtures | Protected: incomplete requirements/needs/specialist/operational state blocks review candidacy |
 | UBO-R10 | Review package and positive exhaustion decision record measures taken and reason fallback was permitted. | `G2_4C_EXECUTABLE` | P03 + package/decision/snapshot fixtures | Protected by the actual immutable DecisionSnapshot measures-taken manifest and reconstructable fallback decision |
+
+## Freeze Wave 11A Decision Application and customer contracts
+
+| Invariant | Protection |
+|---|---|
+| Decision Application v3 has exactly four operations, is schema-1.3/LAB-only, returns Snapshot v2 and its exact pinned Plan v2, and leaves v1/v2 unchanged | `wave11aContracts.nodetest.js`; review/public architecture tests |
+| Wave 11B2A existing-Artifact cycle creates an actual ExternalEvidenceHandoff, six candidates/one source, explicit decisions, linked Snapshot B, four-edge graph, Mitchell 75% satisfied and Lee 25% not satisfied | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js` |
+| Wave 11B2A preserves candidate-before-conclusion, exact source-occurrence identity decisions, officer metadata isolation, idempotent same-session replay, typed failures, sealed browser restore and no-upload/deep-import boundaries | `ubo-control-lab/__tests__/preingestedEvidenceDemo.nodetest.js`; G4.1 actual-façade tests |
+| JourneyProjection v2 accepts only a verified Snapshot v2 plus its exact identity-matched schema-1.3 Policy Pack, is deterministic/immutable, and creates one customer bundle per pinned customer plan bundle/action | `wave11aContracts.nodetest.js` |
+| System, customer, internal review, specialist review, blockers, policy content and final completion remain distinct; affected paths are not customer task counts | Wave 11A projection tests over V2-LAB-07/08/09/10 |
+| CustomerAction v2 authenticates case revision, snapshot/plan hashes, bundle/group/action, needs, requirements, subject/frontier, policy and submission contract | Wave 11A negative contract tests |
+| Wrong share concept, direction, relationship type or target; fabricated fields; stale pins; and blocked content/sign-offs fail with typed application errors | Wave 11A semantic rejection tests |
+| Confirmation adds no graph claim; correction preserves the prior operative claim and creates only a candidate change/review target | Wave 11A customer-cycle tests |
+| Structured company-share input preserves `SHARE_OWNERSHIP`, range semantics and provenance as candidate claims until explicit identity/adjudication decisions; re-evaluation creates a new snapshot without changing the old one | Wave 11A structured ownership cycle |
+| External Evidence action emits a data-only handoff, retains correlation, leaves needs open and performs no extraction; delegation remains data-only and incomplete | Wave 11A handoff/delegation tests and architecture scans |
+| A-02/A-04/A-17 blocks remain effective and no unsigned residual/control/identity content becomes executable | real 1.6-RC projection/action negative tests |
+
+## Freeze Wave 11B1 interactive applicant journey v2
+
+| Invariant | Protection |
+|---|---|
+| Separate `ubo-applicant-journey-ui-v2` accepts only JourneyProjection v2, emits CustomerAction v2, preserves `UboJourney` v1 and adds exactly one deliberate UI export | `UboApplicantJourneyV2.nodetest.js`, architecture/export checks |
+| Status/finish line, compact projected ownership summary, one card per CustomerWorkBundle, known/missing separation and applicant-safe copy | component fixtures and applicant Lab characterization |
+| Confirmation reports the pinned R08 state; correction targets one allowed established relationship and remains pending review | component and `applicantJourneyLab.nodetest.js` |
+| Exact/range/unknown company-share input preserves direction, concept, endpoint semantics and candidate-only state through explicit decisions | applicant Lab cycle tests |
+| External Evidence and delegation stop at data-only handoffs with no upload, Artifact, message, authorization or completion | component/Lab tests and architecture scans |
+| Snapshot/plan/bundle/action draft pins fail closed; fresh projections invalidate stale drafts; no hidden evaluation | component and Lab lifecycle tests |
+| SYSTEM, INTERNAL, SPECIALIST, BLOCKED, CUSTOMER_INPUT_COMPLETE and COMPLETE remain distinct applicant states | AJV2 fixture/component tests |
+| ASDA system and exhausted profiles consume actual pinned JourneyProjection v2 bundles without path/need duplication | AJV2-13/14 characterization |
+| Mobile/keyboard/accessibility path and applicant/analyst separation remain usable | AJV2-15 plus manual-acceptance evidence |
+| One applicant submission invokes the Lab host, which records the accepted result and automatically performs only the no-decisions-required checkpoint/evaluate/snapshot/projection sequence | `applicantJourneyLab.nodetest.js` exact orchestration-order, idempotency and failed-evaluation retry matrix |
+| Candidate identity/claim/correction targets, Evidence handoffs, delegation and policy/sign-off blocks stop automatic continuation and remain pending for the proper actor | applicant host branch tests and fixture-only analyst-helper tests |
+| Browser-local fixture/replay sessions resume from verified Snapshot v2 state; live sessions require explicit opt-in; integrity failure, forbidden content and in-flight uncertainty fail safely | `applicantSessionStore.nodetest.js` and applicant Lab characterization |
+| Applicant current tasks exclude accepted submitted bundles while submitted activity and internal progress remain visible; internal checkpoint/evaluation controls are absent from the applicant surface | `UboApplicantJourneyV2.nodetest.js`, browser-source assertions and manual evidence |
+
+Wave 11B1 advances exactly `F07-14-001`, `F07-14-002`, `F07-14-005`, `F07-14-007`, `F07-14-008`, and `F07-14-009` as `REVIEW_MODE_EXECUTABLE_IN_APPLICANT_LAB`; every entry retains `productionExecutable=false`. A-02, A-04 and A-17 remain unchanged and continue to block their real-policy content. Evidence upload/private ingestion, Wave 11B2, persistence, onboarding and production authorization remain deferred.
+| Successor Lab exposes only a read-only applicant preview and contract inspector with explicit Evidence/content boundary messages | `reviewLabEngine.nodetest.js` |
+| Sign-off dependencies remain audit-complete while only exact `APPROVED` clears execution; OPEN, pending, deferred, mixed and missing records fail closed | Wave 11A schema-1.3 sign-off matrix |
+| Confirmation maps pinned R08 as SATISFIED/OPEN/NOT_APPLICABLE/REVIEW_REQUIRED, does not replace evidence and never mutates or recalculates sufficiency | Wave 11A confirmation/R08 matrix and tampered-snapshot rejection |
+
+Wave 11A makes the versioned application/customer boundary executable in review mode only. It does not change policy sign-offs, authorize production, implement Evidence/G4.1, or deliver the Wave 11B applicant experience.
+
+## G4.1 Evidence extraction adapter
+
+| Invariant | Protection |
+|---|---|
+| Adapter imports only `evidence/consumer/v1/index.js`, receives an already-constructed consumer and obtains trusted authorization from a separate injected provider | `evidencePlatformExtractionAdapter.nodetest.js`; architecture/import-boundary scans |
+| Existing Artifact references are correlated to UBO needs without accepting bytes, Blob URLs, filesystem paths or fabricated Artifact IDs | adapter contract and rejection tests |
+| One Artifact may ground six separately located CandidateFacts while remaining one independent source | frozen Bettercomms fixture characterization |
+| Recognised source-certification Facts cross the frozen public DTO as source-located entity attributes; their date is not converted to relationship currentness and supplemental certification does not degrade completed requested ownership | source-backed Bettercomms adapter and Lab regressions |
+| Exact, range, unknown and qualitative values preserve typed relationship and temporal semantics without UBO conclusions | adapter value/temporal matrix |
+| Unsupported requested facts and incomplete requested concepts produce `PARTIAL`; unsupported supplemental discovered facts remain retained as `DISCOVERED` issues without overriding an otherwise `COMPLETE` requested result | actual-facade requested-versus-discovered outcome regression |
+| `OFFICER_OF` maps only to bounded `officer_relationship` entity-attribute metadata and never ownership, voting, control or qualification | Bettercomms fixture and outcome-scope regression |
+| Frozen consumer failures, authorization failures, integrity failures, stale/mismatched correlation and malformed results fail closed with typed capability outcomes | adapter failure/idempotency/authorization tests |
+| Adapter output enters Decision Application v3 only through the existing ExtractionService seam; adjudication and evaluation remain separate | actual-facade Decision Application integration tests |
+
+G4.1 is fixture/contract tested and review-only. No live provider is called. Private trusted Artifact ingestion, Evidence execution/composition, Evidence-backed Discovery, Wave 11B2, onboarding, persistence and production authorization remain deferred.
+
+## Governed dated-evidence review v1
+
+| Invariant | Protection |
+|---|---|
+| V3 retains exactly four operations; valid review enters only through public `applyDecisions` and returns a sealed review result | `temporalSupportReview.nodetest.js` |
+| Case/snapshot/policy/source Artifact/Fact/claim/relationship pins, actor, actual decision time, wording, date, scope, rationale and limitations are retained | temporal-support record assertions |
+| Original UNKNOWN claims remain unchanged; only the separately pinned dated assessment affects normal evaluation | dated evaluation and raw-state assertions |
+| Exact-date acceptance can satisfy a fully covered route; partial scope, audit note, later date, conflict and withdrawal cannot | dated, partial, later-date and conflict matrix |
+| Stale/tampered/foreign references, unsupported scope, future dates, caller-supplied CURRENT and rewritten quotations fail closed | adversarial application tests |
+| Operation replay is idempotent; conflicting reuse fails; predecessor and supersession records remain reconstructable | idempotency/supersession tests |
+| R08, signer authority, customer completion, final completion and production authorization stay independent | Bettercomms dated-review Lab regression |
+| Existing Snapshot B verifies and reconstructs without running the new evaluator | historical compatibility regression |
+| Compliance-only Lab action produces linked Snapshot C and browser-local restore preserves it without bytes | pre-ingested Evidence Lab/API/cache tests |

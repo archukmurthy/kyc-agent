@@ -25,7 +25,9 @@ function forReviewer(result) {
 // called by the onboarding application.
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false } = req.body || {};
+  // Merge note: their demoRegistryContext flag, our input-length guard. The
+  // guard stays ahead of everything that costs money or hits a provider.
+  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false, demoRegistryContext = false } = req.body || {};
   const limits = checkTextFields(req.body, { entityName: 200, registrationNumber: 64, jurisdiction: 64 });
   if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
@@ -66,7 +68,7 @@ module.exports = async function handler(req, res) {
       entityName,
       registrationNumber: registrationNumber || null,
       jurisdiction: String(jurisdiction).toUpperCase(),
-      tenantConfig: { tenantId, forceRefresh: forceRefresh === true || forceRefresh === "true", uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
+      tenantConfig: { tenantId, forceRefresh: forceRefresh === true || forceRefresh === "true", demoRegistryContext: demoRegistryContext === true, uboRules: { uboThreshold: threshold, discoveryThreshold: discovery } },
       adapters: { companiesHouse: companiesHouseOwnershipAdapter, webResearch: webResearchOwnershipAdapter },
       onProgress: emit,
     });

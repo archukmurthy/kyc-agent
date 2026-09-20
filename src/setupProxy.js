@@ -44,6 +44,8 @@ const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source
 const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
+const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
+const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
@@ -55,6 +57,42 @@ const revokeDossierTokenHandler = require(path.join(__dirname, "..", "api", "rev
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
 const researchHandler = require(path.join(__dirname, "..", "api", "research.js"));
+const evidenceStatusHandler = require(path.join(__dirname, "..", "api", "evidence", "status.js"));
+const evidenceA1FixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a1-fixture.js"));
+const evidenceA2CollectHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-collect.js"));
+const evidenceA2ExistingHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-existing.js"));
+const evidenceA2ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-config.js"));
+const evidenceA3FixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-fixture.js"));
+const evidenceA3ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-config.js"));
+const evidenceA3InterpretHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-interpret.js"));
+const evidenceA3HistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a3-history.js"));
+const evidenceA4aFixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-fixture.js"));
+const evidenceA4aConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-config.js"));
+const evidenceA4aEvaluateHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-evaluate.js"));
+const evidenceA4aHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-history.js"));
+const evidenceA4aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4a-options.js"));
+const evidenceA4bConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-config.js"));
+const evidenceA4bOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-options.js"));
+const evidenceA4bAssessHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-assess.js"));
+const evidenceA4bHistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "a4b-history.js"));
+const evidenceA5aConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-config.js"));
+const evidenceA5aOptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-options.js"));
+const evidenceA5aReconstructHandler = require(path.join(__dirname, "..", "api", "evidence", "a5a-reconstruct.js"));
+const evidenceA5bConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-config.js"));
+const evidenceA5bFreezeHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-freeze.js"));
+const evidenceA5bListHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-list.js"));
+const evidenceA5bReopenHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-reopen.js"));
+const evidenceA5bVerifyHandler = require(path.join(__dirname, "..", "api", "evidence", "a5b-verify.js"));
+const evidenceR1ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-config.js"));
+const evidenceR1ContextsHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-contexts.js"));
+const evidenceR1IngestHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-ingest.js"));
+const evidenceR1ReopenHandler = require(path.join(__dirname, "..", "api", "evidence", "r1-reopen.js"));
+const evidenceR2ConfigHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-config.js"));
+const evidenceR2OptionsHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-options.js"));
+const evidenceR2InterpretHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-interpret.js"));
+const evidenceR2HistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-history.js"));
+const evidenceR2PreflightHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-preflight.js"));
+const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -72,6 +110,35 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  // CRA serves the staged UBO graph assets from build/ in production, but
+  // `npm start` does not run the staging script. Expose the same canonical
+  // files in local development so the ownership-graph iframe receives JS/CSS
+  // rather than CRA's HTML fallback.
+  app.get("/ubo-control-lab/vendor/react.production.min.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "node_modules", "react", "umd", "react.production.min.js")));
+  app.get("/ubo-control-lab/vendor/react-dom.production.min.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "node_modules", "react-dom", "umd", "react-dom.production.min.js")));
+  app.get("/ubo-control-lab/vendor/OwnershipGraph.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "OwnershipGraph.js")));
+  app.get("/ubo-control-lab/vendor/ownership-graph.css", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "ownership-graph.css")));
+
+  app.post("/api/ubo-demo-customer-ownership-chart", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDemoCustomerOwnershipChartHandler)(req, res);
+    });
+  });
+
+  app.post("/api/ubo-demo-entity-resolution", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboDemoEntityResolutionHandler)(req, res);
+    });
+  });
+
   // UK KYB Policy Simulator. Keep the Anthropic credential and prompt server-side.
   app.post("/api/generate-policy", (req, res) => {
     let raw = "";
@@ -507,4 +574,80 @@ module.exports = function (app) {
   // Read-only Change Intelligence dashboard metrics (aggregations over
   // change_events). GET only.
   app.get("/api/change-intelligence-metrics", adapt(changeIntelligenceMetricsHandler));
+
+  // Evidence Platform Stage A0 — isolated server-boundary availability check.
+  app.get("/api/evidence/status", adapt(evidenceStatusHandler));
+
+  // Evidence Platform Stage A1 — fixture-only domain and lineage demonstration.
+  app.get("/api/evidence/a1-fixture", adapt(evidenceA1FixtureHandler));
+
+  // Evidence Platform Stage A2 — isolated Companies House producer/Lab route.
+  app.post("/api/evidence/a2-collect", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(evidenceA2CollectHandler)(req, res);
+    });
+  });
+  app.get("/api/evidence/a2-config", adapt(evidenceA2ConfigHandler));
+  app.post("/api/evidence/a2-existing", (req, res) => {
+    let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA2ExistingHandler)(req, res); });
+  });
+
+  // Evidence Platform Stage A3 — isolated fixture interpretation demonstration.
+  app.get("/api/evidence/a3-fixture", adapt(evidenceA3FixtureHandler));
+  app.get("/api/evidence/a3-config", adapt(evidenceA3ConfigHandler));
+  app.post("/api/evidence/a3-interpret", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(evidenceA3InterpretHandler)(req, res);
+    });
+  });
+  app.post("/api/evidence/a3-history", (req, res) => {
+    let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA3HistoryHandler)(req, res); });
+  });
+  // Evidence Platform Stage A4a — isolated Fact-to-Information-Need evaluation.
+  app.get("/api/evidence/a4a-fixture", adapt(evidenceA4aFixtureHandler));
+  app.get("/api/evidence/a4a-config", adapt(evidenceA4aConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a4a-options", evidenceA4aOptionsHandler], ["/api/evidence/a4a-evaluate", evidenceA4aEvaluateHandler], ["/api/evidence/a4a-history", evidenceA4aHistoryHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
+  // Evidence Platform Stage A4b — immutable coverage/completeness/conflict assessment.
+  app.get("/api/evidence/a4b-config", adapt(evidenceA4bConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a4b-options", evidenceA4bOptionsHandler], ["/api/evidence/a4b-assess", evidenceA4bAssessHandler], ["/api/evidence/a4b-history", evidenceA4bHistoryHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
+  // Evidence Platform Stage A5a — read-only point-in-time reconstruction.
+  app.get("/api/evidence/a5a-config", adapt(evidenceA5aConfigHandler));
+  app.get("/api/evidence/a5a-options", adapt(evidenceA5aOptionsHandler));
+  app.post("/api/evidence/a5a-reconstruct", (req, res) => {
+    let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA5aReconstructHandler)(req, res); });
+  });
+  // Evidence Platform Stage A5b — immutable Package freeze, reopen and verification.
+  app.get("/api/evidence/a5b-config", adapt(evidenceA5bConfigHandler));
+  for (const [route, handler] of [["/api/evidence/a5b-freeze", evidenceA5bFreezeHandler], ["/api/evidence/a5b-list", evidenceA5bListHandler], ["/api/evidence/a5b-reopen", evidenceA5bReopenHandler], ["/api/evidence/a5b-verify", evidenceA5bVerifyHandler]]) {
+    app.post(route, (req, res) => {
+      let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
+      req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
+    });
+  }
+  app.get("/api/evidence/r1-config", adapt(evidenceR1ConfigHandler));
+  app.get("/api/evidence/r1-contexts", adapt(evidenceR1ContextsHandler));
+  for (const [route, handler] of [["/api/evidence/r1-ingest", evidenceR1IngestHandler], ["/api/evidence/r1-reopen", evidenceR1ReopenHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });
+  app.get("/api/evidence/r2-config", adapt(evidenceR2ConfigHandler));
+  for (const [route, handler] of [["/api/evidence/r2-options", evidenceR2OptionsHandler], ["/api/evidence/r2-interpret", evidenceR2InterpretHandler], ["/api/evidence/r2-history", evidenceR2HistoryHandler], ["/api/evidence/r2-preflight", evidenceR2PreflightHandler]]) app.post(route, (req, res) => { let raw=""; req.setEncoding("utf8"); req.on("data", chunk=>{raw+=chunk;}); req.on("end",()=>{try{req.body=raw?JSON.parse(raw):{};}catch(_){req.body={};} adapt(handler)(req,res);}); });
 };
