@@ -441,3 +441,50 @@ they exist, every rule in that file depends on someone recalling it.
 - **Why:** every day of parallel work makes the eventual reconciliation larger. Today's auth work already touched files the other side owns (`src/index.js`, three `api/ubo-*` routes, `package.json`, `vercel.json`).
 - **Options:** send our work as a PR into theirs; or agree one main and have the other fork from it.
 - **Also open, both on the other repo:** PR #64 holds ~370 lines that never reached their main, including "Keep ambiguous chart ownership provisional", which reads like a real fix; and `vercel.json` now carries both `routes` and `rewrites`, a combination Vercel has historically refused — it came from their side and will be found on the first deploy.
+
+---
+
+## UBO trial go-live (2026-09-20)
+
+Real prospects will use this in production, with our API key and their own
+documents. These are the gates. Owner items are marked; the rest are ours.
+
+### GOLIVE-1 — Provision KV or Redis before any link is sent
+- **Category:** Infra · **Priority:** P0 · **Status:** OPEN (owner)
+- **What:** One Vercel integration and one env var. No code change.
+- **Why:** every control built on 2026-09-20 counts through `lib/storage.js`. Without a shared store each serverless instance counts separately: 5 password guesses *per instance* rather than 5 in total, and each caller's hourly allowance *per instance*. The limits work locally and are weaker in production in proportion to how many instances are running. Duplicate of DEP-4/PREB-6; repeated here because this is the gate it blocks.
+
+### GOLIVE-2 — Set a hard spend cap in the Anthropic console
+- **Category:** Cost · **Priority:** P0 · **Status:** OPEN (owner)
+- **What:** A monthly budget ceiling on the provider account itself.
+- **Why:** everything we build can fail - a bug, a missed route, a storage outage that fails open. A provider-side ceiling cannot be coded around. Worth doing even if nothing else on this list is.
+
+### GOLIVE-3 — Clerk cannot run a production instance on vercel.app
+- **Category:** Security / Auth · **Priority:** P0 · **Status:** OPEN (owner decision)
+- **What:** Clerk production instances require a domain you own with DNS records. `vercel.app` cannot have DNS records added, so a vercel.app trial must use a development instance.
+- **Why it matters:** per Clerk's own documentation, development instances are "not suitable for production workloads": capped at 100 users, user data cannot be transferred to a production instance later (prospects would re-register), some social logins use shared credentials, and **the session token travels in the query string** (`__clerk_db_jwt`) instead of a cookie - "can be seen directly in server logs, browser history, internet providers' logs, and could be potentially intercepted by third-parties".
+- **Recommended:** buy a domain (~10/year), point a subdomain at Vercel, use a production instance. For a KYC product being evaluated by compliance buyers, a session token in the URL is the wrong first impression.
+- **If not:** run the trial on the dev instance, keep it to a handful of named contacts, and expect them to re-register later.
+
+### GOLIVE-4 — Add the trial domain to ALLOWED_ORIGINS
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (owner)
+- **What:** The CORS allow-list refuses unknown origins now, including our own new site if it is not listed.
+
+### GOLIVE-5 — Decide whether the trial deployment gets a DATABASE_URL
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (decision)
+- **What:** With one, `api/ubo-discovery.js` writes audit rows and migration 009 must be applied there. Without one it skips persistence cleanly (the route already reports "DATABASE_URL not configured").
+- **Why:** either is fine. Deciding by accident is not.
+
+### GOLIVE-6 — Somewhere to see errors during a trial
+- **Category:** Observability · **Priority:** P1 · **Status:** OPEN
+- **What:** Minimum: know how to read Vercel function logs. Better: an alert on error rate.
+- **Why:** if something breaks at 9pm mid-evaluation we currently find out from the prospect, or not at all.
+
+### GOLIVE-7 — Decide what happens to prospects' uploaded documents
+- **Category:** Privacy · **Priority:** P1 · **Status:** OPEN (decision)
+- **What:** Prospects may upload real ownership charts naming real people. That is personal data in our blob store. Decide retention, deletion at trial end, and what we tell them.
+- **Why:** they will ask, and the answer should exist before the question.
+
+### GOLIVE-8 — Confirm the Evidence Lab is unreachable on the deployed URL
+- **Category:** Security · **Priority:** P1 · **Status:** OPEN
+- **What:** A test asserts the vercel.json denial and the .vercelignore rules; nothing has confirmed it against a real deployment. One curl after the first deploy.
