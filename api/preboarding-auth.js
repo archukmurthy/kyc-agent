@@ -22,6 +22,8 @@ const tenantRegistry = require("../lib/tenantRegistry");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { verifyEnvBearer } = require("../lib/auth");
 const { applyCors } = require("../lib/routeAuth");
+const loginThrottle = require("../lib/loginThrottle");
+const { clientIp } = require("../lib/rateLimit");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
@@ -78,11 +80,17 @@ module.exports = async function handler(req, res) {
 
     const body = await readBody(req);
     const password = body && typeof body.password === "string" ? body.password : "";
+    const who = { account: `preboarding:${tenant}`, ip: clientIp(req) };
+    const locked = await loginThrottle.check(who);
+    if (locked.blocked) return loginThrottle.sendLocked(res, locked);
+
     if (!verifyEnvBearer(password, "PREBOARDING_PASSWORD")) {
+      await loginThrottle.recordFailure(who);
       return res.status(401).json({ error: "invalid_password" });
     }
 
     // The password doubles as the bearer token, mirroring api/admin-auth.js.
+    await loginThrottle.recordSuccess(who);
     return res.status(200).json({ success: true, token: password, tenantId: tenant, companyName });
   } catch (err) {
     // eslint-disable-next-line no-console

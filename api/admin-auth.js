@@ -14,6 +14,8 @@ const { getTenantIdFromRequest } = require("../lib/tenant");
 const { hashPassword, verifyPassword } = require("../lib/auth");
 const registry = require("../lib/tenantRegistry");
 const { applyCors } = require("../lib/routeAuth");
+const loginThrottle = require("../lib/loginThrottle");
+const { clientIp } = require("../lib/rateLimit");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
 let _deps = { storage };
@@ -92,6 +94,12 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ success: false, error: "Password required" });
     }
 
+    // AUTH-1: guessing was unthrottled. Counted on failures, cleared by a
+    // success, so a mistyped password is not treated like an attack.
+    const who = { account: `admin:${tenantId}`, ip: clientIp(req) };
+    const locked = await loginThrottle.check(who);
+    if (locked.blocked) return loginThrottle.sendLocked(res, locked);
+
     const tenantAuth = await _deps.storage.get(authKey(tenantId));
 
     // No KV record? Nium falls back to the env password (and self-seeds on
@@ -111,11 +119,14 @@ module.exports = async function handler(req, res) {
         });
       }
       if (password !== envPassword) {
+        await loginThrottle.recordFailure(who);
         return res.status(401).json({ success: false, error: "Incorrect password" });
       }
       // Seed for next time.
       await seedNiumAuth(envPassword);
-      return res.status(200).json({
+      await loginThrottle.recordSuccess(who);
+      await loginThrottle.recordSuccess(who);
+    return res.status(200).json({
         success: true,
         token: password,
         tenantId,
@@ -124,9 +135,11 @@ module.exports = async function handler(req, res) {
     }
 
     if (!verifyPassword(password, tenantAuth.passwordHash)) {
+      await loginThrottle.recordFailure(who);
       return res.status(401).json({ success: false, error: "Incorrect password" });
     }
 
+    await loginThrottle.recordSuccess(who);
     return res.status(200).json({
       success: true,
       token: password,
