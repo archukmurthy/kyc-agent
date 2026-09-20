@@ -11,6 +11,7 @@ const identityVault = require("./identityVault");
 const identityEventsStore = require("./identityEventsStore");
 const { bandsEnabled } = require("./config");
 const { applyCors } = require("../../lib/routeAuth");
+const { enforceRateLimit } = require("../../lib/rateLimit");
 
 // Fields kept Vault-only (never plaintext on the submission) + their Vault concept.
 const SENSITIVE_FIELD_TO_CONCEPT = {
@@ -59,6 +60,8 @@ async function confirmIdentity({ attemptId, confirmedFields = {} } = {}, deps = 
 }
 
 async function handler(req, res) {
+  // Calls a paid identity provider.
+  if (!(await enforceRateLimit(req, res, "idv-match"))) return undefined;
   if (applyCors(req, res)) return undefined;
   const body = req.body || {};
   if (!body.attemptId) return res.status(400).json({ error: "attemptId_required" });

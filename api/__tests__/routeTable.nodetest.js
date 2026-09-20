@@ -193,3 +193,17 @@ test("the UBO routes ask Clerk who is calling", () => {
   const missing = uboRoutes.filter((f) => !read(f).includes("requireStaff"));
   assert.deepEqual(missing, [], "UBO routes must go through requireStaff");
 });
+
+test("a route that spends money or writes has a rate limit", () => {
+  // Wider than the open-route rule above: a signed-in caller can still cost us
+  // money or fill a table, so the limit is about the resource, not the login.
+  const mustBeLimited = [
+    "research.js", "doc-search.js", "self-source.js", "generate-policy.js",
+    "ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js",
+    "kyc-lookup.js", "company-search.js", "upload-document.js", "get-document.js",
+    "submit.js", "save-dossier.js", "change-events.js", "amendment-documents.js",
+    "idv-match/session.js", "idv-match/resolve.js", "idv-match/confirm.js",
+  ];
+  const missing = mustBeLimited.filter((f) => !read(f).includes("enforceRateLimit"));
+  assert.deepEqual(missing, [], "these spend money or write on every call and must be rate-limited");
+});

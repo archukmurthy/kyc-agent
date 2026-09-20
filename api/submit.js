@@ -11,11 +11,14 @@
 const { enqueue, markProcessing, markDone, markFailed } = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
 const dossierAccess = require("../lib/dossierAccess");
+const { enforceRateLimit } = require("../lib/rateLimit");
 
 // Injected deps (overridable in tests via __setDeps).
 let _deps = { enqueue, finalizeSubmission, markProcessing, markDone, markFailed, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
+  // Writes across eleven tables in one transaction.
+  if (!(await enforceRateLimit(req, res, "dossier-write"))) return undefined;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const rawBody = req.body || {};

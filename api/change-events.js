@@ -26,11 +26,14 @@
 const { neon } = require("@neondatabase/serverless");
 const { writeEvent } = require("../src/changeIntelligence/events/writeEvent");
 const dossierAccess = require("../lib/dossierAccess");
+const { enforceRateLimit } = require("../lib/rateLimit");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { neon, writeEvent, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
+  // Writes an audit row on every call.
+  if (!(await enforceRateLimit(req, res, "dossier-write"))) return undefined;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

@@ -23,6 +23,7 @@ const identityVault = require("./identityVault");
 const identityEventsStore = require("./identityEventsStore");
 const COPY = require("./copy");
 const { applyCors } = require("../../lib/routeAuth");
+const { enforceRateLimit } = require("../../lib/rateLimit");
 
 function identityMap(attributes) {
   const map = {};
@@ -288,6 +289,8 @@ async function resolveAttempt(attemptId, deps = {}) {
 }
 
 async function handler(req, res) {
+  // Calls a paid identity provider.
+  if (!(await enforceRateLimit(req, res, "idv-match"))) return undefined;
   if (applyCors(req, res)) return undefined;
   const attemptId = (req.body && req.body.attemptId) || (req.query && req.query.attemptId);
   if (!attemptId) return res.status(400).json({ error: "attemptId_required" });
