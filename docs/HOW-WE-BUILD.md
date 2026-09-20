@@ -47,6 +47,14 @@ One Guarded file makes the whole change Guarded. No splitting hairs.
 5. **Learn** — every bug adds the test that would have caught it, in the same
    pull request. One line recorded on where it was caught.
 
+**Before any task is called done, ask: what did this turn up that now exists
+only in a conversation or a commit message?** A finding is not only a defect in
+code being edited. A constraint discovered while reading someone's docs, a
+decision taken in discussion, a gate someone has to clear before a deploy - all
+of it goes in `docs/BACKLOG.md` before the next task starts. Commit messages are
+not a backlog: nobody greps them, and the conversation that produced them is
+gone. This step was repeatedly missed by treating "finding" as "code defect".
+
 **Evidence, not impressions.** A claim that something works carries the command
 and its output. "It looked fine" is never evidence.
 
