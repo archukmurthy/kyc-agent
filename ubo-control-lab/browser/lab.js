@@ -2,11 +2,18 @@
   "use strict";
 
   const h = React.createElement;
-  const { OwnershipGraph, UboJourney, DETAIL_LEVEL } = UboControlUI;
+  const { OwnershipGraph, UboJourney, UboApplicantJourneyV2, DETAIL_LEVEL } = UboControlUI;
+  const preingestedGraphViews = UboLabPreingestedEvidenceGraphViews;
   const API = "/api/ubo-control-lab";
   const TABS = ["CUSTOMER", "COMPLIANCE", "DECISIONS", "SOURCES", "HISTORY", "PLANNER", "EVIDENCE", "FEEDBACK", "DIAGNOSTICS"];
+  const REVIEW_TABS = ["CASE_SUMMARY", "APPLICANT_JOURNEY_V2", "APPLICANT_PREVIEW", "CONTRACT_INSPECTOR", "OWNERSHIP_AND_CONTROL_GRAPH", "QUALIFICATIONS", "REQUIREMENTS_AND_CAUSAL_NEEDS", "RESOLUTION_PLAN", "EVIDENCE", "DECISION_HISTORY", "DIAGNOSTICS", "BASELINE_COMPARISON"];
+  const GRAPH_FILTERS = ["OWNERSHIP", "VOTING", "CONTROL", "ALL"];
   let replayLibrary = null;
   try { replayLibrary = UboLabReplay.createReplayLibrary(window.localStorage); } catch (_error) { replayLibrary = null; }
+  let applicantSessionCache = null;
+  try { applicantSessionCache = UboLabApplicantSessions.createApplicantSessionCache(window.localStorage); } catch (_error) { applicantSessionCache = null; }
+  let preingestedEvidenceCache = null;
+  try { preingestedEvidenceCache = UboLabPreingestedEvidenceSessions.createCache(window.localStorage); } catch (_error) { preingestedEvidenceCache = null; }
 
   async function request(operation, payload) {
     const response = await fetch(API, {
@@ -32,7 +39,23 @@
   }
 
   function human(value) {
-    return String(value || "Not recorded").toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+    const recorded = value === null || value === undefined || value === "" ? "Not recorded" : value;
+    return String(recorded).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+  }
+
+  function relationshipFilter(relationship) {
+    if (relationship.dimension === "ECONOMIC" || relationship.relationshipType === "ECONOMIC_OWNERSHIP" || relationship.relationshipType === "TRUST_OWNERSHIP") return "OWNERSHIP";
+    if (relationship.dimension === "VOTING" || relationship.relationshipType === "VOTING_RIGHTS") return "VOTING";
+    return "CONTROL";
+  }
+
+  function filteredReviewGraph(graph, filter, entityDirectory) {
+    const names = new Map((entityDirectory || []).map(({ entityId, party }) => [entityId, party?.name || party?.primaryName || entityId]));
+    return {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({ ...node, primaryName: names.get(node.entityId) || node.primaryName || node.entityId })),
+      relationships: filter === "ALL" ? graph.relationships : graph.relationships.filter((relationship) => relationshipFilter(relationship) === filter),
+    };
   }
 
   function Metric({ label, value }) {
@@ -312,15 +335,654 @@
       tab === "DIAGNOSTICS" && view && h(DiagnosticsPanel, { view, session }));
   }
 
+  function ReviewSetup({ catalogue, mode, setMode, busy, error, savedResults, storageError, startFixture, startLive, startReplay }) {
+    const fixtures = catalogue?.fixtures || [];
+    const profiles = catalogue?.profiles || [];
+    const [fixtureId, setFixtureId] = React.useState("V2-LAB-07");
+    const [profileId, setProfileId] = React.useState("asda-wave-9-further-coverage");
+    const [company, setCompany] = React.useState({ legalEntityName: "", registrationNumber: "", jurisdiction: "GB", entityProfile: "COMPANY", riskLevel: "MEDIUM" });
+    const updateFixture = (value) => {
+      setFixtureId(value);
+      setProfileId(fixtures.find(({ id }) => id === value)?.defaultProfileId || "NOT_PROVIDED");
+    };
+    const update = (field, value) => setCompany((current) => ({ ...current, [field]: value }));
+    const selectedProfile = profiles.find((profile) => profile.profileId === profileId);
+    const Profile = h("div", { className: "field full" },
+      h("label", { htmlFor: "review-profile" }, "RegistryCapabilityProfile — Lab review only"),
+      h("select", { id: "review-profile", value: profileId, onChange: (event) => setProfileId(event.target.value) }, profiles.map((profile) => h("option", { key: profile.profileId, value: profile.profileId }, profile.label))),
+      h("p", { className: "field-help" }, selectedProfile?.warning || "NOT_PROVIDED"),
+      selectedProfile?.profileHash && h("details", null, h("summary", null, `Profile #${shortHash(selectedProfile.profileHash)} · A-15 dependency`), h("pre", { className: "json" }, pretty(selectedProfile))));
+    return h("main", { className: "shell setup review-setup" },
+      h("nav", { className: "mode-list", "aria-label": "Successor acquisition mode" },
+        [["FIXTURE", "Fixture", "Ten deterministic successor scenarios."], ["LIVE_DISCOVERY", "Fresh Live Discovery", "One server-side provider run; provider cost may apply."], ["REPLAY", "Replay", "Reuse a browser-saved normalized result with zero transport calls."]].map(([value, label, description]) => h("button", { key: value, className: `mode-button ${mode === value ? "active" : ""}`, onClick: () => setMode(value) }, h("strong", null, label), h("span", null, description)))),
+      h("section", { className: "card" },
+        h("p", { className: "source-label" }, "SUCCESSOR REVIEW · 1.6-RC · REVIEW ONLY"),
+        h("h2", null, mode === "FIXTURE" ? "Choose a successor scenario" : mode === "REPLAY" ? "Replay a normalized Discovery result" : "Run fresh Discovery once"),
+        mode === "FIXTURE" && h("div", { className: "form-grid" },
+          h("div", { className: "field full" }, h("label", { htmlFor: "review-fixture" }, "Scenario"), h("select", { id: "review-fixture", value: fixtureId, onChange: (event) => updateFixture(event.target.value) }, fixtures.map((fixture) => h("option", { key: fixture.id, value: fixture.id }, `${fixture.id} · ${fixture.label}`))), h("p", { className: "field-help" }, fixtures.find(({ id }) => id === fixtureId)?.description)),
+          Profile,
+          h("div", { className: "field full" }, h("button", { className: "primary", disabled: busy, onClick: () => startFixture(fixtureId, profileId) }, busy ? "Evaluating actual successor pipeline…" : "Run successor review"))),
+        mode === "REPLAY" && h("div", null,
+          Profile,
+          storageError && h("div", { className: "error", role: "alert" }, storageError),
+          savedResults.length ? h("div", { className: "replay-list section" }, savedResults.map((record) => h("article", { className: "replay-item", key: record.replayId }, h("div", null, h("strong", null, record.companyContext.legalEntityName), h("p", null, `${record.companyContext.registrationNumber} · normalized facts saved ${new Date(record.savedAt).toLocaleString()}`)), h("button", { className: "primary", disabled: busy, onClick: () => startReplay(record, profileId) }, "Replay into successor review")))) : h(Empty, null, "No saved Live Discovery result is available in this browser.")),
+        mode === "LIVE_DISCOVERY" && h("div", null,
+          h("div", { className: "notice" }, "This makes one external Discovery request and may incur provider cost. Credentials remain server-side; later comparisons reuse the saved normalized result."),
+          h("form", { className: "form-grid section", onSubmit: (event) => { event.preventDefault(); startLive(company, profileId); } },
+            h("div", { className: "field" }, h("label", { htmlFor: "review-company" }, "Legal entity name"), h("input", { id: "review-company", required: true, value: company.legalEntityName, onInput: (event) => update("legalEntityName", event.target.value) })),
+            h("div", { className: "field" }, h("label", { htmlFor: "review-number" }, "Company number"), h("input", { id: "review-number", required: true, value: company.registrationNumber, onInput: (event) => update("registrationNumber", event.target.value) })),
+            h("div", { className: "field" }, h("label", null, "Entity profile"), h("select", { value: company.entityProfile, onChange: (event) => update("entityProfile", event.target.value) }, h("option", null, "COMPANY"), h("option", null, "LLP"))),
+            Profile,
+            h("div", { className: "field full" }, h("button", { className: "secondary", disabled: busy }, busy ? "Running once…" : "Run fresh live Discovery")))),
+        error && h("div", { className: "error", role: "alert" }, error)));
+  }
+
+  function ReviewHeaderMetrics({ view, session }) {
+    const items = [
+      ["Policy", `${view.snapshot.decisionContent.policy.identity.policyPackId} ${view.snapshot.decisionContent.policy.identity.policyVersion}`],
+      ["Readiness", view.policyReadiness.readiness], ["Runtime", view.policyReadiness.runtimeMode], ["Snapshot", `${view.snapshot.snapshotSchemaVersion} · #${shortHash(view.snapshot.snapshotId)}`],
+      ["Plan", view.plan.state], ["Open causal needs", view.counts.openCausalNeeds], ["Customer actions", view.counts.currentCustomerActions], ["System actions", view.counts.currentSystemActions],
+      ["Reviews", view.counts.reviewRequirements], ["Specialist routes", view.counts.specialistRoutes], ["Capability profile", session.selectedProfileId], ["Production", "NOT AUTHORIZED"],
+    ];
+    return h("div", { className: "review-status-grid", "aria-label": "Successor review status" }, items.map(([label, value]) => h(Metric, { key: label, label, value: human(value) })));
+  }
+
+  function ReviewCountPanel({ view, selectedList, setSelectedList }) {
+    const lists = {
+      openCausalNeeds: view.informationNeeds,
+      affectedCalculations: view.affectedDiagnostics.filter((item) => item.calculationId || item.affected?.calculationIds?.length),
+      affectedPaths: view.affectedDiagnostics.filter((item) => item.pathId || item.affected?.pathIds?.length),
+      operationalBlockers: view.operationalBlockers,
+      reviewRequirements: view.reviewRequirements,
+      specialistRoutes: view.specialistRoutes,
+      currentSystemActions: view.plan.currentPlanningWave.actor === "SYSTEM" ? view.plan.recommendedActions : [],
+      currentCustomerActions: view.plan.currentPlanningWave.actor === "CUSTOMER" ? view.plan.recommendedActions : [],
+      currentInternalActions: view.plan.currentPlanningWave.actor === "INTERNAL" ? view.plan.recommendedActions : [],
+      currentSpecialistActions: view.plan.currentPlanningWave.actor === "SPECIALIST" ? view.plan.recommendedActions : [],
+    };
+    return h("section", { className: "count-inspector" },
+      h("div", { className: "count-buttons" }, Object.entries(view.counts).map(([key, value]) => h("button", { key, className: selectedList === key ? "active" : "", onClick: () => setSelectedList(key), "aria-pressed": selectedList === key }, h("strong", null, value), h("span", null, human(key))))),
+      selectedList && h("div", { className: "deterministic-list", role: "region", "aria-label": human(selectedList) },
+        h("div", { className: "list-heading" }, h("h3", null, `${human(selectedList)} · ${lists[selectedList]?.length || 0}`), h("button", { className: "secondary", onClick: () => setSelectedList(null) }, "Close list")),
+        (lists[selectedList] || []).length ? (lists[selectedList] || []).map((item, index) => h("details", { key: item.needId || item.actionId || item.reviewRequirementId || item.blockerId || item.routeId || index }, h("summary", null, item.needId || item.semanticActionType || item.reasonCode || `${human(selectedList)} ${index + 1}`), h("pre", { className: "json" }, pretty(item)))) : h(Empty, null, "The current snapshot records no items in this category.")));
+  }
+
+  function ReviewGraphPanel({ view, session, graphFilter, setGraphFilter }) {
+    const graph = filteredReviewGraph(view.graph, graphFilter, session.entityDirectory);
+    const hiddenControl = view.graph.relationships.filter((relationship) => relationshipFilter(relationship) === "CONTROL").length;
+    const hiddenVoting = view.graph.relationships.filter((relationship) => relationshipFilter(relationship) === "VOTING").length;
+    return h("section", { className: "panel review-graph-panel" },
+      h("div", { className: "panel-heading" }, h("div", null, h("p", { className: "source-label" }, "PRESENTATION FILTER ONLY"), h("h2", null, "Ownership & Control Graph"), h("p", null, `Projection #${shortHash(view.graph.projectionHash)} remains unchanged; filtering does not recalculate qualification, needs, plan or snapshot.`)),
+        h("div", { className: "graph-filters", role: "group", "aria-label": "Relationship filter" }, GRAPH_FILTERS.map((filter) => h("button", { key: filter, className: filter === graphFilter ? "active" : "", onClick: () => setGraphFilter(filter), "aria-pressed": filter === graphFilter }, human(filter))))),
+      graphFilter === "OWNERSHIP" && (hiddenControl || hiddenVoting) ? h("div", { className: "overlay-note" }, `${hiddenVoting} voting and ${hiddenControl} control relationship(s) remain recorded as overlays. Choose Voting, Control or All to inspect them.`) : null,
+      h(OwnershipGraph, { projection: graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 840 }));
+  }
+
+  function ApplicantPreview({ view }) {
+    const journey = view.journeyProjection;
+    const bundles = journey.customerWorkBundles;
+    return h("section", { className: "panel applicant-preview" },
+      h("p", { className: "source-label" }, "JOURNEYPROJECTION v2 · READ-ONLY CONTRACT PREVIEW"),
+      h("h2", null, "Applicant work preview"),
+      h("p", null, "This preview is generated only from the verified DecisionSnapshot v2. Applying input remains a separate Decision Application v3 operation."),
+      h("div", { className: "grid-3 section" },
+        h(Metric, { label: "Customer work state", value: human(journey.customerWorkState) }),
+        h(Metric, { label: "Open work bundles", value: bundles.length }),
+        h(Metric, { label: "Customer input complete", value: String(journey.customerInputComplete) }),
+        h(Metric, { label: "Final case complete", value: String(journey.finalCaseComplete) }),
+        h(Metric, { label: "Internal review pending", value: journey.finishLine.internalReviewPending }),
+        h(Metric, { label: "Evidence handoffs", value: journey.finishLine.evidenceHandoffBundles })),
+      journey.policyContentBlocks.length > 0 && h("div", { className: "notice" }, `POLICY CONTENT REQUIRED · ${journey.policyContentBlocks.length} blocked option(s). No wording has been invented.`),
+      bundles.length ? h("div", { className: "work-bundle-list section" }, bundles.map((bundle) => h("article", { className: "qualification-card", key: bundle.bundleId },
+        h("div", { className: "panel-heading" }, h("div", null, h("h3", null, `${bundle.informationNeedIds.length} causal need(s) · ${human(bundle.state)}`), h("p", null, `${human(bundle.expectedResult)} · re-evaluate: ${human(bundle.reEvaluationTrigger)}`)), h("span", { className: "status" }, bundle.permittedSemanticActions.some(({ executable }) => executable) ? "ACTION AVAILABLE" : human(bundle.state))),
+        bundle.evidenceHandoff && h("div", { className: bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "notice evidence-ready" : "notice" }, bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED" : human(bundle.evidenceHandoff.readiness)),
+        h("p", null, `Subject: ${bundle.canonicalSubject.entityId || bundle.canonicalSubject.entityIds.join(", ")} · Requirements: ${bundle.requirementIds.join(", ") || "none"}`),
+        h("details", null, h("summary", null, "Known, missing and permitted work"), h("pre", { className: "json" }, pretty({ knownInformation: bundle.knownInformation, missingInformation: bundle.missingInformation, permittedSemanticActions: bundle.permittedSemanticActions, signoffDependencies: bundle.signoffDependencies })))))) : h(Empty, null, journey.customerInputComplete ? "No customer work is currently executable. Final review and system work remain separate." : "No customer bundle is present in the pinned plan."));
+  }
+
+  function ApplicantJourneyPanel({ catalogue, labSession, setLabSession, profileId, cachedRecord, cacheNotice, cacheError, resumeCached, startNew, resetCurrent, saveLiveLocally }) {
+    const [fixtureId, setFixtureId] = React.useState("AJV2-01");
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const run = async (operation, payload) => {
+      setBusy(true);
+      setError("");
+      try {
+        const next = await request(operation, payload);
+        setLabSession(next);
+        return next;
+      } catch (cause) {
+        setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`);
+        throw cause;
+      } finally {
+        setBusy(false);
+      }
+    };
+    const start = () => run("START_APPLICANT_FIXTURE", { fixtureId, profileId });
+    if (!labSession) {
+      return h("section", { className: "panel applicant-journey-host" },
+        h("p", { className: "source-label" }, "REVIEW-ONLY | ACTUAL DECISION APPLICATION v3 CONTRACTS"),
+        h("h2", null, "Applicant Journey v2"),
+        h("p", null, "Start a sanitized scenario. Viewing this tab does not run paid Discovery, Evidence or production persistence."),
+        cacheNotice && h("div", { className: "notice", role: "status" }, cacheNotice),
+        cacheError && h("div", { className: "error", role: "alert" }, cacheError),
+        error && h("div", { className: "error", role: "alert" }, error),
+        cachedRecord && h("button", { className: "primary", disabled: busy, onClick: resumeCached }, "Resume last demo"),
+        h("div", { className: "field" },
+          h("label", null, "Applicant fixture"),
+          h("select", { value: fixtureId, onChange: (event) => setFixtureId(event.target.value) },
+            (catalogue?.fixtures || []).map((fixture) => h("option", { key: fixture.fixtureId, value: fixture.fixtureId }, `${fixture.fixtureId} - ${fixture.label}`)))),
+        h("button", { className: "primary", disabled: busy, onClick: start }, busy ? "Building journey..." : "Start applicant journey"));
+    }
+    const current = labSession.snapshots.at(-1);
+    const submit = async (customerAction) => {
+      const operationId = `${labSession.sessionId}:customer-action:${(labSession.acceptedOperations || []).length + 1}`;
+      if (applicantSessionCache) {
+        try { await applicantSessionCache.markInFlight(labSession, operationId, labSession.liveSaveOptIn === true); }
+        catch (_cause) { /* Submission may continue with the visible Lab-only storage warning. */ }
+      }
+      return run("SUBMIT_APPLICANT_ACTION_AND_ADVANCE", { session: labSession, customerAction, operationId });
+    };
+    const resumeEvaluation = () => run("RESUME_APPLICANT_ADVANCE", {
+      session: labSession,
+      operationId: labSession.orchestrationState.operationId,
+    });
+    const latestActivity = (labSession.customerActivityHistory || []).at(-1);
+    return h("section", { className: "applicant-journey-host" },
+      h("div", { className: "panel applicant-lab-toolbar" },
+        h("div", null,
+          h("p", { className: "source-label" }, labSession.sourceMode === "LIVE"
+            ? (labSession.liveSaveOptIn === true ? "LIVE LAB CASE — SAVED LOCALLY FOR DEMO/TESTING" : "LIVE LAB CASE — NOT SAVED")
+            : "LAB SESSION — SAVED LOCALLY IN THIS BROWSER"),
+          h("h2", null, `${labSession.fixtureId} - ${labSession.fixtureLabel}`),
+          h("p", null, `Snapshot #${shortHash(current.snapshot.snapshotId)} | ${labSession.policyMode} | ${labSession.snapshots.length} immutable snapshot(s)`)),
+        h("div", { className: "actions" },
+          h("button", { className: "secondary", onClick: startNew, disabled: busy }, "Start new case"),
+          h("button", { className: "secondary", onClick: resetCurrent, disabled: busy }, "Reset this demo"),
+          labSession.sourceMode === "LIVE" && labSession.liveSaveOptIn !== true
+            ? h("button", { className: "secondary", onClick: saveLiveLocally, disabled: busy }, "Save this Lab session locally for demo/testing")
+            : null)),
+      cacheNotice && h("div", { className: "notice", role: "status" }, cacheNotice),
+      cacheError && h("div", { className: "error", role: "alert" }, cacheError),
+      error && h("div", { className: "error", role: "alert" }, error),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, "Saving your response and refreshing the ownership review…"),
+      labSession.orchestrationState?.status === "INTERNAL_REVIEW_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "Your response has been submitted."),
+        h("p", null, "Our review team needs to verify it.")),
+      labSession.orchestrationState?.status === "EVIDENCE_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED"),
+        h("p", null, "Nothing was uploaded and no Evidence Artifact was created.")),
+      labSession.orchestrationState?.status === "DELEGATION_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
+        h("h3", null, "Help request prepared"),
+        h("p", null, "Host execution is pending. No invitation was sent and the work is not complete.")),
+      labSession.orchestrationState?.status === "EVALUATION_FAILED" && h("section", { className: "panel applicant-pending", role: "alert" },
+        h("h3", null, "Your response is recorded"),
+        h("p", null, labSession.orchestrationError?.message),
+        h("button", { className: "primary", disabled: busy, onClick: resumeEvaluation }, "Refresh review status")),
+      h(UboApplicantJourneyV2, {
+        journey: current.journey,
+        actorContext: labSession.actorContext,
+        actionResult: labSession.latestCustomerActionResult,
+        content: labSession.content,
+        onSubmitAction: submit,
+        submittedBundleIds: labSession.submittedBundleIds || [],
+        submissionState: busy ? { status: "SUBMITTING" } : null,
+        className: "lab-applicant-journey",
+      }),
+      latestActivity && h("section", { className: "panel applicant-submission-history", "aria-label": "Submitted customer activity" },
+        h("p", { className: "source-label" }, "SUBMITTED ACTIVITY"),
+        h("h3", null, latestActivity.actionType === "CONFIRM_ESTABLISHED_INFORMATION" ? "Confirmation recorded" : "Customer response recorded"),
+        h("p", null, `${human(latestActivity.status)} · submitted ${latestActivity.submittedAt}.`),
+        h("p", null, "This activity remains recorded even when it is no longer a current task.")));
+  }
+
+  function ApplicantInternalReviewPanel({ applicantSession, busy, completeFixtureReview }) {
+    if (!applicantSession) return null;
+    const pendingCount = applicantSession.pendingDecisionTargets.candidateParties.length
+      + applicantSession.pendingDecisionTargets.candidateClaims.length;
+    return h("section", { className: "panel section" },
+      h("p", { className: "source-label" }, "APPLICANT SESSION — INTERNAL ORCHESTRATION"),
+      h("h2", null, "Applicant submission review"),
+      h("p", null, `${pendingCount} explicit identity/claim decision target(s) pending.`),
+      applicantSession.sourceMode === "FIXTURE" && applicantSession.fixtureReviewConfiguration && pendingCount > 0
+        ? h("div", { className: "notice" },
+          h("strong", null, "DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS"),
+          h("p", null, "This deterministic fixture helper calls the normal applyDecisions and evaluate operations. It is unavailable for live or replay data."),
+          h("button", { className: "primary", disabled: busy, onClick: completeFixtureReview }, "Complete fixture review and refresh journey"))
+        : pendingCount > 0 ? h("p", null, "A reviewer must complete the explicit decisions through an authorised internal workflow.") : null);
+  }
+
+  function ApplicantSessionDiagnostics({ applicantSession }) {
+    if (!applicantSession) return null;
+    return h("section", { className: "panel section" },
+      h("h2", null, "Applicant session diagnostics"),
+      h("pre", { className: "json" }, pretty({
+        operationHistory: applicantSession.operationHistory,
+        orchestrationHistory: applicantSession.orchestrationHistory,
+        pendingDecisionTargets: applicantSession.pendingDecisionTargets,
+        latestCustomerActionResult: applicantSession.latestCustomerActionResult,
+        completedCustomerAttempts: applicantSession.completedCustomerAttempts || [],
+        snapshots: applicantSession.snapshots.map(({ sequence, reason, predecessorSnapshotId, snapshot }) => ({ sequence, reason, predecessorSnapshotId, snapshotId: snapshot.snapshotId, snapshotHash: snapshot.decisionContentHash })),
+      })));
+  }
+
+  function ContractInspector({ view }) {
+    return h("section", { className: "panel" },
+      h("p", { className: "source-label" }, "IMMUTABLE VERSIONED CONTRACT"),
+      h("h2", null, "JourneyProjection v2 inspector"),
+      h("div", { className: "grid-3" },
+        h(Metric, { label: "Projection", value: view.journeyProjection.contractVersion }),
+        h(Metric, { label: "Snapshot", value: `#${shortHash(view.journeyProjection.decision.snapshotHash)}` }),
+        h(Metric, { label: "Plan", value: `#${shortHash(view.journeyProjection.decision.planHash)}` })),
+      h("pre", { className: "json section contract-json" }, pretty(view.journeyProjection)));
+  }
+
+  function ReviewQualifications({ view, session }) {
+    const names = new Map(session.entityDirectory.map(({ entityId, party }) => [entityId, party?.name || entityId]));
+    const cards = view.qualifications.map((assessment) => {
+      const bases = assessment.basisRecords.map((basis) => h("details", { className: "section", key: basis.basisId },
+        h("summary", null, `${human(basis.route)} · ${human(basis.dimension || basis.condition)} · ${human(basis.assessmentState)}`),
+        h("div", { className: "route-summary" },
+          h("p", null, `${human(basis.classification)} · ${human(basis.directness)} · ${human(basis.methodStatus)} · threshold ${basis.threshold?.comparator || "—"}${basis.threshold?.value ?? "—"}%`),
+          h("p", null, `Reason: ${human(basis.reasonCode)} · Sign-offs: ${(basis.requiredSignoffs || basis.reviewDependencies || []).join(", ") || "none"}`),
+          h("pre", { className: "json" }, pretty({ calculation: basis.recordedCalculation, attributedRights: basis.targetRightReferences, chains: basis.orderedPathReferences, evidenceReferences: basis.evidenceReferences, governance: assessment.governance })))));
+      return h("article", { className: "qualification-card", key: assessment.assessmentId },
+        h("div", { className: "panel-heading" }, h("div", null, h("h3", null, names.get(assessment.personEntityId) || assessment.personEntityId), h("p", null, `${human(assessment.routeStatus)} · ${human(assessment.reasonCode)}`)), h("span", { className: "status" }, assessment.firmPolicyOnlySatisfied ? "FIRM POLICY ONLY" : assessment.routeStatus)),
+        h("div", { className: "grid-3" }, h(Metric, { label: "Assessed routes", value: assessment.assessedRoutes.join(", ") }), h(Metric, { label: "Unassessed routes", value: assessment.unassessedRoutes.join(", ") || "None" }), h(Metric, { label: "Production", value: assessment.governance.productionAuthorized ? "AUTHORIZED" : "NOT AUTHORIZED" })),
+        bases);
+    });
+    return h("section", { className: "panel" }, h("h2", null, "Route-specific qualification"), h("p", null, "Statutory, firm-policy and review-required routes are shown independently. No naked UBO boolean is inferred."), cards.length ? cards : h(Empty, null, "No natural-person qualification assessment is present in this snapshot."));
+  }
+
+  function ReviewRequirements({ view }) {
+    const rows = view.requirements.map((item) => h("tr", { key: item.requirementId },
+      h("td", null, h("strong", null, item.requirementId)), h("td", null, human(item.applicability)),
+      h("td", { className: `state ${item.resolutionState}` }, human(item.resolutionState)), h("td", null, human(item.reasonCode)),
+      h("td", null, item.causalInformationNeedIds.length), h("td", null, `${item.reviewRequirementIds.length} review · ${item.operationalBlockerIds.length} blocker · ${item.specialistRouteIds.length} specialist`)));
+    const needs = view.informationNeeds.map((need) => h("details", { key: need.needId },
+      h("summary", null, `${human(need.concept)} · ${need.needId}`),
+      h("div", null,
+        h("p", null, `Target: ${need.targetKind} · ${need.frontierEntityId || need.targetReference?.entityId || "case"} · Requirements: ${need.requiredByRequirementIds.join(", ")}`),
+        h("p", null, `Affected: ${need.affected.calculationIds.length} calculation(s), ${need.affected.pathIds.length} path(s), ${need.affected.relationshipIds.length} relationship(s)`),
+        h("p", null, `Content: ${human(need.contentReadinessStatus)} · Sign-offs: ${need.requiredSignoffIds.join(", ") || "none"}`),
+        h("pre", { className: "json" }, pretty(need)))));
+    return h("section", { className: "panel" }, h("h2", null, "R01–R14 requirements and causal InformationNeeds"), h("p", null, "Each open causal need appears once. Affected paths and calculations are dependent diagnostics, not additional needs."),
+      h("div", { className: "table-wrap" }, h("table", null, h("thead", null, h("tr", null, ["Requirement", "Applies", "Resolution", "Reason", "Causal needs", "Reviews / blockers"].map((item) => h("th", { key: item }, item)))), h("tbody", null, rows))),
+      h("div", { className: "section" }, needs));
+  }
+
+  function ReviewPlan({ view }) {
+    const plan = view.plan;
+    const groups = plan.resolutionGroups.map((group) => h("details", { key: group.groupId },
+      h("summary", null, `${human(group.structureAcquisitionStrategy)} · ${group.coveredInformationNeedIds.length} need(s)`),
+      h("div", null, h("p", null, `Why: ${group.rationaleCodes.map(human).join("; ")}`), h("p", null, `Expected: ${human(group.expectedResolution)} · Re-evaluate: ${human(group.reEvaluationTrigger)}`), h("pre", { className: "json" }, pretty(group)))));
+    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "EXACT PLAN PINNED IN SNAPSHOT"), h("h2", null, "ResolutionPlan v2"),
+      h("div", { className: "grid-3" }, h(Metric, { label: "Plan ID", value: `#${shortHash(plan.planId)}` }), h(Metric, { label: "Plan hash", value: `#${shortHash(plan.planHash)}` }), h(Metric, { label: "State / actor", value: `${human(plan.state)} · ${human(plan.currentPlanningWave.actor)}` }), h(Metric, { label: "Groups", value: plan.resolutionGroups.length }), h(Metric, { label: "Selected actions", value: plan.recommendedActions.length }), h(Metric, { label: "Prior attempts", value: plan.attemptHistory.length })),
+      h("div", { className: "section grid-2" }, groups),
+      h("details", { className: "section", open: true }, h("summary", null, `Current ${human(plan.currentPlanningWave.actor)} actions · ${plan.recommendedActions.length}`), h("pre", { className: "json" }, pretty(plan.recommendedActions))),
+      h("details", null, h("summary", null, `Deferred alternatives · ${plan.deferredAlternatives.length}`), h("pre", { className: "json" }, pretty(plan.deferredAlternatives))),
+      h("details", null, h("summary", null, "Predecessor, policy blocks and re-evaluation"), h("pre", { className: "json" }, pretty({ predecessorPlan: plan.predecessorPlan, unresolvedPolicyContentDependencies: plan.unresolvedPolicyContentDependencies, reEvaluationTriggers: plan.reEvaluationTriggers, rationaleCodes: plan.rationaleCodes }))));
+  }
+
+  function ReviewEvidence({ view }) {
+    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "EVIDENCE EXECUTION NOT YET CONNECTED"), h("h2", null, "Provider-neutral evidence"), h("div", { className: "notice" }, "No uploader, extraction service, Evidence Platform call or false receipt is available in Wave 10."), h("h3", { className: "section" }, `EvidenceReferences · ${view.evidence.references.length}`), view.evidence.references.length ? h("pre", { className: "json" }, pretty(view.evidence.references)) : h(Empty, null, "No relationship EvidenceReferences are recorded."), h("h3", { className: "section" }, `Percentage evidence assessments · ${view.evidence.percentageAssessments.length}`), view.evidence.percentageAssessments.length ? h("pre", { className: "json" }, pretty(view.evidence.percentageAssessments)) : h(Empty, null, "No percentage-evidence comparison is recorded."));
+  }
+
+  function ReviewHistory({ session }) {
+    const [selected, setSelected] = React.useState(session.snapshots.length - 1);
+    React.useEffect(() => setSelected(session.snapshots.length - 1), [session.snapshots.length]);
+    const entry = session.snapshots[selected];
+    const historyList = h("div", { className: "history-list", role: "listbox" }, session.snapshots.map((item, index) => h("button", { key: item.historyEntryId, className: `history-item ${index === selected ? "active" : ""}`, onClick: () => setSelected(index), "aria-selected": index === selected }, h("strong", null, `#${shortHash(item.view.snapshot.snapshotId)}`), h("span", null, `${human(item.reason)} · ${item.view.snapshot.decisionContent.checkpoint.evaluationTime}`), h("span", null, `Predecessor: ${shortHash(item.predecessorSnapshotId)}`))));
+    const recordedView = entry ? h("div", null,
+      h("h2", null, "Immutable DecisionSnapshot v2"),
+      h("div", { className: "grid-3" }, h(Metric, { label: "Policy", value: entry.view.snapshot.decisionContent.policy.identity.policyVersion }), h(Metric, { label: "Profile", value: entry.view.plan.registryCapabilityProfileRef?.profileId || entry.view.plan.registryCapabilityProfileRef?.state || "NOT_PROVIDED" }), h(Metric, { label: "Plan", value: `#${shortHash(entry.view.plan.planHash)}` }), h(Metric, { label: "Pipeline", value: entry.view.governance.pipelineMaturity }), h(Metric, { label: "State", value: entry.view.plan.state }), h(Metric, { label: "Production", value: "NOT AUTHORIZED" })),
+      h("details", { className: "section" }, h("summary", null, "Reconstruct recorded view without recalculation"), h("pre", { className: "json" }, pretty(entry.view)))) : null;
+    return h("section", { className: "panel history" }, historyList, recordedView);
+  }
+
+  function ReviewDiagnostics({ view, session, graphFilter }) {
+    const exportPayload = { feedbackVersion: "ubo-control-lab-feedback-v2", mode: session.mode, policyIdentity: session.policyIdentity, snapshotIdentity: { snapshotId: view.snapshot.snapshotId, hash: view.snapshot.decisionContentHash }, planIdentity: { planId: view.plan.planId, hash: view.plan.planHash }, profileIdentity: session.registryCapabilityProfileRef, graphFilter, selectedQualification: null, selectedNeed: null, selectedGroup: null, selectedAction: null };
+    const copy = () => navigator.clipboard.writeText(pretty(exportPayload));
+    return h("section", { className: "panel" }, h("h2", null, "Successor diagnostics"), h("div", { className: "grid-3" }, Object.entries(view.diagnostics).map(([key, value]) => h(Metric, { key, label: human(key), value: typeof value === "string" ? value : value?.profileId || value?.state || (Array.isArray(value) ? value.length : "Recorded") }))), h("details", { className: "section" }, h("summary", null, "Algorithms, profile, sign-offs and working state"), h("pre", { className: "json" }, pretty({ diagnostics: view.diagnostics, governance: view.governance, policyReadiness: view.policyReadiness, sessionPins: { contractVersion: session.contractVersion, reviewApplicationContractVersion: session.reviewApplicationContractVersion, policyIdentity: session.policyIdentity, snapshotVersion: session.snapshotVersion, registryCapabilityProfileRef: session.registryCapabilityProfileRef, evaluationTime: session.evaluationTime } }))), h("div", { className: "section" }, h("h3", null, "Session-only feedback context"), h("p", null, "The export pins mode, policy, snapshot, plan, profile and graph filter. Add practitioner free text after copying; there is no production persistence."), h("button", { className: "secondary", onClick: copy }, "Copy feedback context JSON")));
+  }
+
+  function ReviewComparison({ session }) {
+    const [comparison, setComparison] = React.useState(null);
+    const [error, setError] = React.useState("");
+    React.useEffect(() => {
+      if (!String(session.selectedFixtureId || "").startsWith("V2-LAB-")) return;
+      request("REVIEW_COMPARISON", { fixtureId: session.selectedFixtureId, profileId: session.selectedProfileId }).then(setComparison).catch((cause) => setError(cause.message));
+    }, [session.selectedFixtureId, session.selectedProfileId]);
+    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline — 1.5-RC", comparison.baseline], ["Successor review — 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
+  }
+
+  function PreingestedEvidenceWorkspace({ readiness }) {
+    const [demo, setDemo] = React.useState(null);
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+    const [notice, setNotice] = React.useState("");
+    const [restored, setRestored] = React.useState(false);
+    const [showAllRelationships, setShowAllRelationships] = React.useState(false);
+    React.useEffect(() => {
+      if (!preingestedEvidenceCache) { setRestored(true); return; }
+      preingestedEvidenceCache.restore().then(async ({ record, error: cacheError }) => {
+        if (cacheError) setError(cacheError);
+        if (record) {
+          try {
+            const verified = await request("VALIDATE_PREINGESTED_EVIDENCE_SESSION", { session: record.session });
+            setDemo(verified);
+            setNotice("Restored Snapshot and Evidence references from this browser’s sealed Lab-only cache.");
+          } catch (_cause) { setError("The saved Bettercomms demo failed server-side Snapshot or Artifact-reference verification."); }
+        }
+        setRestored(true);
+      });
+    }, []);
+    React.useEffect(() => {
+      if (!restored || !demo || !preingestedEvidenceCache) return;
+      preingestedEvidenceCache.save(demo).catch(() => setError("This Bettercomms Lab session could not be saved locally."));
+    }, [demo, restored]);
+    const run = async (operation, payload) => {
+      setBusy(true); setError(""); setNotice("");
+      try { setDemo(await request(operation, payload)); }
+      catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const reset = () => {
+      if (preingestedEvidenceCache) preingestedEvidenceCache.clear();
+      setDemo(null); setError(""); setNotice("Demo reset. A new session will receive a new idempotent operation identity.");
+    };
+    const current = demo?.snapshots?.at(-1);
+    const extracted = demo?.extraction?.capabilityResult;
+    const finalContent = ["SNAPSHOT_B", "DATED_REVIEW_APPLIED"].includes(demo?.stage) ? current.snapshot.decisionContent : null;
+    const datedReviewApplied = demo?.stage === "DATED_REVIEW_APPLIED";
+    const assessments = finalContent?.personQualificationAssessments || [];
+    const assessmentFor = (id) => assessments.find(({ personEntityId }) => personEntityId === id);
+    const effectiveBasis = (id) => assessmentFor(id)?.basisRecords.find(({ route, dimension }) => route === "EFFECTIVE_INTEREST" && dimension === "ECONOMIC");
+    const mitchell = effectiveBasis("mitchell-fortescue");
+    const lee = effectiveBasis("lee-taylor");
+    const displayGraph = finalContent && (showAllRelationships
+      ? preingestedGraphViews.createFullSourceGraphView(current.graph, demo.entityDirectory)
+      : preingestedGraphViews.createTargetRelevantGraphView(current.graph, demo.entityDirectory));
+    const ownershipStatements = displayGraph?.relationships
+      .filter(({ relationshipType }) => relationshipType === "ECONOMIC_OWNERSHIP")
+      .map(({ relationshipId, presentationLabel }) => h("li", { key: relationshipId }, presentationLabel));
+    const r08 = finalContent?.evidenceSufficiency?.find(({ requirementId }) => requirementId === "UBO-R08");
+    const evidenceNeedCount = current?.snapshot?.decisionContent?.informationNeedsV2?.filter(({ status, requiredByRequirementIds }) => status === "OPEN" && requiredByRequirementIds.some((id) => ["UBO-R01", "UBO-R08"].includes(id))).length || 0;
+    const factHeading = (fact) => fact.type === "RELATIONSHIP"
+      ? `${fact.subject.name} → ${fact.object.name}`
+      : fact.attribute === "officer_relationship"
+        ? `${fact.subject.name} · officer metadata`
+        : `${human(fact.attribute)} · source certification`;
+    const factSummary = (fact) => fact.type === "RELATIONSHIP"
+      ? `${human(fact.relationship)} · ${human(fact.measurement.type)} ${fact.measurement.value}%`
+      : fact.attribute === "officer_relationship"
+        ? `${human(fact.attribute)} · ${fact.value.relationshipValue.qualitative}`
+        : fact.value.text;
+    const factState = (fact) => fact.type === "RELATIONSHIP" || fact.attribute === "officer_relationship"
+      ? `temporal ${human(fact.qualifiers?.currentState || fact.value?.temporal?.state)}`
+      : "source statement · no relationship-currentness assertion";
+    if (!demo) return h("main", { className: "shell preingested-demo" },
+      h("section", { className: "panel demo-hero" },
+        h("p", { className: "source-label" }, "REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE"),
+        h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"),
+        h("h2", null, "BETTERCOMMS — SOURCE-BACKED REVIEWED OWNERSHIP CHART"),
+        h("p", null, "Replay reviewed source statements through EvidenceConsumerV1, the merged adapter, explicit fixture decisions, Decision Application v3 and Snapshot v2."),
+        h("div", { className: "notice" }, "Historical Evidence-store linkage not yet revalidated · No fresh automated interpretation performed · No source bytes are published or stored in this browser."),
+        notice && h("div", { className: "notice", role: "status" }, notice),
+        error && h("div", { className: "error", role: "alert" }, error),
+        h("button", { className: "primary", disabled: busy || !restored, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, !restored ? "Restoring saved demo…" : busy ? "Starting…" : "Open source-backed Bettercomms demo")));
+    return h("main", { className: "shell preingested-demo" },
+      h("header", { className: "workspace-header" },
+        h("div", null, demo.labels.map((label) => h("p", { className: "source-label", key: label }, label)), h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
+        h("button", { className: "secondary", disabled: busy, onClick: reset }, "Reset demo")),
+      notice && h("div", { className: "notice", role: "status" }, notice),
+      error && h("div", { className: "error", role: "alert" }, error),
+      busy && h("div", { className: "notice", role: "status", "aria-live": "polite" }, demo.stage === "EVIDENCE_REQUIRED"
+        ? "Passing the manually reviewed fixture through EvidenceConsumerV1…"
+        : demo.stage === "SOURCE_FACTS_EXTRACTED"
+          ? "Applying explicit fixture decisions and creating Snapshot B…"
+          : demo.stage === "SNAPSHOT_B"
+            ? "Recording dated support review and creating Snapshot C…"
+            : "Verifying the reviewed demo state…"),
+      h("section", { className: "panel" },
+        h("div", { className: "grid-3" },
+          h(Metric, { label: "Stage", value: human(demo.stage) }), h(Metric, { label: "Active snapshot", value: `#${shortHash(current.snapshot.snapshotId)}` }), h(Metric, { label: "Open ownership/evidence needs", value: evidenceNeedCount }),
+          h(Metric, { label: "Customer work bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Evidence facts", value: extracted?.candidateFacts?.length || 0 }), h(Metric, { label: "Production", value: "NOT AUTHORIZED" })),
+        demo.stage === "EVIDENCE_REQUIRED" && h("div", { className: "section" },
+          h("h3", null, "1. Ownership structure Evidence is required"),
+          h("p", null, "Snapshot A records the unresolved ownership/evidence need and pins the planner’s structure-Evidence request."),
+          h("details", null, h("summary", null, "Inspect the pinned ExternalEvidenceHandoff plan"), h("pre", { className: "json" }, pretty(current.journey.customerWorkBundles))),
+          h("button", { className: "primary section", disabled: busy || demo.sourceMode !== "FIXTURE", onClick: () => run("USE_PREINGESTED_BETTERCOMMS_ARTIFACT", { session: demo }) }, "Use source-backed reviewed Bettercomms fixture")),
+        demo.stage === "SOURCE_FACTS_EXTRACTED" && h("div", { className: "section" },
+          h("div", { className: "evidence-extracted-state" }, "SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH"),
+          h("p", null, `${extracted.candidateFacts.length} extracted facts from one source document. No claim is operative and no UBO calculation has run from them yet.`),
+          h("div", { className: "grid-3 section" }, h(Metric, { label: "Identity targets", value: demo.decisionTargets.candidateParties.length }), h(Metric, { label: "Claim targets", value: demo.decisionTargets.candidateClaims.length }), h(Metric, { label: "Interpretation", value: extracted.outcome.state })),
+          h("button", { className: "primary section", disabled: busy, onClick: () => run("APPLY_PREINGESTED_FIXTURE_DECISIONS", { session: demo }) }, "DEMO FIXTURE — APPLY PRECONFIGURED IDENTITY AND CLAIM DECISIONS"))),
+      extracted && h("section", { className: "panel section" },
+        h("h2", null, "Public Evidence DTO and adapter trace"),
+        h("p", { className: "notice" }, "This is a deterministic replay of manually reviewed source statements. It is not a new automated interpretation or a persisted historical Evidence operation."),
+        h("div", { className: "grid-3" }, h(Metric, { label: "Fixture Artifact", value: demo.extraction.artifact.artifactId }), h(Metric, { label: "Original SHA-256", value: demo.extraction.artifact.digest }), h(Metric, { label: "Media", value: `${demo.extraction.artifact.mediaType} · ${demo.extraction.artifact.sizeBytes} bytes` }), h(Metric, { label: "Fixture operation", value: demo.extraction.interpretation.operationId }), h(Metric, { label: "Source documents", value: 1 }), h(Metric, { label: "Mapped facts", value: extracted.candidateFacts.length })),
+        h("div", { className: "fact-grid section" }, extracted.candidateFacts.map((fact) => h("article", { className: "fact-card", key: fact.factId },
+          h("span", { className: "source-label" }, fact.type === "RELATIONSHIP" ? "REQUESTED OWNERSHIP" : fact.attribute === "officer_relationship" ? "DISCOVERED OFFICER METADATA" : "DISCOVERED CERTIFICATION STATEMENT"),
+          h("h3", null, factHeading(fact)),
+          h("p", null, factSummary(fact)),
+          h("p", null, `Fact ${fact.factId} · ${factState(fact)}`),
+          h("details", null, h("summary", null, "Proof locator and source reference"), h("pre", { className: "json" }, pretty(fact.evidenceReferences)))))),
+        h("details", { className: "section" }, h("summary", null, `Typed adapter limitations · ${extracted.issues.length}`), h("pre", { className: "json" }, pretty(extracted.issues)))),
+      demo.sourceAttestation && h("section", { className: "panel section attestation-panel" },
+        h("p", { className: "source-label" }, "RECOVERED SOURCE CERTIFICATION · REVIEW REQUIRED"),
+        h("h2", null, "Certification is present; present-day ownership currentness is not established"),
+        h("p", null, demo.sourceAttestation.reason),
+        h("div", { className: "grid-3 section" },
+          h(Metric, { label: "Visible mark", value: `${demo.sourceAttestation.metadata.signatureText} · not authenticated` }),
+          h(Metric, { label: "Signer / stated capacity", value: `${demo.sourceAttestation.metadata.signerName} ${demo.sourceAttestation.metadata.signerPostnominal} · ${demo.sourceAttestation.metadata.signerCapacity}` }),
+          h(Metric, { label: "Professional reference", value: `${demo.sourceAttestation.metadata.professionalReference.label}: ${demo.sourceAttestation.metadata.professionalReference.value} · not verified` }),
+          h(Metric, { label: "Certification date", value: `${demo.sourceAttestation.metadata.signedDate} · ownership as-at date not stated` }),
+          h(Metric, { label: "Declaration", value: demo.sourceAttestation.metadata.declarationText }),
+          h(Metric, { label: "Reviewed scope", value: `${demo.sourceAttestation.coveredFactIds.length} economic facts · manual annotation` })),
+        h("p", { className: "notice" }, datedReviewApplied
+          ? "Certification date, accepted support date, actual review/evaluation times and Evidence freshness remain distinct. Covered relationships are applicable only to the 5 May 2026 dated assessment; no present-day continuity is inferred."
+          : "Certification date 5 May 2026, source capture time, fixture review time, requested assessment date and Evidence freshness remain distinct. Historical capture time is not revalidated; no relationship is made CURRENT."),
+        h("p", { className: "notice" }, datedReviewApplied
+          ? "The source Facts remain UNKNOWN. Date-scoped applicability comes only from the separately recorded reviewer decision and derived temporal assessment."
+          : demo.sourceAttestation.reviewInterpretation.limitation),
+        h("details", null, h("summary", null, "Inspect the separate currentness assessment"), h("pre", { className: "json" }, pretty(demo.sourceAttestation))),
+        demo.stage === "SNAPSHOT_B" && h("div", { className: "section" },
+          h("h3", null, "Compliance decision"),
+          h("p", null, "Review the exact source wording and four covered economic relationships. This records dated support for 5 May 2026 only; it does not make the structure current today, verify the source signer or approve a UBO."),
+          h("button", { className: "primary", disabled: busy, onClick: () => run("APPLY_DATED_CERTIFICATION_REVIEW", { session: demo }) }, "Review dated certification")),
+        datedReviewApplied && h("div", { className: "notice section", role: "status" },
+          h("strong", null, "Dated support review recorded"),
+          h("p", null, `Assessment date ${demo.temporalReview.assessmentDate} · decision recorded ${demo.temporalReview.decidedAt} · signer authority remains unresolved.`),
+          h("details", null, h("summary", null, "Review record and temporal assessment"), h("pre", { className: "json" }, pretty(demo.temporalReview))))),
+      finalContent && h(React.Fragment, null,
+        h("section", { className: "panel section result-panel" },
+          h("p", { className: "source-label" }, datedReviewApplied ? "SNAPSHOT C · DATED REVIEW ASSESSMENT" : "SNAPSHOT B · FRESH DETERMINISTIC EVALUATION"), h("h2", null, datedReviewApplied ? "Review-only assessment as of 5 May 2026" : "Current qualification is indeterminate"),
+          h("article", { className: "boundary-result" }, h("h3", null, "Mitchell Fortescue"), h("strong", null, "Source-stated arithmetic · 75% × 100% = nominal 75%"), h("p", null, `${datedReviewApplied ? "Dated" : "Current"} statutory effective-interest route · ${mitchell?.assessmentState || "INDETERMINATE"}. The engine records the path as ${mitchell?.recordedCalculation?.status || "UNRESOLVED"}${datedReviewApplied ? " for the explicitly reviewed 5 May 2026 assessment date only." : " because both material edges have UNKNOWN currentness."}`)),
+          h("article", { className: "boundary-result" }, h("h3", null, "Lee Taylor"), h("strong", null, "Source-stated arithmetic · 25% × 100% = nominal 25%"), h("p", null, `${datedReviewApplied ? "Dated" : "Current"} statutory effective-interest route · ${lee?.assessmentState || "INDETERMINATE"}. ${datedReviewApplied ? "Exactly 25% does not exceed the active >25% economic threshold; separate unassessed routes remain distinct." : "The source percentage can be inspected, but the engine cannot treat the path as current without scoped review."}`)),
+          h("p", null, `R08 Evidence sufficiency remains separate · ${r08?.status || "INSUFFICIENT"}. The attestation assessment contributes no additional independent source.`),
+          h("p", null, "Officer roles remain source-backed entity metadata only; they create no control edge, appointment/removal right or qualification basis."),
+          h("details", null, h("summary", null, "Pinned route, calculation, path and Evidence references"), h("pre", { className: "json" }, pretty({ mitchell, lee, policy: finalContent.policy.identity, productionAuthorized: false })))),
+        h("section", { className: "panel section review-graph-panel" },
+          h("div", { className: "panel-heading" }, h("div", null, h("h2", null, "Ownership graph"), h("p", null, showAllRelationships ? "Full source-document view. The regulated subject remains highlighted." : "Target-specific reverse-reachability view for Better Comms VOIP Ltd.")),
+            h("label", { className: "source-graph-toggle" }, h("input", { type: "checkbox", checked: showAllRelationships, onChange: (event) => setShowAllRelationships(event.target.checked) }), " Show all relationships from source document")),
+          h("p", null, showAllRelationships ? "Both subsidiaries are shown beneath their owner, Better Holdco." : "Off-path sibling Better Network Services is retained in the case and source view, but excluded here because it is not on a path to the regulated target."),
+          h("ul", { className: "ownership-statements" }, ownershipStatements),
+          h(OwnershipGraph, { projection: displayGraph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })),
+        h("section", { className: "panel section" }, h("h2", null, "Applicant journey after re-evaluation"), h("div", { className: "grid-3" }, h(Metric, { label: "Ownership document", value: "SOURCE-REVIEWED FIXTURE" }), h(Metric, { label: "Ownership structure", value: datedReviewApplied ? "DATED SUPPORT · 5 MAY 2026" : "UPDATED · CURRENTNESS OPEN" }), h(Metric, { label: "Statutory qualifying people", value: assessmentFor("mitchell-fortescue")?.routeStatus === "ROUTE_SATISFIED" ? 1 : 0 }), h(Metric, { label: "Customer bundles", value: current.journey.customerWorkBundles.length }), h(Metric, { label: "Internal review pending", value: current.journey.finishLine.internalReviewPending }), h(Metric, { label: "Final case complete", value: String(current.journey.finalCaseComplete) })), current.journey.customerWorkBundles.length ? h("pre", { className: "json section" }, pretty(current.journey.customerWorkBundles)) : h("p", { className: "notice" }, datedReviewApplied ? "The dated relationship assessment is recorded, while R08, signer authority, later-date continuity and production approval remain separate." : "The ownership document was reviewed, but relationship currentness/freshness remains unresolved in the deterministic case."))),
+      h("section", { className: "panel section history" },
+        h("div", { className: "history-list" }, demo.snapshots.map((item) => h("article", { className: "history-item", key: item.snapshot.snapshotId }, h("strong", null, `${item.sequence}. ${human(item.reason)}`), h("span", null, `#${shortHash(item.snapshot.snapshotId)}`), h("span", null, item.snapshot.decisionContent.history.supersessionReason || "GENESIS")))),
+        h("div", null, h("h2", null, "Immutable Decision History"), h("p", null, datedReviewApplied ? "Snapshots A and B remain reconstructable. Snapshot C is linked with REVIEW_DECISION and pins the dated temporal assessment without rewriting either predecessor." : "Snapshot A remains reconstructable. Snapshot B is linked with NEW_FACTS and pins the graph, calculations, qualifications, Evidence references, needs and plan."), h("details", null, h("summary", null, "Evidence handoff correlation and decision audit"), h("pre", { className: "json" }, pretty({ externalEvidenceHandoff: demo.externalEvidenceHandoff, artifactCorrelation: demo.artifactCorrelation, decisionAudit: demo.decisionAudit }))))),
+      h("section", { className: "panel section" }, h("h2", null, "Presenter guide"), h("ol", null,
+        h("li", null, "Show Snapshot A’s unresolved ownership need and planned Evidence request."), h("li", null, "Use the source-backed manually reviewed fixture; no new provider call occurs."), h("li", null, "Inspect six relationship facts plus eight ordinary certification statements from one source document."), h("li", null, "Apply the visibly fixture-only identity and claim decisions."), h("li", null, "Show the dated certification, unverified authority and why current qualification remains indeterminate."), h("li", null, "Compare the target-specific graph with the optional full source-document view."))),
+      readiness && h("p", { className: "field-help" }, `Policy ${readiness.policyIdentity?.version || "1.6-RC"} remains REVIEW ONLY and not production approved.`));
+  }
+
+  function ReviewWorkspace({ session, setSession, busy, setBusy, error, setError, reset, catalogue, applicantCatalogue }) {
+    const [tab, setTab] = React.useState("CASE_SUMMARY");
+    const [graphFilter, setGraphFilter] = React.useState(session.uiState?.graphFilter || "OWNERSHIP");
+    const [selectedList, setSelectedList] = React.useState(null);
+    const [applicantSession, setApplicantSession] = React.useState(null);
+    const [cachedApplicantRecord, setCachedApplicantRecord] = React.useState(null);
+    const [applicantCacheNotice, setApplicantCacheNotice] = React.useState("");
+    const [applicantCacheError, setApplicantCacheError] = React.useState(applicantSessionCache ? "" : "Browser-local applicant session storage is unavailable.");
+    const suppressNextApplicantSave = React.useRef(false);
+    const current = session.snapshots.at(-1);
+    const view = current?.view;
+    const run = async (operation, payload) => { setBusy(true); setError(""); try { setSession(await request(operation, payload)); } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); } finally { setBusy(false); } };
+    const apply = ({ identityDecisions, claimDecisions }) => run("APPLY_REVIEW_DECISIONS", { session, identityDecisions, claimDecisions });
+    const changeProfile = (profileId) => run("CHANGE_REVIEW_PROFILE", { session, profileId, evaluationTime: new Date().toISOString() });
+    React.useEffect(() => {
+      if (!applicantSessionCache) return;
+      applicantSessionCache.restoreLast().then(async ({ record, error: restoreError }) => {
+        if (restoreError) { setApplicantCacheError(restoreError); return; }
+        if (!record) return;
+        setCachedApplicantRecord(record);
+        try {
+          const verified = await request("VALIDATE_APPLICANT_SESSION", { session: record.session });
+          suppressNextApplicantSave.current = true;
+          setApplicantSession(verified);
+          setTab("APPLICANT_JOURNEY_V2");
+          setApplicantCacheNotice(record.inFlightOperation
+            ? "Your previous submission may still be processing. Review the latest recorded activity before trying again."
+            : "Restored your local Lab demo session");
+        } catch (_cause) {
+          setApplicantCacheError("The saved applicant session failed Snapshot verification and was not restored.");
+        }
+      });
+    }, []);
+    React.useEffect(() => {
+      if (!applicantSessionCache || !applicantSession) return;
+      if (suppressNextApplicantSave.current) { suppressNextApplicantSave.current = false; return; }
+      if (!["FIXTURE", "REPLAY"].includes(applicantSession.sourceMode) && applicantSession.liveSaveOptIn !== true) return;
+      applicantSessionCache.save(applicantSession, { liveOptIn: applicantSession.liveSaveOptIn === true })
+        .then((record) => { setCachedApplicantRecord(record); setApplicantCacheError(""); })
+        .catch(() => setApplicantCacheError("This Lab session could not be saved locally."));
+    }, [applicantSession]);
+    const resumeCachedApplicant = async () => {
+      if (!cachedApplicantRecord) return;
+      setBusy(true); setError("");
+      try {
+        const verified = await request("VALIDATE_APPLICANT_SESSION", { session: cachedApplicantRecord.session });
+        suppressNextApplicantSave.current = true;
+        setApplicantSession(verified);
+        setApplicantCacheNotice("Restored your local Lab demo session");
+      } catch (cause) { setApplicantCacheError(cause.message); }
+      finally { setBusy(false); }
+    };
+    const startNewApplicant = () => {
+      if (applicantSession && !window.confirm("Start a new Lab demo? The current demo remains available through Resume last demo.")) return;
+      setApplicantSession(null);
+      setApplicantCacheNotice("Choose a fixture to start a new Lab demo. Your previous saved demo has not been deleted.");
+    };
+    const resetApplicant = async () => {
+      if (!applicantSession || !window.confirm("Reset this demo to its initial fixture state? Its locally saved progress will be removed.")) return;
+      const fixtureId = applicantSession.fixtureId;
+      setBusy(true); setError("");
+      try {
+        if (applicantSessionCache) await applicantSessionCache.remove(applicantSession.sessionId);
+        const next = await request("START_APPLICANT_FIXTURE", { fixtureId, profileId: applicantSession.profileIdentity?.profileId || session.selectedProfileId });
+        setApplicantSession(next);
+        setApplicantCacheNotice("Demo reset to its initial fixture state.");
+      } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const completeFixtureReview = async () => {
+      setBusy(true); setError("");
+      try {
+        setApplicantSession(await request("COMPLETE_APPLICANT_FIXTURE_REVIEW", { session: applicantSession }));
+        setApplicantCacheNotice("Preconfigured fixture review completed and the applicant journey was refreshed.");
+      } catch (cause) { setError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); }
+      finally { setBusy(false); }
+    };
+    const saveLiveApplicantLocally = async () => {
+      if (!applicantSessionCache || !applicantSession || applicantSession.sourceMode !== "LIVE") return;
+      setBusy(true); setError("");
+      try {
+        const next = { ...applicantSession, liveSaveOptIn: true };
+        const record = await applicantSessionCache.save(next, { liveOptIn: true });
+        suppressNextApplicantSave.current = true;
+        setApplicantSession(next);
+        setCachedApplicantRecord(record);
+        setApplicantCacheNotice("Saved only in this browser — Lab testing, not production case storage");
+      } catch (cause) { setApplicantCacheError(cause.message); }
+      finally { setBusy(false); }
+    };
+    if (!view) return h("main", { className: "shell" }, h("header", { className: "workspace-header" }, h("div", null, h("h2", null, session.companyContext.legalEntityName), h("p", null, "Successor intake is candidate-before-conclusion; explicit identity and claim decisions are required.")), h("button", { className: "secondary", onClick: reset }, "New case")), error && h("div", { className: "error" }, error), h(DecisionsPanel, { session, busy, apply }));
+    const profileOptions = (catalogue?.profiles || []).map((profile) => h("option", { key: profile.profileId, value: profile.profileId }, profile.label));
+    const header = h("header", { className: "workspace-header" },
+      h("div", null, h("p", { className: "source-label" }, "SUCCESSOR REVIEW — 1.6-RC"), h("h2", null, session.companyContext.legalEntityName), h("p", null, `${session.sourceLabel} · ${session.sourceState} · Snapshot #${shortHash(view.snapshot.snapshotId)}`)),
+      h("div", { className: "actions", style: { marginTop: 0 } }, h("label", { className: "profile-control" }, "Lab profile", h("select", { value: session.selectedProfileId, disabled: busy, onChange: (event) => changeProfile(event.target.value) }, profileOptions)), h("button", { className: "secondary", onClick: reset }, "New case")));
+    const tabs = h("div", { className: "tabs", role: "tablist", "aria-label": "Successor review workspace views" }, REVIEW_TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name))));
+    const summary = h("section", { className: "panel" }, h("h2", null, "Case Summary"), h("div", { className: "grid-2" },
+      h("div", null, h("h3", null, "Decision state"), h("p", null, `${human(view.plan.state)} with ${view.counts.openCausalNeeds} open causal need(s). The exact pinned current wave is ${human(view.plan.currentPlanningWave.actor)}.`), h("p", null, `Governance: ${view.governance.readiness}; productionAuthorized=${String(view.governance.productionAuthorized)}.`)),
+      h("div", { className: "applicant-disabled" }, h("p", { className: "source-label" }, "APPLICANT CONTRACT PREVIEW AVAILABLE"), h("p", null, `${view.journeyProjection.customerWorkBundles.length} immutable work bundle(s) are exposed read-only. Use Applicant Journey v2 for the separate interactive fixture-backed experience.`))));
+    const panels = {
+      CASE_SUMMARY: summary,
+      APPLICANT_JOURNEY_V2: h(ApplicantJourneyPanel, {
+        catalogue: applicantCatalogue,
+        labSession: applicantSession,
+        setLabSession: setApplicantSession,
+        profileId: session.selectedProfileId,
+        cachedRecord: cachedApplicantRecord,
+        cacheNotice: applicantCacheNotice,
+        cacheError: applicantCacheError,
+        resumeCached: resumeCachedApplicant,
+        startNew: startNewApplicant,
+        resetCurrent: resetApplicant,
+        saveLiveLocally: saveLiveApplicantLocally,
+      }),
+      APPLICANT_PREVIEW: h(ApplicantPreview, { view }),
+      CONTRACT_INSPECTOR: h(ContractInspector, { view }),
+      OWNERSHIP_AND_CONTROL_GRAPH: h(ReviewGraphPanel, { view, session, graphFilter, setGraphFilter }),
+      QUALIFICATIONS: h(ReviewQualifications, { view, session }),
+      REQUIREMENTS_AND_CAUSAL_NEEDS: h(ReviewRequirements, { view }),
+      RESOLUTION_PLAN: h(ReviewPlan, { view }),
+      EVIDENCE: h(ReviewEvidence, { view }),
+      DECISION_HISTORY: h(React.Fragment, null,
+        h(ReviewHistory, { session }),
+        h(ApplicantInternalReviewPanel, { applicantSession, busy, completeFixtureReview })),
+      DIAGNOSTICS: h(React.Fragment, null,
+        h(ReviewDiagnostics, { view, session, graphFilter }),
+        h(ApplicantSessionDiagnostics, { applicantSession })),
+      BASELINE_COMPARISON: h(ReviewComparison, { session }),
+    };
+    return h("main", { className: "shell successor-workspace" }, header,
+      error && h("div", { className: "error", role: "alert" }, error),
+      busy && h("div", { className: "notice", role: "status" }, "Creating a new immutable successor snapshot…"),
+      h(ReviewHeaderMetrics, { view, session }), h(ReviewCountPanel, { view, selectedList, setSelectedList }), tabs, panels[tab]);
+  }
+
   function App() {
     const [catalogue, setCatalogue] = React.useState(null);
+    const [doctrine, setDoctrine] = React.useState(() => preingestedEvidenceCache?.hasSaved() ? "PREINGESTED_EVIDENCE" : "BASELINE");
     const [mode, setMode] = React.useState("FIXTURE");
     const [session, setSession] = React.useState(null);
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState("");
     const [savedResults, setSavedResults] = React.useState([]);
     const [storageError, setStorageError] = React.useState(replayLibrary ? "" : "Browser-local replay storage is unavailable.");
+    const attemptedApplicantRestore = React.useRef(false);
     React.useEffect(() => { fetch(API).then((response) => response.json()).then(setCatalogue).catch(() => setError("Fixture catalogue could not be loaded.")); }, []);
+    React.useEffect(() => {
+      if (!applicantSessionCache || attemptedApplicantRestore.current || preingestedEvidenceCache?.hasSaved()
+        || new URLSearchParams(window.location.search).has("newCase")) return;
+      attemptedApplicantRestore.current = true;
+      applicantSessionCache.restoreLast().then(async ({ record }) => {
+        if (!record || !["FIXTURE", "REPLAY", "LIVE"].includes(record.sourceMode)
+          || !record.sourceIdentity?.sourceFixtureId) return;
+        setDoctrine("SUCCESSOR_REVIEW");
+        setBusy(true);
+        try {
+          setSession(await request("START_REVIEW_FIXTURE", {
+            fixtureId: record.sourceIdentity.sourceFixtureId,
+            profileId: record.profileIdentity?.profileId || "NOT_PROVIDED",
+          }));
+        } catch (_cause) {
+          setError("The saved applicant demo could not restore its Lab workspace.");
+        } finally { setBusy(false); }
+      });
+    }, []);
     React.useEffect(() => {
       if (!replayLibrary) return;
       const saved = replayLibrary.read();
@@ -331,7 +993,7 @@
       setBusy(true); setError("");
       try {
         const next = await request(operation, payload);
-        if (operation === "START_LIVE" && next.replayCapture && replayLibrary) {
+        if ((operation === "START_LIVE" || operation === "START_REVIEW_LIVE") && next.replayCapture && replayLibrary) {
           setSavedResults(replayLibrary.save(next.replayCapture));
           setStorageError("");
         }
@@ -350,13 +1012,29 @@
       try { setSavedResults(replayLibrary ? replayLibrary.clear() : []); setStorageError(""); }
       catch (_cause) { setStorageError("Browser-local replay storage could not be cleared."); }
     };
-    const readiness = session?.policyReadiness || catalogue?.policyReadiness;
+    const evidenceDemo = doctrine === "PREINGESTED_EVIDENCE";
+    const successor = doctrine !== "BASELINE";
+    const currentView = session?.snapshots?.at(-1)?.view;
+    const reviewPolicy = catalogue?.review?.policy;
+    const setupReviewReadiness = reviewPolicy ? { watermarkRequired: true, policyIdentity: { policyPackId: reviewPolicy.policyPackId, version: reviewPolicy.version }, readiness: reviewPolicy.readiness, blockingReasons: [{ code: "POLICY_NOT_PRODUCTION_APPROVED" }], unresolvedSignoffs: Array.from({ length: reviewPolicy.blockingSignoffCount }, (_, index) => ({ signoffId: `REVIEW_SIGNOFF_${index + 1}` })) } : null;
+    const readiness = session?.policyReadiness || currentView?.policyReadiness || (successor ? setupReviewReadiness : catalogue?.policyReadiness);
+    const selectDoctrine = (value) => { setDoctrine(value); setSession(null); setError(""); setMode("FIXTURE"); };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "CASE NON-RESUMABLE / REPLAY LOCAL"), h("span", { className: "badge" }, readiness ? `Policy ${readiness.policyIdentity.version}` : "Policy loading"), h("span", { className: "badge" }, "Decision App v2"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
       h(PolicyReadinessWatermark, { readiness }),
-      session
-        ? h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
-        : h(Setup, { catalogue, mode, setMode, busy, error, savedResults, storageError, deleteReplay, clearReplays, startFixture: (fixtureId, riskLevel) => start("START_FIXTURE", { fixtureId, riskLevel }), startLive: (companyContext) => start("START_LIVE", { companyContext }), startReplay: (replayRecord) => start("START_REPLAY", { replayRecord }) }));
+      h("nav", { className: "doctrine-selector with-evidence-demo", "aria-label": "Policy and engine version" },
+        h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
+        h("button", { className: doctrine === "SUCCESSOR_REVIEW" ? "active" : "", "aria-pressed": doctrine === "SUCCESSOR_REVIEW", onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved")),
+        h("button", { className: evidenceDemo ? "active" : "", "aria-pressed": evidenceDemo, onClick: () => selectDoctrine("PREINGESTED_EVIDENCE") }, h("strong", null, "BETTERCOMMS EVIDENCE DEMO"), h("span", null, "Pre-ingested Artifact · No upload"))),
+      evidenceDemo
+        ? h(PreingestedEvidenceWorkspace, { readiness })
+        : session
+        ? successor
+          ? h(ReviewWorkspace, { session, setSession, busy, setBusy, error, setError, catalogue: catalogue?.review, applicantCatalogue: catalogue?.applicant, reset: () => { setSession(null); setError(""); } })
+          : h(Workspace, { session, setSession, busy, setBusy, error, setError, reset: () => { setSession(null); setError(""); } })
+        : successor
+          ? h(ReviewSetup, { catalogue: catalogue?.review, mode, setMode, busy, error, savedResults, storageError, startFixture: (fixtureId, profileId) => start("START_REVIEW_FIXTURE", { fixtureId, profileId }), startLive: (companyContext, profileId) => start("START_REVIEW_LIVE", { companyContext, profileId }), startReplay: (replayRecord, profileId) => start("START_REVIEW_REPLAY", { replayRecord, profileId }) })
+          : h(Setup, { catalogue, mode, setMode, busy, error, savedResults, storageError, deleteReplay, clearReplays, startFixture: (fixtureId, riskLevel) => start("START_FIXTURE", { fixtureId, riskLevel }), startLive: (companyContext) => start("START_LIVE", { companyContext }), startReplay: (replayRecord) => start("START_REPLAY", { replayRecord }) }));
   }
 
   ReactDOM.createRoot(document.getElementById("root")).render(h(App));

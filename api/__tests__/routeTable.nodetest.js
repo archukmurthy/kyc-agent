@@ -30,7 +30,14 @@ const API_DIR = path.join(__dirname, "..");
  *  unguessable-id - reachable with a random id only (IDVSEC-2)
  *  webhook        - provider callback; needs signature verification (IDV-3)
  *  module         - not an HTTP handler, just code that lives under api/
+ *  lab-only       - an Evidence Lab endpoint that is refused in production by
+ *                   the deployment boundary (vercel.json denies /api/evidence,
+ *                   .vercelignore keeps the files out of the upload). These are
+ *                   not access-controlled; they are not deployed. The test
+ *                   below checks that boundary still exists, because the day it
+ *                   stops existing these become 40 open endpoints.
  */
+const LAB_PREFIX = "evidence/";
 const ROUTES = {
   "admin-auth.js": "public-login",
   "preboarding-auth.js": "public-login",
@@ -86,6 +93,11 @@ const ROUTES = {
   "idv-match/resolve.js": "unguessable-id",
 
   // Provider callbacks. Signature verification is IDV-3.
+  // UBO demo. Both reach Anthropic, both are rate-limited, neither has a
+  // caller identity yet - that arrives with Clerk.
+  "ubo-demo-customer-ownership-chart.js": "open-limited",
+  "ubo-demo-entity-resolution.js": "open-limited",
+
   "idv-match/webhook.js": "webhook",
   "idv-match/screening/webhook.js": "webhook",
 };
@@ -112,7 +124,7 @@ const FILES = listApiFiles();
 const HANDLERS = Object.keys(ROUTES);
 
 test("every file under api/ is either a declared route or declared not-a-route", () => {
-  const undeclared = FILES.filter((f) => !(f in ROUTES) && !isModule(f));
+  const undeclared = FILES.filter((f) => !(f in ROUTES) && !f.startsWith(LAB_PREFIX) && !isModule(f));
   assert.deepEqual(
     undeclared,
     [],
@@ -146,7 +158,7 @@ test("the list of routes with no credential cannot grow", () => {
   // list as Batch 1 lands; never add to it without a decision recorded in
   // docs/PRODUCTION-READINESS-PLAN.md.
   const open = HANDLERS.filter((f) => ["open-limited", "unguessable-id", "webhook"].includes(ROUTES[f])).sort();
-  assert.equal(open.length, 20, `open routes changed - was 20, now ${open.length}: ${open.join(", ")}`);
+  assert.equal(open.length, 22, `open routes changed - was 22, now ${open.length}: ${open.join(", ")}`);
 });
 
 test("a route with no credential is at least rate-limited", () => {
@@ -154,4 +166,19 @@ test("a route with no credential is at least rate-limited", () => {
     .filter((f) => ROUTES[f] === "open-limited")
     .filter((f) => !/enforceRateLimit/.test(read(f)));
   assert.deepEqual(unlimited, [], "open to anyone and not rate-limited - add enforceRateLimit");
+});
+
+test("the Evidence Lab routes stay undeployable", () => {
+  // 40 endpoints under api/evidence are safe only because production refuses
+  // them. If this config is edited away they become 40 open routes, so the
+  // guarantee is asserted here rather than trusted.
+  const vercel = JSON.parse(fs.readFileSync(path.join(API_DIR, "..", "vercel.json"), "utf8"));
+  const denied = (vercel.routes || []).filter((r) => r.status === 404).map((r) => r.src);
+  assert.ok(
+    denied.some((src) => src.includes("/api/evidence")),
+    "vercel.json must keep denying /api/evidence - without it the Evidence Lab ships"
+  );
+
+  const ignore = fs.readFileSync(path.join(API_DIR, "..", ".vercelignore"), "utf8");
+  assert.ok(ignore.includes("api/evidence"), ".vercelignore must keep the lab functions out of the upload");
 });

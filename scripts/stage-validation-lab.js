@@ -24,8 +24,10 @@ fs.mkdirSync(uboLabVendor, { recursive: true });
   ["node_modules/react-dom/umd/react-dom.production.min.js", "react-dom.production.min.js"],
   ["ubo-control-ui/OwnershipGraph.js", "OwnershipGraph.js"],
   ["ubo-control-ui/UboJourney.js", "UboJourney.js"],
+  ["ubo-control-ui/UboApplicantJourneyV2.js", "UboApplicantJourneyV2.js"],
   ["ubo-control-ui/ownership-graph.css", "ownership-graph.css"],
   ["ubo-control-ui/ubo-journey.css", "ubo-journey.css"],
+  ["ubo-control-ui/ubo-applicant-journey-v2.css", "ubo-applicant-journey-v2.css"],
 ].forEach(([source, destination]) => fs.copyFileSync(path.join(root, source), path.join(uboLabVendor, destination)));
 
 console.log("Staged Validation Agent LOA and UBO Control Lab assets in build/.");

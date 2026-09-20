@@ -336,7 +336,7 @@ The immutable phase order is `BASE_APPLICABILITY → CANONICAL_GRAPH_AND_DEPTH �
 
 Graph context preserves the existing R13 combined ownership/control convention as the maximum economic-or-voting path length while recording economic and voting depths separately. Only natural persons receive final route-union assessments. A satisfied statutory route wins disjunctively; review then indeterminate precedence follows; whole-person negative is permitted only after all material statutory routes—including management control—definitively fail. Firm-only satisfaction remains non-statutory.
 
-Phase 5 derives R02, R03 and R07 applicability from the graph and person assessments, never caller placeholders. Phase 7 remains `ubo-requirement-resolution-v1-compat`; Phase 8 remains `ubo-resolution-plan-v1-compat`. The plan is created once before the snapshot and pinned verbatim. No RegistryCapabilityProfile is fabricated. These stages are `TRANSITIONAL_REVIEW_ONLY` and are replaceable by Waves 8/9.
+Phase 5 derives R02, R03 and R07 applicability from the graph and person assessments, never caller placeholders. Recorded Wave 7 snapshots retain `ubo-requirement-resolution-v1-compat` and `ubo-resolution-plan-v1-compat`; recorded Wave 8 snapshots retain RequirementResolution v2 plus the v1 planner bridge. New Wave 9 snapshots use RequirementResolution v2 and ResolutionPlan v2. Every plan is created exactly once before snapshot construction and pinned verbatim.
 
 `ubo-decision-snapshot-v2` canonically hashes every decision-significant phase output, exact plan, algorithm manifest, policy/graph identity, evaluation time and predecessor. `ubo-decision-history-v2` dispatches untouched v1 verification/reconstruction or v2 verification/reconstruction, permits an explicit-reason v1→v2 transition, and preserves linear stale-head protection. Historical reconstruction returns recorded reasoning without recalculation.
 
@@ -401,3 +401,65 @@ New internal Snapshot v2 evaluations replace the transitional Wave 7 Phase 7 wit
 InformationNeed lifecycle is limited to `OPEN`, `SATISFIED` and `SUPERSEDED`. Operational blockers, analyst reviews and specialist routes remain separate domain artifacts. `ubo-need-dependent-diagnostic-v1` records explain downstream effects and never become planner inputs or unresolved-count inflation.
 
 Phase 8 is deliberately unchanged: the private `ubo-information-needs-v2-to-plan-v1-compat` adapter supplies one input per open cause to `ubo-resolution-plan-v1-compat`. The internal `ubo-ownership-graph-projection-v2` projects only recorded Snapshot v2 facts and separates causal needs, diagnostics, blockers, reviews and specialists. Neither module is exported publicly or used by the current Lab. Decision Application v3, ResolutionPlan v2, RegistryCapabilityProfile, public projection/Lab v2, Evidence and onboarding remain outside Wave 8.
+
+## Freeze Wave 9 resolution-planning boundary
+
+New internal review evaluations replace only successor Phase 8 with `ubo-resolution-plan-v2`, produced by `ubo-low-friction-planner-v2`. The planner consumes RequirementResolution v2, the exact InformationNeed v2 set, permitted resolution options, attempts, blockers, reviews, specialist routes, explicit system context and an optional `ubo-registry-capability-profile-v1`. It does not create requirements, facts, evidence, qualification outcomes, customer wording or provider calls.
+
+RegistryCapabilityProfile is versioned planning context rather than evidence. Exact canonical dimensions and deterministic specificity select capability entries; ambiguous matches fail. Capability and entitlement states remain distinct, and explicit evaluation time determines current, stale or future-effective status. Profile ID/version/hash, entitlement context, used entry IDs, governance and A-15 are pinned into the plan and DecisionSnapshot. Credentials, secrets, customer facts, registry results and Evidence objects are prohibited.
+
+Planning is per causal ResolutionGroup. A coherent action may bundle several needs only when an explicit structure/evidence option covers them; grouping never resolves or merges the underlying need records, and dependent diagnostics never become work. Structural groups receive `DISCOVERY_LED`, `CHART_ASSISTED` or `SPECIALIST`; non-structural groups use `NOT_APPLICABLE`. The actor hierarchy is system, customer, internal/specialist review, then complete/blocked, with no numeric friction score.
+
+Attempt keys retain cause/route/profile/material identity. NO_DATA, UNSUPPORTED and final INCONCLUSIVE suppress an unchanged substantive route; PARTIAL permits residual-only planning; UNAVAILABLE produces retry/hold and FAILED produces a hold without creating customer burden. A material cause/profile/entitlement/artifact change may permit retry. Deterministic group, assignment, action, wave and plan IDs plus predecessor pins prevent strategy oscillation under equivalent inputs.
+
+ResolutionPlan v2 is created before the snapshot and stored exactly once. Snapshot v2 dispatches verification and reconstruction by the recorded Phase 7/8 algorithms, preserving Wave 7, Wave 8 and Wave 9 history without re-planning. Wave 9 maturity is `SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY`; runtime is `LAB`, governance is `REVIEW_ONLY`, production authorization is false, and profile-driven behavior requires A-15.
+
+The Wave 9 modules remain internal and absent from `index.js`. Current Decision Application v1/v2, public planner/projections/customer actions, Lab, ASDA v1 output, OwnershipGraph, UboJourney, legacy Discovery, Evidence Platform and onboarding are unchanged. Public v3/Lab v2 belongs to Wave 10; applicant/customer v2 belongs to Wave 11.
+
+## Freeze Wave 10 review entry and Lab v2 boundary
+
+`ubo-control/review/index.js` is a deliberate review/testing entry point. Its exact surface is the review factory, projection-v2 function, review policy constant, contract/version constants and typed review errors. The factory exposes exactly `intake`, `applyDecisions` and `evaluate`, accepts only `LAB`, and returns the real phased successor Snapshot v2 with the exact pinned ResolutionPlan v2. It performs no provider, host, persistence, Evidence or customer-input operation. The stable `ubo-control/index.js` export surface is unchanged.
+
+The standalone Lab now keeps baseline `ubo-control-lab-session-v1` / 1.5-RC behavior alongside successor `ubo-control-lab-session-v2` / 1.6-RC review behavior. Successor server composition imports UBO semantics only through the review entry. Its Fixture, Replay and one-shot Live Discovery acquisition all feed provider-neutral candidate facts through the same review intake and explicit-decision boundary. Replay makes zero transport calls.
+
+The successor workspace renders only recorded Snapshot v2 material: projection v2, route-specific qualification, causal needs, exact pinned plan, evidence references, governance, and immutable history. Ownership/Voting/Control/All filters alter a display copy only. JourneyProjection v2, CustomerAction v2, final Decision Application v3, plan-action execution, Evidence execution, production persistence and onboarding remain deferred.
+
+## Freeze Wave 11A customer-contract boundary
+
+`ubo-decision-application-v3` is the deliberate successor application surface and exposes exactly `intake`, `applyDecisions`, `applyCustomerInput`, and `evaluate`. It remains stateless, sealed-state based, schema-1.3 and `LAB` only. Evaluation delegates to the accepted phased successor kernel and returns DecisionSnapshot v2 together with the exact ResolutionPlan v2 pinned before snapshot construction. Production fails closed and `productionAuthorized` remains false.
+
+`ubo-journey-projection-v2` is a pure projection over one verified DecisionSnapshot v2 plus the exact identity-matched schema-1.3 Policy Pack. It uses the pack only to resolve the status of the plan's recorded sign-off dependencies; it does not run graph, qualification, requirement, InformationNeed or planning logic. `requiredSignoffs` remains the audit-complete dependency list, while `blockingSignoffs` contains every dependency whose register status is not exactly `APPROVED`, including missing records. Its immutable customer work bundles pin the case revision, snapshot/hash, plan/hash, resolution group/action, causal needs, requirements, subject/frontier, known and missing information, content/sign-off readiness, expected outcome, re-evaluation trigger, optional external handoff and delegation eligibility. Customer-input completion remains distinct from internal/specialist review, final UBO completion and onboarding approval.
+
+`ubo-customer-action-v2` is a closed semantic command, not a general fact-injection API. It rejects stale or mismatched case, snapshot, plan, bundle, group, action, need, requirement, subject, frontier, policy, action type and submission contract pins. Company-share submissions preserve owner-to-target `ECONOMIC_OWNERSHIP`, `SHARE_OWNERSHIP`, current/as-at state and exact/range/unknown measurement as candidate facts. Confirmation creates no duplicate fact and reports the pinned R08 state without recalculating or changing evidence sufficiency; correction retains the established claim and records a candidate change. Explicit identity and claim decisions remain mandatory before a later evaluation can create a new snapshot.
+
+Evidence and delegation remain external data handoffs. No Evidence adapter, upload, extraction execution, provider details, host authorization, persistence or communication is present. The successor Lab only adds a read-only applicant preview and contract inspector. Wave 11B UI, G4.1 Evidence integration and onboarding integration remain closed.
+
+## Freeze Wave 11B1 applicant-journey boundary
+
+`UboApplicantJourneyV2` is a separate applicant component exported only by `ubo-control-ui`. It accepts `ubo-journey-projection-v2` as its sole authoritative product-state input and emits only fully pinned `ubo-customer-action-v2` values through a host callback. It imports no UBO domain/private module, Decision Application, Evidence implementation, onboarding surface or persistence layer.
+
+The successor Lab is the review-only host. Applicant submission invokes `applyCustomerInput`; explicit identity/claim decisions and `evaluate` remain separate operator actions. A new applicant projection is rendered only after a new verified Snapshot v2 exists, while prior snapshots remain in Lab session history. The applicant summary is derived only from projected established-spine material and does not rebuild or expose the analyst graph.
+
+Compliance question wording remains policy/content controlled. Missing content or any projected `blockingSignoffs` disables execution, while `requiredSignoffs` remain available in Lab diagnostics for audit. External Evidence and delegation stop at their data-only handoff contracts: there is no upload, private ingestion, Artifact creation, email, authorization, or completion claim.
+
+Wave 11B1 remains fixture-backed, LAB-only and production-unauthorised. The frozen Evidence adapter worktree is neither imported nor copied. Wave 11B2, Evidence execution/release, host onboarding, persistence and production policy activation remain deferred.
+
+## G4.1 Evidence extraction adapter boundary
+
+The UBO-owned `integrations/ubo-control/evidence-platform-extraction` adapter implements the established `ExtractionService` capability against only the frozen `evidence/consumer/v1/index.js` public entry. A trusted composition root supplies an already-constructed Evidence consumer and a separate trusted-authorization provider. The adapter accepts existing Artifact references only; it contains no upload, private ingestion, provider selection, storage, Evidence mutation or host authorization implementation.
+
+Evidence typed relationships become source-backed CandidateFacts and never operative claims, graph mutations, qualification results or policy decisions. One Artifact may ground several separately located facts, while remaining one independent source. Requested facts determine requested-concept completeness. Unsupported supplemental discovered facts remain visible as scoped issues without overriding a complete requested result; the same issue is blocking when its concept was requested. `OFFICER_OF` is bounded non-ownership entity-attribute metadata and cannot imply economic, voting or control rights.
+
+The release remains review-only and production-unauthorised. Trusted private Artifact ingestion, live Evidence execution/composition, Wave 11B2, onboarding and production persistence remain outside this boundary. Evidence Core, UBO core contracts, policy JSON and policy sign-off statuses are unchanged.
+
+## Wave 11B2A existing-Artifact Lab composition
+
+The Wave 11B2A server composition constructs `EvidenceConsumerV1` only through the frozen `evidence/consumer/v1/index.js` entry, injects deterministic fixture-compatible services, then injects that consumer and a server-owned trusted authorization provider into the merged UBO Evidence extraction adapter. The browser sends only a sealed Lab session to bounded operations; tenant, Evidence context, actor scope and Artifact access are never browser authority.
+
+Snapshot A supplies the immutable Plan/Journey Evidence handoff. A separate Lab correlation record binds that handoff to the existing Artifact without mutating the handoff. Interpretation requests neutral economic-ownership facts; supplemental officer relationships remain discovered entity attributes. CandidateFacts do not mutate the graph. Exact fixture-owned source-occurrence decisions are required before Decision Application v3 creates Snapshot B. Operative entity attributes are excluded from PSC claim-support input, so non-relationship metadata cannot contaminate graph attribution.
+
+The Lab-owned cache contains only public Artifact references, normalized candidates, decision audit, sealed case state and verified snapshots. It contains no Evidence repository/model/service objects, bytes, storage keys, provider payloads or authorization credentials. No upload, trusted private ingestion, Evidence-backed Discovery, onboarding, production persistence or production activation is part of this composition.
+
+## Governed dated-evidence review boundary
+
+Decision Application v3 reuses `applyDecisions` to record `ubo-temporal-support-review-v1`; the four-operation surface is unchanged. The application resolves immutable source values and relationship membership from the sealed case plus a verified source Snapshot v2. A separate normal evaluation derives `ubo-temporal-support-assessment-v1` for an explicit date-only assessment date and pins the untouched source graph beside the derived graph in the new snapshot. Evidence supplies source statements only. Neither the Lab nor the adapter can inject `CURRENT`, qualification, continuity or production approval.

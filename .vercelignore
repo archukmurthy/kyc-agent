@@ -1,0 +1,3 @@
+# Evidence Platform acceptance surfaces are local-only.
+api/evidence/**
+public/evidence-lab*

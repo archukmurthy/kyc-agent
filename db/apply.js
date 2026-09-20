@@ -22,17 +22,17 @@ async function apply() {
   const file = process.argv[2];
   if (!file) {
     console.error("Usage: node db/apply.js <path-to-sql>");
-    process.exit(1);
+    return false;
   }
   if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL not found in .env.local");
-    process.exit(1);
+    return false;
   }
 
   const fullPath = path.resolve(file);
   if (!fs.existsSync(fullPath)) {
     console.error(`File not found: ${file}`);
-    process.exit(1);
+    return false;
   }
 
   const sql = neon(process.env.DATABASE_URL);
@@ -72,15 +72,19 @@ async function apply() {
     } catch (err) {
       console.log("FAILED");
       console.error(`\n❌ Statement ${n} failed:\n${stmt}\n\n${err.message}`);
-      process.exit(1);
+      return false;
     }
   }
 
   console.log(`\n✅ ${file} applied (${statements.length} statements)`);
-  process.exit(0);
+  return true;
 }
 
-apply().catch((err) => {
-  console.error("❌ Apply failed:", err);
-  process.exit(1);
-});
+apply()
+  .then((applied) => {
+    if (!applied) process.exitCode = 1;
+  })
+  .catch((err) => {
+    console.error("❌ Apply failed:", err);
+    process.exitCode = 1;
+  });

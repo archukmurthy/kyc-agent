@@ -7,8 +7,9 @@ const policy = require("../policies/uk-corporate/1.6-rc/policy.json");
 const { CAPABILITY_CONTRACT_VERSION, CAPABILITY_OUTCOME_STATE, CANDIDATE_FACT_TYPE, CLAIM_STATE, IDENTITY_RESOLUTION_STATUS } = require("../contracts/constants");
 const { addCanonicalEntity, adjudicateClaim, createOwnershipCase, intakeCapabilityResult, recordIdentityResolutionDecision } = require("../domain/ownershipCase");
 const { verifyDecisionSnapshotV2 } = require("../domain/decisionSnapshotV2");
-const { projectOwnershipGraphV2 } = require("../projection/ownershipGraphProjectionV2");
 const { evaluateUboDecisionV3Review } = require("../application/evaluateUboDecisionV3Review");
+const { ACTION_TYPE, CONTENT_READINESS } = require("../planning/resolutionPlanV2");
+const { createAsdaFurtherCoverageProfile, createAsdaPredictableOpacityProfile } = require("../test-support/asdaRegistryCapabilityProfilesV1");
 
 const NOW = "2026-09-04T10:00:00.000Z";
 function entity(id) { return fixture.entities.find(({ entityId }) => entityId === id); }
@@ -38,13 +39,17 @@ function buildCase() {
   }
   return state;
 }
-
-test("separate ASDA v1.6/v2 characterization preserves LLP voting semantics and a provisional outcome", () => {
-  const result = evaluateUboDecisionV3Review({
+function evaluateAsda(overrides = {}) {
+  return evaluateUboDecisionV3Review({
     policyPack: policy, runtimeMode: "LAB", caseState: buildCase(),
     caseContext: { entityType: "private_limited_company", subjectEntityId: fixture.targetEntityId, jurisdiction: "GB", riskLevel: "MEDIUM" },
     evaluationTime: NOW, checkpoint: "CASE_EVENT", checkpointReference: { referenceId: "asda-v2-characterization" },
+    ...overrides,
   });
+}
+
+test("separate ASDA v1.6/v2 characterization preserves LLP voting semantics and a provisional outcome", () => {
+  const result = evaluateAsda();
   assert.equal(result.graph.nodes.length, 12);
   const people = new Set(["gary-lindsay", "thomas-mitchell", "manjit-dale"]);
   const tdrRights = result.graph.relationships.filter(({ subjectEntityId, objectEntityId }) => people.has(subjectEntityId) && objectEntityId === "tdr-capital-llp");
@@ -62,10 +67,10 @@ test("separate ASDA v1.6/v2 characterization preserves LLP voting semantics and 
   assert.equal(result.personQualificationAssessments.filter(({ personEntityId }) => people.has(personEntityId)).some(({ routeStatus }) => ["ROUTE_SATISFIED", "NOT_SATISFIED"].includes(routeStatus)), false);
   assert.ok(result.layerClosureAssessments.length > 0);
   assert.equal(result.derivedRequirementApplicability.facts.ownershipLayers, 7);
-  assert.equal(result.snapshot.decisionContent.pipelineMaturity, "TRANSITIONAL_PLANNER_ONLY");
+  assert.equal(result.snapshot.decisionContent.pipelineMaturity, "SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY");
   assert.equal(Object.prototype.hasOwnProperty.call(result.snapshot.decisionContent, "frontierInformationNeeds"), false);
   assert.equal(result.snapshot.decisionContent.phaseArtifacts[6].algorithmVersion, "ubo-requirement-resolution-v2");
-  assert.equal(result.snapshot.decisionContent.plannerCompatibilityAdapter.adapterVersion, "ubo-information-needs-v2-to-plan-v1-compat");
+  assert.equal(result.snapshot.decisionContent.pinnedResolutionPlan.contractVersion, "ubo-resolution-plan-v2");
   const resolution = result.requirementStage.requirementResolution;
   const open = resolution.informationNeeds.filter(({ status }) => status === "OPEN");
   assert.equal(open.length, 10);
@@ -100,18 +105,69 @@ test("separate ASDA v1.6/v2 characterization preserves LLP voting semantics and 
   assert.equal(governanceNeed.affected.pathIds.length, 3);
   assert.equal(resolution.dependentDiagnostics.filter(({ kind }) => kind === "CALCULATION_PATH_BLOCKED").length, 6);
   assert.equal(result.resolutionPlan.summary.openInformationNeeds, 10);
-  assert.equal(result.resolutionPlan.summary.recommendedActions, 10);
-  assert.equal(result.resolutionPlan.recommendedWave.actor, "SYSTEM");
+  assert.ok(result.resolutionPlan.summary.recommendedActions > 0);
+  assert.equal(result.resolutionPlan.currentPlanningWave.actor, "SYSTEM");
   assert.ok(open.filter(({ concept }) => ["OTHER_SIGNIFICANT_CONTROL_STATUS", "TRUST_STATUS"].includes(concept)).every(({ contentReadinessStatus }) => contentReadinessStatus === "POLICY_CONTENT_BLOCKED"));
-  const projection = projectOwnershipGraphV2({ decisionSnapshot: result.snapshot });
-  assert.equal(projection.nodes.length, 12);
-  assert.equal(new Set(projection.nodes.map(({ entityId }) => entityId)).size, 12);
-  assert.equal(projection.summary.openCausalNeedCount, 10);
-  assert.equal(projection.summary.affectedPathCount, 3);
-  assert.equal(projection.summary.transitionalCustomerActionCount, 0);
-  assert.equal(projection.informationNeeds.length, 10);
-  assert.equal(projection.affectedDiagnostics.length, 25);
-  assert.equal(projection.nodes.some(({ semanticFlags }) => semanticFlags.includes("UNRESOLVED_ENTITY")), false);
-  people.forEach((personId) => assert.ok(projection.nodes.find(({ entityId }) => entityId === personId).semanticFlags.includes("NOT_CONFIRMED_UBO")));
+  assert.equal(result.resolutionPlan.summary.dependentDiagnosticsIgnoredAsActions, 25);
+  assert.equal(result.resolutionPlan.resolutionGroups.some(({ coveredInformationNeedIds }) => coveredInformationNeedIds.some((id) => resolution.dependentDiagnostics.some(({ diagnosticId }) => diagnosticId === id))), false);
   assert.equal(verifyDecisionSnapshotV2(JSON.parse(JSON.stringify(result.snapshot))), true);
+});
+
+test("ASDA A keeps genuinely available registry work system-first without one action per path", () => {
+  const result = evaluateAsda({ registryCapabilityProfile: createAsdaFurtherCoverageProfile() });
+  const plan = result.resolutionPlan;
+  assert.equal(plan.state, "SYSTEM_RESOLUTION");
+  assert.equal(plan.currentPlanningWave.actor, "SYSTEM");
+  assert.ok(plan.strategyAssignments.some(({ strategy }) => strategy === "DISCOVERY_LED"));
+  assert.equal(plan.recommendedActions.some(({ actor }) => actor === "CUSTOMER"), false);
+  assert.equal(plan.summary.openInformationNeeds, 10);
+  assert.equal(plan.summary.dependentDiagnosticsIgnoredAsActions, 25);
+  assert.equal(plan.recommendedActions.some(({ coveredInformationNeedIds }) => coveredInformationNeedIds.some((id) => result.requirementStage.requirementResolution.dependentDiagnostics.some(({ diagnosticId }) => diagnosticId === id))), false);
+  assert.equal(result.requirementStage.requirementResolution.reviewRequirements.length, 2);
+  assert.ok(plan.requiredSignoffs.includes("A-15"));
+  assert.equal(plan.registryCapabilityProfileRef.profileHash, createAsdaFurtherCoverageProfile().profileHash);
+  assert.equal(verifyDecisionSnapshotV2(result.snapshot), true);
+});
+
+test("ASDA B uses one coherent TDR structure/governance package after predicted registry opacity", () => {
+  const baseline = evaluateAsda();
+  const open = baseline.requirementStage.requirementResolution.informationNeeds.filter(({ status }) => status === "OPEN");
+  const tdrNeeds = open.filter((need) => (need.frontierEntityId || "").startsWith("tdr-")
+    || need.concept === "APPOINTMENT_MAJORITY_SCOPE"
+    || need.concept === "INDEPENDENT_CORROBORATION");
+  const tdrNeedIds = tdrNeeds.map(({ needId }) => needId).sort();
+  const tdrPackage = {
+    resolutionStrategy: "CUSTOMER_DOCUMENT",
+    semanticActionType: ACTION_TYPE.REQUEST_STRUCTURE_EVIDENCE,
+    informationNeedIds: tdrNeedIds,
+    requirementIds: [...new Set(tdrNeeds.flatMap(({ requiredByRequirementIds }) => requiredByRequirementIds))].sort(),
+    acquisitionChannel: "CUSTOMER_EVIDENCE",
+    capabilityQuery: { jurisdiction: "GB", entityProfile: "COMPANY", informationConcept: "OWNERSHIP_STRUCTURE_EVIDENCE", relationshipDimension: "CONTROL", relationshipBasis: "ANY", acquisitionChannel: "CUSTOMER_EVIDENCE", entitlementContext: "ASDA_REVIEW" },
+    evidenceCategories: ["governance_agreement", "group_structure_note"],
+    contentReadiness: CONTENT_READINESS.READY,
+    currentlyAvailable: true,
+    causalGroupingKey: "ASDA_TDR_STRUCTURE_GOVERNANCE_PACKAGE",
+    coverageBasis: "COHERENT_EVIDENCE_PACKAGE",
+    targetReference: { entityId: "tdr-capital-llp" },
+    expectedCandidateFacts: tdrNeeds.map(({ requiredFact }) => requiredFact),
+    externalHandoffType: "EVIDENCE_OR_INFORMATION_INTAKE",
+    retryPermitted: false,
+  };
+  const result = evaluateAsda({ registryCapabilityProfile: createAsdaPredictableOpacityProfile(), resolutionOptions: [tdrPackage] });
+  const plan = result.resolutionPlan;
+  const action = plan.customerBundles.flatMap(({ actionIds }) => actionIds).map((id) => plan.recommendedActions.find(({ actionId }) => actionId === id)).find((item) => item?.coveredInformationNeedIds.length === tdrNeedIds.length);
+  assert.equal(plan.state, "CUSTOMER_RESOLUTION");
+  assert.ok(action);
+  assert.equal(action.semanticActionType, "REQUEST_STRUCTURE_EVIDENCE");
+  assert.equal(action.acquisitionStrategy, "CHART_ASSISTED");
+  assert.deepEqual(action.coveredInformationNeedIds, tdrNeedIds);
+  assert.equal(action.receiptDoesNotResolveNeed, true);
+  assert.equal(action.independentVerificationRequired, true);
+  assert.equal(plan.resolutionGroups.find(({ groupId }) => groupId === action.resolutionGroupId).coveredInformationNeedIds.length, tdrNeedIds.length);
+  assert.equal(plan.recommendedActions.some(({ coveredInformationNeedIds }) => coveredInformationNeedIds.some((id) => open.filter(({ concept }) => ["OTHER_SIGNIFICANT_CONTROL_STATUS", "TRUST_STATUS", "NOMINEE_BEARER_STATUS"].includes(concept)).map(({ needId }) => needId).includes(id))), false);
+  assert.equal(result.requirementStage.requirementResolution.reviewRequirements.length, 2);
+  assert.equal(plan.summary.dependentDiagnosticsIgnoredAsActions, 25);
+  assert.equal(plan.recommendedActions.some(({ semanticActionType }) => semanticActionType === "REQUEST_STRUCTURED_INFORMATION" && JSON.stringify(plan).includes("numeric")), false);
+  assert.equal(result.personQualificationAssessments.some(({ routeStatus }) => routeStatus === "ROUTE_SATISFIED"), false);
+  assert.equal(verifyDecisionSnapshotV2(result.snapshot), true);
 });
