@@ -23,6 +23,9 @@ const API_DIR = path.join(__dirname, "..");
  *  admin          - tenant admin password (lib/adminAuth.js)
  *  super-admin    - platform password
  *  dossier        - analyst or customer credential (lib/dossierAccess.js)
+ *  staff          - a signed-in Clerk user, checked by requireStaff. Some
+ *                   actions inside may demand a role; the table records that a
+ *                   credential is required at all.
  *  cron           - CRON_SECRET, scheduler only
  *  public-login   - the login endpoints themselves; public by definition
  *  open-limited   - no credential yet, rate-limited. Batch 1 gives these a real
@@ -96,6 +99,7 @@ const ROUTES = {
   // UBO. All three reach Anthropic, all three are rate-limited, and all three
   // now call requireStaff - which is inert until CLERK_SECRET_KEY is set, so
   // they are still counted as open until the key lands in an environment.
+  "ubo-invite.js": "staff",
   "ubo-demo-customer-ownership-chart.js": "open-limited",
   "ubo-demo-entity-resolution.js": "open-limited",
 
@@ -103,8 +107,8 @@ const ROUTES = {
   "idv-match/screening/webhook.js": "webhook",
 };
 
-const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron"]);
-const GATE = /requireAdmin|requireActor|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
+const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron", "staff"]);
+const GATE = /requireAdmin|requireActor|requireStaff|verifyClerkSession|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
 
 function listApiFiles(dir = API_DIR, prefix = "") {
   const out = [];
