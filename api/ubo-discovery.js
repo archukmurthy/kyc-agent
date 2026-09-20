@@ -10,6 +10,10 @@ const { enforceRateLimit } = require("../lib/rateLimit");
 const { checkTextFields } = require("../lib/inputLimits");
 const { applyCors, requireStaff } = require("../lib/routeAuth");
 
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
+const DEFAULT_DEPS = { requireStaff, enforceRateLimit, runUboFramework, getFresh, cacheResult, appendAudit, persistUboInvestigation };
+let _deps = { ...DEFAULT_DEPS };
+
 function forReviewer(result) {
   return {
     ...result,
@@ -26,9 +30,12 @@ function forReviewer(result) {
 // called by the onboarding application.
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  // Merge note: their demoRegistryContext flag, our input-length guard. The
-  // guard stays ahead of everything that costs money or hits a provider.
-  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false, demoRegistryContext = false } = req.body || {};
+  // UBO-1: the tenant is NOT read from the body. It used to be, with a default
+  // of "nium" when the caller named none - so anyone could file research under
+  // any company's audit trail, ours included. It now comes from the signed-in
+  // caller, and a caller with no tenant is refused the way every other route in
+  // this codebase refuses one (lib/tenant.js: no tenant resolved, no service).
+  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, forceRefresh = false, demoRegistryContext = false } = req.body || {};
   const limits = checkTextFields(req.body, { entityName: 200, registrationNumber: 64, jurisdiction: 64 });
   if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
@@ -36,10 +43,22 @@ module.exports = async function handler(req, res) {
   const discovery = Number(discoveryThreshold || 5);
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) return res.status(400).json({ error: "uboThreshold must be a number from 0 to 100" });
   if (!Number.isFinite(discovery) || discovery <= 0 || discovery > 100) return res.status(400).json({ error: "discoveryThreshold must be a number from 0 to 100" });
-  if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
-  // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
-  // route behaves exactly as before until the keys land.
-  if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
+  if (!(await _deps.enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
+  // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set.
+  const actor = await _deps.requireStaff(req, res, { requireTenant: true });
+  if (!actor) return undefined;
+  // A named caller brings their own tenant. Nobody else gets one by accident.
+  //
+  // The exception is deliberate and opt-in: public/ubo-lab.html posts no tenant
+  // at all, so with Clerk switched off (local development) an explicitly
+  // configured UBO_DEV_TENANT_ID keeps that lab working. Absent the variable
+  // the request is refused, so forgetting to configure Clerk in production
+  // cannot quietly restore the old "nium" default.
+  const devTenant = actor.kind === "unauthenticated" ? (process.env.UBO_DEV_TENANT_ID || "") : "";
+  const tenantId = actor.tenantId || devTenant;
+  if (!tenantId) {
+    return res.status(400).json({ error: "tenant_required" });
+  }
   const streaming = String(req.headers?.accept || "").includes("text/event-stream");
   const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify(event)}\n\n`); };
   const finish = (payload) => {
@@ -59,16 +78,16 @@ module.exports = async function handler(req, res) {
     const key = resultKey(input, tenantId);
     emit({ stage: "cache_check", message: "Checking previous investigation cache" });
     if (!forceRefresh) {
-      const cached = await getFresh(key);
+      const cached = await _deps.getFresh(key);
       if (cached) {
         emit({ stage: "cache_hit", message: "Reusing cached investigation — no live research needed" });
         const response = { ...cached.result, cache: { hit: true, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "investigation" } };
-        const auditId = await appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: true, forceRefresh: false, cacheKey: key, status: response.status, result: response });
-        const database = await persistUboInvestigation({ tenantId, input, cacheHit: true, forceRefresh: false, result: response });
+        const auditId = await _deps.appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: true, forceRefresh: false, cacheKey: key, status: response.status, result: response });
+        const database = await _deps.persistUboInvestigation({ tenantId, input, cacheHit: true, forceRefresh: false, result: response });
         return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persisted: true, database } }));
       }
     }
-    const result = await runUboFramework({
+    const result = await _deps.runUboFramework({
       entityName,
       registrationNumber: registrationNumber || null,
       jurisdiction: String(jurisdiction).toUpperCase(),
@@ -76,10 +95,10 @@ module.exports = async function handler(req, res) {
       adapters: { companiesHouse: companiesHouseOwnershipAdapter, webResearch: webResearchOwnershipAdapter },
       onProgress: emit,
     });
-    const cached = await cacheResult(input, tenantId, result);
+    const cached = await _deps.cacheResult(input, tenantId, result);
     const response = { ...result, cache: { hit: false, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "live" } };
-    const auditId = await appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: false, forceRefresh: Boolean(forceRefresh), cacheKey: key, status: response.status, result: response });
-    const database = await persistUboInvestigation({ tenantId, input, cacheHit: false, forceRefresh: Boolean(forceRefresh), result: response });
+    const auditId = await _deps.appendAudit({ tenantId, entityIdentityHash: identity(input), cacheHit: false, forceRefresh: Boolean(forceRefresh), cacheKey: key, status: response.status, result: response });
+    const database = await _deps.persistUboInvestigation({ tenantId, input, cacheHit: false, forceRefresh: Boolean(forceRefresh), result: response });
     emit({ stage: "audit", message: "Saving audit snapshot" });
     return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persisted: true, database } }));
   } catch (error) {
@@ -88,3 +107,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "UBO discovery failed", message: error.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
+module.exports.__resetDeps = () => { _deps = { ...DEFAULT_DEPS }; };

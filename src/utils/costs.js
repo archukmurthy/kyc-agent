@@ -3,8 +3,12 @@
 // counts come from response.usage on every Anthropic API call — these are
 // not estimates. Mirrors lib/persist.js#estimateCostUsd ($3 / $15 per Mtok)
 // so the live submit path and the benchmark path price tokens identically.
+// PLAT-5: this said claude-sonnet-4-20250514 while every call site used
+// claude-sonnet-4-5, so the wrong model was stamped onto provenance records.
+// The real fix is to read the model back from the API response rather than
+// keep a list here - a hand-kept identifier drifts silently, and this one did.
 export const API_PRICING = {
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-5",
   inputCostPerMillionTokens: 3.0, // USD
   outputCostPerMillionTokens: 15.0, // USD
 };

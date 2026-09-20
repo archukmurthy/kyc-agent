@@ -23,7 +23,9 @@ import { buildLocalDefaultConfig } from '../config/localDefaultConfig';
 import { formatFetchedAt } from '../utils/files';
 
 test('calcCostUsd prices tokens at $3/$15 per Mtok', () => {
-  expect(API_PRICING.model).toBe('claude-sonnet-4-20250514');
+  // PLAT-5: was pinned to a model no call site used. The pricing below is
+  // what this test is really about; the identifier tracks what we call.
+  expect(API_PRICING.model).toBe('claude-sonnet-4-5');
   expect(calcCostUsd(1_000_000, 1_000_000)).toBe(18);
   expect(calcCostUsd(0, 0)).toBe(0);
   expect(calcCostUsd(500_000, 200_000)).toBeCloseTo(1.5 + 3.0, 10);
