@@ -1,0 +1,98 @@
+/**
+ * What a person sees between signing in and reaching the product.
+ *
+ * The states that matter are the refusals: a prospect who is signed in but not
+ * invited, and one whose trial has run out. Both must read as a situation with
+ * a next step, not as a broken page.
+ */
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import TrialGate from "../TrialGate";
+
+jest.mock("../../auth/ClerkGate", () => ({
+  __esModule: true,
+  default: ({ children }) => children,
+  isClerkEnabled: () => true,
+}));
+
+const mockRedeemInvite = jest.fn();
+const mockTrialStatus = jest.fn();
+jest.mock("../trialApi", () => ({
+  redeemInvite: (...args) => mockRedeemInvite(...args),
+  trialStatus: (...args) => mockTrialStatus(...args),
+}));
+
+function setUrl(search) {
+  window.history.replaceState({}, "", `/ubo-demo${search}`);
+}
+
+beforeEach(() => {
+  mockRedeemInvite.mockReset();
+  mockTrialStatus.mockReset();
+  setUrl("");
+});
+
+test("an invite in the link is redeemed and then removed from the address bar", async () => {
+  // A code left in the URL gets bookmarked, shared and sent in referrer
+  // headers. It is single-use to us, so it should not linger.
+  setUrl("?invite=ACME-7D3K");
+  mockRedeemInvite.mockResolvedValue({ access: {} });
+  mockTrialStatus.mockResolvedValue({ inTrial: true, trialEndsAt: new Date(Date.now() + 5 * 86400000).toISOString(), budgetLeft: 90 });
+
+  render(<TrialGate><div>the product</div></TrialGate>);
+
+  await waitFor(() => expect(mockRedeemInvite).toHaveBeenCalledWith("ACME-7D3K"));
+  expect(await screen.findByText("the product")).toBeInTheDocument();
+  expect(window.location.search).not.toContain("invite");
+});
+
+test("signed in with no invitation is told what to do, not shown a sign-up form", async () => {
+  mockTrialStatus.mockResolvedValue({ inTrial: false });
+  render(<TrialGate><div>the product</div></TrialGate>);
+
+  expect(await screen.findByText(/need an invitation/i)).toBeInTheDocument();
+  expect(screen.queryByText("the product")).not.toBeInTheDocument();
+});
+
+test("a used-up invitation says so plainly", async () => {
+  setUrl("?invite=ACME-7D3K");
+  const error = new Error("invite_full");
+  error.code = "invite_full";
+  mockRedeemInvite.mockRejectedValue(error);
+
+  render(<TrialGate><div>the product</div></TrialGate>);
+  expect(await screen.findByText(/maximum number of people/i)).toBeInTheDocument();
+});
+
+test("an expired trial still shows the work, and explains why research is off", async () => {
+  mockTrialStatus.mockResolvedValue({
+    inTrial: true,
+    readOnly: true,
+    trialEndsAt: new Date(Date.now() - 86400000).toISOString(),
+  });
+  render(<TrialGate><div>the product</div></TrialGate>);
+
+  expect(await screen.findByText(/trial has ended/i)).toBeInTheDocument();
+  expect(screen.getByText("the product")).toBeInTheDocument();
+});
+
+test("days remaining are shown while the trial is live", async () => {
+  mockTrialStatus.mockResolvedValue({
+    inTrial: true,
+    readOnly: false,
+    trialEndsAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+    budgetLeft: 42,
+  });
+  render(<TrialGate><div>the product</div></TrialGate>);
+
+  expect(await screen.findByText(/3 days remaining/i)).toBeInTheDocument();
+  expect(screen.getByText(/42 research runs left/i)).toBeInTheDocument();
+});
+
+test("a broken status call does not become an outage", async () => {
+  // The server refuses anything that matters, so a failing status check should
+  // let the product render rather than blocking it.
+  mockTrialStatus.mockRejectedValue(new Error("network"));
+  render(<TrialGate><div>the product</div></TrialGate>);
+  expect(await screen.findByText("the product")).toBeInTheDocument();
+});

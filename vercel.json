@@ -25,6 +25,8 @@
     { "source": "/preview", "destination": "/index.html" },
     { "source": "/preboarding", "destination": "/index.html" },
     { "source": "/preboarding/(.*)", "destination": "/index.html" },
+    { "source": "/ubo-trials", "destination": "/index.html" },
+    { "source": "/ubo-trials/(.*)", "destination": "/index.html" },
     { "source": "/policy-simulator", "destination": "/index.html" },
     { "source": "/policy-simulator/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }

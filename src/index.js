@@ -11,6 +11,8 @@ import CustomerOwnershipChartPage from "./uboDemo/customer/CustomerOwnershipChar
 import CustomerCompanyPage from "./uboDemo/customer/CustomerCompanyPage";
 import { isCustomerCompanyPath, isCustomerOwnershipChartPath } from "./uboDemo/customer/customerRoute";
 import ClerkGate from "./auth/ClerkGate";
+import TrialGate from "./trials/TrialGate";
+import TrialAdmin from "./trials/TrialAdmin";
 
 const path = window.location.pathname;
 const search = new URLSearchParams(window.location.search);
@@ -33,14 +35,19 @@ document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
 // The UBO surfaces sit behind a Clerk login. ClerkGate is inert until
 // REACT_APP_CLERK_PUBLISHABLE_KEY is set, so these render unchanged until the
 // keys land - the same switch the API uses with CLERK_SECRET_KEY.
-if (isCustomerOwnershipChartPath(path)) {
-  tree = <ClerkGate><CustomerOwnershipChartPage /></ClerkGate>;
+if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
+  // Owner-only screen for creating trial links. Hiding it is convenience; the
+  // check that matters is in api/ubo-invite.js, on every call.
+  tree = <ClerkGate><TrialAdmin /></ClerkGate>;
+  title = "Trial invitations | Ownership review";
+} else if (isCustomerOwnershipChartPath(path)) {
+  tree = <ClerkGate><TrialGate><CustomerOwnershipChartPage /></TrialGate></ClerkGate>;
   title = "Upload ownership chart | Ownership review demo";
 } else if (isCustomerCompanyPath(path)) {
-  tree = <ClerkGate><CustomerCompanyPage /></ClerkGate>;
+  tree = <ClerkGate><TrialGate><CustomerCompanyPage /></TrialGate></ClerkGate>;
   title = "Company details | Ownership review demo";
 } else if (isUboDemoPath(path)) {
-  tree = <ClerkGate><UboDemoRoot /></ClerkGate>;
+  tree = <ClerkGate><TrialGate><UboDemoRoot /></TrialGate></ClerkGate>;
   title = "Ownership review demo";
 } else if (isPolicySimulator) {
   tree = <PolicySimulator />;

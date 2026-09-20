@@ -1,0 +1,161 @@
+/**
+ * TrialAdmin - where the owner makes a trial link without asking an engineer.
+ *
+ * Owner-only, and the server enforces that on every call. This screen being
+ * hidden is convenience; the check in api/ubo-invite.js is the protection.
+ * Anyone can post to that route directly, and creating invites is how somebody
+ * would help themselves to our AI budget.
+ *
+ * Deliberately plain: a form, a table, a copy button. Three people will ever
+ * use it, and a prettier version is time not spent on the product.
+ */
+import React, { useCallback, useEffect, useState } from "react";
+import { createInvite, inviteLink, listInvites, revokeInvite } from "./trialApi";
+
+const FONT = "system-ui, -apple-system, Segoe UI, sans-serif";
+const page = { maxWidth: 860, margin: "40px auto", padding: "0 20px", fontFamily: FONT, lineHeight: 1.5 };
+const label = { display: "block", fontSize: 13, color: "#57606a", marginBottom: 4 };
+const input = { padding: "8px 10px", border: "1px solid #d0d7de", borderRadius: 6, fontSize: 14, width: "100%" };
+const button = { padding: "9px 16px", border: 0, borderRadius: 6, background: "#1a3a4a", color: "#fff", fontSize: 14, cursor: "pointer" };
+const cell = { padding: "8px 10px", borderBottom: "1px solid #eaeef2", fontSize: 13, textAlign: "left", verticalAlign: "top" };
+
+export default function TrialAdmin() {
+  const [invites, setInvites] = useState([]);
+  const [form, setForm] = useState({ company: "", seats: 5, days: 7, budget: 100 });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const result = await listInvites();
+      setInvites(result.invites || []);
+      setError("");
+    } catch (err) {
+      // A 403 here means the person is not an owner. Say that plainly rather
+      // than showing an empty table that looks like "no invites yet".
+      setError(err.status === 403 ? "Only an owner can manage trial invitations." : err.message);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!form.company.trim()) { setError("A company name is required."); return; }
+    setBusy(true);
+    try {
+      await createInvite({
+        company: form.company.trim(),
+        seats: Number(form.seats),
+        days: Number(form.days),
+        budget: Number(form.budget),
+      });
+      setForm({ ...form, company: "" });
+      setError("");
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(code) {
+    const link = inviteLink(code);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(code);
+      setTimeout(() => setCopied(""), 2000);
+    } catch (_) {
+      // Clipboard access can be refused; the link is on screen to copy by hand.
+      window.prompt("Copy this link", link);
+    }
+  }
+
+  return (
+    <div style={page}>
+      <h1 style={{ fontSize: 22, marginBottom: 4 }}>Trial invitations</h1>
+      <p style={{ color: "#57606a", marginTop: 0 }}>
+        One link per company. Everyone who opens it gets their own private workspace - nobody sees anyone
+        else&apos;s research.
+      </p>
+
+      {error ? (
+        <div role="alert" style={{ background: "#ffebe9", border: "1px solid #ffcecb", padding: "10px 12px", borderRadius: 6, marginBottom: 16 }}>
+          {error}
+        </div>
+      ) : null}
+
+      <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: 12, alignItems: "end", marginBottom: 28 }}>
+        <div>
+          <label style={label} htmlFor="company">Company</label>
+          <input id="company" style={input} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Acme Bank" />
+        </div>
+        <div>
+          <label style={label} htmlFor="seats">People</label>
+          <input id="seats" style={input} type="number" min="1" max="50" value={form.seats} onChange={(e) => setForm({ ...form, seats: e.target.value })} />
+        </div>
+        <div>
+          <label style={label} htmlFor="days">Days</label>
+          <input id="days" style={input} type="number" min="1" max="90" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} />
+        </div>
+        <div>
+          <label style={label} htmlFor="budget">Research runs</label>
+          <input id="budget" style={input} type="number" min="1" max="10000" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+        </div>
+        <button type="submit" style={button} disabled={busy}>{busy ? "Creating…" : "Create link"}</button>
+      </form>
+
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={{ ...cell, fontWeight: 600 }}>Company</th>
+            <th style={{ ...cell, fontWeight: 600 }}>Link</th>
+            <th style={{ ...cell, fontWeight: 600 }}>Seats</th>
+            <th style={{ ...cell, fontWeight: 600 }}>Days</th>
+            <th style={{ ...cell, fontWeight: 600 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {invites.length === 0 ? (
+            <tr><td style={{ ...cell, color: "#57606a" }} colSpan={5}>No invitations yet.</td></tr>
+          ) : invites.map((invite) => (
+            <tr key={invite.code} style={{ opacity: invite.revoked ? 0.5 : 1 }}>
+              <td style={cell}>
+                {invite.company}
+                {invite.revoked ? <div style={{ color: "#a40e26", fontSize: 12 }}>withdrawn</div> : null}
+              </td>
+              <td style={{ ...cell, fontFamily: "ui-monospace, Menlo, monospace", wordBreak: "break-all" }}>
+                {inviteLink(invite.code)}
+                <div>
+                  <button type="button" onClick={() => copy(invite.code)} style={{ ...button, background: "#f6f8fa", color: "#24292f", border: "1px solid #d0d7de", marginTop: 6, padding: "4px 10px", fontSize: 12 }}>
+                    {copied === invite.code ? "Copied" : "Copy link"}
+                  </button>
+                </div>
+              </td>
+              <td style={cell}>{invite.seatsUsed} / {invite.seats}</td>
+              <td style={cell}>{invite.days}</td>
+              <td style={cell}>
+                {invite.revoked ? null : (
+                  <button
+                    type="button"
+                    style={{ ...button, background: "#fff", color: "#a40e26", border: "1px solid #ffcecb", padding: "4px 10px", fontSize: 12 }}
+                    onClick={async () => {
+                      // People already inside keep working; this only stops new
+                      // sign-ups on that link.
+                      await revokeInvite(invite.code);
+                      refresh();
+                    }}
+                  >
+                    Withdraw
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

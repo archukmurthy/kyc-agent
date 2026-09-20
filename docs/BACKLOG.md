@@ -488,3 +488,10 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 ### GOLIVE-8 — Confirm the Evidence Lab is unreachable on the deployed URL
 - **Category:** Security · **Priority:** P1 · **Status:** OPEN
 - **What:** A test asserts the vercel.json denial and the .vercelignore rules; nothing has confirmed it against a real deployment. One curl after the first deploy.
+
+### TEST-2 — `PolicySimulator.test.jsx` times out under parallel load
+- **Category:** Test hygiene · **Priority:** P2 · **Status:** OPEN (seen 2026-09-20)
+- **What:** In a full `npm test` run the suite failed after 56s; run alone it passes 9/9 in a few seconds, and an immediate re-run of the full suite passed 742/742. It is slow enough that Jest's default timeout is reached when workers compete for CPU.
+- **Why it matters:** a flaky test is worse than a missing one. Once people learn that a red run might mean nothing, red runs stop being read - and the CI gate we just built depends on red meaning something.
+- **Fix:** find what takes tens of seconds (likely a real timer or a large fixture rendered repeatedly), and either fake the timers or shrink the fixture. Raising the timeout hides it rather than fixing it.
+- **Area:** `src/policySimulator/PolicySimulator.test.jsx`.
