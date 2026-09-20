@@ -22,6 +22,7 @@ const { TERMINAL_STATUSES } = require("../../idv/domain/constants");
 const identityVault = require("./identityVault");
 const identityEventsStore = require("./identityEventsStore");
 const COPY = require("./copy");
+const { applyCors } = require("../../lib/routeAuth");
 
 function identityMap(attributes) {
   const map = {};
@@ -287,7 +288,7 @@ async function resolveAttempt(attemptId, deps = {}) {
 }
 
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
   const attemptId = (req.body && req.body.attemptId) || (req.query && req.query.attemptId);
   if (!attemptId) return res.status(400).json({ error: "attemptId_required" });
   try {

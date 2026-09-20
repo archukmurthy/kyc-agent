@@ -13,6 +13,7 @@ const { handleExplanation } = require("./resolution");
 const { recordBandOutcome } = require("./behaviors");
 const { bandsEnabled } = require("./config");
 const { extractNameTokens } = require("./nameExtraction");
+const { applyCors } = require("../../lib/routeAuth");
 
 function identityMap(attributes) {
   const map = {};
@@ -57,7 +58,7 @@ async function explainAttempt({ attemptId, category, evidence } = {}, deps = {})
 }
 
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
   const body = req.body || {};
   const attemptId = body.attemptId || (req.query && req.query.attemptId);
   if (!attemptId || !body.category) return res.status(400).json({ error: "attemptId_and_category_required" });

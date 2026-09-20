@@ -65,7 +65,7 @@ Three things happen in the SAME pull request as the work, never afterwards:
 
 | Artifact | Update when | Kept honest by |
 | --- | --- | --- |
-| Route table (`api/__tests__/routeAuth.nodetest.js` fixture) | Any new/changed route | Test fails if a route is missing |
+| Route table (`api/__tests__/routeTable.nodetest.js`) | Any new/changed route | Test fails if a route is missing |
 | Rule-tests | Every bug found | Habit, visible in the fix's PR |
 | `docs/BACKLOG.md` | Anything deferred or closed | Habit |
 | `CLAUDE.md` map | New module/folder, new invariant, Guarded list changes | Partly tested (folders exist, routes listed); plus the per-batch read |
@@ -121,7 +121,7 @@ PROC-1 to PROC-4 in `docs/BACKLOG.md`.
 | --- | --- | --- |
 | 1 | `CLAUDE.md` rewritten as a true map of the system | Built (`23b875e`) |
 | 2 | Lint + covering tests run automatically after each edit | Built — `scripts/after-edit.js`, wired in `.claude/settings.json`. Lints the edited file and runs the one test file that covers it (sibling `__tests__`/`tests`, same base name); reports failures back and stops there. Full suites stay before the pull request. |
-| 3 | Rule-tests (route table first, then one per bug class) | Not built |
+| 3 | Rule-tests (route table first, then one per bug class) | Built — `api/__tests__/routeTable.nodetest.js`. Every file under `api/` declares who may call it; a new file fails the test. Also: no wildcard CORS, a credential-gated route really checks one, an open route is at least rate-limited, and the list of open routes cannot grow. |
 | 4 | Automatic checks on every pull request | Built (`.github/workflows/ci.yml`) |
 | 5 | Those checks *blocking* a merge | Blocked — GitHub does not enforce rulesets on a private personal repo; the ruleset is saved and activates if the repo moves to an organization on Team |
 | 6 | `.githooks/pre-push` backstop | Built — run `git config core.hooksPath .githooks` once per clone |

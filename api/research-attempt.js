@@ -20,15 +20,21 @@
 const storage = require("../lib/storage");
 const researchGrant = require("../lib/researchGrant");
 const { SEARCH_CAP } = require("../src/reresearch/searchPolicy");
+const { applyCors } = require("../lib/routeAuth");
+const { enforceRateLimit } = require("../lib/rateLimit");
 
 const TTL_SECONDS = 30 * 24 * 3600;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Injected deps (overridable in tests via __setDeps).
-let _deps = { storage, grant: researchGrant };
+let _deps = { storage, grant: researchGrant, enforceRateLimit };
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  // The per-application cap bounds one id's searches; nothing bounded how many
+  // ids a caller could mint, so the counters themselves were unlimited.
+  if (!(await _deps.enforceRateLimit(req, res, "research-attempt"))) return undefined;
 
   const applicationId = (req.body || {}).applicationId;
   if (typeof applicationId !== "string" || !UUID_RE.test(applicationId)) {

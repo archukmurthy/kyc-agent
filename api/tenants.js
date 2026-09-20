@@ -16,6 +16,7 @@ const { buildTemplateConfig } = require("../lib/configTemplates");
 const { hashPassword } = require("../lib/auth");
 const { sanitiseTenantId } = require("../lib/tenant");
 const tenantRegistry = require("../lib/tenantRegistry");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
 let _deps = { storage, registry: tenantRegistry };
@@ -105,11 +106,8 @@ async function ensureRegistry() {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
 
   if (!requireSuperAdmin(req, res)) return;
 

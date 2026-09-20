@@ -10,6 +10,7 @@ const matchDecisionStore = require("./matchDecisionStore");
 const identityEventsStore = require("./identityEventsStore");
 const identityVault = require("./identityVault");
 const { bandsEnabled } = require("./config");
+const { applyCors, requireAdmin } = require("../../lib/routeAuth");
 
 // Concepts a reviewer may see (mrz stays server-side matching-only, never shown).
 const REVIEWABLE_CONCEPTS = [
@@ -73,14 +74,24 @@ async function revealField({ attemptId, concept, actorId }, deps = {}) {
 }
 
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
+
+  // This route releases identity data. It had no credential check at all, and
+  // it believed the actorId in the query string - so the Vault's audit record,
+  // the thing that makes a reveal accountable, recorded whatever the caller
+  // typed. Both halves are fixed here: a real admin credential, and the actor
+  // taken from that credential.
+  const tenant = await requireAdmin(req, res);
+  if (!tenant) return undefined;
+  const actorId = `admin:${tenant}`;
+
   const q = { ...(req.query || {}), ...(req.body || {}) };
   try {
     if (req.method === "POST" && q.reveal) {
-      return res.status(200).json(await revealField({ attemptId: q.attemptId, concept: q.concept, actorId: q.actorId }));
+      return res.status(200).json(await revealField({ attemptId: q.attemptId, concept: q.concept, actorId }));
     }
     if (!q.attemptId) return res.status(400).json({ error: "attemptId_required" });
-    return res.status(200).json(await getCase(q.attemptId, { actorId: q.actorId }));
+    return res.status(200).json(await getCase(q.attemptId, { actorId }));
   } catch (err) {
     console.error("[idv-match reviewer]", err && err.message);
     return res.status(500).json({ error: "reviewer_error" });

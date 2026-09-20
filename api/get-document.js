@@ -39,6 +39,11 @@
  */
 import { get } from "@vercel/blob";
 import { Readable } from "node:stream";
+import routeAuth from "../lib/routeAuth.js";
+import rateLimit from "../lib/rateLimit.js";
+
+const { applyCors } = routeAuth;
+const { enforceRateLimit } = rateLimit;
 
 // Only ever fetch from the Blob service. Without this the handler would be a
 // generic server-side fetch proxy for any URL a caller supplies.
@@ -54,9 +59,14 @@ function isBlobUrl(value) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  // Batch 0: still no ownership check - that needs the upload-time owner record
+  // (readiness plan 3.1) and a real session (Batch 1). The limiter at least
+  // stops the URL space being swept.
+  if (!(await enforceRateLimit(req, res, "get-document"))) return undefined;
 
   const { url, pathname } = req.query;
   // A full URL is what the app has stored historically; `pathname` is persisted

@@ -66,9 +66,23 @@ These came after the report was written, so they are not in it. We found them by
 
 ---
 
-## Batch 0 — Lock the open doors *(a few days)*
+## Batch 0 — Lock the open doors *(a few days)* — **DONE 18 September 2026**
 
-Small changes, big effect. This closes the four problems above and the easy half of what the report asked for.
+Small changes, big effect. This closes the four problems above and the easy half
+of what the report asked for.
+
+**What actually shipped, and one honest correction.** Seven routes that accepted
+anyone are now closed, the wildcard CORS is gone from all 17 routes, uploads are
+checked where they arrive, and every route with no credential is at least
+rate-limited. A rule-test now holds all of it in place.
+
+The correction: 0.2 said the document routes would get an owner check. They
+cannot yet. Nothing records who owns an uploaded file until final submit
+(readiness item 3.1), and the wizard has no login to check against until Batch 1
+- the audit put authentication first for exactly this reason. So the document
+routes got what is available today: real file validation, a rate limit, and a
+route-table entry naming them as still open. **The document ownership check
+lands in Batch 3, once uploads record an owner.**
 
 ### 0.1 Put a login on every page that handles customer data
 - **They said:** *"Deny-by-default authentication on every non-public API route."* (item 1.1)
@@ -328,7 +342,7 @@ These wait until a named customer or investor actually asks: handling large volu
 
 | Batch | Status | Merged |
 | --- | --- | --- |
-| 0 — Lock the open doors | Not started | — |
+| 0 — Lock the open doors | Done, except the document owner check (moved to Batch 3, needs 3.1) | PR #14 |
 | 1 — Proper logins | Not started | — |
 | 2 — Keep customers' data apart | Not started | — |
 | 3 — Save things honestly | Not started | — |

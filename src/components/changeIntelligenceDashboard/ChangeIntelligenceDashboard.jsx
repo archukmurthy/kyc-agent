@@ -15,6 +15,7 @@
  */
 
 import React, { useEffect, useState } from "react";
+import { getTenantId } from "../../utils/tenant";
 
 const C = {
   bg: "#f4f6f9",
@@ -88,8 +89,17 @@ export default function ChangeIntelligenceDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/change-intelligence-metrics")
-      .then((r) => r.json())
+    // The endpoint checks the admin credential server-side now, so the gate in
+    // ChangeIntelligenceRoot is no longer the only thing standing in front of
+    // it. Same token and headers the admin panel already sends.
+    let token = "";
+    try { token = sessionStorage.getItem("admin_token") || ""; } catch (_) { /* storage unavailable */ }
+    const tenantId = getTenantId();
+    fetch(`/api/change-intelligence-metrics?tenant=${encodeURIComponent(tenantId || "")}`, {
+      headers: { Authorization: `Bearer ${token}`, "X-Tenant-Id": tenantId || "" },
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : r.json().then((body) => Promise.reject(new Error(body.error || `HTTP ${r.status}`)))))
       .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
       .catch((err) => { if (!cancelled) { setError(err.message); setLoading(false); } });
     return () => { cancelled = true; };

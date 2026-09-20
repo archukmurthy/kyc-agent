@@ -17,10 +17,16 @@
 //
 // CommonJS (module.exports), mirroring the other api/ handlers.
 
+const { applyCors, requireActor } = require("../lib/routeAuth");
 const { transition } = require("../dossierLifecycle/transition");
 const { STATES, EVENTS, DISPUTE_KIND } = require("../dossierLifecycle/states");
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: this route had no credential check. It writes nothing and costs
+  // nothing, but it is part of a dossier's journey, so it takes the same
+  // credential every other dossier route takes.
+  if (!(await requireActor(req, res))) return undefined;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

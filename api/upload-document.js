@@ -35,19 +35,33 @@
  */
 import { put } from "@vercel/blob";
 import formidable from "formidable";
-import { readFile } from "fs/promises";
+import { readFile, open } from "fs/promises";
+import routeAuth from "../lib/routeAuth.js";
+import rateLimit from "../lib/rateLimit.js";
+import uploadValidation from "../lib/uploadValidation.js";
+
+const { applyCors } = routeAuth;
+const { enforceRateLimit } = rateLimit;
+const { validateUpload, MAX_UPLOAD_BYTES } = uploadValidation;
 
 // Vercel's default body parser would consume the multipart stream before we can
 // read it — disable it so formidable can parse the raw request.
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  // Batch 0: no credential to check until Batch 1, so the limiter is the only
+  // brake on someone filling our store with junk.
+  if (!(await enforceRateLimit(req, res, "upload-document"))) return undefined;
 
   try {
-    const form = formidable({ multiples: false });
+    // The size cap is enforced by the parser as well as checked afterwards:
+    // without it formidable would write the whole file to disk first (its
+    // default allows 200MB), so a large upload costs us before we refuse it.
+    const form = formidable({ multiples: false, maxFiles: 1, maxFileSize: MAX_UPLOAD_BYTES });
     // formidable v3 promise API returns [fields, files]; each field is an array.
     const [, files] = await form.parse(req);
 
@@ -56,12 +70,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No file provided under form field "file"' });
     }
 
-    const filename = uploaded.originalFilename || "document";
+    const filename = uploaded.originalFilename || "";
+
+    // The browser checks type and size too, but this is where the file actually
+    // arrives - anyone can POST straight here. The declared type, the extension
+    // and the first bytes all have to agree.
+    let head = Buffer.alloc(0);
+    const handle = await open(uploaded.filepath, "r");
+    try {
+      const buf = Buffer.alloc(8);
+      const { bytesRead } = await handle.read(buf, 0, 8, 0);
+      head = buf.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+
+    const check = validateUpload({ filename, mimetype: uploaded.mimetype, size: uploaded.size, head });
+    if (!check.ok) return res.status(check.status).json({ error: check.error });
+
     const fileBuffer = await readFile(uploaded.filepath);
 
     const blob = await put(filename, fileBuffer, {
       access: "private",
       addRandomSuffix: true,
+      contentType: check.mimetype,
     });
 
     // Return `pathname` as well as `url`. addRandomSuffix means the pathname is

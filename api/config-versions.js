@@ -11,33 +11,22 @@
 
 const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
-const { verifyPassword } = require("../lib/auth");
 const tenantRegistry = require("../lib/tenantRegistry");
+const adminAuth = require("../lib/adminAuth");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
-const { PLATFORM_TENANT_IDS } = tenantRegistry;
 
 function configKey(tenant) {
   return `config:${tenant}`;
 }
 
-async function authorizeAdmin(tenant, token) {
-  if (!token) return false;
-  try {
-    const stored = await _deps.storage.get(`tenant-auth:${tenant}`);
-    if (stored && verifyPassword(token, stored.passwordHash)) return true;
-  } catch (_) {}
-  // Static platform list, NOT isProtectedTenant: that predicate fails closed
-  // (unreadable registry → "protected"), which would let the one shared
-  // ADMIN_PASSWORD authenticate as any tenant during a storage outage. The
-  // rollback guard below still uses it, where failing closed is correct.
-  if (PLATFORM_TENANT_IDS.includes(tenant)) {
-    const env = process.env.ADMIN_PASSWORD;
-    if (env && token === env) return true;
-  }
-  return false;
+function authorizeAdmin(tenant, token) {
+  // One implementation, in lib/adminAuth.js - this copy also compared the
+  // shared password with `===`, which is not constant-time.
+  return adminAuth.authorizeAdmin(tenant, token, { storage: _deps.storage });
 }
 
 function versionKey(tenant, version) {
@@ -68,11 +57,8 @@ function readBody(req) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
 
   const tenant = getTenantIdFromRequest(req);
   if (!tenant) {

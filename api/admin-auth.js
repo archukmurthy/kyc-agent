@@ -13,6 +13,7 @@ const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { hashPassword, verifyPassword } = require("../lib/auth");
 const registry = require("../lib/tenantRegistry");
+const { applyCors } = require("../lib/routeAuth");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
 let _deps = { storage };
@@ -76,10 +77,7 @@ async function seedNiumAuth(envPassword) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Tenant-Id");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });

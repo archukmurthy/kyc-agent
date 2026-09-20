@@ -359,7 +359,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 ### AUTH-1 — No brute-force protection on admin password checks
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
 - **What:** `/api/admin-auth` and `/api/benchmark`'s admin password check both return a fast, unlimited 401 on a wrong password — nothing throttles repeated guesses against `ADMIN_PASSWORD` / a tenant's hashed password. Now that the comparisons are constant-time (this review's item (b)), the only remaining exposure is guess volume, not timing.
-- **Also:** only `api/config.js#authorizeAdmin` and `lib/auth.js#verifyPassword` became constant-time. Duplicate copies of `authorizeAdmin` in `api/config-templates.js` and `api/config-versions.js`, plus env-password `===` checks in `api/admin-auth.js`, `api/super-admin-auth.js` and `api/tenants.js`, still compare with `===` — merge them onto one shared constant-time check.
+- **Also:** PARTLY FIXED 2026-09-18 — the three `authorizeAdmin` copies (config, config-templates, config-versions) now delegate to `lib/adminAuth.js`, so the two `===` comparisons are gone. The env-password `===` checks in `api/admin-auth.js`, `api/super-admin-auth.js` and `api/tenants.js` remain, as does the absence of any throttle: both are Batch 1 of the readiness plan.
 - **Area:** `api/admin-auth.js`, `api/benchmark.js`, `api/config.js#authorizeAdmin`, `api/config-templates.js`, `api/config-versions.js`, `api/super-admin-auth.js`, `api/tenants.js`.
 
 ### PERF-1 — Research endpoint cost/ordering inefficiencies
@@ -388,7 +388,7 @@ they exist, every rule in that file depends on someone recalling it.
 - **Area:** `.claude/settings.json` hooks, `package.json` scripts.
 
 ### PROC-3 — Rule-tests that encode what reviewers currently check by eye
-- **Category:** Process / Security · **Priority:** P1 · **Status:** OPEN (agreed 2026-09-18)
+- **Category:** Process / Security · **Priority:** P1 · **Status:** DONE (2026-09-18) — `api/__tests__/routeTable.nodetest.js` carries the first five rules. Still to add as they come up: every `*.nodetest.js` is covered by a `package.json` glob, and every `process.env.X` appears in `.env.example`.
 - **What:** executable invariants, starting with the route table Batch 0 needs anyway: every `api/` route declares who may call it; no route reads the tenant from the query string; nothing writes PII to browser storage; every new table carries a tenant column; no logging of whole request bodies. Then every `*.nodetest.js` is covered by a `package.json` glob, and every `process.env.X` appears in `.env.example`.
 - **Why:** each rule retires a class of human review permanently and catches what a tired reviewer misses — it raises the floor while removing work. Standing rule: every bug found adds one.
 - **Area:** `api/__tests__/`, `lib/__tests__/`, `package.json`.

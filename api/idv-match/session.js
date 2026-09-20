@@ -9,6 +9,7 @@ const { buildOfficerSnapshot, buildAutoMatchSnapshot } = require("./officerSnaps
 const attemptStore = require("./attemptStore");
 const { safeAppendLifecycleEvent, LIFECYCLE_EVENTS } = require("./lifecycle");
 const { bandsEnabled } = require("./config");
+const { applyCors } = require("../../lib/routeAuth");
 
 async function startVerificationAttempt({ applicationId, officerCandidate, officerCandidates, callbackUrl, verifyOnly = false } = {}) {
   if (!applicationId) throw new Error("startVerificationAttempt: applicationId is required");
@@ -52,7 +53,7 @@ async function startVerificationAttempt({ applicationId, officerCandidate, offic
 // flag is on; the browser can never forge the binding (officer snapshot is frozen
 // server-side from the candidate it passes).
 async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (applyCors(req, res)) return undefined;
   if (!bandsEnabled()) return res.status(404).json({ error: "not_enabled" });
   const body = req.body || {};
   const hasCandidates = Array.isArray(body.officerCandidates) && body.officerCandidates.length > 0;
