@@ -28,7 +28,7 @@
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "postbuild": "node scripts/evidence-deployment-boundary.js --sanitize-build --verify",
     "test": "react-scripts test",
-    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js",
+    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js db/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js",
     "test:ubo-demo:critical": "node scripts/run-ubo-demo-critical.js",
     "test:ubo-demo:regression": "node scripts/run-ubo-demo-regression.js",
     "test:smoke:db": "node scripts/real-db-smoke.js",
@@ -41,7 +41,8 @@
     "idv:db:seed:populated": "node -r dotenv/config scripts/demo/seed-populated.js dotenv_config_path=.env.local",
     "idv:harness": "node idv/harness/server.js",
     "eject": "react-scripts eject",
-    "access": "node -r dotenv/config scripts/access.js"
+    "access": "node -r dotenv/config scripts/access.js",
+    "db:migrate": "node db/migrate-all.js"
   },
   "eslintConfig": {
     "extends": [

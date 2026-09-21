@@ -499,3 +499,11 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Fix options, in order of honesty:** find what actually takes tens of seconds and fix it (real timers, large fixtures re-rendered per test); or cap workers (`--maxWorkers=50%`) so each gets enough CPU. Raising the timeout hides it rather than fixing it, and the CI gate depends on red meaning something.
 - **Note:** CI itself has been green throughout (3 minutes, dedicated runner). This bites locally and would bite a busier CI machine.
 - **Area:** `src/policySimulator/PolicySimulator.test.jsx`, `src/uboDemo/UboDemoRoot.test.jsx`, `package.json` test script.
+
+### DB-1 — Baseline the migration ledger on each database
+- **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (owner decision)
+- **What:** `db/migrationRunner.js` records what it has applied in a `schema_migrations` table. Every existing database was migrated by hand before the runner existed, so that table starts empty and all 34 files look pending. `npm run db:migrate -- --baseline` records them as applied WITHOUT running them. It must be run once per database, before the first real `db:migrate`.
+- **Why it matters:** running the migrations instead of baselining would re-apply the whole history against a live database. Most files are idempotent (`IF NOT EXISTS`) but not all, and a partial run leaves a database nobody can describe.
+- **Dev status (2026-09-21):** `002_cost_breakdown.sql` and `003_persistence_now.sql` are already recorded, applied accidentally during development (see note below). Both are idempotent and contain no DROP/TRUNCATE/DELETE, so no data was affected. The remaining 32 still need baselining on dev.
+- **Production:** verify the later migrations' tables and columns actually exist before baselining. On dev the cost of a wrong guess is visible breakage; on production it is a missing table under live traffic.
+- **How it happened:** `node -e "require('./db/migrate-all.js')"` was used to check the file loaded. It runs on import, so it started migrating. `db/migrate-all.js` now only runs under `require.main === module`.
