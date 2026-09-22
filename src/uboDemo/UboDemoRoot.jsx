@@ -10,6 +10,7 @@ import {
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
   demoSourceRelevantEntityIds, projectDemoGraph, runDemoResearch,
 } from "./demoResearch";
+import { limitNotice } from "../trials/limitNotice";
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_RESEARCH_PATH, DEMO_START_PATH, isDemoResearchPath, navigateDemo } from "./demoRoute";
 import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff";
@@ -198,8 +199,24 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
   </main>;
 }
 
+// A limit reached and a failure are different things and used to look
+// identical. See src/trials/limitNotice.js.
 function ResearchError({ error, replays, onRetry, onReplay, onEdit }) {
-  return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-failure"><span className="ubo-demo-eyebrow">Research unavailable</span><h1>We could not complete this research</h1><p>{error}</p><div className="ubo-demo-error-actions"><button className="ubo-demo-primary" onClick={onRetry}>Try live research again</button>{replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}<button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button></div></section></main>;
+  const message = typeof error === "string" ? error : (error && error.message) || "";
+  const code = typeof error === "string" ? null : error && error.code;
+  const notice = limitNotice(code, message);
+
+  if (notice) {
+    return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-limit"><span className="ubo-demo-eyebrow">{notice.action === "contact" ? "Trial" : "Please wait"}</span><h1>{notice.title}</h1><p>{notice.body}</p><div className="ubo-demo-error-actions">
+      {/* "Try again" cannot succeed on an ended trial, and offering it turns a
+          sales moment into a loop of refusals. */}
+      {notice.action === "wait" && <button className="ubo-demo-primary" onClick={onRetry}>Try again</button>}
+      {replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}
+      <button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button>
+    </div></section></main>;
+  }
+
+  return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-failure"><span className="ubo-demo-eyebrow">Research unavailable</span><h1>We could not complete this research</h1><p>{message}</p><div className="ubo-demo-error-actions"><button className="ubo-demo-primary" onClick={onRetry}>Try live research again</button>{replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}<button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button></div></section></main>;
 }
 
 export default function UboDemoRoot() {
@@ -210,7 +227,7 @@ export default function UboDemoRoot() {
   const [errors, setErrors] = useState({});
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [runToken, setRunToken] = useState(0);
-  const [researchError, setResearchError] = useState("");
+  const [researchError, setResearchError] = useState(null);
   const [customerSwitchState, setCustomerSwitchState] = useState(null);
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
@@ -231,7 +248,7 @@ export default function UboDemoRoot() {
     const replayId = demoCase.analysisContext?.replayId || draft.replayId;
     const replayRecord = sourceMode === "REPLAY" ? findReplayById(replays, replayId) : null;
     if (sourceMode === "REPLAY" && !replayRecord) {
-      setResearchError("The selected saved research record is not available on this browser origin. No live search was started.");
+      setResearchError({ message: "The selected saved research record is not available on this browser origin. No live search was started.", code: null });
       setResearchResult(null);
       return undefined;
     }
@@ -249,7 +266,7 @@ export default function UboDemoRoot() {
         catch (cause) { setReplays((current) => availableLabReplays({ replayCapture: session.replayCapture })); setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local replay storage failed."} Export this replay before leaving the page.` }); }
       }
       setResearchResult(compactResearchResult(session, sourceMode, demoCase.analysisContext?.calculationMethod));
-    }).catch((cause) => { if (active) { setResearchError(`${cause.code ? `${cause.code}: ` : ""}${cause.message}`); setResearchResult(null); } });
+    }).catch((cause) => { if (active) { setResearchError({ message: cause.message, code: cause.code || null }); setResearchResult(null); } });
     return () => { active = false; };
   }, [pathname, demoCase, researchResult?.status, runToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -286,12 +303,12 @@ export default function UboDemoRoot() {
     if (Object.keys(next).length) return;
     setDraft(cleanDraft);
     const nextCase = createDemoCase(cleanDraft);
-    setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH);
+    setDemoCase(nextCase); setResearchError(null); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH);
   };
   const loadCalculationExample = (fixtureId) => {
     const alice = fixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28;
     const nextDraft = { ...draft, legalName: alice ? "Example Trading Ltd" : "V2 Review Customer Limited", registrationNumber: alice ? "DEMO0028" : "DEMO6040", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", sourceMode: "FIXTURE", replayId: "", calculationMethod: "EFFECTIVE_INTEREST", demoFixtureId: fixtureId };
-    setDraft(nextDraft); setDemoCase(createDemoCase(nextDraft)); setErrors({}); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: "FIXTURE" }); navigateDemo(DEMO_RESEARCH_PATH);
+    setDraft(nextDraft); setDemoCase(createDemoCase(nextDraft)); setErrors({}); setResearchError(null); setResearchResult({ status: "LOADING", sourceMode: "FIXTURE" }); navigateDemo(DEMO_RESEARCH_PATH);
   };
   const changeCalculationMethod = (calculationMethod) => {
     setDraft((current) => ({ ...current, calculationMethod }));
@@ -322,12 +339,12 @@ export default function UboDemoRoot() {
     if (mode === "REPLAY") {
       const available = replays.length ? replays : readLabReplays();
       const record = findReplayById(available, nextDraft.replayId) || available[0] || null;
-      if (!record) { setResearchError("The selected saved research record is not available on this browser origin. No live search was started."); setResearchResult(null); return; }
+      if (!record) { setResearchError({ message: "The selected saved research record is not available on this browser origin. No live search was started.", code: null }); setResearchResult(null); return; }
       try { nextDraft = bindDraftToReplay(nextDraft, record); }
-      catch (cause) { setResearchError(`${cause.message} No live search was started.`); setResearchResult(null); return; }
+      catch (cause) { setResearchError({ message: `${cause.message} No live search was started.`, code: null }); setResearchResult(null); return; }
     }
     const nextCase = createDemoCase(nextDraft);
-    setDraft(nextDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
+    setDraft(nextDraft); setDemoCase(nextCase); setResearchError(null); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
   };
   const startNewCase = () => { skipNextSave.current = true; clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
   const edit = () => navigateDemo(DEMO_START_PATH);

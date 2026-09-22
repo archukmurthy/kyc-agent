@@ -602,3 +602,23 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Category:** Security - **Priority:** P3 - **Status:** DONE (2026-09-22) - `api/tenants.js`.
 - **What was wrong:** the create-tenant screen refused the platform workspace id, and the API did not. `RESERVED_TENANT_IDS` held the three URL path names only, so a tenant created through the API could have collided with the platform's own.
 - **Now:** the reserved set includes `PLATFORM_TENANT_IDS`, and the client list holds only the path names, with the server as the authority.
+
+
+### UBO-5 - A reached limit looked exactly like a crash
+- **Category:** UX / Revenue - **Priority:** P1 - **Status:** DONE (2026-09-22) - `src/trials/limitNotice.js`, `src/uboDemo/UboDemoRoot.jsx`.
+- **What was wrong:** the demo screen had one error panel for everything. An ended trial produced "Research unavailable / We could not complete this research", the machine code printed in front of the sentence (`trial_ended: ...`), and a "Try live research again" button that could only fail again. Introduced the same morning the server refusals were added (UBO-3).
+- **Why it mattered more than it looks:** the end of a trial is the best moment we get - somebody who wants more is telling us they are interested. It read as broken software.
+- **Now:** four refusals get their own panel with a heading that names what happened, the server's own sentence (it has the dates and numbers, so only one place writes them), and an action that can work: "get in touch" for a trial that has ended or spent its budget, "try again" only for limits that lift by themselves. Genuine failures still say plainly that something went wrong - "please wait" over a real break is worse than the break.
+- **Also fixed on the way:** the client read the refusal code from `result.code` only, while the rate limiter names itself in `result.error`. A 429 therefore arrived with no code at all and was shown as a crash. It now reads both.
+- **Worth tidying one day:** two response shapes for the same idea. One would be better, but changing the rate limiter's shape reaches further than this change should.
+
+### UBO-6 - The trials screen could not show whether anyone was using the trial
+- **Category:** Product - **Priority:** P2 - **Status:** DONE (2026-09-22) - `lib/uboTrials.js#listInvites`, `src/trials/TrialAdmin.jsx`.
+- **What was missing:** seats taken (3 of 5) but not research runs used. Seats say how many people arrived; runs say whether any of them did anything.
+- **Why now:** the number only became real this morning. Until UBO-3 the spend was computed but never counted, so "100 research runs" was decoration.
+- **Now:** a "Research runs" column (34 / 100), and a "nearly used up" flag at 85% - the same threshold the spend ceiling alerts on, so one number means one thing across the product. An invite created before the count existed reads as 0, not as blank.
+
+### PROC-7 - Nothing checked that an api/ route is reachable in dev
+- **Category:** Process - **Priority:** P3 - **Status:** DONE (2026-09-22) - `api/__tests__/routeTable.nodetest.js`.
+- **What:** the route table enforced that every route declares who may call it, and nothing enforced the other half of invariant 1 - that it is mounted in `src/setupProxy.js`. A route could 404 locally for weeks while working in production (PLAT-11).
+- **Estimate I got wrong:** I said this would fail on several routes and be its own piece of work. Measured instead of guessed: 66 handlers, exactly one unmounted - `finalize-submissions`, which is cron-only and correctly excluded. The test went green immediately with one named exception, and a second test checks that exception still names something real.

@@ -41,7 +41,11 @@ export async function runDemoResearch(input, fetchImpl = window.fetch) {
   const result = await response.json();
   if (!response.ok) {
     const error = new Error(result?.message || result?.error || "Research could not be completed safely.");
-    error.code = result?.code;
+    // Two shapes arrive here: most refusals name themselves in `code`, the rate
+    // limiter in `error`. Reading only one of them is how a 429 arrived at the
+    // screen with no code at all and got shown as a crash.
+    error.code = result?.code || result?.error || null;
+    error.status = response.status;
     throw error;
   }
   return result;

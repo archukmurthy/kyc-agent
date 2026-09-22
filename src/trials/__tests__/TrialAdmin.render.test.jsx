@@ -93,3 +93,29 @@ test("a person nobody has added yet is told that, not told they are not an owner
   render(<TrialAdmin />);
   expect(await screen.findByRole("alert")).toHaveTextContent(/account is not set up yet/i);
 });
+
+test("how much research each prospect has used is on the screen", async () => {
+  // Seats say how many arrived. Runs say whether anyone actually used it.
+  mockListInvites.mockResolvedValue({
+    invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 5, seatsUsed: 3, days: 7, budget: 100, budgetSpent: 34, nearlySpent: false, revoked: false }],
+  });
+  render(<TrialAdmin />);
+  expect(await screen.findByText("34 / 100")).toBeInTheDocument();
+  expect(screen.getByText("3 / 5")).toBeInTheDocument();
+});
+
+test("a prospect about to run out is flagged before they complain", async () => {
+  mockListInvites.mockResolvedValue({
+    invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 5, seatsUsed: 3, days: 7, budget: 100, budgetSpent: 92, nearlySpent: true, revoked: false }],
+  });
+  render(<TrialAdmin />);
+  expect(await screen.findByText(/nearly used up/i)).toBeInTheDocument();
+});
+
+test("an invite from before the count existed reads as zero, not as blank", async () => {
+  mockListInvites.mockResolvedValue({
+    invites: [{ code: "OLD-1", company: "Older Co", seats: 5, seatsUsed: 1, days: 7, budget: 100, revoked: false }],
+  });
+  render(<TrialAdmin />);
+  expect(await screen.findByText("0 / 100")).toBeInTheDocument();
+});

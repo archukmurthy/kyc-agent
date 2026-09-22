@@ -358,6 +358,9 @@
 .ubo-demo-handoff-status.accepted { color: var(--ubo-demo-green); }
 .ubo-demo-handoff-status.error { color: #9b2525; background: #fff0f0; }
 .ubo-demo-failure { border-color: #e5b6b6; }
+/* A limit reached is not a failure. Red says something broke; this is the
+   product working, and on an ended trial it is a sales moment. */
+.ubo-demo-limit { border-color: #cfd9e5; background: #f6f9fc; }
 
 @media (max-width: 640px) {
   .ubo-demo-header { height: 64px; padding: 0 18px; }

@@ -239,3 +239,36 @@ test("a public status route answers booleans and never values", () => {
     }
   }
 });
+
+test("every route is reachable in dev, not only in production", () => {
+  // The other half of invariant 1. Vercel turns each file here into a live
+  // endpoint by itself; `npm start` does not, so a route must also be mounted
+  // by hand in src/setupProxy.js. Forget that and it works in production and
+  // 404s on the developer's machine - which is how /ubo-trials was broken
+  // locally for weeks while working fine when deployed (PLAT-11).
+  //
+  // The declaration test above checks each route says who may call it. Nothing
+  // checked that anyone could reach it (PROC-7).
+  const proxy = fs.readFileSync(path.join(API_DIR, "..", "src", "setupProxy.js"), "utf8");
+
+  // Runs on a schedule, invoked by the platform rather than by a browser, so
+  // there is nothing for the dev server to serve. The only exception, and it
+  // stays a named one.
+  const CRON_ONLY = new Set(["finalize-submissions.js"]);
+
+  const unreachable = HANDLERS
+    .filter((f) => !CRON_ONLY.has(f))
+    .filter((f) => !proxy.includes(f) && !proxy.includes(f.replace(/\.js$/, "")));
+
+  assert.deepEqual(
+    unreachable,
+    [],
+    "these are live in production and 404 under npm start - mount them in src/setupProxy.js:\n" + unreachable.join("\n")
+  );
+});
+
+test("the cron exception is real, not a way round the rule", () => {
+  // A named exception is only honest while the thing it names still exists.
+  assert.ok(HANDLERS.includes("finalize-submissions.js"));
+  assert.equal(ROUTES["finalize-submissions.js"], "cron");
+});

@@ -528,3 +528,70 @@ test("saved draft survives refresh", () => {
   writeDemoSession({ draft, demoCase: null, researchResult: null }); renderStart();
   expect(screen.getByLabelText(/Company name/)).toHaveValue("Restored Limited"); expect(screen.getByLabelText(/Registration number/)).toHaveValue("00001234");
 });
+
+// A limit reached is the product working. It used to look exactly like a crash.
+
+function refusal(status, body) {
+  return Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) });
+}
+
+test("an ended trial reads as a sales moment, not a malfunction", async () => {
+  window.fetch = jest.fn(() => refusal(403, {
+    code: "trial_ended",
+    message: "This trial has ended. Your work is still here and can be viewed - get in touch to continue.",
+  }));
+
+  renderStart();
+  completeRequiredFields();
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+
+  expect(await screen.findByText("Your trial has ended")).toBeInTheDocument();
+  expect(screen.getByText(/work is still here/)).toBeInTheDocument();
+  // The machine code was being printed in front of the sentence.
+  expect(screen.queryByText(/trial_ended/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/could not complete this research/i)).not.toBeInTheDocument();
+  // Retrying an ended trial can only fail again.
+  expect(screen.queryByRole("button", { name: /try/i })).not.toBeInTheDocument();
+});
+
+test("a spent research budget says so, and offers a conversation", async () => {
+  window.fetch = jest.fn(() => refusal(403, {
+    code: "trial_budget_spent",
+    message: "This trial has used all 100 research runs. Your work is still here - get in touch to continue.",
+  }));
+
+  renderStart();
+  completeRequiredFields();
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+
+  expect(await screen.findByText(/used all its research runs/i)).toBeInTheDocument();
+  expect(screen.getByText(/all 100 research runs/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /try/i })).not.toBeInTheDocument();
+});
+
+test("a limit that lifts by itself keeps the retry button", async () => {
+  window.fetch = jest.fn(() => refusal(429, {
+    error: "rate_limited",
+    message: "You have used all 15 requests for this hour. Try again in 12 minutes.",
+  }));
+
+  renderStart();
+  completeRequiredFields();
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+
+  expect(await screen.findByText(/lot of research at once/i)).toBeInTheDocument();
+  expect(screen.getByText(/Try again in 12 minutes/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^Try again$/ })).toBeInTheDocument();
+});
+
+test("a genuine failure still says something went wrong", async () => {
+  // "Please wait" over a real break is worse than the break.
+  window.fetch = jest.fn(() => refusal(500, { code: "provider_timeout", message: "The provider did not respond." }));
+
+  renderStart();
+  completeRequiredFields();
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+
+  expect(await screen.findByText(/could not complete this research/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Try live research again/ })).toBeInTheDocument();
+});

@@ -118,13 +118,14 @@ export default function TrialAdmin() {
             <th style={{ ...cell, fontWeight: 600 }}>Company</th>
             <th style={{ ...cell, fontWeight: 600 }}>Link</th>
             <th style={{ ...cell, fontWeight: 600 }}>Seats</th>
+            <th style={{ ...cell, fontWeight: 600 }}>Research runs</th>
             <th style={{ ...cell, fontWeight: 600 }}>Days</th>
             <th style={{ ...cell, fontWeight: 600 }}></th>
           </tr>
         </thead>
         <tbody>
           {invites.length === 0 ? (
-            <tr><td style={{ ...cell, color: "#57606a" }} colSpan={5}>No invitations yet.</td></tr>
+            <tr><td style={{ ...cell, color: "#57606a" }} colSpan={6}>No invitations yet.</td></tr>
           ) : invites.map((invite) => (
             <tr key={invite.code} style={{ opacity: invite.revoked ? 0.5 : 1 }}>
               <td style={cell}>
@@ -140,6 +141,15 @@ export default function TrialAdmin() {
                 </div>
               </td>
               <td style={cell}>{invite.seatsUsed} / {invite.seats}</td>
+              <td style={cell}>
+                {/* Seats say how many arrived; runs say whether they actually
+                    used it. A prospect at 0 of 100 after five days is a
+                    conversation to have now, not after the trial ends. */}
+                <span style={invite.nearlySpent ? { color: "#a04100", fontWeight: 600 } : undefined}>
+                  {invite.budgetSpent ?? 0} / {invite.budget}
+                </span>
+                {invite.nearlySpent ? <div style={{ fontSize: 11, color: "#a04100" }}>nearly used up</div> : null}
+              </td>
               <td style={cell}>{invite.days}</td>
               <td style={cell}>
                 {invite.revoked ? null : (

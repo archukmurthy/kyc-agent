@@ -43,7 +43,7 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 | 13 | Retention | **The rule is done** (2026-09-22) | `lib/uboRetention.js`: seven years, hard-coded, with a test that fails if it is ever read from configuration. Records are stamped on write with the period they were made under. Enforcement over UBO case data follows the tables - and will not have to be remembered then (UBO-RET-1). |
 | 14 | Provider controls | **Done** (2026-09-22) | Timeouts on every provider call, two daily ceilings (100 per account, 500 platform-wide) with alerts at 60% and 85%, keys server-side. Figures are arithmetic, not measurement — COST-1. |
 | 15 | Security regression tests | **Done** (2026-09-22) | `api/__tests__/adversarial.nodetest.js` - 13 tests written from the attacker's side: taking another workspace, escalating a role, spending on an ended trial, forging an address for a fresh allowance, oversized and disguised uploads. Three of them found real defects rather than confirming good behaviour (UBO-3, UBO-4, SEC-1). |
-| 16 | Admin and support basics | **Partly** | The people screen and the trial screen are the beginning. Inspecting a failed job, retrying it safely and seeing a submission queue all need the jobs table. |
+| 16 | Admin and support basics | **Partly** (2026-09-22) | The people screen and the trial screen, which now shows research runs used per prospect and flags one about to run out. Inspecting a failed job, retrying it safely and seeing a submission queue all still need the jobs table. |
 
 ## The count
 
