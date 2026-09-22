@@ -35,11 +35,15 @@ const researchGrant = require("../lib/researchGrant");
 const { buildAnthropicRequest, ResearchInputError, CLIENT_OWNED_KEYS } = require("../lib/researchPrompts");
 const config = require("./config");
 const { applyCors } = require("../lib/routeAuth");
+const { fetchWithTimeout } = require("../lib/providerCall");
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 let _deps = {
-  fetch: (...args) => fetch(...args),
+  // Deadline on every provider call: without one, a provider that accepts
+  // the connection and goes quiet holds this function open until the
+  // platform kills it, and we pay for the wall-clock.
+  fetch: (...args) => fetchWithTimeout(...args),
   cache: researchCache,
   officersLayer,
   enforceRateLimit,

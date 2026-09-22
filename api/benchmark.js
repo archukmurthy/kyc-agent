@@ -31,6 +31,7 @@ const { persistBenchmarkEntity } = require("../lib/persist");
 const { readConfigForTenant, authorizeAdminForTenant } = require("./config");
 const { readBearer } = require("../lib/dossierAccess");
 const { applyCors } = require("../lib/routeAuth");
+const { fetchWithTimeout } = require("../lib/providerCall");
 
 // Injected deps (overridable in tests via __setDeps).
 let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
@@ -106,7 +107,7 @@ async function callAnthropic({ prompt, tools }) {
   };
   if (Array.isArray(tools) && tools.length > 0) requestBody.tools = tools;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

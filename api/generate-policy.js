@@ -1,5 +1,6 @@
 const { validatePolicyForm, buildUserMessage } = require('../src/policySimulator/policyConfig');
 const { enforceRateLimit } = require('../lib/rateLimit');
+const { fetchWithTimeout } = require("../lib/providerCall");
 
 const SYSTEM_PROMPT = `You are a senior financial crime compliance expert with deep expertise in UK AML/CTF regulations, FCA requirements, and KYB/KYC policy design for regulated payment and e-money institutions.
 
@@ -65,7 +66,7 @@ async function handler(req, res) {
   const prompt = buildUserMessage(checked.form);
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: AbortSignal.timeout(240000),
       headers: {

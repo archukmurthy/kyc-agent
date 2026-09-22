@@ -234,7 +234,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **What/Why:** `claude-sonnet-4-5`, `claude-sonnet-4-6`, and `claude-sonnet-4-20250514` all appear. Verify each referenced model ID exists to avoid runtime 404s.
 
 ### PLAT-6 — Daily research spending cap per tenant
-- **Category:** Cost / Security · **Priority:** P2 · **Status:** OPEN (deferred by user 2026-09-15)
+- **Category:** Cost / Security · **Priority:** P2 · **Status:** DONE (2026-09-22) — `lib/spendCap.js`, enforced inside `enforceRateLimit` for the buckets that reach a provider. A circuit breaker rather than a working limit: 300 calls per account per day by default, alerting at 60% and 85% so an unusual day reaches a human before anything stops, and raisable via `SPEND_CAP_DAILY` without a deploy. Fails open on a storage error, like the rate limiter. Trials are metered separately by their own non-resetting budget.
 - **What:** Stop Claude-backed research for a tenant once a configurable daily USD budget is reached (usage tracked from the cost/token data research already returns). Show the customer a clear message instead of failing silently.
 - **Why:** Last-line safety net against a surprise Anthropic bill. The rest of the `/api/research` hardening (server-built prompt, rate limit, key required where one exists) is being built now; only this cap is deferred.
 - **Area:** `api/research.js`, `lib/storage.js` (counter), tenant config.

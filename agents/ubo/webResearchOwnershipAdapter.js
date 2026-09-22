@@ -3,6 +3,7 @@
 const { EDGE_TYPES } = require("./constants");
 const storage = require("../../lib/storage");
 const { entityKey, getFresh } = require("./uboPersistence");
+const { fetchWithTimeout } = require("../../lib/providerCall");
 
 function extractJson(text) {
   const clean = String(text || "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
@@ -21,7 +22,7 @@ async function webResearchOwnershipAdapter({ entity, tenantConfig = {} }) {
   }
   if (!process.env.ANTHROPIC_API_KEY) return { statements: [], evidence: [], missingInformation: [{ entity: entity.name, source: "Web research", reason: "ANTHROPIC_API_KEY is not configured" }], searchEvents: [{ source: "web_research", entity: entity.name, jurisdiction: entity.jurisdiction, model: "claude-sonnet-4-5", maxSearchUses: 4, at: startedAt, cacheHit: false, outcome: "Not configured" }] };
   const prompt = `Research the direct ownership of the entity below using web search. Return ONLY JSON. Do not infer percentages. Include only claims supported by a public source, filing, or company disclosure.\n\nEntity: ${entity.name}\nJurisdiction: ${entity.jurisdiction}\nRegistration number: ${entity.registrationNumber || "unknown"}\n\nSchema:\n{"statements":[{"owner":{"name":"","type":"individual|company|trust|foundation|government|public_company|unknown","registrationNumber":null,"jurisdiction":""},"ownershipPercentage":0,"source":"","sourceUrl":"","publishedAt":null}],"missingInformation":["..."]}`;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 3000, messages: [{ role: "user", content: prompt }], tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }] }),
