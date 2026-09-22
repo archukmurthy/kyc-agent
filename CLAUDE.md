@@ -60,10 +60,10 @@ Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
 
 ### Creating a new tenant
 
-1. Sign in to `/admin` (Nium admin)
+1. Sign in to `/admin` as the platform tenant
 2. Click "+ Create New Tenant" on the dashboard banner
 3. Enter a tenant ID (lowercase letters, numbers, hyphens; max 32 chars)
-4. Pick start-from: blank (empty config) or copy-from-Nium-defaults
+4. Pick start-from: blank (empty config) or the `default` settings template
 5. The success screen links straight into the new tenant's admin and customer
    flow
 
@@ -75,8 +75,10 @@ Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
   (or the pure `entryIsProtected`); no protection logic compares tenant strings.
   `PLATFORM_TENANT_IDS` exists only to seed that flag on a first-ever registry
   write — never as a runtime check. Today `nium` is the only entry in it.
-- A protected tenant's config auto-seeds from the `nium-default` template on
-  first read; every other tenant seeds blank via `buildBlankConfig`.
+- A protected tenant's config auto-seeds from the `default` template on first
+  read; every other tenant seeds blank via `buildBlankConfig`. (That template
+  was called `nium-default` until 2026-09-22; the old id still resolves, see
+  `canonicalTemplateId`.)
 - `POST /api/config` refuses publishes that have zero licences or zero active
   entity types **for a protected tenant** — guards against an accidental wipe.
   The same guard applies to a rollback via `POST /api/config-versions`.
