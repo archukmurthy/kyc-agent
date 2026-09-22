@@ -19,6 +19,8 @@ const input = { padding: "8px 10px", border: "1px solid #d0d7de", borderRadius: 
 const button = { padding: "9px 16px", border: 0, borderRadius: 6, background: "#1a3a4a", color: "#fff", fontSize: 14, cursor: "pointer" };
 const cell = { padding: "8px 10px", borderBottom: "1px solid #eaeef2", fontSize: 13, textAlign: "left", verticalAlign: "top" };
 
+const NO_ACCESS = "Your account is not set up yet. Whoever invited you needs to add you before you can see anything here.";
+
 export default function TrialAdmin() {
   const [invites, setInvites] = useState([]);
   const [form, setForm] = useState({ company: "", seats: 5, days: 7, budget: 100 });
@@ -32,9 +34,12 @@ export default function TrialAdmin() {
       setInvites(result.invites || []);
       setError("");
     } catch (err) {
-      // A 403 here means the person is not an owner. Say that plainly rather
-      // than showing an empty table that looks like "no invites yet".
-      setError(err.status === 403 ? "Only an owner can manage trial invitations." : err.message);
+      // Two different 403s: "no_access" is a person nobody has added yet,
+      // "forbidden" is somebody who has access but is not an owner. Telling
+      // them the wrong one wastes their afternoon.
+      if (err.code === "no_access") setError(NO_ACCESS);
+      else if (err.status === 403) setError("Only an owner can manage trial invitations.");
+      else setError(err.message);
     }
   }, []);
 

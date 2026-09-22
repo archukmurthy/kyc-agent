@@ -24,6 +24,8 @@ const quiet = { ...button, background: "#fff", color: "#a40e26", border: "1px so
 const cell = { padding: "8px 10px", borderBottom: "1px solid #eaeef2", fontSize: 13, textAlign: "left", verticalAlign: "top" };
 const head = { ...cell, fontWeight: 600 };
 
+const NO_ACCESS = "Your account is not set up yet. Whoever invited you needs to add you before you can see anything here.";
+
 const ROLE_WORDS = {
   owner: "Owner - every company, and can add other owners",
   admin: "Admin - manages this company's people",
@@ -50,9 +52,12 @@ export default function PeopleAdmin() {
       setRoles(result.grantableRoles || []);
       setError("");
     } catch (err) {
-      // A 403 here means they are an analyst. Say so, rather than showing an
-      // empty table that reads as "nobody works here".
-      setError(err.status === 403 ? "Only an owner or an admin can manage people." : err.message);
+      // Two different 403s, and telling somebody the wrong one wastes their
+      // afternoon. "no_access" is a person nobody has added yet; "forbidden"
+      // is an analyst, who has access - just not to this.
+      if (err.code === "no_access") setError(NO_ACCESS);
+      else if (err.status === 403) setError("Only an owner or an admin can manage people.");
+      else setError(err.message);
     }
   }, []);
 

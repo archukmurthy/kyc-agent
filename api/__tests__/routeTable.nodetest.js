@@ -28,6 +28,12 @@ const API_DIR = path.join(__dirname, "..");
  *                   credential is required at all.
  *  cron           - CRON_SECRET, scheduler only
  *  public-login   - the login endpoints themselves; public by definition
+ *  public-status  - a liveness check. Open on purpose: a health check behind a
+ *                   login cannot tell you the login is broken. Kept OUT of the
+ *                   frozen open-route list below, deliberately and visibly,
+ *                   because that list is about routes that DO something for a
+ *                   caller; this one answers booleans and is held to a stricter
+ *                   rule of its own (see the test at the end of this file).
  *  open-limited   - no credential yet, rate-limited. Batch 1 gives these a real
  *                   session; until then the limiter is the only brake.
  *  unguessable-id - reachable with a random id only (IDVSEC-2)
@@ -42,6 +48,8 @@ const API_DIR = path.join(__dirname, "..");
  */
 const LAB_PREFIX = "evidence/";
 const ROUTES = {
+  "health.js": "public-status",
+
   "admin-auth.js": "public-login",
   "preboarding-auth.js": "public-login",
   "super-admin-auth.js": "public-login",
@@ -211,4 +219,23 @@ test("a route that spends money or writes has a rate limit", () => {
   ];
   const missing = mustBeLimited.filter((f) => !read(f).includes("enforceRateLimit"));
   assert.deepEqual(missing, [], "these spend money or write on every call and must be rate-limited");
+});
+
+test("a public status route answers booleans and never values", () => {
+  // It is open, so it is reconnaissance if it leaks. A connection string, a
+  // hostname, a version or a count of customers tells an attacker where to
+  // start; "storage: true" tells them nothing and tells us everything.
+  const statusRoutes = HANDLERS.filter((f) => ROUTES[f] === "public-status");
+  assert.ok(statusRoutes.length > 0, "the policy exists, so something should use it");
+
+  for (const file of statusRoutes) {
+    const src = read(file);
+    assert.ok(/enforceRateLimit/.test(src), `${file} is open and must be rate-limited`);
+    // Every process.env read is wrapped in Boolean(...) - the value never
+    // reaches the response.
+    for (const envRead of src.match(/process\.env\.[A-Z_]+/g) || []) {
+      const pattern = new RegExp("Boolean\\(\\s*" + envRead.replace(/\./g, "\\."));
+      assert.ok(pattern.test(src), `${file} reads ${envRead} without reducing it to a boolean`);
+    }
+  }
 });

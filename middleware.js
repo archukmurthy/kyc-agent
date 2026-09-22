@@ -19,6 +19,7 @@ const UBO_PATHS = [
   "/api/ubo-demo-entity-resolution",
   "/api/ubo-invite",
   "/api/ubo-people",
+  "/api/health",
   "/api/company-search",
   "/api/document-requirements",
   "/api/track-event",

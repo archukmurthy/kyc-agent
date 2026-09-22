@@ -83,3 +83,13 @@ test("seats used are visible, so a full invite is obvious before a prospect comp
   render(<TrialAdmin />);
   expect(await screen.findByText("5 / 5")).toBeInTheDocument();
 });
+
+test("a person nobody has added yet is told that, not told they are not an owner", async () => {
+  const refusal = new Error("no_access");
+  refusal.status = 403;
+  refusal.code = "no_access";
+  mockListInvites.mockRejectedValue(refusal);
+
+  render(<TrialAdmin />);
+  expect(await screen.findByRole("alert")).toHaveTextContent(/account is not set up yet/i);
+});

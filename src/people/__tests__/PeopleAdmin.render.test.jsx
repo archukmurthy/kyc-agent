@@ -159,3 +159,16 @@ test("an email address is required before anything is sent", async () => {
   expect(mockInvitePerson).not.toHaveBeenCalled();
   expect(await screen.findByRole("alert")).toHaveTextContent(/email address is required/i);
 });
+
+test("a person nobody has added yet is told that, not told they are the wrong role", async () => {
+  // Both arrive as 403. "Only an owner or an admin can manage people" sends
+  // somebody looking for a permission problem when what they need is an
+  // invitation.
+  const refusal = new Error("no_access");
+  refusal.status = 403;
+  refusal.code = "no_access";
+  mockListPeople.mockRejectedValue(refusal);
+
+  render(<PeopleAdmin />);
+  expect(await screen.findByRole("alert")).toHaveTextContent(/account is not set up yet/i);
+});

@@ -24,6 +24,7 @@ const { enforceRateLimit } = require("../lib/rateLimit");
 const trials = require("../lib/uboTrials");
 const userAccess = require("../lib/userAccess");
 const clerkAuth = require("../lib/clerkAuth");
+const { logFailure, attachRequestId } = require("../lib/requestLog");
 
 const DEFAULT_DEPS = { requireStaff, enforceRateLimit, trials, userAccess, clerkAuth };
 let _deps = { ...DEFAULT_DEPS };
@@ -103,9 +104,9 @@ module.exports = async function handler(req, res) {
 
     return send(res, 400, { error: "unknown_action" });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[ubo-invite]", err && err.message);
-    return send(res, 500, { error: "invite_failed" });
+    const reference = logFailure("ubo-invite", err, req);
+    attachRequestId(req, res);
+    return send(res, 500, { error: "invite_failed", reference });
   }
 };
 

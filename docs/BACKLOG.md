@@ -354,7 +354,7 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Area:** `api/ubo-discovery.js`, `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js` (`startLive`).
 
 ### UBO-2 — UBO lab doesn't surface a 429 to the user
-- **Category:** UX · **Priority:** P3 · **Status:** OPEN (found in Part 2 final review 2026-09-16)
+- **Category:** UX · **Priority:** P3 · **Status:** DONE (2026-09-22; reported in the Part 2 final review 2026-09-16)
 - **What:** `public/ubo-lab.html` and the UBO lab's `START_LIVE` operation don't special-case a rate-limited response from `/api/ubo-discovery`; a 429 surfaces as a generic "No completed result was returned" / failure rather than telling the user to slow down or retry later.
 - **Area:** `public/ubo-lab.html`, `ubo-control-lab/server/labEngine.js`.
 - **Update 2026-09-20:** the server half is done. A 429 now carries `scope`, `limit`, `retryAfterSeconds` and a readable `message` ("You have used all 15 requests for this hour. Try again in 12 minutes."). What remains is client-side: show `body.message` instead of collapsing every non-200 into "No completed result was returned".
@@ -544,3 +544,26 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Category:** Testing · **Priority:** P2 · **Status:** DONE (2026-09-22) — `getUser` is now stubbed in the `requireStaff` harness.
 - **What happened:** adding the verified-email lookup put a Clerk API call on the no-access path. `lib/__tests__/routeAuth.nodetest.js` had no stub for it, so the suite reached out to Clerk on every run and logged `[clerk] could not read the email for a user: Unauthorized`. It passed either way, which is what made it easy to miss.
 - **Same shape as TEST-1** (tests writing to the real store): a seam that exists is not the same as a seam the test uses.
+
+
+### UBO-3 - An expired trial could research forever, and its budget was never counted
+- **Category:** Security / Cost - **Priority:** P1 - **Status:** DONE (2026-09-22) - enforced in `lib/rateLimit.js#enforceRateLimit`, the one gate every paid route already calls.
+- **What was wrong:** `lib/uboTrials.js#statusFor` computed `expired`, `readOnly` and `budgetLeft`, and the only thing reading it was `/api/ubo-invite?action=status` - which feeds the banner on the screen. No route checked it. `recordSpend` existed and was called by nothing, so the trial budget was never decremented. A prospect whose seven days were up could keep spending our money, and "100 research runs" was decoration.
+- **How it was found:** writing the row-15 attack suite (`api/__tests__/adversarial.nodetest.js`). Not by review, not by a reader - by a test that tried it.
+- **Now:** a paid route refuses a read-only trial with 403 `trial_ended` / `trial_budget_spent` and a message that treats the end of a trial as a sales moment; a live trial's call is counted.
+
+### UBO-4 - The daily spend ceiling did not apply to trial users
+- **Category:** Cost - **Priority:** P1 - **Status:** DONE (2026-09-22) - `callerKey` resolves the workspace from `lib/userAccess.js`, falling back to Clerk's org claim.
+- **What was wrong:** `callerKey` set `tenantId: session.orgId || null`. Trial users are not in a Clerk organisation - their workspace lives in our access list - so `tenantId` was null, and `enforceRateLimit` skips the entire spend-cap block when it is. The ceiling built the day before applied to nobody it was built for.
+- **Lesson worth keeping:** two sources of truth for "which workspace", one of them Clerk's. CLAUDE.md says there is exactly one access list; this was a second one, hiding in a single expression.
+
+### SEC-1 - `x-forwarded-for` was trusted for the rate-limit bucket
+- **Category:** Security - **Priority:** P3 - **Status:** DONE (2026-09-22) - `x-vercel-forwarded-for` is preferred where present.
+- **What was wrong:** an anonymous caller who sends their own `x-forwarded-for` gets a new rate-limit bucket per request, and therefore no limit. Vercel overwrites the header, so production was not exposed - but the code stated no such assumption, and it is wrong on any other host, including the dev server.
+- **Note:** the platform header cannot be forged by a caller. The old header is still read as a fallback, so nothing changes where a proxy sets it legitimately.
+
+### OBS-1 - A failure during a trial was unfindable
+- **Category:** Observability - **Priority:** P1 - **Status:** DONE (2026-09-22) - `lib/requestLog.js`, wired into the three UBO routes, plus `GET /api/health`.
+- **What was wrong:** failures were `console.error("[ubo-people]", message)` with nothing to correlate them, and `api/ubo-discovery.js` logged the whole error object - which can quote the company being researched, the customer's confidential work - and returned the raw internal message to the caller.
+- **Now:** one structured line per failure carrying a request id, the route, the status and the ids involved, and nothing anybody typed; the caller gets the same id as a `reference` they can quote. `GET /api/health` answers booleans only and returns 503 when the store is unreachable, so an uptime check can be pointed at it.
+- **Remaining, and it is the owner's:** somewhere for those lines to raise an alarm. Reading them still means opening the Vercel dashboard (GOLIVE-6).

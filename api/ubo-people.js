@@ -27,6 +27,7 @@
 const { applyCors, requireStaff } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const userAccess = require("../lib/userAccess");
+const { logFailure, attachRequestId } = require("../lib/requestLog");
 
 const DEFAULT_DEPS = { requireStaff, enforceRateLimit, userAccess };
 let _deps = { ...DEFAULT_DEPS };
@@ -179,9 +180,11 @@ module.exports = async function handler(req, res) {
 
     return send(res, 400, { error: "unknown_action" });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[ubo-people]", err && err.message);
-    return send(res, 500, { error: "people_failed" });
+    // The person gets a reference they can quote; the log line carries the same
+    // id, the route and the ids involved - never what anyone typed.
+    const reference = logFailure("ubo-people", err, req, { tenantId: actor.tenantId, userId: actor.userId });
+    attachRequestId(req, res);
+    return send(res, 500, { error: "people_failed", reference });
   }
 };
 

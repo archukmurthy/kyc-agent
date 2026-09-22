@@ -9,6 +9,7 @@ const { randomUUID } = require("crypto");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const { checkTextFields } = require("../lib/inputLimits");
 const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { logFailure, attachRequestId } = require("../lib/requestLog");
 
 // Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 const DEFAULT_DEPS = { requireStaff, enforceRateLimit, runUboFramework, getFresh, cacheResult, appendAudit, persistUboInvestigation };
@@ -102,9 +103,14 @@ module.exports = async function handler(req, res) {
     emit({ stage: "audit", message: "Saving audit snapshot" });
     return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persisted: true, database } }));
   } catch (error) {
-    console.error("[api/ubo-discovery]", error);
-    if (streaming) { emit({ stage: "error", message: error.message }); return res.end(); }
-    return res.status(500).json({ error: "UBO discovery failed", message: error.message });
+    // One structured line with a reference, rather than the whole error object:
+    // an investigation's error message can quote the company being researched,
+    // which is the customer's confidential work and not our telemetry.
+    const reference = logFailure("ubo-discovery", error, req, { tenantId });
+    attachRequestId(req, res);
+    const message = `Something went wrong on our side. Quote reference ${reference} if you get in touch.`;
+    if (streaming) { emit({ stage: "error", message, reference }); return res.end(); }
+    return res.status(500).json({ error: "UBO discovery failed", message, reference });
   }
 };
 

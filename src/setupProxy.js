@@ -49,6 +49,7 @@ const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api",
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const uboInviteHandler = require(path.join(__dirname, "..", "api", "ubo-invite.js"));
 const uboPeopleHandler = require(path.join(__dirname, "..", "api", "ubo-people.js"));
+const healthHandler = require(path.join(__dirname, "..", "api", "health.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
@@ -191,6 +192,8 @@ module.exports = function (app) {
   app.post("/api/ubo-invite", (req, res) => readJsonBody(req, () => adapt(uboInviteHandler)(req, res)));
   app.get("/api/ubo-people", adapt(uboPeopleHandler));
   app.post("/api/ubo-people", (req, res) => readJsonBody(req, () => adapt(uboPeopleHandler)(req, res)));
+
+  app.get("/api/health", adapt(healthHandler));
 
   app.all("/api/config", adapt(configHandler));
   app.all("/api/config-versions", adapt(configVersionsHandler));

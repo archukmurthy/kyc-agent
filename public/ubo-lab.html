@@ -267,6 +267,20 @@ $("#searchForm").onsubmit = async (event) => {
       body: JSON.stringify(formData)
     });
 
+    // A refusal arrives as JSON, not as an event stream. Reading it as one
+    // gave "No completed result was returned" - which a user reads as broken
+    // software rather than "you are going too fast". The server already sends
+    // a sentence worth showing; show it.
+    if (!response.ok) {
+      let payload = null;
+      try { payload = await response.json(); } catch (_) { payload = null; }
+      const said = payload && (payload.message || payload.error);
+      if (response.status === 429) {
+        throw new Error(said || "Too many requests. Wait a little and try again.");
+      }
+      throw new Error(said || `The server refused this request (${response.status}).`);
+    }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
