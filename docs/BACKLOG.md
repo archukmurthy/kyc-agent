@@ -527,3 +527,19 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Consequence today:** every figure in the ceilings is arithmetic rather than measurement - roughly 0.12-0.25 USD per research call, so 100/day is about 12-25 USD per account. Nobody has checked that against a real invoice.
 - **Worth doing for a second reason:** the same data is what the cost-per-onboarding model needs (readiness plan item 6.9), so it pays for itself twice.
 - **Area:** `api/research.js`, `api/generate-policy.js`, `agents/ubo/webResearchOwnershipAdapter.js`, `lib/spendCap.js`, `src/utils/costs.js`.
+
+### PLAT-11 — `/api/ubo-invite` was never mounted in the dev server
+- **Category:** Platform · **Priority:** P3 · **Status:** DONE (2026-09-22) — mounted in `src/setupProxy.js` alongside the new `/api/ubo-people`.
+- **What happened:** invariant 1 in CLAUDE.md says every file added to `api/` is mounted in `src/setupProxy.js`. `api/ubo-invite.js` was not, so `/ubo-trials` returned a 404 under `npm start` while working in production. Found while adding the people screen, not by a test.
+- **Worth noting:** the route table test checks that every route *declares a caller*; nothing checks that every route is *mounted*. That gap is PROC-7.
+
+### PROC-7 — Nothing checks that an api/ route is reachable in dev
+- **Category:** Process · **Priority:** P3 · **Status:** OPEN (raised 2026-09-22)
+- **What:** `api/__tests__/routeTable.nodetest.js` enforces that each file under `api/` declares who may call it. It does not enforce the other half of invariant 1 — that the route is mounted in `src/setupProxy.js` — so a route can 404 in dev for weeks while working in production (PLAT-11).
+- **Fix:** one more assertion in the same test: every `api/*.js` appears in `src/setupProxy.js`, with a named exception list for the cron-only routes (`finalize-submissions`) exactly as the open-route list works today.
+- **Why it is not done in this change:** it will fail on more than one existing route, and turning that list green is its own piece of work rather than a rider on the people screen.
+
+### TEST-3 — A test was making a real call to Clerk's API
+- **Category:** Testing · **Priority:** P2 · **Status:** DONE (2026-09-22) — `getUser` is now stubbed in the `requireStaff` harness.
+- **What happened:** adding the verified-email lookup put a Clerk API call on the no-access path. `lib/__tests__/routeAuth.nodetest.js` had no stub for it, so the suite reached out to Clerk on every run and logged `[clerk] could not read the email for a user: Unauthorized`. It passed either way, which is what made it easy to miss.
+- **Same shape as TEST-1** (tests writing to the real store): a seam that exists is not the same as a seam the test uses.

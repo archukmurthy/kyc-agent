@@ -100,6 +100,7 @@ const ROUTES = {
   // now call requireStaff - which is inert until CLERK_SECRET_KEY is set, so
   // they are still counted as open until the key lands in an environment.
   "ubo-invite.js": "staff",
+  "ubo-people.js": "staff",
   "ubo-demo-customer-ownership-chart.js": "open-limited",
   "ubo-demo-entity-resolution.js": "open-limited",
 

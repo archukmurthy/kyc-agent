@@ -47,6 +47,8 @@ const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-cont
 const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
+const uboInviteHandler = require(path.join(__dirname, "..", "api", "ubo-invite.js"));
+const uboPeopleHandler = require(path.join(__dirname, "..", "api", "ubo-people.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
@@ -93,6 +95,19 @@ const evidenceR2InterpretHandler = require(path.join(__dirname, "..", "api", "ev
 const evidenceR2HistoryHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-history.js"));
 const evidenceR2PreflightHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-preflight.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
+
+// The dev server does not parse JSON bodies for these routes, so the handler
+// gets nothing unless we read the stream first. Every POST below does this;
+// the older ones inline their own copy.
+function readJsonBody(req, done) {
+  let raw = "";
+  req.setEncoding("utf8");
+  req.on("data", (chunk) => { raw += chunk; });
+  req.on("end", () => {
+    try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+    done();
+  });
+}
 
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
@@ -169,6 +184,13 @@ module.exports = function (app) {
       adapt(researchHandler)(req, res);
     });
   });
+
+  // Trial invitations and staff access. GET reads req.query; POST needs the
+  // JSON body the dev server does not parse for us.
+  app.get("/api/ubo-invite", adapt(uboInviteHandler));
+  app.post("/api/ubo-invite", (req, res) => readJsonBody(req, () => adapt(uboInviteHandler)(req, res)));
+  app.get("/api/ubo-people", adapt(uboPeopleHandler));
+  app.post("/api/ubo-people", (req, res) => readJsonBody(req, () => adapt(uboPeopleHandler)(req, res)));
 
   app.all("/api/config", adapt(configHandler));
   app.all("/api/config-versions", adapt(configVersionsHandler));

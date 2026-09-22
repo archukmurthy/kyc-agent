@@ -13,6 +13,7 @@ import { isCustomerCompanyPath, isCustomerOwnershipChartPath } from "./uboDemo/c
 import ClerkGate from "./auth/ClerkGate";
 import TrialGate from "./trials/TrialGate";
 import TrialAdmin from "./trials/TrialAdmin";
+import PeopleAdmin from "./people/PeopleAdmin";
 
 // One codebase, two products. A deployment built with REACT_APP_PRODUCT_MODE=ubo
 // shows the ownership review module and nothing else. The server refuses the
@@ -45,6 +46,11 @@ if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
   // check that matters is in api/ubo-invite.js, on every call.
   tree = <ClerkGate><TrialAdmin /></ClerkGate>;
   title = "Trial invitations | Ownership review";
+} else if (path === "/ubo-people" || path.startsWith("/ubo-people/")) {
+  // Owners and admins manage who works here. Hiding it from an analyst is
+  // convenience; the check that matters is in api/ubo-people.js, on every call.
+  tree = <ClerkGate><PeopleAdmin /></ClerkGate>;
+  title = "People | Ownership review";
 } else if (isCustomerOwnershipChartPath(path)) {
   tree = <ClerkGate><TrialGate><CustomerOwnershipChartPage /></TrialGate></ClerkGate>;
   title = "Upload ownership chart | Ownership review demo";
