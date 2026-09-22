@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 agreement: the Guarded path list, the five stages, and what must be updated in
 the same pull request as the work. `docs/BACKLOG.md` is the source of truth for
 deferred work; `docs/PRODUCTION-READINESS-PLAN.md` is the ordered programme of
-what we build next.
+what we build next; `docs/ubo/P0-ROWS.md` is the same thing for the UBO module -
+the product owner's sixteen rows and what is done against each.
 
 This map describes boundaries and invariants, not behaviour — the code says what
 it does. Keep it one page. If a line here stops being true, fix it in the pull
