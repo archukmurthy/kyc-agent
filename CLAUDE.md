@@ -35,7 +35,12 @@ store). The active tenant is resolved per request, with this priority:
 1. `?tenant=` URL query parameter (browser) / `req.query.tenant` (server)
 2. `x-tenant-id` request header
 3. none — a request that names no tenant is refused (`tenant_required`). There
-   is no `TENANT_ID` env fallback and no `"nium"` default.
+   is no `TENANT_ID` env fallback and no company-name default anywhere.
+   **`api/__tests__/brandDefaults.nodetest.js` enforces this**: no `|| "<brand>"`
+   default in anything that ships, and no brand name in text a person reads.
+   Its exemption list is short, explicit, and argued in the file — the vendor's
+   own client (Nium is a real supplier we call), `PLATFORM_TENANT_IDS`, and the
+   server-side password salt. Add to that list only with a reason worth reading.
 
 ### URLs
 

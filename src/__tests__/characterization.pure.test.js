@@ -54,7 +54,7 @@ test('country list and DRS ownership mapping keep pre-refactor values', () => {
   expect(OWNERSHIP_ID_TO_DRS.public_listed).toBe('Public Listed Company');
   expect(OWNERSHIP_ID_TO_DRS.sole_trader).toBe('Sole Trader');
   expect(OWNERSHIP_ID_TO_DRS.other).toBe('Private Limited');
-  expect(C.niumBlue).toBe('#1a3a4a');
+  expect(C.brandBlue).toBe('#1a3a4a');
 });
 
 test('DOC_TYPES catalogue is unchanged', () => {

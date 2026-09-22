@@ -18,6 +18,12 @@ const { sanitiseTenantId } = require("../lib/tenant");
 const tenantRegistry = require("../lib/tenantRegistry");
 const { applyCors } = require("../lib/routeAuth");
 
+// What the create-tenant screen sends when somebody picks "start from the
+// default settings". The two "nium-" spellings are what older clients and
+// stored records still send.
+const DEFAULTS_REQUESTED = new Set(["default", "defaults", "nium-default", "nium-defaults"]);
+
+
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
 let _deps = { storage, registry: tenantRegistry };
 
@@ -30,7 +36,10 @@ function authKey(tid) {
   return `tenant-auth:${tid}`;
 }
 
-const RESERVED_TENANT_IDS = new Set(["super-admin", "admin", "api"]);
+// Path names that would collide with a real URL, plus the platform's own
+// workspace - which the create screen refused but the API did not, so a
+// tenant created through the API could have collided with it.
+const RESERVED_TENANT_IDS = new Set(["super-admin", "admin", "api", ...tenantRegistry.PLATFORM_TENANT_IDS]);
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -179,8 +188,8 @@ module.exports = async function handler(req, res) {
 
       // Persist config
       let config;
-      if (startFrom === "nium-defaults" || startFrom === "nium-default") {
-        config = buildTemplateConfig("nium-default", tenantId);
+      if (DEFAULTS_REQUESTED.has(startFrom)) {
+        config = buildTemplateConfig("default", tenantId);
       } else {
         config = buildBlankConfig(tenantId);
       }
@@ -198,7 +207,7 @@ module.exports = async function handler(req, res) {
         isProtected: false,
         // On by default (owner decision 2026-09-17); a super-admin can switch it off.
         preboardingEnabled: true,
-        isBlank: !(startFrom === "nium-defaults" || startFrom === "nium-default"),
+        isBlank: !DEFAULTS_REQUESTED.has(startFrom),
       });
 
       return res.status(200).json({

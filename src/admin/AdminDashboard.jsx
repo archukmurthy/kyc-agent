@@ -54,7 +54,7 @@ export default function AdminDashboard({
   tenantConfig,
   firstLogin,
   token,
-  tenantId = "nium",
+  tenantId,
   onSignOut,
   onReloadConfig,
 }) {
@@ -362,8 +362,8 @@ export default function AdminDashboard({
             padding: "14px 18px",
             borderRadius: 10,
             background: "#fff",
-            border: `1.5px solid ${adminColors.niumBlue}`,
-            color: adminColors.niumBlue,
+            border: `1.5px solid ${adminColors.brandBlue}`,
+            color: adminColors.brandBlue,
             fontWeight: 700,
             fontSize: 14,
             cursor: "pointer",
@@ -542,7 +542,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-          Your current configuration is pre-loaded with Nium defaults - nothing is blank.
+          Your current configuration is pre-loaded with the default settings - nothing is blank.
         </div>
       </div>
     </div>
@@ -553,7 +553,7 @@ function WelcomeOption({ recommended, icon, title, body, cta, ctaStyle, onClick 
   return (
     <div
       style={{
-        border: `1.5px solid ${recommended ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${recommended ? adminColors.brandBlue : adminColors.border}`,
         background: recommended ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 12,
         padding: 14,

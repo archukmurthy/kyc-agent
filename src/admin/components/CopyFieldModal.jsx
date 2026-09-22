@@ -474,7 +474,7 @@ function StageConfirmAdditions({ field, cellKey, cursor, total, getCellDisplayNa
               width: 8,
               height: 8,
               borderRadius: 99,
-              background: i < cursor ? adminColors.statusComplete : (i === cursor ? adminColors.niumBlue : adminColors.border),
+              background: i < cursor ? adminColors.statusComplete : (i === cursor ? adminColors.brandBlue : adminColors.border),
             }}
           />
         ))}

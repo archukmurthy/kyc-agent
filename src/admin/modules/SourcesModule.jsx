@@ -82,7 +82,7 @@ export default function SourcesModule({ config, patchConfig, markSaved }) {
           <input
             type="checkbox" checked={documentsArePrimary}
             onChange={(e) => { setDocumentsArePrimary(e.target.checked); setSaved(false); }}
-            style={{ accentColor: tokens.niumBlue, width: 16, height: 16 }}
+            style={{ accentColor: tokens.brandBlue, width: 16, height: 16 }}
           />
           Documents are primary sources
         </label>

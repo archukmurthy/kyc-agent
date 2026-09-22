@@ -73,7 +73,8 @@ test("an authed list returns the template ids", async (t) => {
   await handler(req, res);
 
   assert.strictEqual(res.statusCode, 200);
-  assert.ok(res.body.templates.some((x) => x.id === "nium-default"));
+  assert.ok(res.body.templates.some((x) => x.id === "default"),
+    "the template is named for what it is, not for a company - see api/__tests__/brandDefaults.nodetest.js");
 });
 
 test("?id= builds the template for the requesting tenant", async (t) => {

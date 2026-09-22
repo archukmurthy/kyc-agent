@@ -216,7 +216,7 @@ function UploadZone({ file, isProcessing, fileInputRef, onPick }) {
       onClick={() => fileInputRef.current?.click()}
       style={{
         padding: 24,
-        border: `2px dashed ${dragOver ? adminColors.niumBlue : adminColors.borderStrong || adminColors.border}`,
+        border: `2px dashed ${dragOver ? adminColors.brandBlue : adminColors.borderStrong || adminColors.border}`,
         borderRadius: 10,
         textAlign: "center",
         cursor: "pointer",
@@ -456,7 +456,7 @@ function ChoiceCard({ icon, title, body, selected, onSelect, warn, detail }) {
       style={{
         padding: 14,
         marginBottom: 10,
-        border: `2px solid ${selected ? adminColors.niumBlue : adminColors.border}`,
+        border: `2px solid ${selected ? adminColors.brandBlue : adminColors.border}`,
         borderRadius: 10,
         cursor: "pointer",
         background: selected ? "rgba(11,61,145,0.04)" : "#fff",
@@ -572,8 +572,8 @@ function TabBtn({ label, on, onClick }) {
         fontFamily: "inherit",
         fontSize: 12,
         fontWeight: 700,
-        color: on ? adminColors.niumBlue : adminColors.textMuted,
-        borderBottom: on ? `2px solid ${adminColors.niumBlue}` : "2px solid transparent",
+        color: on ? adminColors.brandBlue : adminColors.textMuted,
+        borderBottom: on ? `2px solid ${adminColors.brandBlue}` : "2px solid transparent",
         cursor: "pointer",
         marginBottom: -1,
       }}
@@ -590,7 +590,7 @@ function Spinner() {
         display: "inline-block",
         width: 12, height: 12, borderRadius: "50%",
         border: "2px solid rgba(0,0,0,0.15)",
-        borderTopColor: adminColors.niumBlue,
+        borderTopColor: adminColors.brandBlue,
         animation: "schemaImportSpin 0.7s linear infinite",
       }}
     >

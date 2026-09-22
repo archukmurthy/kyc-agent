@@ -272,6 +272,9 @@ module.exports = async function handler(req, res) {
             entityName: result.input.companyName,
             segment: company.segment || null,
             ownershipType: result.input.ownershipType,
+            // Whoever ran it. These rows used to be filed under one particular
+            // company no matter who ran the benchmark.
+            tenantId: tenant,
           });
         } catch (e) {
           // eslint-disable-next-line no-console

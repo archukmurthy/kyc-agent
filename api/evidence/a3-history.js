@@ -1,4 +1,5 @@
 "use strict";
+const { evidenceLabTenantId } = require("./tenant");
 
 const { createPostgresDb } = require("../../evidence/a2/postgresDb");
 const { PostgresA3Repository } = require("../../evidence/a3/repository");
@@ -16,7 +17,7 @@ function createHandler(dependencyFactory = dependencies) {
     let deps;
     try {
       deps = await dependencyFactory(req.body || {});
-      const tenantId = process.env.EVIDENCE_LAB_TENANT_ID || process.env.TENANT_ID || "nium";
+      const tenantId = evidenceLabTenantId();
       const result = await new EvidenceInterpretationHistoryService(deps.repository).forArtifact({ artifactId: req.body?.artifactId, tenantId });
       return res.status(200).json(result);
     } catch (error) {

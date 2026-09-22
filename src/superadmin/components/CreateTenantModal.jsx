@@ -15,7 +15,10 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
   const [error, setError] = useState(null);
 
   const sanitised = sanitiseTenantId(tenantId);
-  const isReserved = ["super-admin", "admin", "api", "nium"].includes(sanitised);
+  // URL path names only. The server is the authority on what is reserved -
+  // it also refuses the platform workspace - and this list exists to say so
+  // before somebody fills in the rest of the form.
+  const isReserved = ["super-admin", "admin", "api"].includes(sanitised);
   const idValid =
     !!tenantId.trim() &&
     sanitised === tenantId.toLowerCase() &&
@@ -118,8 +121,8 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
           body="Client starts with empty schemas. Best for custom requirements."
         />
         <RadioCard
-          checked={startFrom === "nium-defaults"}
-          onChange={() => setStartFrom("nium-defaults")}
+          checked={startFrom === "defaults"}
+          onChange={() => setStartFrom("defaults")}
           title="Start from default settings"
           body="UK/SG licences, entity types and reference schemas. Brand details stay blank - the client can modify everything."
         />
@@ -156,7 +159,7 @@ function RadioCard({ checked, onChange, title, body }) {
         gap: 10,
         alignItems: "flex-start",
         padding: 12,
-        border: `1.5px solid ${checked ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${checked ? adminColors.brandBlue : adminColors.border}`,
         background: checked ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 10,
         cursor: "pointer",

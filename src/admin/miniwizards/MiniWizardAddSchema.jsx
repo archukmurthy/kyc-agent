@@ -150,7 +150,7 @@ export default function MiniWizardAddSchema({ config, preselectedCell = null, on
                 style={{
                   textAlign: "left",
                   padding: 10,
-                  border: `1.5px solid ${selectedCell === c.key ? adminColors.niumBlue : adminColors.border}`,
+                  border: `1.5px solid ${selectedCell === c.key ? adminColors.brandBlue : adminColors.border}`,
                   borderRadius: 10,
                   background: c.configured ? adminColors.statusCompleteBg : adminColors.statusIncompleteBg,
                   cursor: "pointer",

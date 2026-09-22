@@ -232,7 +232,7 @@ export function JourneyPicker({
                   countryCode === "SG";
                 if (!isFixtureSelection) {
                   window.alert(
-                    "🔗 Nium API Lookup - Test Environment\n\n" +
+                    "🔗 Registry API Lookup - Test Environment\n\n" +
                     "This sandbox has limited data. The next screen will show " +
                     "sample data for \"STAR FINANCE PRIVATE LIMITED\" - not live " +
                     "data for the company you entered.\n\n" +
@@ -251,7 +251,7 @@ export function JourneyPicker({
               }}
             >
               <div style={{ fontSize: 24, marginBottom: 6 }}>🔗</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nium API Lookup</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Registry API Lookup</div>
               <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>
                 Pull verified registry data directly from Nium's KYB infrastructure. Fastest and most accurate for supported markets.
               </div>
@@ -282,7 +282,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once - uploaded documents, public registries, web research and Nium's KYB data - to pre-fill as much of your application as possible.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once - uploaded documents, public registries, web research and registry data - to pre-fill as much of your application as possible.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
             </div>
           );
@@ -296,7 +296,7 @@ export function JourneyPicker({
       {SHOW_NIUM_REG_PANEL && (demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
         <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
           <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
-            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>- required for Nium API Lookup</span>
+            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>- required for Registry API Lookup</span>
           </label>
           <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
             The Nium KYB registry searches by registration number (a name-only search isn't supported). Type it, or look it up from the company name (UK only). <em>Preprod test value: 00445790 (GB).</em>

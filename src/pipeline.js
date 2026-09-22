@@ -10,7 +10,7 @@
  */
 const {
   OWNERSHIP_TYPE_LIBRARY,
-  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  DEFAULT_OWNERSHIP_TYPES,
   getResearchStrategy,
   ownershipTypeLabel,
 } = require("./utils/ownershipTypes");
@@ -95,7 +95,7 @@ const classifySource = (source, countryCode) => {
   return "secondary";
 };
 
-// Markets where Nium holds a licence. Country of registration matching one of these
+// Markets where we hold a licence. Country of registration matching one of these
 // uses that market's schema. Otherwise the Singapore licence applies as default.
 const LICENSED_MARKETS = ["GB"];
 
@@ -461,13 +461,13 @@ const SG_FI_SCHEMA = {
    ═══════════════════════════════════════════ */
 
 // Options for the Step 1 ownership-type dropdown, scoped to the entity type's
-// configured list (falls back to the Nium defaults when the live config has no
+// configured list (falls back to the built-in defaults when the live config has no
 // explicit ownershipTypes for that entity type).
 function getOwnershipTypeOptions(entityTypeId, tenantConfig) {
   const entityTypeDef = (tenantConfig?.entityTypes || []).find((e) => e.id === entityTypeId);
   const enabledIds = (entityTypeDef?.ownershipTypes && entityTypeDef.ownershipTypes.length)
     ? entityTypeDef.ownershipTypes
-    : NIUM_DEFAULT_OWNERSHIP_TYPES;
+    : DEFAULT_OWNERSHIP_TYPES;
   return enabledIds
     .map((id) => OWNERSHIP_TYPE_LIBRARY.find((o) => o.id === id))
     .filter(Boolean)
@@ -1972,16 +1972,17 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   // non-registry pages, (2) resigned directors being returned, (3) attributes from
   // one person merged onto another. See validateAllDirectors() for the
   // deterministic code-level backstop that enforces the same three rules.
-  const niumKnownIssueGuard = /nium\s*fintech/i.test(String(name || ""))
-    ? `\nKNOWN ISSUE GUARD:
-For Nium FinTech Limited (UK company number 09337457):
-  The active director is Anupam Pahuja.
-  Prajit Nanu resigned as director and must NOT be returned.
-  If you find yourself about to return Prajit Nanu as a director of
-  Nium FinTech Limited, stop. He is not an active director.
-  Return Anupam Pahuja only.
-`
-    : "";
+  // A hard-coded correction for one company used to sit here: it named two
+  // real individuals, asserted which of them had resigned, and shipped in every
+  // customer's browser bundle. A claim about a named person's directorship is
+  // not a prompt tweak - it is personal data, and it was in the product by
+  // accident of one bad result during a demo.
+  //
+  // The general mechanism that should catch the same error is already below
+  // (RULE 2, resigned directors) with validateAllDirectors() as the
+  // deterministic backstop. If a specific company needs a correction again, it
+  // belongs in data a reviewer can see and change, not in a prompt compiled
+  // into the bundle.
   const directorThreeRules = `
 DIRECTOR AND UBO DATA — THREE MANDATORY RULES:
 
@@ -2057,7 +2058,7 @@ WRONG output (do not do this):
   - Returning Prajit Nanu's name with Anupam Pahuja's details
   - Using Prajit Nanu's name because he appears prominently on the company
     website or in news articles
-${niumKnownIssueGuard}`;
+`;
   const stakeholderRulesBlock = stakeholderRules
     ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n${directorThreeRules}`
     : "";
@@ -2142,11 +2143,11 @@ ${strategy.strategyNotes}
 \n`
     : "";
 
-  return `You are a KYC research agent for Nium.
+  return `You are a KYC research agent.
 ${strategyBlock}${wolfsbergBlock}
 JURISDICTION CONTEXT (read carefully, this is two separate things):
 1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
-2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` Nium has no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
+2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` We hold no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
 
 WHERE TO SEARCH:
 - Search ${country}'s public records, registries, and regulators for "${name}".

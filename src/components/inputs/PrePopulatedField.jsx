@@ -52,7 +52,7 @@ export function PrePopulatedField({ id, label, value, displayValue, type, onUpda
           <button
             type="button"
             onClick={() => setEditing(true)}
-            style={{ fontSize: 11, color: C.niumBlue, background: "none", border: `1px solid ${C.niumBlue}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+            style={{ fontSize: 11, color: C.brandBlue, background: "none", border: `1px solid ${C.brandBlue}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
           >
             Edit
           </button>

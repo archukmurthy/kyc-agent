@@ -79,13 +79,15 @@ export default function AdminRoot() {
 
   // First-login wizard fires for brand-new blank tenants (created via
   // /super-admin) and for any tenant that has zero licences configured.
-  // No tenant is excluded by id: the platform tenant ships with default seed
-  // config, so it has licences and doesn't reach the wizard on its own. The
-  // one exception is the offline fallback above, which marks every tenant
-  // _isBlank — an API-unreachable admin session shows the wizard regardless.
+  // No tenant is excluded by id - the comment used to say that while the code
+  // did exactly that. The platform tenant ships with seed config, so it has
+  // licences and does not reach the wizard anyway; if it ever has none, it IS
+  // unconfigured and the wizard is the right answer. The one exception is the
+  // offline fallback above, which marks every tenant _isBlank - an
+  // API-unreachable admin session shows the wizard regardless.
   const firstLogin =
     tenantConfig._isBlank === true ||
-    ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "nium");
+    (tenantConfig.licences?.length || 0) === 0;
 
   return (
     <>
@@ -201,7 +203,7 @@ function PasswordGate({ tenantId, onSuccess }) {
               width: 56,
               height: 56,
               borderRadius: 14,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -218,7 +220,7 @@ function PasswordGate({ tenantId, onSuccess }) {
             Intelligence-Led Onboarding Platform
           </p>
           {gateCompanyName && (
-            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
+            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.brandBlue, fontSize: 11, fontWeight: 600 }}>
               {gateCompanyName}
             </div>
           )}
@@ -288,7 +290,7 @@ function Loading() {
             width: 56,
             height: 56,
             borderRadius: 14,
-            background: adminColors.niumBlue,
+            background: adminColors.brandBlue,
             color: "#fff",
             display: "flex",
             alignItems: "center",

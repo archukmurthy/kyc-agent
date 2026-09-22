@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { adminColors, adminStyles } from "../../admin/adminDesign";
 
 // One tenant tile in the super-admin dashboard. A protected (platform) tenant
-// is rendered with a niumBlue left rail and an "Internal" badge; nothing else
+// is rendered with a brandBlue left rail and an "Internal" badge; nothing else
 // is special-cased beyond hiding the deactivate button (the server refuses to
 // deactivate a protected tenant anyway).
 export default function TenantCard({ tenant, onResetPassword, onToggleStatus, onTogglePreboarding }) {
   // Protection is a registry flag, never a tenant id: isInternal is the
   // legacy spelling of the same idea, so both count (mirrors
   // lib/tenantRegistry.js#entryIsProtected).
-  const isNium = tenant.isProtected || tenant.isInternal;
+  const isProtected = tenant.isProtected || tenant.isInternal;
   const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -25,7 +25,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus, on
         background: "#fff",
         borderRadius: 12,
         border: `1px solid ${adminColors.border}`,
-        borderLeft: isNium ? `4px solid ${adminColors.niumBlue}` : `1px solid ${adminColors.border}`,
+        borderLeft: isProtected ? `4px solid ${adminColors.brandBlue}` : `1px solid ${adminColors.border}`,
         padding: 18,
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
@@ -36,18 +36,17 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus, on
             <span style={{ fontSize: 20 }}>🏢</span>
             <div style={{ fontSize: 16, fontWeight: 800, color: adminColors.text }}>
               {tenant.companyName || tenant.tenantId}
-              {isNium && (
+              {isProtected && (
                 <span style={{ fontWeight: 500, color: adminColors.textMuted, marginLeft: 6 }}>
                   (Platform Tenant)
                 </span>
               )}
             </div>
-            <StatusBadge isInternal={isNium} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
+            <StatusBadge isInternal={isProtected} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
           </div>
           {/* Tenant ID is the routing/storage key, not a display name - kept
               behind an expander so it stays available to operators without
-              surfacing "nium" on the branded dashboard. A full rename to a
-              prod-ready ID is tracked separately (see the Notion task). */}
+              putting a storage key on a branded dashboard. */}
           <div style={{ marginTop: 4 }}>
             <button
               type="button"
@@ -126,7 +125,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus, on
         >
           {tenant.preboardingEnabled ? "Disable pre-boarding" : "Enable pre-boarding"}
         </button>
-        {!isNium && (
+        {!isProtected && (
           <button
             type="button"
             onClick={() => onToggleStatus(tenant)}
@@ -145,7 +144,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus, on
 
 function StatusBadge({ isInternal, isActive, isBlank }) {
   if (isInternal) {
-    return <span style={{ ...adminStyles.statusBadge("complete"), background: "rgba(11,61,145,0.1)", color: adminColors.niumBlue }}>INTERNAL</span>;
+    return <span style={{ ...adminStyles.statusBadge("complete"), background: "rgba(11,61,145,0.1)", color: adminColors.brandBlue }}>INTERNAL</span>;
   }
   if (isBlank) {
     return <span style={adminStyles.statusBadge("incomplete")}>⚠ Setup pending</span>;

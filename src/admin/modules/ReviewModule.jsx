@@ -11,7 +11,7 @@ function Row({ label, value, onEdit }) {
         <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
         <div style={{ fontSize: 13, fontWeight: 600, marginTop: 3 }}>{value}</div>
       </div>
-      {onEdit && <button onClick={onEdit} style={{ background: "transparent", border: "none", color: tokens.niumBlue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit →</button>}
+      {onEdit && <button onClick={onEdit} style={{ background: "transparent", border: "none", color: tokens.brandBlue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit →</button>}
     </div>
   );
 }

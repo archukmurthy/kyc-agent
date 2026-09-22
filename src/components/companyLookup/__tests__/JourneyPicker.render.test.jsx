@@ -34,7 +34,7 @@
  * FLAG STATE UNDER JEST (characterised, not assumed):
  *   NODE_ENV="test"      → SHOW_TEST_TOOLS === true
  *   no ?test=1 in jsdom  → TEST_FLAG === false
- *   no ?demo / no storage→ demoMode starts FALSE, so card D (Nium) is ABSENT
+ *   no ?demo / no storage→ demoMode starts FALSE, so card D (registry) is ABSENT
  *   jsdom host localhost → demoToggleVisible === true, so the DemoToggle IS
  *                          mounted and demo mode is reachable by clicking it
  *                          (a user-facing control — no production flag is
@@ -154,7 +154,7 @@ const card = (title) => screen.getByText(title).parentElement;
 const CARD_A = "Upload documents & let AI fill the rest";
 const CARD_B = "Let AI research your company";
 const CARD_C = "I'll complete the form myself";
-const CARD_D = "Nium API Lookup";
+const CARD_D = "Registry API Lookup";
 const CARD_E = "Run for max prefill";
 
 // Task 13: Card C only renders when the tenant configured its own manual
@@ -255,7 +255,7 @@ describe("the cards that render", () => {
     expect(screen.getByText(/Full control · No AI · ~15 minutes/)).toBeInTheDocument();
   });
 
-  it("does NOT render card D (Nium API Lookup) - demoMode is off by default", async () => {
+  it("does NOT render card D (Registry API Lookup) - demoMode is off by default", async () => {
     await driveToPicker();
     expect(screen.queryByText(CARD_D)).not.toBeInTheDocument();
   });

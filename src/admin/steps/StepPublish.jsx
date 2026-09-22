@@ -114,7 +114,7 @@ export default function StepPublish({
     setTemplateError(null);
     try {
       const r = await fetch(
-        `/api/config-templates?id=nium-default&tenant=${encodeURIComponent(activeTenant)}`,
+        `/api/config-templates?id=default&tenant=${encodeURIComponent(activeTenant)}`,
         { headers: { Authorization: `Bearer ${adminToken}`, "X-Tenant-Id": activeTenant }, cache: "no-store" }
       );
       const data = await r.json();

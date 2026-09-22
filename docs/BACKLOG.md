@@ -567,3 +567,38 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **What was wrong:** failures were `console.error("[ubo-people]", message)` with nothing to correlate them, and `api/ubo-discovery.js` logged the whole error object - which can quote the company being researched, the customer's confidential work - and returned the raw internal message to the caller.
 - **Now:** one structured line per failure carrying a request id, the route, the status and the ids involved, and nothing anybody typed; the caller gets the same id as a `reference` they can quote. `GET /api/health` answers booleans only and returns 503 when the store is unreachable, so an uptime check can be pointed at it.
 - **Remaining, and it is the owner's:** somewhere for those lines to raise an alarm. Reading them still means opening the Vercel dashboard (GOLIVE-6).
+
+
+### BRAND-2 - The third Nium removal, and the first one with a guard
+- **Category:** Security / Brand - **Priority:** P1 - **Status:** DONE (2026-09-22)
+- **Why a third time:** the two earlier passes removed instances and installed nothing to stop the next one. Both fixed *tenant resolution* - which customer a request belongs to - and neither touched cache keys, admin branding, the undeployed Evidence Lab, or a SQL literal. "Removed" meant "removed the ones we found that day".
+- **The guard:** `api/__tests__/brandDefaults.nodetest.js`. Two rules: no `|| "<brand>"` default anywhere that ships, and no brand name in text a person reads. It found six sites in its first run that a manual search had missed, including the SQL literal below. Exemptions are listed in the file with reasons: the real vendor client, `PLATFORM_TENANT_IDS` (a named list, not a fallback), and the server-side password salt.
+- **Removed - defaults:** `agents/ubo/uboPersistence.js` (2, the only ones in the UBO path - a cache key with no workspace is a key *shared between customers*, so it now refuses); `api/evidence/*` (13, via one `evidenceLabTenantId()` that throws); `api/admin-auth.js` (the platform tenant is now whichever one `PLATFORM_TENANT_IDS` names, its display name from `PLATFORM_COMPANY_NAME`); `src/admin/AdminDashboard.jsx`.
+- **Removed - visible text:** the admin header showed "Nium" to any tenant with no company name set; "pre-loaded with Nium defaults"; the config template's label and id (`nium-default` to `default`, old spellings still resolve - see `canonicalTemplateId`); the wizard's "Nium will retrieve these for you"; the journey card "Nium API Lookup"; four status and error strings during a lookup; the validation lab's prefilled form.
+- **Removed - colour token:** `niumBlue` to `brandBlue` across 33 files. Invisible in any interface, but a rename away from gone, so it went rather than earning an exemption.
+- **Kept, deliberately:** `lib/niumClient.js`, `agents/ubo/niumOwnershipAdapter.js`, `agents/kycLookupAgent.js`, the `/api/nium/*` routes and the `nium_api` journey identifier. Nium is a real third-party company-lookup service we pay for; naming the client after the supplier it calls is as correct as naming a Companies House client after Companies House, and `nium_api` may be recorded in stored journeys.
+- **Verified:** `grep -i nium build/static/js/*.js` returns only those vendor identifiers - no display text, no defaults.
+
+### SEC-2 - A hard-coded correction naming two real people shipped in every browser bundle
+- **Category:** Privacy / Security - **Priority:** P1 - **Status:** DONE (2026-09-22) - removed from `src/pipeline.js`.
+- **What it was:** a "KNOWN ISSUE GUARD" block in the research prompt, fired when the company being researched matched `/nium\s*fintech/i`. It named two real individuals, asserted which of them had resigned as a director, gave a UK company number, and instructed the model accordingly.
+- **Why it matters:** it was a claim about a named person's employment, hard-coded in the product, compiled into every customer's browser bundle and sent to a third-party model on every matching run. It got there from one bad result during a demo.
+- **What covers the same error now:** the three general director rules immediately below it (RULE 2 is resigned directors) with `validateAllDirectors()` as the deterministic backstop. If a specific company ever needs a correction again, it belongs in data a reviewer can see and change - not in a prompt compiled into the bundle.
+
+### SEC-3 - A password salt shipped to the browser, in dead code
+- **Category:** Security - **Priority:** P2 - **Status:** DONE (2026-09-22) - `src/utils/auth.js`.
+- **What was wrong:** the frontend mirrored the server's `hashPassword`/`verifyPassword`, salt included, so a password-hashing secret was in the bundle any visitor can read. Nothing imported either function - only `generatePassword`, which needs no secret.
+- **Fixed by deleting the dead code.** The server-side copy (`lib/auth.js`) is untouched, so no stored hash changes and nobody is locked out.
+- **Found by** the brand guard, which flagged the salt for containing a company name. The brand was the least of it.
+- **Still open, separately:** both copies used a 32-bit string hash rather than a password hash. That is PLAT-2.
+
+### SEC-4 - A tenant written into SQL as a literal
+- **Category:** Security - **Priority:** P2 - **Status:** DONE (2026-09-22) - `lib/persist.js`, `api/benchmark.js`.
+- **What was wrong:** every row `persistBenchmarkEntity` wrote - across `benchmark_runs`, `clients` and `onboarding_sessions` - carried `tenant_id = 'nium'` written into the SQL text. A benchmark run by any customer was filed under one particular company, and the lookup that de-duplicates clients searched that company's rows.
+- **Now:** the caller passes the tenant it already resolved, and the function refuses without one.
+- **Found by** the brand guard on its first run. Two manual cleanups had walked past it.
+
+### SEC-5 - The API would have let somebody create the platform's own workspace
+- **Category:** Security - **Priority:** P3 - **Status:** DONE (2026-09-22) - `api/tenants.js`.
+- **What was wrong:** the create-tenant screen refused the platform workspace id, and the API did not. `RESERVED_TENANT_IDS` held the three URL path names only, so a tenant created through the API could have collided with the platform's own.
+- **Now:** the reserved set includes `PLATFORM_TENANT_IDS`, and the client list holds only the path names, with the server as the authority.

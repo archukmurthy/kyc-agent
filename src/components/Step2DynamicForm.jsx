@@ -482,14 +482,14 @@ export default function Step2DynamicForm({
         </div>
       )}
 
-      {/* "Nium will retrieve these for you" (self-sourced) section - hidden for
+      {/* "We will retrieve these for you" (self-sourced) section - hidden for
           now per request, but kept here for future use. `selfSourced` is still
           computed above and still counted as submitted in handleContinue, so the
           downstream document gate is unaffected; only the UI is hidden. To
           restore, un-comment this block.
       {selfSourced.length > 0 && (
         <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
+          <h3 style={styles.sectionTitle}>We will retrieve these for you</h3>
           <p style={styles.sectionDesc}>
             We source these from official registries - no action needed. You can optionally upload any you already have to speed up review.
           </p>

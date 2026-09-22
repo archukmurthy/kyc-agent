@@ -107,7 +107,7 @@ function getResearchStrategy(ownershipTypeId) {
 
 // The Nium default enabled ownership types — used as the fallback when an
 // entity type in the live config has no explicit `ownershipTypes` array.
-const NIUM_DEFAULT_OWNERSHIP_TYPES = [
+const DEFAULT_OWNERSHIP_TYPES = [
   "private_limited",
   "public_listed",
   "trust",
@@ -127,6 +127,6 @@ module.exports = {
   OWNERSHIP_TYPE_LIBRARY,
   RESEARCH_STRATEGIES,
   getResearchStrategy,
-  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  DEFAULT_OWNERSHIP_TYPES,
   ownershipTypeLabel,
 };

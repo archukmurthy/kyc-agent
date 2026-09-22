@@ -717,7 +717,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const loaderMsgs = useMemo(() => {
     if (journeyType === "nium_api") {
       return [
-        "Connecting to Nium KYB registry…",
+        "Connecting to the company registry…",
         `Looking up ${companyName || "the company"}…`,
         "Retrieving company details…",
         "Loading stakeholder data…",
@@ -2351,7 +2351,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setActiveSchema(schema);
     const S = stepsFor("ai_only");
     setLoading(true); setStep(S.research); setLoaderIdx(0); setLoaderPhase(0);
-    setResearchStatus("Calling Nium KYB API…");
+    setResearchStatus("Calling the company registry…");
 
     const startedAt = Date.now();
     trackEvent("nium_api_lookup_started", {
@@ -2391,7 +2391,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           jurisdiction: schema.region,
           countryOfRegistration: countryCode,
           found,
-          gaps: schema.gapFields.map(f => ({ ...f, reason: "Not in Nium registry response" })),
+          gaps: schema.gapFields.map(f => ({ ...f, reason: "Not in the registry response" })),
         };
         setResearch(tagged);
         setOnboardingSubmissionId(genUUID()); // fresh submission id for this research run (amendment-doc handoff)
@@ -2440,7 +2440,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         // The analyst chose the Nium API journey deliberately; do NOT silently
         // switch to AI research. They decide whether to retry or pick another
         // journey type.
-        const base = `Nium API returned no results for ${companyName}. Check the API connection or try a different journey type.`;
+        const base = `The registry returned no results for ${companyName}. Check the API connection or try a different journey type.`;
         const msg = data.error ? `${base} (${data.error})` : base;
         trackEvent("nium_api_lookup_failed", { companyName, error: data.error || "no_results" });
         setLoading(false); setLoaderPhase(0); setResearchStatus("");
@@ -2459,7 +2459,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setLoading(false); setLoaderPhase(0); setResearchStatus("");
       setStep(stepsFor("ai_only").input);
       setJourneyOpen(true);
-      setError(`Nium API lookup failed for ${companyName}: ${reason}. Check the API connection or try a different journey type.`);
+      setError(`Registry lookup failed for ${companyName}: ${reason}. Check the API connection or try a different journey type.`);
     } finally {
       clearTimeout(timer);
     }
@@ -4716,7 +4716,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
               />
             ) : (
               <div style={{
-                width: 48, height: 48, borderRadius: 12, background: C.niumBlue,
+                width: 48, height: 48, borderRadius: 12, background: C.brandBlue,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 22, fontWeight: 800, color: "#fff",
               }}>
@@ -4749,7 +4749,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
               cursor: "pointer", transition: "all 0.15s", textAlign: "left",
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.borderColor = C.niumBlue;
+              e.currentTarget.style.borderColor = C.brandBlue;
               e.currentTarget.style.transform = "translateY(-2px)";
               e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
             }}
@@ -4766,7 +4766,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             <div style={{ fontSize: 14, color: C.textSec, lineHeight: 1.6, marginBottom: 20 }}>
               AI-powered KYC/KYB onboarding. Research, confirm, fill gaps and submit a complete application.
             </div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.niumBlue }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.brandBlue }}>
               Start onboarding →
             </div>
           </div>
@@ -4828,7 +4828,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // ─── Pre-boarding renderers (analyst flow) ───────────────────────────────
   // Reuse the onboarding research / schema / stakeholder / coverage logic; only
-  // the presentation differs. Purple accent (#7C3AED) replaces niumBlue. These
+  // the presentation differs. Purple accent (#7C3AED) replaces brandBlue. These
   // close over the confirm/fill-gaps render vars and are reached from the
   // pre-boarding early returns above the main return (the dossier and invite
   // screens), NOT from the step switch.
