@@ -649,3 +649,15 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **What was missing:** no README, no setup guide. Which settings are needed, which you invent yourself, which cost money, what runs without a database, where each screen lives, how to apply the schema, and which known failures are expected - all of it lived in somebody's head or had to be reassembled by reading the code.
 - **Written because** the product owner is being sent the branch to run, and the alternative was a wall of instructions in a chat message that she would lose.
 - **Includes the honest section:** the pre-existing lint errors, `npm ci` not working, and the Evidence Lab being refused on purpose. An unexplained failure wastes an afternoon.
+
+### AUTH-2 — The login endpoints hand back the password as the session token
+- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found 2026-09-22 while verifying the pre-boarding flow end to end)
+- **What:** `POST /api/admin-auth` and `POST /api/preboarding-auth` answer a successful login with `{ success: true, token: "<the password they just typed>" }`. Every later call carries it as `Authorization: Bearer <password>`. The password **is** the session.
+- **Why it matters, in order:**
+  - There is no way to sign somebody out, or to end one session, without changing the password for everybody who shares it.
+  - The password is re-transmitted on every single request rather than once at login, so it is in far more places: proxy logs, any error report that captures headers, the browser's memory, and — as this was found — a terminal transcript.
+  - It cannot expire. A password captured once is valid until somebody thinks to rotate it.
+  - It is indistinguishable from the real credential, so a leaked bearer token is a leaked password.
+- **Fix:** mint a short-lived signed session on successful login and return that instead. `lib/dossierToken.js` already does exactly this shape for customers — signed, expiring, revocable — so there is a working pattern in the codebase to copy rather than a design to invent. `lib/session.js` exists from earlier work and was paused.
+- **Do it with PREB-3 and PLAT-2**, which touch the same three login routes: one change that gives per-tenant analyst passwords, a real key-derivation function, and a session that is not the password.
+- **Note:** this is what leaked an admin password into a session transcript on 2026-09-22. Nothing was exposed outside that session, and the value is a local development password, but it is worth rotating when the three items above are done.
