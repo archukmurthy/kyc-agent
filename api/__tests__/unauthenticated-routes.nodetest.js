@@ -78,7 +78,11 @@ test("paid Nium lookups refuse an anonymous caller before spending anything", as
 });
 
 test("internal tools refuse an anonymous caller", async () => {
-  for (const route of ["../ubo-control-lab", "../ubo-recalculate", "../dossier-reseed"]) {
+  // ubo-control-lab was in this list until 2026-09-22. It is not an internal
+  // tool: the UBO demo calls it for every live research run, and demanding an
+  // admin password had been failing that call since Batch 0. It now uses the
+  // same staff gate as its siblings, and the test below covers it.
+  for (const route of ["../ubo-recalculate", "../dossier-reseed"]) {
     const handler = require(route);
     const { req, res } = fakeReqRes({ method: "POST", query: { tenant: "nium" }, body: {} });
     await handler(req, res);
@@ -94,4 +98,21 @@ test("an allow-listed admin still gets through", async () => {
   assert.notStrictEqual(res.statusCode, 401);
   assert.notStrictEqual(res.statusCode, 403);
   delete process.env.ADMIN_ROUTE_TEST;
+});
+
+test("the UBO demo route refuses an anonymous caller once Clerk is configured", async () => {
+  // While CLERK_SECRET_KEY is unset the staff gate is deliberately inert, which
+  // is what lets the demo run locally with no accounts. Setting the key is what
+  // turns the login on - and is the first thing the trial deployment does.
+  const saved = process.env.CLERK_SECRET_KEY;
+  process.env.CLERK_SECRET_KEY = "sk_test_x";
+  try {
+    const handler = require("../ubo-control-lab");
+    const { req, res } = fakeReqRes({ method: "POST", query: {}, body: { operation: "FIXTURE_CATALOGUE" } });
+    await handler(req, res);
+    assert.strictEqual(res.statusCode, 401, "no session token means no access");
+  } finally {
+    if (saved === undefined) delete process.env.CLERK_SECRET_KEY;
+    else process.env.CLERK_SECRET_KEY = saved;
+  }
 });

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
 import { formatAssertionMeasurement } from "../assertionPresentation";
 import { buildChartResearchComparison, buildChartResearchIdentityCandidates, filterComparisonEntriesRelevantToCustomer, summarizeOwnershipComparison } from "./chartComparison";
+import { clerkAuthHeaders } from "../../auth/clerkFetch";
 
 const IDENTITY_CACHE_KEY = "ubo-control-demo.cross-source-party-resolution.v1";
 
@@ -71,11 +72,11 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
     attemptedIdentityChecks.current.add(requestKey);
     let active = true;
     setIdentityCheck({ state: "CHECKING", requestKey });
-    fetch("/api/ubo-demo-entity-resolution", {
+    clerkAuthHeaders().then((auth) => fetch("/api/ubo-demo-entity-resolution", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({ candidates: pending.slice(0, 20) }),
-    }).then(async (response) => {
+    })).then(async (response) => {
       const payload = await response.json();
       if (!response.ok || !payload.success || payload.result?.decisionScope !== "PARTY_IDENTITY_ONLY") throw new Error(payload.message || "Identity matching is unavailable");
       if (!active) return;

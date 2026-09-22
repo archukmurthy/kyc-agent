@@ -62,7 +62,6 @@ const ROUTES = {
   "nium/constants.js": "admin",
   "nium/public-details.js": "admin",
   "nium/exhaustive-details.js": "admin",
-  "ubo-control-lab.js": "admin",
   "ubo-recalculate.js": "admin",
   "idv-match/reviewer.js": "admin",
 
@@ -109,6 +108,10 @@ const ROUTES = {
   // they are still counted as open until the key lands in an environment.
   "ubo-invite.js": "staff",
   "ubo-people.js": "staff",
+  // Reached by the UBO demo screens, by signed-in trial users - not by an
+  // administrator with a shared password. Batch 0 got this wrong; see the
+  // comment in the route.
+  "ubo-control-lab.js": "staff",
   "ubo-demo-customer-ownership-chart.js": "open-limited",
   "ubo-demo-entity-resolution.js": "open-limited",
 
@@ -213,6 +216,7 @@ test("a route that spends money or writes has a rate limit", () => {
   const mustBeLimited = [
     "research.js", "doc-search.js", "self-source.js", "generate-policy.js",
     "ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js",
+    "ubo-control-lab.js",
     "kyc-lookup.js", "company-search.js", "upload-document.js", "get-document.js",
     "submit.js", "save-dossier.js", "change-events.js", "amendment-documents.js",
     "idv-match/session.js", "idv-match/resolve.js", "idv-match/confirm.js",

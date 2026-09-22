@@ -1,7 +1,8 @@
 "use strict";
 
 const legacyDiscoveryHandler = require("./ubo-discovery");
-const { applyCors, requireAdmin } = require("../lib/routeAuth");
+const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { enforceRateLimit } = require("../lib/rateLimit");
 const {
   applyCustomerAction,
   applyReviewerDecisions,
@@ -170,8 +171,17 @@ async function startSuccessorLive(payload, { demoProfileReconciliation = false, 
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return undefined;
-  // Batch 0: this route had no credential check. It is an internal tool with no caller in the app.
-  if (!(await requireAdmin(req, res))) return undefined;
+
+  // Batch 0 locked this behind an admin password on the reasoning that it was
+  // "an internal tool with no caller in the app". True of our tree that day;
+  // the UBO demo was merged in five days later and calls this route for every
+  // live research run, so live research has been answering 400 tenant_required
+  // ever since. Every test mocks the network, which is why nothing caught it.
+  //
+  // The right gate is the one its siblings use - the demo screens are reached
+  // by signed-in trial users, not by an administrator with a shared password.
+  if (!(await enforceRateLimit(req, res, "ubo-control-lab"))) return undefined;
+  if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
   if (req.method === "GET") return send(res, 200, {
     ...fixtureCatalogue(),
     review: reviewCatalogue(),
@@ -191,6 +201,12 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_FIXTURE:
         return send(res, 200, startFixture(input.payload));
       case OPERATIONS.START_LIVE:
+        // The one operation here that reaches a provider, so the one that has
+        // to pass the paid allowance: the per-person limit, the trial's budget
+        // and end date, and the daily spend ceiling. It shares the bucket with
+        // /api/ubo-discovery deliberately - two routes onto the same provider
+        // must not hand one person two allowances.
+        if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
         return send(res, 200, await startLive({
           ...input.payload,
           transport: { invoke: ({ body }) => invokeLegacyDiscovery(body, req.headers || {}) },

@@ -16,6 +16,8 @@ import AnalystCustomerRequests from "./AnalystCustomerRequests";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
 import "./customerOwnershipChart.css";
+import { clerkAuthHeaders } from "../../auth/clerkFetch";
+import { limitNotice } from "../../trials/limitNotice";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
 
@@ -51,6 +53,13 @@ function analysisFailureMessage(payload, status) {
     invalid_media: "The selected file is labelled as an image, but its contents are not a valid supported image.",
     unsupported_model_media: "The document was received, but this file format is not supported by the configured analysis model.",
   };
+  // A limit reached is the product working, not a failure to analyse. Showing
+  // "We could not analyse this chart. Reference: trial_ended (403)." to a
+  // prospect whose trial just ended reads as broken software at the exact
+  // moment they are deciding whether to buy.
+  const notice = limitNotice(code, payload?.message);
+  if (notice) return `${notice.title}. ${notice.body}`;
+
   const message = messages[code] || payload?.message || "We could not analyse this ownership chart.";
   return `${message} Reference: ${code}${status ? ` (${status})` : ""}.`;
 }
@@ -193,7 +202,7 @@ export default function CustomerOwnershipChartPage() {
       try {
         const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) },
           body: JSON.stringify({
             operation: "REEVALUATE_SAVED_EXTRACTION",
             demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId },
@@ -235,7 +244,7 @@ export default function CustomerOwnershipChartPage() {
       const contentBase64 = await fileAsBase64(file);
       const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) },
         body: JSON.stringify({
           demoContext: {
             company: context.company,

@@ -434,7 +434,8 @@ they exist, every rule in that file depends on someone recalling it.
 - **What:** `identityVault.js` calls a function named `useDurable` from four non-component functions, which trips `react-hooks/rules-of-hooks` (it is not a React hook; the name is the problem). `media/index.js` uses `globalThis`, which the CRA ESLint env does not declare.
 - **Why:** they are the only errors in the repo, so "lint is clean" currently needs an asterisk, and an asterisk is how real errors hide.
 - **Fix:** rename `useDurable` to `withDurable`, and declare the env for the media module.
-- **Area:** `api/idv-match/identityVault.js`, `api/idv-match/media/index.js`.
+- **Also, found 2026-09-22:** a third instance of the same naming problem - `api/ubo-control-lab.js` calls `usePreingestedBettercommsArtifact` from its handler. Same fix (rename off the `use` prefix), same reason: a function that is not a React hook must not be named like one.
+- **Area:** `api/idv-match/identityVault.js`, `api/idv-match/media/index.js`, `api/ubo-control-lab.js`.
 
 ### PROC-6 — Two mains, drifting
 - **Category:** Process · **Priority:** P1 · **Status:** OPEN (decision taken 2026-09-20: keep two repos for now)
@@ -622,3 +623,29 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Category:** Process - **Priority:** P3 - **Status:** DONE (2026-09-22) - `api/__tests__/routeTable.nodetest.js`.
 - **What:** the route table enforced that every route declares who may call it, and nothing enforced the other half of invariant 1 - that it is mounted in `src/setupProxy.js`. A route could 404 locally for weeks while working in production (PLAT-11).
 - **Estimate I got wrong:** I said this would fail on several routes and be its own piece of work. Measured instead of guessed: 66 handlers, exactly one unmounted - `finalize-submissions`, which is cron-only and correctly excluded. The test went green immediately with one named exception, and a second test checks that exception still names something real.
+
+
+### UBO-7 - We broke the demo's live research, and nothing noticed for four days
+- **Category:** Regression - **Priority:** P0 - **Status:** DONE (2026-09-22) - `api/ubo-control-lab.js`.
+- **What happened:** Batch 0 (18 Sept, commit `00014bd`) put `requireAdmin` in front of `/api/ubo-control-lab`, with the stated reasoning that it was "an internal tool with no caller in the app". That was true of our tree that day. Your partner's UBO demo - which calls that route for every live research run - was merged in on the 23rd, and nobody rechecked. Since then, "Start research" in live mode has been answering **400 `tenant_required`**: the page sends no tenant and no admin password, and the gate demands both.
+- **Why no test caught it:** every test in front of it mocks the network. The screen tests assert what the screen does with an answer; the route tests assert what the route does with a request. Nothing checked that the request the screen sends is one the route accepts.
+- **Now:** `requireStaff`, the same gate its siblings use - these screens are reached by signed-in trial users, not by an administrator with a shared password.
+- **Lesson worth keeping:** "no caller in the app" was a true statement about a moving tree. A reason that depends on what has been merged so far needs re-checking after the next merge, and nothing made that happen.
+
+### UBO-8 - No UBO screen sent the Clerk token, so the trial would have died on launch
+- **Category:** Security / Launch - **Priority:** P0 - **Status:** DONE (2026-09-22)
+- **What was wrong:** `requireStaff` is deliberately inert while `CLERK_SECRET_KEY` is unset, which is what lets the demo run locally with no accounts. Three screens called staff-gated routes and sent no token: the demo's research call, the ownership chart upload, and the chart comparison. They worked only because the gate was off. **Setting that key is the first thing the trial deployment does** - at which point all three would have answered 401 and the product would have been dead on arrival.
+- **Now:** every UBO call carries `clerkAuthHeaders()`, the helper the trials and people screens already used. It returns nothing while Clerk is unconfigured, so local behaviour is unchanged.
+- **The test that would have caught all of this:** `api/__tests__/uboScreensReachTheirRoutes.nodetest.js` - each UBO route paired with the screen that calls it, checking the gate against the call. It also checks the mapping itself is current, because a stale mapping tests nothing.
+
+### UBO-9 - The path prospects actually use had no limiter at all
+- **Category:** Cost - **Priority:** P0 - **Status:** DONE (2026-09-22)
+- **What was wrong:** `/api/ubo-control-lab` reaches Anthropic through its `START_LIVE` operation and had no `enforceRateLimit` call. So the per-person limits, the trial budget and end date (UBO-3) and the daily spend ceilings (UBO-4, row 14) applied to `/api/ubo-discovery` - and the demo does not use that route. Everything built this week to bound the bill missed the path prospects were going to run.
+- **Now:** a light bucket on the route (mostly local computation on fixtures and replays) and, for `START_LIVE` only, the **same** `ubo-discovery` allowance as the direct route. Sharing the bucket deliberately: two routes onto one provider must not hand one person two allowances.
+- **Found by:** asking what else was left to do without the schema, and reading the call sites rather than trusting a route table.
+
+### DOC-1 - Nothing told a new person how to run this
+- **Category:** Documentation - **Priority:** P2 - **Status:** DONE (2026-09-22) - `docs/RUNNING-LOCALLY.md`.
+- **What was missing:** no README, no setup guide. Which settings are needed, which you invent yourself, which cost money, what runs without a database, where each screen lives, how to apply the schema, and which known failures are expected - all of it lived in somebody's head or had to be reassembled by reading the code.
+- **Written because** the product owner is being sent the branch to run, and the alternative was a wall of instructions in a chat message that she would lose.
+- **Includes the honest section:** the pre-existing lint errors, `npm ci` not working, and the Evidence Lab being refused on purpose. An unexplained failure wastes an afternoon.

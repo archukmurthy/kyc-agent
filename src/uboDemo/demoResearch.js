@@ -1,3 +1,4 @@
+import { clerkAuthHeaders } from "../auth/clerkFetch";
 export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE", REPLAY: "REPLAY" });
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
@@ -35,7 +36,10 @@ export async function runDemoResearch(input, fetchImpl = window.fetch) {
   const request = buildResearchRequest(input);
   const response = await fetchImpl("/api/ubo-control-lab", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    // The session token, or nothing while Clerk is unconfigured - which matches
+    // the server: no key, no gate. Without this the screen answers 401 the
+    // moment the trial deployment turns Clerk on.
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await clerkAuthHeaders()) },
     body: JSON.stringify(request),
   });
   const result = await response.json();
