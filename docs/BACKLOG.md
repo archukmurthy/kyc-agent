@@ -507,3 +507,15 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Dev status (2026-09-21):** DONE. All 34 migrations are recorded; `npm run db:migrate -- --dry` reports nothing pending. Two of them (`002_cost_breakdown.sql`, `003_persistence_now.sql`) were applied accidentally during development before the baseline - both idempotent, no DROP/TRUNCATE/DELETE, no data affected. The other 32 were baselined without running.
 - **Production:** verify the later migrations' tables and columns actually exist before baselining. On dev the cost of a wrong guess is visible breakage; on production it is a missing table under live traffic.
 - **How it happened:** `node -e "require('./db/migrate-all.js')"` was used to check the file loaded. It runs on import, so it started migrating. `db/migrate-all.js` now only runs under `require.main === module`.
+
+### UBO-RET-1 — Make the seven-year retention period configurable
+- **Category:** Compliance / Config · **Priority:** P3 · **Status:** OPEN (raised with the decision, 2026-09-22)
+- **What:** Retention is fixed at seven years, hard-coded with a comment, on the product owner's instruction ("For now nothing gets deleted for 7 years leave it for configuration to define later date, hard code 7 years with comment and backlog item to make it configurable"). Nothing is ever hard-deleted; rows carry `deleted_at` and stay.
+- **Why later:** a retention period that varies per deployment is a compliance question, not a setting. It becomes configurable when a customer's own policy requires a different figure.
+- **Area:** UBO persistence layer (see `docs/ubo/SCHEMA-PROPOSAL.md`).
+
+### UBO-DB-1 — Schema proposal awaiting the product owner
+- **Category:** Database · **Priority:** P1 · **Status:** OPEN (proposal written, nothing applied)
+- **What:** `docs/ubo/SCHEMA-PROPOSAL.md` proposes seven tables in a separate `ubo` schema: workspaces, users, cases, decision_snapshots, artifacts, extractions, research_runs, jobs. Every shape is taken from something `ubo-control/` already emits or something the demo currently loses on refresh.
+- **Blocked on:** approval, plus five open questions in section 7 of that document.
+- **Diagnosis behind it:** `public.ubo_investigations` exists with 21 columns, zero rows, and no `SELECT` anywhere in the repository - a write-only audit log nobody reads. The engine's DecisionSnapshot is genuinely store-as-is (its id is the hash of its own contents), so audit history is a small job once she is ready for it. The most painful thing currently lost on refresh is an uploaded chart and its extraction.
