@@ -244,3 +244,33 @@ test("a thrown send error reports a fixed code, never the raw error text", async
   assert.strictEqual(res.body.message, undefined);
   assert.strictEqual(JSON.stringify(res.body).includes("ECONNREFUSED"), false);
 });
+
+test("a link built on a dev server is one a browser can actually open", async (t) => {
+  // Vercel sets x-forwarded-proto, so deployments stay https. A local dev
+  // server sets nothing, and defaulting to https produced
+  // https://localhost:3000 links that do not load - which made the customer
+  // half of the flow untestable without deploying.
+  const { handler } = setup(t);
+  for (const host of ["localhost:3000", "127.0.0.1:3001", "localhost"]) {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload }, { host }), res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(new URL(res.body.link).protocol, "http:", `${host} should be reachable`);
+  }
+});
+
+test("everything that is not localhost stays https", async (t) => {
+  const { handler } = setup(t);
+  for (const host of ["kyc-agent-deploy.vercel.app", "onboarding.example.com", "localhost.evil.test"]) {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload }, { host }), res);
+    assert.strictEqual(new URL(res.body.link).protocol, "https:", `${host} must not be downgraded`);
+  }
+});
+
+test("the platform's own header still wins over the guess", async (t) => {
+  const { handler } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }, { host: "localhost:3000", "x-forwarded-proto": "https" }), res);
+  assert.strictEqual(new URL(res.body.link).protocol, "https:");
+});

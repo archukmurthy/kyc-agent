@@ -62,7 +62,15 @@ function resolveOrigin(req, bodyOrigin) {
   const headers = req.headers || {};
   const host = headers["x-forwarded-host"] || headers.host;
   if (host) {
-    const proto = String(headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+    // Vercel sets x-forwarded-proto, so deployments are always https. A local
+    // dev server sets nothing, and defaulting to https there produced
+    // https://localhost:3000 links that simply do not load - which made the
+    // customer half of the flow untestable without deploying. Only localhost
+    // gets http: naming it in a Host header points the link at the caller's
+    // own machine, which gains an attacker nothing.
+    const forwarded = String(headers["x-forwarded-proto"] || "").split(",")[0].trim();
+    const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(String(host));
+    const proto = forwarded || (isLocal ? "http" : "https");
     return `${proto}://${host}`.replace(/\/+$/, "");
   }
   // No Host header at all (shouldn't happen over real HTTP) — fall back to

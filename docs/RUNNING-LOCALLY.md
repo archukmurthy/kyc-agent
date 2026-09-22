@@ -31,7 +31,9 @@ At this point every screen renders. What needs keys is below.
 Create `.env.local` in the repo root. It is gitignored and never committed.
 **Changes need a dev-server restart** — the values are read at startup.
 
-### Invent these yourself. Any value works.
+### If you were sent an `.env.local`, use it as-is and skip this section.
+
+Otherwise, invent these four. Any value works.
 
 ```
 ADMIN_PASSWORD=whatever-you-like
@@ -40,9 +42,17 @@ PREBOARDING_PASSWORD=a-third-thing
 DOSSIER_TOKEN_SECRET=any-long-random-string
 ```
 
-`DOSSIER_TOKEN_SECRET` signs the links customers receive. Locally it only needs
-to be consistent with itself, so a random string is fine — but use a different
-one from any other environment, or links you generate here would be valid there.
+The first three are typed by people, so make them memorable rather than random.
+
+`DOSSIER_TOKEN_SECRET` is never typed — it signs the links customers receive.
+Generate it properly:
+
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Use a different value from any other environment, or links minted here would be
+valid there too.
 
 ### Real keys, for the features that need them
 
@@ -133,7 +143,25 @@ is a known issue, tracked as TEST-2 in `docs/BACKLOG.md`.
 | `docs/ubo/SERVICE-BOUNDARY.md` | what the UBO module offers a host system, and what the host must bring |
 | `docs/ubo/SCHEMA-PROPOSAL.md` | a proposed shape for UBO's tables. Nothing applied. |
 
-## 8. Things that will look broken and are
+## 8. Checking it actually works
+
+The whole analyst-to-customer path, end to end, verified on 2026-09-22:
+
+1. Sign in at `/admin?tenant=nium` with `ADMIN_PASSWORD`. The platform workspace
+   creates itself on that first sign-in — until then every other surface answers
+   `tenant_not_found`, which is the thing most likely to confuse you on day one.
+2. Sign in at `/preboarding?tenant=nium` with `PREBOARDING_PASSWORD`.
+3. Research a company and let the dossier save. It needs `DATABASE_URL`.
+4. Send the invite. **No email is sent** unless `RESEND_API_KEY` is configured —
+   the response carries the link instead, and you copy it by hand. That is
+   expected locally, not a fault.
+5. Open that link. It signs you in as that one customer, with their data
+   pre-filled.
+6. Once the customer saves, the analyst is locked out of writing: `403
+   dossier_locked`. That is the ownership handover working.
+7. "Revoke link" kills every link for that dossier: `410 link_revoked`.
+
+## 9. Things that will look broken and are
 
 Kept honest rather than tidy — an unexplained failure wastes an afternoon.
 
