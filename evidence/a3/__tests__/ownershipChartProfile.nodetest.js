@@ -72,4 +72,63 @@ test("targeted verification merges a missing relationship without regenerating d
   assert.equal(merged.ownershipConnectorInventory.length, 2);
   assert.equal(merged.verificationPassUsed, true);
   assert.equal(OWNERSHIP_CHART_PROFILE.profileVersion, "ownership-chart-extraction-v2");
+  assert.equal(OWNERSHIP_CHART_PROFILE.instructionVersion, "ownership-chart-instructions-v3");
+});
+
+test("targeted verification reconciles namespaced inventory IDs and one unambiguous connector", () => {
+  const primary = {
+    facts: [], requestedConceptOutcomes: [], completeness: { state: "incomplete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("party_0", "Alice"), party("party_1", "Target Ltd", "legal_entity")],
+    ownershipConnectorInventory: [{ connectorId: "connector_0", subjectInventoryId: "party_0", objectInventoryId: "party_1", percentageText: null }],
+  };
+  const verification = {
+    facts: [], requestedConceptOutcomes: [], completeness: { state: "complete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("party:party_0", "Alice"), party("party:party_1", "Target Ltd", "legal_entity")],
+    ownershipConnectorInventory: [{ connectorId: "connector:connector_0", percentageText: "40%" }],
+  };
+  const merged = mergeOwnershipSemanticExtractions(primary, verification);
+  assert.equal(merged.ownershipPartyInventory.length, 2);
+  assert.deepEqual(merged.ownershipConnectorInventory, [{ connectorId: "connector_0", subjectInventoryId: "party_0", objectInventoryId: "party_1", percentageText: "40%" }]);
+  const fact = relationship("fact-1", "Alice", "Target Ltd");
+  fact.typedRelationship.sourceSpecificMetadata = {};
+  const assessed = assessOwnershipChartCompleteness({
+    artifactId: "artifact-1", facts: [fact], partyInventory: merged.ownershipPartyInventory,
+    connectorInventory: merged.ownershipConnectorInventory, providerCompleteness: { state: "complete" }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(assessed.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE);
+  assert.equal(assessed.metrics.unresolvedConnectorCount, 0);
+});
+
+test("a represented connector reconciles its explicit inventory endpoints", () => {
+  const assessed = assessOwnershipChartCompleteness({
+    facts: [{ typedRelationship: {
+      relationshipType: "ECONOMIC_OWNERSHIP",
+      subject: { name: "Alice Morgan" },
+      object: { name: "Northstar Payments Ltd" },
+      value: { kind: "EXACT", measurementType: "percentage", value: 40, unit: "percentage_points" },
+      sourceSpecificMetadata: { connectorInventoryId: "connector-1" },
+    } }],
+    partyInventory: [party("party-1", "Alice Morgan"), party("party-2", "Northstar Payments Ltd", "legal_entity")],
+    connectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2", visibleLabel: "OWNS 40% OF SHARES IN", disposition: "RESOLVED" }],
+    providerCompleteness: { state: "complete", limitations: [] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(assessed.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE);
+  assert.equal(assessed.unresolvedParties.length, 0);
+});
+
+test("verification inventory IDs with different punctuation reconcile by unique visible identity", () => {
+  const merged = mergeOwnershipSemanticExtractions({
+    facts: [], requestedConceptOutcomes: [], completeness: { state: "incomplete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("party-1", "Alice Morgan"), party("party-2", "Higgs LLP", "legal_entity")],
+    ownershipConnectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2", visibleLabel: "OWNS 40% OF SHARES IN" }],
+  }, {
+    facts: [], requestedConceptOutcomes: [], completeness: { state: "complete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("party_1", "Alice Morgan"), party("party_2", "Higgs LLP", "legal_entity")],
+    ownershipConnectorInventory: [{ connectorId: "connector_1", subjectInventoryId: "party_1", objectInventoryId: "party_2", visibleLabel: "OWNS 40% OF SHARES IN" }],
+  });
+  assert.deepEqual(merged.ownershipPartyInventory.map(({ inventoryId }) => inventoryId), ["party-1", "party-2"]);
+  assert.deepEqual(merged.ownershipConnectorInventory.map(({ connectorId, subjectInventoryId, objectInventoryId }) => ({ connectorId, subjectInventoryId, objectInventoryId })), [
+    { connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2" },
+  ]);
 });

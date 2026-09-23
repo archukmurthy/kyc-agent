@@ -1,0 +1,163 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
+const { MemoryArtifactStore } = require("../../a2/artifactStore.js");
+const { MemoryR1Repository } = require("../../r1/repository.js");
+const { CustomerOwnershipExtractionJobService } = require("../service.js");
+const { OWNERSHIP_CHART_PROFILE } = require("../../a3/ownershipChartProfile.js");
+
+function input() {
+  const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x01, 0xff, 0xd9]);
+  return {
+    demoContext: { demoCaseId: "case-1", referenceCaseId: "ref-1", company: { legalName: "POC LIMITED", registrationNumber: "01234567", countryCode: "GB", countryName: "United Kingdom", ownershipType: "LIMITED_COMPANY" } },
+    file: { originalFilename: "ownership.jpg", declaredMediaType: "image/jpeg", sizeBytes: bytes.length, contentBase64: bytes.toString("base64") },
+  };
+}
+
+function usableResult(state = "EXTRACTION_SUCCESS_COMPLETE") {
+  return { artifact: { artifactId: "artifact" }, extractionQuality: { state, canContinueToQuestions: true }, candidateFacts: [{ factId: "fact-1" }], sourceGraph: { relationships: [{ relationshipId: "rel-1" }] } };
+}
+
+class MemoryJobs {
+  constructor(ingestion) { this.ingestion = ingestion; this.jobs = new Map(); this.context = null; this.failCreateOnce = false; }
+  async ensureContext({ tenantId, demoCaseId, company }) {
+    if (!this.context) {
+      this.context = { id: randomUUID(), tenant_id: tenantId, subject_reference_id: randomUUID(), display_name: company.legalName, demoCaseId };
+      this.ingestion.contexts.push(this.context);
+    }
+    return this.context;
+  }
+  async findArtifact({ contextId, sha256 }) {
+    const item = [...this.ingestion.operations.values()].find((row) => row.contextId === contextId && row.fingerprintValue === sha256 && row.status === "successful");
+    return item ? { ...item, artifactId: item.artifactId, storageProvider: item.storageProvider, storageKey: item.storageKey, storageReference: item.storageReference } : null;
+  }
+  async createOrGetJob(record) {
+    if (this.failCreateOnce) { this.failCreateOnce = false; throw Object.assign(new Error("db unavailable"), { code: "database_persistence_failed", statusCode: 503 }); }
+    const existing = [...this.jobs.values()].find((job) => job.tenantId === record.tenantId && job.contextId === record.contextId && job.cacheKey === record.cacheKey);
+    if (existing) return { created: false, job: structuredClone(existing) };
+    const now = new Date().toISOString();
+    const job = { ...structuredClone(record), id: randomUUID(), state: "QUEUED", attemptCount: 0, createdAt: now, updatedAt: now, completedAt: null, nextAttemptAt: null, result: null };
+    this.jobs.set(job.id, job); return { created: true, job: structuredClone(job) };
+  }
+  async getJob({ id }) { return this.jobs.has(id) ? structuredClone(this.jobs.get(id)) : null; }
+  async claimJob({ id }) {
+    const job = this.jobs.get(id);
+    if (!job || ["COMPLETE", "PARTIAL", "FAILED"].includes(job.state) || job.attemptCount >= job.maxAttempts) return null;
+    job.state = "RUNNING"; job.attemptCount += 1; job.updatedAt = new Date().toISOString(); return structuredClone(job);
+  }
+  async markRetry({ id, code, message, upstreamStatus, nextAttemptAt }) { const job = this.jobs.get(id); Object.assign(job, { state: "RETRYING", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, nextAttemptAt }); return structuredClone(job); }
+  async completeJob({ id, state, result }) { const job = this.jobs.get(id); Object.assign(job, { state, result: structuredClone(result), completedAt: new Date().toISOString() }); return structuredClone(job); }
+  async failJob({ id, code, message, upstreamStatus }) { const job = this.jobs.get(id); Object.assign(job, { state: "FAILED", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, completedAt: new Date().toISOString() }); return structuredClone(job); }
+  async retryFailed({ id, correlationId }) { const job = this.jobs.get(id); if (job?.state !== "FAILED") return null; Object.assign(job, { state: "QUEUED", attemptCount: 0, correlationId, completedAt: null, nextAttemptAt: null }); return structuredClone(job); }
+  async requeueNonComplete({ id, correlationId }) { const job = this.jobs.get(id); if (!["FAILED", "PARTIAL"].includes(job?.state)) return null; Object.assign(job, { state: "QUEUED", attemptCount: 0, correlationId, completedAt: null, nextAttemptAt: null, result: null }); return structuredClone(job); }
+}
+
+function harness(sequence, options = {}) {
+  const ingestion = options.ingestion || new MemoryR1Repository();
+  const repository = options.repository || new MemoryJobs(ingestion);
+  const artifactStore = options.artifactStore || new MemoryArtifactStore();
+  let calls = 0;
+  const analyse = async () => {
+    const item = sequence[Math.min(calls, sequence.length - 1)]; calls += 1;
+    if (item instanceof Error) throw item;
+    return item;
+  };
+  const service = new CustomerOwnershipExtractionJobService({ repository, ingestionRepository: ingestion, artifactStore, analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: options.profile || OWNERSHIP_CHART_PROFILE });
+  return { service, repository, ingestion, artifactStore, calls: () => calls };
+}
+
+const failure = (code, statusCode) => Object.assign(new Error(`${code} safe reason`), { code, statusCode, upstreamStatus: statusCode });
+
+async function processToTerminal(service, jobId) {
+  let job;
+  for (let i = 0; i < 4; i += 1) { job = await service.process(jobId); if (["COMPLETE", "PARTIAL", "FAILED"].includes(job.state)) return job; }
+  return job;
+}
+
+test("first provider 502 retries and succeeds without another Artifact or Fact set", async () => {
+  const h = harness([failure("provider_failed", 502), usableResult()]);
+  const started = await h.service.start(input());
+  assert.equal((await h.service.process(started.jobId)).state, "RETRYING");
+  assert.equal((await h.service.process(started.jobId)).state, "COMPLETE");
+  assert.equal(h.ingestion.operations.size, 1); assert.equal(h.repository.jobs.size, 1); assert.equal(h.calls(), 2);
+});
+
+test("all provider requests 502 terminate FAILED with a safe customer message", async () => {
+  const h = harness([failure("provider_failed", 502)]);
+  const started = await h.service.start(input());
+  const job = await processToTerminal(h.service, started.jobId);
+  assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 3); assert.match(job.failure.message, /saved safely/); assert.doesNotMatch(JSON.stringify(job), /502/);
+});
+
+test("429 then success becomes COMPLETE", async () => {
+  const h = harness([failure("provider_failed", 429), usableResult()]);
+  const started = await h.service.start(input());
+  assert.equal((await processToTerminal(h.service, started.jobId)).state, "COMPLETE");
+});
+
+test("provider timeout is bounded and terminates FAILED", async () => {
+  const h = harness([failure("provider_timeout", 408)]);
+  const started = await h.service.start(input());
+  assert.equal((await processToTerminal(h.service, started.jobId)).state, "FAILED"); assert.equal(h.calls(), 3);
+});
+
+test("browser refresh resumes the same durable job", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const replacement = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
+  assert.equal((await replacement.process(started.jobId)).state, "COMPLETE"); assert.equal(h.repository.jobs.size, 1);
+});
+
+test("server restart after Artifact save reuses it when job persistence recovers", async () => {
+  const h = harness([usableResult()]); h.repository.failCreateOnce = true;
+  await assert.rejects(() => h.service.start(input()), /db unavailable/);
+  assert.equal(h.ingestion.operations.size, 1);
+  const restarted = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
+  const job = await restarted.start(input()); assert.equal(job.reused, true); assert.equal(h.ingestion.operations.size, 1);
+});
+
+test("re-upload of the same successful document reuses Artifact, job and result", async () => {
+  const h = harness([usableResult()]); const first = await h.service.start(input()); await h.service.process(first.jobId);
+  const replay = await h.service.start(input()); assert.equal(replay.jobId, first.jobId); assert.equal(replay.state, "COMPLETE"); assert.equal(replay.reused, true); assert.equal(h.calls(), 1);
+});
+
+test("same document with a newer extraction profile creates one new job but no Artifact", async () => {
+  const h = harness([usableResult()]); const first = await h.service.start(input());
+  const newer = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, profileVersion: "ownership-chart-extraction-v3" } });
+  const second = await newer.start(input()); assert.notEqual(second.jobId, first.jobId); assert.equal(h.ingestion.operations.size, 1); assert.equal(h.repository.jobs.size, 2);
+});
+
+test("same document with a newer instruction version creates a new cache identity", async () => {
+  const h = harness([usableResult()]); const first = await h.service.start(input());
+  const newer = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, instructionVersion: "ownership-chart-instructions-v4" } });
+  const second = await newer.start(input()); assert.notEqual(second.jobId, first.jobId); assert.equal(h.ingestion.operations.size, 1);
+});
+
+test("deterministic malformed output is not retried even when wrapped as 502", async () => {
+  const h = harness([failure("malformed_provider_result", 502)]);
+  const started = await h.service.start(input());
+  const job = await h.service.process(started.jobId);
+  assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 1); assert.equal(h.calls(), 1);
+});
+
+test("PARTIAL result is usable but is not reused as an authoritative extraction cache", async () => {
+  const h = harness([usableResult("EXTRACTION_SUCCESS_PARTIAL"), usableResult()]);
+  const first = await h.service.start(input()); assert.equal((await h.service.process(first.jobId)).state, "PARTIAL");
+  const refreshed = await h.service.start(input()); assert.equal(refreshed.jobId, first.jobId); assert.equal(refreshed.state, "QUEUED");
+  assert.equal((await h.service.process(refreshed.jobId)).state, "COMPLETE"); assert.equal(h.ingestion.operations.size, 1);
+});
+
+test("temporary database/cache failure retains the Artifact for retry", async () => {
+  const h = harness([usableResult()]); h.repository.failCreateOnce = true;
+  await assert.rejects(() => h.service.start(input()));
+  const retry = await h.service.start(input()); assert.ok(retry.artifactId); assert.equal(h.ingestion.operations.size, 1);
+});
+
+test("double-click start does not duplicate Artifact, job, Fact set or graph", async () => {
+  const h = harness([usableResult()]);
+  const first = await h.service.start(input()); const second = await h.service.start(input());
+  assert.equal(second.jobId, first.jobId); await h.service.process(first.jobId); await h.service.process(second.jobId);
+  assert.equal(h.ingestion.operations.size, 1); assert.equal(h.repository.jobs.size, 1); assert.equal(h.calls(), 1);
+});

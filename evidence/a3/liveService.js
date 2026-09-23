@@ -147,7 +147,7 @@ class LiveArtifactInterpretationService {
       }
     } catch (error) {
       const code = error.code || "provider_failed"; const message = error.message || "Semantic provider failed";
-      await this.persistFailure(run, artifacts, code, message); throw liveError(code, message, code === "provider_authentication_failed" ? 401 : 502, { runId: run.id });
+      await this.persistFailure(run, artifacts, code, message); throw liveError(code, message, code === "provider_authentication_failed" ? 401 : error.upstreamStatus || 502, { runId: run.id, upstreamStatus: error.upstreamStatus || null, attemptsUsed: error.attemptsUsed || 1 });
     }
     const deterministic = this.repository.findDeterministicValues ? (await Promise.all(artifacts.map((item) => this.repository.findDeterministicValues(item.id)))).flat() : [];
     const duplicateSuppressions = [];

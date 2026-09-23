@@ -124,13 +124,13 @@ test("reuses only a complete same-digest extraction produced by the current prof
   const diagram = {
     profileVersion: "ownership-chart-extraction-v2",
     schemaVersion: "ownership-chart-schema-v2",
-    instructionVersion: "ownership-chart-instructions-v2",
+    instructionVersion: "ownership-chart-instructions-v3",
     verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
   };
   const complete = { ...result, extractionQuality: { state: "EXTRACTION_SUCCESS_COMPLETE" }, evidence: { ownershipDiagramCompleteness: diagram } };
   const records = [{ result: complete }];
   expect(reusableCustomerOwnershipChartExtraction(records, "sha256:abc123")?.result).toBe(complete);
   expect(reusableCustomerOwnershipChartExtraction(records, "sha256:different")).toBeNull();
-  expect(reusableCustomerOwnershipChartExtraction(records, "sha256:abc123", { ...diagram, instructionVersion: "ownership-chart-instructions-v3" })).toBeNull();
+  expect(reusableCustomerOwnershipChartExtraction(records, "sha256:abc123", { ...diagram, instructionVersion: "ownership-chart-instructions-v4" })).toBeNull();
   expect(reusableCustomerOwnershipChartExtraction([{ result: { ...complete, extractionQuality: { state: "EXTRACTION_SUCCESS_PARTIAL" } } }], "sha256:abc123")).toBeNull();
 });

@@ -179,7 +179,7 @@ test("typed source-backed chart percentages identify Alice as a provisional UBO 
       evidenceRelationshipType: "ECONOMIC_OWNERSHIP",
       evidenceValue: { kind: "EXACT", measurementType: "percentage", exact: value, unit: "percentage_points" },
       evidenceMapping: { method: "provider_structured", id: "chart-provider", version: "1" },
-      evidenceSupportState: "supported",
+      evidenceSupportState: "supported_with_qualification",
     },
     evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-vodafone" }],
   });
@@ -624,7 +624,7 @@ test("API handler is POST-only and returns a bounded customer error", async () =
   assert.equal(response.statusCode, 405);
   await handler({ method: "POST", body: input() }, response);
   assert.equal(response.statusCode, 500);
-  assert.equal(response.body.message, "We could not analyse this ownership chart. Please try again.");
+  assert.equal(response.body.message, "We couldn't save or analyse this document right now. Please try again.");
   assert.doesNotMatch(JSON.stringify(response.body), /secret details/);
 });
 

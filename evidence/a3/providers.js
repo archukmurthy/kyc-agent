@@ -25,14 +25,26 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
 function parsedJson(value, fallback) {
+  if (value !== null && typeof value === "object") return structuredClone(value);
   if (typeof value !== "string") return fallback;
   try { return JSON.parse(value); } catch (_) { return value; }
 }
 
 function factValue(item) {
   if (item.value_json === undefined) return item.value;
+  // Without Anthropic's oversized compiled grammar the provider may return
+  // the already-decoded JSON value instead of the shallow transport string.
+  // Both representations carry the same fact; normalize before validation.
+  if (item.value_json !== null && typeof item.value_json === "object") return structuredClone(item.value_json);
   try { return JSON.parse(item.value_json); }
-  catch (_) { throw Object.assign(new Error("Semantic provider returned an invalid encoded Fact value"), { code: "provider_malformed_output" }); }
+  catch (_) {
+    const raw = String(item.value_json || "").trim();
+    // A scalar string may be returned directly when strict compiled output is
+    // unavailable. Preserve that string; never accept malformed object/array
+    // syntax as a value.
+    if (raw && !/^[{[]/.test(raw)) return raw;
+    throw Object.assign(new Error("Semantic provider returned an invalid encoded Fact value"), { code: "provider_malformed_output" });
+  }
 }
 
 const PERCENTAGE_POINT_UNIT_ALIASES = new Set([
@@ -144,6 +156,104 @@ function mapSupportLocator(locator) {
   };
 }
 
+function reconcilePercentageCandidate(candidate, value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return candidate;
+  const sourceValue = value.value;
+  const sourceSubject = value.subject;
+  const sourceObject = value.object;
+  const explicitRelationshipValue = value.relationship || value.relationship_type;
+  const explicitRelationship = String(explicitRelationshipValue || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const explicitPercentageValue = sourceValue?.kind === "EXACT"
+    && ["percentage_points", "percentage", "percent"].includes(String(sourceValue?.unit || value.unit || "").toLowerCase())
+    && typeof (sourceValue.exact_value ?? sourceValue.value) === "number";
+  if (!candidate) {
+    const exact = sourceValue?.exact_value ?? sourceValue?.value ?? value.percentage;
+    if (!explicitRelationshipValue || !sourceSubject?.name || !sourceObject?.name
+      || !((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number")
+      || typeof exact !== "number" || exact < 0 || exact > 100) return null;
+    return {
+      directionEstablished: true,
+      relationshipType: explicitRelationship,
+      subject: { partyType: sourceSubject.partyType || sourceSubject.party_type, name: sourceSubject.name },
+      object: { partyType: sourceObject.partyType || sourceObject.party_type, name: sourceObject.name },
+      value: { kind: "EXACT", measurementType: "percentage", value: exact, unit: "percentage_points" },
+      temporal: { state: "unknown" },
+      qualifications: [],
+      sourceSpecificMetadata: { deterministicTypedRelationshipFromStructuredFactValue: true },
+    };
+  }
+  const normalized = (text) => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const exact = sourceValue?.exact_value ?? sourceValue?.value ?? value.percentage;
+  const candidateSubjectName = candidate.subject?.name || sourceSubject?.name;
+  const candidateObjectName = candidate.object?.name || sourceObject?.name;
+  const sameAssertion = (!candidate.relationshipType || explicitRelationship === candidate.relationshipType)
+    && normalized(sourceSubject?.name) === normalized(candidateSubjectName)
+    && normalized(sourceObject?.name) === normalized(candidateObjectName)
+    && ((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number")
+    && typeof exact === "number" && exact >= 0 && exact <= 100;
+  if (!sameAssertion) return candidate;
+  const hydrated = {
+    ...candidate,
+    subject: { ...(candidate.subject || {}), partyType: candidate.subject?.partyType || sourceSubject?.partyType || sourceSubject?.party_type, name: candidateSubjectName },
+    object: { ...(candidate.object || {}), partyType: candidate.object?.partyType || sourceObject?.partyType || sourceObject?.party_type, name: candidateObjectName },
+  };
+  if (candidate.value?.kind === "EXACT" && candidate.value?.measurementType === "percentage"
+    && typeof candidate.value.value === "number" && candidate.value.value >= 0 && candidate.value.value <= 100) {
+    if (candidate.value.value !== exact) return candidate;
+    return {
+      ...hydrated,
+      value: { ...candidate.value, unit: candidate.value.unit || "percentage_points" },
+      sourceSpecificMetadata: { ...(candidate.sourceSpecificMetadata || {}), percentagePointUnitConfirmedByStructuredFact: true },
+    };
+  }
+  return {
+    ...hydrated,
+    directionEstablished: true,
+    relationshipType: candidate.relationshipType || explicitRelationship,
+    value: { ...(candidate.value || {}), kind: "EXACT", measurementType: "percentage", value: exact, unit: "percentage_points" },
+    temporal: candidate.temporal?.state ? candidate.temporal : { state: "unknown" },
+    qualifications: Array.isArray(candidate.qualifications) ? candidate.qualifications : [],
+    sourceSpecificMetadata: { ...(candidate.sourceSpecificMetadata || {}), providerTransportPercentageReconciledFromFactValue: true },
+  };
+}
+
+function relationshipValueForCandidate(value, concept, partyInventory = []) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, inventoryIds: {} };
+  const canonicalId = (input) => String(input || "").replace(/^(?:party:)+/i, "").trim();
+  const normalizedName = (input) => String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const byId = new Map(partyInventory.map((item) => [canonicalId(item?.inventory_id || item?.party_id || item?.id), item]));
+  const findByName = (name) => partyInventory.find((item) => normalizedName(item?.name || item?.visible_label || item?.description) === normalizedName(name));
+  const subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id;
+  const objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id;
+  const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id;
+  const party = (source, inventoryId) => {
+    const supplied = source && typeof source === "object" ? source : typeof source === "string" ? { name: source } : {};
+    const inventory = byId.get(canonicalId(inventoryId)) || findByName(supplied.name) || {};
+    const name = supplied.name || inventory.name || inventory.visible_label || inventory.description;
+    return name ? { ...inventory, ...supplied, name, party_type: supplied.party_type || supplied.partyType || inventory.party_type || inventory.partyType } : source;
+  };
+  const relationshipByConcept = {
+    economic_ownership: "ECONOMIC_OWNERSHIP",
+    voting_rights: "VOTING_CONTROL",
+    significant_influence_or_control: "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+    appointment_rights: "APPOINTMENT_RIGHTS",
+  };
+  const relationshipToken = String(value.relationship || value.relationship_type || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const controlledRelationships = new Set(Object.values(relationshipByConcept));
+  const relationship = controlledRelationships.has(relationshipToken) ? relationshipToken : relationshipByConcept[String(concept || "").toLowerCase()] || relationshipToken;
+  return {
+    value: {
+      ...value,
+      relationship,
+      subject: party(value.subject, subjectInventoryId),
+      object: party(value.object, objectInventoryId),
+      percentage: value.percentage ?? value.percentage_points,
+      unit: value.unit || (typeof value.percentage_points === "number" ? "percentage_points" : undefined),
+    },
+    inventoryIds: { subjectInventoryId: canonicalId(subjectInventoryId), objectInventoryId: canonicalId(objectInventoryId), connectorInventoryId: canonicalId(connectorInventoryId).replace(/^(?:connector:)+/i, "") },
+  };
+}
+
 class FixtureSemanticProvider extends SemanticExtractionProvider {
   constructor(options = {}) { super(); this.variant = options.variant || "primary"; }
   capabilities() { return { contentKinds: ["text", "image", "document"], maxRequestBytes: 32 * 1024 * 1024 }; }
@@ -196,13 +306,14 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       "Return one JSON object with facts, requested_concept_outcomes, completeness, and support.",
       "When Lab extraction context schemaReference is ownership-chart-extraction-v2, also build ownership_party_inventory and ownership_connector_inventory before extracting relationships. Identify every visible person, legal entity, trust/arrangement, and unclear party. Do not omit a party because its relationship is unclear; retain it with disposition UNRESOLVED. Inventory every visible connector and percentage separately. Link each ownership typed_relationship to its connector, subject, and object inventory IDs. If a visible item cannot be reconciled, retain it in the inventory rather than inventing a relationship.",
       "For ownership-chart-extraction-v2, ownership_data_status is OWNERSHIP_RELATIONSHIPS_PRESENT when at least one relationship is visible, NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED only when the complete source was inspected and contains no ownership relationship, and UNRESOLVED when visibility or interpretation is incomplete. Use NOT_APPLICABLE for other profiles.",
+      "For ownership-chart-extraction-v2, return only ownership/control parties, connectors, relationships, their currentness, and the specifically requested certification facts. Do not return application navigation, journey names, renderer metadata, page headings, graph counters, zoom percentages, instructions, status-card prose, or other user-interface text as business facts. A percentage is a relationship percentage only when it labels an ownership/control connector; never treat a zoom value such as 100% as ownership. Every returned business fact must include a source locator. For a PDF, use the exact 1-indexed page range plus an excerpt and set qualified=true when those fields locate the source. For an image, include an excerpt or description and original-pixel coordinates when available.",
       "Return shallow indexed transport lists: facts, support_locators, and typed_relationships. value_json and supporting_artifact_ids_json are valid JSON encoded as strings. Each support or relationship row uses fact_index, the zero-based index of its Fact. Omit rows instead of inventing unsupported locators or relationships.",
       "Each facts item must contain concept, value_json, raw, requested, value_found, semantic_role, sampled, supporting_artifact_ids_json, semanticAmbiguity, and ambiguous. value_json preserves the Fact's natural scalar, array, or object shape. semantic_role must be business_fact for a persistable semantic fact.",
       "A typed_relationship is optional and must describe exactly the same single source assertion as its ordinary Fact. Never put several independent relationships in one typed relationship or relationship array; emit one Fact per directed relationship.",
       "Only return typed_relationship when the evidence explicitly supports both parties, the relationship meaning, and subject→relationship→object direction. If meaning or direction is ambiguous, omit typed_relationship while retaining the safe ordinary Fact.",
       "Each typed_relationships row must contain direction_established=true; source-supported subject_json and object_json party snapshots; value_kind and measurement_type; temporal_state and temporal_json; metadata; and qualifications_json. Parties require a source name or description and never become canonical identities.",
       "Allowed relationship_type values are ECONOMIC_OWNERSHIP, VOTING_RIGHTS, APPOINTMENT_RIGHTS, REMOVAL_RIGHTS, FORMAL_DECISION_RIGHTS, SIGNIFICANT_INFLUENCE_OR_CONTROL, DIRECTOR_OF, OFFICER_OF, AUTHORIZED_SIGNATORY_FOR, CONTROL_OVER, SETTLOR_OF, TRUSTEE_OF, PROTECTOR_OF, BENEFICIARY_OF, NOMINEE_FOR, ACTS_ON_BEHALF_OF, and OTHER. OTHER is only for an understood out-of-vocabulary relationship and must retain source_specific_metadata.originalRelationshipLabel. There is no unknown relationship code.",
-      "typed_relationship.value uses kind EXACT, RANGE, QUALITATIVE, or UNKNOWN and measurement_type percentage, count_of_total, absolute_quantity, qualitative, or none. EXACT percentage uses exact_value in percentage points: 75% is 75, 25% is 25, and 100% is 100; never return 0.75, text, basis points, or 7500. RANGE uses range_lower/range_upper and inclusivity fields. QUALITATIVE uses qualitative_value containing the source-supported meaning, including a role title for DIRECTOR_OF or OFFICER_OF. Preserve exact bounds and inclusivity. Never convert a range to an exact value, qualitative wording to a number, or UNKNOWN to zero.",
+      "typed_relationship.value uses kind EXACT, RANGE, QUALITATIVE, or UNKNOWN and measurement_type percentage, count_of_total, absolute_quantity, qualitative, or none. EXACT and RANGE percentage relationships must use unit=percentage_points. EXACT percentage uses exact_value in percentage points: 75% is 75, 25% is 25, and 100% is 100; never return 0.75, text, basis points, or 7500. RANGE uses range_lower/range_upper and inclusivity fields. QUALITATIVE uses qualitative_value containing the source-supported meaning, including a role title for DIRECTOR_OF or OFFICER_OF. Preserve exact bounds and inclusivity. Never convert a range to an exact value, qualitative wording to a number, or UNKNOWN to zero.",
       "typed_relationship.temporal.state must be current, ceased, historical, or unknown. Do not infer current solely because no cease date appears.",
       "Do not return UBO/controller status, threshold decisions, indirect ownership calculations, winner selection, KYC satisfaction, or other downstream conclusions as typed relationships.",
       "The verified inputs are separate preserved Artifacts belonging to one Evidence Asset. Interpret them together where appropriate while preserving every Artifact boundary.",
@@ -230,7 +341,15 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     }
     content.push({ type: "text", text: instruction });
     const requestContent = items.every((item) => item.kind === "text") ? content.map((item) => item.text).join("\n\n") : content;
-    const requestBody = JSON.stringify({ model: this.model, max_tokens: this.maxOutputTokens, messages: [{ role: "user", content: requestContent }], output_config: { format: { type: "json_schema", schema: ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA } } });
+    // The ownership-chart schema is intentionally rich enough to exceed
+    // Anthropic's compiled-grammar limit. Keep the same prompt plus the
+    // deterministic parser/validator, but do not ask Anthropic to compile the
+    // oversized strict grammar for this profile.
+    const request = { model: this.model, max_tokens: this.maxOutputTokens, messages: [{ role: "user", content: requestContent }] };
+    if (context.schemaReference !== "ownership-chart-extraction-v2") {
+      request.output_config = { format: { type: "json_schema", schema: ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA } };
+    }
+    const requestBody = JSON.stringify(request);
     let response;
     let attemptsUsed = 0;
     let lastTransportError = null;
@@ -239,7 +358,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
         response = await this.fetchImpl("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" }, body: requestBody, signal: controller.signal });
-        if (!(response.status === 429 || response.status >= 500) || attempt === this.maxAttempts) break;
+        if (!(response.status === 408 || response.status === 429 || response.status >= 500) || attempt === this.maxAttempts) break;
       } catch (error) {
         lastTransportError = error;
         if (attempt === this.maxAttempts) {
@@ -255,8 +374,15 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     let payload;
     try { payload = await response.json(); } catch (_) { throw Object.assign(new Error("Semantic provider returned malformed output"), { code: "provider_malformed_output" }); }
     if (!response.ok) {
-      const code = response.status === 401 || response.status === 403 ? "provider_authentication_failed" : "provider_failed";
-      throw Object.assign(new Error(`Semantic provider failed with HTTP ${response.status}`), { code });
+      const safeReason = String(payload?.error?.message || payload?.message || "Provider request failed").slice(0, 500);
+      const code = response.status === 401 || response.status === 403
+        ? "provider_authentication_failed"
+        : response.status === 408
+          ? "provider_timeout"
+          : response.status === 429 || response.status >= 500
+            ? "provider_failed"
+            : "provider_request_rejected";
+      throw Object.assign(new Error(safeReason), { code, upstreamStatus: response.status, attemptsUsed });
     }
     if (payload.stop_reason === "max_tokens") throw Object.assign(new Error(`Semantic provider output exceeded the ${this.maxOutputTokens}-token response allowance; no partial interpretation was persisted`), { code: "provider_output_truncated" });
     const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
@@ -269,22 +395,55 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       parsed.support_locators.forEach((locator) => { if (Number.isInteger(locator?.fact_index)) { const rows = locatorsByFact.get(locator.fact_index) || []; rows.push(mapSupportLocator(locator)); locatorsByFact.set(locator.fact_index, rows); } });
       parsed.typed_relationships.forEach((relationship) => { if (Number.isInteger(relationship?.fact_index) && !relationshipsByFact.has(relationship.fact_index)) relationshipsByFact.set(relationship.fact_index, mapTypedRelationshipCandidate(relationship)); });
     }
+    const inventoryFacts = (concept) => parsed.facts.filter((item) => item?.concept === concept).flatMap((item) => {
+      const value = factValue(item);
+      return Array.isArray(value) ? value : [];
+    });
+    const mergeInventory = (items, idFields, prefix) => {
+      const rows = new Map();
+      items.forEach((item, index) => {
+        const supplied = idFields.map((field) => item?.[field]).find(Boolean) || `${prefix}_${index + 1}`;
+        const id = String(supplied).replace(new RegExp(`^(?:${prefix}:)+`, "i"), "");
+        const current = rows.get(id) || {};
+        const merged = { ...current, ...item };
+        Object.entries(item || {}).forEach(([field, fieldValue]) => { if (fieldValue == null || fieldValue === "") merged[field] = current[field]; });
+        rows.set(id, merged);
+      });
+      return [...rows.entries()].map(([id, item]) => ({ ...item, [idFields[0]]: id }));
+    };
+    const rawPartyInventory = mergeInventory([
+      ...(Array.isArray(parsed.ownership_party_inventory) ? parsed.ownership_party_inventory : []),
+      ...inventoryFacts("ownership_party_inventory"),
+    ], ["inventory_id", "party_id", "id"], "party");
+    const rawConnectorInventory = mergeInventory([
+      ...(Array.isArray(parsed.ownership_connector_inventory) ? parsed.ownership_connector_inventory : []),
+      ...inventoryFacts("ownership_connector_inventory"),
+    ], ["connector_id", "inventory_id", "id"], "connector");
     const facts = parsed.facts.map((item, sourceIndex) => ({ item, sourceIndex })).filter(({ item }) => item && item.concept && (item.value_json !== undefined || item.value !== undefined)).map(({ item, sourceIndex }) => {
       const request = requestByConcept.get(item.concept); const isRequested = item.requested === true && !!request;
       const encodedSupportIds = item.supporting_artifact_ids_json === undefined ? item.supporting_artifact_ids : parsedJson(item.supporting_artifact_ids_json, []);
-      return { concept: String(item.concept), value: factValue(item), raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(encodedSupportIds) ? encodedSupportIds.map(String) : Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: shallowTransport ? locatorsByFact.get(sourceIndex) || [] : Array.isArray(item.support_locators) ? item.support_locators.map(mapSupportLocator) : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate: shallowTransport ? relationshipsByFact.get(sourceIndex) || null : mapTypedRelationshipCandidate(item.typed_relationship) };
+      const value = factValue(item);
+      const candidate = shallowTransport ? relationshipsByFact.get(sourceIndex) || null : mapTypedRelationshipCandidate(item.typed_relationship);
+      const enriched = relationshipValueForCandidate(value, item.concept, rawPartyInventory);
+      let typedRelationshipCandidate = reconcilePercentageCandidate(candidate, enriched.value);
+      if (typedRelationshipCandidate && Object.values(enriched.inventoryIds).some(Boolean)) typedRelationshipCandidate = {
+        ...typedRelationshipCandidate,
+        sourceSpecificMetadata: { ...(typedRelationshipCandidate.sourceSpecificMetadata || {}), ...Object.fromEntries(Object.entries(enriched.inventoryIds).filter(([, id]) => id)) },
+      };
+      return { concept: String(item.concept), value, raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(encodedSupportIds) ? encodedSupportIds.map(String) : Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: shallowTransport ? locatorsByFact.get(sourceIndex) || [] : Array.isArray(item.support_locators) ? item.support_locators.map(mapSupportLocator) : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate };
     });
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
     const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) && parsed.completeness.source_record_count >= 0 ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) && parsed.completeness.represented_record_count >= 0 ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
     const requestedConceptOutcomes = requestedConcepts.map((request) => { const reported = reportedOutcomes.get(request.concept); const found = facts.some((fact) => fact.concept === request.concept && fact.valueFound && fact.semanticRole === "business_fact"); return { concept: request.concept, status: found ? "found" : reported === "not_found" ? "not_found" : completeness.state === "complete" ? "not_found" : "not_evaluated" }; });
-    const ownershipPartyInventory = (Array.isArray(parsed.ownership_party_inventory) ? parsed.ownership_party_inventory : []).map((item) => ({
-      inventoryId: String(item?.inventory_id || ""), visibleLabel: String(item?.visible_label || ""), partyType: String(item?.party_type || "unknown_or_other"), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
+    const ownershipPartyInventory = rawPartyInventory.map((item) => ({
+      inventoryId: String(item?.inventory_id || item?.party_id || item?.id || ""), visibleLabel: String(item?.visible_label || item?.name || item?.description || ""), partyType: String(item?.party_type || "unknown_or_other"), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
     }));
-    const ownershipConnectorInventory = (Array.isArray(parsed.ownership_connector_inventory) ? parsed.ownership_connector_inventory : []).map((item) => ({
-      connectorId: String(item?.connector_id || ""), subjectInventoryId: String(item?.subject_inventory_id || ""), objectInventoryId: String(item?.object_inventory_id || ""), visibleLabel: String(item?.relationship_label || ""), percentageText: String(item?.percentage_text || ""), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
+    const ownershipConnectorInventory = rawConnectorInventory.map((item) => ({
+      connectorId: String(item?.connector_id || item?.inventory_id || item?.id || ""), subjectInventoryId: String(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.source_party_id || item?.from_party_id || item?.from_party_inventory_id || item?.subject_id || item?.from || item?.source || ""), objectInventoryId: String(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.target_party_id || item?.to_party_id || item?.to_party_inventory_id || item?.object_id || item?.to || item?.target || ""), visibleLabel: String(item?.relationship_label || item?.connector_label || item?.source_label || item?.label || ""), percentageText: String(item?.percentage_text || item?.connector_label || item?.relationship_label || item?.source_label || item?.label || (typeof (item?.percentage_points ?? item?.percentage ?? item?.percentage_value) === "number" ? `${item.percentage_points ?? item.percentage ?? item.percentage_value}%` : "")), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
     }));
-    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed };
+    const ownershipDataStatusFact = facts.find((fact) => fact.concept === "ownership_data_status" && typeof fact.value === "string")?.value;
+    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed };
   }
 }
 
-module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, relationshipValueForCandidate };

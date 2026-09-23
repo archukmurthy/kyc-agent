@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit } = require("../providers");
+const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, reconcilePercentageCandidate, relationshipValueForCandidate } = require("../providers");
 const { runIndependentVerification, runSemanticExtraction, supportState } = require("../extractor");
 const { DeterministicProfileDiscoveryProvider, PROFILE_DISCOVERY_SOURCE } = require("./profileDiscoveryFixture");
 
@@ -172,4 +172,114 @@ test("semantic adapter bounds repeated transient retries at two attempts", async
   const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", maxAttempts: 10, fetchImpl: async () => { calls += 1; return { ok: false, status: 503, async json() { return {}; } }; } });
   await assert.rejects(() => adapter.extract({ decodedText: "x", requestedConcepts: [] }), (error) => error.code === "provider_failed");
   assert.equal(calls, 2);
+});
+
+test("ownership-chart extraction avoids Anthropic's oversized compiled grammar", async () => {
+  let body;
+  const adapter = new AnthropicSemanticProvider({
+    apiKey: "x", model: "m", fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, async json() { return { content: [{ type: "text", text: JSON.stringify({ facts: [], requested_concept_outcomes: [{ concept: "ECONOMIC_OWNERSHIP", status: "not_found" }], completeness: { state: "complete", limitations: [] }, ownership_data_status: "NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED" }) }] }; } };
+    },
+  });
+  await adapter.extract({ decodedText: "no ownership relationships", requestedConcepts: [{ concept: "ECONOMIC_OWNERSHIP" }], context: { schemaReference: "ownership-chart-extraction-v2" } });
+  assert.equal(body.output_config, undefined);
+});
+
+test("ownership inventories embedded as Facts complete skeletal top-level inventories", async () => {
+  const response = {
+    facts: [
+      { concept: "ownership_party_inventory", value: [
+        { inventory_id: "party:party_001", name: "ALICE MORGAN", party_type: "natural_person" },
+        { inventory_id: "party:party_002", name: "HIGGS LLP", party_type: "legal_entity" },
+      ] },
+      { concept: "ownership_connector_inventory", value: [
+        { inventory_id: "connector:connector_001", from_party_inventory_id: "party:party_001", to_party_inventory_id: "party:party_002", relationship_label: "OWNS 40% OF SHARES IN", percentage_points: 40 },
+      ] },
+    ],
+    ownership_party_inventory: [{ inventory_id: "party_001" }, { inventory_id: "party_002" }],
+    ownership_connector_inventory: [{ inventory_id: "connector_001" }],
+    requested_concept_outcomes: [], completeness: { state: "complete", limitations: [] },
+  };
+  const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", fetchImpl: async () => ({ ok: true, status: 200, async json() { return { content: [{ type: "text", text: JSON.stringify(response) }] }; } }) });
+  const result = await adapter.extract({ decodedText: "ownership", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
+  assert.deepEqual(result.ownershipPartyInventory.map(({ visibleLabel, partyType }) => ({ visibleLabel, partyType })), [
+    { visibleLabel: "ALICE MORGAN", partyType: "natural_person" },
+    { visibleLabel: "HIGGS LLP", partyType: "legal_entity" },
+  ]);
+  assert.equal(result.ownershipConnectorInventory[0].subjectInventoryId, "party:party_001");
+  assert.equal(result.ownershipConnectorInventory[0].objectInventoryId, "party:party_002");
+});
+
+test("ownership percentage transport is repaired only from the same explicit structured Fact", () => {
+  const factValue = {
+    relationship: "ECONOMIC_OWNERSHIP",
+    subject: { party_type: "natural_person", name: "Alice Morgan" },
+    object: { party_type: "legal_entity", name: "Northstar Payments Ltd" },
+    value: { kind: "EXACT", measurement_type: "percentage", exact_value: 40 },
+  };
+  const derived = reconcilePercentageCandidate(null, factValue);
+  assert.equal(derived.relationshipType, "ECONOMIC_OWNERSHIP");
+  assert.equal(derived.value.value, 40);
+  assert.equal(derived.value.unit, "percentage_points");
+
+  const malformedTransport = {
+    relationshipType: "ECONOMIC_OWNERSHIP",
+    subject: { partyType: "natural_person", name: "Alice Morgan" },
+    object: { partyType: "legal_entity", name: "Northstar Payments Ltd" },
+    value: { kind: "EXACT", measurementType: "percentage", value: 4000 },
+  };
+  assert.equal(reconcilePercentageCandidate(malformedTransport, factValue).value.value, 40);
+  assert.equal(reconcilePercentageCandidate({ ...malformedTransport, value: { kind: "EXACT", measurementType: "percentage", value: 40 } }, factValue).value.unit, "percentage_points");
+  const hydrated = reconcilePercentageCandidate({ ...malformedTransport, subject: { name: "Alice Morgan" }, object: { name: "Northstar Payments Ltd" }, value: { kind: "EXACT", measurementType: "percentage", value: 40 } }, factValue);
+  assert.equal(hydrated.subject.partyType, "natural_person");
+  assert.equal(hydrated.object.partyType, "legal_entity");
+  assert.equal(reconcilePercentageCandidate({ ...malformedTransport, subject: { partyType: "natural_person", name: "Different Person" } }, factValue).value.value, 4000);
+
+  const scalarPercentage = reconcilePercentageCandidate(null, {
+    relationship: "economic ownership",
+    subject: { partyType: "natural_person", name: "Alice Morgan" },
+    object: { partyType: "legal_entity", name: "Northstar Payments Ltd" },
+    percentage: 40,
+  });
+  assert.equal(scalarPercentage.relationshipType, "ECONOMIC_OWNERSHIP");
+  assert.equal(scalarPercentage.value.value, 40);
+
+  const snakeCaseRelationship = reconcilePercentageCandidate({
+    subject: { name: "Alice Morgan" }, object: { name: "Northstar Payments Ltd" },
+    value: { kind: "EXACT", measurementType: "percentage", value: 40 },
+  }, {
+    relationship_type: "ECONOMIC_OWNERSHIP",
+    subject: { party_type: "natural_person", name: "Alice Morgan" },
+    object: { party_type: "legal_entity", name: "Northstar Payments Ltd" },
+    percentage: 40,
+    unit: "percentage_points",
+  });
+  assert.equal(snakeCaseRelationship.subject.partyType, "natural_person");
+  assert.equal(snakeCaseRelationship.object.partyType, "legal_entity");
+});
+
+test("ownership Fact inventory IDs deterministically hydrate the typed relationship candidate", () => {
+  const enriched = relationshipValueForCandidate({
+    percentage_points: 40,
+    subject_party_inventory_id: "party_001",
+    object_party_inventory_id: "party_002",
+    relationship_connector_inventory_id: "connector_001",
+  }, "economic_ownership", [
+    { inventory_id: "party:party_001", name: "ALICE MORGAN", party_type: "natural_person" },
+    { inventory_id: "party:party_002", name: "HIGGS LLP", party_type: "legal_entity" },
+  ]);
+  const relationship = reconcilePercentageCandidate(null, enriched.value);
+  assert.equal(relationship.relationshipType, "ECONOMIC_OWNERSHIP");
+  assert.equal(relationship.subject.partyType, "natural_person");
+  assert.equal(relationship.object.partyType, "legal_entity");
+  assert.equal(relationship.value.value, 40);
+  assert.deepEqual(enriched.inventoryIds, { subjectInventoryId: "party_001", objectInventoryId: "party_002", connectorInventoryId: "connector_001" });
+
+  const synonym = relationshipValueForCandidate({ relationship: "owns shares in", subject: "ALICE MORGAN", object: "HIGGS LLP", percentage: 40, unit: "percentage_points" }, "economic_ownership", [
+    { inventory_id: "party_001", name: "ALICE MORGAN", party_type: "natural_person" },
+    { inventory_id: "party_002", name: "HIGGS LLP", party_type: "legal_entity" },
+  ]);
+  assert.equal(synonym.value.relationship, "ECONOMIC_OWNERSHIP");
+  assert.equal(reconcilePercentageCandidate(null, synonym.value).relationshipType, "ECONOMIC_OWNERSHIP");
 });

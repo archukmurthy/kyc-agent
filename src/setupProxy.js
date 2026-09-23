@@ -32,6 +32,7 @@ const inviteHandler = require(path.join(__dirname, "..", "api", "invite.js"));
 const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-discovery.js"));
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
 const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
+const uboPocHealthHandler = require(path.join(__dirname, "..", "api", "ubo-poc-health.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
@@ -102,6 +103,8 @@ module.exports = function (app) {
   app.get("/ubo-control-lab/vendor/react-dom.production.min.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "node_modules", "react-dom", "umd", "react-dom.production.min.js")));
   app.get("/ubo-control-lab/vendor/OwnershipGraph.js", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "OwnershipGraph.js")));
   app.get("/ubo-control-lab/vendor/ownership-graph.css", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "ownership-graph.css")));
+
+  app.get("/api/ubo-poc-health", adapt(uboPocHealthHandler));
 
   app.post("/api/ubo-demo-customer-ownership-chart", (req, res) => {
     let raw = "";

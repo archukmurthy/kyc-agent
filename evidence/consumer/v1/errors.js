@@ -29,6 +29,7 @@ const PUBLIC_ERRORS = Object.freeze({
   provider_authentication_failed: ["provider_failure", "provider", "The semantic provider could not complete the request.", true],
   provider_media_rejected: ["provider_failure", "provider", "The semantic provider rejected the supplied media.", false],
   provider_failed: ["provider_failure", "provider", "The semantic provider could not complete the request.", true],
+  provider_request_rejected: ["provider_request_rejected", "provider", "The semantic provider rejected the extraction request.", false],
   provider_malformed_output: ["malformed_provider_result", "provider", "The semantic provider returned an invalid result.", true],
   provider_output_truncated: ["incomplete_interpretation", "interpretation", "The semantic provider result was incomplete.", true],
   typed_relationship_invalid: ["incomplete_interpretation", "interpretation", "A typed Evidence relationship could not be validated.", false],

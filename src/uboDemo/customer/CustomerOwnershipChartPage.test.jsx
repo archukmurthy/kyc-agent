@@ -6,10 +6,12 @@ import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcile
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY,
+  CUSTOMER_OWNERSHIP_JOB_KEY,
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
   readCustomerDemoContext,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
+  writeCustomerOwnershipJob,
 } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, CUSTOMER_QUESTIONS_PATH, isCustomerOwnershipChartPath } from "./customerRoute";
 
@@ -229,8 +231,65 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
     expect(within(card).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
   });
   expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("status")).toHaveTextContent(/saved in this browser for future no-cost replay/i);
+  expect(screen.getByRole("status")).toHaveTextContent(/Evidence saved the Artifact and validated extraction durably/i);
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+});
+
+test("a queued upload polls the durable job and ignores a rapid duplicate click", async () => {
+  seed();
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    const job = body.operation === "PROCESS_EXTRACTION_JOB"
+      ? { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "COMPLETE", result: analysis }
+      : { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "QUEUED" };
+    return { ok: true, json: async () => ({ success: true, job }) };
+  });
+  const { container } = render(<CustomerOwnershipChartPage />);
+  const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+  const upload = screen.getByRole("button", { name: /Upload and analyse/i });
+  fireEvent.click(upload); fireEvent.click(upload);
+  await screen.findByRole("heading", { name: /Continue to questions/i });
+  expect(window.fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(window.fetch.mock.calls[1][1].body)).toEqual({ operation: "PROCESS_EXTRACTION_JOB", jobId: "job-1" });
+  expect(window.localStorage.getItem(CUSTOMER_OWNERSHIP_JOB_KEY)).toBeNull();
+});
+
+test("refresh resumes the same persisted extraction job without uploading bytes again", async () => {
+  seed();
+  writeCustomerOwnershipJob({ jobId: "job-refresh", demoCaseId: demoCase.demoCaseId, artifactId: "artifact-1", correlationId: "corr-refresh" });
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    expect(body).toEqual({ operation: "GET_EXTRACTION_JOB", jobId: "job-refresh" });
+    return { ok: true, json: async () => ({ success: true, job: { jobId: "job-refresh", artifactId: "artifact-1", correlationId: "corr-refresh", state: "COMPLETE", result: analysis } }) };
+  });
+  render(<CustomerOwnershipChartPage />);
+  await screen.findByRole("heading", { name: /Continue to questions/i });
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(window.fetch.mock.calls[0])).not.toContain("contentBase64");
+});
+
+test("retry reuses the failed job and existing Artifact", async () => {
+  seed();
+  let step = 0;
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body); step += 1;
+    if (step === 1) return { ok: true, json: async () => ({ success: true, job: { jobId: "job-retry", artifactId: "artifact-saved", correlationId: "corr-old", state: "FAILED", failure: { message: "safe" } } }) };
+    if (step === 2) {
+      expect(body).toEqual({ operation: "RETRY_EXTRACTION_JOB", jobId: "job-retry" });
+      return { ok: true, json: async () => ({ success: true, job: { jobId: "job-retry", artifactId: "artifact-saved", correlationId: "corr-new", state: "QUEUED" } }) };
+    }
+    expect(body).toEqual({ operation: "PROCESS_EXTRACTION_JOB", jobId: "job-retry" });
+    return { ok: true, json: async () => ({ success: true, job: { jobId: "job-retry", artifactId: "artifact-saved", correlationId: "corr-new", state: "COMPLETE", result: analysis } }) };
+  });
+  const { container } = render(<CustomerOwnershipChartPage />);
+  const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("saved safely");
+  fireEvent.click(screen.getByRole("button", { name: /Try analysis again/i }));
+  await screen.findByRole("heading", { name: /Continue to questions/i });
+  expect(window.fetch).toHaveBeenCalledTimes(3);
 });
 
 test("a restored structured extraction explains when the original chart bytes are unavailable", () => {
@@ -353,8 +412,9 @@ test("a server-side analysis failure distinguishes ingestion from provider timeo
   const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
   fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
   fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("document was received");
-  expect(screen.getByRole("alert")).toHaveTextContent("Reference: provider_timeout (502)");
+  expect(await screen.findByRole("alert")).toHaveTextContent("document has been saved safely");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("provider_timeout");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("502");
 });
 
 test("customer result refresh restore is case-bound and preserves an opaque research reference without inspecting it", () => {

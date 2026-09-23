@@ -4,10 +4,11 @@ export const CUSTOMER_OWNERSHIP_CHART_SESSION_KEY = "ubo-demo.customer-ownership
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION = "ubo-demo-customer-ownership-chart-session-v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY = "ubo-demo.customer-ownership-chart-library.v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION = "ubo-demo-customer-ownership-chart-library-v1";
+export const CUSTOMER_OWNERSHIP_JOB_KEY = "ubo-demo.customer-ownership-job.v1";
 export const CURRENT_OWNERSHIP_EXTRACTION_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
-  instructionVersion: "ownership-chart-instructions-v2",
+  instructionVersion: "ownership-chart-instructions-v3",
   verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
 });
 const MAX_SAVED_EXTRACTIONS = 12;
@@ -189,4 +190,17 @@ export function writeCustomerOwnershipChartSession({ context, result, calculatio
 
 export function clearCustomerOwnershipChartSession(storage = window.localStorage) {
   storage.removeItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY);
+}
+
+export function readCustomerOwnershipJob(storage = window.localStorage) {
+  const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_JOB_KEY));
+  return parsed?.jobId && parsed?.demoCaseId ? parsed : null;
+}
+
+export function writeCustomerOwnershipJob({ jobId, demoCaseId, artifactId, correlationId }, storage = window.localStorage) {
+  storage.setItem(CUSTOMER_OWNERSHIP_JOB_KEY, JSON.stringify({ jobId, demoCaseId, artifactId, correlationId, savedAt: new Date().toISOString() }));
+}
+
+export function clearCustomerOwnershipJob(storage = window.localStorage) {
+  storage.removeItem(CUSTOMER_OWNERSHIP_JOB_KEY);
 }

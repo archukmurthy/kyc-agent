@@ -5,7 +5,7 @@ const { createHash } = require("node:crypto");
 const OWNERSHIP_CHART_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
-  instructionVersion: "ownership-chart-instructions-v2",
+  instructionVersion: "ownership-chart-instructions-v3",
   verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
 });
 
@@ -110,11 +110,27 @@ function assessOwnershipChartCompleteness({
   const representedPartyIds = new Set();
   const representedConnectorIds = new Set();
   validRelationships.forEach((fact) => {
-    inventoryIdsForRelationship(fact, parties, "subject").forEach((id) => representedPartyIds.add(id));
-    inventoryIdsForRelationship(fact, parties, "object").forEach((id) => representedPartyIds.add(id));
+    const subjectIds = inventoryIdsForRelationship(fact, parties, "subject");
+    const objectIds = inventoryIdsForRelationship(fact, parties, "object");
+    subjectIds.forEach((id) => representedPartyIds.add(id));
+    objectIds.forEach((id) => representedPartyIds.add(id));
     const metadata = relationshipMetadata(fact);
     const connectorId = boundedText(metadata.connectorInventoryId || metadata.connector_inventory_id, 120);
     if (connectorId) representedConnectorIds.add(connectorId);
+    else if (subjectIds.length === 1 && objectIds.length === 1) {
+      const matches = connectors.filter((item) => item.subjectInventoryId === subjectIds[0] && item.objectInventoryId === objectIds[0]);
+      if (matches.length === 1) representedConnectorIds.add(matches[0].connectorId);
+      else if (connectors.length === 1 && !connectors[0].subjectInventoryId && !connectors[0].objectInventoryId) {
+        const relationship = fact.typedRelationship || fact.typedRelationshipCandidate;
+        const exact = relationship?.value?.exact ?? relationship?.value?.value;
+        const percentage = connectors[0].percentageText?.match(/(?:^|\D)(\d+(?:\.\d+)?)\s*%/)?.[1];
+        if (Number.isFinite(exact) && percentage != null && Number(percentage) === exact) representedConnectorIds.add(connectors[0].connectorId);
+      }
+    }
+  });
+  connectors.filter((item) => representedConnectorIds.has(item.connectorId)).forEach((item) => {
+    if (item.subjectInventoryId) representedPartyIds.add(item.subjectInventoryId);
+    if (item.objectInventoryId) representedPartyIds.add(item.objectInventoryId);
   });
 
   const unresolvedParties = parties.filter((item) => !representedPartyIds.has(item.inventoryId) && item.providerDisposition !== "INTENTIONALLY_NON_OWNERSHIP")
@@ -173,11 +189,43 @@ function stableFactKey(fact) {
   return `fact:${fact?.semanticConceptId || fact?.concept || "unknown"}:${JSON.stringify(fact?.factValue === undefined ? fact?.value : fact.factValue)}`;
 }
 
+function canonicalInventoryId(value, prefix) {
+  let id = boundedText(value, 120);
+  while (id.toLowerCase().startsWith(`${prefix}:`) && id.length > prefix.length + 1) id = id.slice(prefix.length + 1);
+  return id;
+}
+
 function mergeById(left, right, idKey) {
   const rows = new Map();
   [...(left || []), ...(right || [])].forEach((item, index) => {
-    const key = boundedText(item?.[idKey] || item?.[idKey.replace(/[A-Z]/g, (value) => `_${value.toLowerCase()}`)] || `${idKey}-${index}`, 120);
-    if (!rows.has(key)) rows.set(key, item);
+    const prefix = idKey === "inventoryId" ? "party" : "connector";
+    const supplied = item?.[idKey] || item?.[idKey.replace(/[A-Z]/g, (value) => `_${value.toLowerCase()}`)] || `${idKey}-${index}`;
+    let key = canonicalInventoryId(supplied, prefix);
+    if (idKey === "inventoryId") {
+      const sameParty = [...rows.entries()].filter(([, existing]) => normalized(existing.visibleLabel || existing.name) === normalized(item?.visibleLabel || item?.name)
+        && String(existing.partyType || existing.party_type || "unknown_or_other").toLowerCase() === String(item?.partyType || item?.party_type || "unknown_or_other").toLowerCase());
+      if (sameParty.length === 1) key = sameParty[0][0];
+    } else {
+      const connectorLabel = normalized(item?.visibleLabel || item?.relationshipLabel || item?.label);
+      const sameConnector = connectorLabel ? [...rows.entries()].filter(([, existing]) => normalized(existing.visibleLabel || existing.relationshipLabel || existing.label) === connectorLabel) : [];
+      if (sameConnector.length === 1) key = sameConnector[0][0];
+    }
+    const cleaned = { ...item, [idKey]: key };
+    if (idKey === "connectorId") {
+      cleaned.subjectInventoryId = canonicalInventoryId(item?.subjectInventoryId || item?.subject_inventory_id, "party") || null;
+      cleaned.objectInventoryId = canonicalInventoryId(item?.objectInventoryId || item?.object_inventory_id, "party") || null;
+    }
+    const current = rows.get(key);
+    if (!current) { rows.set(key, cleaned); return; }
+    const merged = { ...current, ...cleaned };
+    Object.entries(cleaned).forEach(([field, value]) => {
+      if (value == null || value === "") merged[field] = current[field];
+    });
+    if (idKey === "connectorId") {
+      merged.subjectInventoryId = current.subjectInventoryId || cleaned.subjectInventoryId;
+      merged.objectInventoryId = current.objectInventoryId || cleaned.objectInventoryId;
+    }
+    rows.set(key, merged);
   });
   return [...rows.values()];
 }

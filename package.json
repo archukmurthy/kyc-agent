@@ -25,6 +25,7 @@
     "test": "react-scripts test",
     "test:ubo-demo:critical": "node scripts/run-ubo-demo-critical.js",
     "test:ubo-demo:regression": "node scripts/run-ubo-demo-regression.js",
+    "test:ubo-poc:release-smoke": "node scripts/ubo-poc-release-smoke.js",
     "test:smoke:db": "node scripts/real-db-smoke.js",
     "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js idv/__tests__/secureIdentity.nodetest.js idv/__tests__/metrics.nodetest.js idv/__tests__/productionGuards.nodetest.js",
     "idv:security-scan": "node idv/scripts/securityScan.js",

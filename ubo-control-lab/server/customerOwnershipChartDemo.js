@@ -131,6 +131,7 @@ function defaultProvider() {
     apiKey: process.env.ANTHROPIC_API_KEY,
     model,
     timeoutMs: CUSTOMER_PROVIDER_TIMEOUT_MS,
+    maxAttempts: 1,
   });
 }
 
@@ -237,8 +238,8 @@ function selectSemanticProvider(fingerprintValue, injectedProvider) {
   return fingerprintValue === REVIEWED_BETTERCOMMS_DIGEST ? reviewedBettercommsProvider() : defaultProvider();
 }
 
-function createBaseConsumer({ artifact, artifactStore, provider }) {
-  const artifactRepository = createMemoryArtifactRepository(artifact);
+function createBaseConsumer({ artifact, artifactStore, provider, artifactRepository = null, operationRepository = null }) {
+  artifactRepository = artifactRepository || createMemoryArtifactRepository(artifact);
   const providerLineage = typeof provider.configuration === "function"
     ? provider.configuration()
     : { provider: "injected", model: "test", instructionReference: ANTHROPIC_R4_INSTRUCTION_REFERENCE };
@@ -249,7 +250,7 @@ function createBaseConsumer({ artifact, artifactStore, provider }) {
     providerLineage,
   });
   const interpretationService = new TargetedInterpretationService({
-    repository: new MemoryR2Repository(),
+    repository: operationRepository || new MemoryR2Repository(),
     artifactRepository,
     interpreter,
   });
@@ -663,7 +664,7 @@ function isExplicitTypedChartShareOwnership(fact, entityProfile) {
     && evidenceValue.measurementType === "percentage"
     && ["EXACT", "RANGE"].includes(fact.measurement?.type)
     && Boolean(qualifiers.evidenceMapping?.method)
-    && qualifiers.evidenceSupportState === "supported";
+    && ["supported", "supported_with_qualification"].includes(qualifiers.evidenceSupportState);
 }
 
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {
@@ -955,6 +956,13 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     subjectDisplayName: input.demoContext.company.legalName,
     subjectIdentifier: input.demoContext.company.registrationNumber,
   };
+  return analyseIngestedCustomerOwnershipChart({ input, ingestion, artifact, artifactStore }, dependencies);
+}
+
+async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifact, artifactStore }, dependencies = {}) {
+  const tenantId = artifact.tenantId;
+  const contextId = artifact.contextId;
+  const subjectReferenceId = artifact.subjectReferenceId;
   const authorization = {
     contractVersion: CONTRACT_VERSIONS.trustedAuthorization,
     tenantId,
@@ -965,12 +973,25 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     subjectReferenceId,
   };
   const semanticProvider = selectSemanticProvider(ingestion.fingerprintValue, dependencies.provider);
-  const baseConsumer = createBaseConsumer({ artifact, artifactStore, provider: semanticProvider });
+  const baseConsumer = createBaseConsumer({
+    artifact,
+    artifactStore,
+    provider: semanticProvider,
+    artifactRepository: dependencies.artifactRepository,
+    operationRepository: dependencies.operationRepository,
+  });
   let interpretationEnvelope = null;
   const evidenceConsumer = {
     async interpretArtifacts(trustedAuthorization, request) {
       const requestedConcepts = [
-        ...chartRequestedConcepts(request.requestedConcepts, input.demoContext.company),
+        ...chartRequestedConcepts(request.requestedConcepts, input.demoContext.company).map((concept) => ({
+          ...concept,
+          // These UUIDs belong to the UBO capability request and remain in
+          // correlation.externalReferences. They are not persisted Evidence
+          // requirement rows and must not be written through the Evidence FK.
+          informationNeedId: null,
+          schemaFieldId: null,
+        })),
         ...CERTIFICATION_CONCEPTS.map((concept) => certificationConcept(concept, input.demoContext.company)),
       ];
       interpretationEnvelope = await baseConsumer.interpretArtifacts(trustedAuthorization, {
@@ -981,7 +1002,10 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
           jurisdiction: input.demoContext.company.countryCode,
           schemaReference: OWNERSHIP_CHART_PROFILE.profileVersion,
           schemaVersionReference: OWNERSHIP_CHART_PROFILE.schemaVersion,
-          tenantConfigVersion: `${OWNERSHIP_CHART_PROFILE.instructionVersion}:${OWNERSHIP_CHART_PROFILE.verificationStrategyVersion}`,
+          // The Evidence schema reserves this column for an integer tenant
+          // configuration revision. Ownership profile/instruction/verification
+          // versions are persisted on the durable customer extraction job.
+          tenantConfigVersion: null,
           purpose: `Complete source-faithful ownership chart relationship enumeration for ${input.demoContext.company.legalName} (${input.demoContext.company.registrationNumber}); no UBO or policy conclusion`,
         },
       });
@@ -992,7 +1016,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
     evidenceConsumer,
     trustedAuthorizationProvider: async () => authorization,
   });
-  const requestId = `customer-chart:${randomUUID()}`;
+  const requestId = dependencies.requestId || `customer-chart:${randomUUID()}`;
   const capabilityResult = await extractionAdapter.extract({
     contractVersion: CAPABILITY_CONTRACT_VERSION,
     requestId,
@@ -1068,7 +1092,7 @@ async function analyseCustomerOwnershipChart(rawInput, dependencies = {}) {
       digest: ingestion.fingerprintValue,
       capturedAt: ingestion.capturedAt,
       integrityVerified: interpretationEnvelope.result.evidence.integrityVerified === true,
-      persistence: "EPHEMERAL_DEMO_ONLY",
+      persistence: dependencies.persistence || "EPHEMERAL_DEMO_ONLY",
     },
     evidence: {
       consumerContractVersion: interpretationEnvelope.contractVersion,
@@ -1107,6 +1131,7 @@ module.exports = Object.freeze({
   MAX_BYTES,
   RESULT_VERSION,
   analyseCustomerOwnershipChart,
+  analyseIngestedCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
   chartRequestedConcepts,

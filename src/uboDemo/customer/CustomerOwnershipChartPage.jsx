@@ -7,10 +7,12 @@ import {
   chartSourceCoverage,
   customerOwnershipChartExtractionsForContext,
   customerOwnershipChartSessionForContext,
+  clearCustomerOwnershipJob,
+  readCustomerOwnershipJob,
   readCustomerDemoContext,
-  reusableCustomerOwnershipChartExtraction,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
+  writeCustomerOwnershipJob,
 } from "./customerOwnershipChartSession";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
@@ -33,12 +35,6 @@ function fileAsBase64(file) {
   });
 }
 
-async function fileSha256(file) {
-  if (!file?.arrayBuffer || !window.crypto?.subtle) return null;
-  const digest = await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
 function validateFile(file) {
   if (!file) return "Choose an ownership chart to continue.";
   if (!ACCEPTED_TYPES.has(file.type)) return "Upload a PDF, PNG or JPEG ownership chart.";
@@ -59,8 +55,10 @@ function analysisFailureMessage(payload, status) {
     invalid_media: "The selected file is labelled as an image, but its contents are not a valid supported image.",
     unsupported_model_media: "The document was received, but this file format is not supported by the configured analysis model.",
   };
-  const message = messages[code] || payload?.message || "We could not analyse this ownership chart.";
-  return `${message} Reference: ${code}${status ? ` (${status})` : ""}.`;
+  if (status >= 500 || code === "analysis_temporarily_unavailable" || code.startsWith("provider_")) {
+    return "We couldn't complete the analysis right now. Your document has been saved safely. Please try again.";
+  }
+  return messages[code] || payload?.message || "We could not analyse this ownership chart.";
 }
 
 function relationshipValue(assertion) {
@@ -87,7 +85,7 @@ function CompanyContext({ context }) {
   </section>;
 }
 
-function UploadPanel({ file, error, busy, onChoose, onAnalyse, onRemove }) {
+function UploadPanel({ file, error, busy, retryAvailable, onChoose, onAnalyse, onRemove }) {
   const input = useRef(null);
   return <section className="ubo-customer-card ubo-customer-upload-card">
     <div className="ubo-customer-card-title"><span className="ubo-customer-icon" aria-hidden="true">↥</span><div><small>One document</small><h2>Upload your ownership chart</h2></div></div>
@@ -104,7 +102,7 @@ function UploadPanel({ file, error, busy, onChoose, onAnalyse, onRemove }) {
       <button type="button" onClick={onRemove} disabled={busy}>Remove</button>
     </div>}
     {error && <p className="ubo-customer-error" role="alert">{error}</p>}
-    <div className="ubo-customer-upload-actions"><small>Your file is used only for this demo analysis.</small><button type="button" className="ubo-customer-primary" onClick={onAnalyse} disabled={busy}>{busy ? "Analysing chart…" : "Upload and analyse"}<span>→</span></button></div>
+    <div className="ubo-customer-upload-actions"><small>{retryAvailable ? "Your document is saved safely. Retry will reuse it." : "Your file is saved before analysis begins."}</small><button type="button" className="ubo-customer-primary" onClick={onAnalyse} disabled={busy}>{busy ? "Analysing your ownership structure…" : retryAvailable ? "Try analysis again" : "Upload and analyse"}<span>→</span></button></div>
   </section>;
 }
 
@@ -218,7 +216,78 @@ export default function CustomerOwnershipChartPage() {
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
   const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
   const [analysisVisible, setAnalysisVisible] = useState(() => Boolean(restored) && new URLSearchParams(window.location.search).get("view") === "analysis");
+  const [failedJob, setFailedJob] = useState(null);
   const reevaluationAttempts = useRef(new Set());
+  const uploadInFlight = useRef(false);
+
+  const saveUsableResult = (nextResult, nextPreview = null) => {
+    setResult(nextResult);
+    setAnalysisVisible(false);
+    if (nextPreview) setPreview(nextPreview);
+    clearCustomerOwnershipJob();
+    setFailedJob(null);
+    try {
+      writeCustomerOwnershipChartSession({ context, result: nextResult });
+      saveCustomerOwnershipChartExtraction({ context, result: nextResult });
+      setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
+      setPersistenceNotice({ kind: "success", message: "Evidence saved the Artifact and validated extraction durably. This browser also keeps a convenient replay copy." });
+    } catch (saveError) {
+      setPersistenceNotice({ kind: "warning", message: `The durable Evidence result is available, but this browser could not save its replay copy: ${saveError.message || "local storage unavailable"}` });
+    }
+  };
+
+  const postJob = async (body) => {
+    const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
+    return payload.job || (payload.result ? {
+      jobId: `legacy-response:${payload.result.artifact?.artifactId || "result"}`,
+      artifactId: payload.result.artifact?.artifactId,
+      correlationId: "legacy-response",
+      state: "COMPLETE",
+      result: payload.result,
+    } : null);
+  };
+
+  const continueJob = async (initialJob, nextPreview = null) => {
+    let job = initialJob;
+    for (let poll = 0; poll < 12; poll += 1) {
+      writeCustomerOwnershipJob({ jobId: job.jobId, demoCaseId: context.demoCaseId, artifactId: job.artifactId, correlationId: job.correlationId });
+      if (job.state === "COMPLETE" || job.state === "PARTIAL") { saveUsableResult(job.result, nextPreview); return; }
+      if (job.state === "FAILED") {
+        setFailedJob(job);
+        setError("We couldn't complete the analysis right now. Your document has been saved safely. Please try again.");
+        return;
+      }
+      if (job.state === "RETRYING" && job.nextAttemptAt) {
+        const delay = Math.max(0, Math.min(9000, new Date(job.nextAttemptAt).getTime() - Date.now()));
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+      }
+      job = await postJob({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId });
+    }
+    throw new Error("Analysis is still safely queued. Refresh this page to continue checking it.");
+  };
+
+  useEffect(() => {
+    if (!context || result || busy) return undefined;
+    const savedJob = readCustomerOwnershipJob();
+    if (!savedJob || savedJob.demoCaseId !== context.demoCaseId) return undefined;
+    let active = true;
+    setBusy(true);
+    (async () => {
+      try {
+        const job = await postJob({ operation: "GET_EXTRACTION_JOB", jobId: savedJob.jobId });
+        if (active) await continueJob(job);
+      } catch (caught) {
+        if (active) setError(caught.message || "We could not resume the saved analysis.");
+      } finally { if (active) setBusy(false); }
+    })();
+    return () => { active = false; };
+    // Resume exactly once for the page/context. Job transitions are driven by continueJob.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context?.demoCaseId]);
 
   useEffect(() => {
     const artifactId = result?.artifact?.artifactId;
@@ -259,7 +328,7 @@ export default function CustomerOwnershipChartPage() {
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
-  const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); setAnalysisVisible(false); remove(); };
+  const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipJob(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); setAnalysisVisible(false); setFailedJob(null); remove(); };
   const useSaved = (record) => {
     setResult(record.result);
     setAnalysisVisible(false);
@@ -270,51 +339,34 @@ export default function CustomerOwnershipChartPage() {
     catch (_) { setPersistenceNotice({ kind: "warning", message: "Saved extraction loaded without a provider call, but the active browser session could not be updated." }); }
   };
   const analyse = async () => {
-    const nextError = validateFile(file);
+    if (uploadInFlight.current) return;
+    const nextError = failedJob ? "" : validateFile(file);
     if (nextError) { setError(nextError); return; }
+    uploadInFlight.current = true;
     setBusy(true); setError("");
     try {
-      const contentBase64 = await fileAsBase64(file);
-      const digest = await fileSha256(file);
-      const reusable = reusableCustomerOwnershipChartExtraction(savedExtractions, digest);
-      if (reusable) {
-        setResult(reusable.result);
-        setAnalysisVisible(false);
-        setPreview(writeCustomerOwnershipChartPreview({ context, result: reusable.result, file, contentBase64 }));
-        writeCustomerOwnershipChartSession({ context, result: reusable.result, calculationMethod: reusable.calculationMethod });
-        setCalculationMethod(reusable.calculationMethod || "EFFECTIVE_INTEREST");
-        setPersistenceNotice({ kind: "success", message: "Validated extraction reused for this exact file and extraction profile. No provider call was made." });
+      if (failedJob) {
+        const retried = await postJob({ operation: "RETRY_EXTRACTION_JOB", jobId: failedJob.jobId });
+        setFailedJob(null);
+        await continueJob(retried);
         return;
       }
-      const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const contentBase64 = await fileAsBase64(file);
+      const job = await postJob({
           demoContext: {
             company: context.company,
             referenceCaseId: context.referenceCaseId,
             demoCaseId: context.demoCaseId,
           },
           file: { originalFilename: file.name, declaredMediaType: file.type, sizeBytes: file.size, contentBase64 },
-        }),
       });
-      const payload = await response.json();
-      if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
-      setResult(payload.result);
-      setAnalysisVisible(false);
-      try { setPreview(writeCustomerOwnershipChartPreview({ context, result: payload.result, file, contentBase64 })); }
-      catch (_) { setPreview(null); }
-      try {
-        writeCustomerOwnershipChartSession({ context, result: payload.result });
-        saveCustomerOwnershipChartExtraction({ context, result: payload.result });
-        setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
-        setPersistenceNotice({ kind: "success", message: "Extraction saved in this browser for future no-cost replay. The original file remains available for preview only in this browser tab." });
-      } catch (saveError) {
-        setPersistenceNotice({ kind: "warning", message: `Analysis completed, but the browser could not save this extraction: ${saveError.message || "local storage unavailable"}` });
-      }
+      let nextPreview = null;
+      try { nextPreview = writeCustomerOwnershipChartPreview({ context, result: { artifact: { artifactId: job.artifactId } }, file, contentBase64 }); }
+      catch (_) { /* Durable Artifact remains available even if tab preview storage is full. */ }
+      await continueJob(job, nextPreview);
     } catch (caught) {
       setError(caught.message || "We could not analyse this ownership chart.");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); uploadInFlight.current = false; }
   };
   const changeCalculationMethod = (next) => {
     setCalculationMethod(next);
@@ -333,9 +385,9 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} analysisVisible={analysisVisible} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} analysisVisible={analysisVisible} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} retryAvailable={Boolean(failedJob)} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
-    <footer className="ubo-customer-footer">Demo experience · Browser-local result · Read-only source comparison</footer>
+    <footer className="ubo-customer-footer">Demo experience · Evidence Artifact and extraction saved durably · Read-only source comparison</footer>
   </div>;
 }
 
