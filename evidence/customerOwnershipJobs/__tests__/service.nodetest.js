@@ -51,7 +51,6 @@ class MemoryJobs {
   async completeJob({ id, state, result }) { const job = this.jobs.get(id); Object.assign(job, { state, result: structuredClone(result), completedAt: new Date().toISOString() }); return structuredClone(job); }
   async failJob({ id, code, message, upstreamStatus }) { const job = this.jobs.get(id); Object.assign(job, { state: "FAILED", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, completedAt: new Date().toISOString() }); return structuredClone(job); }
   async retryFailed({ id, correlationId }) { const job = this.jobs.get(id); if (job?.state !== "FAILED") return null; Object.assign(job, { state: "QUEUED", attemptCount: 0, correlationId, completedAt: null, nextAttemptAt: null }); return structuredClone(job); }
-  async requeueNonComplete({ id, correlationId }) { const job = this.jobs.get(id); if (!["FAILED", "PARTIAL"].includes(job?.state)) return null; Object.assign(job, { state: "QUEUED", attemptCount: 0, correlationId, completedAt: null, nextAttemptAt: null, result: null }); return structuredClone(job); }
 }
 
 function harness(sequence, options = {}) {
@@ -142,11 +141,18 @@ test("deterministic malformed output is not retried even when wrapped as 502", a
   assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 1); assert.equal(h.calls(), 1);
 });
 
-test("PARTIAL result is usable but is not reused as an authoritative extraction cache", async () => {
-  const h = harness([usableResult("EXTRACTION_SUCCESS_PARTIAL"), usableResult()]);
+test("re-upload of the same validated PARTIAL result returns it without another provider run", async () => {
+  const h = harness([usableResult("EXTRACTION_SUCCESS_PARTIAL")]);
   const first = await h.service.start(input()); assert.equal((await h.service.process(first.jobId)).state, "PARTIAL");
-  const refreshed = await h.service.start(input()); assert.equal(refreshed.jobId, first.jobId); assert.equal(refreshed.state, "QUEUED");
-  assert.equal((await h.service.process(refreshed.jobId)).state, "COMPLETE"); assert.equal(h.ingestion.operations.size, 1);
+  const refreshed = await h.service.start(input()); assert.equal(refreshed.jobId, first.jobId); assert.equal(refreshed.state, "PARTIAL");
+  assert.equal(refreshed.reused, true); assert.equal(h.calls(), 1); assert.equal(h.ingestion.operations.size, 1);
+});
+
+test("re-upload of a failed extraction does not silently start another provider run", async () => {
+  const h = harness([failure("provider_request_rejected", 400)]);
+  const first = await h.service.start(input()); assert.equal((await h.service.process(first.jobId)).state, "FAILED");
+  const refreshed = await h.service.start(input()); assert.equal(refreshed.jobId, first.jobId); assert.equal(refreshed.state, "FAILED");
+  assert.equal(h.calls(), 1); assert.equal(h.ingestion.operations.size, 1);
 });
 
 test("temporary database/cache failure retains the Artifact for retry", async () => {

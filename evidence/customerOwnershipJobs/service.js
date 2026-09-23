@@ -165,15 +165,7 @@ class CustomerOwnershipExtractionJobService {
       evidenceHandoff: input.evidenceHandoff, ...this.profile, provider, modelVersion,
       maxAttempts: this.maxAttempts, correlationId,
     });
-    let persistedJob = claimed.job;
-    if (!claimed.created && ["FAILED", "PARTIAL"].includes(persistedJob.state)) {
-      persistedJob = await this.repository.requeueNonComplete({
-        id: persistedJob.id,
-        tenantId: this.tenantId,
-        correlationId,
-      }) || persistedJob;
-    }
-    const job = { ...persistedJob, reused: artifactReused || !claimed.created };
+    const job = { ...claimed.job, reused: artifactReused || !claimed.created };
     console.info("[ubo-customer-extraction] job-start", { jobId: job.id, correlationId: job.correlationId, state: job.state, reused: job.reused });
     return publicJob(job);
   }

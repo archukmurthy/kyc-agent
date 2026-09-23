@@ -150,14 +150,6 @@ class PostgresCustomerExtractionJobRepository {
     return mapJob(rows(result)[0]);
   }
 
-  async requeueNonComplete({ id, tenantId, correlationId }) {
-    const result = await this.db.query(`UPDATE evidence_customer_extraction_jobs SET
-      state='QUEUED',attempt_count=0,next_attempt_at=NULL,lease_expires_at=NULL,completed_at=NULL,result=NULL,
-      last_reason_code=NULL,last_reason_message=NULL,upstream_status=NULL,correlation_id=$3,updated_at=NOW()
-      WHERE id=$1 AND tenant_id=$2 AND state IN ('FAILED','PARTIAL') RETURNING *`, [id, tenantId, correlationId]);
-    return mapJob(rows(result)[0]);
-  }
-
   async health() {
     const result = await this.db.query(`SELECT
       COUNT(*) FILTER (WHERE state IN ('QUEUED','RETRYING'))::int queued,
