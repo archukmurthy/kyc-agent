@@ -324,6 +324,8 @@ Surfaced during the initial audit; recorded here so they are not lost. Not part 
 - **Area:** `api/change-events.js`, `api/amendment-documents.js`, `src/App.js` onboardingSubmissionId.
 
 ### PREB-3 — Per-tenant pre-boarding analyst password
+- **Scheduled 2026-09-23:** to be done together with PLAT-2, on the owner's decision. They touch the same three login routes, so doing them as one change means one round of testing and one moment where stored passwords are rewritten, rather than two. AUTH-2 (sessions) is already done and is what makes these two the whole of the remaining password work.
+- **Note on what AUTH-2 did and did not fix:** a session now names the company it was issued for, so one cannot be replayed against another tenant. It does not stop an analyst simply logging in again against a different tenant with the same shared password - that is this item.
 - **Category:** Security · **Priority:** P2 · **Status:** OPEN (deferred to polish phase by user 2026-09-15)
 - **What:** Replace the single server-checked `PREBOARDING_PASSWORD` with a password per tenant (set from admin/super admin, stored hashed with a real KDF — see PLAT-2), so an analyst for tenant A can't enter tenant B's pre-boarding.
 - **Being built now instead:** `/preboarding?tenant=<id>` entry, per-tenant pre-boarding on/off switch, server check that the tenant exists and is active, analyst session bound to the verified tenant — with one shared analyst password.
