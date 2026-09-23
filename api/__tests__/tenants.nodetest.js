@@ -1,4 +1,5 @@
 const { test } = require("node:test");
+const { asSuperAdmin } = require("./_sessions");
 const assert = require("node:assert");
 const handler = require("../tenants");
 const registry = require("../../lib/tenantRegistry");
@@ -17,7 +18,9 @@ function fakeStorage(initial) {
 }
 
 function fakeReqRes({ method = "GET", query = {}, body = undefined } = {}) {
-  const req = { method, query, body, headers: { authorization: `Bearer ${SUPER}` }, url: "/api/tenants" };
+  // A super-admin SESSION, not the password: nothing accepts a password as a
+  // bearer any more (AUTH-2). SUPER below is still what the login route checks.
+  const req = { method, query, body, headers: asSuperAdmin(), url: "/api/tenants" };
   const res = {
     statusCode: null, body: null, headers: {},
     setHeader(k, v) { this.headers[k] = v; },

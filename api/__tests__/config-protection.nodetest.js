@@ -1,11 +1,14 @@
 const { test } = require("node:test");
+const { asAdmin } = require("./_sessions");
+// Still the password seeded into the stored hash and the env var - nothing
+// accepts it as a bearer any more, but the login routes still check it.
+const ADMIN = "test-admin-password";
 const assert = require("node:assert");
 const configHandler = require("../config");
 const versionsHandler = require("../config-versions");
 const registry = require("../../lib/tenantRegistry");
 const { hashPassword } = require("../../lib/auth");
 
-const ADMIN = "test-admin-password";
 
 function fakeStorage(initial) {
   const data = { ...(initial || {}) };
@@ -73,7 +76,7 @@ test("DELETE is refused for a protected tenant and keeps every version", async (
   const { req, res } = fakeReqRes({
     method: "DELETE",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
   });
   await configHandler(req, res);
 
@@ -101,7 +104,7 @@ test("DELETE still works for an unprotected tenant", async (t) => {
   const { req, res } = fakeReqRes({
     method: "DELETE",
     query: { tenant: "plain" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("plain"),
   });
   await configHandler(req, res);
 
@@ -118,7 +121,7 @@ test("publishing a gutted config is refused for any protected tenant (not just n
   const { req, res } = fakeReqRes({
     method: "POST",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
     body: { licences: [], entityTypes: [] },
   });
   await configHandler(req, res);
@@ -137,7 +140,7 @@ test("rolling a protected tenant back to a gutted version is refused", async (t)
   const { req, res } = fakeReqRes({
     method: "POST",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
     body: { version: 2 },
   });
   await versionsHandler(req, res);
@@ -156,7 +159,7 @@ test("rolling back to a healthy version still works", async (t) => {
   const { req, res } = fakeReqRes({
     method: "POST",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
     body: { version: 3 },
   });
   await versionsHandler(req, res);
@@ -226,7 +229,12 @@ function registryDownStore(extra) {
   };
 }
 
-test("an unreadable registry does NOT let ADMIN_PASSWORD authenticate a non-platform tenant", async (t) => {
+test("a session for one company cannot be used on another, registry up or down", async (t) => {
+  // This replaced a test that ADMIN_PASSWORD could not authenticate a
+  // non-platform tenant during a storage blip. That concern is now structural:
+  // no password is accepted as a bearer at all (AUTH-2), and a session names
+  // the company it was issued for. The check reads the token, not the store,
+  // so an unreadable registry cannot widen it.
   withAdmin(t);
   const storage = registryDownStore();
   configHandler.__setDeps({ storage });
@@ -235,7 +243,7 @@ test("an unreadable registry does NOT let ADMIN_PASSWORD authenticate a non-plat
   const { req, res } = fakeReqRes({
     method: "POST",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("somebody-else"),
     body: { licences: [{ id: "GB" }], entityTypes: [{ id: "Corporate", active: true }] },
   });
   await configHandler(req, res);
@@ -250,11 +258,11 @@ test("the destructive guard still fails CLOSED when the registry is unreadable",
   configHandler.__setDeps({ storage });
   registry.__setDeps({ storage });
 
-  // Authenticated by the tenant's OWN password, so auth is not what refuses.
+  // Signed in as an admin OF THAT TENANT, so auth is not what refuses.
   const { req, res } = fakeReqRes({
     method: "DELETE",
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${TENANT_PW}` },
+    headers: asAdmin("acme"),
   });
   await configHandler(req, res);
 

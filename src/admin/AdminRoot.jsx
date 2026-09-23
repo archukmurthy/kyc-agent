@@ -3,6 +3,7 @@ import AdminDashboard from "./AdminDashboard";
 import { adminColors, adminStyles } from "./adminDesign";
 import { buildLocalDefaultConfig } from "../config/localDefaultConfig";
 import { getTenantId } from "../utils/tenant";
+import { endSession } from "../auth/endSession";
 
 const TOKEN_KEY = "admin_token";
 const TENANT_KEY = "tenant_id";
@@ -61,7 +62,10 @@ export default function AdminRoot() {
     setToken(authToken);
   }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    // Tell the server first: clearing our own copy leaves the token working for
+    // anyone else holding one. Never blocks - the browser forgets it either way.
+    await endSession(token);
     try {
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TENANT_KEY);

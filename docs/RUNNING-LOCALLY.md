@@ -44,7 +44,10 @@ DOSSIER_TOKEN_SECRET=any-long-random-string
 
 The first three are typed by people, so make them memorable rather than random.
 
-`DOSSIER_TOKEN_SECRET` is never typed — it signs the links customers receive.
+`DOSSIER_TOKEN_SECRET` is never typed — it signs the links customers receive,
+and (unless you set `SESSION_SECRET` separately) the staff sessions that logins
+hand out. **Without it every login answers 500**, deliberately: a login that
+cannot mint a verifiable session should fail loudly rather than quietly.
 Generate it properly:
 
 ```
@@ -150,7 +153,10 @@ The whole analyst-to-customer path, end to end, verified on 2026-09-22:
 1. Sign in at `/admin?tenant=nium` with `ADMIN_PASSWORD`. The platform workspace
    creates itself on that first sign-in — until then every other surface answers
    `tenant_not_found`, which is the thing most likely to confuse you on day one.
-2. Sign in at `/preboarding?tenant=nium` with `PREBOARDING_PASSWORD`.
+2. Sign in at `/preboarding?tenant=nium` with `PREBOARDING_PASSWORD`. What comes
+   back is a session that expires after a working day — not the password. Every
+   later request carries the session; the password is checked once and never
+   travels again.
 3. Research a company and let the dossier save. It needs `DATABASE_URL`.
 4. Send the invite. **No email is sent** unless `RESEND_API_KEY` is configured —
    the response carries the link instead, and you copy it by hand. That is

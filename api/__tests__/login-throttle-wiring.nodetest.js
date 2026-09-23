@@ -4,6 +4,8 @@
 // forgets to call it. These drive the real handlers.
 
 const { test, beforeEach } = require("node:test");
+// Sets a session secret: a login cannot mint one without it, and answers 500.
+require("./_sessions");
 const assert = require("node:assert");
 
 const loginThrottle = require("../../lib/loginThrottle");

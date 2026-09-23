@@ -1,4 +1,6 @@
 const { test } = require("node:test");
+// Sets a session secret, which a login now needs in order to mint one.
+require("./_sessions");
 const assert = require("node:assert");
 const handler = require("../admin-auth");
 const registry = require("../../lib/tenantRegistry");

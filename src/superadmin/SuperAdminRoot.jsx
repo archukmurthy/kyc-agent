@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import { adminColors, adminStyles } from "../admin/adminDesign";
+import { endSession } from "../auth/endSession";
 
 const TOKEN_KEY = "super_admin_token";
 
@@ -23,7 +24,8 @@ export default function SuperAdminRoot() {
     setToken(authToken);
   }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await endSession(token);
     try {
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (_) {}

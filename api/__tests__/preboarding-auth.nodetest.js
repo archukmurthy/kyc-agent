@@ -1,4 +1,6 @@
 const { test } = require("node:test");
+// Sets a session secret, which a login now needs in order to mint one.
+require("./_sessions");
 const assert = require("node:assert");
 const handler = require("../preboarding-auth");
 const registry = require("../../lib/tenantRegistry");
@@ -106,7 +108,16 @@ test("the right password returns the verified tenant and a bearer token", async 
   assert.strictEqual(res.body.success, true);
   assert.strictEqual(res.body.tenantId, "acme");
   assert.strictEqual(res.body.companyName, "Acme Ltd");
-  assert.strictEqual(res.body.token, PASSWORD);
+
+  // This used to assert res.body.token === PASSWORD - the vulnerability written
+  // down as a requirement (AUTH-2). What comes back now is a session.
+  assert.notStrictEqual(res.body.token, PASSWORD, "the password must never come back as the token");
+  const session = require("../../lib/session");
+  const verified = await session.verify(res.body.token);
+  assert.strictEqual(verified.valid, true, verified.reason || "");
+  assert.strictEqual(verified.payload.role, "analyst");
+  assert.strictEqual(verified.payload.tenantId, "acme", "a session names the company it was issued for");
+  assert.ok(verified.payload.exp > Date.now(), "and it expires");
 });
 
 test("GET reports availability without needing a password", async (t) => {

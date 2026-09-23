@@ -49,6 +49,9 @@ const API_DIR = path.join(__dirname, "..");
 const LAB_PREFIX = "evidence/";
 const ROUTES = {
   "health.js": "public-status",
+  // Destroys a session the caller already holds - nothing to gate, and a
+  // sign-out that can be refused leaves people stuck.
+  "sign-out.js": "public-status",
 
   "admin-auth.js": "public-login",
   "preboarding-auth.js": "public-login",

@@ -1,10 +1,13 @@
 const { test } = require("node:test");
+const { asAdmin } = require("./_sessions");
+// Still the password seeded into the stored hash and the env var - nothing
+// accepts it as a bearer any more, but the login routes still check it.
+const ADMIN = "test-admin-password";
 const assert = require("node:assert");
 const handler = require("../config-templates");
 const registry = require("../../lib/tenantRegistry");
 const { hashPassword } = require("../../lib/auth");
 
-const ADMIN = "test-admin-password";
 
 function fakeStorage(initial) {
   const data = { ...(initial || {}) };
@@ -68,7 +71,7 @@ test("an authed list returns the template ids", async (t) => {
 
   const { req, res } = fakeReqRes({
     query: { tenant: "acme" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
   });
   await handler(req, res);
 
@@ -85,7 +88,7 @@ test("?id= builds the template for the requesting tenant", async (t) => {
 
   const { req, res } = fakeReqRes({
     query: { tenant: "acme", id: "nium-default" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
   });
   await handler(req, res);
 
@@ -102,7 +105,7 @@ test("an unknown template id is a 404", async (t) => {
 
   const { req, res } = fakeReqRes({
     query: { tenant: "acme", id: "nope" },
-    headers: { authorization: `Bearer ${ADMIN}` },
+    headers: asAdmin("acme"),
   });
   await handler(req, res);
 

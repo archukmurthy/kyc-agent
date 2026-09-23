@@ -15,6 +15,7 @@ const { hashPassword, verifyPassword } = require("../lib/auth");
 const registry = require("../lib/tenantRegistry");
 const { applyCors } = require("../lib/routeAuth");
 const loginThrottle = require("../lib/loginThrottle");
+const session = require("../lib/session");
 const { clientIp } = require("../lib/rateLimit");
 
 // Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
@@ -91,8 +92,20 @@ async function seedPlatformAuth(tenantId, envPassword) {
   }
 }
 
+/** A login that cannot mint a session must say so plainly. Without this the
+ *  route throws and the person sees a bare 500 - the same shape as the existing
+ *  "ADMIN_PASSWORD not configured" answer, which is what makes it diagnosable. */
+function sessionSecretMissing(res) {
+  if (process.env.SESSION_SECRET || process.env.DOSSIER_TOKEN_SECRET) return false;
+  // eslint-disable-next-line no-console
+  console.error("[auth] SESSION_SECRET (or DOSSIER_TOKEN_SECRET) is not configured - logins cannot mint a session");
+  res.status(500).json({ success: false, error: "SESSION_SECRET not configured on server" });
+  return true;
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return undefined;
+  if (sessionSecretMissing(res)) return undefined;
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -141,7 +154,7 @@ module.exports = async function handler(req, res) {
       await loginThrottle.recordSuccess(who);
       return res.status(200).json({
         success: true,
-        token: password,
+        token: session.mint({ subject: `admin:${tenantId}`, tenantId, role: "admin" }),
         tenantId,
         companyName: platformCompanyName(tenantId),
       });
@@ -155,7 +168,7 @@ module.exports = async function handler(req, res) {
     await loginThrottle.recordSuccess(who);
     return res.status(200).json({
       success: true,
-      token: password,
+      token: session.mint({ subject: `admin:${tenantId}`, tenantId, role: "admin" }),
       tenantId,
       companyName: tenantAuth.companyName || "",
     });

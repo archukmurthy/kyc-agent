@@ -6,6 +6,7 @@
 const { applyCors } = require("../lib/routeAuth");
 const loginThrottle = require("../lib/loginThrottle");
 const { clientIp } = require("../lib/rateLimit");
+const session = require("../lib/session");
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -21,8 +22,20 @@ function readBody(req) {
   });
 }
 
+/** A login that cannot mint a session must say so plainly. Without this the
+ *  route throws and the person sees a bare 500 - the same shape as the existing
+ *  "ADMIN_PASSWORD not configured" answer, which is what makes it diagnosable. */
+function sessionSecretMissing(res) {
+  if (process.env.SESSION_SECRET || process.env.DOSSIER_TOKEN_SECRET) return false;
+  // eslint-disable-next-line no-console
+  console.error("[auth] SESSION_SECRET (or DOSSIER_TOKEN_SECRET) is not configured - logins cannot mint a session");
+  res.status(500).json({ success: false, error: "SESSION_SECRET not configured on server" });
+  return true;
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return undefined;
+  if (sessionSecretMissing(res)) return undefined;
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -46,7 +59,7 @@ module.exports = async function handler(req, res) {
     const provided = body && typeof body.password === "string" ? body.password : "";
     if (provided === expected) {
       await loginThrottle.recordSuccess(who);
-    return res.status(200).json({ success: true, token: expected });
+    return res.status(200).json({ success: true, token: session.mint({ subject: "super-admin", role: "super-admin" }) });
     }
     await loginThrottle.recordFailure(who);
     return res.status(401).json({ success: false, error: "Incorrect password" });

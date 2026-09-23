@@ -651,7 +651,13 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Includes the honest section:** the pre-existing lint errors, `npm ci` not working, and the Evidence Lab being refused on purpose. An unexplained failure wastes an afternoon.
 
 ### AUTH-2 — The login endpoints hand back the password as the session token
-- **Category:** Security · **Priority:** P2 · **Status:** OPEN (found 2026-09-22 while verifying the pre-boarding flow end to end)
+- **Category:** Security · **Priority:** P2 · **Status:** DONE (2026-09-23) — all three logins mint a session from `lib/session.js`; nothing accepts a password as a bearer.
+- **What shipped:** `authorizeAdmin`, the analyst path in `lib/dossierAccess.js` and `requireSuperAdmin` in `api/tenants.js` all verify a session and check its role, and a session names the company it was issued for, so one tenant's cannot open another's. `POST /api/sign-out` ends one session and leaves colleagues working. Sessions expire after a working day. `SESSION_SECRET` (falling back to `DOSSIER_TOKEN_SECRET`) signs them, with the key derived per purpose so a customer's dossier link can never verify as a staff session.
+- **Behaviour change worth knowing:** without either secret, every login now answers 500 with `SESSION_SECRET not configured` rather than working. Deliberate — issuing sessions nobody can verify is worse than failing loudly.
+- **What it cost:** 22 tests failed on the first run, every one of them a test that authenticated by putting a password in the Authorization header. One asserted `res.body.token === PASSWORD` — the vulnerability written down as a requirement. `api/__tests__/_sessions.js` mints the real thing for tests that need to be signed in.
+- **Found the same way it was fixed:** `GET /api/config` is deliberately open (the customer wizard reads it with no login), so the first live check appeared to show the password still working. It was testing a route with no gate. The verification is only worth what the route you point it at is.
+- **Still open, and deliberately separate:** PREB-3 (one shared analyst password across every tenant — the session is now tenant-scoped, but the password that earns it is not) and PLAT-2 (the stored hash is not a password KDF).
+- **Originally recorded 2026-09-22 while verifying the pre-boarding flow end to end:**
 - **What:** `POST /api/admin-auth` and `POST /api/preboarding-auth` answer a successful login with `{ success: true, token: "<the password they just typed>" }`. Every later call carries it as `Authorization: Bearer <password>`. The password **is** the session.
 - **Why it matters, in order:**
   - There is no way to sign somebody out, or to end one session, without changing the password for everybody who shares it.

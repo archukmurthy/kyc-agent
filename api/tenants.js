@@ -17,6 +17,7 @@ const { hashPassword } = require("../lib/auth");
 const { sanitiseTenantId } = require("../lib/tenant");
 const tenantRegistry = require("../lib/tenantRegistry");
 const { applyCors } = require("../lib/routeAuth");
+const session = require("../lib/session");
 
 // What the create-tenant screen sends when somebody picks "start from the
 // default settings". The two "nium-" spellings are what older clients and
@@ -55,15 +56,14 @@ function readBody(req) {
   });
 }
 
-function requireSuperAdmin(req, res) {
-  const expected = process.env.SUPER_ADMIN_PASSWORD;
-  if (!expected) {
-    res.status(500).json({ error: "SUPER_ADMIN_PASSWORD not configured on server" });
-    return false;
-  }
+async function requireSuperAdmin(req, res) {
+  // A session from /api/super-admin-auth, not the password. The old check also
+  // compared with `!==`, which is not constant-time; there is nothing left here
+  // to compare against a secret.
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (token !== expected) {
+  const result = await session.verify(token);
+  if (!result.valid || result.payload.role !== "super-admin") {
     res.status(401).json({ error: "Unauthorized" });
     return false;
   }
@@ -118,7 +118,7 @@ module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 
-  if (!requireSuperAdmin(req, res)) return;
+  if (!(await requireSuperAdmin(req, res))) return;
 
   try {
     if (req.method === "GET") {
