@@ -19,7 +19,7 @@ finalises the flow. Her follow-up answers settled four things:
 - UBO is **standalone** — *"just another microservice I should be able to call
   from my main code, otherwise there is no link"*. So no reference field
   pointing at platform data, in either direction.
-- The **audit row is hers** and not to be actioned by us.
+- The **audit row was hers** and not to be actioned by us — **reversed 2026-09-24**: the Production Readiness Solution Guide puts an append-only audit event ledger in scope (section 19).
 - **Retention is seven years**, hard-coded with a comment, nothing ever
   hard-deleted, and a backlog item to make it configurable later (UBO-RET-1).
 
@@ -37,7 +37,7 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 | 7 | Questions | **Hers** | Needs tables and a flow. |
 | 8 | Analyst review | **Hers** | Needs tables and a flow. |
 | 9 | Policy mode | **Hers** | Needs tables and a flow. |
-| 10 | Audit history | **Blocked by her instruction**, not by a dependency | She asked that this not be actioned. |
+| 10 | Audit history | **In scope again** (owner, 2026-09-24) | Previously "do not action". The Production Readiness Solution Guide asks for a full append-only event ledger (its section 19) with a named event list, actor, four kinds of time, correlation id and reason codes. Waits on the data model, not on permission. |
 | 11 | Observability | **Done bar the alarm** (2026-09-22) | `lib/requestLog.js`: one structured line per failure with a request id the caller can quote, and nothing anybody typed. `GET /api/health` answers booleans only, 503 when the store is down. What remains is the owner's: somewhere for those lines to raise an alarm (GOLIVE-6). |
 | 12 | Backups and recovery | **Blocked** | Nothing to restore until the tables exist. A backup nobody has restored is not a backup. |
 | 13 | Retention | **The rule is done** (2026-09-22) | `lib/uboRetention.js`: seven years, hard-coded, with a test that fails if it is ever read from configuration. Records are stamped on write with the period they were made under. Enforcement over UBO case data follows the tables - and will not have to be remembered then (UBO-RET-1). |
