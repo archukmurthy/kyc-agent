@@ -12,7 +12,12 @@ function createHandler(analyse = analyseCustomerOwnershipChart, reevaluate = ree
     if (!(await enforceRateLimit(req, res, "ubo-demo-chart"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
-    if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
+    // No requireTenant here, deliberately. This route never reads the caller's
+    // workspace - what scopes it is the rate limiter, which resolves the caller
+    // and their workspace itself (lib/rateLimit.js#callerKey). Asking for a
+    // tenant we then discard is a claim a reader believes and the code does not
+    // keep, and with the login switched off it cannot be enforced anyway.
+    if (!(await requireStaff(req, res))) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });

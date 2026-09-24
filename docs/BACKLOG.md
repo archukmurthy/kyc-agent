@@ -681,3 +681,12 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **The rule now:** you cannot check a role you cannot establish. A `requireStaff` call that names roles refuses when there is no identity to have one; a call that names none stays inert, which is what the demo depends on.
 - **Second test alongside it:** every owner-gated UBO route must DECLARE its roles to `requireStaff` rather than checking them itself afterwards - a route doing its own check after an unroled call would be waved through exactly as before.
 - **Why it matters beyond this route:** GOLIVE-3 is still open, and the answer to it may involve redeploying with different Clerk settings. This was the failure mode that would have made a Clerk misstep expensive rather than merely inconvenient.
+
+
+### UBO-11 - Three routes demanded a workspace they never read
+- **Category:** Correctness / Clarity - **Priority:** P3 - **Status:** DONE (2026-09-24)
+- **The sibling of UBO-10.** That one was about roles; this is the same shape one flag over. `requireTenant: true` cannot be enforced when the login is switched off - `requireStaff` returns before it is reached - and `api/ubo-control-lab.js`, `api/ubo-demo-customer-ownership-chart.js` and `api/ubo-demo-entity-resolution.js` all asked for it and then never read a tenant at all.
+- **Why it mattered even though nothing was exposed:** a reader sees `requireTenant: true` and believes the request is scoped to one company. It was not. The thing that actually scopes those routes is the rate limiter, which resolves the caller and their workspace itself. A promise the code does not keep is worse than no promise, because the next person builds on it.
+- **Now:** the three drop the flag with a comment saying what does scope them. `api/ubo-discovery.js` keeps it, reads it, and handles the switched-off case explicitly with `UBO_DEV_TENANT_ID`.
+- **Enforced:** a test walks every route in `api/` and fails any that asks for a tenant without reading one.
+- **The rule, written where it is used** (`lib/routeAuth.js`): roles are refused when there is no identity; a tenant is allowed through as null, because the one route that reads it handles that - but a route that will not read it must not ask.

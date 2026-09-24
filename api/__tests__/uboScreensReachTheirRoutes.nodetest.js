@@ -106,3 +106,30 @@ test("every owner-only or role-gated UBO action names its roles", () => {
   const people = fs2.readFileSync(path2.join(ROOT, "api/ubo-people.js"), "utf8");
   assert.match(people, /requireStaff\([^)]*\{[^}]*roles:\s*\[/s);
 });
+
+test("a route that demands a tenant actually reads one", () => {
+  // The sibling of the role rule. `requireTenant: true` cannot be enforced when
+  // the login is switched off - requireStaff returns before it is checked - so
+  // a route that asks for a tenant and then never reads it is making a promise
+  // a reader believes and the code does not keep. Three UBO routes did exactly
+  // that until 2026-09-24. The one that genuinely needs a workspace
+  // (ubo-discovery) reads it, and handles the switched-off case itself.
+  const fs2 = require("node:fs");
+  const path2 = require("node:path");
+
+  const apiDir = path2.join(ROOT, "api");
+  const offenders = [];
+  for (const name of fs2.readdirSync(apiDir)) {
+    if (!name.endsWith(".js")) continue;
+    const src = fs2.readFileSync(path2.join(apiDir, name), "utf8");
+    if (!/requireTenant:\s*true/.test(src)) continue;
+    // It must go on to read the tenant off the actor it was given.
+    if (!/actor\.tenantId|\.tenantId\b/.test(src)) offenders.push(name);
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "these demand a workspace and never read it - drop the flag or use it:\n" + offenders.join("\n")
+  );
+});

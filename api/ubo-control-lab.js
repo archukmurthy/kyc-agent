@@ -181,7 +181,12 @@ module.exports = async function handler(req, res) {
   // The right gate is the one its siblings use - the demo screens are reached
   // by signed-in trial users, not by an administrator with a shared password.
   if (!(await enforceRateLimit(req, res, "ubo-control-lab"))) return undefined;
-  if (!(await requireStaff(req, res, { requireTenant: true }))) return undefined;
+  // No requireTenant here, deliberately. This route never reads the caller's
+  // workspace - what scopes it is the rate limiter, which resolves the caller
+  // and their workspace itself (lib/rateLimit.js#callerKey). Asking for a
+  // tenant we then discard is a claim a reader believes and the code does not
+  // keep, and with the login switched off it cannot be enforced anyway.
+  if (!(await requireStaff(req, res))) return undefined;
   if (req.method === "GET") return send(res, 200, {
     ...fixtureCatalogue(),
     review: reviewCatalogue(),
