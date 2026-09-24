@@ -426,7 +426,9 @@ they exist, every rule in that file depends on someone recalling it.
 - **Area:** `api/__tests__/*`, `lib/storage.js`.
 
 ### PLAT-9 — Dead `"nium"` defaults in the UBO persistence keys
-- **Category:** Security / Tidiness · **Priority:** P3 · **Status:** OPEN
+- **Category:** Security / Tidiness · **Priority:** P3 · **Status:** DONE (2026-09-22, as part of BRAND-2) — `agents/ubo/uboPersistence.js` now calls `requireTenant()`, which throws. A cache key with no workspace in it is a key SHARED between customers, so refusing is right and substituting a name never was.
+- **Status was stale until 2026-09-24.** Third time in this programme that the backlog disagreed with the code (UBO-1, PROC-7, this). Worth a habit: close the entry in the commit that does the work, not afterwards.
+- **Original report:**
 - **What:** `agents/ubo/uboPersistence.js` builds cache keys with `normalise(tenantId || "nium")` in both `resultKey` and `entityKey`. UBO-1 made the route always pass a real tenant, so the default is unreachable from `api/ubo-discovery.js` — but it is still there for any future caller that forgets.
 - **Why:** the same defaulting that UBO-1 was about. An unreachable bad default is a trap, not a safety net.
 - **Area:** `agents/ubo/uboPersistence.js`. Owned by the UBO side — worth raising rather than editing.
@@ -538,7 +540,7 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Worth noting:** the route table test checks that every route *declares a caller*; nothing checks that every route is *mounted*. That gap is PROC-7.
 
 ### PROC-7 — Nothing checks that an api/ route is reachable in dev
-- **Category:** Process · **Priority:** P3 · **Status:** OPEN (raised 2026-09-22)
+- **Category:** Process · **Priority:** P3 · **Status:** DONE (2026-09-22) — see the fuller entry lower in this file. This one was left OPEN when the work landed; a duplicate entry is how a backlog starts lying.
 - **What:** `api/__tests__/routeTable.nodetest.js` enforces that each file under `api/` declares who may call it. It does not enforce the other half of invariant 1 — that the route is mounted in `src/setupProxy.js` — so a route can 404 in dev for weeks while working in production (PLAT-11).
 - **Fix:** one more assertion in the same test: every `api/*.js` appears in `src/setupProxy.js`, with a named exception list for the cron-only routes (`finalize-submissions`) exactly as the open-route list works today.
 - **Why it is not done in this change:** it will fail on more than one existing route, and turning that list green is its own piece of work rather than a rider on the people screen.
@@ -669,3 +671,13 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Fix:** mint a short-lived signed session on successful login and return that instead. `lib/dossierToken.js` already does exactly this shape for customers — signed, expiring, revocable — so there is a working pattern in the codebase to copy rather than a design to invent. `lib/session.js` exists from earlier work and was paused.
 - **Do it with PREB-3 and PLAT-2**, which touch the same three login routes: one change that gives per-tenant analyst passwords, a real key-derivation function, and a session that is not the password.
 - **Note:** this is what leaked an admin password into a session transcript on 2026-09-22. Nothing was exposed outside that session, and the value is a local development password, but it is worth rotating when the three items above are done.
+
+
+### UBO-10 - An unconfigured deployment let anyone create trial invites
+- **Category:** Security - **Priority:** P0 - **Status:** DONE (2026-09-24) - `lib/routeAuth.js#requireStaff`.
+- **What was wrong:** the staff gate is deliberately inert while `CLERK_SECRET_KEY` is unset, so the demo runs locally with no accounts. It did that by returning an "unauthenticated" actor - a truthy object. Every caller checks it as `if (!(await requireStaff(req, res, { roles: ["owner"] })))`, and a truthy object is not falsy, so **every role check passed**. On a deployment without Clerk configured, anyone could `POST /api/ubo-invite` with no credentials at all and mint themselves a trial: any number of seats, any number of days, any research budget. A trial is a workspace plus a spending allowance, so that is money.
+- **The route's own comment claimed the opposite:** *"The owner actions are checked HERE, on the server... anyone can post to this route directly, and creating invites is how somebody would help themselves to our Anthropic budget."* True with Clerk on. False without it, which is the state a misconfigured or freshly-deployed environment is in.
+- **How it was found:** by asking what UBO work remained and then calling the live route with no credentials, rather than reading the code again. Proved by two invites it should never have created - 50 seats and 100,000 research runs - since removed.
+- **The rule now:** you cannot check a role you cannot establish. A `requireStaff` call that names roles refuses when there is no identity to have one; a call that names none stays inert, which is what the demo depends on.
+- **Second test alongside it:** every owner-gated UBO route must DECLARE its roles to `requireStaff` rather than checking them itself afterwards - a route doing its own check after an unroled call would be waved through exactly as before.
+- **Why it matters beyond this route:** GOLIVE-3 is still open, and the answer to it may involve redeploying with different Clerk settings. This was the failure mode that would have made a Clerk misstep expensive rather than merely inconvenient.

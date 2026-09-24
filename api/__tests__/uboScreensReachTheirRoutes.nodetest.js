@@ -93,3 +93,16 @@ test("the demo's live research passes the same paid allowance as the direct rout
   const lab = read("api/ubo-control-lab.js");
   assert.match(lab, /START_LIVE[\s\S]{0,400}enforceRateLimit\(req, res, "ubo-discovery"\)/);
 });
+
+test("every owner-only or role-gated UBO action names its roles", () => {
+  // The refusal above only fires when a route ASKS for a role. A route that
+  // checks the role itself, after calling requireStaff with none, would be
+  // waved through on an unconfigured deployment exactly as before.
+  const fs2 = require("node:fs");
+  const path2 = require("node:path");
+  const src = fs2.readFileSync(path2.join(ROOT, "api/ubo-invite.js"), "utf8");
+  assert.match(src, /requireStaff\([^)]*\{[^}]*roles:\s*\[/s, "owner actions must be declared to requireStaff, not checked afterwards");
+
+  const people = fs2.readFileSync(path2.join(ROOT, "api/ubo-people.js"), "utf8");
+  assert.match(people, /requireStaff\([^)]*\{[^}]*roles:\s*\[/s);
+});
