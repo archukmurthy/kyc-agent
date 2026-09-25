@@ -62,3 +62,23 @@ test("Review and Audit consume the same completed verification assessment", () =
   expect(screen.getByRole("heading", { name: "Assessment and identity-verification history" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "identity verification completed" })).toBeInTheDocument();
 });
+
+test("a no-nominee declaration is presented as a declaration rather than an unknown ownership edge", () => {
+  const nomineeDeclaration = {
+    id: "resolution:nominee", comparisonItemId: "ownership-comparison:nominee-declaration", resolutionStatus: "RESOLVED_CUSTOMER_CONFIRMED", ownershipEstablishment: "ESTABLISHED_CUSTOMER_DECLARATION",
+    resultingFact: { type: "ENTITY_ATTRIBUTE", attribute: "nominee_arrangement", value: false, evidenceReferences: [] },
+    reason: "Customer declared that no nominee, bare-trust or similar arrangement applies.", factRequirements: [], questions: [], evidence: [],
+  };
+  const shared = { demoCase: props.demoCase, result: { ownershipResolutionTrace: { ...trace, ownershipFacts: [...trace.ownershipFacts, nomineeDeclaration] } } };
+  const view = render(<AnalystResolutionView mode="REVIEW" {...shared} />);
+  expect(screen.getByRole("heading", { name: "Ownership declarations" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Nominee arrangement for Customer Limited" })).toBeInTheDocument();
+  expect(screen.getByText("No nominee arrangement declared")).toBeInTheDocument();
+  expect(screen.getByText("No nominee ownership route added")).toBeInTheDocument();
+  expect(screen.queryByText(/Unknown party/)).not.toBeInTheDocument();
+  view.unmount();
+
+  render(<AnalystResolutionView mode="AUDIT" {...shared} />);
+  expect(screen.getByRole("heading", { name: "Nominee arrangement for Customer Limited" })).toBeInTheDocument();
+  expect(screen.queryByText(/Unknown party/)).not.toBeInTheDocument();
+});
