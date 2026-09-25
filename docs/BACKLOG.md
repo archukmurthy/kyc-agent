@@ -521,6 +521,11 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Area:** UBO persistence layer (see `docs/ubo/SCHEMA-PROPOSAL.md`).
 
 ### UBO-DB-1 — Schema proposal awaiting the product owner
+- **Decision taken 2026-09-25 (owner):** **Way B — UBO owns its own tables and refers to other modules by plain text, never by a database link.** Written up as section 0 of `docs/ubo/SCHEMA-PROPOSAL.md`, which is where the migrations will be written from.
+- **What it resolves:** the Production Readiness Solution Guide describes one shared structure (Case, Parties, Evidence, IDV, Audit together, UBO holding IDV session references, one correlation id across modules). That reads as a single product and contradicts the standing requirement that UBO is sellable on its own. Separation was chosen.
+- **The three rules:** UBO owns every table it writes to; references to Evidence and IDV are text and are never followed; `case_id` and `correlation_id` are given to UBO and stamped on its output, never looked up by it.
+- **Cost accepted:** a company or person known to both modules is stored twice. Duplication you can see beats a join you cannot remove.
+- **Still to confirm with the product owner**, since the guide reads the other way. Nothing has been built on this decision yet - it is recorded so the first migration does not quietly assume the opposite.
 - **Category:** Database · **Priority:** P1 · **Status:** OPEN (proposal written, nothing applied)
 - **What:** `docs/ubo/SCHEMA-PROPOSAL.md` proposes seven tables in a separate `ubo` schema: workspaces, users, cases, decision_snapshots, artifacts, extractions, research_runs, jobs. Every shape is taken from something `ubo-control/` already emits or something the demo currently loses on refresh.
 - **Blocked on:** approval, plus five open questions in section 7 of that document.

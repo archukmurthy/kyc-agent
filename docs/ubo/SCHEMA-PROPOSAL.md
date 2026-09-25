@@ -1,5 +1,13 @@
 # UBO database — proposal
 
+> **Status, 2026-09-25.** Sections 1-7 below were written on 2026-09-22, before the
+> Production Readiness Solution Guide arrived. They are narrower than the guide:
+> they store the decision, where the guide stores the assertions a decision was
+> made from and derives the decision as a projection. The guide is the better
+> model and supersedes them. Section 0 is the one decision already taken and it
+> governs whatever is written next. Four of the five open questions in section 7
+> are answered by the guide.
+
 **Status: proposal. Nothing here has been applied.** Written 22 September 2026
 after a read-only diagnosis of what UBO persists today. It needs approval from
 the UBO product owner before any migration runs.
@@ -8,6 +16,69 @@ The shapes below are not invented. Every table exists because something in
 `ubo-control/` already emits a record of that shape, or because the demo keeps
 it in a browser today and loses it on refresh. Where a column mirrors a contract
 field, the contract is named.
+
+---
+
+## 0. The decision this schema must honour — taken 2026-09-25
+
+**UBO gets its own tables. It refers to other modules by plain text, never by a
+database link.**
+
+The Production Readiness Solution Guide describes one shared structure - Case,
+Parties, Research, Evidence, Assertions, Questions, Assessment, IDV, Audit in a
+single database, with UBO holding IDV session references and one correlation id
+threading through Evidence and IDV. Read literally that is a single product.
+
+It was weighed against the standing requirement that UBO is sellable on its own,
+and the owner chose separation. Concretely:
+
+```
+Evidence's own tables                 UBO's own tables
+  documents                             facts
+    id: 77   chart.pdf                    id: 5  "Alice owns 30%"
+                                          came_from: "evidence:77"   <- text
+```
+
+`came_from` is a note, not a foreign key. Nothing in UBO's schema can be
+declared against a table UBO does not own, and nothing in UBO ever follows the
+reference to fetch what it points at.
+
+**Why, in one line:** code separates by deleting a file; a database does not.
+Hand a client tables full of links pointing at tables they do not have and the
+database refuses to create them - that is a rewrite, not a delivery. Hand them
+tables holding reference text and they work on the first day.
+
+**The three rules that follow, and every migration is checked against them:**
+
+1. **UBO owns every table it writes to.** Its own cases, parties, assertions,
+   resolutions, assessments, questions, audit events. The same company may
+   therefore exist as a row in both Evidence and UBO. That duplication is
+   accepted deliberately: duplication you can see beats a join you cannot
+   remove.
+2. **References are text, and are never dereferenced.** UBO may record that a
+   fact came from an Evidence artifact, or that a person has an IDV session. It
+   may not read either. Section 18 of the guide already asks for exactly this
+   for IDV - a session reference, not the passport image - so the pattern is the
+   guide's own.
+3. **`case_id` and `correlation_id` are given to UBO, not looked up by it.** It
+   stamps them on everything it produces and hands them back. It never asks
+   anyone what they mean. This is what satisfies section 21's end-to-end
+   identity without UBO reaching into another module to get it.
+
+**What this does not cost.** Everything the guide asks for still works:
+assertions as the record with the graph as a projection, full lineage from
+source to decision, immutable assessment snapshots, an append-only audit
+ledger, one id across the whole case. None of it needs a shared table.
+
+**What it does cost.** Some duplication, and the discipline to keep it. A person
+or company known to both modules is stored twice. The guide's own canonical
+Party model (section 6) lives inside UBO's schema, built from what UBO is told,
+not from a table it shares.
+
+**Still to be confirmed with the product owner:** whether she agrees, since the
+guide reads the other way. The decision above is the owner's instruction for how
+we build; if she wants shared tables it is a different schema and a different
+product.
 
 ---
 

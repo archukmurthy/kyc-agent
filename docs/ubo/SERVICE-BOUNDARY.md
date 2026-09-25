@@ -127,3 +127,9 @@ the schema question again.
 **Open question for the product owner:** in-process package, or a deployed
 service with its own URL? Nothing built so far depends on the answer, and the
 answer changes what the schema is for.
+
+**Settled 2026-09-25, and it is the half that mattered more.** Whichever way that
+question goes, UBO keeps its OWN tables and refers to Evidence and IDV by plain
+text it never follows - see section 0 of `docs/ubo/SCHEMA-PROPOSAL.md`. Code
+separates by deleting a file; a database does not, so the data boundary is the
+one that decides whether this module can be sold on its own.
