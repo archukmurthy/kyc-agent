@@ -89,6 +89,32 @@ test("Continue stays disabled until discovery is ready and finalizes the shared 
   expect(trace.verificationPopulation).toEqual([expect.objectContaining({ personName: "Alice Morgan", verificationStatus: "NOT_STARTED" })]);
 });
 
+test("a restored completed questionnaire consumes its one StrictMode recalculation and enables IDV", async () => {
+  const input = props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" });
+  window.fetch = jest.fn(() => new Promise(() => {}));
+  const firstVisit = render(<OwnershipResolutionQuestions {...input} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "40" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  const nominee = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(nominee).getByLabelText("No"));
+  fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(Object.values(JSON.parse(window.localStorage.getItem("ubo-demo.ownership-resolution.v1:case-questions:chart-artifact")).answers)).toHaveLength(2));
+  firstVisit.unmount();
+
+  let finishRecalculation;
+  window.fetch = jest.fn(() => new Promise((resolve) => { finishRecalculation = resolve; }));
+  render(<React.StrictMode><OwnershipResolutionQuestions {...input} /></React.StrictMode>);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  finishRecalculation({
+    ok: true,
+    json: async () => ({ success: true, result: { ...input.result, chartAnalysis: qualifyingChartAnalysis() } }),
+  });
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /Continue to identity verification/i })).toBeEnabled());
+  expect(screen.getByText("Questions complete")).toBeInTheDocument();
+});
+
 test("analyst topic and custom requests share the existing customer Questions experience", () => {
   const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
   input.researchResult.investigationTopicActivations = [{ id: "topic-voting", caseId: "case-questions", topicCode: "VOTING_RIGHTS", origin: "ANALYST", status: "ACTIVE", createdAt: "2026-09-17T10:00:00.000Z" }];

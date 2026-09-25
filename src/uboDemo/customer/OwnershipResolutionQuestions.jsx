@@ -308,6 +308,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
   const requestedRecalculations = useRef(new Set());
+  const recalculationGeneration = useRef(0);
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
   const researchEntries = useMemo(() => partitionResearchEntriesForComparison(filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company)).primaryEntries, [researchResult, company]);
   const chartEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer((result?.candidateFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), company), [result, company]);
@@ -338,12 +339,15 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   }, [context?.demoCaseId, currentTrace, engine.topicActivations]);
   useEffect(() => {
     const material = engine.resolutions.filter((resolution) => resolution.resultingFact?.type === "RELATIONSHIP" && resolution.resultingFact.relationship === "ECONOMIC_OWNERSHIP");
-    if (!material.length) return;
+    if (!material.length) {
+      recalculationGeneration.current += 1;
+      return;
+    }
     const signature = JSON.stringify(material.map(({ comparisonItemId, resultingFact }) => [comparisonItemId, resultingFact]));
     if (requestedRecalculations.current.has(signature)) return;
     requestedRecalculations.current.add(signature);
+    const generation = ++recalculationGeneration.current;
     const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), result);
-    let active = true;
     fetch("/api/ubo-demo-customer-ownership-chart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -351,7 +355,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     }).then(async (response) => {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.message || "UBO recalculation failed");
-      if (!active) return;
+      if (generation !== recalculationGeneration.current) return;
       setRecalculations((current) => {
         const next = { ...current };
         rows.forEach((row) => {
@@ -366,12 +370,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         return next;
       });
     }).catch((caught) => {
-      if (active) setRecalculations((current) => Object.fromEntries([
+      if (generation === recalculationGeneration.current) setRecalculations((current) => Object.fromEntries([
         ...Object.entries(current),
         ...material.map((resolution) => [resolution.comparisonItemId, { determination: resolution.uboImpact.determination, error: caught.message, recalculatedAt: new Date().toISOString() }]),
       ]));
     });
-    return () => { active = false; };
   }, [context, engine.resolutions, result, rows]);
 
   const submit = (question) => {
