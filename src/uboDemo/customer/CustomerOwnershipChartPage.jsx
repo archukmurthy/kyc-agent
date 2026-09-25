@@ -22,7 +22,7 @@ import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, writeCustomerOwnershipChartPreview } from "./customerOwnershipChartPreview";
 import "./customerOwnershipChart.css";
 
-const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
+const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;

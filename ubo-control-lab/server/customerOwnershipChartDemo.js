@@ -23,7 +23,7 @@ const {
 } = require("../fixtures/bettercomms-source-reviewed.js");
 
 const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
-const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v2";
+const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 const MAX_BYTES = 3 * 1024 * 1024;
 const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -702,7 +702,7 @@ function isExplicitTypedChartShareOwnership(fact, entityProfile) {
     && evidenceValue.measurementType === "percentage"
     && ["EXACT", "RANGE"].includes(fact.measurement?.type)
     && Boolean(qualifiers.evidenceMapping?.method)
-    && ["supported", "supported_with_qualification"].includes(qualifiers.evidenceSupportState);
+    && ["supported", "supported_with_qualification", "needs_verification"].includes(qualifiers.evidenceSupportState);
 }
 
 function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile) {

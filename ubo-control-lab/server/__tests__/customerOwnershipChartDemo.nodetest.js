@@ -219,7 +219,7 @@ test("typed source-backed chart percentages identify Alice as a provisional UBO 
       evidenceRelationshipType: "ECONOMIC_OWNERSHIP",
       evidenceValue: { kind: "EXACT", measurementType: "percentage", exact: value, unit: "percentage_points" },
       evidenceMapping: { method: "provider_structured", id: "chart-provider", version: "1" },
-      evidenceSupportState: "supported_with_qualification",
+      evidenceSupportState: "needs_verification",
     },
     evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-vodafone" }],
   });

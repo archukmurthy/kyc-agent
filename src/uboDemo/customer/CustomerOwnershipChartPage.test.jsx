@@ -64,7 +64,7 @@ const analysis = {
   } },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
-    calculationSemanticsVersion: "ubo-demo-chart-calculation-v2",
+    calculationSemanticsVersion: "ubo-demo-chart-calculation-v3",
     state: "EVALUATED",
     entityLabels: { "person-1": "Mitchell Fortescue", "company-1": "Better Comms VOIP Ltd" },
     view: {
