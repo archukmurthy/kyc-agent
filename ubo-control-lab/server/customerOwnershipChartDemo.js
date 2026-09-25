@@ -515,7 +515,7 @@ function canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityI
 }
 
 function buildSourceGraph(candidateFacts, company, artifact, requestId) {
-  const relationships = candidateFacts.filter((fact) => fact.type === "RELATIONSHIP");
+  const relationships = deduplicateChartCandidateFacts(candidateFacts).filter((fact) => fact.type === "RELATIONSHIP");
   const canonicalEntities = canonicalizeLegalEntityEndpoints(relationships, company);
   const nodesById = new Map(canonicalEntities.records.map((record) => [record.entityId, record]));
   const addNode = (party, semantics = []) => {
@@ -653,6 +653,44 @@ function normalizedPartyName(value) {
     .replace(/[^A-Z0-9]+/g, "");
 }
 
+function chartRelationshipSignature(fact) {
+  if (fact?.type !== "RELATIONSHIP") return null;
+  const party = (value) => `${String(value?.entityType || value?.partyType || "").toUpperCase()}|${normalizedPartyName(value?.name || value?.sourcePartySnapshot?.description)}`;
+  const measurement = fact.measurement || {};
+  const measurementKey = [measurement.type, measurement.value, measurement.lowerBound, measurement.upperBound, measurement.lowerInclusive, measurement.upperInclusive]
+    .map((value) => value == null ? "" : String(value)).join("|");
+  return [fact.relationship, party(fact.subject), party(fact.object), measurementKey].join("|");
+}
+
+function chartConnectorId(fact) {
+  const metadata = fact?.qualifiers?.evidenceSourceSpecificMetadata || {};
+  return String(metadata.connectorInventoryId || metadata.connector_inventory_id || "").trim();
+}
+
+function deduplicateChartCandidateFacts(candidateFacts = []) {
+  const output = [];
+  const relationships = new Map();
+  candidateFacts.forEach((fact) => {
+    const signature = chartRelationshipSignature(fact);
+    if (!signature) { output.push(fact); return; }
+    const existingIndex = relationships.get(signature);
+    if (existingIndex == null) {
+      relationships.set(signature, output.length);
+      output.push(fact);
+      return;
+    }
+    const existing = output[existingIndex];
+    const existingConnector = chartConnectorId(existing);
+    const nextConnector = chartConnectorId(fact);
+    if (existingConnector && nextConnector) {
+      output.push(fact);
+      return;
+    }
+    if (!existingConnector && nextConnector) output[existingIndex] = fact;
+  });
+  return output;
+}
+
 function isExplicitTypedChartShareOwnership(fact, entityProfile) {
   const qualifiers = fact?.qualifiers || {};
   const evidenceValue = qualifiers.evidenceValue || {};
@@ -719,6 +757,7 @@ function factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId,
 }
 
 function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }) {
+  const usableCandidateFacts = deduplicateChartCandidateFacts(candidateFacts);
   const recordedAt = artifact.capturedAt;
   const entityProfile = chartEntityProfile(company.ownershipType);
   const subjectEntityId = `chart-subject:${createHash("sha256").update(`${company.countryCode}|${company.registrationNumber}`).digest("hex").slice(0, 20)}`;
@@ -742,8 +781,8 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
     discoveryResult: {
       contractVersion: "1.0.0",
       requestId,
-      outcome: { state: candidateFacts.length ? "COMPLETE" : "NO_DATA" },
-      candidateFacts: factsWithChartSubjectIdentity(candidateFacts, company, subjectEntityId, entityProfile),
+      outcome: { state: usableCandidateFacts.length ? "COMPLETE" : "NO_DATA" },
+      candidateFacts: factsWithChartSubjectIdentity(usableCandidateFacts, company, subjectEntityId, entityProfile),
       operationEvidenceReferences: structuredClone(operationEvidenceReferences || []),
       issues: structuredClone(issues || []),
     },
@@ -804,11 +843,12 @@ function reevaluateSavedCustomerOwnershipChart(rawInput) {
   const operationEvidenceReferences = savedResult.ubo?.operationEvidenceReferences || [];
   const issues = savedResult.ubo?.issues || [];
   const requestId = `saved-chart-analysis:${artifact.artifactId}`;
-  const candidateFacts = structuredClone(savedResult.candidateFacts);
+  const candidateFacts = deduplicateChartCandidateFacts(structuredClone(savedResult.candidateFacts));
   const sourceGraph = buildSourceGraph(candidateFacts, company, artifact, requestId);
   return {
     ...structuredClone(savedResult),
     company: structuredClone(company),
+    candidateFacts,
     sourceGraph,
     sourceCoverage: sourceGraphCoverage(sourceGraph),
     chartAnalysis: buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }),
@@ -1057,8 +1097,10 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
   if (!["COMPLETE", "PARTIAL", "NO_DATA", "INCONCLUSIVE"].includes(capabilityResult.outcome.state)) {
     throw demoError("ubo_candidate_mapping_failed", capabilityResult.outcome.message || "No UBO candidate facts could be mapped from this chart.", 422);
   }
-  const displayed = presentation(capabilityResult.candidateFacts, capabilityResult.issues);
-  const sourceGraph = buildSourceGraph(capabilityResult.candidateFacts, input.demoContext.company, {
+  const candidateFacts = deduplicateChartCandidateFacts(capabilityResult.candidateFacts);
+  const normalizedCapabilityResult = { ...capabilityResult, candidateFacts };
+  const displayed = presentation(candidateFacts, capabilityResult.issues);
+  const sourceGraph = buildSourceGraph(candidateFacts, input.demoContext.company, {
     artifactId: ingestion.artifactId,
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
@@ -1066,12 +1108,12 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
   const sourceCoverage = sourceGraphCoverage(sourceGraph);
   const extractionQuality = extractionQualityFor({
     interpretation: interpretationEnvelope.result,
-    capabilityResult,
+    capabilityResult: normalizedCapabilityResult,
     sourceGraph,
     sourceCoverage,
   });
   const chartAnalysis = buildChartAnalysis({
-    candidateFacts: capabilityResult.candidateFacts,
+    candidateFacts,
     operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
     issues: capabilityResult.issues,
     company: input.demoContext.company,
@@ -1108,13 +1150,13 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
     ubo: {
       capabilityContractVersion: capabilityResult.contractVersion,
       adapterOutcome: capabilityResult.outcome,
-      candidateFactCount: capabilityResult.candidateFacts.length,
+      candidateFactCount: candidateFacts.length,
       operationEvidenceReferences: capabilityResult.operationEvidenceReferences,
       issues: capabilityResult.issues,
       downstreamDecision: "NOT_PERFORMED",
     },
-    candidateFacts: structuredClone(capabilityResult.candidateFacts),
-    certification: certificationFrom(capabilityResult.candidateFacts),
+    candidateFacts: structuredClone(candidateFacts),
+    certification: certificationFrom(candidateFacts),
     sourceGraph,
     sourceCoverage,
     extractionQuality,
@@ -1134,6 +1176,7 @@ module.exports = Object.freeze({
   analyseIngestedCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
+  deduplicateChartCandidateFacts,
   chartRequestedConcepts,
   certificationFrom,
   presentation,

@@ -1,6 +1,6 @@
 "use strict";
 
-const { assessOwnershipChartCompleteness, EXTRACTION_QUALITY_STATE, isOwnershipChartProfile, mergeOwnershipSemanticExtractions } = require("./ownershipChartProfile");
+const { assessOwnershipChartCompleteness, isOwnershipChartProfile, mergeOwnershipSemanticExtractions, requiresTargetedOwnershipVerification } = require("./ownershipChartProfile");
 
 const { randomUUID } = require("node:crypto");
 const { sha256 } = require("../a1/domain");
@@ -135,7 +135,7 @@ class LiveArtifactInterpretationService {
       semantic = await runSemanticExtraction(this.provider, semanticRequest);
       if (isOwnershipChartProfile(context)) {
         const primaryAssessment = assessOwnershipChartCompleteness({ artifactId: artifacts[0].id, facts: semantic.facts, partyInventory: semantic.ownershipPartyInventory, connectorInventory: semantic.ownershipConnectorInventory, providerCompleteness: semantic.completeness, ownershipDataStatus: semantic.ownershipDataStatus });
-        if (primaryAssessment.state !== EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE && primaryAssessment.state !== EXTRACTION_QUALITY_STATE.NO_OWNERSHIP_DATA_CONFIRMED) {
+        if (requiresTargetedOwnershipVerification(primaryAssessment)) {
           const missing = [...primaryAssessment.unresolvedParties.map(({ inventoryId }) => `party:${inventoryId}`), ...primaryAssessment.unresolvedRelationships.map(({ connectorId }) => `connector:${connectorId}`)].slice(0, 50);
           try {
             const verification = await runSemanticExtraction(this.provider, { ...semanticRequest, extractionContext: { ...context, purpose: `${context.purpose || "Ownership chart extraction"}. TARGETED VERIFICATION PASS: compare the proposed structure with the original document and correct only omissions or misrepresentations. Reuse inventory IDs where possible. Focus on ${missing.length ? missing.join(", ") : "missing visible parties, connectors, percentages, and rejected typed relationships"}. Do not regenerate unrelated content.` } });

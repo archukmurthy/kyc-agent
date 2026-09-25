@@ -6,7 +6,7 @@ const OWNERSHIP_CHART_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
   instructionVersion: "ownership-chart-instructions-v3",
-  verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
+  verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
 });
 
 const EXTRACTION_QUALITY_STATE = Object.freeze({
@@ -36,8 +36,8 @@ function sourceScopedId(artifactId, kind, suppliedId, index) {
 }
 
 function normalizePartyInventory(items = [], artifactId = null) {
-  return items.slice(0, 250).map((item, index) => {
-    const inventoryId = boundedText(item?.inventoryId || item?.inventory_id || `party-${index + 1}`, 120);
+  return mergeByCanonicalId(items, "inventoryId").slice(0, 250).map((item, index) => {
+    const inventoryId = canonicalInventoryId(item?.inventoryId || item?.inventory_id || `party-${index + 1}`, "party");
     const partyType = String(item?.partyType || item?.party_type || "unknown_or_other").toLowerCase();
     return {
       inventoryId,
@@ -51,13 +51,13 @@ function normalizePartyInventory(items = [], artifactId = null) {
 }
 
 function normalizeConnectorInventory(items = [], artifactId = null) {
-  return items.slice(0, 500).map((item, index) => {
-    const connectorId = boundedText(item?.connectorId || item?.connector_id || `connector-${index + 1}`, 120);
+  return mergeByCanonicalId(items, "connectorId").slice(0, 500).map((item, index) => {
+    const connectorId = canonicalInventoryId(item?.connectorId || item?.connector_id || `connector-${index + 1}`, "connector");
     return {
       connectorId,
       sourceConnectorId: sourceScopedId(artifactId, "connector", connectorId, index),
-      subjectInventoryId: boundedText(item?.subjectInventoryId || item?.subject_inventory_id, 120) || null,
-      objectInventoryId: boundedText(item?.objectInventoryId || item?.object_inventory_id, 120) || null,
+      subjectInventoryId: canonicalInventoryId(item?.subjectInventoryId || item?.subject_inventory_id, "party") || null,
+      objectInventoryId: canonicalInventoryId(item?.objectInventoryId || item?.object_inventory_id, "party") || null,
       visibleLabel: boundedText(item?.visibleLabel || item?.visible_label || item?.relationshipLabel || item?.relationship_label),
       percentageText: boundedText(item?.percentageText || item?.percentage_text, 120) || null,
       sourceLocator: safeJson(item?.sourceLocator || item?.source_locator_json),
@@ -86,7 +86,7 @@ function relationshipValid(fact) {
 
 function inventoryIdsForRelationship(fact, inventory, role) {
   const metadata = relationshipMetadata(fact);
-  const explicit = boundedText(metadata[`${role}InventoryId`] || metadata[`${role}_inventory_id`], 120);
+  const explicit = canonicalInventoryId(metadata[`${role}InventoryId`] || metadata[`${role}_inventory_id`], "party");
   if (explicit) return [explicit];
   const party = relationshipParty(fact, role);
   const label = normalized(party?.name || party?.description);
@@ -115,7 +115,7 @@ function assessOwnershipChartCompleteness({
     subjectIds.forEach((id) => representedPartyIds.add(id));
     objectIds.forEach((id) => representedPartyIds.add(id));
     const metadata = relationshipMetadata(fact);
-    const connectorId = boundedText(metadata.connectorInventoryId || metadata.connector_inventory_id, 120);
+    const connectorId = canonicalInventoryId(metadata.connectorInventoryId || metadata.connector_inventory_id, "connector");
     if (connectorId) representedConnectorIds.add(connectorId);
     else if (subjectIds.length === 1 && objectIds.length === 1) {
       const matches = connectors.filter((item) => item.subjectInventoryId === subjectIds[0] && item.objectInventoryId === objectIds[0]);
@@ -192,7 +192,51 @@ function stableFactKey(fact) {
 function canonicalInventoryId(value, prefix) {
   let id = boundedText(value, 120);
   while (id.toLowerCase().startsWith(`${prefix}:`) && id.length > prefix.length + 1) id = id.slice(prefix.length + 1);
+  const numeric = id.match(prefix === "connector" ? /^(?:connector|conn)[_:\-]?0*(\d+)$/i : /^party[_:\-]?0*(\d+)$/i);
+  if (numeric) return `${prefix}-${Number(numeric[1])}`;
   return id;
+}
+
+function mergeByCanonicalId(items, idKey) {
+  const prefix = idKey === "inventoryId" ? "party" : "connector";
+  const rows = new Map();
+  (items || []).forEach((item, index) => {
+    const snakeKey = idKey.replace(/[A-Z]/g, (value) => `_${value.toLowerCase()}`);
+    const key = canonicalInventoryId(item?.[idKey] || item?.[snakeKey] || `${prefix}-${index + 1}`, prefix);
+    const cleaned = { ...item, [idKey]: key };
+    const current = rows.get(key);
+    if (!current) { rows.set(key, cleaned); return; }
+    const merged = { ...current, ...cleaned };
+    Object.entries(cleaned).forEach(([field, value]) => {
+      if (value == null || value === "") merged[field] = current[field];
+    });
+    rows.set(key, merged);
+  });
+  return [...rows.values()];
+}
+
+function relationshipConnectorId(fact) {
+  const metadata = relationshipMetadata(fact);
+  return canonicalInventoryId(metadata.connectorInventoryId || metadata.connector_inventory_id, "connector");
+}
+
+function semanticRelationshipKey(fact) {
+  const relationship = fact?.typedRelationship || fact?.typedRelationshipCandidate;
+  if (!relationship) return null;
+  const partyKey = (party) => `${String(party?.partyType || "").toLowerCase()}|${normalized(party?.name || party?.description)}`;
+  const value = relationship.value || {};
+  const valueKey = [value.kind, value.measurementType, value.unit, value.exact ?? value.value, value.lower, value.upper, value.lowerInclusive, value.upperInclusive, value.qualitative]
+    .map((item) => item == null ? "" : String(item)).join("|");
+  return [relationship.relationshipType, partyKey(relationship.subject), partyKey(relationship.object), valueKey].join("|");
+}
+
+function requiresTargetedOwnershipVerification(assessment) {
+  if (!assessment) return false;
+  const relationshipsPresent = assessment.ownershipDataStatus === "OWNERSHIP_RELATIONSHIPS_PRESENT";
+  return (relationshipsPresent && Number(assessment.metrics?.extractedTypedRelationshipCount || 0) === 0)
+    || (assessment.unresolvedParties || []).length > 0
+    || (assessment.unresolvedRelationships || []).length > 0
+    || (assessment.relationshipValidationFailures || []).length > 0;
 }
 
 function mergeById(left, right, idKey) {
@@ -233,10 +277,27 @@ function mergeById(left, right, idKey) {
 function mergeOwnershipSemanticExtractions(primary, verification) {
   if (!verification) return primary;
   const facts = new Map();
+  const semanticRelationships = new Map();
   [...(primary?.facts || []), ...(verification?.facts || [])].forEach((fact) => {
     const key = stableFactKey(fact);
     const current = facts.get(key);
-    if (!current || (!relationshipValid(current) && relationshipValid(fact))) facts.set(key, fact);
+    if (current) {
+      if (!relationshipValid(current) && relationshipValid(fact)) facts.set(key, fact);
+      return;
+    }
+    const semanticKey = semanticRelationshipKey(fact);
+    const existingKey = semanticKey ? semanticRelationships.get(semanticKey) : null;
+    if (existingKey) {
+      const existing = facts.get(existingKey);
+      const existingConnector = relationshipConnectorId(existing);
+      const nextConnector = relationshipConnectorId(fact);
+      if (!existingConnector || !nextConnector) {
+        if ((!relationshipValid(existing) && relationshipValid(fact)) || (!existingConnector && nextConnector)) facts.set(existingKey, fact);
+        return;
+      }
+    }
+    facts.set(key, fact);
+    if (semanticKey && !semanticRelationships.has(semanticKey)) semanticRelationships.set(semanticKey, key);
   });
   const outcomes = new Map();
   [...(primary?.requestedConceptOutcomes || []), ...(verification?.requestedConceptOutcomes || [])].forEach((item) => {
@@ -279,4 +340,5 @@ module.exports = {
   mergeOwnershipSemanticExtractions,
   normalizeConnectorInventory,
   normalizePartyInventory,
+  requiresTargetedOwnershipVerification,
 };

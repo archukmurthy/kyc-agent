@@ -8,6 +8,7 @@ const {
   assessOwnershipChartCompleteness,
   mergeOwnershipSemanticExtractions,
   normalizePartyInventory,
+  requiresTargetedOwnershipVerification,
 } = require("../ownershipChartProfile");
 
 function party(inventoryId, visibleLabel, partyType = "natural_person") {
@@ -73,6 +74,7 @@ test("targeted verification merges a missing relationship without regenerating d
   assert.equal(merged.verificationPassUsed, true);
   assert.equal(OWNERSHIP_CHART_PROFILE.profileVersion, "ownership-chart-extraction-v2");
   assert.equal(OWNERSHIP_CHART_PROFILE.instructionVersion, "ownership-chart-instructions-v3");
+  assert.equal(OWNERSHIP_CHART_PROFILE.verificationStrategyVersion, "ownership-chart-targeted-verification-v2");
 });
 
 test("targeted verification reconciles namespaced inventory IDs and one unambiguous connector", () => {
@@ -88,7 +90,7 @@ test("targeted verification reconciles namespaced inventory IDs and one unambigu
   };
   const merged = mergeOwnershipSemanticExtractions(primary, verification);
   assert.equal(merged.ownershipPartyInventory.length, 2);
-  assert.deepEqual(merged.ownershipConnectorInventory, [{ connectorId: "connector_0", subjectInventoryId: "party_0", objectInventoryId: "party_1", percentageText: "40%" }]);
+  assert.deepEqual(merged.ownershipConnectorInventory, [{ connectorId: "connector-0", subjectInventoryId: "party-0", objectInventoryId: "party-1", percentageText: "40%" }]);
   const fact = relationship("fact-1", "Alice", "Target Ltd");
   fact.typedRelationship.sourceSpecificMetadata = {};
   const assessed = assessOwnershipChartCompleteness({
@@ -131,4 +133,53 @@ test("verification inventory IDs with different punctuation reconcile by unique 
   assert.deepEqual(merged.ownershipConnectorInventory.map(({ connectorId, subjectInventoryId, objectInventoryId }) => ({ connectorId, subjectInventoryId, objectInventoryId })), [
     { connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2" },
   ]);
+});
+
+test("equivalent padded connector IDs do not create false gaps or a second provider pass", () => {
+  const facts = [relationship("fact-1", "party_001", "party_003")];
+  facts[0].typedRelationship.sourceSpecificMetadata.connectorInventoryId = "conn_001";
+  const assessed = assessOwnershipChartCompleteness({
+    artifactId: "artifact-ba",
+    facts,
+    partyInventory: [party("party_001", "Amelia Hart"), party("party_003", "Northstar Aviation Holdings Ltd", "legal_entity")],
+    connectorInventory: [
+      { connectorId: "conn_001", subjectInventoryId: "party_001", objectInventoryId: "party_003", disposition: "RESOLVED" },
+      { connectorId: "connector_01", subjectInventoryId: "party_01", objectInventoryId: "party_03", percentageText: "55%", disposition: "RESOLVED" },
+    ],
+    providerCompleteness: { state: "incomplete", limitations: ["image locator missing"] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(assessed.inventory.connectors.length, 1);
+  assert.equal(assessed.metrics.unresolvedConnectorCount, 0);
+  assert.equal(assessed.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL);
+  assert.equal(requiresTargetedOwnershipVerification(assessed), false);
+});
+
+test("a genuine missing connector still requires targeted verification", () => {
+  const assessed = assessOwnershipChartCompleteness({
+    facts: [relationship("connector-1", "party-1", "party-2")],
+    partyInventory: [party("party-1", "Alice"), party("party-2", "Target Ltd", "legal_entity")],
+    connectorInventory: [
+      { connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2" },
+      { connectorId: "connector-2", subjectInventoryId: "party-3", objectInventoryId: "party-2" },
+    ],
+    providerCompleteness: { state: "incomplete", limitations: [] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(requiresTargetedOwnershipVerification(assessed), true);
+});
+
+test("verification does not duplicate an identical relationship merely because one pass omitted its connector ID", () => {
+  const primaryRelationship = relationship("connector-1", "party-1", "party-2");
+  const duplicate = structuredClone(primaryRelationship);
+  duplicate.id = "verification-fact";
+  duplicate.typedRelationship.sourceSpecificMetadata = {};
+  const base = {
+    requestedConceptOutcomes: [], completeness: { state: "incomplete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("party-1", "party-1"), party("party-2", "party-2", "legal_entity")],
+    ownershipConnectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2" }],
+  };
+  const merged = mergeOwnershipSemanticExtractions({ ...base, facts: [primaryRelationship] }, { ...base, completeness: { state: "complete", limitations: [] }, facts: [duplicate] });
+  assert.equal(merged.facts.length, 1);
+  assert.equal(merged.facts[0].typedRelationship.sourceSpecificMetadata.connectorInventoryId, "connector-1");
 });

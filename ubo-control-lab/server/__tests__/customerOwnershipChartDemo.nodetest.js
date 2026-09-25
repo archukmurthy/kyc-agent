@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, presentation, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, deduplicateChartCandidateFacts, presentation, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -103,6 +103,25 @@ test("uploaded bytes pass through R1 integrity, Evidence interpretation and the 
   assert.equal(result.comparison, "NOT_PERFORMED");
 });
 
+test("a locator-only completeness warning does not run a second full chart extraction", async () => {
+  const observed = {};
+  const completeProvider = provider(observed);
+  const partialProvider = {
+    configuration: () => completeProvider.configuration(),
+    capabilities: () => completeProvider.capabilities(),
+    async extract(request) {
+      const result = await completeProvider.extract(request);
+      return { ...result, completeness: { state: "incomplete", limitations: ["One image locator was not available"] } };
+    },
+  };
+  const result = await analyseCustomerOwnershipChart(input(), { provider: partialProvider });
+  assert.equal(observed.calls, 1);
+  assert.equal(result.evidence.ownershipDiagramCompleteness.metrics.verificationPassUsed, false);
+  assert.equal(result.evidence.ownershipDiagramCompleteness.metrics.unresolvedPartyCount, 0);
+  assert.equal(result.evidence.ownershipDiagramCompleteness.metrics.unresolvedConnectorCount, 0);
+  assert.equal(result.sourceGraph.relationships.length, 1);
+});
+
 test("resolution evidence handoff adds only supported fact concepts to the existing Evidence extraction", async () => {
   const observed = {};
   await analyseCustomerOwnershipChart(input({
@@ -134,6 +153,27 @@ test("full assertion presentation preserves zero, registry ranges, unknown value
   assert.match(assertions[2].statement, /percentage not established/);
   assert.match(assertions[3].statement, /non-percentage right/);
   assert.equal(assertions[1].evidenceReferences[0].referenceId, "ref-range");
+});
+
+test("a verification-pass copy without a connector ID cannot duplicate a source relationship", () => {
+  const party = (name, entityType) => ({ name, entityType, externalIdentifiers: [], sourcePartySnapshot: {} });
+  const amelia = party("Amelia Hart", "NATURAL_PERSON");
+  const northstar = party("Northstar Aviation Holdings Ltd", "LEGAL_ENTITY");
+  const relationship = (factId, connectorInventoryId) => ({
+    factId, type: "RELATIONSHIP", subject: amelia, relationship: "ECONOMIC_OWNERSHIP", object: northstar,
+    measurement: { type: "EXACT", value: 55 },
+    qualifiers: {
+      currentState: "UNKNOWN",
+      evidenceSourceSpecificMetadata: connectorInventoryId ? { connectorInventoryId } : {},
+    },
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-ba" }],
+  });
+  const facts = [relationship("primary", "conn_001"), relationship("verification-copy", null)];
+  const deduplicated = deduplicateChartCandidateFacts(facts);
+  const graph = buildSourceGraph(deduplicated, { legalName: "British Airways PLC", countryCode: "GB" }, { artifactId: "artifact-ba", digest: "abc", capturedAt: "2026-09-25T09:44:46.000Z" }, "ba-request");
+  assert.equal(deduplicated.length, 1);
+  assert.equal(deduplicated[0].factId, "primary");
+  assert.equal(graph.relationships.length, 1);
 });
 
 test("chart-only analysis uses the shared engine for direct plus indirect ownership paths", () => {
