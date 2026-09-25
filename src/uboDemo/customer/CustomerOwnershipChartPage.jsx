@@ -5,6 +5,7 @@ import AssertionDetails from "../AssertionDetails";
 import {
   clearCustomerOwnershipChartSession,
   chartSourceCoverage,
+  CURRENT_OWNERSHIP_EXTRACTION_PROFILE,
   customerOwnershipChartExtractionsForContext,
   customerOwnershipChartSessionForContext,
   clearCustomerOwnershipJob,
@@ -295,7 +296,9 @@ export default function CustomerOwnershipChartPage() {
     const hasCalculationRecords = (result?.chartAnalysis?.view?.qualificationBases || []).length > 0
       && (result?.chartAnalysis?.view?.qualifications || []).length > 0;
     const hasCurrentCalculationSemantics = result?.chartAnalysis?.calculationSemanticsVersion === CHART_CALCULATION_SEMANTICS_VERSION;
-    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics) || reevaluationAttempts.current.has(artifactId)) return;
+    const hasCurrentExtractionSemantics = result?.evidence?.ownershipDiagramCompleteness?.verificationStrategyVersion
+      === CURRENT_OWNERSHIP_EXTRACTION_PROFILE.verificationStrategyVersion;
+    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics) || reevaluationAttempts.current.has(artifactId)) return;
     reevaluationAttempts.current.add(artifactId);
     let active = true;
     (async () => {

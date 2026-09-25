@@ -9,7 +9,7 @@ export const CURRENT_OWNERSHIP_EXTRACTION_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
   instructionVersion: "ownership-chart-instructions-v3",
-  verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
+  verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
 });
 const MAX_SAVED_EXTRACTIONS = 12;
 

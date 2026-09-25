@@ -56,6 +56,12 @@ const analysis = {
     summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
   },
   sourceCoverage: { state: "CONNECTED", sourceRelationshipCount: 1, subjectConnectedRelationshipCount: 1, disconnectedRelationshipIds: [] },
+  evidence: { ownershipDiagramCompleteness: {
+    profileVersion: "ownership-chart-extraction-v2",
+    schemaVersion: "ownership-chart-schema-v2",
+    instructionVersion: "ownership-chart-instructions-v3",
+    verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
+  } },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",
     calculationSemanticsVersion: "ubo-demo-chart-calculation-v2",
@@ -340,6 +346,29 @@ test("a stale saved calculation is re-evaluated through the current engine witho
   expect(screen.getByText(/Recorded aggregate: 75%/i)).toBeInTheDocument();
   expect(screen.getByText(/75% = 75%/i)).toBeInTheDocument();
   expect(screen.getByText("Provisional UBO · qualifies")).toBeInTheDocument();
+});
+
+test("a saved graph from the previous verification strategy is re-evaluated even when its calculation is current", async () => {
+  seed();
+  const duplicateRelationship = { ...analysis.sourceGraph.relationships[0], relationshipId: "verification-copy" };
+  const stale = {
+    ...analysis,
+    evidence: { ownershipDiagramCompleteness: { ...analysis.evidence.ownershipDiagramCompleteness, verificationStrategyVersion: "ownership-chart-targeted-verification-v1" } },
+    candidateFacts: [...analysis.candidateFacts, { ...analysis.candidateFacts[0], factId: "verification-copy" }],
+    sourceGraph: { ...analysis.sourceGraph, relationships: [...analysis.sourceGraph.relationships, duplicateRelationship] },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    expect(body.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
+    expect(body.savedResult.sourceGraph.relationships).toHaveLength(2);
+    return { ok: true, json: async () => ({ success: true, result: analysis }) };
+  });
+
+  render(<CustomerOwnershipChartPage />);
+
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
 });
 
 test("an unevaluated chart still lists its ownership steps instead of leaving the calculation panel blank", () => {

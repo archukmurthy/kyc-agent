@@ -125,7 +125,7 @@ test("reuses only a complete same-digest extraction produced by the current prof
     profileVersion: "ownership-chart-extraction-v2",
     schemaVersion: "ownership-chart-schema-v2",
     instructionVersion: "ownership-chart-instructions-v3",
-    verificationStrategyVersion: "ownership-chart-targeted-verification-v1",
+    verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
   };
   const complete = { ...result, extractionQuality: { state: "EXTRACTION_SUCCESS_COMPLETE" }, evidence: { ownershipDiagramCompleteness: diagram } };
   const records = [{ result: complete }];
