@@ -259,6 +259,52 @@ test("accepted evidence remains visible with its filename and an inline preview"
   }
 });
 
+test("supporting evidence follows a durable queued extraction job to completion", async () => {
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+  const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
+  fireEvent.click(within(discrepancyQuestion).getByLabelText(/existing shares were transferred/i));
+  fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
+
+  const effectiveDate = screen.getByLabelText("Effective date").closest("article");
+  fireEvent.change(within(effectiveDate).getByLabelText("Effective date"), { target: { value: "2026-09-01" } });
+  fireEvent.click(within(effectiveDate).getByRole("button", { name: /Save answer/i }));
+  const percentage = screen.getByLabelText("Ownership percentage").closest("article");
+  fireEvent.change(within(percentage).getByLabelText("Ownership percentage"), { target: { value: "30" } });
+  fireEvent.click(within(percentage).getByRole("button", { name: /Save answer/i }));
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  window.fetch.mockClear();
+
+  window.fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ success: true, job: { jobId: "job-support-1", state: "QUEUED" } }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        job: {
+          jobId: "job-support-1",
+          state: "COMPLETE",
+          result: {
+            artifact: { artifactId: "support-artifact", integrityVerified: true },
+            candidateFacts: [ownership("evidence-fact", { type: "EXACT", value: 30 }, "evidence-ref")],
+          },
+        },
+      }),
+    });
+
+  const fileInput = container.querySelector('.ubo-resolution-evidence input[type="file"]');
+  fireEvent.change(fileInput, { target: { files: [new File(["%PDF-1.4\n%%EOF"], "current-register.pdf", { type: "application/pdf" })] } });
+
+  await waitFor(() => expect(screen.getByText("File received · evidence accepted")).toBeInTheDocument());
+  expect(window.fetch).toHaveBeenCalledTimes(2);
+  const processRequest = JSON.parse(window.fetch.mock.calls[1][1].body);
+  expect(processRequest).toEqual({ operation: "PROCESS_EXTRACTION_JOB", jobId: "job-support-1" });
+});
+
 test("a provider outage keeps the received filename and permits retrying the same file", async () => {
   const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
   const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");

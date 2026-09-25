@@ -82,6 +82,43 @@ function evidenceUploadFailure(payload, responseStatus) {
   return { status: EVIDENCE_STATUS.REJECTED, message: payload?.message || "Evidence validation failed" };
 }
 
+async function postOwnershipExtraction(body) {
+  const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) {
+    const failure = evidenceUploadFailure(payload, response.status);
+    throw Object.assign(new Error(failure.message), { evidenceStatus: failure.status });
+  }
+  return payload;
+}
+
+async function awaitSupportingEvidenceResult(initialPayload) {
+  if (initialPayload?.result) return initialPayload.result;
+  let job = initialPayload?.job;
+  if (!job?.jobId) throw new Error("Evidence analysis did not return a durable job.");
+  if (job.state === "FAILED") {
+    const retried = await postOwnershipExtraction({ operation: "RETRY_EXTRACTION_JOB", jobId: job.jobId });
+    job = retried.job;
+  }
+  for (let transition = 0; transition < 12; transition += 1) {
+    if (["COMPLETE", "PARTIAL"].includes(job.state) && job.result) return job.result;
+    if (job.state === "FAILED") {
+      throw Object.assign(new Error(job.failure?.message || "Your file was saved, but document analysis could not complete. Please retry."), { evidenceStatus: EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE });
+    }
+    if (job.state === "RETRYING" && job.nextAttemptAt) {
+      const delay = Math.max(0, Math.min(9000, new Date(job.nextAttemptAt).getTime() - Date.now()));
+      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+    }
+    const processed = await postOwnershipExtraction({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId });
+    job = processed.job;
+  }
+  throw Object.assign(new Error("Your file was saved, but analysis is still running. Please retry shortly."), { evidenceStatus: EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE });
+}
+
 function resolutionContext(comparisonItemId, requirements, rows, company) {
   const requirement = requirements.find((item) => item.comparisonItemId === comparisonItemId || item.semanticKey === comparisonItemId);
   const row = rows.find((item) => item.key === comparisonItemId);
@@ -392,23 +429,15 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Evidence received and sent to the existing validation pipeline." } }));
     try {
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.VALIDATING } }));
-      const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId },
-          file: { originalFilename: file.name, declaredMediaType: file.type, sizeBytes: file.size, contentBase64: await fileAsBase64(file) },
-          evidenceHandoff: record.handoff,
-        }),
+      const started = await postOwnershipExtraction({
+        demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId },
+        file: { originalFilename: file.name, declaredMediaType: file.type, sizeBytes: file.size, contentBase64: await fileAsBase64(file) },
+        evidenceHandoff: record.handoff,
       });
-      const payload = await response.json();
-      if (!response.ok || !payload.success) {
-        const failure = evidenceUploadFailure(payload, response.status);
-        throw Object.assign(new Error(failure.message), { evidenceStatus: failure.status });
-      }
+      const extractionResult = await awaitSupportingEvidenceResult(started);
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
-      const outcome = evidenceResultStatus(payload.result, resolution, record);
-      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], ...outcome, artifactId: payload.result.artifact?.artifactId, validatedAt: new Date().toISOString() } }));
+      const outcome = evidenceResultStatus(extractionResult, resolution, record);
+      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
     } catch (caught) {
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
