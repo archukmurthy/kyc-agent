@@ -33,6 +33,7 @@ const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-disco
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
 const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
 const uboPocHealthHandler = require(path.join(__dirname, "..", "api", "ubo-poc-health.js"));
+const uboPocCaseHandler = require(path.join(__dirname, "..", "api", "ubo-poc-case.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
@@ -105,6 +106,17 @@ module.exports = function (app) {
   app.get("/ubo-control-lab/vendor/ownership-graph.css", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "ownership-graph.css")));
 
   app.get("/api/ubo-poc-health", adapt(uboPocHealthHandler));
+  app.get("/api/ubo-poc-case", adapt(uboPocCaseHandler));
+
+  app.post("/api/ubo-poc-case", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboPocCaseHandler)(req, res);
+    });
+  });
 
   app.post("/api/ubo-demo-customer-ownership-chart", (req, res) => {
     let raw = "";

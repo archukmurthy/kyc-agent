@@ -33,6 +33,6 @@ export default function CustomerQuestionsPage() {
       <a className="ubo-customer-questions-back" href={CUSTOMER_OWNERSHIP_CHART_PATH}>← Back to ownership chart</a>
       <OwnershipResolutionQuestions researchResult={context.researchResult} result={chartSession.result} company={chartSession.result.company || context.company} context={context} />
     </main>
-    <footer className="ubo-customer-footer">Demo experience · Browser-local result · Questions and resolution</footer>
+    <footer className="ubo-customer-footer">Demo experience · Server-saved answers and assessment · Questions and resolution</footer>
   </div>;
 }

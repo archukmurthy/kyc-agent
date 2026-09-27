@@ -47,7 +47,7 @@ Use POC-specific resources and values. Never copy values into source control.
 | Companies House | `COMPANIES_HOUSE_API_KEY` |
 | AI extraction / research | `ANTHROPIC_API_KEY`, `EVIDENCE_A3_ANTHROPIC_MODEL`, and `UBO_RESEARCH_ANTHROPIC_MODEL` if overridden |
 | Health | dedicated random `UBO_POC_HEALTH_KEY` |
-| Demo / IDV | explicit POC demo-mode settings used by the application; dummy IDV only, clearly labelled |
+| Demo / IDV | `UBO_POC_IDV_MODE=DEMO`; dummy IDV only, clearly labelled in the journey and health response |
 | Logging | POC log destination/retention settings supported by the hosting account; do not log provider payloads or credentials |
 
 The analyst footer and health response must show the same environment, tag, and commit SHA. CRA `REACT_APP_*` values are embedded at build time, so changing them requires a rebuild.
@@ -60,21 +60,25 @@ An `UNAVAILABLE` result returns HTTP 503. A hosted filesystem artifact or cache 
 
 ## Persistence inventory
 
-Durable today:
+Durable after migration 021 is applied:
 
 - ownership uploads and Artifact bytes when Blob is configured;
 - Artifact metadata, extraction jobs, attempts, extraction results, and reuse identity in Postgres;
-- research/audit persistence in the configured KV/Redis backend and server persistence path.
+- the active UBO case projection and append-only case action history in Postgres;
+- fact requirements, generated questions, answer submissions, supporting-evidence references, versioned UBO assessments, verification requirements and dummy-IDV completion events in Postgres;
+- research/audit persistence and replay/cache records in the configured KV/Redis backend.
 
-Ephemeral or browser-bound today:
+Browser state is now a disposable compatibility/read-through cache for:
 
-- active analyst demo case and saved replay selection;
-- customer ownership-chart browser session/job reference;
-- customer question answers and supporting-evidence UI state;
-- recalculation/trace presentation state used by the later customer and analyst screens;
-- dummy IDV completion state.
+- the active case pointer and shareable `?case=` selection;
+- form drafts that have not been submitted;
+- graph zoom, expanded panels, and other display preferences;
+- ownership-document preview object URLs and selected-file bytes before upload;
+- locally exported/imported replay-library UI selection.
 
-These browser-local items do not survive origin changes, browser storage loss, or moving the journey to another device. They must be accepted as an explicit POC limitation or moved to durable journey-state persistence before describing the deployment as a dependable multi-session customer POC.
+Submitted business state is restored by case ID after refresh, process replacement, or on another browser/device. Unsubmitted drafts and display preferences are intentionally ephemeral and must not be treated as the system of record.
+
+The case projection is mutable for efficient restore, while `ubo_poc_case_events`, answer rows, assessment versions and verification events preserve submitted history. Evidence continues to own artifact bytes and extraction jobs; the case database stores only their durable identifiers.
 
 ## Deployment
 
@@ -97,4 +101,4 @@ After deployment, run:
 5. Run health preflight and the hosted smoke again.
 6. Preserve failed deployment logs and database/artifact data for diagnosis; do not move either tag.
 
-Schema changes must be backward compatible with the previous release before rollback can be considered safe. If not, the release plan must include a tested database rollback or forward-fix procedure.
+Migration 021 is additive and the application can ignore its new tables when rolling back to a pre-021 binary. Preserve the tables and case data during rollback; do not run destructive down-migrations. Schema changes must remain backward compatible with the previous release before rollback can be considered safe. If not, the release plan must include a tested forward-fix procedure.

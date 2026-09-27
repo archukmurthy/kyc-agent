@@ -14,6 +14,7 @@ import {
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { chartSourceCoverage } from "./customerOwnershipChartSession";
 import { applyCurrentVerificationAssessment, isReadyForIdentityVerification } from "./verificationAssessment";
+import { persistPocCase, smallStableHash } from "../pocCaseClient";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 const SESSION_PREFIX = "ubo-demo.ownership-resolution.v1";
@@ -308,6 +309,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
   const requestedRecalculations = useRef(new Set());
+  const durableSyncs = useRef(new Set());
+  const answerSubmissions = useRef(new Set());
   const recalculationGeneration = useRef(0);
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
   const researchEntries = useMemo(() => partitionResearchEntriesForComparison(filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company)).primaryEntries, [researchResult, company]);
@@ -323,7 +326,36 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const engine = useMemo(() => evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current }), [rows, answers, evidence, recalculations, result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId]);
   const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 
+  const durableResolution = (nextAnswers = answers, nextEvidence = evidence, nextRecalculations = recalculations, trace = currentTrace, submittedAnswer = null) => ({
+    createdAt: createdAt.current,
+    requirements: engine.requirements,
+    questions: trace.questions || engine.questions,
+    evidenceRequirements: engine.evidenceRequirements,
+    answers: nextAnswers,
+    evidence: nextEvidence,
+    recalculations: nextRecalculations,
+    trace,
+    ...(submittedAnswer ? { submittedAnswer } : {}),
+  });
+
   useEffect(() => { saveSession(context, result, { createdAt: createdAt.current, answers, evidence, recalculations }); }, [answers, context, evidence, recalculations, result]);
+  useEffect(() => {
+    const signature = smallStableHash([currentTrace.verificationAssessment?.inputStateVersion, answers, evidence, recalculations]);
+    if (!context?.demoCaseId || durableSyncs.current.has(signature)) return;
+    durableSyncs.current.add(signature);
+    persistPocCase("SYNC_RESOLUTION", {
+      caseId: context.demoCaseId,
+      actorType: "SYSTEM",
+      idempotencyKey: `resolution:${signature}`,
+      payload: {
+        resolution: durableResolution(),
+        assessment: { assessmentId: currentTrace.verificationAssessment?.assessmentVersionId, trace: currentTrace, evidence },
+        researchResult: { ...researchResult, ownershipResolutionTrace: currentTrace },
+      },
+    }).catch(() => durableSyncs.current.delete(signature));
+    // The signature intentionally represents every submitted substantive projection change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, context?.demoCaseId, currentTrace, evidence, recalculations]);
   useEffect(() => {
     try {
       const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
@@ -378,16 +410,39 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   }, [context, engine.resolutions, result, rows]);
 
   const submit = (question) => {
+    let idempotencyKey;
     try {
       const value = answerValue(question, drafts[question.id]);
       const previousValue = answers[question.id]?.value;
       const changed = previousValue !== value;
+      const answeredAt = new Date().toISOString();
+      const answer = { value, answeredAt, factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId };
+      const nextAnswers = { ...answers, [question.id]: answer };
+      const nextRecalculations = { ...recalculations };
+      const nextEvidence = { ...evidence };
+      if (changed) {
+        delete nextRecalculations[question.comparisonItemId];
+        engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).forEach(({ id }) => delete nextEvidence[id]);
+      }
+      const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: nextAnswers, evidence: nextEvidence, recalculations: nextRecalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+      const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
+      Object.entries(nextAnswers).forEach(([questionId, stored]) => {
+        if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete nextAnswers[questionId];
+      });
+      const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers: nextAnswers, previousTrace: currentTrace, recalculations: nextRecalculations });
+      idempotencyKey = `answer:${smallStableHash([question.id, answers[question.id]?.answeredAt || "initial", value])}`;
+      if (answerSubmissions.current.has(idempotencyKey)) return;
+      answerSubmissions.current.add(idempotencyKey);
+      // Preserve the engine's original functional update semantics. Several
+      // answers for one issue can be submitted before the asynchronous
+      // recalculation settles; replacing state from a render-time snapshot can
+      // otherwise discard the preceding answer.
       setAnswers((current) => {
-        const next = { ...current, [question.id]: { value, answeredAt: new Date().toISOString(), factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId } };
-        const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: next, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
-        const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
+        const next = { ...current, [question.id]: answer };
+        const currentEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: next, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+        const currentQuestionIds = new Set(currentEngine.questions.map(({ id: questionId }) => questionId));
         Object.entries(next).forEach(([questionId, stored]) => {
-          if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete next[questionId];
+          if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !currentQuestionIds.has(questionId)) delete next[questionId];
         });
         return next;
       });
@@ -397,17 +452,30 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
           delete next[question.comparisonItemId];
           return next;
         });
-        const relatedEvidenceIds = engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).map(({ id: evidenceId }) => evidenceId);
+        const relatedEvidenceIds = engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).map(({ id }) => id);
         if (relatedEvidenceIds.length) setEvidence((current) => {
           const next = { ...current };
-          relatedEvidenceIds.forEach((evidenceId) => delete next[evidenceId]);
+          relatedEvidenceIds.forEach((id) => delete next[id]);
           return next;
         });
         requestedRecalculations.current.delete(question.comparisonItemId);
       }
+      persistPocCase("SUBMIT_ANSWER", {
+        caseId: context.demoCaseId,
+        actorType: "CUSTOMER",
+        idempotencyKey,
+        payload: {
+          resolution: { ...durableResolution(nextAnswers, nextEvidence, nextRecalculations, nextTrace), submittedAnswer: { question, answer } },
+          assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
+          researchResult: { ...researchResult, ownershipResolutionTrace: nextTrace },
+        },
+      }).catch((caught) => {
+        answerSubmissions.current.delete(idempotencyKey);
+        setErrors((current) => ({ ...current, [question.id]: caught.message }));
+      });
       setEditingQuestionId(null);
       setErrors((current) => ({ ...current, [question.id]: "" }));
-    } catch (caught) { setErrors((current) => ({ ...current, [question.id]: caught.message })); }
+    } catch (caught) { if (idempotencyKey) answerSubmissions.current.delete(idempotencyKey); setErrors((current) => ({ ...current, [question.id]: caught.message })); }
   };
   const resetAnswers = () => {
     clearSession(context, result);
@@ -440,8 +508,26 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       const extractionResult = await awaitSupportingEvidenceResult(started);
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
       const outcome = evidenceResultStatus(extractionResult, resolution, record);
-      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() } }));
+      const submittedEvidence = { ...(evidence[record.id] || {}), filename: file.name, ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() };
+      const nextEvidence = { ...evidence, [record.id]: submittedEvidence };
+      setEvidence(nextEvidence);
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
+      try {
+        const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence: nextEvidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+        const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers, previousTrace: currentTrace, recalculations });
+        await persistPocCase("SYNC_RESOLUTION", {
+          caseId: context.demoCaseId,
+          actorType: "CUSTOMER",
+          idempotencyKey: `evidence:${record.id}:${extractionResult.artifact?.artifactId}`,
+          payload: {
+            resolution: durableResolution(answers, nextEvidence, recalculations, nextTrace),
+            assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
+            researchResult: { ...researchResult, ownershipResolutionTrace: nextTrace },
+          },
+        });
+      } catch (syncError) {
+        setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: `${outcome.reason} The case link will retry automatically: ${syncError.message}` } }));
+      }
     } catch (caught) {
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
@@ -462,14 +548,32 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const completed = engine.resolutions.filter(({ resolutionStatus }) => resolutionStatus !== RESOLUTION_STATUS.UNRESOLVED).length;
   const readyForIdv = isReadyForIdentityVerification(currentTrace);
   const readinessMessage = currentTrace.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions to continue.";
-  const finalizeCurrentAssessment = () => {
+  const finalizeCurrentAssessment = async (event) => {
+    event.preventDefault();
     const finalEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: new Date().toISOString() });
     const finalTrace = resolutionTrace({ engine: finalEngine, rows, answers, previousTrace: readCurrentTrace(context), recalculations, finalized: true });
     try {
       const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
       if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return;
       window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: finalTrace } }));
-    } catch (_) { /* The browser will continue to IDV, where the missing final state fails closed. */ }
+      await persistPocCase("FINALIZE_ASSESSMENT", {
+        caseId: context.demoCaseId,
+        actorType: "CUSTOMER",
+        idempotencyKey: `assessment:${finalTrace.verificationAssessment?.assessmentVersionId}`,
+        payload: {
+          resolution: durableResolution(answers, evidence, recalculations, finalTrace),
+          assessment: { assessmentId: finalTrace.verificationAssessment?.assessmentVersionId, trace: finalTrace, evidence },
+          researchResult: { ...researchResult, ownershipResolutionTrace: finalTrace },
+        },
+      });
+      window.location.assign(CUSTOMER_IDV_PATH);
+    } catch (cause) {
+      try {
+        const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+        if (session?.researchResult) window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: currentTrace } }));
+      } catch (_) { /* Server submission failed; the page remains blocked from navigation. */ }
+      setErrors((current) => ({ ...current, finalize: cause.message || "The assessment could not be saved." }));
+    }
   };
   return <section className="ubo-customer-card ubo-resolution-engine">
     <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
@@ -506,6 +610,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
-    <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p></div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>
+    <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>
   </section>;
 }

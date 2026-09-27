@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
 import CustomerCompanyPage from "./CustomerCompanyPage";
 import { DEMO_SESSION_KEY } from "../demoSession";
 import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";

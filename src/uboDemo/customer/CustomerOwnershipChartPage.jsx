@@ -21,6 +21,7 @@ import ChartResearchComparison from "./ChartResearchComparison";
 import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, writeCustomerOwnershipChartPreview } from "./customerOwnershipChartPreview";
 import "./customerOwnershipChart.css";
+import { persistPocCase, smallStableHash } from "../pocCaseClient";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 
@@ -215,21 +216,34 @@ export default function CustomerOwnershipChartPage() {
   const [preview, setPreview] = useState(() => customerOwnershipChartPreviewFor({ context, result: restored?.result }));
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || "EFFECTIVE_INTEREST");
   const [savedExtractions, setSavedExtractions] = useState(availableExtractions);
-  const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
+  const [persistenceNotice, setPersistenceNotice] = useState(result ? { kind: "success", message: result.durableExtraction?.jobId ? "This accepted Evidence extraction was restored from the server-saved case." : "This structured extraction is restored from browser-local demo storage. No provider call was made." } : null);
   const [analysisVisible, setAnalysisVisible] = useState(() => Boolean(restored) && new URLSearchParams(window.location.search).get("view") === "analysis");
   const [failedJob, setFailedJob] = useState(null);
   const reevaluationAttempts = useRef(new Set());
   const uploadInFlight = useRef(false);
 
-  const saveUsableResult = (nextResult, nextPreview = null) => {
-    setResult(nextResult);
+  const saveUsableResult = async (nextResult, nextPreview = null, job = null) => {
+    const durableJob = job || nextResult?.durableExtraction;
+    if (!durableJob?.jobId) throw new Error("Evidence completed the extraction, but its durable job reference was not returned.");
+    const durableResult = { ...nextResult, durableExtraction: { jobId: durableJob.jobId, artifactId: durableJob.artifactId || nextResult.artifact?.artifactId, state: durableJob.state || "COMPLETE" } };
+    await persistPocCase("ASSOCIATE_CHART", {
+      caseId: context.demoCaseId,
+      actorType: "CUSTOMER",
+      idempotencyKey: `chart:${durableJob.jobId}:${smallStableHash([durableResult.artifact?.artifactId, calculationMethod, durableResult.chartAnalysis?.calculationSemanticsVersion])}`,
+      payload: {
+        company: context.company,
+        chartReference: { jobId: durableJob.jobId, artifactId: durableJob.artifactId || durableResult.artifact?.artifactId, calculationMethod },
+        chartProjection: durableResult,
+      },
+    });
+    setResult(durableResult);
     setAnalysisVisible(false);
     if (nextPreview) setPreview(nextPreview);
     clearCustomerOwnershipJob();
     setFailedJob(null);
     try {
-      writeCustomerOwnershipChartSession({ context, result: nextResult });
-      saveCustomerOwnershipChartExtraction({ context, result: nextResult });
+      writeCustomerOwnershipChartSession({ context, result: durableResult });
+      saveCustomerOwnershipChartExtraction({ context, result: durableResult });
       setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
       setPersistenceNotice({ kind: "success", message: "Evidence saved the Artifact and validated extraction durably. This browser also keeps a convenient replay copy." });
     } catch (saveError) {
@@ -256,7 +270,7 @@ export default function CustomerOwnershipChartPage() {
     let job = initialJob;
     for (let poll = 0; poll < 12; poll += 1) {
       writeCustomerOwnershipJob({ jobId: job.jobId, demoCaseId: context.demoCaseId, artifactId: job.artifactId, correlationId: job.correlationId });
-      if (job.state === "COMPLETE" || job.state === "PARTIAL") { saveUsableResult(job.result, nextPreview); return; }
+      if (job.state === "COMPLETE" || job.state === "PARTIAL") { await saveUsableResult(job.result, nextPreview, job); return; }
       if (job.state === "FAILED") {
         setFailedJob(job);
         setError("We couldn't complete the analysis right now. Your document has been saved safely. Please try again.");
@@ -315,9 +329,16 @@ export default function CustomerOwnershipChartPage() {
         const payload = await response.json();
         if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
         if (!active) return;
-        setResult(payload.result);
-        writeCustomerOwnershipChartSession({ context, result: payload.result, calculationMethod });
-        saveCustomerOwnershipChartExtraction({ context, result: payload.result, calculationMethod });
+        const durableResult = { ...payload.result, durableExtraction: result.durableExtraction };
+        if (result.durableExtraction?.jobId) await persistPocCase("ASSOCIATE_CHART", {
+          caseId: context.demoCaseId,
+          actorType: "SYSTEM",
+          idempotencyKey: `chart-reevaluated:${result.durableExtraction.jobId}:${smallStableHash(durableResult.chartAnalysis)}`,
+          payload: { company: context.company, chartReference: { ...result.durableExtraction, calculationMethod }, chartProjection: durableResult },
+        });
+        setResult(durableResult);
+        writeCustomerOwnershipChartSession({ context, result: durableResult, calculationMethod });
+        saveCustomerOwnershipChartExtraction({ context, result: durableResult, calculationMethod });
         setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
         setPersistenceNotice({ kind: "success", message: "Saved chart facts were re-evaluated through the current UBO engine. No provider call was made." });
       } catch (caught) {
@@ -332,13 +353,21 @@ export default function CustomerOwnershipChartPage() {
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };
   const replace = () => { clearCustomerOwnershipChartSession(); clearCustomerOwnershipJob(); clearCustomerOwnershipChartPreview(); setResult(null); setPreview(null); setPersistenceNotice(null); setAnalysisVisible(false); setFailedJob(null); remove(); };
-  const useSaved = (record) => {
+  const useSaved = async (record) => {
     setResult(record.result);
     setAnalysisVisible(false);
     setPreview(customerOwnershipChartPreviewFor({ context, result: record.result }));
     setCalculationMethod(record.calculationMethod || "EFFECTIVE_INTEREST");
     setPersistenceNotice({ kind: "success", message: "Saved extraction loaded from this browser. No provider call was made." });
-    try { writeCustomerOwnershipChartSession({ context, result: record.result, calculationMethod: record.calculationMethod }); }
+    try {
+      if (record.result.durableExtraction?.jobId) await persistPocCase("ASSOCIATE_CHART", {
+        caseId: context.demoCaseId,
+        actorType: "CUSTOMER",
+        idempotencyKey: `chart-reused:${record.result.durableExtraction.jobId}`,
+        payload: { company: context.company, chartReference: { ...record.result.durableExtraction, calculationMethod: record.calculationMethod }, chartProjection: record.result },
+      });
+      writeCustomerOwnershipChartSession({ context, result: record.result, calculationMethod: record.calculationMethod });
+    }
     catch (_) { setPersistenceNotice({ kind: "warning", message: "Saved extraction loaded without a provider call, but the active browser session could not be updated." }); }
   };
   const analyse = async () => {
@@ -374,6 +403,12 @@ export default function CustomerOwnershipChartPage() {
   const changeCalculationMethod = (next) => {
     setCalculationMethod(next);
     if (result) {
+      if (result.durableExtraction?.jobId) persistPocCase("ASSOCIATE_CHART", {
+        caseId: context.demoCaseId,
+        actorType: "ANALYST",
+        idempotencyKey: `chart-method:${result.durableExtraction.jobId}:${next}`,
+        payload: { company: context.company, chartReference: { ...result.durableExtraction, calculationMethod: next }, chartProjection: result },
+      }).catch(() => {});
       try {
         writeCustomerOwnershipChartSession({ context, result, calculationMethod: next });
         saveCustomerOwnershipChartExtraction({ context, result, calculationMethod: next });

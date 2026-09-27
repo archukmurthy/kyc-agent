@@ -129,6 +129,32 @@ test("an ordinary Fact whose typed relationship was rejected remains explicit", 
   assert.equal(assessed.unresolvedParties[0].visibleLabel, "Jane Smith");
 });
 
+test("targeted verification supersedes a rejected duplicate with the validated canonical relationship", () => {
+  const rejected = {
+    id: "first-pass-rejected",
+    typedRelationshipCandidate: {
+      relationshipType: "ECONOMIC_OWNERSHIP",
+      subject: { partyType: "natural_person", name: "ALICE MORGAN" },
+      object: { partyType: "legal_entity", name: "HIGGS LLP", jurisdiction: "GB" },
+      value: { kind: "EXACT", measurementType: "percentage", exact: 40, unit: "percentage_points" },
+      qualifications: {},
+      sourceSpecificMetadata: {},
+    },
+    supportSignals: { typedRelationship: { state: "rejected", limitations: ["qualifications must be an array"] } },
+  };
+  const verified = canonicalRelationship({ id: "verified-40" });
+  const merged = mergeOwnershipSemanticExtractions({
+    facts: [rejected], requestedConceptOutcomes: [], completeness: { state: "incomplete", limitations: ["qualifications must be an array"] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT", ownershipPartyInventory: [], ownershipConnectorInventory: [],
+  }, {
+    facts: [verified], requestedConceptOutcomes: [], completeness: { state: "complete", limitations: [] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT", ownershipPartyInventory: [], ownershipConnectorInventory: [],
+  });
+  assert.equal(merged.facts.length, 1);
+  assert.equal(merged.facts[0].id, "verified-40");
+  assert.ok(merged.facts[0].typedRelationship);
+});
+
 test("zero relationships is never ordinary success without explicit confirmed absence", () => {
   const incomplete = assessOwnershipChartCompleteness({ artifactId: "artifact-1", facts: [], partyInventory: [], connectorInventory: [], providerCompleteness: { state: "complete" }, ownershipDataStatus: "UNRESOLVED" });
   assert.equal(incomplete.state, EXTRACTION_QUALITY_STATE.EXTRACTION_INCOMPLETE);

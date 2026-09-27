@@ -13,6 +13,7 @@ import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import { sameCustomerCompany, writeCustomerDemoCase } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import "./customerOwnershipChart.css";
+import { persistPocCase } from "../pocCaseClient";
 
 export default function CustomerCompanyPage() {
   const restored = useMemo(() => readDemoSession(), []);
@@ -20,6 +21,7 @@ export default function CustomerCompanyPage() {
   const [demoCase, setDemoCase] = useState(restored?.demoCase || null);
   const [researchResult, setResearchResult] = useState(restored?.researchResult || null);
   const [errors, setErrors] = useState({});
+  const [saveError, setSaveError] = useState("");
   useEffect(() => listenForCustomerHandoff((handoff) => {
     writeDemoSession(handoff);
     setDraft(handoff.draft);
@@ -31,16 +33,19 @@ export default function CustomerCompanyPage() {
     window.history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
   }), []);
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
-  const submit = (event) => {
+  const submit = async (event) => {
+    event.preventDefault();
     const nextErrors = validateDemoDraft(draft);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) {
-      event.preventDefault();
-      return;
-    }
+    if (Object.keys(nextErrors).length) return;
     const created = createDemoCase(draft);
     const continuingSameCompany = demoCase?.demoCaseId && sameCustomerCompany(demoCase.company, created.company);
-    writeCustomerDemoCase({ draft, demoCase: continuingSameCompany ? { ...created, demoCaseId: demoCase.demoCaseId } : created });
+    const nextCase = continuingSameCompany ? { ...created, demoCaseId: demoCase.demoCaseId } : created;
+    writeCustomerDemoCase({ draft, demoCase: nextCase });
+    try {
+      await persistPocCase("UPSERT_CASE", { caseId: nextCase.demoCaseId, idempotencyKey: `customer-case:${nextCase.demoCaseId}`, payload: { draft, demoCase: nextCase }, actorType: "CUSTOMER" });
+      window.location.assign(CUSTOMER_OWNERSHIP_CHART_PATH);
+    } catch (cause) { setSaveError(`${cause.message} Your case was not submitted.`); }
   };
   const assertionCount = (researchResult?.candidateSources || []).reduce((count, source) => count + (source.candidateFacts || []).length, 0);
 
@@ -55,9 +60,10 @@ export default function CustomerCompanyPage() {
         <label><span>Country of registration *</span><select value={draft.countryCode} onChange={(event) => update("countryCode", event.target.value)}>{COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}</select></label>
         <label><span>Ownership type *</span><select value={draft.ownershipType} onChange={(event) => update("ownershipType", event.target.value)}>{OWNERSHIP_TYPES.map((type) => <option key={type.code} value={type.code}>{type.label}</option>)}</select></label>
         <label className="wide"><span>Case reference <em>Optional</em></span><input value={draft.referenceCaseId} onChange={(event) => update("referenceCaseId", event.target.value)} placeholder="Your internal reference" /></label>
-        <div className="ubo-customer-company-actions"><small>Saved in this browser for this demo only.</small><button className="ubo-customer-primary" type="submit">Continue to ownership <span>→</span></button></div>
+        {saveError && <p className="ubo-customer-error" role="alert">{saveError}</p>}
+        <div className="ubo-customer-company-actions"><small>Submitted company details are saved to this POC case.</small><button className="ubo-customer-primary" type="submit">Continue to ownership <span>→</span></button></div>
       </form>
     </main>
-    <footer className="ubo-customer-footer">Demo experience · Browser-local session</footer>
+    <footer className="ubo-customer-footer">Demo experience · Server-saved POC case</footer>
   </div>;
 }

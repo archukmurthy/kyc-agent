@@ -279,10 +279,16 @@ function semanticRelationshipKey(fact) {
   const relationship = fact?.typedRelationship || fact?.typedRelationshipCandidate;
   if (!relationship) return null;
   const partyKey = (party) => `${String(party?.partyType || "").toLowerCase()}|${normalized(party?.name || party?.description)}`;
-  const value = relationship.value || {};
+  // Provider candidates and validated canonical relationships deliberately use
+  // different transport shapes. Compare their normalized semantic view so a
+  // targeted verification result can supersede the rejected first-pass
+  // representation of the same source assertion.
+  const subject = relationshipParty(fact, "subject");
+  const object = relationshipParty(fact, "object");
+  const value = relationshipValue(fact) || {};
   const valueKey = [value.kind, value.measurementType, value.unit, value.exact ?? value.value, value.lower, value.upper, value.lowerInclusive, value.upperInclusive, value.qualitative]
     .map((item) => item == null ? "" : String(item)).join("|");
-  return [relationship.relationshipType, partyKey(relationship.subject), partyKey(relationship.object), valueKey].join("|");
+  return [relationship.relationshipType, partyKey(subject), partyKey(object), valueKey].join("|");
 }
 
 function requiresTargetedOwnershipVerification(assessment) {

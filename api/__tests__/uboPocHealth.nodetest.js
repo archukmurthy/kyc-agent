@@ -42,7 +42,7 @@ test("internal POC health reports all configured dependencies without exposing s
       async query() {
         query += 1;
         if (query === 1) return { rows: [{}] };
-        if (query === 2) return { rows: [{ artifacts: "evidence_artifacts", jobs: "evidence_customer_extraction_jobs" }] };
+        if (query === 2) return { rows: [{ artifacts: "evidence_artifacts", jobs: "evidence_customer_extraction_jobs", poc_cases: "ubo_poc_cases", poc_case_events: "ubo_poc_case_events" }] };
         return { rows: [{ queued: 0, stale: 0 }] };
       },
       async close() {},
@@ -53,6 +53,7 @@ test("internal POC health reports all configured dependencies without exposing s
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.status, "DEGRADED");
     assert.equal(res.body.checks.evidencePersistence.artifactStore, "vercel_blob");
+    assert.equal(res.body.checks.casePersistence.status, "HEALTHY");
     assert.equal(res.body.checks.extractionWorker.stale, 0);
     assert.equal(res.body.checks.aiExtractionProvider.status, "HEALTHY");
     assert.equal(res.body.checks.researchProvider.status, "HEALTHY");
@@ -76,18 +77,24 @@ test("internal POC health reports a production-like durable cache and release id
       async query() {
         query += 1;
         if (query === 1) return { rows: [{}] };
-        if (query === 2) return { rows: [{ artifacts: "evidence_artifacts", jobs: "evidence_customer_extraction_jobs" }] };
+        if (query === 2) return { rows: [{ artifacts: "evidence_artifacts", jobs: "evidence_customer_extraction_jobs", poc_cases: "ubo_poc_cases", poc_case_events: "ubo_poc_case_events" }] };
         return { rows: [{ queued: 0, stale: 0 }] };
       },
       async close() {},
     };
-    const handler = health.createHandler({ dbFactory: () => db, fetchImpl: async () => ({ ok: true, status: 200 }), storageBackend: () => "redis" });
+    const values = new Map();
+    const cacheStorage = {
+      async set(key, value) { values.set(key, value); },
+      async get(key) { return values.get(key); },
+      async del(key) { values.delete(key); },
+    };
+    const handler = health.createHandler({ dbFactory: () => db, fetchImpl: async () => ({ ok: true, status: 200 }), storageBackend: () => "redis", cacheStorage });
     const res = response();
     await handler({ method: "GET", headers: { "x-internal-health-key": "health-secret" } }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.status, "HEALTHY");
     assert.equal(res.body.contractVersion, "ubo-poc-health-v2");
-    assert.deepEqual(res.body.checks.app, { status: "HEALTHY", environment: "poc", productVersion: "ubo-poc-v1.0.0", commitSha: "0123456789abcdef" });
-    assert.deepEqual(res.body.checks.researchCache, { status: "HEALTHY", backend: "redis" });
+    assert.deepEqual(res.body.checks.app, { status: "HEALTHY", environment: "poc", productVersion: "ubo-poc-v1.0.0", commitSha: "0123456789abcdef", idvMode: "DEMO" });
+    assert.deepEqual(res.body.checks.researchCache, { status: "HEALTHY", backend: "redis", roundTrip: "passed" });
   });
 });

@@ -16,6 +16,7 @@ import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff
 import AnalystInvestigationTopics from "./AnalystInvestigationTopics";
 import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
+import { clearActivePocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
 import "./uboDemo.css";
 
 // Temporarily hide the legacy analyst open-questions panel without removing its implementation.
@@ -35,7 +36,7 @@ function DemoFooter({ pathname }) {
   const environment = process.env.REACT_APP_UBO_ENVIRONMENT || "local";
   const version = process.env.REACT_APP_UBO_PRODUCT_VERSION || "development";
   const commit = (process.env.REACT_APP_UBO_COMMIT_SHA || "unversioned").slice(0, 7);
-  return <footer className="ubo-demo-footer"><nav aria-label="Supporting evidence"><span>Supporting evidence and traceability</span><a href={DEMO_AUDIT_PATH} aria-current={isDemoAuditPath(pathname) ? "page" : undefined}>Open Audit</a></nav><small>Demo experience · Browser-local session · UK Corporate 1.6-RC review path</small><small aria-label="Build metadata">{environment} · {version} · {commit}</small></footer>;
+  return <footer className="ubo-demo-footer"><nav aria-label="Supporting evidence"><span>Supporting evidence and traceability</span><a href={DEMO_AUDIT_PATH} aria-current={isDemoAuditPath(pathname) ? "page" : undefined}>Open Audit</a></nav><small>Demo experience · Server-saved POC case · UK Corporate 1.6-RC review path</small><small aria-label="Build metadata">{environment} · {version} · {commit}</small></footer>;
 }
 
 function FieldError({ id, children }) { return <p className="ubo-demo-error" id={id} role="alert">{children}</p>; }
@@ -240,6 +241,7 @@ export default function UboDemoRoot() {
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
   const skipNextSave = useRef(false);
+  const durableResearchSaves = useRef(new Set());
 
   useEffect(() => { const onPop = () => setPathname(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
@@ -254,6 +256,21 @@ export default function UboDemoRoot() {
     try { writeDemoSession({ draft, demoCase, researchResult }); }
     catch (cause) { setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local demo-session storage failed."} The current live result remains available until this page is closed.` }); }
   }, [draft, demoCase, researchResult]);
+  useEffect(() => {
+    if (!demoCase?.demoCaseId || !researchResult || researchResult.status === "LOADING") return;
+    const signature = smallStableHash([researchResult.jobId, researchResult.status, researchResult.completedAt,
+      researchResult.investigationTopicActivations, researchResult.analystCustomerRequests]);
+    if (durableResearchSaves.current.has(signature)) return;
+    durableResearchSaves.current.add(signature);
+    persistPocCase("SAVE_RESEARCH", {
+      caseId: demoCase.demoCaseId,
+      idempotencyKey: `research:${signature}`,
+      payload: { draft, demoCase, researchResult },
+    }).catch((cause) => {
+      durableResearchSaves.current.delete(signature);
+      setReplayLibraryStatus({ kind: "error", message: `${cause.message} This research result is not yet durably attached to the case.` });
+    });
+  }, [demoCase, draft, researchResult]);
   useEffect(() => {
     const receiveCustomerProgress = (event) => {
       if (event.key !== "ubo-demo.case.v1" || !event.newValue) return;
@@ -353,6 +370,9 @@ export default function UboDemoRoot() {
     if (Object.keys(next).length) return;
     setDraft(cleanDraft);
     const nextCase = createDemoCase(cleanDraft);
+    persistPocCase("UPSERT_CASE", { caseId: nextCase.demoCaseId, idempotencyKey: `case-created:${nextCase.demoCaseId}`, payload: { draft: cleanDraft, demoCase: nextCase }, actorType: "ANALYST" }).catch((cause) => {
+      setReplayLibraryStatus({ kind: "error", message: `${cause.message} Research was not started because the case could not be saved.` });
+    });
     abortActiveDemoResearchJobs();
     setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: cleanDraft.sourceMode }); navigateDemo(DEMO_RESEARCH_PATH);
   };
@@ -412,7 +432,7 @@ export default function UboDemoRoot() {
     abortActiveDemoResearchJobs();
     setDraft(nextDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
   };
-  const startNewCase = () => { abortActiveDemoResearchJobs(); skipNextSave.current = true; clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
+  const startNewCase = () => { abortActiveDemoResearchJobs(); skipNextSave.current = true; clearActivePocCase(); clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
   const edit = () => navigateDemo(DEMO_START_PATH);
   const exportReplays = () => {
     try {
@@ -434,6 +454,13 @@ export default function UboDemoRoot() {
   const switchToCustomerView = async () => {
     try {
       setCustomerSwitchState({ kind: "pending", message: "Opening the customer view and transferring this case…" });
+      const saved = await persistPocCase("SAVE_RESEARCH", {
+        caseId: demoCase.demoCaseId,
+        idempotencyKey: `customer-handoff:${smallStableHash([researchResult.jobId, researchResult.status, researchResult.completedAt])}`,
+        payload: { draft, demoCase, researchResult },
+        actorType: "ANALYST",
+      });
+      if (!saved.researchRelease?.mayProceed) throw new Error(saved.researchRelease?.reason || "Discovery is still in progress because unresolved research could change who requires identity verification.");
       await openCustomerViewHandoff(buildCustomerHandoff({ draft, demoCase, researchResult }));
       setCustomerSwitchState({ kind: "accepted", message: "Customer view opened with this case and all research assertions." });
     } catch (cause) {

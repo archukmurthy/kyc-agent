@@ -1,6 +1,6 @@
 "use strict";
 
-const { timingSafeEqual } = require("node:crypto");
+const { randomUUID, timingSafeEqual } = require("node:crypto");
 const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PostgresCustomerExtractionJobRepository } = require("../evidence/customerOwnershipJobs/repository.js");
 const storage = require("../lib/storage.js");
@@ -35,7 +35,17 @@ function providerResult(response) {
   return { status: response.status >= 500 || response.status === 408 || response.status === 429 ? "DEGRADED" : "UNAVAILABLE", httpStatus: response.status };
 }
 
-function createHandler({ dbFactory = createPostgresDb, fetchImpl = boundedFetch, storageBackend = storage.backend } = {}) {
+async function probeDurableCache(cache) {
+  const key = `ubo-poc-health:${randomUUID()}`;
+  const value = { probe: randomUUID() };
+  await cache.set(key, value, { ttlSeconds: 30 });
+  try {
+    const restored = await cache.get(key);
+    if (restored?.probe !== value.probe) throw new Error("cache_round_trip_mismatch");
+  } finally { await cache.del(key).catch(() => {}); }
+}
+
+function createHandler({ dbFactory = createPostgresDb, fetchImpl = boundedFetch, storageBackend = storage.backend, cacheStorage = storage } = {}) {
   return async function uboPocHealth(req, res) {
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
@@ -47,6 +57,7 @@ function createHandler({ dbFactory = createPostgresDb, fetchImpl = boundedFetch,
       environment: process.env.UBO_POC_ENVIRONMENT || "local",
       productVersion: process.env.UBO_POC_PRODUCT_VERSION || "development",
       commitSha: process.env.UBO_POC_COMMIT_SHA || "unversioned",
+      idvMode: process.env.UBO_POC_IDV_MODE || "DEMO",
     } };
     let db;
     try {
@@ -54,24 +65,33 @@ function createHandler({ dbFactory = createPostgresDb, fetchImpl = boundedFetch,
       await db.query("SELECT 1");
       checks.database = { status: "HEALTHY" };
       const tableResult = await db.query(`SELECT to_regclass('public.evidence_artifacts') artifacts,
-        to_regclass('public.evidence_customer_extraction_jobs') jobs`);
+        to_regclass('public.evidence_customer_extraction_jobs') jobs,
+        to_regclass('public.ubo_poc_cases') poc_cases,
+        to_regclass('public.ubo_poc_case_events') poc_case_events`);
       const row = tableResult.rows?.[0] || tableResult[0] || {};
       checks.evidencePersistence = row.artifacts && row.jobs
         ? { status: "HEALTHY", artifactStore: process.env.BLOB_READ_WRITE_TOKEN ? "vercel_blob" : process.env.EVIDENCE_ARTIFACT_DIR ? "filesystem" : "not_configured" }
         : { status: "UNAVAILABLE", reason: "required_tables_missing" };
       if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.EVIDENCE_ARTIFACT_DIR) checks.evidencePersistence = { status: "UNAVAILABLE", reason: "artifact_store_not_configured" };
       else if (process.env.VERCEL && !process.env.BLOB_READ_WRITE_TOKEN) checks.evidencePersistence = { status: "UNAVAILABLE", artifactStore: "filesystem", reason: "ephemeral_hosted_artifact_store" };
+      checks.casePersistence = row.poc_cases && row.poc_case_events
+        ? { status: "HEALTHY", currentProjection: "ubo_poc_cases", immutableHistory: "ubo_poc_case_events" }
+        : { status: "UNAVAILABLE", reason: "migration_021_missing" };
       const worker = await new PostgresCustomerExtractionJobRepository(db).health();
       checks.extractionWorker = { status: Number(worker.stale || 0) ? "DEGRADED" : "HEALTHY", queued: Number(worker.queued || 0), stale: Number(worker.stale || 0) };
     } catch (error) {
       checks.database = { status: "UNAVAILABLE", reason: "connection_or_schema_failure" };
       checks.evidencePersistence = { status: "UNAVAILABLE", reason: "database_unavailable" };
       checks.extractionWorker = { status: "UNAVAILABLE", reason: "job_store_unavailable" };
+      checks.casePersistence = { status: "UNAVAILABLE", reason: "database_unavailable" };
     }
     const cacheBackend = storageBackend();
-    checks.researchCache = cacheBackend === "kv" || cacheBackend === "redis"
-      ? { status: "HEALTHY", backend: cacheBackend }
-      : { status: process.env.VERCEL ? "UNAVAILABLE" : "DEGRADED", backend: cacheBackend, reason: process.env.VERCEL ? "ephemeral_hosted_cache" : "local_filesystem_cache" };
+    if (cacheBackend === "kv" || cacheBackend === "redis") {
+      try {
+        await probeDurableCache(cacheStorage);
+        checks.researchCache = { status: "HEALTHY", backend: cacheBackend, roundTrip: "passed" };
+      } catch (_) { checks.researchCache = { status: "UNAVAILABLE", backend: cacheBackend, reason: "cache_round_trip_failed" }; }
+    } else checks.researchCache = { status: process.env.VERCEL ? "UNAVAILABLE" : "DEGRADED", backend: cacheBackend, reason: process.env.VERCEL ? "ephemeral_hosted_cache" : "local_filesystem_cache" };
     const anthropicConfigured = Boolean(process.env.ANTHROPIC_API_KEY);
     let anthropicConnectivity;
     if (anthropicConfigured) {

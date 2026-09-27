@@ -34,6 +34,7 @@ export function openCustomerViewHandoff(payload, {
   }
   target.searchParams.set("handoff", CUSTOMER_HANDOFF_CONTRACT);
   target.searchParams.set("handoffOrigin", windowRef.location.origin);
+  target.searchParams.set("case", payload.demoCase.demoCaseId);
   return new Promise((resolve, reject) => {
     let customerWindow;
     let timer;

@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
 import CustomerIdvPage from "./CustomerIdvPage";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { CUSTOMER_COMPLETE_PATH, CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
@@ -14,7 +15,7 @@ function seed(trace) {
   window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase, researchResult: { ownershipResolutionTrace: trace } }));
 }
 
-test("IDV route shows each qualifying natural person once, completes dummy IDV and ignores a legal entity", () => {
+test("IDV route shows each qualifying natural person once, completes dummy IDV and ignores a legal entity", async () => {
   const trace = applyCurrentVerificationAssessment({ ownershipResolution: { status: "COMPLETE" }, controlResolution: { status: "NOT_STARTED" }, questions: [], evidence: [], ownershipFacts: [], personOwnershipAssessments: [{ assessmentId: "alice", personId: "alice", personName: "Alice Morgan", partyType: "NATURAL_PERSON", determination: "DEFINITE_UBO", idvRequired: true, aggregateEffectiveOwnership: { type: "EXACT", value: "26" }, ownershipPaths: [{}, {}] }], uboAssessments: [
     { personId: "alice", personName: "Alice Morgan", partyType: "NATURAL_PERSON", idvRequired: true, bases: ["SHARE_OWNERSHIP"] },
     { personId: "alice", personName: "Alice Morgan", partyType: "NATURAL_PERSON", idvRequired: true, bases: ["VOTING_RIGHTS"] },
@@ -26,7 +27,7 @@ test("IDV route shows each qualifying natural person once, completes dummy IDV a
   expect(screen.queryByText("Holding Limited")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Application information complete/i })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: /^Complete identity verification$/i }));
-  expect(screen.getByText(/Identity verification completed/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Identity verification completed/i)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Application information complete/i })).toHaveAttribute("href", CUSTOMER_COMPLETE_PATH);
   const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace;
   expect(saved.discoveryState).toBe(DISCOVERY_STATE.IDV_COMPLETE);

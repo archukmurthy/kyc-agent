@@ -45,6 +45,7 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   "src/uboDemo/customer/CustomerIdvPage.test.jsx",
   "src/uboDemo/customer/CustomerCompletePage.test.jsx",
   "src/uboDemo/AnalystResolutionView.test.jsx",
+  "src/uboDemo/pocCaseClient.test.js",
   `--moduleNameMapper=${JSON.stringify({
     "^react$": "<rootDir>/node_modules/react",
     "^react-dom$": "<rootDir>/node_modules/react-dom",
@@ -60,6 +61,7 @@ run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence char
   "ubo-control-lab/__tests__/tdrDemoScreen2.nodetest.js",
   "ubo-control-lab/server/__tests__/customerOwnershipChartDemo.nodetest.js",
   "ubo-control-lab/server/__tests__/ownershipResolutionIntegration.nodetest.js",
+  "ubo-control-lab/server/__tests__/pocCaseState.nodetest.js",
   "ubo-control-lab/server/__tests__/demoEntityMatching.nodetest.js",
   "agents/ubo/__tests__/recursiveCompaniesHouseExpansion.nodetest.js",
   "agents/ubo/__tests__/researchStability.nodetest.js",

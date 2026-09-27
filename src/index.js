@@ -13,6 +13,7 @@ import CustomerQuestionsPage from "./uboDemo/customer/CustomerQuestionsPage";
 import CustomerIdvPage from "./uboDemo/customer/CustomerIdvPage";
 import CustomerCompletePage from "./uboDemo/customer/CustomerCompletePage";
 import { isCustomerCompanyPath, isCustomerCompletePath, isCustomerIdvPath, isCustomerOwnershipChartPath, isCustomerQuestionsPath } from "./uboDemo/customer/customerRoute";
+import DurablePocCaseBoundary from "./uboDemo/DurablePocCaseBoundary";
 
 const path = window.location.pathname;
 // Pre-boarding agent vs. the plain customer onboarding flow is distinguished by
@@ -81,4 +82,5 @@ if (isCustomerCompletePath(path)) {
 }
 
 document.title = title;
+if (isUboDemoPath(path)) tree = <DurablePocCaseBoundary>{tree}</DurablePocCaseBoundary>;
 root.render(<React.StrictMode>{tree}</React.StrictMode>);
