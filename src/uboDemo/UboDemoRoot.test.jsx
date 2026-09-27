@@ -47,6 +47,10 @@ beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, 
 afterEach(() => { abortActiveDemoResearchJobs(); window.localStorage.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
+test("analyst demo displays unobtrusive build metadata", () => {
+  renderStart();
+  expect(screen.getByLabelText("Build metadata")).toHaveTextContent("local · development · unversi");
+});
 test("analyst journey progress contains company, ownership research and analyst review only", () => {
   renderStart();
   const progress = screen.getByLabelText("Demo journey progress");

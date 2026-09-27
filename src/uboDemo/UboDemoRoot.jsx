@@ -32,7 +32,10 @@ function DemoProgress({ pathname }) {
 }
 
 function DemoFooter({ pathname }) {
-  return <footer className="ubo-demo-footer"><nav aria-label="Supporting evidence"><span>Supporting evidence and traceability</span><a href={DEMO_AUDIT_PATH} aria-current={isDemoAuditPath(pathname) ? "page" : undefined}>Open Audit</a></nav><small>Demo experience · Browser-local session · UK Corporate 1.6-RC review path</small></footer>;
+  const environment = process.env.REACT_APP_UBO_ENVIRONMENT || "local";
+  const version = process.env.REACT_APP_UBO_PRODUCT_VERSION || "development";
+  const commit = (process.env.REACT_APP_UBO_COMMIT_SHA || "unversioned").slice(0, 7);
+  return <footer className="ubo-demo-footer"><nav aria-label="Supporting evidence"><span>Supporting evidence and traceability</span><a href={DEMO_AUDIT_PATH} aria-current={isDemoAuditPath(pathname) ? "page" : undefined}>Open Audit</a></nav><small>Demo experience · Browser-local session · UK Corporate 1.6-RC review path</small><small aria-label="Build metadata">{environment} · {version} · {commit}</small></footer>;
 }
 
 function FieldError({ id, children }) { return <p className="ubo-demo-error" id={id} role="alert">{children}</p>; }
