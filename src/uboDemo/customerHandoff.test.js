@@ -36,7 +36,7 @@ test("handoff keeps every normalized source assertion out of the URL and deliver
     setTimeout: jest.fn(() => 7),
     clearTimeout: jest.fn(),
   };
-  const accepted = openCustomerViewHandoff(payload, { windowRef });
+  const accepted = openCustomerViewHandoff(payload, { windowRef, configuredUrl: "" });
   const openedUrl = windowRef.open.mock.calls[0][0];
   expect(openedUrl).toContain("handoff=ubo-demo-customer-handoff-v1");
   expect(openedUrl).not.toContain("fact-1");

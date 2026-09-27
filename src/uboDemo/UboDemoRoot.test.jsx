@@ -50,7 +50,10 @@ afterEach(() => { abortActiveDemoResearchJobs(); window.localStorage.clear(); je
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
 test("analyst demo displays unobtrusive build metadata", () => {
   renderStart();
-  expect(screen.getByLabelText("Build metadata")).toHaveTextContent("local · development · unversi");
+  const environment = process.env.REACT_APP_UBO_ENVIRONMENT || "local";
+  const version = process.env.REACT_APP_UBO_PRODUCT_VERSION || "development";
+  const commit = (process.env.REACT_APP_UBO_COMMIT_SHA || "unversioned").slice(0, 7);
+  expect(screen.getByLabelText("Build metadata")).toHaveTextContent(`${environment} · ${version} · ${commit}`);
 });
 test("analyst journey progress contains company, ownership research and analyst review only", () => {
   renderStart();
