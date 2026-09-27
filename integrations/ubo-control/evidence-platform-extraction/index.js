@@ -91,6 +91,12 @@ const ORDINARY_FACT_ATTRIBUTE_MAP = Object.freeze({
   CERTIFICATION_SIGNATURE_PRESENCE: "source_certification_signature_presence",
 });
 
+const RELATIONSHIP_FACT_CONCEPTS = new Set([
+  "ECONOMIC_OWNERSHIP", "OWNERSHIP_PERCENTAGE", "VOTING_RIGHTS", "APPOINTMENT_RIGHTS",
+  "REMOVAL_RIGHTS", "FORMAL_CONTROL_RIGHTS", "SIGNIFICANT_INFLUENCE_OR_CONTROL",
+  "NOMINEE_RELATIONSHIP", "OFFICER_RELATIONSHIP",
+]);
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -196,6 +202,39 @@ function candidateParty(party, sourcePartyId = null) {
   if (party?.jurisdiction) mapped.jurisdiction = party.jurisdiction;
   if (sourcePartyId) mapped.sourcePartyId = String(sourcePartyId);
   return mapped;
+}
+
+function normalizedPartyKey(party) {
+  const type = normalizeToken(party?.partyType || party?.party_type);
+  const name = String(party?.name || party?.description || "").trim().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ");
+  return `${type}|${name}`;
+}
+
+function relationshipDescriptor(fact) {
+  const typed = fact?.typedRelationship;
+  if (typed) return {
+    relationshipType: normalizeToken(typed.relationshipType),
+    subject: normalizedPartyKey(typed.subject),
+    object: normalizedPartyKey(typed.object),
+    measurementType: normalizeToken(typed.value?.measurementType),
+    exact: typed.value?.exact ?? null,
+  };
+  const value = fact?.value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const relationshipType = normalizeToken(value.relationshipType || value.relationship_type || value.relationship || fact.semanticConceptId);
+  const measurement = value.value && typeof value.value === "object" ? value.value : value;
+  return {
+    relationshipType: relationshipType === "ECONOMIC_OWNERSHIP" ? relationshipType : normalizeToken(fact.semanticConceptId),
+    subject: normalizedPartyKey(value.subject),
+    object: normalizedPartyKey(value.object),
+    measurementType: normalizeToken(measurement.measurementType || measurement.measurement_type || (measurement.percentage_points !== undefined || measurement.exact_value !== undefined ? "percentage" : "")),
+    exact: measurement.percentage_points ?? measurement.exact_value ?? measurement.exact ?? null,
+  };
+}
+
+function sameRelationship(left, right) {
+  return left && right && left.relationshipType === right.relationshipType && left.subject === right.subject && left.object === right.object
+    && left.measurementType === right.measurementType && left.exact !== null && left.exact === right.exact;
 }
 
 function temporalQualifiers(temporal) {
@@ -321,7 +360,7 @@ function mapTypedFact(fact, interpretation, artifactById, factScope) {
   if (!relationship) {
     const attribute = ORDINARY_FACT_ATTRIBUTE_MAP[normalizeToken(fact.semanticConceptId)];
     const subject = fact.value?.subject;
-    if (!attribute || !subject || typeof subject !== "object") {
+    if ((!attribute || !subject || typeof subject !== "object") && RELATIONSHIP_FACT_CONCEPTS.has(normalizeToken(fact.semanticConceptId))) {
       return {
         mapped: null,
         issue: issue("EVIDENCE_FACT_NOT_TYPED", {
@@ -331,6 +370,7 @@ function mapTypedFact(fact, interpretation, artifactById, factScope) {
         }),
       };
     }
+    if (!attribute || !subject || typeof subject !== "object") return { mapped: null };
     return {
       mapped: {
         factId: fact.factId,
@@ -415,7 +455,10 @@ function mapFacts(interpretation, artifactById) {
   });
   const candidateFacts = [];
   const issues = [];
+  const typedDescriptors = [...byId.values()].filter(({ fact }) => fact.typedRelationship).map(({ fact }) => relationshipDescriptor(fact)).filter(Boolean);
   [...byId.values()].sort((a, b) => a.fact.factId.localeCompare(b.fact.factId)).forEach(({ fact, factScope }) => {
+    if (!fact.typedRelationship && RELATIONSHIP_FACT_CONCEPTS.has(normalizeToken(fact.semanticConceptId))
+      && typedDescriptors.some((typed) => sameRelationship(relationshipDescriptor(fact), typed))) return;
     const mapped = mapTypedFact(fact, interpretation, artifactById, factScope);
     if (mapped.mapped) candidateFacts.push(mapped.mapped);
     if (mapped.issue) issues.push(mapped.issue);
@@ -425,22 +468,25 @@ function mapFacts(interpretation, artifactById) {
 
 function successfulOutcome(interpretation, candidateFacts, issues) {
   const outcomes = interpretation.requestedConceptOutcomes || [];
-  outcomes.filter(({ status }) => status && status !== "found").forEach((item) => {
+  const ownershipComplete = interpretation.ownershipDiagramCompleteness?.completenessState === "COMPLETE"
+    && (interpretation.ownershipDiagramCompleteness?.blockingLimitations || []).length === 0;
+  outcomes.filter(({ status }) => status && status !== "found" && !(ownershipComplete && status === "not_found")).forEach((item) => {
     issues.push(issue("EVIDENCE_REQUESTED_CONCEPT_OUTCOME", {
       concept: item.concept || null,
       status: item.status,
     }));
   });
-  (interpretation.limitations || []).forEach((limitation) => {
+  const nonBlockingLimitations = new Set(interpretation.ownershipDiagramCompleteness?.nonBlockingLimitations || []);
+  (interpretation.limitations || []).filter((limitation) => !ownershipComplete || !nonBlockingLimitations.has(limitation)).forEach((limitation) => {
     issues.push(issue("EVIDENCE_INTERPRETATION_LIMITATION", { limitation }));
   });
   const statuses = outcomes.map(({ status }) => status);
   const complete = interpretation.completeness?.input?.state === "complete"
-    && interpretation.completeness?.extraction?.state === "complete";
+    && (interpretation.completeness?.extraction?.state === "complete" || ownershipComplete);
   const requestedIssues = issues.filter(({ factScope }) => factScope !== "DISCOVERED");
   if (candidateFacts.length > 0) {
-    const allFound = statuses.length === 0 || statuses.every((status) => status === "found");
-    return complete && allFound && requestedIssues.length === 0
+    const allResolved = statuses.length === 0 || statuses.every((status) => status === "found" || (ownershipComplete && status === "not_found"));
+    return complete && allResolved && requestedIssues.length === 0
       ? CAPABILITY_OUTCOME_STATE.COMPLETE
       : CAPABILITY_OUTCOME_STATE.PARTIAL;
   }

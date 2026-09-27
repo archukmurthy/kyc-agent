@@ -194,7 +194,15 @@ function projectFact(fact) {
   return { contractVersion: CONTRACT_VERSIONS.fact, factId: fact?.id || fact?.factId || null, extractionRunId: fact?.extractionRunId || null, primaryArtifactId: fact?.artifactId || null, semanticConceptId: fact?.semanticConceptId || null, value: jsonValue(fact?.value === undefined ? fact?.factValue : fact.value, "Fact value"), requestRelation: fact?.requestRelation || null, persistedRequestStatus: fact?.persistedRequestStatus || fact?.requestStatus || null, groundingType: fact?.groundingType || null, supportState: fact?.supportState || null, supportingArtifactIds: array(fact?.supportingArtifactIds), supportLocators: array(fact?.supportLocators).map(projectLocator), typedRelationship: projectTypedRelationship(fact?.typedRelationship), createdAt: timestamp(fact?.createdAt) };
 }
 function projectRequestedOutcome(item) { return { contractVersion: CONTRACT_VERSIONS.requestedConceptOutcome, concept: item?.concept || null, status: item?.status || null }; }
-function projectCompleteness(input) { return input ? { state: input.state || null, limitations: array(input.limitations).filter((item) => typeof item === "string") } : null; }
+function projectCompleteness(input) {
+  if (!input) return null;
+  return {
+    state: input.state || null,
+    limitations: array(input.limitations).filter((item) => typeof item === "string"),
+    ...(Array.isArray(input.blockingLimitations) ? { blockingLimitations: input.blockingLimitations.filter((item) => typeof item === "string") } : {}),
+    ...(Array.isArray(input.nonBlockingLimitations) ? { nonBlockingLimitations: input.nonBlockingLimitations.filter((item) => typeof item === "string") } : {}),
+  };
+}
 function projectCorrelation(input) { return { ...(input?.requestId ? { requestId: input.requestId } : {}), ...(Array.isArray(input?.externalReferences) ? { externalReferences: input.externalReferences.map((item) => ({ system: item.system, type: item.type, id: item.id })) } : {}) }; }
 
 function projectInterpretationResult(result, errorProjector) {

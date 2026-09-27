@@ -6,7 +6,7 @@ const OWNERSHIP_CHART_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
   instructionVersion: "ownership-chart-instructions-v3",
-  verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
+  verificationStrategyVersion: "ownership-chart-targeted-verification-v6",
 });
 
 const EXTRACTION_QUALITY_STATE = Object.freeze({
@@ -73,9 +73,12 @@ function relationshipMetadata(fact) {
 }
 
 function relationshipParty(fact, role) {
-  return fact?.typedRelationship?.[role]
-    || fact?.typedRelationshipCandidate?.[role]
-    || null;
+  const relationship = fact?.typedRelationship || fact?.typedRelationshipCandidate;
+  if (!relationship) return null;
+  if (relationship[role]) return relationship[role];
+  const partyType = relationship[`${role}PartyType`];
+  const snapshot = relationship[`${role}Snapshot`];
+  return partyType || snapshot ? { partyType, ...(snapshot || {}) } : null;
 }
 
 function relationshipValid(fact) {
@@ -84,10 +87,47 @@ function relationshipValid(fact) {
   return Boolean(fact?.typedRelationshipCandidate);
 }
 
+function relationshipValue(fact) {
+  const relationship = fact?.typedRelationship || fact?.typedRelationshipCandidate;
+  if (!relationship) return null;
+  return relationship.value || {
+    kind: relationship.valueKind,
+    measurementType: relationship.measurementType,
+    exact: relationship.exactValue,
+    lower: relationship.rangeLower,
+    upper: relationship.rangeUpper,
+    unit: relationship.unit,
+  };
+}
+
+function connectorLabelSupportsRelationship(connector, relationship) {
+  const label = normalized(connector?.visibleLabel);
+  if (!label) return false;
+  if (relationship?.relationshipType === "ECONOMIC_OWNERSHIP") return /\bowns?\b/.test(label) || /\b(?:economic|beneficial) ownership\b/.test(label);
+  if (relationship?.relationshipType === "VOTING_RIGHTS") return /\bvot(?:e|es|ing)\b/.test(label);
+  return false;
+}
+
+function materialRelationshipFailure(fact) {
+  const relationship = fact?.typedRelationship || fact?.typedRelationshipCandidate;
+  if (!relationship || !["ECONOMIC_OWNERSHIP", "VOTING_RIGHTS"].includes(relationship.relationshipType)) return null;
+  const value = relationshipValue(fact);
+  if (value?.measurementType === "percentage" && ["EXACT", "RANGE"].includes(value?.kind)) return null;
+  return { evidenceFactId: fact.id || fact.factId || null, reasonCodes: ["OWNERSHIP_PERCENTAGE_NOT_ESTABLISHED"], limitations: ["A material ownership or voting connector does not have a validated percentage measurement."] };
+}
+
+function classifyCompletenessLimitations(providerCompleteness = null) {
+  const limitations = (providerCompleteness?.limitations || []).map((item) => boundedText(item)).filter(Boolean);
+  const nonBlockingLimitations = limitations.filter((item) => /^A valid (?:document|image) source locator was not returned for supporting Artifact\s+/i.test(item));
+  const blockingLimitations = limitations.filter((item) => !nonBlockingLimitations.includes(item));
+  if (providerCompleteness?.state !== "complete" && !limitations.length) blockingLimitations.push("Provider reported extraction incomplete without a bounded limitation.");
+  return { blockingLimitations: [...new Set(blockingLimitations)], nonBlockingLimitations: [...new Set(nonBlockingLimitations)] };
+}
+
 function inventoryIdsForRelationship(fact, inventory, role) {
   const metadata = relationshipMetadata(fact);
   const explicit = canonicalInventoryId(metadata[`${role}InventoryId`] || metadata[`${role}_inventory_id`], "party");
-  if (explicit) return [explicit];
+  if (explicit) return inventory.some((item) => item.inventoryId === explicit) ? [explicit] : [];
   const party = relationshipParty(fact, role);
   const label = normalized(party?.name || party?.description);
   const partyType = String(party?.partyType || "").toLowerCase();
@@ -107,11 +147,19 @@ function assessOwnershipChartCompleteness({
   const parties = normalizePartyInventory(partyInventory, artifactId);
   const connectors = normalizeConnectorInventory(connectorInventory, artifactId);
   const validRelationships = facts.filter(relationshipValid);
+  const { blockingLimitations, nonBlockingLimitations } = classifyCompletenessLimitations(providerCompleteness);
+  const relationshipCompletenessFailures = validRelationships.map(materialRelationshipFailure).filter(Boolean);
   const representedPartyIds = new Set();
   const representedConnectorIds = new Set();
+  const relationshipInventoryFailures = [];
   validRelationships.forEach((fact) => {
     const subjectIds = inventoryIdsForRelationship(fact, parties, "subject");
     const objectIds = inventoryIdsForRelationship(fact, parties, "object");
+    if (subjectIds.length !== 1 || objectIds.length !== 1) relationshipInventoryFailures.push({
+      evidenceFactId: fact.id || fact.factId || null,
+      reasonCodes: ["RELATIONSHIP_ENDPOINT_INVENTORY_MISMATCH"],
+      limitations: [subjectIds.length !== 1 ? "The relationship holder did not match exactly one inventoried party." : null, objectIds.length !== 1 ? "The relationship target did not match exactly one inventoried party." : null].filter(Boolean),
+    });
     subjectIds.forEach((id) => representedPartyIds.add(id));
     objectIds.forEach((id) => representedPartyIds.add(id));
     const metadata = relationshipMetadata(fact);
@@ -122,9 +170,10 @@ function assessOwnershipChartCompleteness({
       if (matches.length === 1) representedConnectorIds.add(matches[0].connectorId);
       else if (connectors.length === 1 && !connectors[0].subjectInventoryId && !connectors[0].objectInventoryId) {
         const relationship = fact.typedRelationship || fact.typedRelationshipCandidate;
-        const exact = relationship?.value?.exact ?? relationship?.value?.value;
+        const value = relationshipValue(fact);
+        const exact = value?.exact ?? value?.value;
         const percentage = connectors[0].percentageText?.match(/(?:^|\D)(\d+(?:\.\d+)?)\s*%/)?.[1];
-        if (Number.isFinite(exact) && percentage != null && Number(percentage) === exact) representedConnectorIds.add(connectors[0].connectorId);
+        if (connectorLabelSupportsRelationship(connectors[0], relationship) && Number.isFinite(exact) && percentage != null && Number(percentage) === exact) representedConnectorIds.add(connectors[0].connectorId);
       }
     }
   });
@@ -139,12 +188,12 @@ function assessOwnershipChartCompleteness({
     .map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
   const relationshipValidationFailures = facts.filter((fact) => fact?.supportSignals?.typedRelationship?.state === "rejected")
     .map((fact) => ({ evidenceFactId: fact.id || fact.factId || null, reasonCodes: ["TYPED_RELATIONSHIP_REJECTED"], limitations: (fact.supportSignals.typedRelationship.limitations || []).map((item) => boundedText(item)) }));
-  const providerComplete = providerCompleteness?.state === "complete";
+  const providerComplete = blockingLimitations.length === 0 && (providerCompleteness?.state === "complete" || (providerCompleteness?.state === "incomplete" && nonBlockingLimitations.length > 0));
   const explicitNoOwnership = ownershipDataStatus === "NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED";
   let state;
-  if (!validRelationships.length && explicitNoOwnership && !unresolvedParties.length && !unresolvedRelationships.length && !relationshipValidationFailures.length && providerComplete) {
+  if (!validRelationships.length && explicitNoOwnership && !unresolvedParties.length && !unresolvedRelationships.length && !relationshipValidationFailures.length && !relationshipCompletenessFailures.length && !relationshipInventoryFailures.length && providerComplete) {
     state = EXTRACTION_QUALITY_STATE.NO_OWNERSHIP_DATA_CONFIRMED;
-  } else if (validRelationships.length && parties.length && providerComplete && !unresolvedParties.length && !unresolvedRelationships.length && !relationshipValidationFailures.length) {
+  } else if (validRelationships.length && parties.length && providerComplete && !unresolvedParties.length && !unresolvedRelationships.length && !relationshipValidationFailures.length && !relationshipCompletenessFailures.length && !relationshipInventoryFailures.length) {
     state = EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE;
   } else if (validRelationships.length) {
     state = EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL;
@@ -165,12 +214,18 @@ function assessOwnershipChartCompleteness({
     unresolvedRelationships,
     unmatchedInventoryItems: [...unresolvedParties.map((item) => ({ type: "PARTY", id: item.inventoryId })), ...unresolvedRelationships.map((item) => ({ type: "CONNECTOR", id: item.connectorId }))],
     relationshipValidationFailures,
+    relationshipCompletenessFailures,
+    relationshipInventoryFailures,
+    blockingLimitations,
+    nonBlockingLimitations,
     metrics: {
       inventoryPartyCount: parties.length,
       inventoryNaturalPersonCount: parties.filter(({ partyType }) => partyType === "natural_person").length,
       inventoryLegalEntityCount: parties.filter(({ partyType }) => partyType === "legal_entity").length,
       extractedTypedRelationshipCount: validRelationships.length,
       rejectedRelationshipCount: relationshipValidationFailures.length,
+      incompleteRelationshipCount: relationshipCompletenessFailures.length,
+      inventoryMismatchRelationshipCount: relationshipInventoryFailures.length,
       unresolvedPartyCount: unresolvedParties.length,
       unresolvedConnectorCount: unresolvedRelationships.length,
       verificationPassUsed: verificationPassUsed === true,
@@ -236,7 +291,9 @@ function requiresTargetedOwnershipVerification(assessment) {
   return (relationshipsPresent && Number(assessment.metrics?.extractedTypedRelationshipCount || 0) === 0)
     || (assessment.unresolvedParties || []).length > 0
     || (assessment.unresolvedRelationships || []).length > 0
-    || (assessment.relationshipValidationFailures || []).length > 0;
+    || (assessment.relationshipValidationFailures || []).length > 0
+    || (assessment.relationshipCompletenessFailures || []).length > 0
+    || (assessment.relationshipInventoryFailures || []).length > 0;
 }
 
 function mergeById(left, right, idKey) {
@@ -341,4 +398,5 @@ module.exports = {
   normalizeConnectorInventory,
   normalizePartyInventory,
   requiresTargetedOwnershipVerification,
+  classifyCompletenessLimitations,
 };

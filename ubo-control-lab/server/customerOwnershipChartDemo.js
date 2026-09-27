@@ -911,6 +911,8 @@ function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, s
   const issues = capabilityResult?.issues || [];
   const rejectionReasonCodes = [...new Set([
     ...(diagram?.relationshipValidationFailures || []).flatMap((item) => item.reasonCodes || []),
+    ...(diagram?.relationshipCompletenessFailures || []).flatMap((item) => item.reasonCodes || []),
+    ...(diagram?.relationshipInventoryFailures || []).flatMap((item) => item.reasonCodes || []),
     ...issues.map((item) => item.code).filter(Boolean),
   ])];
   let state = diagram?.state || EXTRACTION_QUALITY_STATE.EXTRACTION_INCOMPLETE;
@@ -931,6 +933,8 @@ function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, s
     unresolvedRelationships: structuredClone(diagram?.unresolvedRelationships || []),
     unmatchedInventoryItems: structuredClone(diagram?.unmatchedInventoryItems || []),
     relationshipValidationFailures: structuredClone(diagram?.relationshipValidationFailures || []),
+    relationshipCompletenessFailures: structuredClone(diagram?.relationshipCompletenessFailures || []),
+    relationshipInventoryFailures: structuredClone(diagram?.relationshipInventoryFailures || []),
     metrics: {
       candidateFactCount: capabilityResult?.candidateFacts?.length || 0,
       ownershipEdgeCount,
@@ -939,6 +943,8 @@ function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, s
           : "INCOMPLETE",
       verificationPassUsed: diagram?.metrics?.verificationPassUsed === true,
       relationshipRejectedCount: diagram?.metrics?.rejectedRelationshipCount || 0,
+      relationshipIncompleteCount: diagram?.metrics?.incompleteRelationshipCount || 0,
+      relationshipInventoryMismatchCount: diagram?.metrics?.inventoryMismatchRelationshipCount || 0,
       unmappedFactCount: issues.filter((item) => item.code === "EVIDENCE_FACT_NOT_TYPED").length,
       unresolvedPartyCount: diagram?.metrics?.unresolvedPartyCount || 0,
       unresolvedConnectorCount: diagram?.metrics?.unresolvedConnectorCount || 0,

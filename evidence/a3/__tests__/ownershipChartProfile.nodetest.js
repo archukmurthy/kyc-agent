@@ -28,6 +28,83 @@ function relationship(id, subjectInventoryId, objectInventoryId, relationshipTyp
   };
 }
 
+function canonicalRelationship({ id = "fact-40", valueKind = "EXACT", measurementType = "percentage", exactValue = 40 } = {}) {
+  return {
+    id,
+    supportingArtifactIds: ["artifact-smoke"],
+    typedRelationship: {
+      relationshipType: "ECONOMIC_OWNERSHIP",
+      subjectPartyType: "natural_person",
+      subjectSnapshot: { name: "ALICE MORGAN", description: "Natural person", qualifiers: {} },
+      objectPartyType: "legal_entity",
+      objectSnapshot: { name: "HIGGS LLP", jurisdiction: "GB", qualifiers: {} },
+      valueKind,
+      measurementType,
+      exactValue,
+      unit: measurementType === "percentage" ? "percentage_points" : null,
+      sourceSpecificMetadata: {},
+      qualifications: [],
+    },
+  };
+}
+
+test("validated canonical 40 percent relationship reconciles the complete smoke inventory", () => {
+  const locatorLimitation = "A valid document source locator was not returned for supporting Artifact artifact-smoke";
+  const assessed = assessOwnershipChartCompleteness({
+    artifactId: "artifact-smoke",
+    facts: [canonicalRelationship()],
+    partyInventory: [party("party-1", "ALICE MORGAN"), party("party-2", "HIGGS LLP", "legal_entity")],
+    connectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2", visibleLabel: "OWNS 40% OF SHARES IN", percentageText: "40%", disposition: "RESOLVED" }],
+    providerCompleteness: { state: "incomplete", limitations: [locatorLimitation] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(assessed.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE);
+  assert.equal(assessed.metrics.inventoryPartyCount, 2);
+  assert.equal(assessed.metrics.extractedTypedRelationshipCount, 1);
+  assert.equal(assessed.unresolvedParties.length, 0);
+  assert.equal(assessed.unresolvedRelationships.length, 0);
+  assert.deepEqual(assessed.blockingLimitations, []);
+  assert.deepEqual(assessed.nonBlockingLimitations, [locatorLimitation]);
+});
+
+test("one directionally labelled percentage connector reconciles canonical storage without provider endpoint IDs", () => {
+  const assessed = assessOwnershipChartCompleteness({
+    artifactId: "artifact-smoke",
+    facts: [canonicalRelationship()],
+    partyInventory: [party("party-1", "ALICE MORGAN"), party("party-2", "HIGGS LLP", "legal_entity")],
+    connectorInventory: [{ connectorId: "connector-1", visibleLabel: "OWNS 40% OF SHARES IN", percentageText: "OWNS 40% OF SHARES IN", disposition: "RESOLVED" }],
+    providerCompleteness: { state: "complete", limitations: [] },
+    ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  });
+  assert.equal(assessed.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_COMPLETE);
+  assert.equal(assessed.unresolvedRelationships.length, 0);
+});
+
+test("genuine smoke-shape completeness gaps remain partial or incomplete", () => {
+  const complete = { state: "complete", limitations: [] };
+  const base = {
+    artifactId: "artifact-smoke", facts: [canonicalRelationship()],
+    partyInventory: [party("party-1", "ALICE MORGAN"), party("party-2", "HIGGS LLP", "legal_entity")],
+    connectorInventory: [{ connectorId: "connector-1", subjectInventoryId: "party-1", objectInventoryId: "party-2", percentageText: "40%" }],
+    providerCompleteness: complete, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+  };
+  const missingParty = assessOwnershipChartCompleteness({ ...base, partyInventory: [party("party-1", "ALICE MORGAN")] });
+  assert.equal(missingParty.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL);
+  assert.equal(missingParty.relationshipInventoryFailures.length, 1);
+
+  const unknownDirection = assessOwnershipChartCompleteness({ ...base, connectorInventory: [{ connectorId: "connector-1", percentageText: "40%" }] });
+  assert.equal(unknownDirection.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL);
+  assert.equal(unknownDirection.unresolvedRelationships.length, 1);
+
+  const missingPercentage = assessOwnershipChartCompleteness({ ...base, facts: [canonicalRelationship({ valueKind: "UNKNOWN", measurementType: "none", exactValue: null })] });
+  assert.equal(missingPercentage.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL);
+  assert.deepEqual(missingPercentage.relationshipCompletenessFailures[0].reasonCodes, ["OWNERSHIP_PERCENTAGE_NOT_ESTABLISHED"]);
+
+  const inventedParty = assessOwnershipChartCompleteness({ ...base, partyInventory: [...base.partyInventory, party("party-3", "INVENTED PERSON")] });
+  assert.equal(inventedParty.state, EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL);
+  assert.equal(inventedParty.unresolvedParties[0].inventoryId, "party-3");
+});
+
 test("five inventoried parties with only four relationship endpoints triggers targeted incompleteness", () => {
   const inventory = [party("p1", "Alice"), party("p2", "Bob"), party("p3", "Carol"), party("p4", "Delta Ltd", "legal_entity"), party("p5", "Small label")];
   const facts = [relationship("c1", "p1", "p4"), relationship("c2", "p2", "p4"), relationship("c3", "p3", "p4")];
@@ -74,7 +151,7 @@ test("targeted verification merges a missing relationship without regenerating d
   assert.equal(merged.verificationPassUsed, true);
   assert.equal(OWNERSHIP_CHART_PROFILE.profileVersion, "ownership-chart-extraction-v2");
   assert.equal(OWNERSHIP_CHART_PROFILE.instructionVersion, "ownership-chart-instructions-v3");
-  assert.equal(OWNERSHIP_CHART_PROFILE.verificationStrategyVersion, "ownership-chart-targeted-verification-v2");
+  assert.equal(OWNERSHIP_CHART_PROFILE.verificationStrategyVersion, "ownership-chart-targeted-verification-v6");
 });
 
 test("targeted verification reconciles namespaced inventory IDs and one unambiguous connector", () => {

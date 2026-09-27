@@ -47,6 +47,16 @@ function factValue(item) {
   }
 }
 
+function parsedQualifications(value) {
+  const parsed = parsedJson(value, []);
+  if (Array.isArray(parsed)) return parsed;
+  // Some provider responses encode an absent qualifications list as the empty
+  // JSON object. It carries no qualification content, so normalize only that
+  // transport representation; populated objects remain invalid at R4.
+  if (parsed && typeof parsed === "object" && Object.keys(parsed).length === 0) return [];
+  return parsed;
+}
+
 const PERCENTAGE_POINT_UNIT_ALIASES = new Set([
   "%",
   "percent",
@@ -98,7 +108,7 @@ function mapTypedRelationshipCandidate(input) {
       directionEstablished: input.direction_established, relationshipType: input.relationship_type,
       subject: party("subject"), object: party("object"), value,
       temporal: { state: input.temporal_state, effectiveFrom: temporalDetails.effective_from, effectiveTo: temporalDetails.effective_to, sourceEffectiveDate: temporalDetails.source_effective_date, precision: temporalDetails.precision || {} },
-      sourceSpecificMetadata: { ...metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), ...inventoryMetadata }, qualifications: parsedJson(input.qualifications_json, []),
+      sourceSpecificMetadata: { ...metadataWithUnitNormalization(parsedJson(input.source_specific_metadata_json, {}), normalizedUnit.normalization), ...inventoryMetadata }, qualifications: parsedQualifications(input.qualifications_json),
     };
   }
   if (input.present === false) return null;
@@ -223,9 +233,10 @@ function relationshipValueForCandidate(value, concept, partyInventory = []) {
   const normalizedName = (input) => String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
   const byId = new Map(partyInventory.map((item) => [canonicalId(item?.inventory_id || item?.party_id || item?.id), item]));
   const findByName = (name) => partyInventory.find((item) => normalizedName(item?.name || item?.visible_label || item?.description) === normalizedName(name));
-  const subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id;
-  const objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id;
-  const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id;
+  const inventoryReferences = value.inventory_references && typeof value.inventory_references === "object" ? value.inventory_references : {};
+  const subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id;
+  const objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id;
+  const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id || inventoryReferences.connector_id || inventoryReferences.connector_inventory_id;
   const party = (source, inventoryId) => {
     const supplied = source && typeof source === "object" ? source : typeof source === "string" ? { name: source } : {};
     const inventory = byId.get(canonicalId(inventoryId)) || findByName(supplied.name) || {};
@@ -241,14 +252,15 @@ function relationshipValueForCandidate(value, concept, partyInventory = []) {
   const relationshipToken = String(value.relationship || value.relationship_type || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
   const controlledRelationships = new Set(Object.values(relationshipByConcept));
   const relationship = controlledRelationships.has(relationshipToken) ? relationshipToken : relationshipByConcept[String(concept || "").toLowerCase()] || relationshipToken;
+  const percentage = value.percentage ?? value.percentage_points ?? value.value?.exact_percentage_points ?? value.value?.exact_value;
   return {
     value: {
       ...value,
       relationship,
       subject: party(value.subject, subjectInventoryId),
       object: party(value.object, objectInventoryId),
-      percentage: value.percentage ?? value.percentage_points,
-      unit: value.unit || (typeof value.percentage_points === "number" ? "percentage_points" : undefined),
+      percentage,
+      unit: value.unit || (typeof percentage === "number" ? "percentage_points" : undefined),
     },
     inventoryIds: { subjectInventoryId: canonicalId(subjectInventoryId), objectInventoryId: canonicalId(objectInventoryId), connectorInventoryId: canonicalId(connectorInventoryId).replace(/^(?:connector:)+/i, "") },
   };

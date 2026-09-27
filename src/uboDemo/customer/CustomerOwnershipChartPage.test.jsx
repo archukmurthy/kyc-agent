@@ -60,7 +60,7 @@ const analysis = {
     profileVersion: "ownership-chart-extraction-v2",
     schemaVersion: "ownership-chart-schema-v2",
     instructionVersion: "ownership-chart-instructions-v3",
-    verificationStrategyVersion: "ownership-chart-targeted-verification-v2",
+    verificationStrategyVersion: "ownership-chart-targeted-verification-v6",
   } },
   chartAnalysis: {
     contractVersion: "ubo-demo-chart-analysis-v1",

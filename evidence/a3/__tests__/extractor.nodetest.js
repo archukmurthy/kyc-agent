@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, reconcilePercentageCandidate, relationshipValueForCandidate } = require("../providers");
 const { runIndependentVerification, runSemanticExtraction, supportState } = require("../extractor");
+const { validateTypedRelationshipCandidate } = require("../../r4/domain");
 const { DeterministicProfileDiscoveryProvider, PROFILE_DISCOVERY_SOURCE } = require("./profileDiscoveryFixture");
 
 test("semantic provider maps different source wording and discovers an unrequested fact", async () => {
@@ -152,6 +153,33 @@ test("real semantic adapter reports authentication and malformed output truthful
   await t.test("timeout", async () => { const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", timeoutMs: 5, fetchImpl: async (_url, options) => new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))) }); await assert.rejects(() => adapter.extract({ decodedText: "x" }), (e) => e.code === "provider_timeout"); });
 });
 
+test("empty-object qualifications transport means no qualifications without accepting populated invalid objects", () => {
+  const input = {
+    fact_index: 0,
+    direction_established: true,
+    relationship_type: "ECONOMIC_OWNERSHIP",
+    subject_party_type: "natural_person",
+    subject_json: JSON.stringify({ name: "Alice Morgan" }),
+    object_party_type: "legal_entity",
+    object_json: JSON.stringify({ name: "Higgs LLP" }),
+    value_kind: "EXACT",
+    measurement_type: "percentage",
+    exact_value: 40,
+    unit: "percentage_points",
+    temporal_state: "current",
+    temporal_json: "{}",
+    source_specific_metadata_json: "{}",
+  };
+  const normalized = mapTypedRelationshipCandidate({ ...input, qualifications_json: "{}" });
+  assert.deepEqual(normalized.qualifications, []);
+  assert.ok(validateTypedRelationshipCandidate(normalized, { factId: "fact-1", createdAt: "2026-09-27T00:00:00.000Z" }).relationship);
+
+  const populatedObject = mapTypedRelationshipCandidate({ ...input, qualifications_json: JSON.stringify({ note: "not an array" }) });
+  const rejected = validateTypedRelationshipCandidate(populatedObject, { factId: "fact-2", createdAt: "2026-09-27T00:00:00.000Z" });
+  assert.equal(rejected.relationship, null);
+  assert.deepEqual(rejected.limitations, ["qualifications must be an array"]);
+});
+
 test("semantic adapter retries one transient provider failure and reports attempts", async () => {
   let calls = 0;
   const adapter = new AnthropicSemanticProvider({
@@ -282,4 +310,27 @@ test("ownership Fact inventory IDs deterministically hydrate the typed relations
   ]);
   assert.equal(synonym.value.relationship, "ECONOMIC_OWNERSHIP");
   assert.equal(reconcilePercentageCandidate(null, synonym.value).relationshipType, "ECONOMIC_OWNERSHIP");
+});
+
+test("nested exact percentage and inventory references hydrate a provider typed row before canonical validation", () => {
+  const enriched = relationshipValueForCandidate({
+    relationship: "economic_ownership",
+    subject: { name: "ALICE MORGAN", party_type: "natural_person" },
+    object: { name: "HIGGS LLP", party_type: "legal_entity" },
+    value: { exact_percentage_points: 40 },
+    inventory_references: { subject_party_id: "party_001", object_party_id: "party_002", connector_id: "connector_001" },
+  }, "economic_ownership", []);
+  const hydrated = reconcilePercentageCandidate({
+    directionEstablished: true,
+    relationshipType: "ECONOMIC_OWNERSHIP",
+    subject: { name: "ALICE MORGAN" },
+    object: { name: "HIGGS LLP" },
+    value: { kind: "EXACT", measurementType: "percentage", value: 40, unit: "percentage_points" },
+    temporal: { state: "current" },
+    qualifications: [],
+  }, enriched.value);
+  assert.equal(hydrated.subject.partyType, "natural_person");
+  assert.equal(hydrated.object.partyType, "legal_entity");
+  assert.equal(enriched.inventoryIds.connectorInventoryId, "connector_001");
+  assert.ok(validateTypedRelationshipCandidate(hydrated, { factId: "fact-nested", createdAt: "2026-09-27T00:00:00.000Z" }).relationship);
 });

@@ -122,6 +122,42 @@ test("a locator-only completeness warning does not run a second full chart extra
   assert.equal(result.sourceGraph.relationships.length, 1);
 });
 
+test("a complete 40 percent diagram remains COMPLETE when only the single-Artifact page locator is advisory", async () => {
+  const observed = {};
+  const baseProvider = provider(observed);
+  const smokeProvider = {
+    configuration: () => baseProvider.configuration(),
+    capabilities: () => baseProvider.capabilities(),
+    async extract(request) {
+      const result = await baseProvider.extract(request);
+      result.facts.forEach((fact) => { fact.supportLocators = []; });
+      const ownership = result.facts.find(({ concept }) => concept === "economic_ownership");
+      ownership.value = "40%";
+      ownership.raw = "ALICE MORGAN owns 40% of shares in HIGGS LLP";
+      ownership.typedRelationshipCandidate.subject.name = "ALICE MORGAN";
+      ownership.typedRelationshipCandidate.object.name = "HIGGS LLP";
+      ownership.typedRelationshipCandidate.value.value = 40;
+      result.ownershipPartyInventory = [
+        { inventoryId: "party-person", visibleLabel: "ALICE MORGAN", partyType: "natural_person", disposition: "RESOLVED" },
+        { inventoryId: "party-company", visibleLabel: "HIGGS LLP", partyType: "legal_entity", disposition: "RESOLVED" },
+      ];
+      result.ownershipConnectorInventory = [{ connectorId: "connector-1", subjectInventoryId: "party-person", objectInventoryId: "party-company", visibleLabel: "OWNS 40% OF SHARES IN", percentageText: "40%", disposition: "RESOLVED" }];
+      return result;
+    },
+  };
+  const result = await analyseCustomerOwnershipChart(input({ demoContext: { ...input().demoContext, company: { ...input().demoContext.company, legalName: "HIGGS LLP", registrationNumber: "OC435996", ownershipType: "LLP" } } }), { provider: smokeProvider });
+  assert.equal(result.extractionQuality.state, "EXTRACTION_SUCCESS_COMPLETE", JSON.stringify(result.extractionQuality));
+  assert.equal(result.extractionQuality.metrics.unresolvedPartyCount, 0);
+  assert.equal(result.extractionQuality.metrics.unresolvedConnectorCount, 0);
+  assert.equal(result.extractionQuality.canContinueToQuestions, true);
+  assert.equal(result.ubo.adapterOutcome.state, "COMPLETE", JSON.stringify(result.ubo.issues));
+  assert.equal(result.candidateFacts.filter(({ relationship }) => relationship === "ECONOMIC_OWNERSHIP").length, 1);
+  assert.equal(result.candidateFacts.find(({ relationship }) => relationship === "ECONOMIC_OWNERSHIP").measurement.value, 40);
+  assert.equal(result.sourceGraph.relationships.length, 1);
+  assert.deepEqual(result.evidence.extractionCompleteness.blockingLimitations, []);
+  assert.ok(result.evidence.extractionCompleteness.nonBlockingLimitations.some((item) => /valid image source locator/i.test(item)));
+});
+
 test("resolution evidence handoff adds only supported fact concepts to the existing Evidence extraction", async () => {
   const observed = {};
   await analyseCustomerOwnershipChart(input({

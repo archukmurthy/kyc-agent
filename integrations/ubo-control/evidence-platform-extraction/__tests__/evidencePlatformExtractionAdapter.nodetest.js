@@ -435,6 +435,39 @@ test("complete, partial, not-found, not-evaluated and unsupported concept outcom
   }
 });
 
+test("complete ownership inventory treats not-found optional concepts and an equivalent untyped duplicate as non-blocking", async () => {
+  const harness = consumerHarness({ mutate(serviceResult) {
+    const typed = serviceResult.responsiveFacts[0];
+    const duplicate = structuredClone(typed);
+    duplicate.id = "98000000-0000-4000-8000-000000000001";
+    duplicate.semanticConceptId = "economic_ownership";
+    duplicate.value = {
+      relationship_type: typed.typedRelationship.relationshipType,
+      subject: { party_type: typed.typedRelationship.subject.partyType, name: typed.typedRelationship.subject.name },
+      object: { party_type: typed.typedRelationship.object.partyType, name: typed.typedRelationship.object.name },
+      value: { measurement_type: "percentage", exact_value: typed.typedRelationship.value.exact },
+    };
+    delete duplicate.typedRelationship;
+    serviceResult.responsiveFacts = [typed, duplicate];
+    serviceResult.requestedConceptOutcomes = [
+      { concept: "economic_ownership", status: "found" },
+      { concept: "voting_rights", status: "not_found" },
+    ];
+    const locatorAdvisory = `A valid image source locator was not returned for supporting Artifact ${IDS.artifact}`;
+    serviceResult.limitations = [locatorAdvisory];
+    serviceResult.completeness.extraction = { state: "complete", limitations: [locatorAdvisory], blockingLimitations: [], nonBlockingLimitations: [locatorAdvisory] };
+    serviceResult.ownershipDiagramCompleteness = { completenessState: "COMPLETE", blockingLimitations: [], nonBlockingLimitations: [locatorAdvisory] };
+    return serviceResult;
+  } });
+  const mapped = await adapter(harness).extract(request({ informationNeeds: [{ informationNeedId: "need-current", concepts: ["CURRENT_OWNERSHIP_AND_CONTROL"] }] }));
+  assert.equal(mapped.outcome.state, CAPABILITY_OUTCOME_STATE.COMPLETE, JSON.stringify(mapped.issues));
+  assert.equal(mapped.candidateFacts.length, 1);
+  assert.equal(mapped.candidateFacts[0].type, CANDIDATE_FACT_TYPE.RELATIONSHIP);
+  assert.equal(mapped.issues.some(({ code }) => code === "EVIDENCE_FACT_NOT_TYPED"), false);
+  assert.equal(mapped.issues.some(({ code }) => code === "EVIDENCE_REQUESTED_CONCEPT_OUTCOME"), false);
+  assert.equal(mapped.issues.some(({ code }) => code === "EVIDENCE_INTERPRETATION_LIMITATION"), false);
+});
+
 test("public Evidence failures retain authorization, availability, integrity, provider and persistence meaning", async () => {
   const mappings = [
     ["unsupported_concept", CAPABILITY_OUTCOME_STATE.UNSUPPORTED],
