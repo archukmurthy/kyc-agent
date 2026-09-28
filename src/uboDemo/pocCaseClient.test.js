@@ -98,3 +98,28 @@ test("a duplicate browser submission carries the same idempotency key", async ()
   expect(bodies[1]).toEqual(bodies[0]);
   expect(window.localStorage.getItem(ACTIVE_POC_CASE_KEY)).toBe("case-cross-session");
 });
+
+test("research persistence sends the bounded transfer projection instead of duplicated immutable internals", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
+  const researchResult = {
+    status: "PARTIAL",
+    candidateSources: [{ candidateFacts: [{ factId: "fact-1" }] }],
+    view: {
+      snapshot: { decisionContent: "x".repeat(20000) },
+      graph: {
+        nodes: [{ entityId: "person", qualificationAssessment: { repeated: "x".repeat(20000) } }],
+        relationships: [{ relationshipId: "edge-1", subjectEntityId: "person", objectEntityId: "company" }],
+        qualificationBasisRecords: [],
+        personQualificationAssessments: [],
+        llpAttributionAssessments: [{ repeated: "x".repeat(20000) }],
+      },
+    },
+  };
+  await persistPocCase("SAVE_RESEARCH", { caseId: "case-cross-session", idempotencyKey: "research:bounded", payload: { draft: {}, demoCase: record.projection.demoCase, researchResult } }, fetchImpl);
+  const sent = JSON.parse(fetchImpl.mock.calls[0][1].body);
+  expect(sent.payload.researchResult.candidateSources).toEqual(researchResult.candidateSources);
+  expect(sent.payload.researchResult.view.snapshot).toBeUndefined();
+  expect(sent.payload.researchResult.view.graph.relationships).toEqual(researchResult.view.graph.relationships);
+  expect(sent.payload.researchResult.view.graph.llpAttributionAssessments).toBeUndefined();
+  expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(10000);
+});

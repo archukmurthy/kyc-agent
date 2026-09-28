@@ -5,6 +5,83 @@ export const CUSTOMER_HANDOFF_READY = "ubo-demo-customer-handoff-ready-v1";
 export const CUSTOMER_HANDOFF_DELIVERY = "ubo-demo-customer-handoff-delivery-v1";
 export const CUSTOMER_HANDOFF_ACCEPTED = "ubo-demo-customer-handoff-accepted-v1";
 
+function withoutKeys(value, keys) {
+  const omitted = new Set(keys);
+  return Object.fromEntries(Object.entries(value || {}).filter(([key]) => !omitted.has(key)));
+}
+
+function compactPath(path = {}) {
+  return {
+    pathId: path.pathId,
+    state: path.state,
+    relationshipIds: path.relationshipIds || [],
+    contribution: path.contribution || null,
+    majoritySteps: (path.majoritySteps || []).map((step) => ({
+      relationshipId: step.relationshipId,
+      relationshipType: step.relationshipType,
+      measurement: step.measurement || null,
+      fromEntityId: step.fromEntityId,
+      toEntityId: step.toEntityId,
+    })),
+  };
+}
+
+function compactQualificationBasis(basis = {}) {
+  return {
+    basisId: basis.basisId,
+    personEntityId: basis.personEntityId,
+    route: basis.route,
+    condition: basis.condition || null,
+    dimension: basis.dimension,
+    assessmentState: basis.assessmentState,
+    method: basis.method,
+    policyId: basis.policyId,
+    policyVersion: basis.policyVersion,
+    threshold: basis.threshold || null,
+    recordedCalculation: basis.recordedCalculation ? {
+      value: basis.recordedCalculation.value || null,
+      cycles: (basis.recordedCalculation.cycles || []).map(({ cycleId }) => ({ cycleId })),
+    } : null,
+    aggregatedTargetRightValue: basis.aggregatedTargetRightValue || null,
+    orderedPathReferences: (basis.orderedPathReferences || []).map(compactPath),
+    attributionChains: (basis.attributionChains || []).map(compactPath),
+    reviewDependencies: basis.reviewDependencies || [],
+    governance: basis.governance ? { requiredSignoffIds: basis.governance.requiredSignoffIds || [] } : null,
+  };
+}
+
+function compactQualification(assessment = {}) {
+  return {
+    personEntityId: assessment.personEntityId,
+    routeStatus: assessment.routeStatus,
+    assessedRoutes: assessment.assessedRoutes || [],
+    unassessedRoutes: assessment.unassessedRoutes || [],
+  };
+}
+
+export function compactResearchResultForTransfer(researchResult) {
+  if (!researchResult?.view?.graph) return researchResult;
+  const view = researchResult.view;
+  const graph = view.graph;
+  const qualificationBases = (view.qualificationBases || graph.qualificationBasisRecords || []).map(compactQualificationBasis);
+  const qualifications = (view.qualifications || graph.personQualificationAssessments || []).map(compactQualification);
+  const viewFields = withoutKeys(view, ["snapshot", "qualificationBases", "qualifications", "graph"]);
+  const graphFields = withoutKeys(graph, [
+    "qualificationBasisRecords", "personQualificationAssessments", "companyAttributionAssessments",
+    "llpAttributionAssessments", "layerClosureAssessments", "percentageEvidenceAssessments", "nodes",
+  ]);
+  const compactGraph = {
+    ...graphFields,
+    nodes: (graph.nodes || []).map((node) => withoutKeys(node, ["qualificationAssessment"])),
+    qualificationBasisRecords: qualificationBases,
+    personQualificationAssessments: qualifications,
+  };
+  return {
+    ...researchResult,
+    view: { ...viewFields, graph: compactGraph, qualificationBases, qualifications },
+  };
+}
+
 export function resolveCustomerDemoUrl(location = window.location, configuredUrl = process.env.REACT_APP_UBO_CUSTOMER_DEMO_URL) {
   if (configuredUrl) return new URL(configuredUrl, location.origin);
   return new URL(CUSTOMER_DEMO_START_PATH, location.origin);
@@ -19,7 +96,7 @@ export function buildCustomerHandoff({ draft, demoCase, researchResult }, now = 
     createdAt: now(),
     draft,
     demoCase,
-    researchResult,
+    researchResult: compactResearchResultForTransfer(researchResult),
   };
 }
 

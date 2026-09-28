@@ -3,6 +3,7 @@ import {
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
   CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
 } from "./customer/customerOwnershipChartSession";
+import { compactResearchResultForTransfer } from "./customerHandoff";
 
 export const ACTIVE_POC_CASE_KEY = "ubo-demo.active-poc-case.v1";
 const RESOLUTION_PREFIX = "ubo-demo.ownership-resolution.v1";
@@ -50,10 +51,13 @@ export async function loadPocCase(caseId, fetchImpl = window.fetch) {
 
 export async function persistPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl = window.fetch) {
   if (!caseId) throw new TypeError("A durable case ID is required.");
+  const durablePayload = operation === "SAVE_RESEARCH" && payload?.researchResult
+    ? { ...payload, researchResult: compactResearchResultForTransfer(payload.researchResult) }
+    : payload;
   const record = await parse(await fetchImpl("/api/ubo-poc-case", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ operation, caseId, payload, idempotencyKey, actorType }),
+    body: JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType }),
   }));
   rememberActivePocCase(caseId);
   return record;

@@ -1,7 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
+const mockPersistPocCase = jest.fn();
+const mockOpenCustomerViewHandoff = jest.fn();
+jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args) }));
+jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
 import UboDemoRoot from "./UboDemoRoot";
 import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch, saveLastSuccessfulResearch } from "./demoResearch";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
@@ -44,7 +47,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); });
+beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); });
 afterEach(() => { abortActiveDemoResearchJobs(); window.localStorage.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -461,6 +464,25 @@ test("reviewed fixture renders graph and collapsed source assertions without leg
   expect(screen.queryByText(/Provide the remaining ownership or control details/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Internal review is still in progress/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to customer view" })).toBeInTheDocument();
+});
+
+test("customer handoff joins the in-flight durable research save instead of posting the full result twice", async () => {
+  const draft = { ...emptyDemoDraft(), legalName: "HIGGS LLP", registrationNumber: "OC435996", ownershipType: "LLP" };
+  const demoCase = { demoCaseId: "handoff-save-once", referenceCaseId: "", company: { legalName: draft.legalName, registrationNumber: draft.registrationNumber, countryCode: "GB", countryName: "United Kingdom", ownershipType: draft.ownershipType }, analysisContext: { sourceMode: "LIVE", calculationMethod: "EFFECTIVE_INTEREST" } };
+  const researchResult = compactResearchResult({ ...evaluatedSession, jobId: "handoff-save-once", terminalState: "PARTIAL" }, "LIVE");
+  writeDemoSession({ draft, demoCase, researchResult });
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  let finishSave;
+  mockPersistPocCase.mockImplementation(() => new Promise((resolve) => { finishSave = resolve; }));
+  render(<UboDemoRoot />);
+  await waitFor(() => expect(mockPersistPocCase).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Switch to customer view" }));
+  expect(screen.getByText(/Opening the customer view/)).toBeInTheDocument();
+  expect(mockPersistPocCase).toHaveBeenCalledTimes(1);
+  await act(async () => { finishSave({ researchRelease: { mayProceed: true } }); });
+  await waitFor(() => expect(mockOpenCustomerViewHandoff).toHaveBeenCalledTimes(1));
+  expect(mockPersistPocCase).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(/Customer view opened/)).toBeInTheDocument();
 });
 
 test("a response without an evaluated snapshot exposes no invented graph or questions", async () => {

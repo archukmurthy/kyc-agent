@@ -241,7 +241,7 @@ export default function UboDemoRoot() {
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
   const skipNextSave = useRef(false);
-  const durableResearchSaves = useRef(new Set());
+  const durableResearchSaves = useRef(new Map());
 
   useEffect(() => { const onPop = () => setPathname(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
@@ -256,21 +256,30 @@ export default function UboDemoRoot() {
     try { writeDemoSession({ draft, demoCase, researchResult }); }
     catch (cause) { setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local demo-session storage failed."} The current live result remains available until this page is closed.` }); }
   }, [draft, demoCase, researchResult]);
-  useEffect(() => {
-    if (!demoCase?.demoCaseId || !researchResult || researchResult.status === "LOADING") return;
+  const saveResearchDurably = () => {
+    if (!demoCase?.demoCaseId || !researchResult || researchResult.status === "LOADING") return Promise.reject(new Error("Research is not ready to save."));
     const signature = smallStableHash([researchResult.jobId, researchResult.status, researchResult.completedAt,
       researchResult.investigationTopicActivations, researchResult.analystCustomerRequests]);
-    if (durableResearchSaves.current.has(signature)) return;
-    durableResearchSaves.current.add(signature);
-    persistPocCase("SAVE_RESEARCH", {
+    const existing = durableResearchSaves.current.get(signature);
+    if (existing) return existing;
+    const pending = persistPocCase("SAVE_RESEARCH", {
       caseId: demoCase.demoCaseId,
       idempotencyKey: `research:${signature}`,
       payload: { draft, demoCase, researchResult },
-    }).catch((cause) => {
-      durableResearchSaves.current.delete(signature);
+      actorType: "ANALYST",
+    });
+    durableResearchSaves.current.set(signature, pending);
+    pending.catch(() => {
+      if (durableResearchSaves.current.get(signature) === pending) durableResearchSaves.current.delete(signature);
+    });
+    return pending;
+  };
+  useEffect(() => {
+    if (!demoCase?.demoCaseId || !researchResult || researchResult.status === "LOADING") return;
+    saveResearchDurably().catch((cause) => {
       setReplayLibraryStatus({ kind: "error", message: `${cause.message} This research result is not yet durably attached to the case.` });
     });
-  }, [demoCase, draft, researchResult]);
+  }, [demoCase, draft, researchResult]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const receiveCustomerProgress = (event) => {
       if (event.key !== "ubo-demo.case.v1" || !event.newValue) return;
@@ -454,12 +463,7 @@ export default function UboDemoRoot() {
   const switchToCustomerView = async () => {
     try {
       setCustomerSwitchState({ kind: "pending", message: "Opening the customer view and transferring this case…" });
-      const saved = await persistPocCase("SAVE_RESEARCH", {
-        caseId: demoCase.demoCaseId,
-        idempotencyKey: `customer-handoff:${smallStableHash([researchResult.jobId, researchResult.status, researchResult.completedAt])}`,
-        payload: { draft, demoCase, researchResult },
-        actorType: "ANALYST",
-      });
+      const saved = await saveResearchDurably();
       if (!saved.researchRelease?.mayProceed) throw new Error(saved.researchRelease?.reason || "Discovery is still in progress because unresolved research could change who requires identity verification.");
       await openCustomerViewHandoff(buildCustomerHandoff({ draft, demoCase, researchResult }));
       setCustomerSwitchState({ kind: "accepted", message: "Customer view opened with this case and all research assertions." });
