@@ -6,6 +6,7 @@ const {
   PocCaseService,
   RELEASE_STATE,
   evaluateResearchRelease,
+  projectCommand,
 } = require("../pocCaseState.js");
 
 function partialResult(informationNeeds = []) {
@@ -113,4 +114,23 @@ test("answer retries retain a single append-only action", async () => {
   const retry = await service.apply(answer);
   assert.equal(retry.duplicate, true);
   assert.equal((await repository.history("case-2")).filter(({ eventType }) => eventType === "SUBMIT_ANSWER").length, 1);
+});
+
+test("durable projection preserves submitted answers when an older sync completes later", () => {
+  const current = projectCommand({}, "SYNC_RESOLUTION", {
+    resolution: { answers: { q1: { value: 40 } }, trace: { updatedAt: "2026-09-28T10:00:02.000Z", discoveryState: "READY_FOR_IDV" } },
+    assessment: { trace: { updatedAt: "2026-09-28T10:00:02.000Z", discoveryState: "READY_FOR_IDV" } },
+  });
+  const restored = projectCommand(current, "SUBMIT_ANSWER", {
+    resolution: {
+      answers: {},
+      submittedAnswer: { question: { id: "q2" }, answer: { value: "YES" } },
+      trace: { updatedAt: "2026-09-28T10:00:01.000Z", discoveryState: "DISCOVERY_IN_PROGRESS" },
+    },
+    assessment: { trace: { updatedAt: "2026-09-28T10:00:01.000Z", discoveryState: "DISCOVERY_IN_PROGRESS" } },
+  });
+
+  assert.deepEqual(restored.resolution.answers, { q1: { value: 40 }, q2: { value: "YES" } });
+  assert.equal(restored.assessment.trace.discoveryState, "READY_FOR_IDV");
+  assert.equal(restored.currentStage, "READY_FOR_IDV");
 });

@@ -97,6 +97,29 @@ function stageFromTrace(trace, fallback = "QUESTIONS") {
   return fallback;
 }
 
+function traceFrom(value) {
+  return value?.assessment?.trace || value?.resolution?.trace || value?.researchResult?.ownershipResolutionTrace || null;
+}
+
+function traceTime(trace) {
+  const value = Date.parse(trace?.updatedAt || "");
+  return Number.isFinite(value) ? value : null;
+}
+
+function mergeResolution(current, incoming) {
+  if (!incoming) return current;
+  const submitted = incoming.submittedAnswer;
+  const submittedAnswer = submitted?.question?.id && submitted?.answer
+    ? { [submitted.question.id]: submitted.answer }
+    : {};
+  return {
+    ...incoming,
+    answers: { ...(current?.answers || {}), ...(incoming.answers || {}), ...submittedAnswer },
+    evidence: { ...(current?.evidence || {}), ...(incoming.evidence || {}) },
+    recalculations: { ...(current?.recalculations || {}), ...(incoming.recalculations || {}) },
+  };
+}
+
 function projectCommand(current, operation, payload, release) {
   const base = { contractVersion: CASE_CONTRACT, ...(current || {}) };
   const durableResearchResult = payload?.researchResult
@@ -118,13 +141,25 @@ function projectCommand(current, operation, payload, release) {
     chartProjection: payload.chartProjection || base.chartProjection,
     currentStage: "OWNERSHIP_COMPLETE",
   };
-  if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"].includes(operation)) return {
-    ...base,
-    resolution: payload.resolution || base.resolution,
-    assessment: payload.assessment || base.assessment,
-    researchResult: durableResearchResult || base.researchResult,
-    currentStage: stageFromTrace(payload.assessment?.trace || payload.resolution?.trace, "QUESTIONS"),
-  };
+  if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"].includes(operation)) {
+    const incomingTrace = traceFrom({ assessment: payload.assessment, resolution: payload.resolution, researchResult: durableResearchResult });
+    const currentTrace = traceFrom(base);
+    const incomingTime = traceTime(incomingTrace);
+    const currentTime = traceTime(currentTrace);
+    const stale = incomingTime != null && currentTime != null && incomingTime < currentTime;
+    const incomingResolution = mergeResolution(base.resolution, payload.resolution);
+    const resolution = stale ? mergeResolution(incomingResolution, base.resolution) : incomingResolution;
+    const assessment = stale ? base.assessment : (payload.assessment || base.assessment);
+    const researchResult = stale ? base.researchResult : (durableResearchResult || base.researchResult);
+    const selectedTrace = traceFrom({ assessment, resolution, researchResult }) || currentTrace;
+    return {
+      ...base,
+      resolution,
+      assessment,
+      researchResult,
+      currentStage: stageFromTrace(selectedTrace, "QUESTIONS"),
+    };
+  }
   if (operation === "COMPLETE_IDV") return {
     ...base,
     resolution: payload.resolution || base.resolution,
@@ -183,6 +218,7 @@ class PostgresPocCaseRepository {
         await client.query(`INSERT INTO ubo_poc_cases (case_id, tenant_id, company, current_projection)
           VALUES ($1, $2, $3::jsonb, '{}'::jsonb)`, [caseId, this.tenantId, json(company)]);
       }
+      await client.query("SELECT case_id FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2 FOR UPDATE", [caseId, this.tenantId]);
       const inserted = first(await client.query(`INSERT INTO ubo_poc_case_events
         (case_id, event_type, idempotency_key, actor_type, payload)
         VALUES ($1, $2, $3, $4, $5::jsonb)
@@ -325,4 +361,5 @@ module.exports = {
   evaluateResearchRelease,
   frontierCanChangeVerificationPopulation,
   stableHash,
+  projectCommand,
 };
