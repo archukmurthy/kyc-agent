@@ -31,17 +31,10 @@ class MemoryRepository {
   async apply(command) {
     const eventKey = `${command.operation}:${command.idempotencyKey}`;
     const events = this.events.get(command.caseId) || [];
-    if (events.some((event) => event.eventId === eventKey)) return { record: this.state.get(command.caseId), duplicate: true };
+    const duplicate = events.some((event) => event.eventId === eventKey);
+    if (duplicate && command.operation !== "SUBMIT_ANSWER") return { record: this.state.get(command.caseId), duplicate: true };
     const previous = this.state.get(command.caseId);
-    const projection = {
-      ...(previous?.projection || {}),
-      ...(command.payload.demoCase ? { demoCase: command.payload.demoCase } : {}),
-      ...(command.payload.draft ? { draft: command.payload.draft } : {}),
-      ...(command.payload.researchResult ? { researchResult: command.payload.researchResult } : {}),
-      ...(command.release ? { researchRelease: command.release } : {}),
-      ...(command.payload.resolution ? { resolution: command.payload.resolution } : {}),
-      ...(command.payload.assessment ? { assessment: command.payload.assessment } : {}),
-    };
+    const projection = projectCommand(previous?.projection, command.operation, command.payload, command.release);
     const record = {
       caseId: command.caseId,
       company: command.payload.company || command.payload.demoCase?.company || previous?.company,
@@ -49,8 +42,8 @@ class MemoryRepository {
       updatedAt: new Date().toISOString(),
     };
     this.state.set(command.caseId, record);
-    this.events.set(command.caseId, [...events, { eventId: eventKey, eventType: command.operation }]);
-    return { record, duplicate: false };
+    if (!duplicate) this.events.set(command.caseId, [...events, { eventId: eventKey, eventType: command.operation }]);
+    return { record, duplicate };
   }
 }
 
@@ -111,9 +104,12 @@ test("answer retries retain a single append-only action", async () => {
     payload: { resolution: { answers: { q1: { value: "NO" } } } },
   };
   await service.apply(answer);
+  const drifted = await repository.get("case-2");
+  repository.state.set("case-2", { ...drifted, projection: { ...drifted.projection, resolution: { ...drifted.projection.resolution, answers: {} } } });
   const retry = await service.apply(answer);
   assert.equal(retry.duplicate, true);
   assert.equal((await repository.history("case-2")).filter(({ eventType }) => eventType === "SUBMIT_ANSWER").length, 1);
+  assert.deepEqual((await repository.get("case-2")).projection.resolution.answers, { q1: { value: "NO" } });
 });
 
 test("durable projection preserves submitted answers when an older sync completes later", () => {

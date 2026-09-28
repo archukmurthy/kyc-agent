@@ -225,7 +225,7 @@ class PostgresPocCaseRepository {
         ON CONFLICT (case_id, event_type, idempotency_key) DO NOTHING
         RETURNING event_id`, [caseId, operation, idempotencyKey, actorType, json(payload)]));
       const existing = await this.get(caseId, client);
-      if (!inserted) return { record: existing, duplicate: true };
+      if (!inserted && operation !== "SUBMIT_ANSWER") return { record: existing, duplicate: true };
       const projection = projectCommand(existing?.projection, operation, payload, release);
       const chart = projection.chartReference || {};
       const assessmentId = projection.assessment?.assessmentId || projection.assessment?.trace?.verificationAssessment?.assessmentVersionId || null;
@@ -239,7 +239,7 @@ class PostgresPocCaseRepository {
       await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
       if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, idempotencyKey);
-      return { record: await this.get(caseId, client), duplicate: false };
+      return { record: await this.get(caseId, client), duplicate: !inserted };
     });
   }
 
