@@ -239,6 +239,14 @@ class PostgresPocCaseRepository {
       await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
       if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, idempotencyKey);
+      console.info("[ubo-poc-case] projection-applied", {
+        caseRef: stableHash(caseId).slice(0, 12),
+        operation,
+        duplicate: !inserted,
+        submittedAnswer: Boolean(payload.resolution?.submittedAnswer?.question?.id),
+        answerCount: Object.keys(projection.resolution?.answers || {}).length,
+        stage: projection.currentStage,
+      });
       return { record: await this.get(caseId, client), duplicate: !inserted };
     });
   }
