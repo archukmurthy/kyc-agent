@@ -41,6 +41,18 @@ test("rehydrates a fresh browser from the server projection", () => {
   expect(activePocCaseId()).toBe("case-cross-session");
 });
 
+test("rehydrates the durable assessment trace when the case has no research projection", () => {
+  const trace = { discoveryState: "READY_FOR_IDV", verificationAssessment: { subjects: [{ personId: "alice" }] } };
+  const assessmentOnly = {
+    ...record,
+    projection: { ...record.projection, researchResult: undefined, assessment: { trace } },
+  };
+
+  expect(hydrateBrowserFromPocCase(assessmentOnly)).toBe(true);
+  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(trace);
+  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.researchResult.ownershipResolutionTrace).toEqual(trace);
+});
+
 test("a duplicate browser submission carries the same idempotency key", async () => {
   const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
   const command = { caseId: "case-cross-session", idempotencyKey: "answer:q1:no", actorType: "CUSTOMER", payload: { resolution: { answers: { q1: { value: "NO" } } } } };

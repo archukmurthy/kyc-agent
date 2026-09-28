@@ -68,7 +68,7 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
   const trace = projection.assessment?.trace || projection.resolution?.trace || projection.researchResult?.ownershipResolutionTrace || null;
   const researchResult = projection.researchResult
     ? { ...projection.researchResult, ...(trace ? { ownershipResolutionTrace: trace } : {}) }
-    : null;
+    : trace ? { ownershipResolutionTrace: trace } : null;
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     savedAt: record.updatedAt || new Date().toISOString(),
