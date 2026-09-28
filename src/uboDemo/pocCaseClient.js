@@ -61,6 +61,39 @@ export async function persistPocCase(operation, { caseId, payload, idempotencyKe
 
 function resolutionSessionKey(caseId, artifactId) { return `${RESOLUTION_PREFIX}:${caseId}:${artifactId}`; }
 
+function withoutImmutableSnapshot(view) {
+  if (!view || typeof view !== "object") return view;
+  const { snapshot: _snapshot, ...browserView } = view;
+  return browserView;
+}
+
+function compactChartAnalysis(chartAnalysis) {
+  if (!chartAnalysis?.view) return chartAnalysis;
+  return { ...chartAnalysis, view: withoutImmutableSnapshot(chartAnalysis.view) };
+}
+
+function compactChartResult(result) {
+  if (!result?.chartAnalysis) return result;
+  return { ...result, chartAnalysis: compactChartAnalysis(result.chartAnalysis) };
+}
+
+function compactRecalculations(recalculations = {}) {
+  return Object.fromEntries(Object.entries(recalculations).map(([key, record]) => [key, record?.chartAnalysis
+    ? { ...record, chartAnalysis: compactChartAnalysis(record.chartAnalysis) }
+    : record]));
+}
+
+function clearRestoredProjection(storage) {
+  storage.removeItem(DEMO_SESSION_KEY);
+  storage.removeItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY);
+  const resolutionKeys = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(`${RESOLUTION_PREFIX}:`)) resolutionKeys.push(key);
+  }
+  resolutionKeys.forEach((key) => storage.removeItem(key));
+}
+
 export function hydrateBrowserFromPocCase(record, storage = window.localStorage) {
   const projection = record?.projection;
   const demoCase = projection?.demoCase;
@@ -69,17 +102,21 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
   const researchResult = projection.researchResult
     ? { ...projection.researchResult, ...(trace ? { ownershipResolutionTrace: trace } : {}) }
     : trace ? { ownershipResolutionTrace: trace } : null;
+  const browserResearchResult = researchResult?.view
+    ? { ...researchResult, view: withoutImmutableSnapshot(researchResult.view) }
+    : researchResult;
+  clearRestoredProjection(storage);
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     savedAt: record.updatedAt || new Date().toISOString(),
     draft: projection.draft,
     demoCase,
-    researchResult,
+    researchResult: browserResearchResult,
   }));
   const extraction = record.extraction;
   if (projection.chartReference && (projection.chartProjection || extraction?.result)) {
     const result = {
-      ...(projection.chartProjection || extraction.result),
+      ...compactChartResult(projection.chartProjection || extraction.result),
       durableExtraction: { jobId: extraction.jobId, artifactId: extraction.artifactId, state: extraction.state },
     };
     const context = {
@@ -87,7 +124,7 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
       referenceCaseId: demoCase.referenceCaseId || "",
       demoCaseId: demoCase.demoCaseId,
       opaqueResearchReference: researchResult?.jobId || null,
-      researchResult,
+      researchResult: trace ? { ownershipResolutionTrace: trace } : null,
     };
     storage.setItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY, JSON.stringify({
       contractVersion: CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
@@ -103,7 +140,7 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
         createdAt: projection.resolution.createdAt,
         answers: projection.resolution.answers || {},
         evidence: projection.resolution.evidence || {},
-        recalculations: projection.resolution.recalculations || {},
+        recalculations: compactRecalculations(projection.resolution.recalculations),
       }));
     }
   }

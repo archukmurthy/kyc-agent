@@ -53,6 +53,41 @@ test("rehydrates the durable assessment trace when the case has no research proj
   expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.researchResult.ownershipResolutionTrace).toEqual(trace);
 });
 
+test("rehydration compacts duplicated immutable snapshots and replaces stale case caches", () => {
+  const values = new Map([
+    ["ubo-demo.ownership-resolution.v1:stale-case:stale-artifact", "stale"],
+  ]);
+  const storage = {
+    get length() { return values.size; },
+    key(index) { return [...values.keys()][index] || null; },
+    getItem(key) { return values.get(key) || null; },
+    removeItem(key) { values.delete(key); },
+    setItem(key, value) {
+      const next = new Map(values); next.set(key, String(value));
+      const characters = [...next.values()].reduce((total, item) => total + item.length, 0);
+      if (characters > 5000) throw new DOMException("quota reached", "QuotaExceededError");
+      values.set(key, String(value));
+    },
+  };
+  const largeSnapshot = { decisionContent: "x".repeat(4000) };
+  const chartAnalysis = { view: { snapshot: largeSnapshot, graph: { nodes: [], relationships: [] }, qualifications: [] } };
+  const quotaRecord = {
+    ...record,
+    projection: {
+      ...record.projection,
+      researchResult: { ...record.projection.researchResult, view: { snapshot: largeSnapshot, graph: { nodes: [], relationships: [] } } },
+      chartProjection: { ...record.projection.chartProjection, chartAnalysis },
+      resolution: { ...record.projection.resolution, recalculations: { q1: { chartAnalysis, determination: "UBO" } } },
+    },
+  };
+
+  expect(hydrateBrowserFromPocCase(quotaRecord, storage)).toBe(true);
+  expect(values.has("ubo-demo.ownership-resolution.v1:stale-case:stale-artifact")).toBe(false);
+  expect(JSON.parse(values.get(DEMO_SESSION_KEY)).researchResult.view.snapshot).toBeUndefined();
+  expect(JSON.parse(values.get(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).result.chartAnalysis.view.snapshot).toBeUndefined();
+  expect(JSON.parse(values.get("ubo-demo.ownership-resolution.v1:case-cross-session:artifact-1")).recalculations.q1.chartAnalysis.view.snapshot).toBeUndefined();
+});
+
 test("a duplicate browser submission carries the same idempotency key", async () => {
   const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
   const command = { caseId: "case-cross-session", idempotencyKey: "answer:q1:no", actorType: "CUSTOMER", payload: { resolution: { answers: { q1: { value: "NO" } } } } };
