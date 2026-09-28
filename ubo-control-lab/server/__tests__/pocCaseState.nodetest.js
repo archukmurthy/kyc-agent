@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   PocCaseService,
   RELEASE_STATE,
+  compactCaseRecordForTransport,
   evaluateResearchRelease,
   projectCommand,
 } = require("../pocCaseState.js");
@@ -165,4 +166,44 @@ test("durable projection preserves submitted answers when an older sync complete
   assert.deepEqual(restored.resolution.answers, { q1: { value: 40 }, q2: { value: "YES" } });
   assert.equal(restored.assessment.trace.discoveryState, "READY_FOR_IDV");
   assert.equal(restored.currentStage, "READY_FOR_IDV");
+});
+
+test("case restore removes repeated immutable analysis internals without losing graph or assessment facts", () => {
+  const repeated = "x".repeat(2_000_000);
+  const chartAnalysis = {
+    entityLabels: { person: "Alice Morgan" },
+    view: {
+      snapshot: { repeated },
+      graph: {
+        nodes: [{ entityId: "person", qualificationAssessment: { repeated } }],
+        relationships: [{ relationshipId: "edge-1", subjectEntityId: "person", objectEntityId: "company" }],
+        qualificationBasisRecords: [],
+        personQualificationAssessments: [],
+        companyAttributionAssessments: [{ repeated }],
+      },
+      qualificationBases: [],
+      qualifications: [],
+    },
+  };
+  const compact = compactCaseRecordForTransport({
+    caseId: "oversize-case",
+    projection: {
+      researchResult: { status: "COMPLETE", candidateSources: [{ candidateFacts: [{ factId: "fact-1" }] }], ...chartAnalysis },
+      chartProjection: { candidateFacts: [{ factId: "chart-fact" }], chartAnalysis },
+      resolution: {
+        answers: { q1: { value: 40 } },
+        recalculations: { q1: { determination: "UBO", chartAnalysis }, q2: { determination: "NOT_UBO", chartAnalysis } },
+      },
+      assessment: { trace: { verificationPopulation: [{ personName: "Alice Morgan" }] } },
+    },
+    extraction: { jobId: "job-1", state: "COMPLETE", result: { chartAnalysis } },
+  });
+
+  assert.equal(compact.extraction.result, undefined);
+  assert.equal(compact.projection.researchResult.view.snapshot, undefined);
+  assert.equal(compact.projection.chartProjection.chartAnalysis.view.snapshot, undefined);
+  assert.equal(compact.projection.resolution.recalculations.q1.chartAnalysis.view.graph.companyAttributionAssessments, undefined);
+  assert.equal(compact.projection.resolution.recalculations.q2.chartAnalysis.view.graph.relationships.length, 1);
+  assert.equal(compact.projection.assessment.trace.verificationPopulation[0].personName, "Alice Morgan");
+  assert.ok(JSON.stringify(compact).length < 20_000);
 });

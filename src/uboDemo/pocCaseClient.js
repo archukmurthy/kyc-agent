@@ -51,9 +51,7 @@ export async function loadPocCase(caseId, fetchImpl = window.fetch) {
 
 export async function persistPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl = window.fetch) {
   if (!caseId) throw new TypeError("A durable case ID is required.");
-  const durablePayload = operation === "SAVE_RESEARCH" && payload?.researchResult
-    ? { ...payload, researchResult: compactResearchResultForTransfer(payload.researchResult) }
-    : payload;
+  const durablePayload = compactCasePayload(payload);
   const record = await parse(await fetchImpl("/api/ubo-poc-case", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -73,7 +71,7 @@ function withoutImmutableSnapshot(view) {
 
 function compactChartAnalysis(chartAnalysis) {
   if (!chartAnalysis?.view) return chartAnalysis;
-  return { ...chartAnalysis, view: withoutImmutableSnapshot(chartAnalysis.view) };
+  return compactResearchResultForTransfer({ ...chartAnalysis, view: withoutImmutableSnapshot(chartAnalysis.view) });
 }
 
 function compactChartResult(result) {
@@ -85,6 +83,21 @@ function compactRecalculations(recalculations = {}) {
   return Object.fromEntries(Object.entries(recalculations).map(([key, record]) => [key, record?.chartAnalysis
     ? { ...record, chartAnalysis: compactChartAnalysis(record.chartAnalysis) }
     : record]));
+}
+
+function compactCasePayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  return {
+    ...payload,
+    ...(payload.researchResult ? { researchResult: compactResearchResultForTransfer(payload.researchResult) } : {}),
+    ...(payload.chartProjection ? { chartProjection: compactChartResult(payload.chartProjection) } : {}),
+    ...(payload.resolution ? {
+      resolution: {
+        ...payload.resolution,
+        recalculations: compactRecalculations(payload.resolution.recalculations),
+      },
+    } : {}),
+  };
 }
 
 function clearRestoredProjection(storage) {

@@ -123,3 +123,46 @@ test("research persistence sends the bounded transfer projection instead of dupl
   expect(sent.payload.researchResult.view.graph.llpAttributionAssessments).toBeUndefined();
   expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(10000);
 });
+
+test("final assessment persistence bounds repeated research and recalculation analyses", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
+  const repeated = "x".repeat(20000);
+  const chartAnalysis = {
+    entityLabels: { person: "Alice Morgan" },
+    view: {
+      snapshot: { repeated },
+      graph: {
+        nodes: [{ entityId: "person", qualificationAssessment: { repeated } }],
+        relationships: [{ relationshipId: "edge-1", subjectEntityId: "person", objectEntityId: "company" }],
+        qualificationBasisRecords: [],
+        personQualificationAssessments: [],
+        percentageEvidenceAssessments: [{ repeated }],
+      },
+      qualificationBases: [],
+      qualifications: [],
+    },
+  };
+  await persistPocCase("FINALIZE_ASSESSMENT", {
+    caseId: "case-cross-session",
+    idempotencyKey: "assessment:bounded",
+    payload: {
+      researchResult: { status: "COMPLETE", candidateSources: [{ candidateFacts: [{ factId: "fact-1" }] }], ...chartAnalysis },
+      chartProjection: { candidateFacts: [{ factId: "chart-fact" }], chartAnalysis },
+      resolution: {
+        answers: { q1: { value: 40 } },
+        recalculations: {
+          q1: { determination: "UBO", chartAnalysis },
+          q2: { determination: "NOT_UBO", chartAnalysis },
+        },
+      },
+    },
+  }, fetchImpl);
+
+  const request = JSON.parse(fetchImpl.mock.calls[0][1].body);
+  expect(request.payload.researchResult.view.snapshot).toBeUndefined();
+  expect(request.payload.chartProjection.chartAnalysis.view.snapshot).toBeUndefined();
+  expect(request.payload.resolution.recalculations.q1.chartAnalysis.view.graph.percentageEvidenceAssessments).toBeUndefined();
+  expect(request.payload.resolution.recalculations.q2.chartAnalysis.view.graph.relationships).toHaveLength(1);
+  expect(request.payload.researchResult.candidateSources[0].candidateFacts).toHaveLength(1);
+  expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(15000);
+});

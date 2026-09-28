@@ -15,6 +15,111 @@ function rows(result) { return result?.rows || result || []; }
 function first(result) { return rows(result)[0] || null; }
 function normalized(value) { return String(value || "").trim().toUpperCase(); }
 function stableHash(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
+function withoutKeys(value, keys) {
+  const omitted = new Set(keys);
+  return Object.fromEntries(Object.entries(value || {}).filter(([key]) => !omitted.has(key)));
+}
+function compactPath(path = {}) {
+  return {
+    pathId: path.pathId,
+    state: path.state,
+    relationshipIds: path.relationshipIds || [],
+    contribution: path.contribution || null,
+    majoritySteps: (path.majoritySteps || []).map((step) => ({
+      relationshipId: step.relationshipId,
+      relationshipType: step.relationshipType,
+      measurement: step.measurement || null,
+      fromEntityId: step.fromEntityId,
+      toEntityId: step.toEntityId,
+    })),
+  };
+}
+function compactQualificationBasis(basis = {}) {
+  return {
+    basisId: basis.basisId,
+    personEntityId: basis.personEntityId,
+    route: basis.route,
+    condition: basis.condition || null,
+    dimension: basis.dimension,
+    assessmentState: basis.assessmentState,
+    method: basis.method,
+    policyId: basis.policyId,
+    policyVersion: basis.policyVersion,
+    threshold: basis.threshold || null,
+    recordedCalculation: basis.recordedCalculation ? {
+      value: basis.recordedCalculation.value || null,
+      cycles: (basis.recordedCalculation.cycles || []).map(({ cycleId }) => ({ cycleId })),
+    } : null,
+    aggregatedTargetRightValue: basis.aggregatedTargetRightValue || null,
+    orderedPathReferences: (basis.orderedPathReferences || []).map(compactPath),
+    attributionChains: (basis.attributionChains || []).map(compactPath),
+    reviewDependencies: basis.reviewDependencies || [],
+    governance: basis.governance ? { requiredSignoffIds: basis.governance.requiredSignoffIds || [] } : null,
+  };
+}
+function compactQualification(assessment = {}) {
+  return {
+    personEntityId: assessment.personEntityId,
+    routeStatus: assessment.routeStatus,
+    assessedRoutes: assessment.assessedRoutes || [],
+    unassessedRoutes: assessment.unassessedRoutes || [],
+  };
+}
+function compactAnalysis(analysis) {
+  if (!analysis?.view) return analysis;
+  const view = analysis.view;
+  const graph = view.graph;
+  if (!graph) return { ...analysis, view: withoutKeys(view, ["snapshot"]) };
+  const qualificationBases = (view.qualificationBases || graph.qualificationBasisRecords || []).map(compactQualificationBasis);
+  const qualifications = (view.qualifications || graph.personQualificationAssessments || []).map(compactQualification);
+  return {
+    ...analysis,
+    view: {
+      ...withoutKeys(view, ["snapshot", "qualificationBases", "qualifications", "graph"]),
+      graph: {
+        ...withoutKeys(graph, [
+          "qualificationBasisRecords", "personQualificationAssessments", "companyAttributionAssessments",
+          "llpAttributionAssessments", "layerClosureAssessments", "percentageEvidenceAssessments", "nodes",
+        ]),
+        nodes: (graph.nodes || []).map((node) => withoutKeys(node, ["qualificationAssessment"])),
+        qualificationBasisRecords: qualificationBases,
+        personQualificationAssessments: qualifications,
+      },
+      qualificationBases,
+      qualifications,
+    },
+  };
+}
+function compactChartResult(result) {
+  return result?.chartAnalysis ? { ...result, chartAnalysis: compactAnalysis(result.chartAnalysis) } : result;
+}
+function compactRecalculations(recalculations = {}) {
+  return Object.fromEntries(Object.entries(recalculations).map(([key, record]) => [key, record?.chartAnalysis
+    ? { ...record, chartAnalysis: compactAnalysis(record.chartAnalysis) }
+    : record]));
+}
+function compactCasePayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  return {
+    ...payload,
+    ...(payload.researchResult ? { researchResult: compactAnalysis(payload.researchResult) } : {}),
+    ...(payload.chartProjection ? { chartProjection: compactChartResult(payload.chartProjection) } : {}),
+    ...(payload.resolution ? { resolution: { ...payload.resolution, recalculations: compactRecalculations(payload.resolution.recalculations) } } : {}),
+  };
+}
+function compactCaseProjection(projection) {
+  return compactCasePayload(projection);
+}
+function compactCaseRecordForTransport(record) {
+  if (!record) return record;
+  const projection = compactCaseProjection(record.projection);
+  const extraction = record.extraction
+    ? projection?.chartProjection
+      ? withoutKeys(record.extraction, ["result"])
+      : { ...record.extraction, result: compactChartResult(record.extraction.result) }
+    : record.extraction;
+  return { ...record, projection, extraction };
+}
 function candidateFactCount(result) {
   return (result?.candidateSources || []).reduce((total, source) => total + (source?.candidateFacts || []).length, 0);
 }
@@ -136,7 +241,8 @@ function mergeResolution(current, incoming) {
 }
 
 function projectCommand(current, operation, payload, release) {
-  const base = { contractVersion: CASE_CONTRACT, ...(current || {}) };
+  const base = { contractVersion: CASE_CONTRACT, ...compactCaseProjection(current || {}) };
+  payload = compactCasePayload(payload);
   const durableResearchResult = payload?.researchResult
     ? Object.fromEntries(Object.entries(payload.researchResult).filter(([key]) => key !== "displayState"))
     : null;
@@ -363,15 +469,16 @@ class PocCaseService {
     if (!record) return null;
     const extraction = await this.repository.extraction(record.latestExtractionJobId);
     const history = await this.repository.history(caseId);
-    return { ...record, extraction, history };
+    return compactCaseRecordForTransport({ ...record, extraction, history });
   }
 
   async apply(command) {
     const caseId = String(command.caseId || command.payload?.demoCase?.demoCaseId || "").trim();
     if (!caseId) throw Object.assign(new Error("caseId is required"), { statusCode: 400, code: "case_id_required" });
     if (!command.idempotencyKey) throw Object.assign(new Error("idempotencyKey is required"), { statusCode: 400, code: "idempotency_key_required" });
-    const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(command.payload?.researchResult) : null;
-    const result = await this.repository.apply({ ...command, caseId, actorType: command.actorType || "SYSTEM", release });
+    const payload = compactCasePayload(command.payload);
+    const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
+    const result = await this.repository.apply({ ...command, payload, caseId, actorType: command.actorType || "SYSTEM", release });
     return { ...(await this.load(caseId)), duplicate: result.duplicate, researchRelease: release || result.record?.projection?.researchRelease || null };
   }
 }
@@ -383,6 +490,8 @@ module.exports = {
   PostgresPocCaseRepository,
   evaluateResearchRelease,
   frontierCanChangeVerificationPopulation,
+  compactCasePayload,
+  compactCaseRecordForTransport,
   stableHash,
   projectCommand,
 };
