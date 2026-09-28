@@ -69,6 +69,42 @@ test("a resolved material need does not keep a partial result blocked", () => {
   assert.equal(release.mayProceed, true);
 });
 
+test("a source-limited partial with usable facts can hand off unannotated question-stage topics", () => {
+  const release = evaluateResearchRelease({
+    status: "PARTIAL",
+    candidateSources: [{
+      sourceType: "LEGACY_DISCOVERY",
+      candidateFacts: [{ factId: "fact-1", type: "RELATIONSHIP" }],
+      issues: [{
+        code: "LEGACY_KNOWN_COVERAGE_LIMITATION",
+        message: "Legacy Discovery is lossy and cannot establish exhaustive current ownership and control",
+      }],
+    }],
+    providerOutcomes: [{ provider: "COMPANIES_HOUSE", outcome: "COMPLETE", reasonCode: "FACTS_RETURNED" }],
+    view: { informationNeeds: [
+      { needId: "nominee", concept: "NOMINEE_BEARER_STATUS", status: "OPEN" },
+      { needId: "voting", concept: "VOTING_CONTROL_STATUS", status: "OPEN" },
+      { needId: "trust", concept: "TRUST_STATUS", status: "OPEN" },
+    ] },
+  });
+  assert.equal(release.state, RELEASE_STATE.PARTIAL_NON_MATERIAL);
+  assert.equal(release.mayProceed, true);
+  assert.deepEqual(release.materialFrontier, []);
+  assert.deepEqual(release.limitations.map(({ reasonCode }) => reasonCode), ["LEGACY_KNOWN_COVERAGE_LIMITATION"]);
+});
+
+test("a partial with usable facts but no stated limitation remains blocked", () => {
+  const release = evaluateResearchRelease({
+    status: "PARTIAL",
+    candidateSources: [{ candidateFacts: [{ factId: "fact-1", type: "RELATIONSHIP" }] }],
+    providerOutcomes: [{ provider: "COMPANIES_HOUSE", outcome: "COMPLETE", reasonCode: "FACTS_RETURNED" }],
+    view: { informationNeeds: [] },
+  });
+  assert.equal(release.state, RELEASE_STATE.PARTIAL_MATERIAL);
+  assert.equal(release.mayProceed, false);
+  assert.match(release.reason, /does not state its remaining provider or source limitations/);
+});
+
 test("case actions are idempotent and survive a service restart", async () => {
   const sharedState = new Map();
   const repository = new MemoryRepository(sharedState);

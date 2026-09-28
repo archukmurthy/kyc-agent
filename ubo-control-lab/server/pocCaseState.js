@@ -20,20 +20,35 @@ function candidateFactCount(result) {
 }
 
 function researchLimitations(result) {
-  return (result?.providerOutcomes || []).filter(({ outcome }) => outcome !== "COMPLETE").map((item) => ({
+  const providerLimitations = (result?.providerOutcomes || []).filter(({ outcome }) => outcome !== "COMPLETE").map((item) => ({
     provider: item.provider,
     outcome: item.outcome,
     reasonCode: item.reasonCode || "UNSPECIFIED_PROVIDER_LIMITATION",
     reasonText: item.reasonText || "The provider did not return complete coverage.",
   }));
+  const sourceLimitations = (result?.candidateSources || []).flatMap((source) => (source?.issues || [])
+    .filter((issue) => issue?.code !== "LEGACY_PROVIDER_OUTCOME")
+    .filter((issue) => /LIMITATION|SOURCE_UNAVAILABLE|PROVIDER_(TIMEOUT|FAILURE|UNAVAILABLE)/.test(normalized(issue?.code || issue?.issueType)))
+    .map((issue) => ({
+      provider: issue?.details?.provider || source?.provider || source?.sourceType || "RESEARCH_SOURCE",
+      outcome: "PARTIAL",
+      reasonCode: issue.code || issue.issueType || "UNSPECIFIED_SOURCE_LIMITATION",
+      reasonText: issue.message || issue.detail || "The source did not establish exhaustive coverage.",
+    })));
+  return [...new Map([...providerLimitations, ...sourceLimitations]
+    .map((item) => [`${item.provider}:${item.reasonCode}:${item.reasonText}`, item])).values()];
 }
 
 function researchFrontier(result) {
   const snapshot = result?.view?.snapshot || {};
+  const explicitlyMaterialNeed = (item) => item?.couldChangeVerificationPopulation === true
+    || item?.materiality?.material === true
+    || item?.blocking === true
+    || ![undefined, null, "", "NONE"].includes(item?.verificationPopulationImpact);
   const candidates = [
-    ...(result?.view?.informationNeeds || []),
-    ...(snapshot.informationNeeds || []),
-    ...(snapshot.openInformationNeeds || []),
+    ...(result?.view?.informationNeeds || []).filter(explicitlyMaterialNeed),
+    ...(snapshot.informationNeeds || []).filter(explicitlyMaterialNeed),
+    ...(snapshot.openInformationNeeds || []).filter(explicitlyMaterialNeed),
     ...(result?.missingInformation || []),
     ...(result?.unresolvedPaths || []),
   ];
