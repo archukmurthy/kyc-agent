@@ -1,9 +1,10 @@
-export const CONTROL_DISCOVERY_MODE = Object.freeze({
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const CONTROL_DISCOVERY_MODE = Object.freeze({
   OWNERSHIP_FIRST_THEN_CONTROL: "OWNERSHIP_FIRST_THEN_CONTROL",
   OWNERSHIP_AND_CONTROL_IN_PARALLEL: "OWNERSHIP_AND_CONTROL_IN_PARALLEL",
 });
 
-export const QUESTION_ORIGIN = Object.freeze({
+const QUESTION_ORIGIN = Object.freeze({
   SYSTEM_COMPARISON: "SYSTEM_COMPARISON",
   SYSTEM_CONTROL_DISCOVERY: "SYSTEM_CONTROL_DISCOVERY",
   SYSTEM_FALLBACK: "SYSTEM_FALLBACK",
@@ -11,14 +12,14 @@ export const QUESTION_ORIGIN = Object.freeze({
   ANALYST_CUSTOM: "ANALYST_CUSTOM",
 });
 
-export const INVESTIGATION_TOPIC_STATUS = Object.freeze({
+const INVESTIGATION_TOPIC_STATUS = Object.freeze({
   ACTIVE: "ACTIVE",
   RESOLVED: "RESOLVED",
   SUPERSEDED: "SUPERSEDED",
   CANCELLED: "CANCELLED",
 });
 
-export const INVESTIGATION_TOPIC_CODE = Object.freeze({
+const INVESTIGATION_TOPIC_CODE = Object.freeze({
   CURRENT_OWNERSHIP: "CURRENT_OWNERSHIP",
   OWNERSHIP_DISCREPANCY: "OWNERSHIP_DISCREPANCY",
   EXACT_OWNERSHIP_PERCENTAGE: "EXACT_OWNERSHIP_PERCENTAGE",
@@ -41,7 +42,7 @@ export const INVESTIGATION_TOPIC_CODE = Object.freeze({
 
 const topic = (code, group, label, preview, options = {}) => Object.freeze({ code, group, label, preview, active: options.active !== false, rootFactTypes: options.rootFactTypes || [] });
 
-export const INVESTIGATION_TOPIC_REGISTRY = Object.freeze([
+const INVESTIGATION_TOPIC_REGISTRY = Object.freeze([
   topic(INVESTIGATION_TOPIC_CODE.CURRENT_OWNERSHIP, "Ownership & ownership accuracy", "Current ownership", "Confirm that the ownership information is current where freshness or a material source difference creates a real doubt.", { rootFactTypes: ["CONFIRM_CURRENT_OWNERSHIP"] }),
   topic(INVESTIGATION_TOPIC_CODE.OWNERSHIP_DISCREPANCY, "Ownership & ownership accuracy", "Ownership discrepancy", "Resolve a material difference between the customer chart and independent ownership information.", { rootFactTypes: ["EXPLAIN_OWNERSHIP_DIFFERENCE"] }),
   topic(INVESTIGATION_TOPIC_CODE.EXACT_OWNERSHIP_PERCENTAGE, "Ownership & ownership accuracy", "Exact ownership percentage", "Establish an exact interest where the available range cannot determine the ownership outcome.", { rootFactTypes: ["EXACT_SHARE_PERCENTAGE"] }),
@@ -61,11 +62,11 @@ export const INVESTIGATION_TOPIC_REGISTRY = Object.freeze([
   topic(INVESTIGATION_TOPIC_CODE.OTHER_ECONOMIC_RIGHT, "Future economic-interest routes", "Other economic right", "Reserved extension point; no customer flow is active in this iteration.", { active: false }),
 ]);
 
-export function topicDefinition(code) {
+function topicDefinition(code) {
   return INVESTIGATION_TOPIC_REGISTRY.find((item) => item.code === code) || null;
 }
 
-export function createTopicActivation({ topicCode, caseId, targetEntityId, targetPersonId, analystReason, activatedBy, createdAt = new Date().toISOString() }) {
+function createTopicActivation({ topicCode, caseId, targetEntityId, targetPersonId, analystReason, activatedBy, createdAt = new Date().toISOString() }) {
   const definition = topicDefinition(topicCode);
   if (!definition || !definition.active) throw new TypeError("Choose an active investigation topic.");
   const target = [targetEntityId, targetPersonId].filter(Boolean).join(":") || "case";
@@ -84,11 +85,11 @@ export function createTopicActivation({ topicCode, caseId, targetEntityId, targe
   };
 }
 
-export function semanticFactKey(type, { targetEntityId, targetPersonId, scope = "CUSTOMER_ENTITY" } = {}) {
+function semanticFactKey(type, { targetEntityId, targetPersonId, scope = "CUSTOMER_ENTITY" } = {}) {
   return [type, targetEntityId || "CUSTOMER_ENTITY", targetPersonId || "ANY_PERSON", scope].join(":");
 }
 
-export function mergeRequirementOrigins(existing, incoming) {
+function mergeRequirementOrigins(existing, incoming) {
   const unique = (values) => [...new Set(values.filter(Boolean))];
   return {
     ...existing,
@@ -98,7 +99,7 @@ export function mergeRequirementOrigins(existing, incoming) {
   };
 }
 
-export function deduplicateFactRequirements(requirements = []) {
+function deduplicateFactRequirements(requirements = []) {
   const byKey = new Map();
   requirements.forEach((item) => {
     const key = item.semanticKey || semanticFactKey(item.type, item);
@@ -106,3 +107,16 @@ export function deduplicateFactRequirements(requirements = []) {
   });
   return [...byKey.values()];
 }
+
+module.exports = {
+  CONTROL_DISCOVERY_MODE,
+  QUESTION_ORIGIN,
+  INVESTIGATION_TOPIC_STATUS,
+  INVESTIGATION_TOPIC_CODE,
+  INVESTIGATION_TOPIC_REGISTRY,
+  topicDefinition,
+  createTopicActivation,
+  semanticFactKey,
+  mergeRequirementOrigins,
+  deduplicateFactRequirements,
+};

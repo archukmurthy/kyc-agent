@@ -1,11 +1,12 @@
-export const DISCOVERY_STATE = Object.freeze({
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const DISCOVERY_STATE = Object.freeze({
   DISCOVERY_IN_PROGRESS: "DISCOVERY_IN_PROGRESS",
   READY_FOR_IDV: "READY_FOR_IDV",
   IDV_IN_PROGRESS: "IDV_IN_PROGRESS",
   IDV_COMPLETE: "IDV_COMPLETE",
 });
 
-export const VERIFICATION_REASON = Object.freeze({
+const VERIFICATION_REASON = Object.freeze({
   OWNERSHIP_UBO: "OWNERSHIP_UBO",
   VOTING_RIGHTS_UBO: "VOTING_RIGHTS_UBO",
   BOARD_CONTROL_UBO: "BOARD_CONTROL_UBO",
@@ -135,7 +136,7 @@ function changedEvents(previousTrace, trace, assessmentVersionId, occurredAt) {
   return events;
 }
 
-export function applyCurrentVerificationAssessment(trace, previousTrace = null, { pendingRecalculation = false, finalized = false, now = new Date().toISOString() } = {}) {
+function applyCurrentVerificationAssessment(trace, previousTrace = null, { pendingRecalculation = false, finalized = false, now = new Date().toISOString() } = {}) {
   const inputStateVersion = `ubo-input:${hash(assessmentInput(trace, pendingRecalculation))}`;
   const assessmentVersionId = `ubo-assessment:${inputStateVersion.split(":").at(-1)}`;
   const completions = [...(previousTrace?.idvCompletionHistory || trace.idvCompletionHistory || [])];
@@ -192,7 +193,7 @@ export function applyCurrentVerificationAssessment(trace, previousTrace = null, 
   return { ...trace, discoveryState, verificationAssessment, verificationPopulation: population, verificationRequirementHistory: requirementHistory, idvCompletionHistory: completions, auditEvents };
 }
 
-export function completeIdentityVerification(trace, personId, now = new Date().toISOString()) {
+function completeIdentityVerification(trace, personId, now = new Date().toISOString()) {
   const population = trace?.verificationAssessment?.verificationPopulation || trace?.verificationPopulation || [];
   const subject = population.find((item) => normalized(item.personId) === normalized(personId));
   if (!subject || subject.partyType !== "NATURAL_PERSON" || subject.currentRequirementStatus !== "REQUIRED") return trace;
@@ -220,12 +221,21 @@ export function completeIdentityVerification(trace, personId, now = new Date().t
   };
 }
 
-export function currentVerificationPopulation(trace) {
+function currentVerificationPopulation(trace) {
   return trace?.verificationAssessment?.verificationPopulation || trace?.verificationPopulation || [];
 }
 
-export function isReadyForIdentityVerification(trace) {
+function isReadyForIdentityVerification(trace) {
   return [DISCOVERY_STATE.READY_FOR_IDV, DISCOVERY_STATE.IDV_IN_PROGRESS, DISCOVERY_STATE.IDV_COMPLETE].includes(trace?.discoveryState)
     && (trace?.verificationAssessment?.blockingIssues || []).length === 0
     && currentVerificationPopulation(trace).length > 0;
 }
+
+module.exports = {
+  DISCOVERY_STATE,
+  VERIFICATION_REASON,
+  applyCurrentVerificationAssessment,
+  completeIdentityVerification,
+  currentVerificationPopulation,
+  isReadyForIdentityVerification,
+};

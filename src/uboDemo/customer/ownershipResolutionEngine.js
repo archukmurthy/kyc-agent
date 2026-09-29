@@ -1,7 +1,8 @@
-import { CONTROL_DISCOVERY_MODE } from "./investigationTopics";
-import { extendResolutionWithInvestigation } from "./controlDiscoveryEngine";
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const { CONTROL_DISCOVERY_MODE } = require("./investigationTopics");
+const { extendResolutionWithInvestigation } = require("./controlDiscoveryEngine");
 
-export const FACT_REQUIREMENT_TYPE = Object.freeze({
+const FACT_REQUIREMENT_TYPE = Object.freeze({
   EXACT_SHARE_PERCENTAGE: "EXACT_SHARE_PERCENTAGE",
   CONFIRM_CURRENT_SHAREHOLDING: "CONFIRM_CURRENT_SHAREHOLDING",
   EXPLAIN_OWNERSHIP_DIFFERENCE: "EXPLAIN_OWNERSHIP_DIFFERENCE",
@@ -14,7 +15,7 @@ export const FACT_REQUIREMENT_TYPE = Object.freeze({
   IDENTIFY_UNDERLYING_BENEFICIAL_OWNER: "IDENTIFY_UNDERLYING_BENEFICIAL_OWNER",
 });
 
-export const QUESTION_TYPE = Object.freeze({
+const QUESTION_TYPE = Object.freeze({
   BOOLEAN: "BOOLEAN",
   SINGLE_SELECT: "SINGLE_SELECT",
   PERCENTAGE: "PERCENTAGE",
@@ -23,9 +24,9 @@ export const QUESTION_TYPE = Object.freeze({
   FREE_TEXT: "FREE_TEXT",
 });
 
-export const QUESTION_STATUS = Object.freeze({ OPEN: "OPEN", ANSWERED: "ANSWERED", RESOLVED: "RESOLVED", SUPERSEDED: "SUPERSEDED" });
-export const EVIDENCE_STATUS = Object.freeze({ OPEN: "OPEN", RECEIVED: "RECEIVED", VALIDATING: "VALIDATING", SATISFIED: "SATISFIED", REJECTED: "REJECTED", ANALYSIS_UNAVAILABLE: "ANALYSIS_UNAVAILABLE", ANALYST_REVIEW: "ANALYST_REVIEW" });
-export const RESOLUTION_STATUS = Object.freeze({
+const QUESTION_STATUS = Object.freeze({ OPEN: "OPEN", ANSWERED: "ANSWERED", RESOLVED: "RESOLVED", SUPERSEDED: "SUPERSEDED" });
+const EVIDENCE_STATUS = Object.freeze({ OPEN: "OPEN", RECEIVED: "RECEIVED", VALIDATING: "VALIDATING", SATISFIED: "SATISFIED", REJECTED: "REJECTED", ANALYSIS_UNAVAILABLE: "ANALYSIS_UNAVAILABLE", ANALYST_REVIEW: "ANALYST_REVIEW" });
+const RESOLUTION_STATUS = Object.freeze({
   RESOLVED_CUSTOMER_CONFIRMED: "RESOLVED_CUSTOMER_CONFIRMED",
   RESOLVED_EVIDENCE_VERIFIED: "RESOLVED_EVIDENCE_VERIFIED",
   RESOLVED_INDEPENDENTLY_VERIFIED: "RESOLVED_INDEPENDENTLY_VERIFIED",
@@ -35,14 +36,14 @@ export const RESOLUTION_STATUS = Object.freeze({
   UNRESOLVED: "UNRESOLVED",
 });
 
-export const UBO_DETERMINATION = Object.freeze({ DEFINITE_UBO: "DEFINITE_UBO", DEFINITE_NON_UBO: "DEFINITE_NON_UBO", INDETERMINATE: "INDETERMINATE" });
-export const OWNERSHIP_LINK_OUTCOME = Object.freeze({
+const UBO_DETERMINATION = Object.freeze({ DEFINITE_UBO: "DEFINITE_UBO", DEFINITE_NON_UBO: "DEFINITE_NON_UBO", INDETERMINATE: "INDETERMINATE" });
+const OWNERSHIP_LINK_OUTCOME = Object.freeze({
   OWNERSHIP_THRESHOLD_EXCEEDED: "OWNERSHIP_THRESHOLD_EXCEEDED",
   OWNERSHIP_THRESHOLD_NOT_EXCEEDED: "OWNERSHIP_THRESHOLD_NOT_EXCEEDED",
   OWNERSHIP_RANGE_AMBIGUOUS: "OWNERSHIP_RANGE_AMBIGUOUS",
 });
 
-export const OWNERSHIP_DIFFERENCE_REASON = Object.freeze({
+const OWNERSHIP_DIFFERENCE_REASON = Object.freeze({
   SHARE_TRANSFER: "SHARE_TRANSFER",
   SHARE_ALLOTMENT: "SHARE_ALLOTMENT",
   REGISTRY_OUTDATED: "REGISTRY_OUTDATED",
@@ -51,7 +52,7 @@ export const OWNERSHIP_DIFFERENCE_REASON = Object.freeze({
   NOT_SURE: "NOT_SURE",
 });
 
-export const EVIDENCE_RULES = Object.freeze({
+const EVIDENCE_RULES = Object.freeze({
   SHARE_TRANSFER: Object.freeze({
     purpose: "Establish the current shareholding after the reported share transfer.",
     preferredEvidenceTypes: ["CURRENT_REGISTER_OF_MEMBERS"],
@@ -108,12 +109,12 @@ function canonicalPartyType(value) {
 
 function rowHolderParty(row) { return row?.chartFact?.subject || row?.researchFact?.subject || null; }
 
-export function idvRequiredForSubject(subject = {}) {
+function idvRequiredForSubject(subject = {}) {
   return canonicalPartyType(subject.partyType || subject.entityType) === "NATURAL_PERSON"
     && (subject.isUbo === true || subject.requiresSeniorManagementFallbackIdv === true);
 }
 
-export function determineUboFromMeasurement(measurement, threshold = 25) {
+function determineUboFromMeasurement(measurement, threshold = 25) {
   if (!measurement || measurement.type === "UNKNOWN") return UBO_DETERMINATION.INDETERMINATE;
   if (measurement.type === "EXACT") return Number(measurement.value) >= threshold ? UBO_DETERMINATION.DEFINITE_UBO : UBO_DETERMINATION.DEFINITE_NON_UBO;
   if (measurement.type !== "RANGE") return UBO_DETERMINATION.INDETERMINATE;
@@ -126,7 +127,7 @@ export function determineUboFromMeasurement(measurement, threshold = 25) {
   return UBO_DETERMINATION.INDETERMINATE;
 }
 
-export function ownershipLinkOutcome(measurement, threshold = 25) {
+function ownershipLinkOutcome(measurement, threshold = 25) {
   const determination = determineUboFromMeasurement(measurement, threshold);
   if (determination === UBO_DETERMINATION.DEFINITE_UBO) return OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_EXCEEDED;
   if (determination === UBO_DETERMINATION.DEFINITE_NON_UBO) return OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_NOT_EXCEEDED;
@@ -158,7 +159,7 @@ function assessmentStateToDetermination(state) {
   return UBO_DETERMINATION.INDETERMINATE;
 }
 
-export function personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, threshold = 25) {
+function personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, threshold = 25) {
   const view = chartAnalysis?.view;
   const graph = view?.graph;
   if (!graph) return [];
@@ -230,7 +231,7 @@ function relationshipIdsForRow(row, chartAnalysis) {
   }).map(({ relationshipId }) => relationshipId);
 }
 
-export function ownershipFactMateriality(row, personAssessments = [], chartAnalysis = null, threshold = 25) {
+function ownershipFactMateriality(row, personAssessments = [], chartAnalysis = null, threshold = 25) {
   const holderPartyType = canonicalPartyType(rowHolderParty(row)?.entityType || rowHolderParty(row)?.partyType);
   const relationshipIds = new Set(relationshipIdsForRow(row, chartAnalysis));
   const affected = personAssessments.filter((assessment) => assessment.ownershipPaths.some((path) => path.relationshipIds.some((id) => relationshipIds.has(id))));
@@ -274,7 +275,7 @@ function requirement(comparisonItemId, type, row, reason, sequence = "base") {
   };
 }
 
-export function deriveFactRequirements(comparisonRows = [], {
+function deriveFactRequirements(comparisonRows = [], {
   threshold = 25, answers = {}, chartAnalysis = null, personAssessments = personOwnershipAssessmentsFromChartAnalysis(chartAnalysis, threshold),
 } = {}) {
   const requirements = [];
@@ -636,7 +637,7 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
   };
 }
 
-export function evaluateOwnershipResolution({
+function evaluateOwnershipResolution({
   comparisonRows = [], answers = {}, evidence = {}, recalculations = {}, chartAnalysis = null, threshold = 25,
   topicActivations = [], analystCustomerRequests = [],
   ownershipContext = {},
@@ -647,7 +648,7 @@ export function evaluateOwnershipResolution({
   return extendResolutionWithInvestigation({ base, comparisonRows, answers, evidence, topicActivations, analystCustomerRequests, ownershipContext, controlDiscoveryMode, customerEntityId, now });
 }
 
-export function customerOwnershipFact(row, percentage, answers = {}, effectiveDate = null, recordedAt = new Date().toISOString()) {
+function customerOwnershipFact(row, percentage, answers = {}, effectiveDate = null, recordedAt = new Date().toISOString()) {
   const value = Number(percentage);
   if (!Number.isFinite(value) || value < 0 || value > 100) throw new TypeError("Ownership percentage must be from 0 to 100.");
   const source = row.chartFact || row.researchFact;
@@ -678,7 +679,7 @@ export function customerOwnershipFact(row, percentage, answers = {}, effectiveDa
   };
 }
 
-export function applyResultingFact(savedResult, resultingFact) {
+function applyResultingFact(savedResult, resultingFact) {
   if (!savedResult || !Array.isArray(savedResult.candidateFacts) || resultingFact?.type !== "RELATIONSHIP" || resultingFact.relationship !== "ECONOMIC_OWNERSHIP") return savedResult;
   const sameRelationship = (fact) => fact.type === "RELATIONSHIP" && fact.relationship === resultingFact.relationship
     && normalized(fact.subject?.name) === normalized(resultingFact.subject?.name)
@@ -688,7 +689,7 @@ export function applyResultingFact(savedResult, resultingFact) {
   return { ...clone(savedResult), candidateFacts };
 }
 
-export function determinationFromChartAnalysis(chartAnalysis, resultingFact, threshold = 25) {
+function determinationFromChartAnalysis(chartAnalysis, resultingFact, threshold = 25) {
   const name = normalized(resultingFact?.subject?.name);
   const labels = chartAnalysis?.entityLabels || {};
   const personIds = Object.entries(labels).filter(([, label]) => normalized(label) === name).map(([entityId]) => entityId);
@@ -711,7 +712,7 @@ export function determinationFromChartAnalysis(chartAnalysis, resultingFact, thr
   return determineUboFromMeasurement(resultingFact?.measurement, threshold);
 }
 
-export function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
+function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
   if (!result?.artifact?.integrityVerified || !Array.isArray(result?.candidateFacts)) return { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence pipeline did not return an integrity-checked structured result." };
   if (evidenceRequirementRecord?.reviewMode === "ANALYST_REVIEW") return { status: EVIDENCE_STATUS.ANALYST_REVIEW, reason: "The document passed through Evidence extraction and is queued for analyst review against the declared control or special-arrangement fact." };
   if (evidenceRequirementRecord?.comparisonItemId === "ownership-comparison:nominee-declaration") {
@@ -740,3 +741,26 @@ export function evidenceResultStatus(result, resolution, evidenceRequirementReco
     ? { status: EVIDENCE_STATUS.SATISFIED, reason: "The existing Evidence pipeline extracted a matching current ownership assertion." }
     : { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence result did not establish the declared current ownership assertion; analyst review is required." };
 }
+
+module.exports = {
+  FACT_REQUIREMENT_TYPE,
+  QUESTION_TYPE,
+  QUESTION_STATUS,
+  EVIDENCE_STATUS,
+  RESOLUTION_STATUS,
+  UBO_DETERMINATION,
+  OWNERSHIP_LINK_OUTCOME,
+  OWNERSHIP_DIFFERENCE_REASON,
+  EVIDENCE_RULES,
+  idvRequiredForSubject,
+  determineUboFromMeasurement,
+  ownershipLinkOutcome,
+  personOwnershipAssessmentsFromChartAnalysis,
+  ownershipFactMateriality,
+  deriveFactRequirements,
+  evaluateOwnershipResolution,
+  customerOwnershipFact,
+  applyResultingFact,
+  determinationFromChartAnalysis,
+  evidenceResultStatus,
+};

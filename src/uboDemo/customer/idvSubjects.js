@@ -1,8 +1,9 @@
-import { currentVerificationPopulation, isReadyForIdentityVerification } from "./verificationAssessment";
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const { currentVerificationPopulation, isReadyForIdentityVerification } = require("./verificationAssessment");
 
 function normalized(value) { return String(value || "").trim().toLowerCase().replace(/\s+/g, " "); }
 
-export function idvSubjectsFromTrace(trace) {
+function idvSubjectsFromTrace(trace) {
   const canonical = currentVerificationPopulation(trace);
   if (canonical.length) return canonical.map((item) => ({
     ...item,
@@ -34,10 +35,15 @@ export function idvSubjectsFromTrace(trace) {
   return [...people.values()];
 }
 
-export function traceReadyForIdv(trace) {
+function traceReadyForIdv(trace) {
   if (trace?.verificationAssessment) return isReadyForIdentityVerification(trace);
   if (!trace || trace.ownershipResolution?.status !== "COMPLETE") return false;
   if ((trace.questions || []).some(({ status }) => status === "OPEN")) return false;
   if ((trace.evidence || []).some(({ status }) => status !== "SATISFIED")) return false;
   return idvSubjectsFromTrace(trace).length > 0;
 }
+
+module.exports = {
+  idvSubjectsFromTrace,
+  traceReadyForIdv,
+};

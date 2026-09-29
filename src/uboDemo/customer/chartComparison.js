@@ -1,9 +1,10 @@
-import {
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const {
   buildAiPartyMatchCandidates,
   buildPartyStructuralContexts,
   partyFingerprint,
   resolveCrossSourceParty,
-} from "./crossSourcePartyResolution";
+} = require("./crossSourcePartyResolution");
 
 function normalized(value) { return String(value || "").trim().toUpperCase().replace(/\s+/g, " "); }
 
@@ -27,7 +28,7 @@ function provenanceText(entry) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
-export function isWebSourcedResearchEntry(entry) {
+function isWebSourcedResearchEntry(entry) {
   const provenance = provenanceText(entry);
   const companiesHouse = provenance.includes("companies house") || provenance.includes("companies-house") || provenance.includes("company-information.service.gov.uk");
   const web = /(^|\s)web:/.test(provenance)
@@ -37,7 +38,7 @@ export function isWebSourcedResearchEntry(entry) {
   return web && !companiesHouse;
 }
 
-export function partitionResearchEntriesForComparison(entries = []) {
+function partitionResearchEntriesForComparison(entries = []) {
   return entries.reduce((partition, entry) => {
     partition[isWebSourcedResearchEntry(entry) ? "supplementaryEntries" : "primaryEntries"].push(entry);
     return partition;
@@ -60,7 +61,7 @@ function sameSourceParty(left, right) {
   return resolveCrossSourceParty({ sourcePartyA: left, sourcePartyB: right }).autoLinked;
 }
 
-export function filterComparisonEntriesRelevantToCustomer(entries = [], company = null) {
+function filterComparisonEntriesRelevantToCustomer(entries = [], company = null) {
   const subject = customerParty(company);
   if (!subject) return entries;
   const ownership = entries.map(unwrap).filter(({ fact }) => isEconomicOwnership(fact));
@@ -107,7 +108,7 @@ function overlaps(left, right) {
     || (right.upper === left.lower && right.upperInclusive && left.lowerInclusive);
 }
 
-export function compareMeasurements(research, chart) {
+function compareMeasurements(research, chart) {
   const registry = interval(research);
   const customer = interval(chart);
   if (!registry || !customer) return { status: "NOT_COMPARABLE" };
@@ -280,7 +281,7 @@ function assessedRow(key, researchEntry, chartEntry, identity = {}) {
   };
 }
 
-export function buildChartResearchComparison(researchEntries = [], chartEntries = [], { aiResolutions = [] } = {}) {
+function buildChartResearchComparison(researchEntries = [], chartEntries = [], { aiResolutions = [] } = {}) {
   const research = researchEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
   const chart = chartEntries.map(unwrap).filter((entry) => isEconomicOwnership(entry.fact));
   const researchContexts = buildPartyStructuralContexts(research.map(({ fact }) => fact));
@@ -319,13 +320,13 @@ export function buildChartResearchComparison(researchEntries = [], chartEntries 
   return rows;
 }
 
-export function buildChartResearchIdentityCandidates(researchEntries = [], chartEntries = []) {
+function buildChartResearchIdentityCandidates(researchEntries = [], chartEntries = []) {
   const researchFacts = researchEntries.map(unwrap).map(({ fact }) => fact).filter(isEconomicOwnership);
   const chartFacts = chartEntries.map(unwrap).map(({ fact }) => fact).filter(isEconomicOwnership);
   return buildAiPartyMatchCandidates(researchFacts, chartFacts);
 }
 
-export function summarizeOwnershipComparison(rows = []) {
+function summarizeOwnershipComparison(rows = []) {
   const summary = { independentlyVerified: 0, discrepancies: 0, needsConfirmation: 0, exactMatches: 0, independentRangeSupport: 0, independentRangeOverlap: 0 };
   rows.forEach((row) => {
     if (row.status === "INDEPENDENTLY_VERIFIED") summary.independentlyVerified += 1;
@@ -337,3 +338,13 @@ export function summarizeOwnershipComparison(rows = []) {
   });
   return summary;
 }
+
+module.exports = {
+  isWebSourcedResearchEntry,
+  partitionResearchEntriesForComparison,
+  filterComparisonEntriesRelevantToCustomer,
+  compareMeasurements,
+  buildChartResearchComparison,
+  buildChartResearchIdentityCandidates,
+  summarizeOwnershipComparison,
+};

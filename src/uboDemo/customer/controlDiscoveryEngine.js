@@ -1,16 +1,17 @@
-import {
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
+const {
   CONTROL_DISCOVERY_MODE,
   deduplicateFactRequirements,
   INVESTIGATION_TOPIC_CODE,
   QUESTION_ORIGIN,
   semanticFactKey,
   topicDefinition,
-} from "./investigationTopics";
+} = require("./investigationTopics");
 
-export const OWNERSHIP_RESOLUTION_STATUS = Object.freeze({ COMPLETE: "COMPLETE", INDETERMINATE: "INDETERMINATE", UNKNOWN: "UNKNOWN", EVIDENCE_REQUIRED: "EVIDENCE_REQUIRED", CONFLICTED: "CONFLICTED" });
-export const CONTROL_RESOLUTION_STATUS = Object.freeze({ NOT_STARTED: "NOT_STARTED", IN_PROGRESS: "IN_PROGRESS", COMPLETE: "COMPLETE", ANALYST_REVIEW: "ANALYST_REVIEW" });
-export const CONTROL_ASSESSMENT_OUTCOME = Object.freeze({ CONTROL_UBO: "CONTROL_UBO", NOT_CONTROL_UBO: "NOT_CONTROL_UBO", INDETERMINATE: "INDETERMINATE" });
-export const UBO_BASIS = Object.freeze({ SHARE_OWNERSHIP: "SHARE_OWNERSHIP", VOTING_RIGHTS: "VOTING_RIGHTS", BOARD_CONTROL: "BOARD_CONTROL", SIGNIFICANT_INFLUENCE: "SIGNIFICANT_INFLUENCE" });
+const OWNERSHIP_RESOLUTION_STATUS = Object.freeze({ COMPLETE: "COMPLETE", INDETERMINATE: "INDETERMINATE", UNKNOWN: "UNKNOWN", EVIDENCE_REQUIRED: "EVIDENCE_REQUIRED", CONFLICTED: "CONFLICTED" });
+const CONTROL_RESOLUTION_STATUS = Object.freeze({ NOT_STARTED: "NOT_STARTED", IN_PROGRESS: "IN_PROGRESS", COMPLETE: "COMPLETE", ANALYST_REVIEW: "ANALYST_REVIEW" });
+const CONTROL_ASSESSMENT_OUTCOME = Object.freeze({ CONTROL_UBO: "CONTROL_UBO", NOT_CONTROL_UBO: "NOT_CONTROL_UBO", INDETERMINATE: "INDETERMINATE" });
+const UBO_BASIS = Object.freeze({ SHARE_OWNERSHIP: "SHARE_OWNERSHIP", VOTING_RIGHTS: "VOTING_RIGHTS", BOARD_CONTROL: "BOARD_CONTROL", SIGNIFICANT_INFLUENCE: "SIGNIFICANT_INFLUENCE" });
 
 const TYPE = Object.freeze({
   CONFIRM_CURRENT_OWNERSHIP: "CONFIRM_CURRENT_OWNERSHIP",
@@ -41,7 +42,7 @@ const TYPE = Object.freeze({
   ANALYST_CUSTOM: "ANALYST_CUSTOM",
 });
 
-export const DISCOVERY_FACT_REQUIREMENT_TYPE = TYPE;
+const DISCOVERY_FACT_REQUIREMENT_TYPE = TYPE;
 
 const options = (...pairs) => pairs.map(([value, label]) => ({ value, label }));
 const YES_NO_UNSURE = options(["NO", "No"], ["YES", "Yes"], ["NOT_SURE", "I'm not sure"]);
@@ -354,7 +355,7 @@ function discoveryEvidenceRequirements(requirements, answers, control, now) {
   return records.filter(Boolean);
 }
 
-export function extendResolutionWithInvestigation({ base, comparisonRows = [], answers = {}, evidence = {}, topicActivations = [], analystCustomerRequests = [], ownershipContext = {}, controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL, customerEntityId = "CUSTOMER_ENTITY", now }) {
+function extendResolutionWithInvestigation({ base, comparisonRows = [], answers = {}, evidence = {}, topicActivations = [], analystCustomerRequests = [], ownershipContext = {}, controlDiscoveryMode = CONTROL_DISCOVERY_MODE.OWNERSHIP_FIRST_THEN_CONTROL, customerEntityId = "CUSTOMER_ENTITY", now }) {
   let ownership = baseOwnershipSummary(base, comparisonRows, ownershipContext.sourceCoverage);
   const decoratedBase = base.requirements.map((item) => ({
     ...item,
@@ -429,3 +430,12 @@ export function extendResolutionWithInvestigation({ base, comparisonRows = [], a
     },
   };
 }
+
+module.exports = {
+  OWNERSHIP_RESOLUTION_STATUS,
+  CONTROL_RESOLUTION_STATUS,
+  CONTROL_ASSESSMENT_OUTCOME,
+  UBO_BASIS,
+  DISCOVERY_FACT_REQUIREMENT_TYPE,
+  extendResolutionWithInvestigation,
+};

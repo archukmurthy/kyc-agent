@@ -1,3 +1,4 @@
+// CommonJS on purpose: the server recomputes with this same code (UBO-13).
 const TRUSTED_IDENTIFIER_NAMESPACES = /COMPANIES[_ -]?HOUSE|COMPANY[_ -]?(NUMBER|NO)|REGISTRY|LEI|LEGAL[_ -]?ENTITY[_ -]?IDENTIFIER/;
 
 const LEGAL_FORM_ALIASES = new Map([
@@ -34,7 +35,7 @@ function statedLegalForm(party) {
   return found?.[1] || "";
 }
 
-export function normalizedLegalName(partyOrName) {
+function normalizedLegalName(partyOrName) {
   const party = typeof partyOrName === "string" ? { name: partyOrName } : (partyOrName || {});
   const normalized = words(party.name);
   const form = statedLegalForm(party);
@@ -109,7 +110,7 @@ function partySnapshot(party) {
   };
 }
 
-export function partyFingerprint(party) {
+function partyFingerprint(party) {
   const identifier = trustedIdentifiers(party).sort((a, b) => a.key.localeCompare(b.key))[0]?.key;
   if (identifier) return `ID:${identifier}`;
   const name = normalizedLegalName(party);
@@ -127,7 +128,7 @@ function structuralFingerprint(context) {
   ].join("|");
 }
 
-export function partyPairKey(sourcePartyA, sourcePartyB, structuralContextA, structuralContextB) {
+function partyPairKey(sourcePartyA, sourcePartyB, structuralContextA, structuralContextB) {
   return `${partyFingerprint(sourcePartyA)}::${partyFingerprint(sourcePartyB)}::${structuralFingerprint(structuralContextA)}::${structuralFingerprint(structuralContextB)}`;
 }
 
@@ -170,7 +171,7 @@ function resolution(method, confidence, sourcePartyA, sourcePartyB, reasons, cla
   };
 }
 
-export function resolveCrossSourceParty({ sourcePartyA, sourcePartyB, structuralContextA, structuralContextB, aiResolutions = [] } = {}) {
+function resolveCrossSourceParty({ sourcePartyA, sourcePartyB, structuralContextA, structuralContextB, aiResolutions = [] } = {}) {
   const sharedIdentifier = sharedTrustedIdentifier(sourcePartyA, sourcePartyB);
   if (sharedIdentifier) return resolution("TRUSTED_IDENTIFIER", 1, sourcePartyA, sourcePartyB, [`shared trusted identifier ${sharedIdentifier}`]);
   if (identifierConflict(sourcePartyA, sourcePartyB)) return resolution("TRUSTED_IDENTIFIER_CONFLICT", 1, sourcePartyA, sourcePartyB, ["trusted identifiers conflict"], "DIFFERENT_ENTITY", false);
@@ -219,7 +220,7 @@ function relationshipFamily(fact) {
   return fact?.relationship || "OTHER";
 }
 
-export function buildPartyStructuralContexts(facts = []) {
+function buildPartyStructuralContexts(facts = []) {
   const contexts = new Map();
   const adjacency = new Map();
   const ensure = (party) => {
@@ -254,7 +255,7 @@ export function buildPartyStructuralContexts(facts = []) {
   return contexts;
 }
 
-export function buildAiPartyMatchCandidates(researchFacts = [], chartFacts = []) {
+function buildAiPartyMatchCandidates(researchFacts = [], chartFacts = []) {
   const researchContexts = buildPartyStructuralContexts(researchFacts);
   const chartContexts = buildPartyStructuralContexts(chartFacts);
   const uniqueParties = (facts) => {
@@ -292,3 +293,12 @@ export function buildAiPartyMatchCandidates(researchFacts = [], chartFacts = [])
   }));
   return candidates.slice(0, 20);
 }
+
+module.exports = {
+  normalizedLegalName,
+  partyFingerprint,
+  partyPairKey,
+  resolveCrossSourceParty,
+  buildPartyStructuralContexts,
+  buildAiPartyMatchCandidates,
+};
