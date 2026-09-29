@@ -106,7 +106,7 @@ class CompaniesHouseEvidenceService {
 
   failureAcquisition(graph, collectionId, subjectId, contextId, type, locator, startedAt, outcome, reason, metadata = {}) {
     const website = type.endsWith("_website");
-    graph.acquisitions.push({ id: stableUuid(collectionId, type, "acquisition"), collectionOperationId: collectionId, contextId, tenantId: graph.contexts[0]?.tenantId || "nium", subjectReferenceId: subjectId, sourceType: website ? "public_website" : "public_registry_api", sourceProvider: "Companies House", acquisitionMethod: website ? "browser_capture" : "official_api", actorType: "system", actorId: "evidence-platform-companies-house", outcome, outcomeReason: reason, sourceLocator: locator || null, startedAt, completedAt: this.now(), producerMetadata: { sourceArea: type, sourceKind: website ? "website" : "api", ...(website ? { captureStatus: "unavailable" } : {}), ...metadata }, createdAt: startedAt });
+    graph.acquisitions.push({ id: stableUuid(collectionId, type, "acquisition"), collectionOperationId: collectionId, contextId, tenantId: graph.contexts[0].tenantId, subjectReferenceId: subjectId, sourceType: website ? "public_website" : "public_registry_api", sourceProvider: "Companies House", acquisitionMethod: website ? "browser_capture" : "official_api", actorType: "system", actorId: "evidence-platform-companies-house", outcome, outcomeReason: reason, sourceLocator: locator || null, startedAt, completedAt: this.now(), producerMetadata: { sourceArea: type, sourceKind: website ? "website" : "api", ...(website ? { captureStatus: "unavailable" } : {}), ...metadata }, createdAt: startedAt });
   }
 
   async collectApiArea(graph, inspection, options) {

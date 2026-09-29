@@ -63,7 +63,7 @@ function harness(sequence, options = {}) {
     if (item instanceof Error) throw item;
     return item;
   };
-  const service = new CustomerOwnershipExtractionJobService({ repository, ingestionRepository: ingestion, artifactStore, analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: options.profile || OWNERSHIP_CHART_PROFILE });
+  const service = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository, ingestionRepository: ingestion, artifactStore, analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: options.profile || OWNERSHIP_CHART_PROFILE });
   return { service, repository, ingestion, artifactStore, calls: () => calls };
 }
 
@@ -105,7 +105,7 @@ test("provider timeout is bounded and terminates FAILED", async () => {
 test("browser refresh resumes the same durable job", async () => {
   const h = harness([usableResult()]);
   const started = await h.service.start(input());
-  const replacement = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
+  const replacement = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
   assert.equal((await replacement.process(started.jobId)).state, "COMPLETE"); assert.equal(h.repository.jobs.size, 1);
 });
 
@@ -113,7 +113,7 @@ test("server restart after Artifact save reuses it when job persistence recovers
   const h = harness([usableResult()]); h.repository.failCreateOnce = true;
   await assert.rejects(() => h.service.start(input()), /db unavailable/);
   assert.equal(h.ingestion.operations.size, 1);
-  const restarted = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
+  const restarted = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
   const job = await restarted.start(input()); assert.equal(job.reused, true); assert.equal(h.ingestion.operations.size, 1);
 });
 
@@ -124,13 +124,13 @@ test("re-upload of the same successful document reuses Artifact, job and result"
 
 test("same document with a newer extraction profile creates one new job but no Artifact", async () => {
   const h = harness([usableResult()]); const first = await h.service.start(input());
-  const newer = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, profileVersion: "ownership-chart-extraction-v3" } });
+  const newer = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, profileVersion: "ownership-chart-extraction-v3" } });
   const second = await newer.start(input()); assert.notEqual(second.jobId, first.jobId); assert.equal(h.ingestion.operations.size, 1); assert.equal(h.repository.jobs.size, 2);
 });
 
 test("same document with a newer instruction version creates a new cache identity", async () => {
   const h = harness([usableResult()]); const first = await h.service.start(input());
-  const newer = new CustomerOwnershipExtractionJobService({ repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, instructionVersion: "ownership-chart-instructions-v4" } });
+  const newer = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) }, profile: { ...OWNERSHIP_CHART_PROFILE, instructionVersion: "ownership-chart-instructions-v4" } });
   const second = await newer.start(input()); assert.notEqual(second.jobId, first.jobId); assert.equal(h.ingestion.operations.size, 1);
 });
 

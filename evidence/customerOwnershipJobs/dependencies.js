@@ -28,7 +28,7 @@ function createCustomerOwnershipJobService(overrides = {}) {
   const service = new CustomerOwnershipExtractionJobService({
     repository, ingestionRepository, artifactStore, artifactRepository, operationRepository,
     provider: overrides.provider,
-    tenantId: process.env.TENANT_ID || "nium",
+    tenantId: overrides.tenantId,
     modelVersion: process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5",
   });
   return { service, repository, db, artifactStore, close: () => db.close() };

@@ -69,6 +69,8 @@ run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence char
   "integrations/ubo-control/legacy-discovery/__tests__/liveComposition.e2e.nodetest.js",
   "ubo-control-ui/__tests__/OwnershipGraph.nodetest.js",
   "evidence/a3/__tests__/extractor.nodetest.js",
+  "evidence/a3/__tests__/ownershipChartProfile.nodetest.js",
+  "evidence/customerOwnershipJobs/__tests__/service.nodetest.js",
 ]);
 
 console.log("\n[UBO_DEMO_CRITICAL] PASS — DEMO-01 through DEMO-15; provider credentials withheld");

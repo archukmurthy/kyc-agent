@@ -733,7 +733,7 @@ not lost with it:
 - **What:** one upload makes up to 12 POSTs to `ubo-demo-customer-ownership-chart` while polling; each passes `enforceRateLimit("ubo-demo-chart")`, which allows 15 an hour. The demo cap must count uploads, not status polls.
 
 ### UBO-17 - Chart jobs are reachable by id alone
-- **Category:** Security - **Priority:** P1 - **Status:** OPEN
+- **Category:** Security - **Priority:** P1 - **Status:** DONE (2026-09-29) - the job service is built per request with the caller's tenant (`uboCallerTenant`) and refuses to exist without one; its `"nium"` default is gone.
 - **What:** `GET/PROCESS/RETRY_EXTRACTION_JOB` take a `jobId` and never check it belongs to the caller's tenant.
 
 ### UBO-18 - Audit writes are fire-and-forget on a serverless platform
@@ -745,11 +745,11 @@ not lost with it:
 - **What:** `npm run db:migrate` applies every file in `db/migrations/`, which would put KYC tables into the UBO database. `ubo-dev` was built by calling `migrationRunner.run` with only 001, 009, the evidence files and 021. That needs to be a supported option, not a one-off.
 
 ### UBO-20 - The brand-default test does not look where the partner's code lives
-- **Category:** Process - **Priority:** P1 - **Status:** OPEN
+- **Category:** Process - **Priority:** P1 - **Status:** DONE (2026-09-29) - the scan now covers `ubo-control-lab/`, `evidence/` and `integrations/`. It found three more in Evidence (a2 identity, a2 service, a4a fixtures), all fixed.
 - **What:** `brandDefaults.nodetest.js` skips `evidence/`, `ubo-control-lab/` and `scripts/`, which hold `TENANT_ID || "nium"` and `tenantId = "nium"` today. Widen the scan and remove them.
 
 ### UBO-21 - Two of the partner's tests are run by no script
-- **Category:** Process - **Priority:** P2 - **Status:** OPEN
+- **Category:** Process - **Priority:** P2 - **Status:** DONE (2026-09-29) - both added to `scripts/run-ubo-demo-critical.js`.
 - **What:** `evidence/customerOwnershipJobs/__tests__/service.nodetest.js` and `evidence/a3/__tests__/ownershipChartProfile.nodetest.js`.
 
 ### UBO-22 - The case wrapper and client carry no sign-in, and names sit in browser storage
@@ -764,3 +764,11 @@ not lost with it:
 - **Category:** Security (low) / UX - **Priority:** P3 - **Status:** OPEN - goes away with server-created case ids
 - **What:** `ubo_poc_cases.case_id` is the primary key on its own. A write to an id another workspace owns fails on the key (nothing written, nothing read) but answers 500 where an unknown id answers 200, so it confirms the id exists elsewhere. Ids are random UUIDs made in the browser, so it needs a leaked id. Fixed properly when the server creates case ids (the signed customer link work); otherwise key on `(tenant_id, case_id)` or answer 409.
 - **Found by:** adversarial review of UBO-12.
+
+### EVID-TENANT-1 - Evidence Lab collection uses a sandbox workspace when none is given
+- **Category:** Security - **Priority:** P2 - **Status:** OPEN - must close before KYC uses Evidence collection
+- **What:** `evidence/a2/identity.js` defaults `tenantId` to `"evidence-lab-sandbox"` (it was `"nium"`). Only the undeployed Evidence Lab reaches it today. Before any product path (the KYC integration) calls a2 collection, it must pass the caller's tenant and the default must go.
+
+### EVID-LAB-1 - Two Evidence Lab API tests fail, and no suite runs them
+- **Category:** Process - **Priority:** P3 - **Status:** OPEN
+- **What:** `evidence/a2/__tests__` "A2 fixture API is explicitly labelled..." and `evidence/a4a/__tests__` "selection API returns persisted options..." fail on `dev/local-work` too, so they predate the UBO merge. None of the `evidence/*/__tests__` folders except the two UBO ones is in any script, so nobody sees them. Decide whether the Evidence Lab suite runs in CI; if it does, fix these first.

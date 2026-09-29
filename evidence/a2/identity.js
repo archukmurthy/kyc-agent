@@ -26,7 +26,10 @@ function validateCompaniesHouseRequest(input = {}) {
     producerRequestKey: requestKey,
     collectionCoordinates: { jurisdiction: "GB", companyNumber: normalizeCompanyNumber(coordinates.companyNumber) },
     mode: input.mode === "fixture" ? "fixture" : "live",
-    tenantId: input.tenantId || "nium",
+    // ponytail: only the Evidence Lab reaches this (api/evidence/*, undeployed),
+    // so it gets a named sandbox workspace rather than a company's. Any product
+    // path must pass the caller's tenant before using it (EVID-TENANT-1).
+    tenantId: input.tenantId || "evidence-lab-sandbox",
     contextReference: input.contextReference || null,
   };
 }

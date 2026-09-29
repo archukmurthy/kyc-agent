@@ -2,23 +2,23 @@
 
 const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
 const { createCustomerOwnershipJobService } = require("../evidence/customerOwnershipJobs/dependencies.js");
-const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
-function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService) {
+const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit };
+
+function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService, gates = DEFAULT_GATES) {
   return async function customerOwnershipChartHandler(req, res) {
-    if (applyCors(req, res)) return undefined;
+    if (gates.applyCors(req, res)) return undefined;
     // Merged from the UBO demo with no credential and no limit. Reaches document extraction and Anthropic, so an anonymous caller can spend our money.
     // Clerk gives these a real caller identity; the limiter is what holds until then.
-    if (!(await enforceRateLimit(req, res, "ubo-demo-chart"))) return undefined;
+    if (!(await gates.enforceRateLimit(req, res, "ubo-demo-chart"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
-    // No requireTenant here, deliberately. This route never reads the caller's
-    // workspace - what scopes it is the rate limiter, which resolves the caller
-    // and their workspace itself (lib/rateLimit.js#callerKey). Asking for a
-    // tenant we then discard is a claim a reader believes and the code does not
-    // keep, and with the login switched off it cannot be enforced anyway.
-    if (!(await requireStaff(req, res))) return undefined;
+    // The job operations read the caller's workspace (uboCallerTenant below), so
+    // this asks for one. Re-evaluating a saved result reads no stored data.
+    const actor = await gates.requireStaff(req, res, { requireTenant: true });
+    if (!actor) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
@@ -32,7 +32,11 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       }
       // The injected legacy function keeps focused handler tests backwards-compatible.
       if (analyse) return res.status(200).json({ success: true, result: await analyse(body) });
-      dependencies = jobFactory();
+      // Jobs hold an uploaded document and what was read from it: always the
+      // caller's own workspace, never one named in the request (UBO-17).
+      const tenantId = uboCallerTenant(actor);
+      if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
+      dependencies = jobFactory({ tenantId });
       let job;
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);

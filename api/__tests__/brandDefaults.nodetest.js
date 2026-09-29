@@ -45,7 +45,9 @@ const ROOT = path.join(__dirname, "..", "..");
 // Directories that ship. Deliberately includes the Evidence Lab: it is not
 // deployed today, but it held thirteen copies of the pattern, and "not deployed"
 // is a deployment setting rather than a property of the code.
-const SEARCH = ["api", "lib", "src", "agents", "ubo-control", "ubo-control-ui", "public", "dossierLifecycle"];
+// evidence/, ubo-control-lab/ and integrations/ ship too: the partner's UBO demo
+// arrived with `TENANT_ID || "nium"` defaults there, unseen by this scan (UBO-20).
+const SEARCH = ["api", "lib", "src", "agents", "ubo-control", "ubo-control-ui", "ubo-control-lab", "evidence", "integrations", "public", "dossierLifecycle"];
 
 const SKIP_DIRS = new Set(["node_modules", "build", "__tests__", "tests", "test-support", "fixtures", "demo", ".kilo", "coverage"]);
 

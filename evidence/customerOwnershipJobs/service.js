@@ -112,10 +112,13 @@ function artifactFrom(stored, company) {
 
 class CustomerOwnershipExtractionJobService {
   constructor({ repository, ingestionRepository, artifactStore, artifactRepository = null, operationRepository = null,
-    provider = null, tenantId = "nium", modelVersion = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5",
+    provider = null, tenantId, modelVersion = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5",
     profile = OWNERSHIP_CHART_PROFILE,
     maxAttempts = DEFAULT_MAX_ATTEMPTS, leaseSeconds = DEFAULT_LEASE_SECONDS,
     now = () => new Date(), analyse = analyseIngestedCustomerOwnershipChart } = {}) {
+    // Every job and artifact lookup below is scoped to this workspace. It comes
+    // from the signed-in caller; there is no default (it used to be "nium").
+    if (!tenantId) throw new Error("CustomerOwnershipExtractionJobService needs the caller's tenant");
     this.repository = repository;
     this.ingestionRepository = ingestionRepository;
     this.artifactStore = artifactStore;
