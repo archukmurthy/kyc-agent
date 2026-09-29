@@ -1,3 +1,4 @@
+import { clerkAuthHeaders } from "../../auth/clerkFetch";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { allCandidateFacts } from "../demoResearch";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
@@ -86,7 +87,7 @@ function evidenceUploadFailure(payload, responseStatus) {
 async function postOwnershipExtraction(body) {
   const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) },
     body: JSON.stringify(body),
   });
   const payload = await response.json();
@@ -380,11 +381,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     requestedRecalculations.current.add(signature);
     const generation = ++recalculationGeneration.current;
     const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), result);
-    fetch("/api/ubo-demo-customer-ownership-chart", {
+    clerkAuthHeaders().then((auth) => fetch("/api/ubo-demo-customer-ownership-chart", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({ operation: "REEVALUATE_SAVED_EXTRACTION", demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId }, savedResult }),
-    }).then(async (response) => {
+    })).then(async (response) => {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.message || "UBO recalculation failed");
       if (generation !== recalculationGeneration.current) return;

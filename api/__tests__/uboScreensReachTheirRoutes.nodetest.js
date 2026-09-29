@@ -135,3 +135,28 @@ test("a route that demands a tenant actually reads one", () => {
     "these demand a workspace and never read it - drop the flag or use it:\n" + offenders.join("\n")
   );
 });
+
+test("every UBO screen file that calls a staff-gated route sends the session token", () => {
+  // The table above names one caller per route, and a route can have several:
+  // the questions screen posted evidence uploads and recalculations to the
+  // chart route with no token, and nothing here looked at it. So this reads
+  // every file under src/uboDemo instead of a list.
+  const staffRoutes = CALLS.filter(({ route }) => /requireStaff/.test(read(route))).map(({ url }) => url);
+  const dir = path.join(ROOT, "src", "uboDemo");
+  const files = [];
+  (function walk(d) {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(js|jsx)$/.test(entry.name) && !/\.test\.jsx?$/.test(entry.name)) files.push(full);
+    }
+  })(dir);
+  const missing = [];
+  for (const file of files) {
+    const src = fs.readFileSync(file, "utf8");
+    // A call, not a mention: the engines name routes as data without fetching.
+    const calls = staffRoutes.filter((url) => new RegExp(`(fetch|fetchImpl)\\(\\s*["\`]${url.replace(/[/-]/g, "\\$&")}`).test(src));
+    if (calls.length && !/clerkAuthHeaders/.test(src)) missing.push(`${path.relative(ROOT, file)} -> ${calls.join(", ")}`);
+  }
+  assert.deepEqual(missing, [], "these screens call a signed-in route without the session token");
+});
