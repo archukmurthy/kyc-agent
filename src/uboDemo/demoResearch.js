@@ -1,4 +1,5 @@
 import { clerkAuthHeaders } from "../auth/clerkFetch";
+import { allCandidateFacts } from "./customer/caseResolution";
 export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE", REPLAY: "REPLAY" });
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
@@ -318,11 +319,6 @@ export function registryContextsForSession(session) {
     });
   });
   return Object.fromEntries([...merged].map(([entityId, context]) => [entityId, registryPresentation(context)]));
-}
-
-export function allCandidateFacts(result) {
-  return (result?.candidateSources || []).flatMap((source) =>
-    (source.candidateFacts || []).map((fact) => ({ fact, source })));
 }
 
 export function assertionSourceState(result, source) {
@@ -721,3 +717,6 @@ export function demoReviewPresentations(view, result = {}) {
     }];
   }));
 }
+
+// Shared with the server; see customer/caseResolution.js.
+export { allCandidateFacts };

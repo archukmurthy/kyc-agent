@@ -1,20 +1,17 @@
 import { clerkAuthHeaders } from "../../auth/clerkFetch";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { allCandidateFacts } from "../demoResearch";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
-import { buildChartResearchComparison, filterComparisonEntriesRelevantToCustomer, partitionResearchEntriesForComparison } from "./chartComparison";
+import { caseInputs, evaluateCase, resolutionTrace } from "./caseResolution";
 import {
   applyResultingFact,
   determinationFromChartAnalysis,
   EVIDENCE_STATUS,
-  evaluateOwnershipResolution,
   evidenceResultStatus,
   QUESTION_TYPE,
   RESOLUTION_STATUS,
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
-import { chartSourceCoverage } from "./customerOwnershipChartSession";
-import { applyCurrentVerificationAssessment, isReadyForIdentityVerification } from "./verificationAssessment";
+import { isReadyForIdentityVerification } from "./verificationAssessment";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
@@ -137,40 +134,6 @@ function resolutionContext(comparisonItemId, requirements, rows, company) {
     stageLabel,
     label: nominee ? `Nominee arrangement for ${companyName}` : stage === "CONTROL" ? `Control of ${companyName}` : stage === "FALLBACK" ? `Senior management of ${companyName}` : stage === "ADDITIONAL" ? `Additional information for ${companyName}` : holderName ? `${holderName} → ${companyName}` : `Ownership of ${companyName}`,
   };
-}
-
-function customerRecalculationPending(engine, recalculations) {
-  return engine.resolutions.some((resolution) => resolution.resultingFact?.qualifiers?.customerResolution === true
-    && (!recalculations[resolution.comparisonItemId]?.chartAnalysis || recalculations[resolution.comparisonItemId]?.error));
-}
-
-function resolutionTrace({ engine, rows, answers, previousTrace, recalculations, finalized = false, now = new Date().toISOString() }) {
-  const baseTrace = {
-    contractVersion: "ubo-investigation-trace-v2",
-    updatedAt: now,
-    policy: engine.policy,
-    ownershipResolution: engine.ownershipResolution,
-    controlResolution: { ...engine.controlResolution, assessments: engine.controlResolution?.assessments || [] },
-    fallback: engine.fallback,
-    personOwnershipAssessments: engine.personOwnershipAssessments,
-    uboAssessments: engine.uboAssessments,
-    auditTrail: engine.auditTrail,
-    ownershipFacts: engine.resolutions.map((resolution) => {
-      const row = rows.find(({ key }) => key === resolution.comparisonItemId);
-      return {
-        ...resolution,
-        originalComparison: row ? { status: row.status, detail: row.detail, descriptor: row.descriptor } : null,
-        customerAssertion: row?.chartFact || null,
-        independentAssertion: row?.researchFact || null,
-        factRequirements: engine.requirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
-        questions: engine.questions.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId).map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
-        evidence: engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === resolution.comparisonItemId),
-      };
-    }),
-    questions: engine.questions.map((question) => ({ ...question, ...(answers[question.id] ? { answer: answers[question.id].value } : {}) })),
-    evidence: engine.evidenceRequirements.map((item) => ({ ...item })),
-  };
-  return applyCurrentVerificationAssessment(baseTrace, previousTrace, { pendingRecalculation: customerRecalculationPending(engine, recalculations), finalized, now });
 }
 
 function answerLabel(question, answer) {
@@ -314,17 +277,10 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const answerSubmissions = useRef(new Set());
   const recalculationGeneration = useRef(0);
   const createdAt = useRef(restored?.createdAt || new Date().toISOString());
-  const researchEntries = useMemo(() => partitionResearchEntriesForComparison(filterComparisonEntriesRelevantToCustomer(allCandidateFacts(researchResult), company)).primaryEntries, [researchResult, company]);
-  const chartEntries = useMemo(() => filterComparisonEntriesRelevantToCustomer((result?.candidateFacts || []).map((fact) => ({ fact, source: { artifactId: fact.evidenceReferences?.[0]?.artifactId || fact.evidenceReferences?.[0]?.referenceId } })), company), [result, company]);
-  const rows = useMemo(() => buildChartResearchComparison(researchEntries, chartEntries), [researchEntries, chartEntries]);
-  const topicActivations = useMemo(() => researchResult?.investigationTopicActivations || [], [researchResult]);
-  const analystCustomerRequests = useMemo(() => researchResult?.analystCustomerRequests || [], [researchResult]);
-  const customerEntityId = company?.registrationNumber || company?.legalName || "CUSTOMER_ENTITY";
-  const ownershipContext = useMemo(() => ({
-    customerDocumentEffectiveDate: result?.certification?.certificationDate || null,
-    sourceCoverage: chartSourceCoverage(result),
-  }), [result]);
-  const engine = useMemo(() => evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current }), [rows, answers, evidence, recalculations, result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId]);
+  // The same calculation the server runs (caseResolution.js); the server's result is the record.
+  const inputs = useMemo(() => caseInputs({ researchResult, chartResult: result, company }), [researchResult, result, company]);
+  const { rows } = inputs;
+  const engine = useMemo(() => evaluateCase(inputs, { answers, evidence, recalculations, now: createdAt.current }), [inputs, answers, evidence, recalculations]);
   const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 
   const durableResolution = (nextAnswers = answers, nextEvidence = evidence, nextRecalculations = recalculations, trace = currentTrace, submittedAnswer = null) => ({
@@ -425,7 +381,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         delete nextRecalculations[question.comparisonItemId];
         engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).forEach(({ id }) => delete nextEvidence[id]);
       }
-      const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: nextAnswers, evidence: nextEvidence, recalculations: nextRecalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+      const nextEngine = evaluateCase(inputs, { answers: nextAnswers, evidence: nextEvidence, recalculations: nextRecalculations, now: createdAt.current });
       const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
       Object.entries(nextAnswers).forEach(([questionId, stored]) => {
         if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete nextAnswers[questionId];
@@ -440,7 +396,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       // otherwise discard the preceding answer.
       setAnswers((current) => {
         const next = { ...current, [question.id]: answer };
-        const currentEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers: next, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+        const currentEngine = evaluateCase(inputs, { answers: next, evidence, recalculations, now: createdAt.current });
         const currentQuestionIds = new Set(currentEngine.questions.map(({ id: questionId }) => questionId));
         Object.entries(next).forEach(([questionId, stored]) => {
           if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !currentQuestionIds.has(questionId)) delete next[questionId];
@@ -514,7 +470,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       setEvidence(nextEvidence);
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
       try {
-        const nextEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence: nextEvidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: createdAt.current });
+        const nextEngine = evaluateCase(inputs, { answers, evidence: nextEvidence, recalculations, now: createdAt.current });
         const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers, previousTrace: currentTrace, recalculations });
         await persistPocCase("SYNC_RESOLUTION", {
           caseId: context.demoCaseId,
@@ -551,7 +507,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const readinessMessage = currentTrace.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions to continue.";
   const finalizeCurrentAssessment = async (event) => {
     event.preventDefault();
-    const finalEngine = evaluateOwnershipResolution({ comparisonRows: rows, answers, evidence, recalculations, chartAnalysis: result?.chartAnalysis, topicActivations, analystCustomerRequests, ownershipContext, customerEntityId, now: new Date().toISOString() });
+    const finalEngine = evaluateCase(inputs, { answers, evidence, recalculations, now: new Date().toISOString() });
     const finalTrace = resolutionTrace({ engine: finalEngine, rows, answers, previousTrace: readCurrentTrace(context), recalculations, finalized: true });
     try {
       const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");

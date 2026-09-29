@@ -16,6 +16,7 @@ const ENGINES = {
   chartComparison: [],
   crossSourcePartyResolution: [],
   idvSubjects: [],
+  caseResolution: ["caseInputs", "evaluateCase", "resolutionTrace", "allCandidateFacts", "chartSourceCoverage"],
 };
 
 for (const [name, mustExport] of Object.entries(ENGINES)) {
