@@ -41,7 +41,7 @@ test('the DAL module surface exposes exactly one write path and zero mutations',
   );
 });
 
-test('an explicit id is rejected — no caller can overwrite a row by id', async () => {
+test('an explicit id is rejected - no caller can overwrite a row by id', async () => {
   const db = makeFakeDb();
   await assert.rejects(() => writeEvent(db, baseEvent({ id: 99 })), /id is server-assigned/);
 });
@@ -65,6 +65,22 @@ test('superseding a non-existent event is rejected', async () => {
   );
 });
 
+test('superseding another submission\'s event is rejected - cross-submission ids are guessable (BIGSERIAL)', async () => {
+  const db = makeFakeDb();
+  // Dossier A's event.
+  const victim = await writeEvent(db, baseEvent({ submissionId: 'sub-A', fieldId: 'a' }));
+  // An anonymous POST for a fresh, unrelated submission guesses the victim's id.
+  await assert.rejects(
+    () => writeEvent(db, baseEvent({ submissionId: 'sub-B', fieldId: 'a', supersedesId: victim.id })),
+    /does not exist/,
+  );
+  // The victim event must be untouched: not superseded, still current.
+  const current = await getCurrentFieldState(db, 'sub-A', 'a');
+  assert.equal(current.id, victim.id);
+  const stillFresh = await db.query('-- @qid:is_superseded\nSELECT id FROM change_events WHERE supersedes = $1', [victim.id]);
+  assert.equal(stillFresh.length, 0);
+});
+
 test('after a chain of N supersedes: current = tail, history = all N in order', async () => {
   const db = makeFakeDb();
   const N = 5;
@@ -85,7 +101,7 @@ test('after a chain of N supersedes: current = tail, history = all N in order', 
   assert.deepEqual(history.map((r) => r.after_value.v), [0, 1, 2, 3, 4]); // in order
 });
 
-test('a revert to the AI value grows history — it never shrinks', async () => {
+test('a revert to the AI value grows history - it never shrinks', async () => {
   const db = makeFakeDb();
   // Customer edits the AI value...
   const e1 = await writeEvent(

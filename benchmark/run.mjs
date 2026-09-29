@@ -16,6 +16,9 @@
 //   --baseline <min>    human analyst minutes per entity, default 25
 //   --nonkeep <path>    optional JSON array of non-keep field ids (over-collection)
 //   --out <dir>         default benchmark/out
+//
+// Env: BENCHMARK_ADMIN_TOKEN — the tenant's admin password; /api/benchmark
+// requires it. Put the tenant in --endpoint (…/api/benchmark?tenant=<id>).
 // -----------------------------------------------------------------------------
 
 import fs from 'node:fs';
@@ -109,7 +112,10 @@ async function callOnce(entity) {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.BENCHMARK_ADMIN_TOKEN ? { Authorization: `Bearer ${process.env.BENCHMARK_ADMIN_TOKEN}` } : {}),
+      },
       body: JSON.stringify({
         companies: [{
           companyName: entity.name,

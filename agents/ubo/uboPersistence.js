@@ -10,8 +10,17 @@ function normalise(value) { return String(value || "").trim().toLowerCase().repl
 function identity({ entityName, registrationNumber, jurisdiction }) {
   return createHash("sha256").update([normalise(entityName), normalise(registrationNumber), normalise(jurisdiction)].join("|")).digest("hex");
 }
-function resultKey(input, tenantId) { return `ubo:result:${CACHE_VERSION}:${normalise(tenantId || "nium")}:${identity(input)}`; }
-function entityKey(entity, tenantId) { return `ubo:web:${CACHE_VERSION}:${normalise(tenantId || "nium")}:${identity({ entityName: entity.name, registrationNumber: entity.registrationNumber, jurisdiction: entity.jurisdiction })}`; }
+// A cache key with no workspace in it is a key SHARED between customers: one
+// company would read another's research back out of it. Refuse rather than
+// substitute a name - a default here is not a safety net, it is a silent leak.
+function requireTenant(tenantId) {
+  const named = typeof tenantId === "string" ? tenantId.trim() : "";
+  if (!named) throw new Error("a UBO cache key needs a workspace - callers must name one");
+  return named;
+}
+
+function resultKey(input, tenantId) { return `ubo:result:${CACHE_VERSION}:${normalise(requireTenant(tenantId))}:${identity(input)}`; }
+function entityKey(entity, tenantId) { return `ubo:web:${CACHE_VERSION}:${normalise(requireTenant(tenantId))}:${identity({ entityName: entity.name, registrationNumber: entity.registrationNumber, jurisdiction: entity.jurisdiction })}`; }
 
 async function getFresh(key) {
   const record = await storage.get(key);

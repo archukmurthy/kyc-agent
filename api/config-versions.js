@@ -11,23 +11,22 @@
 
 const storage = require("../lib/storage");
 const { getTenantIdFromRequest } = require("../lib/tenant");
-const { verifyPassword } = require("../lib/auth");
+const tenantRegistry = require("../lib/tenantRegistry");
+const adminAuth = require("../lib/adminAuth");
+const { applyCors } = require("../lib/routeAuth");
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+let _deps = { storage, registry: tenantRegistry };
+
 
 function configKey(tenant) {
   return `config:${tenant}`;
 }
 
-async function authorizeAdmin(tenant, token) {
-  if (!token) return false;
-  try {
-    const stored = await storage.get(`tenant-auth:${tenant}`);
-    if (stored && verifyPassword(token, stored.passwordHash)) return true;
-  } catch (_) {}
-  if (tenant === "nium") {
-    const env = process.env.ADMIN_PASSWORD;
-    if (env && token === env) return true;
-  }
-  return false;
+function authorizeAdmin(tenant, token) {
+  // One implementation, in lib/adminAuth.js - this copy also compared the
+  // shared password with `===`, which is not constant-time.
+  return adminAuth.authorizeAdmin(tenant, token, { storage: _deps.storage });
 }
 
 function versionKey(tenant, version) {
@@ -58,17 +57,17 @@ function readBody(req) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
 
   const tenant = getTenantIdFromRequest(req);
+  if (!tenant) {
+    return res.status(400).json({ error: "tenant_required" });
+  }
 
   try {
     if (req.method === "GET") {
-      const keys = await storage.list(`config:${tenant}:v`);
+      const keys = await _deps.storage.list(`config:${tenant}:v`);
       const versions = keys
         .map((k) => Number(k.split(":v")[1]))
         .filter((n) => !Number.isNaN(n))
@@ -77,7 +76,7 @@ module.exports = async function handler(req, res) {
 
       const items = await Promise.all(
         versions.map(async (v) => {
-          const cfg = await storage.get(versionKey(tenant, v));
+          const cfg = await _deps.storage.get(versionKey(tenant, v));
           if (!cfg) return null;
           return {
             version: v,
@@ -102,18 +101,30 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Missing or invalid `version` in request body" });
       }
 
-      const archived = await storage.get(versionKey(tenant, targetVersion));
+      const archived = await _deps.storage.get(versionKey(tenant, targetVersion));
       if (!archived) {
         return res.status(404).json({ error: `Version v${targetVersion} not found` });
       }
 
-      const current = (await storage.get(configKey(tenant))) || {};
+      // A rollback is a publish by another name: apply the same protection so
+      // a gutted archived version can't be restored over a protected tenant.
+      if (await _deps.registry.isProtectedTenant(tenant)) {
+        const lic = Array.isArray(archived.licences) ? archived.licences.length : 0;
+        const ent = Array.isArray(archived.entityTypes)
+          ? archived.entityTypes.filter((e) => e && e.active !== false).length
+          : 0;
+        if (lic === 0 || ent === 0) {
+          return res.status(400).json({ error: "empty_config_rejected" });
+        }
+      }
+
+      const current = (await _deps.storage.get(configKey(tenant))) || {};
       const currentVersion = current._version || 0;
 
       // Archive the current config under its own version number so it isn't
       // lost when we overwrite with the rollback target.
       if (currentVersion > 0) {
-        await storage.set(versionKey(tenant, currentVersion), current);
+        await _deps.storage.set(versionKey(tenant, currentVersion), current);
       }
 
       const newVersion = currentVersion + 1;
@@ -129,7 +140,7 @@ module.exports = async function handler(req, res) {
         _tenantId: tenant,
         _rolledBackFrom: targetVersion,
       };
-      await storage.set(configKey(tenant), next);
+      await _deps.storage.set(configKey(tenant), next);
       return res.status(200).json({ success: true, version: newVersion, rolledBackFrom: targetVersion });
     }
 
@@ -140,3 +151,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server error", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };

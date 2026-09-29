@@ -1,0 +1,481 @@
+const { test, beforeEach, afterEach } = require("node:test");
+const assert = require("node:assert");
+
+const { getFlags } = require("../flags");
+const { resolveAttempt } = require("../resolve");
+
+const realFlag = process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+afterEach(() => {
+  if (realFlag === undefined) delete process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+  else process.env.IDV_DISCREPANCY_BANDS_ENABLED = realFlag;
+});
+
+// --- flags ---
+test("flags endpoint reflects the feature flag", () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  assert.deepStrictEqual(getFlags(), { idvDiscrepancyBands: true });
+  delete process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+  assert.deepStrictEqual(getFlags(), { idvDiscrepancyBands: false });
+});
+
+// --- resolve ---
+function deps(over = {}) {
+  const decisions = [];
+  const tasks = [];
+  return {
+    _decisions: decisions,
+    attemptStore: over.attemptStore || {
+      getAttempt: async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { name: "SMITH, John", birthMonthYear: "1985-05", officerId: "o1" } }),
+    },
+    getDecision: over.getDecision || (async () => ({
+      status: "Approved",
+      decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
+    })),
+    // count: 1 mirrors reality — the default startScreening below succeeds, which
+    // means a row was created (count 0 with a completed start is the failure case
+    // covered by its own dedicated test further down).
+    hasScreeningHit: over.hasScreeningHit || (async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 })),
+    startScreening: over.startScreening || (async () => ({ screeningId: "s1" })),
+    listScreeningByAttempt: over.listScreeningByAttempt || (async () => []),
+    runBandPipeline: over.runBandPipeline,
+    matchDecisionStore: { recordDecision: async (d) => { decisions.push(d); return `dec-${decisions.length}`; }, listByAttempt: over.listByAttempt || (async () => []) },
+    _tasks: tasks,
+    reviewTaskStore: over.reviewTaskStore || {
+      createTask: async (t) => { tasks.push(t); return { id: "t1", taskType: t.taskType }; },
+      listByAttempt: async () => [],
+    },
+  };
+}
+
+test("resolve is inert when the flag is off", async () => {
+  delete process.env.IDV_DISCREPANCY_BANDS_ENABLED;
+  assert.deepStrictEqual(await resolveAttempt("att-1", deps()), { enabled: false });
+});
+
+test("resolve maps the fresh decision and runs the pipeline -> Band A", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps();
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.enabled, true);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(r.outcomeType, "auto_match");
+  assert.strictEqual(d._decisions.length, 1);
+  // returns the applicant's own verified fields for confirmation (no mrz)
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+  assert.strictEqual(r.verifiedFields.lastName, "Smith");
+  assert.strictEqual(r.verifiedFields.dateOfBirth, "1985-05-24");
+  assert.ok(!("mrz" in r.verifiedFields));
+});
+
+test("resolve is idempotent — an existing decision is returned, pipeline not re-run", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({ listByAttempt: async () => [{ band: "A", outcome_type: "auto_match" }] });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.alreadyResolved, true);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(d._decisions.length, 0, "must not record a second decision");
+});
+
+test("verify-only (unlisted) resolves as verified, no band, with verified fields", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({});
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.band, undefined, "no band comparison for verify-only");
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+  assert.strictEqual(d._decisions.length, 0, "verify-only records no band decision");
+});
+
+test("verify-only + providerVerified + screening clear -> verified success (BAND_A_SUCCESS)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, undefined);
+  assert.strictEqual(r.requiresReview, undefined);
+  assert.deepStrictEqual(r.applicantView, require("../copy").BAND_A_SUCCESS);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + providerVerified + screening pending -> holds (screening_pending), no auto-pass", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => ({ hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_pending"]);
+  assert.strictEqual(r.verified, undefined);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + providerVerified + screening HIT -> requires review, NOT auto success", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("verify-only + screening HIT -> writes a review task for back-office", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(d._tasks.length, 1, "exactly one review task written");
+  assert.strictEqual(d._tasks[0].taskType, "review");
+  assert.strictEqual(d._tasks[0].outcomeType, "unresolved_to_review");
+  assert.strictEqual(d._tasks[0].reason, "screening_hit");
+  assert.strictEqual(d._tasks[0].applicationId, "app-1");
+});
+
+test("verify-only + screening HIT + a review task already exists -> does not duplicate (idempotent)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { created: 0 };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+    reviewTaskStore: {
+      listByAttempt: async () => [{ task_type: "review" }],
+      createTask: async (t) => { calls.created += 1; return { id: "t1", taskType: t.taskType }; },
+    },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(calls.created, 0, "createTask must not be called when a review task already exists");
+});
+
+test("verify-only + screening CLEAR -> no review task written", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.deepStrictEqual(r.applicantView, require("../copy").BAND_A_SUCCESS);
+  assert.strictEqual(d._tasks.length, 0);
+});
+
+test("verify-only + screening HIT + task store throws -> error swallowed, still returns the review hold", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+    reviewTaskStore: {
+      listByAttempt: async () => { throw new Error("db unavailable"); },
+      createTask: async () => { throw new Error("db unavailable"); },
+    },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.strictEqual(r.requiresReview, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+});
+
+test("verify-only + NOT providerVerified -> IN_REVIEW, no screening started", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { started: 0 };
+  const d = deps({
+    getDecision: async () => ({
+      status: "Declined",
+      decision: { session_id: "sess-1", status: "Declined", id_verifications: [{ status: "Declined", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Declined" }] },
+    }),
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+  });
+  d.attemptStore.getAttempt = async () => ({ id: "att-1", application_id: "app-1", didit_session_id: "sess-1", selected_officer: { mode: "verify_only" } });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.verifyOnly, true);
+  assert.strictEqual(r.verified, false);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(calls.started, 0, "no screening should be started for an unverified identity");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("resolve holds (needsRetry) while the Didit session is still in progress — selfie not done yet", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  // Document step finished (fields present) but the overall session is still
+  // In Progress (liveness/selfie pending) -> must NOT return the cells yet.
+  const d = deps({
+    getDecision: async () => ({
+      status: "In Progress",
+      decision: { session_id: "sess-1", status: "In Progress", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }] },
+    }),
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.band, undefined, "no band assigned before the session is terminal");
+  assert.strictEqual(r.verifiedFields, undefined, "no fields leaked before the selfie completes");
+  assert.strictEqual(d._decisions.length, 0, "records nothing while in progress");
+});
+
+test("auto_match: backend picks the matching officer from the document -> Band A (no dropdown)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps();
+  // Attempt froze the WHOLE candidate list; the doc is John Smith 1985-05.
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "DOE, Jane", birthMonthYear: "1990-01" },
+      { name: "SMITH, John", birthMonthYear: "1985-05" },
+    ] },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(r.outcomeType, "auto_match");
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
+test("auto_match: document matches no candidate -> LOA path (Band C), no dropdown, no retry", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps();
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "DOE, Jane", birthMonthYear: "1990-01" },
+      { name: "BLOGGS, Fred", birthMonthYear: "1970-03" },
+    ] },
+  });
+  // Provide a recordBandOutcome stub so we don't touch the evidence outbox/DB.
+  d.recordBandOutcome = async ({ decision }) => ({ decisionId: "dec-c", route: "loa_path", escalated: true, applicantView: { title: "loa" }, reasons: decision.reasons });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "demoted_to_loa_path");
+  assert.strictEqual(r.route, "loa_path");
+  assert.strictEqual(r.needsRetry, undefined);
+  // still shows the applicant their own fetched fields (read-only + LOA upload)
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
+test("auto_match: no candidate match + readable name + screening HIT -> Band C routed to review, not LOA", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "hit" }],
+    hasScreeningHit: async () => ({ hit: true, pending: false, notProcessed: false, categories: { sanctions: true }, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  let recordedDecision = null;
+  d.recordBandOutcome = async ({ decision }) => {
+    recordedDecision = decision;
+    return { decisionId: "dec-c", tasks: [{ id: "t1", taskType: "review" }], escalated: true, route: "loa_path", applicantView: { title: "review" } };
+  };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "unresolved_to_review");
+  assert.strictEqual(r.requiresReview, true);
+  assert.strictEqual(r.screeningHit, true);
+  assert.deepStrictEqual(r.applicantView, require("../copy").IN_REVIEW);
+  assert.strictEqual(recordedDecision.outcomeType, "unresolved_to_review", "must record unresolved_to_review, not demoted_to_loa_path");
+  assert.strictEqual(recordedDecision.band, "C");
+});
+
+test("auto_match: no candidate match + readable name + screening CLEAR -> Band C demoted_to_loa_path (unchanged)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const d = deps(); // default hasScreeningHit -> clear
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  d.recordBandOutcome = async ({ decision }) => ({ decisionId: "dec-c", route: "loa_path", escalated: true, applicantView: { title: "loa" }, reasons: decision.reasons });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "C");
+  assert.strictEqual(r.outcomeType, "demoted_to_loa_path");
+  assert.strictEqual(r.route, "loa_path");
+  assert.strictEqual(r.screeningHit, undefined);
+  assert.strictEqual(r.needsRetry, undefined);
+  assert.strictEqual(r.verifiedFields.firstName, "John");
+});
+
+test("auto_match: no candidate match + screening PENDING -> holds, no decision recorded", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { recorded: 0 };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => ({ hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  d.recordBandOutcome = async () => { calls.recorded += 1; return {}; };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.strictEqual(r.pending, true);
+  assert.deepStrictEqual(r.reasons, ["screening_pending"]);
+  assert.strictEqual(r.band, undefined);
+  assert.strictEqual(calls.recorded, 0, "no band decision while screening is pending");
+});
+
+test("auto_match: no candidate match + UNREADABLE name -> missing_required_data retry, screening not attempted", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const calls = { started: 0 };
+  const d = deps({
+    getDecision: async () => ({
+      status: "Approved",
+      decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
+    }),
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+  });
+  d.attemptStore.getAttempt = async () => ({
+    id: "att-1", application_id: "app-1", didit_session_id: "sess-1",
+    selected_officer: { mode: "auto_match", candidates: [
+      { name: "ANDERSON, Robert", birthMonthYear: "1990-01" },
+      { name: "THOMPSON, Michael", birthMonthYear: "1970-03" },
+    ] },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["missing_required_data"]);
+  assert.strictEqual(r.band, null);
+  assert.strictEqual(calls.started, 0, "screening must not be attempted for an unreadable identity");
+});
+
+test("resolve reports a missing session", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
+  const r = await resolveAttempt("att-1", deps({ attemptStore: { getAttempt: async () => ({ id: "att-1", didit_session_id: null }) } }));
+  assert.strictEqual(r.error, "no_session");
+});
+
+test("resolveAttempt passes a boolean screeningHit (not the accessor object) into the pipeline", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  let capturedScreeningHit = "UNSET";
+  const d = deps({
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+    runBandPipeline: async (input) => { capturedScreeningHit = input.screeningHit; return { enabled: true, band: "A", outcomeType: "auto_match" }; },
+  });
+  await resolveAttempt("att-1", d);
+  assert.strictEqual(typeof capturedScreeningHit, "boolean");
+  assert.strictEqual(capturedScreeningHit, false);
+});
+
+test("resolveAttempt screens the verified identity once, then holds while screening is pending", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const calls = { started: 0 };
+  let rows = []; // no screening rows yet
+  const d = deps({
+    // terminal Didit decision with a readable identity + an auto_match officer that resolves
+    startScreening: async () => { calls.started += 1; rows = [{ status: "pending", outcome: null }]; return { screeningId: "s1" }; },
+    hasScreeningHit: async () => rows.length ? { hit: false, pending: true, notProcessed: false, categories: {}, count: 1 } : { hit: false, pending: false, categories: {}, count: 0 },
+    listScreeningByAttempt: async () => rows,
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.equal(calls.started, 1);
+  assert.equal(r.pending, true);
+  assert.deepEqual(r.reasons, ["screening_pending"]);
+  assert.equal(r.band, undefined); // no decision recorded on a hold
+});
+
+test("resolveAttempt does not re-screen when a screening row already exists", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const calls = { started: 0 };
+  const d = deps({
+    startScreening: async () => { calls.started += 1; return { screeningId: "s1" }; },
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }],
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  await resolveAttempt("att-1", d);
+  assert.equal(calls.started, 0);
+});
+
+test("resolveAttempt reconciles a pending screening mid-poll -> proceeds to a band instead of holding", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  // Shared mutable state: hasScreeningHit reads it; the injected reconcileScreening
+  // flips it from pending to clear, mirroring a getCheck resolving mid-poll.
+  const screening = { pending: true };
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "pending", outcome: null }],
+    hasScreeningHit: async () => (screening.pending
+      ? { hit: false, pending: true, notProcessed: false, categories: {}, count: 1 }
+      : { hit: false, pending: false, notProcessed: false, categories: {}, count: 1 }),
+  });
+  d.reconcileScreening = async () => { screening.pending = false; };
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.band, "A");
+  assert.strictEqual(r.outcomeType, "auto_match");
+  assert.strictEqual(r.pending, undefined, "must not hold once reconcile clears the pending row");
+  assert.strictEqual(r.reasons, undefined);
+});
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening-hit read throws (never 500s, never decides a band)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => [{ status: "complete", outcome: "clear" }], // already screened; only the verdict read fails
+    hasScreeningHit: async () => { throw new Error("db unavailable"); },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when screening status is unknown");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening-list read throws (never 500s, never decides a band)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => { throw new Error("db unavailable"); },
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when screening status is unknown");
+  assert.strictEqual(d._decisions.length, 0);
+});
+
+test("resolveAttempt fails CLOSED with screening_unavailable when the screening START throws and no row was created (outage, not read failure)", async () => {
+  process.env.IDV_DISCREPANCY_BANDS_ENABLED = "true";
+  const d = deps({
+    listScreeningByAttempt: async () => [], // no existing rows -> a start is attempted
+    startScreening: async () => { throw new Error("ComplyCube outage"); },
+    hasScreeningHit: async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 0 }), // no row exists: start failed
+  });
+  const r = await resolveAttempt("att-1", d);
+  assert.strictEqual(r.pending, true);
+  assert.strictEqual(r.needsRetry, true);
+  assert.deepStrictEqual(r.reasons, ["screening_unavailable"]);
+  assert.strictEqual(r.band, undefined, "no band decision recorded when a screening start failed");
+  assert.strictEqual(d._decisions.length, 0);
+});

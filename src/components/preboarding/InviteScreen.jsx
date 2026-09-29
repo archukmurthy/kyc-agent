@@ -2,37 +2,30 @@
  * InviteScreen.jsx — the analyst's "invite the customer" screen, the last
  * pre-boarding surface.
  *
- * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. Reached from the
- * ?preboarding=1 early-return block (which stays in App.js) when showInviteScreen
- * is set; it takes priority over the dossier view, and that ordering lives in the
- * routing block, not here.
+ * Originally extracted from App.js as a pure move; since then the invite-send
+ * path was fixed to email a working (dossier-backed) link — see below. Reached
+ * from the ?preboarding=1 early-return block (which stays in App.js) when
+ * showInviteScreen is set; it takes priority over the dossier view, and that
+ * ordering lives in the routing block, not here.
  *
- * TWO LINK BRANCHES, BOTH LIVE, BOTH PRESERVED EXACTLY — the discriminator is
- * dossierId, and Preboarding.render.test.jsx pins both:
- *   - dossierId present → a dossier-backed link, ?dossierId=…&journey=customer,
- *     which works cross-device because the customer's mount fetches the dossier.
- *   - dossierId null     → the legacy ?ref=<token> fallback, which rehydrates from
- *     a same-browser localStorage snapshot written at send time.
- * A move that drops the dossierId drill would silently collapse the first branch
- * into the second — the link would still render, just the wrong one.
+ * ONE LINK, SERVER-ISSUED: the server signs a customer token for this dossier
+ * (POST /api/invite) and returns `?dossierToken=<token>&journey=customer` — the
+ * client never builds the link itself and no raw dossier id ever leaves. It
+ * works cross-device because the customer's mount fetches the dossier
+ * server-side (api/get-dossier) using that token. A saved dossier (dossierId)
+ * is therefore REQUIRED to send an invite; Send is disabled until one exists.
  *
  * THIS COMPONENT OWNS NO STATE. The invite fields and the sent/link pair are all
  * App-owned and drilled.
  */
 
 import React from "react";
+import { getDossierAuthHeaders } from "../../utils/dossierCredential";
 
 export function InviteScreen({
   research,
   companyName,
-  countryCode,
-  entityType,
-  ownershipType,
-  activeSchema,
-  coverage,
-  fieldMetadata,
-  checks,
-  journeyType,
+  brandName,
   tenantId,
   dossierId,
   inviteEmail,
@@ -46,81 +39,60 @@ export function InviteScreen({
   setShowInviteScreen,
 }) {
     const companyDisplayName = research?.companyName || companyName || 'the company';
+    const brand = brandName || tenantId || 'the company';
+    const [sendError, setSendError] = React.useState('');
 
-    function generateLink() {
-      const base = window.location.origin;
-      // Preferred: a dossier-backed link. `?dossierId=&journey=customer` lands
-      // the customer on the standalone Applicant page; the mount effect fetches
-      // the dossier server-side (api/get-dossier) and pre-loads company context +
-      // research, so this works cross-device (unlike the legacy ?ref snapshot).
-      if (dossierId) {
-        return `${base}/?tenant=${tenantId}&dossierId=${dossierId}&journey=customer`;
+    // Maps a failed /api/invite response to plain-language, non-technical text.
+    // Server error codes: 401 unauthorized, 403 forbidden, 404 dossier_not_found,
+    // 500 not_configured / lookup_failed. Falls back to a generic message for
+    // anything else (including a network failure, which has no status/code).
+    function inviteErrorMessage(status, errorCode) {
+      if (errorCode === 'unauthorized' || status === 401) {
+        return 'Your pre-boarding session is no longer valid. Unlock pre-boarding again.';
       }
-      // Fallback (no saved dossier yet): the legacy `?ref=<token>` link, which
-      // rehydrates from a same-browser localStorage snapshot taken at send time.
-      const token = btoa(`${companyDisplayName}-${Date.now()}`).replace(/=/g, '');
-      return `${base}/?ref=${token}`;
+      if (errorCode === 'forbidden' || status === 403) {
+        return "You don't have permission to send this invite.";
+      }
+      if (errorCode === 'dossier_not_found' || status === 404) {
+        return 'Save the dossier before sending an invite.';
+      }
+      return "Couldn't create the invite link. Try again.";
     }
 
-    // Sends the invite for real via /api/invite (Resend). The server generates
-    // and persists the authoritative token/link; we fall back to a locally
-    // generated link only if the request fails, so the success screen always
-    // has a value to show.
+    // The SERVER builds the link: it signs a token for this dossier, so there is
+    // no client-built link to drift from, and no raw dossier id ever leaves.
     async function handleSendInvite() {
-      if (!inviteEmail || !inviteContactName) return;
-      let link = generateLink();
+      if (!inviteEmail || !inviteContactName || !dossierId) return;
+      setSendError('');
       try {
         const resp = await fetch('/api/invite', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getDossierAuthHeaders(tenantId) },
           body: JSON.stringify({
             email: inviteEmail,
             contactName: inviteContactName,
             companyName: companyDisplayName,
             origin: window.location.origin,
+            dossierId,
           }),
         });
         const data = await resp.json();
-        // Keep the dossier-backed link when we have one; only adopt the
-        // server-issued ?ref link in the legacy (no-dossier) fallback path.
-        if (!dossierId && data && data.link) link = data.link;
-        console.log('Invite dispatched:', { ...data, email: inviteEmail, contactName: inviteContactName });
-      } catch (err) {
-        console.warn('Invite send failed, using local link:', err);
-      }
-
-      // Snapshot the dossier under the link's token so that opening the invite
-      // link (`?ref=<token>`) rehydrates the populated Confirm page — the same
-      // view "Preview Customer Onboarding" shows. Keyed by the FINAL token
-      // (server-issued if available, else the local one) so it matches the
-      // link that actually went out. See the mount effect that reads this.
-      const finalToken = (link.split('ref=')[1] || '').split('&')[0];
-      if (finalToken) {
-        try {
-          localStorage.setItem('nium_invite_' + finalToken, JSON.stringify({
-            research,
-            activeSchema,
-            coverage,
-            fieldMetadata,
-            checks,
-            companyName,
-            countryCode,
-            entityType,
-            ownershipType,
-            journeyType: journeyType || 'ai_only',
-          }));
-        } catch (e) {
-          console.warn('Could not snapshot dossier for invite link:', e && e.message);
+        if (!resp.ok || !data.link) {
+          console.warn('Invite was not issued:', data && data.error);
+          setSendError(inviteErrorMessage(resp.status, data && data.error));
+          return;
         }
+        setInviteLink(data.link);
+        setInviteSent(true);
+      } catch (err) {
+        console.warn('Invite send failed, email may not have been dispatched:', err);
+        setSendError(inviteErrorMessage(null, null));
       }
-
-      setInviteLink(link);
-      setInviteSent(true);
     }
 
     const emailBody = `Dear ${inviteContactName || '[Contact Name]'},
 
-Thank you for your interest in Nium. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
+Thank you for your interest in ${brand}. We have begun reviewing your application for ${companyDisplayName} and are ready to proceed with the next step.
 
 Please complete your onboarding by clicking the link below:
 
@@ -128,10 +100,10 @@ ${inviteLink || '[Onboarding link will appear here]'}
 
 This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
 
-If you have any questions, please do not hesitate to reach out to your Nium contact.
+If you have any questions, please do not hesitate to reach out to your ${brand} contact.
 
 Best regards,
-Nium Onboarding Team`;
+${brand} Onboarding Team`;
 
     const stepLabels = ['Company Input', 'Research', 'Dossier Review', 'Invite Customer'];
 
@@ -283,7 +255,7 @@ Nium Onboarding Team`;
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
               <strong>To:</strong> {inviteEmail || '[customer email]'}
               &nbsp;·&nbsp;
-              <strong>Subject:</strong> Your Nium onboarding is ready — {companyDisplayName}
+              <strong>Subject:</strong> Your {brand} onboarding is ready - {companyDisplayName}
             </div>
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
               <pre style={{
@@ -296,7 +268,7 @@ Nium Onboarding Team`;
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => setShowInviteScreen(false)}
             style={{
@@ -308,20 +280,31 @@ Nium Onboarding Team`;
           </button>
           <button
             onClick={handleSendInvite}
-            disabled={!inviteEmail || !inviteContactName}
+            disabled={!inviteEmail || !inviteContactName || !dossierId}
             style={{
               padding: '10px 24px',
-              background: (!inviteEmail || !inviteContactName) ? '#9ca3af' : '#1a3a4a',
+              background: (!inviteEmail || !inviteContactName || !dossierId) ? '#9ca3af' : '#1a3a4a',
               color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
-              cursor: (!inviteEmail || !inviteContactName) ? 'not-allowed' : 'pointer'
+              cursor: (!inviteEmail || !inviteContactName || !dossierId) ? 'not-allowed' : 'pointer'
             }}
           >
             ✉ Send invite
           </button>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>
-            Customer receives a unique onboarding link
-          </span>
+          {!dossierId ? (
+            <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+              Save the dossier before inviting the customer.
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+              Customer receives a unique onboarding link
+            </span>
+          )}
         </div>
+        {sendError && (
+          <div style={{ marginTop: 12, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+            {sendError}
+          </div>
+        )}
       </div>
     );
 }

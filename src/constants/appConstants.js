@@ -56,9 +56,6 @@ export const TEST_FLAG =
   new URLSearchParams(window.location.search).get("test") === "1";
 export const SHOW_TEST_TOOLS = process.env.NODE_ENV !== "production" || TEST_FLAG;
 
-export const MANUAL_FORM_URL = "https://app.nium.com";
-// TODO: replace with actual product form URL
-
 export const CACHE_STALE_DAYS = 90;
 // Number of days before cached research is considered stale (used by Session 2 cache layer)
 

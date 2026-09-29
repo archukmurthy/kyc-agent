@@ -415,6 +415,9 @@
 .ubo-analyst-assessment-card details dl { display: grid; grid-template-columns: 180px 1fr; gap: 6px 10px; }
 .ubo-analyst-assessment-card details dd, .ubo-analyst-audit-card dd { margin: 0; }
 .ubo-analyst-audit-card > dl { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 8px 12px; line-height: 1.45; }
+/* A limit reached is not a failure. Red says something broke; this is the
+   product working, and on an ended trial it is a sales moment. */
+.ubo-demo-limit { border-color: #cfd9e5; background: #f6f9fc; }
 
 @media (max-width: 640px) {
   .ubo-demo-header { height: 64px; padding: 0 18px; }

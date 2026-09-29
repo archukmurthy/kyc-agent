@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 const { deriveChangeType } = require('../deriveChangeType');
 
-test('add — aiValue empty/absent, finalValue present', () => {
+test('add - aiValue empty/absent, finalValue present', () => {
   const cases = [
     ['', 'Acme Ltd'],
     [null, 'Acme Ltd'],
@@ -19,7 +19,7 @@ test('add — aiValue empty/absent, finalValue present', () => {
   }
 });
 
-test('remove — aiValue present, finalValue empty/absent', () => {
+test('remove - aiValue present, finalValue empty/absent', () => {
   const cases = [
     ['Acme Ltd', ''],
     ['Acme Ltd', null],
@@ -33,7 +33,7 @@ test('remove — aiValue present, finalValue empty/absent', () => {
   }
 });
 
-test('changed — both present (the value moved)', () => {
+test('changed - both present (the value moved)', () => {
   assert.equal(deriveChangeType({ aiValue: 'Acme Ltd', finalValue: 'Acme Limited' }), 'changed');
   assert.equal(deriveChangeType({ aiValue: ['A'], finalValue: ['A', 'B'] }), 'changed');
   // equal values still → changed: deriveChangeType does NOT compare equality;
@@ -52,7 +52,7 @@ test('whitespace-only is treated as empty', () => {
   assert.equal(deriveChangeType({ aiValue: 'X', finalValue: '\t\n ' }), 'remove');
 });
 
-test('fieldClass is ignored — never used to infer the change type', () => {
+test('fieldClass is ignored - never used to infer the change type', () => {
   const args = { aiValue: '', finalValue: 'X' };
   assert.equal(
     deriveChangeType({ ...args, fieldClass: 'director' }),

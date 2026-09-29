@@ -1,6 +1,6 @@
 const { deriveScalarProvenance } = require("../fieldProvenance");
 
-describe("deriveScalarProvenance — agent_value is never the customer's value", () => {
+describe("deriveScalarProvenance - agent_value is never the customer's value", () => {
   it("keeps the ORIGINAL for a corrected scalar, not the correction", () => {
     const { agentValue, customerAction } = deriveScalarProvenance({
       fieldId: "registered_address_line1",
@@ -54,7 +54,7 @@ describe("deriveScalarProvenance — agent_value is never the customer's value",
   });
 });
 
-describe("deriveScalarProvenance — affirmation", () => {
+describe("deriveScalarProvenance - affirmation", () => {
   it("records an explicit tick of a low-confidence value as 'affirmed'", () => {
     const { agentValue, customerAction } = deriveScalarProvenance({
       fieldId: "leiNumber",
@@ -68,7 +68,7 @@ describe("deriveScalarProvenance — affirmation", () => {
     expect(agentValue).toBe("529900T8BM49AURSDO55");
   });
 
-  it("never downgrades a stated action — an edit outranks an affirmation", () => {
+  it("never downgrades a stated action - an edit outranks an affirmation", () => {
     expect(
       deriveScalarProvenance({
         fieldId: "leiNumber",

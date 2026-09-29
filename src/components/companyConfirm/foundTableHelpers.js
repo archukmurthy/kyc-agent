@@ -46,7 +46,7 @@ export const humaniseSection = (s) => {
  *  field value (e.g. structured UBO data) where a string is expected. */
 export const safeRenderValue = (value) => {
   if (value === null || value === undefined) {
-    return "—";
+    return "-";
   }
   if (typeof value === "object") {
     return JSON.stringify(value, null, 2);

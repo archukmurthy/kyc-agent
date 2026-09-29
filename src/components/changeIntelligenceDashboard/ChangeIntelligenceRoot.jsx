@@ -38,9 +38,9 @@ function Gate({ tenantId, onSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "nium")}`, {
+      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "nium" },
+        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId },
         body: JSON.stringify({ password }),
       });
       if (!r.ok) { setError("Incorrect password. Please try again."); setSubmitting(false); return; }
@@ -58,7 +58,7 @@ function Gate({ tenantId, onSuccess }) {
         <div style={{ textAlign: "center", marginBottom: 18 }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "#0b3d91", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 24, margin: "0 auto 12px" }}>📊</div>
           <h1 style={{ fontSize: 19, fontWeight: 800, margin: 0 }}>Change Intelligence</h1>
-          <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>Internal — authorised personnel only</p>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>Internal - authorised personnel only</p>
         </div>
         <label style={{ fontSize: 12, fontWeight: 600, color: "#1a3a4a", display: "block", marginBottom: 5 }}>Password</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus

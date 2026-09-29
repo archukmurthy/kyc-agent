@@ -45,7 +45,7 @@ describe("buildSupersedingEvent", () => {
       expect(ev.eddFlag).toBe(false);
     });
 
-    it("never RETRACTS a flag already set on the original — append-only trail", () => {
+    it("never RETRACTS a flag already set on the original - append-only trail", () => {
       const flagged = { ...baseEvent, eddFlag: true };
       const ev = buildSupersedingEvent({ emitted: true, event: flagged }, "United Kingdom", { eddFlag: false });
       expect(ev.eddFlag).toBe(true);
@@ -72,7 +72,7 @@ describe("buildSupersedingEvent", () => {
     expect(snap.event.supersedesId).toBeNull();
   });
 
-  describe("lineage — chain to the tail, never back to a consumed head", () => {
+  describe("lineage - chain to the tail, never back to a consumed head", () => {
     it("targets the head for the first correction", () => {
       const ev = buildSupersedingEvent({ emitted: true, event: baseEvent, eventId: "1" }, "a");
       expect(ev.supersedesId).toBe("1");
@@ -98,7 +98,7 @@ describe("buildSupersedingEvent", () => {
       expect(targets).toEqual(["1", "2", "3"]);
     });
 
-    it("falls back to null — never the consumed head — when the tail id is unknown", () => {
+    it("falls back to null - never the consumed head - when the tail id is unknown", () => {
       // The write happened but its id never came back (no DB / bad response).
       // Re-targeting the head would throw "already superseded" and be swallowed.
       const ev = buildSupersedingEvent(
@@ -114,7 +114,7 @@ describe("buildSupersedingEvent", () => {
       expect("supersedesId" in ev).toBe(false);
     });
 
-    it("treats the id as an opaque token — a string id passes through unchanged", () => {
+    it("treats the id as an opaque token - a string id passes through unchanged", () => {
       const ev = buildSupersedingEvent(
         { emitted: true, event: baseEvent, headConsumed: true, tailEventId: "9007199254740993" },
         "x"

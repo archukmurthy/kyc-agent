@@ -7,6 +7,14 @@ const { getFresh, resultKey, cacheResult, appendAudit, identity, CACHE_TTL } = r
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
 const { withTimeout } = require("../agents/ubo/boundedAsync");
 const { randomUUID } = require("crypto");
+const { enforceRateLimit } = require("../lib/rateLimit");
+const { checkTextFields } = require("../lib/inputLimits");
+const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { logFailure, attachRequestId } = require("../lib/requestLog");
+
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
+const DEFAULT_DEPS = { requireStaff, enforceRateLimit, runUboFramework, getFresh, cacheResult, appendAudit, persistUboInvestigation };
+let _deps = { ...DEFAULT_DEPS };
 
 const PERSISTENCE_TIMEOUT_MS = Number(process.env.UBO_PERSISTENCE_TIMEOUT_MS || 2500);
 
@@ -45,9 +53,9 @@ function cacheMetadata(result, layer) {
 
 function schedulePersistence({ jobId, tenantId, input, cacheHit, forceRefresh, result, cacheKey, auditId }) {
   const tasks = [
-    ["cache", () => cacheResult(input, tenantId, result)],
-    ["audit", () => appendAudit({ id: auditId, tenantId, entityIdentityHash: identity(input), cacheHit, forceRefresh, cacheKey, status: result.status, result })],
-    ["database", () => persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh, result })],
+    ["cache", () => _deps.cacheResult(input, tenantId, result)],
+    ["audit", () => _deps.appendAudit({ id: auditId, tenantId, entityIdentityHash: identity(input), cacheHit, forceRefresh, cacheKey, status: result.status, result })],
+    ["database", () => _deps.persistUboInvestigation({ tenantId, input, cacheHit, forceRefresh, result })],
   ];
   tasks.forEach(([label, operation]) => {
     void withTimeout(operation, { label: `UBO ${label} persistence`, timeoutMs: PERSISTENCE_TIMEOUT_MS })
@@ -72,7 +80,14 @@ function forReviewer(result) {
 // called by the onboarding application.
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, tenantId = "nium", forceRefresh = false, demoRegistryContext = false } = req.body || {};
+  // UBO-1: the tenant is NOT read from the body. It used to be, with a default
+  // of "nium" when the caller named none - so anyone could file research under
+  // any company's audit trail, ours included. It now comes from the signed-in
+  // caller, and a caller with no tenant is refused the way every other route in
+  // this codebase refuses one (lib/tenant.js: no tenant resolved, no service).
+  const { entityName, registrationNumber, jurisdiction, uboThreshold, discoveryThreshold, forceRefresh = false, demoRegistryContext = false } = req.body || {};
+  const limits = checkTextFields(req.body, { entityName: 200, registrationNumber: 64, jurisdiction: 64 });
+  if (!limits.ok) return res.status(400).json({ error: "invalid_input", field: limits.field });
   const suppliedJobId = String(req.body?.jobId || "");
   const jobId = /^[A-Za-z0-9:_-]{8,120}$/.test(suppliedJobId) ? suppliedJobId : `ubo-${randomUUID()}`;
   if (!entityName || !jurisdiction) return res.status(400).json({ error: "entityName and jurisdiction are required" });
@@ -80,6 +95,22 @@ module.exports = async function handler(req, res) {
   const discovery = Number(discoveryThreshold || 5);
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) return res.status(400).json({ error: "uboThreshold must be a number from 0 to 100" });
   if (!Number.isFinite(discovery) || discovery <= 0 || discovery > 100) return res.status(400).json({ error: "discoveryThreshold must be a number from 0 to 100" });
+  if (!(await _deps.enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
+  // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set.
+  const actor = await _deps.requireStaff(req, res, { requireTenant: true });
+  if (!actor) return undefined;
+  // A named caller brings their own tenant. Nobody else gets one by accident.
+  //
+  // The exception is deliberate and opt-in: public/ubo-lab.html posts no tenant
+  // at all, so with Clerk switched off (local development) an explicitly
+  // configured UBO_DEV_TENANT_ID keeps that lab working. Absent the variable
+  // the request is refused, so forgetting to configure Clerk in production
+  // cannot quietly restore the old "nium" default.
+  const devTenant = actor.kind === "unauthenticated" ? (process.env.UBO_DEV_TENANT_ID || "") : "";
+  const tenantId = actor.tenantId || devTenant;
+  if (!tenantId) {
+    return res.status(400).json({ error: "tenant_required" });
+  }
   const streaming = String(req.headers?.accept || "").includes("text/event-stream");
   const emit = (event) => { if (streaming) res.write(`data: ${JSON.stringify({ jobId, ...event })}\n\n`); };
   const finish = (payload) => {
@@ -102,7 +133,7 @@ module.exports = async function handler(req, res) {
     const key = resultKey(input, tenantId);
     emit({ stage: "cache_check", message: "Checking previous investigation cache" });
     if (!forceRefresh) {
-      const cached = await getFresh(key);
+      const cached = await _deps.getFresh(key);
       if (cached) {
         emit({ stage: "cache_hit", message: "Reusing cached investigation — no live research needed" });
         const response = { ...cached.result, cache: { hit: true, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "investigation" } };
@@ -114,7 +145,7 @@ module.exports = async function handler(req, res) {
     const jobController = createResearchJobController(req, res);
     let result;
     try {
-      result = await runUboFramework({
+      result = await _deps.runUboFramework({
         entityName,
         registrationNumber: registrationNumber || null,
         jurisdiction: String(jurisdiction).toUpperCase(),
@@ -131,11 +162,21 @@ module.exports = async function handler(req, res) {
     emit({ stage: "persistence_queued", message: "Research complete; audit persistence queued" });
     return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
   } catch (error) {
-    console.error(`[ubo-research:${jobId}] failed`, error.code || error.message);
-    if (streaming) { emit({ stage: "error", terminalState: "FAILED", code: error.code || "UBO_DISCOVERY_FAILED", message: error.message }); return res.end(); }
-    return res.status(500).json({ error: "UBO discovery failed", terminalState: "FAILED", jobId, code: error.code || "UBO_DISCOVERY_FAILED", message: error.message });
+    // One structured line with a reference, rather than the whole error object:
+    // an investigation's error message can quote the company being researched,
+    // which is the customer's confidential work and not our telemetry.
+    const reference = logFailure("ubo-discovery", error, req, { tenantId, jobId });
+    attachRequestId(req, res);
+    const message = `Something went wrong on our side. Quote reference ${reference} if you get in touch.`;
+    const code = error.code || "UBO_DISCOVERY_FAILED";
+    if (streaming) { emit({ stage: "error", terminalState: "FAILED", code, message, reference }); return res.end(); }
+    return res.status(500).json({ error: "UBO discovery failed", terminalState: "FAILED", jobId, code, message, reference });
   }
 };
 
 module.exports.createResearchJobController = createResearchJobController;
 module.exports.terminalState = terminalState;
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
+module.exports.__resetDeps = () => { _deps = { ...DEFAULT_DEPS }; };

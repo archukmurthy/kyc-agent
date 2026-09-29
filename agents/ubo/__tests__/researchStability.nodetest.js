@@ -50,7 +50,7 @@ test("Anthropic timeout becomes an explicit failed provider outcome", async () =
   try {
     const result = await webResearchOwnershipAdapter({
       entity: { name: "Timeout Ltd", type: "company", jurisdiction: "GB", registrationNumber: "00112233" },
-      tenantConfig: { forceRefresh: true },
+      tenantConfig: { tenantId: "test-tenant", forceRefresh: true },
       fetchImpl: async () => new Promise(() => {}),
       timeoutMs: 5,
     });
@@ -97,7 +97,7 @@ test("web research preserves supported non-percentage control relationships", as
   try {
     const result = await webResearchOwnershipAdapter({
       entity: { name: "Target Ltd", type: "company", jurisdiction: "GB", registrationNumber: "00112233" },
-      tenantConfig: { forceRefresh: true, jobId: "web-control-test" },
+      tenantConfig: { tenantId: "test-tenant", forceRefresh: true, jobId: "web-control-test" },
       fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ content: [{ type: "text", text: JSON.stringify({ statements: [
         { owner: { name: "Influencer Ltd", type: "company" }, relationship: "SIGNIFICANT_INFLUENCE_OR_CONTROL", ownershipPercentage: null, source: "Filing" },
         { owner: { name: "Voter Ltd", type: "company" }, relationship: "VOTING_RIGHTS", ownershipPercentage: null, source: "Filing" },
@@ -118,31 +118,29 @@ test("web research preserves supported non-percentage control relationships", as
 test("audit and database failures are off the discovery response critical path", async () => {
   const previousTimeout = process.env.UBO_PERSISTENCE_TIMEOUT_MS;
   process.env.UBO_PERSISTENCE_TIMEOUT_MS = "5";
-  const orchestrator = require("../uboOrchestrator");
-  const persistence = require("../uboPersistence");
-  const databaseAudit = require("../uboDatabaseAudit");
-  const originals = {
-    runUboFramework: orchestrator.runUboFramework,
-    cacheResult: persistence.cacheResult,
-    appendAudit: persistence.appendAudit,
-    persistUboInvestigation: databaseAudit.persistUboInvestigation,
-  };
-  let frameworkSignal;
-  orchestrator.runUboFramework = async ({ tenantConfig }) => {
-    frameworkSignal = tenantConfig.signal;
-    return ({
-    status: "partial",
-    ownershipGraph: { rootEntityId: "target", nodes: [{ id: "target", name: "Target Ltd", type: "company" }], edges: [] },
-    evidence: [], investigationLog: [], searchEvents: [], resolutions: [], ownership: { unresolvedPaths: [] }, control: {}, ubos: [], explanations: [],
-    missingInformation: [{ source: "webResearch", reason: "Provider unavailable" }], budget: { used: {}, limits: {}, exhausted: false },
-    });
-  };
-  persistence.cacheResult = async () => { throw new Error("cache unavailable"); };
-  persistence.appendAudit = async () => { throw new Error("audit unavailable"); };
-  databaseAudit.persistUboInvestigation = async () => { throw new Error("database unavailable"); };
   const apiPath = require.resolve("../../../api/ubo-discovery");
   delete require.cache[apiPath];
   const handler = require(apiPath);
+  let frameworkSignal;
+  // Through the route's own test seam: the caller is a signed-in analyst with a
+  // tenant (the route refuses anyone without one), and every persistence step fails.
+  handler.__setDeps({
+    requireStaff: async () => ({ kind: "staff", tenantId: "test-tenant" }),
+    enforceRateLimit: async () => true,
+    getFresh: async () => null,
+    runUboFramework: async ({ tenantConfig }) => {
+      frameworkSignal = tenantConfig.signal;
+      return ({
+        status: "partial",
+        ownershipGraph: { rootEntityId: "target", nodes: [{ id: "target", name: "Target Ltd", type: "company" }], edges: [] },
+        evidence: [], investigationLog: [], searchEvents: [], resolutions: [], ownership: { unresolvedPaths: [] }, control: {}, ubos: [], explanations: [],
+        missingInformation: [{ source: "webResearch", reason: "Provider unavailable" }], budget: { used: {}, limits: {}, exhausted: false },
+      });
+    },
+    cacheResult: async () => { throw new Error("cache unavailable"); },
+    appendAudit: async () => { throw new Error("audit unavailable"); },
+    persistUboInvestigation: async () => { throw new Error("database unavailable"); },
+  });
   try {
     const startedAt = Date.now();
     let statusCode = 200;
@@ -157,10 +155,7 @@ test("audit and database failures are off the discovery response critical path",
     assert.ok(Date.now() - startedAt < 100, "response must not await persistence failures");
     await new Promise((resolve) => setTimeout(resolve, 15));
   } finally {
-    orchestrator.runUboFramework = originals.runUboFramework;
-    persistence.cacheResult = originals.cacheResult;
-    persistence.appendAudit = originals.appendAudit;
-    databaseAudit.persistUboInvestigation = originals.persistUboInvestigation;
+    handler.__resetDeps();
     delete require.cache[apiPath];
     if (previousTimeout === undefined) delete process.env.UBO_PERSISTENCE_TIMEOUT_MS;
     else process.env.UBO_PERSISTENCE_TIMEOUT_MS = previousTimeout;

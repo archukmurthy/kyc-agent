@@ -115,8 +115,8 @@ function renderSummary(stepNumber, config) {
     return (
       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
         <li>Current published version: <strong>v{v}</strong></li>
-        <li>Last published: <strong>{publishedAt ? new Date(publishedAt).toLocaleString() : "—"}</strong></li>
-        <li>Tenant: <strong>{config._tenantId || "—"}</strong></li>
+        <li>Last published: <strong>{publishedAt ? new Date(publishedAt).toLocaleString() : "-"}</strong></li>
+        <li>Tenant: <strong>{config._tenantId || "-"}</strong></li>
       </ul>
     );
   }

@@ -1,6 +1,9 @@
 "use strict";
 
 const legacyDiscoveryHandler = require("./ubo-discovery");
+const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { enforceRateLimit } = require("../lib/rateLimit");
+const { logFailure } = require("../lib/requestLog");
 const {
   applyCustomerAction,
   applyReviewerDecisions,
@@ -76,6 +79,10 @@ const OPERATIONS = Object.freeze({
   VALIDATE_PREINGESTED_EVIDENCE_SESSION: "VALIDATE_PREINGESTED_EVIDENCE_SESSION",
 });
 
+// Caller identity headers the rate limiter reads; forwarded so a live lab run
+// spends the caller's own ubo-discovery bucket.
+const FORWARDED_HEADERS = ["x-forwarded-for", "x-real-ip", "authorization", "x-tenant-id"];
+
 function explicitlyReviewBaseline(session) {
   if (!session.decisionTargets.candidateParties.length && !session.decisionTargets.candidateClaims.length) return session;
   return applyReviewerDecisions({
@@ -118,13 +125,21 @@ function comparisonSummary(baseline, successor) {
   };
 }
 
-function invokeLegacyDiscovery(body, { onProgress, signal, timeoutMs = NESTED_DISCOVERY_TIMEOUT_MS } = {}) {
+// callerHeaders: the nested discovery call is a real request to the discovery
+// route, which does its own sign-in, tenant and allowance checks. Without the
+// caller's identity forwarded it answers tenant_required - or, worse, would
+// treat a signed-in person as anonymous.
+function invokeLegacyDiscovery(body, { onProgress, signal, timeoutMs = NESTED_DISCOVERY_TIMEOUT_MS, callerHeaders = {} } = {}) {
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(signal?.reason);
   if (signal?.aborted) abortFromCaller();
   else signal?.addEventListener?.("abort", abortFromCaller, { once: true });
   const operation = new Promise((resolve, reject) => {
-    const request = { method: "POST", body, researchSignal: controller.signal, headers: { accept: onProgress ? "text/event-stream" : "application/json" } };
+    const headers = { accept: onProgress ? "text/event-stream" : "application/json" };
+    for (const name of FORWARDED_HEADERS) {
+      if (typeof callerHeaders[name] === "string") headers[name] = callerHeaders[name];
+    }
+    const request = { method: "POST", body, researchSignal: controller.signal, headers };
     let statusCode = 200;
     let streamBuffer = "";
     let streamedResult = null;
@@ -183,10 +198,10 @@ function send(res, status, payload) {
   return res.json(payload);
 }
 
-async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body, jobId, onProgress, signal } = {}) {
+async function startSuccessorLive(payload, { demoProfileReconciliation = false, prepareDiscoveryBody = (body) => body, jobId, onProgress, signal, callerHeaders = {} } = {}) {
   const baseline = await startLive({
     ...payload,
-    transport: { invoke: ({ body }) => invokeLegacyDiscovery({ ...prepareDiscoveryBody(body), jobId }, { onProgress, signal }) },
+    transport: { invoke: ({ body }) => invokeLegacyDiscovery({ ...prepareDiscoveryBody(body), jobId }, { onProgress, signal, callerHeaders }) },
   });
   if (!baseline.replayCapture) {
     baseline.sourceState = "LIVE";
@@ -209,6 +224,23 @@ async function startSuccessorLive(payload, { demoProfileReconciliation = false, 
 }
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+
+  // Batch 0 locked this behind an admin password on the reasoning that it was
+  // "an internal tool with no caller in the app". True of our tree that day;
+  // the UBO demo was merged in five days later and calls this route for every
+  // live research run, so live research has been answering 400 tenant_required
+  // ever since. Every test mocks the network, which is why nothing caught it.
+  //
+  // The right gate is the one its siblings use - the demo screens are reached
+  // by signed-in trial users, not by an administrator with a shared password.
+  if (!(await enforceRateLimit(req, res, "ubo-control-lab"))) return undefined;
+  // No requireTenant here, deliberately. This route never reads the caller's
+  // workspace - what scopes it is the rate limiter, which resolves the caller
+  // and their workspace itself (lib/rateLimit.js#callerKey). Asking for a
+  // tenant we then discard is a claim a reader believes and the code does not
+  // keep, and with the login switched off it cannot be enforced anyway.
+  if (!(await requireStaff(req, res))) return undefined;
   if (req.method === "GET") return send(res, 200, {
     ...fixtureCatalogue(),
     review: reviewCatalogue(),
@@ -229,9 +261,15 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_FIXTURE:
         return send(res, 200, startFixture(input.payload));
       case OPERATIONS.START_LIVE:
+        // The one operation here that reaches a provider, so the one that has
+        // to pass the paid allowance: the per-person limit, the trial's budget
+        // and end date, and the daily spend ceiling. It shares the bucket with
+        // /api/ubo-discovery deliberately - two routes onto the same provider
+        // must not hand one person two allowances.
+        if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
         return send(res, 200, await startLive({
           ...input.payload,
-          transport: { invoke: ({ body }) => invokeLegacyDiscovery(body) },
+          transport: { invoke: ({ body }) => invokeLegacyDiscovery(body, { callerHeaders: req.headers || {} }) },
         }));
       case OPERATIONS.START_REPLAY:
         return send(res, 200, startReplay(input.payload));
@@ -253,7 +291,7 @@ module.exports = async function handler(req, res) {
         return send(res, 200, autoReviewDemoReplaySession(replay));
       }
       case OPERATIONS.START_REVIEW_LIVE: {
-        return send(res, 200, await startSuccessorLive(input.payload));
+        return send(res, 200, await startSuccessorLive(input.payload, { callerHeaders: req.headers || {} }));
       }
       case OPERATIONS.START_DEMO_REVIEW_LIVE: {
         const jobController = createOuterResearchController(req, res);
@@ -273,11 +311,13 @@ module.exports = async function handler(req, res) {
               jobId,
               onProgress: emit,
               signal: jobController.signal,
+              callerHeaders: req.headers || {},
             });
             const session = live.terminalState === "FAILED" ? live : autoReviewDemoSession(live);
             emit({ stage: "complete", message: "Analyst research ready", terminalState: session.terminalState, result: session });
           } catch (error) {
-            emit({ stage: "error", terminalState: "FAILED", code: error.code || "RESEARCH_FAILED", message: error.message });
+            const reference = logFailure("ubo-control-lab", error, req, { jobId });
+            emit({ stage: "error", terminalState: "FAILED", code: error.code || "RESEARCH_FAILED", message: `Research could not be completed. Quote reference ${reference} if you get in touch.`, reference });
           } finally {
             jobController.cleanup();
           }
@@ -289,6 +329,7 @@ module.exports = async function handler(req, res) {
             prepareDiscoveryBody: prepareDemoLiveDiscoveryBody,
             jobId,
             signal: jobController.signal,
+            callerHeaders: req.headers || {},
           });
           return send(res, 200, live.terminalState === "FAILED" ? live : autoReviewDemoSession(live));
         } finally {
@@ -349,3 +390,4 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.OPERATIONS = OPERATIONS;
+module.exports.invokeLegacyDiscovery = invokeLegacyDiscovery;

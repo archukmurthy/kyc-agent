@@ -6,8 +6,12 @@
   "functions": {
     "api/doc-search.js": { "maxDuration": 60 },
     "api/self-source.js": { "maxDuration": 60 },
-    "api/generate-policy.js": { "maxDuration": 300 }
+    "api/generate-policy.js": { "maxDuration": 300 },
+    "api/finalize-submissions.js": { "maxDuration": 60 }
   },
+  "crons": [
+    { "path": "/api/finalize-submissions", "schedule": "* * * * *" }
+  ],
   "routes": [
     { "src": "/api/evidence(/.*)?", "status": 404 },
     { "src": "/evidence-lab.*", "status": 404 }
@@ -19,6 +23,10 @@
     { "source": "/admin/(.*)", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/preview", "destination": "/index.html" },
+    { "source": "/preboarding", "destination": "/index.html" },
+    { "source": "/preboarding/(.*)", "destination": "/index.html" },
+    { "source": "/ubo-trials", "destination": "/index.html" },
+    { "source": "/ubo-trials/(.*)", "destination": "/index.html" },
     { "source": "/policy-simulator", "destination": "/index.html" },
     { "source": "/policy-simulator/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }

@@ -242,7 +242,7 @@ export default function SchemaFieldPanel({
               value={form.section && sections.includes(form.section) ? form.section : (form.section === "" ? "__new__" : form.section || "")}
               onChange={(e) => handleSectionChange(e.target.value)}
             >
-              <option value="">— Select section —</option>
+              <option value="">- Select section -</option>
               {sections.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -262,7 +262,7 @@ export default function SchemaFieldPanel({
             )}
           </Field>
 
-          <Field label="UI Label" helper="Be clear and specific — this is exactly what appears on the form">
+          <Field label="UI Label" helper="Be clear and specific - this is exactly what appears on the form">
             <input
               type="text"
               value={form.label || ""}
@@ -271,7 +271,7 @@ export default function SchemaFieldPanel({
             />
           </Field>
 
-          <Field label="Field ID" helper="System identifier — must be unique">
+          <Field label="Field ID" helper="System identifier - must be unique">
             <input
               type="text"
               value={form.field || ""}
@@ -368,7 +368,7 @@ export default function SchemaFieldPanel({
           </Field>
         </div>
 
-        {/* Fixed footer — Save is always reachable */}
+        {/* Fixed footer - Save is always reachable */}
         <div
           style={{
             flexShrink: 0,

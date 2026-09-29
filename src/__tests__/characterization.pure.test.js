@@ -8,7 +8,6 @@ import { API_PRICING, calcCostUsd, buildCostSummary } from '../utils/costs';
 import {
   COUNTRIES,
   OWNERSHIP_ID_TO_DRS,
-  MANUAL_FORM_URL,
 } from '../constants/appConstants';
 import { C } from '../constants/theme';
 import {
@@ -24,7 +23,9 @@ import { buildLocalDefaultConfig } from '../config/localDefaultConfig';
 import { formatFetchedAt } from '../utils/files';
 
 test('calcCostUsd prices tokens at $3/$15 per Mtok', () => {
-  expect(API_PRICING.model).toBe('claude-sonnet-4-20250514');
+  // PLAT-5: was pinned to a model no call site used. The pricing below is
+  // what this test is really about; the identifier tracks what we call.
+  expect(API_PRICING.model).toBe('claude-sonnet-4-5');
   expect(calcCostUsd(1_000_000, 1_000_000)).toBe(18);
   expect(calcCostUsd(0, 0)).toBe(0);
   expect(calcCostUsd(500_000, 200_000)).toBeCloseTo(1.5 + 3.0, 10);
@@ -53,8 +54,7 @@ test('country list and DRS ownership mapping keep pre-refactor values', () => {
   expect(OWNERSHIP_ID_TO_DRS.public_listed).toBe('Public Listed Company');
   expect(OWNERSHIP_ID_TO_DRS.sole_trader).toBe('Sole Trader');
   expect(OWNERSHIP_ID_TO_DRS.other).toBe('Private Limited');
-  expect(MANUAL_FORM_URL).toBe('https://app.nium.com');
-  expect(C.niumBlue).toBe('#1a3a4a');
+  expect(C.brandBlue).toBe('#1a3a4a');
 });
 
 test('DOC_TYPES catalogue is unchanged', () => {
@@ -124,7 +124,7 @@ test('demo self-source results keep the synthetic sentinel identity', () => {
 test('demo fixtures keep their pre-refactor keys', () => {
   expect(TEST_DATA.applicantFirstName).toBe('Jane');
   expect(DUMMY_RESEARCH_VALUES.businessRegistrationNumber).toBe('12345678');
-  expect(JSON.parse(DUMMY_RESEARCH_VALUES.directors)).toHaveLength(3);
+  expect(JSON.parse(DUMMY_RESEARCH_VALUES.directors)).toHaveLength(4);
 });
 
 test('local fallback config covers all entity:jurisdiction schemas', () => {
@@ -133,7 +133,8 @@ test('local fallback config covers all entity:jurisdiction schemas', () => {
     'Corporate:GB', 'Corporate:SG', 'Direct:GB', 'Direct:SG',
     'FI:GB', 'FI:SG', 'Platform:GB', 'Platform:SG',
   ]);
-  expect(cfg.company.name).toBe('Nium');
+  expect(cfg.company.name).toBe('');
+  expect(cfg.company.manualFormUrl).toBe('');
   expect(cfg.licences.map(l => l.id)).toEqual(['GB', 'SG']);
 });
 

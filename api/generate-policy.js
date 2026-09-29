@@ -1,3 +1,7 @@
+const { validatePolicyForm, buildUserMessage } = require('../src/policySimulator/policyConfig');
+const { enforceRateLimit } = require('../lib/rateLimit');
+const { fetchWithTimeout } = require("../lib/providerCall");
+
 const SYSTEM_PROMPT = `You are a senior financial crime compliance expert with deep expertise in UK AML/CTF regulations, FCA requirements, and KYB/KYC policy design for regulated payment and e-money institutions.
 
 Your task is to generate a professional, structured KYB (Know Your Business) Policy document based on a configuration provided by the user. This document will be used for discussion purposes—to demonstrate regulatory understanding to MLROs and compliance professionals. It is not a substitute for legal advice.
@@ -41,18 +45,28 @@ async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Method not allowed.' }));
   }
 
-  const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-  if (!prompt || prompt.length > 12000) {
+  // The browser sends its structured form; the server validates it against the
+  // allowed option lists and builds the message. Any client-authored piece of
+  // the Anthropic request is refused.
+  const CLIENT_OWNED_KEYS = ['prompt', 'messages', 'model', 'tools', 'max_tokens', 'system'];
+  if (CLIENT_OWNED_KEYS.some((key) => req.body?.[key] !== undefined)) {
     res.statusCode = 400;
-    return res.end(JSON.stringify({ error: 'A valid policy configuration is required.' }));
+    return res.end(JSON.stringify({ error: 'client_prompt_not_allowed' }));
+  }
+  const checked = validatePolicyForm(req.body?.form);
+  if (!checked.ok) {
+    res.statusCode = 400;
+    return res.end(JSON.stringify({ error: checked.error, field: checked.field }));
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     res.statusCode = 500;
     return res.end(JSON.stringify({ error: 'The Anthropic API key is not configured.' }));
   }
+  if (!(await enforceRateLimit(req, res, 'generate-policy'))) return undefined;
+  const prompt = buildUserMessage(checked.form);
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: AbortSignal.timeout(240000),
       headers: {

@@ -22,6 +22,8 @@ import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, writeCustomerOwnershipChartPreview } from "./customerOwnershipChartPreview";
 import "./customerOwnershipChart.css";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { clerkAuthHeaders } from "../../auth/clerkFetch";
+import { limitNotice } from "../../trials/limitNotice";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 
@@ -45,7 +47,8 @@ function validateFile(file) {
 }
 
 function analysisFailureMessage(payload, status) {
-  const code = String(payload?.code || "customer_ownership_chart_failed");
+  // The rate limiter names itself in `error`, every other refusal in `code`.
+  const code = String(payload?.code || payload?.error || "customer_ownership_chart_failed");
   const messages = {
     provider_timeout: "The document was received, but analysis reached its time limit. Please retry once.",
     provider_output_truncated: "The document was received, but the analysis result was too large to complete safely.",
@@ -57,10 +60,16 @@ function analysisFailureMessage(payload, status) {
     invalid_media: "The selected file is labelled as an image, but its contents are not a valid supported image.",
     unsupported_model_media: "The document was received, but this file format is not supported by the configured analysis model.",
   };
+  // A limit reached is the product working, not a failure to analyse. Showing
+  // "We could not analyse this chart" to a prospect whose trial just ended
+  // reads as broken software at the moment they are deciding whether to buy.
+  const notice = limitNotice(code, payload?.message);
+  if (notice) return `${notice.title}. ${notice.body}`;
   if (status >= 500 || code === "analysis_temporarily_unavailable" || code.startsWith("provider_")) {
     return "We couldn't complete the analysis right now. Your document has been saved safely. Please try again.";
   }
-  return messages[code] || payload?.message || "We could not analyse this ownership chart.";
+  const message = messages[code] || payload?.message || "We could not analyse this ownership chart.";
+  return code ? `${message} Reference: ${code}${status ? ` (${status})` : ""}.` : message;
 }
 
 function relationshipValue(assertion) {
@@ -253,7 +262,7 @@ export default function CustomerOwnershipChartPage() {
 
   const postJob = async (body) => {
     const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      method: "POST", headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) }, body: JSON.stringify(body),
     });
     const payload = await response.json();
     if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
@@ -319,7 +328,7 @@ export default function CustomerOwnershipChartPage() {
       try {
         const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) },
           body: JSON.stringify({
             operation: "REEVALUATE_SAVED_EXTRACTION",
             demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId },

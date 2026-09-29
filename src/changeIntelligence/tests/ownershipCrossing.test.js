@@ -8,7 +8,7 @@ const person = (over = {}) => ({
   ...over,
 });
 
-describe("parsePercentage — a point value, or nothing", () => {
+describe("parsePercentage - a point value, or nothing", () => {
   it("reads the shapes research actually returns", () => {
     expect(parsePercentage("35%")).toBe(35);
     expect(parsePercentage("35")).toBe(35);
@@ -28,7 +28,7 @@ describe("parsePercentage — a point value, or nothing", () => {
   });
 });
 
-describe("ownershipCrossing — the 25% UBO threshold", () => {
+describe("ownershipCrossing - the 25% UBO threshold", () => {
   it("detects a UBO dropping below the threshold", () => {
     expect(ownershipCrossing("35%", "15%")).toBe("crossed_below");
     expect(ownershipCrossing(25, 24.9)).toBe("crossed_below");
@@ -45,7 +45,7 @@ describe("ownershipCrossing — the 25% UBO threshold", () => {
     expect(ownershipCrossing("25%", "25%")).toBe("none");
   });
 
-  it("stays UNKNOWN when either side is a band — never guesses from a range", () => {
+  it("stays UNKNOWN when either side is a band - never guesses from a range", () => {
     expect(ownershipCrossing("25-50%", "15%")).toBe("unknown");
     expect(ownershipCrossing("35%", "Over 25%")).toBe("unknown");
     expect(ownershipCrossing(null, "15%")).toBe("unknown");

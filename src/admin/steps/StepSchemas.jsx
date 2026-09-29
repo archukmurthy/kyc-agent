@@ -133,12 +133,12 @@ export default function StepSchemas({
     if (totalSchemas <= 1) return;
     if (!updated || !updated.field) {
       // eslint-disable-next-line no-console
-      console.warn("Copy modal: skipping — saved field has no id", updated);
+      console.warn("Copy modal: skipping - saved field has no id", updated);
       return;
     }
     if (!selectedCell || !(config?.schemas || {})[selectedCell]) {
       // eslint-disable-next-line no-console
-      console.warn("Copy modal: skipping — sourceCell not found", selectedCell);
+      console.warn("Copy modal: skipping - sourceCell not found", selectedCell);
       return;
     }
     setLastSavedField(updated);
@@ -165,7 +165,7 @@ export default function StepSchemas({
       },
     });
     const total = (finalSchema.researchFields?.length || 0) + (finalSchema.gapFields?.length || 0);
-    setCopyToast(`✅ Schema imported — ${total} field${total === 1 ? "" : "s"} (${mode})`);
+    setCopyToast(`✅ Schema imported - ${total} field${total === 1 ? "" : "s"} (${mode})`);
     setTimeout(() => setCopyToast(null), 3500);
   }
 
@@ -443,7 +443,7 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                 if (!associated && !has) {
                   return (
                     <td key={l.id} style={notAssoc}>
-                      —
+                      -
                     </td>
                   );
                 }
@@ -463,7 +463,7 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
                         cursor: "pointer",
                         background: has ? adminColors.statusCompleteBg : adminColors.statusIncompleteBg,
                         color: has ? adminColors.statusComplete : adminColors.statusIncomplete,
-                        border: isSel ? `2px solid ${adminColors.niumBlue}` : `1px solid transparent`,
+                        border: isSel ? `2px solid ${adminColors.brandBlue}` : `1px solid transparent`,
                         fontFamily: "inherit",
                         fontWeight: 700,
                         fontSize: 14,
@@ -533,7 +533,7 @@ function NoSchemaOptions({ schemas, entityId, onCopy, onTemplate, onScratch }) {
           value={copySource}
           onChange={(e) => setCopySource(e.target.value)}
         >
-          <option value="">— Select source —</option>
+          <option value="">- Select source -</option>
           {sourceCells.map((k) => (
             <option key={k} value={k}>{k}</option>
           ))}
@@ -562,8 +562,8 @@ function NoSchemaOptions({ schemas, entityId, onCopy, onTemplate, onScratch }) {
                   borderRadius: 99,
                   fontSize: 11,
                   fontWeight: 700,
-                  border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                  background: on ? adminColors.niumBlue : "#fff",
+                  border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                  background: on ? adminColors.brandBlue : "#fff",
                   color: on ? "#fff" : adminColors.text,
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -597,7 +597,7 @@ function OptionCard({ icon, title, body, recommended, children }) {
     <div
       style={{
         background: "#fff",
-        border: `${recommended ? 2 : 1}px solid ${recommended ? adminColors.niumBlue : adminColors.border}`,
+        border: `${recommended ? 2 : 1}px solid ${recommended ? adminColors.brandBlue : adminColors.border}`,
         borderRadius: 10,
         padding: 14,
         display: "flex",
@@ -608,7 +608,7 @@ function OptionCard({ icon, title, body, recommended, children }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 18 }}>{icon}</div>
         {recommended && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.niumBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: adminColors.brandBlue, background: "rgba(11,61,145,0.1)", padding: "2px 8px", borderRadius: 99 }}>
             RECOMMENDED
           </span>
         )}
@@ -686,7 +686,7 @@ function SchemaEditor({
           {!fields.length && (
             <tr>
               <td colSpan={activeTab === "research" ? 6 : 4} style={{ padding: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-                No fields yet — click "+ Add Field" to get started.
+                No fields yet - click "+ Add Field" to get started.
               </td>
             </tr>
           )}
@@ -713,8 +713,8 @@ function TabButton({ on, onClick, children }) {
         fontFamily: "inherit",
         fontSize: 13,
         fontWeight: 700,
-        color: on ? adminColors.niumBlue : adminColors.textMuted,
-        borderBottom: on ? `2px solid ${adminColors.niumBlue}` : "2px solid transparent",
+        color: on ? adminColors.brandBlue : adminColors.textMuted,
+        borderBottom: on ? `2px solid ${adminColors.brandBlue}` : "2px solid transparent",
         cursor: "pointer",
         marginBottom: -1,
       }}
@@ -775,7 +775,7 @@ function BannerImportCallout({ entityTypeName, licenceName, onImport }) {
           Already have your fields in a spreadsheet?
         </div>
         <div style={{ fontSize: 12, color: "#0369A1", marginTop: 3 }}>
-          Import an Excel file with all your fields — fastest way to set this schema up.
+          Import an Excel file with all your fields - fastest way to set this schema up.
         </div>
       </div>
       <SchemaImportButton

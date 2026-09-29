@@ -40,7 +40,7 @@ const company = (over = {}) => ({
 
 afterEach(() => setHighRiskCountries([])); // shipped default: matches nothing
 
-describe('country-field detection (no schema type marker — id/label heuristic)', () => {
+describe('country-field detection (no schema type marker - id/label heuristic)', () => {
   const countryFields = [
     { fieldId: 'registeredCountry', label: 'Registered Country' },
     { fieldId: 'country', label: 'Address Country' },
@@ -67,7 +67,7 @@ describe('country-field detection (no schema type marker — id/label heuristic)
     expect(isCountryField({ fieldId, label })).toBe(false);
   });
 
-  it('excludes dialling codes — "Mobile Country Code" is not a country', () => {
+  it('excludes dialling codes - "Mobile Country Code" is not a country', () => {
     // Without this, an MLRO list entry colliding with a dialling-code string
     // would flag EDD on every applicant who used it.
     expect(isCountryField({ fieldId: 'applicantMobileCountryCode', label: 'Mobile Country Code' })).toBe(false);
@@ -80,7 +80,7 @@ describe('country-field detection (no schema type marker — id/label heuristic)
 });
 
 describe('multi-value country fields', () => {
-  it('splits delimited lists — one country in the list is enough', () => {
+  it('splits delimited lists - one country in the list is enough', () => {
     setHighRiskCountries(['Ruritania']);
     expect(containsHighRiskCountry('UK, US, Ruritania')).toBe(true);
     expect(containsHighRiskCountry('UK, US, SG')).toBe(false);
@@ -130,7 +130,7 @@ describe('EDD flag on company country fields', () => {
     expect(fieldHasHighRiskCountry({ fieldId: 'registeredCountry', value: 'Ruritania' })).toBe(true);
   });
 
-  it('flags EITHER WAY — it does not depend on the change producing a document', () => {
+  it('flags EITHER WAY - it does not depend on the change producing a document', () => {
     setHighRiskCountries(['Ruritania']);
     // The verifiability guard short-circuits before the policy table; the flag
     // must still land, which is why the post-step sits at the engine's exit.
@@ -149,7 +149,7 @@ describe('EDD flag on company country fields', () => {
     expect(undecided.eddFlag).toBe(true);
   });
 
-  it('flag only — never a document, never an escalation of its own (CD-03)', () => {
+  it('flag only - never a document, never an escalation of its own (CD-03)', () => {
     setHighRiskCountries(['Ruritania']);
     const base = classifyChange(company());
     const flagged = classifyChange(company({ highRiskCountry: true }));
@@ -159,7 +159,7 @@ describe('EDD flag on company country fields', () => {
   });
 });
 
-describe('empty list — the shipped, pre-MLRO state', () => {
+describe('empty list - the shipped, pre-MLRO state', () => {
   it('flags nothing anywhere: company, person, or raw check', () => {
     setHighRiskCountries([]);
     expect(isHighRiskCountry('Ruritania')).toBe(false);
@@ -171,7 +171,7 @@ describe('empty list — the shipped, pre-MLRO state', () => {
   });
 });
 
-describe('ONE mechanism — person (commit 6) and company (commit 8) share it', () => {
+describe('ONE mechanism - person (commit 6) and company (commit 8) share it', () => {
   it('both paths resolve through the same injectable list', () => {
     setHighRiskCountries(['Ruritania']);
     expect(personHasHighRiskCountry({ nationality: 'Ruritania' })).toBe(true);

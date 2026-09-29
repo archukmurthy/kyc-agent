@@ -15,7 +15,10 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
   const [error, setError] = useState(null);
 
   const sanitised = sanitiseTenantId(tenantId);
-  const isReserved = ["super-admin", "admin", "api", "nium"].includes(sanitised);
+  // URL path names only. The server is the authority on what is reserved -
+  // it also refuses the platform workspace - and this list exists to say so
+  // before somebody fills in the rest of the form.
+  const isReserved = ["super-admin", "admin", "api"].includes(sanitised);
   const idValid =
     !!tenantId.trim() &&
     sanitised === tenantId.toLowerCase() &&
@@ -79,7 +82,7 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
         {tenantId && (
           <div style={{ marginTop: 8, fontSize: 11, color: adminColors.textMuted, fontFamily: "monospace", lineHeight: 1.6 }}>
             Saved as: <strong>{sanitised}</strong>{" "}
-            {isReserved && <span style={{ color: adminColors.danger }}>(reserved — pick another)</span>}
+            {isReserved && <span style={{ color: adminColors.danger }}>(reserved - pick another)</span>}
             <div>Admin: {origin}/admin?tenant={sanitised}</div>
             <div>Customer: {origin}/?tenant={sanitised}</div>
           </div>
@@ -96,7 +99,7 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
         />
       </Field>
 
-      <Field label="Admin Password *" helper="You will share this with the client. Store it securely — it is shown once after creation.">
+      <Field label="Admin Password *" helper="You will share this with the client. Store it securely - it is shown once after creation.">
         <div style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
@@ -118,10 +121,10 @@ export default function CreateTenantModal({ token, onClose, onCreated }) {
           body="Client starts with empty schemas. Best for custom requirements."
         />
         <RadioCard
-          checked={startFrom === "nium-defaults"}
-          onChange={() => setStartFrom("nium-defaults")}
-          title="Copy Nium defaults as template"
-          body="Starts with Nium's UK/SG schemas as a template. Client can modify."
+          checked={startFrom === "defaults"}
+          onChange={() => setStartFrom("defaults")}
+          title="Start from default settings"
+          body="UK/SG licences, entity types and reference schemas. Brand details stay blank - the client can modify everything."
         />
       </Field>
 
@@ -156,7 +159,7 @@ function RadioCard({ checked, onChange, title, body }) {
         gap: 10,
         alignItems: "flex-start",
         padding: 12,
-        border: `1.5px solid ${checked ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${checked ? adminColors.brandBlue : adminColors.border}`,
         background: checked ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 10,
         cursor: "pointer",

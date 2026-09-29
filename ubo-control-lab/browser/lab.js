@@ -18,6 +18,10 @@
   async function request(operation, payload) {
     const response = await fetch(API, {
       method: "POST",
+      // The internal lab reaches the same paid route as the demo, so it needs
+      // the same session token once Clerk is on. window.Clerk is absent here
+      // (this page is not the React app), so this is empty until the lab is
+      // served inside it - the server then refuses, which is correct.
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ operation, payload }),
     });

@@ -3,6 +3,11 @@
 // leaked client password can never escalate to platform-wide tenant
 // management.
 
+const { applyCors } = require("../lib/routeAuth");
+const loginThrottle = require("../lib/loginThrottle");
+const { clientIp } = require("../lib/rateLimit");
+const session = require("../lib/session");
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     if (req.body && typeof req.body === "object") return resolve(req.body);
@@ -17,17 +22,32 @@ function readBody(req) {
   });
 }
 
+/** A login that cannot mint a session must say so plainly. Without this the
+ *  route throws and the person sees a bare 500 - the same shape as the existing
+ *  "ADMIN_PASSWORD not configured" answer, which is what makes it diagnosable. */
+function sessionSecretMissing(res) {
+  if (process.env.SESSION_SECRET || process.env.DOSSIER_TOKEN_SECRET) return false;
+  // eslint-disable-next-line no-console
+  console.error("[auth] SESSION_SECRET (or DOSSIER_TOKEN_SECRET) is not configured - logins cannot mint a session");
+  res.status(500).json({ success: false, error: "SESSION_SECRET not configured on server" });
+  return true;
+}
+
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
+  if (sessionSecretMissing(res)) return undefined;
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
+    // AUTH-1: one shared platform password is the single most valuable thing
+    // to guess in this product, and nothing slowed guessing down.
+    const who = { account: "super-admin", ip: clientIp(req) };
+    const locked = await loginThrottle.check(who);
+    if (locked.blocked) return loginThrottle.sendLocked(res, locked);
+
     const expected = process.env.SUPER_ADMIN_PASSWORD;
     if (!expected) {
       return res.status(500).json({
@@ -38,8 +58,10 @@ module.exports = async function handler(req, res) {
     const body = await readBody(req);
     const provided = body && typeof body.password === "string" ? body.password : "";
     if (provided === expected) {
-      return res.status(200).json({ success: true, token: expected });
+      await loginThrottle.recordSuccess(who);
+    return res.status(200).json({ success: true, token: session.mint({ subject: "super-admin", role: "super-admin" }) });
     }
+    await loginThrottle.recordFailure(who);
     return res.status(401).json({ success: false, error: "Incorrect password" });
   } catch (err) {
     return res.status(500).json({ success: false, error: "Server error", message: err.message });

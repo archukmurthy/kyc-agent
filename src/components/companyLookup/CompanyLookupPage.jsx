@@ -34,9 +34,9 @@
  *      <Btn> renders no `disabled` attribute; it only dims the button and
  *      withholds onClick. Assistive tech sees an enabled button that does
  *      nothing. Separate a11y decision — unchanged here.
- *   2. The pendingReseedMode === "re_derive" short-circuit is currently dead:
- *      nothing in src/ ever sets that value (the only setter call passes null,
- *      inside applyReDerive itself). Possibly an unwired feature — kept intact.
+ *   2. (Removed.) The dead pendingReseedMode === "re_derive" short-circuit is
+ *      gone: a wrong entity type is now corrected inline on the Applicant page
+ *      (App.js applyCorrections).
  *   3. The four inline validation messages cannot fire, because Continue's
  *      gating condition tests the same four fields as its onClick guards.
  *      Defensive code — kept intact.
@@ -80,8 +80,6 @@ export function CompanyLookupPage({
   forceRefresh,
   setForceRefresh,
   // ── the Continue path ──
-  pendingReseedMode,
-  applyReDerive,
   setSelectedJourneyCard,
   setManualOpened,
   setJourneyOpen,
@@ -100,7 +98,7 @@ export function CompanyLookupPage({
             {/* Optional registration / company number. When supplied it's used as
                 the primary search key to pinpoint the exact company; blank = the
                 same name-based search as before (slice 1). */}
-            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => { setRegNumber(v); setRegNumberSource(v.trim() ? "customer" : null); }} placeholder="e.g. 00445790 — the official company / registration number" />
+            <StableInput id="regNumber" label="Registration / Company number (optional)" type="text" value={regNumber} onUpdate={(_, v) => { setRegNumber(v); setRegNumberSource(v.trim() ? "customer" : null); }} placeholder="e.g. 00445790 - the official company / registration number" />
             <p style={{ fontSize: 11, color: "#1a3a4a80", margin: "-8px 0 16px", lineHeight: 1.4 }}>
               Optional. If you know the company's official registration number, we'll use it to pinpoint the exact company and sharpen the research. Leave it blank to search by name.
             </p>
@@ -144,7 +142,7 @@ export function CompanyLookupPage({
                 value={countryCode}
                 onChange={setCountryCode}
                 placeholder="Select or type country…"
-                options={COUNTRIES.map(c => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
+                options={COUNTRIES.map(c => ({ value: c.code, label: `${c.code} - ${c.name}` }))}
               />
             </div>
             {countryCode && (() => {
@@ -155,8 +153,8 @@ export function CompanyLookupPage({
               const primary = tenantConfig ? (tenantConfig.licences || []).find(l => l.isPrimary) || (tenantConfig.licences || [])[0] : null;
               const isLicensedHere = !!resolved && Array.isArray(resolved.countriesCovered) && resolved.countriesCovered.includes(countryCode);
               const licenceLabel = resolved
-                ? `${resolved.jurisdictionCode === "GB" ? "🇬🇧 " : resolved.jurisdictionCode === "SG" ? "🇸🇬 " : ""}${resolved.jurisdictionName || resolved.id}${resolved.regulatoryAuthority ? ` (${resolved.regulatoryAuthority})` : ""}${!isLicensedHere ? " — default for non-licensed markets" : ""}`
-                : (getApplicableLicence(countryCode) === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) — default for non-licensed markets");
+                ? `${resolved.jurisdictionCode === "GB" ? "🇬🇧 " : resolved.jurisdictionCode === "SG" ? "🇸🇬 " : ""}${resolved.jurisdictionName || resolved.id}${resolved.regulatoryAuthority ? ` (${resolved.regulatoryAuthority})` : ""}${!isLicensedHere ? " - default for non-licensed markets" : ""}`
+                : (getApplicableLicence(countryCode) === "GB" ? "🇬🇧 United Kingdom (FCA)" : "🇸🇬 Singapore (MAS) - default for non-licensed markets");
               const isFiFlow = entityType === "FI" || entityType === "Platform";
               const routesNote = entityType === "Platform" || entityType === "Direct"
                 ? ` (${entityType} routes to ${isFiFlow ? "FI" : "Corporate"} schema)`
@@ -189,12 +187,12 @@ export function CompanyLookupPage({
               </label>
               {!forceRefresh && (
                 <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                  Cache saves API costs — only override for demos or stale data
+                  Cache saves API costs - only override for demos or stale data
                 </span>
               )}
               {forceRefresh && (
                 <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
-                  ⚠ Live API call — this will cost tokens
+                  ⚠ Live API call - this will cost tokens
                 </span>
               )}
             </div>
@@ -208,9 +206,6 @@ export function CompanyLookupPage({
                   if (!ownershipType) { setError("Please select an ownership type."); return; }
                   if (!countryCode) { setError("Please select a country."); return; }
                   setError("");
-                  // Wrong-TYPE re-derive: skip the search journey entirely — keep
-                  // the existing research and re-resolve from the corrected type.
-                  if (pendingReseedMode === "re_derive") { applyReDerive(); return; }
                   setSelectedJourneyCard(null);
                   setManualOpened(false);
                   // Both the onboarding AND pre-boarding flows now show the

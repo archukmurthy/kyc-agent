@@ -1,4 +1,8 @@
-export const WOLFSBERG_EXTRACTION_PROMPT = `You are a KYC compliance data extractor. Extract all available field values from this Wolfsberg CBDDQ questionnaire and return them as a JSON object.
+// Document-extraction prompts. CommonJS (the src/pipeline.js precedent) so the
+// server can require them for POST /api/research mode "extract_document" while
+// src/constants/docTypes.js keeps importing them for the upload slots.
+
+const WOLFSBERG_EXTRACTION_PROMPT = `You are a KYC compliance data extractor. Extract all available field values from this Wolfsberg CBDDQ questionnaire and return them as a JSON object.
 
 Return ONLY valid JSON with no markdown, no backticks.
 Map the questionnaire answers to these field IDs where possible:
@@ -68,10 +72,10 @@ For each field: extract the actual answer from the questionnaire. If the questio
    Each prompt instructs Claude to read a PDF (or
    image, for org chart) and return a JSON array of
    {fieldId, value} objects. The keys returned are
-   "generic" — mapEXTRACTION_KEY_TO_SCHEMA() below
+   "generic" - mapEXTRACTION_KEY_TO_SCHEMA() below
    maps them onto the active schema's field IDs.
    ═══════════════════════════════════════════ */
-export const CERT_EXTRACTION_PROMPT = `Extract the following from this Certificate of Incorporation or equivalent company registration document:
+const CERT_EXTRACTION_PROMPT = `Extract the following from this Certificate of Incorporation or equivalent company registration document:
 - legal_name: full registered legal name
 - registration_number: company/registration number
 - incorporation_date: date of incorporation (ISO format)
@@ -81,7 +85,7 @@ export const CERT_EXTRACTION_PROMPT = `Extract the following from this Certifica
 
 Return as JSON array of {fieldId, value} objects. Only include fields actually present in the document. No markdown, no backticks.`;
 
-export const LICENCE_EXTRACTION_PROMPT = `Extract the following from this regulatory licence or authorisation document:
+const LICENCE_EXTRACTION_PROMPT = `Extract the following from this regulatory licence or authorisation document:
 - licence_number: licence or registration number
 - regulatory_authority: name of the issuing regulator
 - has_licence: always 'Yes' if this document exists
@@ -91,7 +95,7 @@ export const LICENCE_EXTRACTION_PROMPT = `Extract the following from this regula
 
 Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
 
-export const ANNUAL_REPORT_EXTRACTION_PROMPT = `Extract the following from this annual report or financial statements document:
+const ANNUAL_REPORT_EXTRACTION_PROMPT = `Extract the following from this annual report or financial statements document:
 - annual_turnover_band: revenue range (return as a descriptive string e.g. 'Over £250 million')
 - employee_count_band: number of employees or band
 - operating_countries: countries where the company operates
@@ -105,15 +109,15 @@ export const ANNUAL_REPORT_EXTRACTION_PROMPT = `Extract the following from this 
 
 Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
 
-export const ORG_CHART_EXTRACTION_PROMPT = `Extract the following from this ownership structure or org chart document:
+const ORG_CHART_EXTRACTION_PROMPT = `Extract the following from this ownership structure or org chart document:
 - ubo_names: names of ultimate beneficial owners
-- ubo_share_percentage: ownership percentages — return the EXACT text as stated (e.g. "75% or more", "25% to 50%", "Significant influence or control"). Do not convert, round, average a range, or strip qualifiers like "or more"/"to".
+- ubo_share_percentage: ownership percentages - return the EXACT text as stated (e.g. "75% or more", "25% to 50%", "Significant influence or control"). Do not convert, round, average a range, or strip qualifiers like "or more"/"to".
 - group_structure: description of corporate structure
 - parent_company: immediate parent company name if shown
 
 Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
 
-export const AML_POLICY_EXTRACTION_PROMPT = `Extract the following from this AML policy document:
+const AML_POLICY_EXTRACTION_PROMPT = `Extract the following from this AML policy document:
 - aml_programme_in_place: always 'Yes' if this exists
 - policies_updated_annually: Yes/No if stated
 - pep_screening: Yes/No if PEP screening is mentioned
@@ -123,3 +127,25 @@ export const AML_POLICY_EXTRACTION_PROMPT = `Extract the following from this AML
 - aml_policy_board_approved: Yes/No if stated
 
 Return as JSON array of {fieldId, value} objects. No markdown, no backticks.`;
+
+// Server lookup for POST /api/research mode "extract_document": the client
+// names a document slot, never the prompt. Keys match DOC_TYPES[].key.
+const EXTRACTION_PROMPT_BY_DOC_KEY = Object.freeze({
+  wolfsberg: WOLFSBERG_EXTRACTION_PROMPT,
+  certificate: CERT_EXTRACTION_PROMPT,
+  licence: LICENCE_EXTRACTION_PROMPT,
+  annualReport: ANNUAL_REPORT_EXTRACTION_PROMPT,
+  financialStatements: ANNUAL_REPORT_EXTRACTION_PROMPT,
+  orgChart: ORG_CHART_EXTRACTION_PROMPT,
+  amlPolicy: AML_POLICY_EXTRACTION_PROMPT,
+});
+
+module.exports = {
+  WOLFSBERG_EXTRACTION_PROMPT,
+  CERT_EXTRACTION_PROMPT,
+  LICENCE_EXTRACTION_PROMPT,
+  ANNUAL_REPORT_EXTRACTION_PROMPT,
+  ORG_CHART_EXTRACTION_PROMPT,
+  AML_POLICY_EXTRACTION_PROMPT,
+  EXTRACTION_PROMPT_BY_DOC_KEY,
+};

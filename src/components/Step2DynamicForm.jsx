@@ -27,7 +27,7 @@
  * Styling uses the app's inline palette (Nium navy + teal), matching App.js.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDocumentRequirements } from '../hooks/useDocumentRequirements';
 
 const C = {
@@ -127,7 +127,7 @@ function AutoSourcedBanner({ result, showUploadHint = true }) {
 // Exported so the Applicant page (App.js, PR-044) can reuse this exact card for
 // the "Authority to act" upload when the applicant declares they are not a
 // listed director/officer — same markup, styling, and "why required" details.
-export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult }) {
+export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult, brandName }) {
   const selfSource = isSelfSourced(item);
   const done = !!uploaded;
   const regUrl = item.regulatoryUrl || item.sourceUrl;
@@ -163,9 +163,9 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
     </label>
   );
 
-  // Badge: client-provided → Required/Optional; Nium-sourced → auto badge.
+  // Badge: client-provided → Required/Optional; self-sourced → auto badge.
   const badge = selfSource
-    ? <span style={styles.autoBadge}>Nium-sourced</span>
+    ? <span style={styles.autoBadge}>{brandName ? `${brandName}-sourced` : "Auto-sourced"}</span>
     : <span style={item.mandatory ? styles.mandatoryBadge : styles.optionalBadge}>{item.mandatory ? 'Required' : 'Optional'}</span>;
 
   return (
@@ -184,9 +184,9 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
           <div style={styles.selfSourceNote}>
             <span>🔍</span>
             <span>
-              Nium retrieves this automatically.{' '}
+              {brandName ? `${brandName} retrieves this automatically.` : "We retrieve this automatically."}{' '}
               {clientMayAlsoProvide(item)
-                ? 'Upload only if you already have it — it can speed up review.'
+                ? 'Upload only if you already have it - it can speed up review.'
                 : 'No action needed.'}
             </span>
           </div>
@@ -207,15 +207,15 @@ export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSou
   );
 }
 
-function WolfsbergSection({ uploaded, onComplete, onRemove, autoSourcedResult }) {
+function WolfsbergSection({ uploaded, onComplete, onRemove, autoSourcedResult, brandName }) {
   const done = !!uploaded;
   return (
     <div style={styles.section}>
       <h3 style={styles.sectionTitle}>Wolfsberg CBDDQ</h3>
       <p style={styles.sectionDesc}>
-        As a Financial Institution, Nium requires a completed Correspondent Banking Due Diligence
-        Questionnaire (CBDDQ). Upload your most recent completed version, or complete one at
-        wolfsberg-group.com.
+        As a Financial Institution, {brandName || "we"} require{brandName ? "s" : ""} a completed
+        Correspondent Banking Due Diligence Questionnaire (CBDDQ). Upload your most recent
+        completed version, or complete one at wolfsberg-group.com.
       </p>
       <div style={{ ...styles.docCard, border: `1.5px solid ${done ? C.successBorder : C.border}`, background: done ? C.successBg : '#fff' }}>
         <AutoSourcedBanner result={autoSourcedResult} />
@@ -266,15 +266,39 @@ function LoadingState() {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function Step2DynamicForm({ step1Data, onComplete, docSearchResults, selfSourceResults }) {
+export default function Step2DynamicForm({
+  step1Data, onComplete, docSearchResults, selfSourceResults,
+  // Brand shown in badges, self-source copy and the jurisdiction banner.
+  // Default "" (not "we") because several strings use it possessively
+  // ("<brandName> retrieves…") where "we" reads wrong; callers guard instead.
+  brandName = "",
+  // Lifts upload state to the parent (App.js) so it survives this component
+  // unmounting on navigation. initialUploads seeds the cards as uploaded;
+  // onUploadsChange fires on every upload/remove, not only on Continue.
+  initialUploads, onUploadsChange,
+  // Continue is normally rendered inside the footer here. When the parent
+  // renders its own Continue button outside the card (renderOwnContinue =
+  // false), this component hides its internal button and instead exposes the
+  // latest handleContinue to the parent via onExposeContinue.
+  renderOwnContinue = true, onExposeContinue,
+}) {
   const { companyName, entityType, ownershipType, incorporationCountry } = step1Data;
 
   const { checklist, flags, onboardingCountry, loading, error } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
-  const [uploads, setUploads] = useState({});
-  const handleUpload = (key, file) => setUploads(prev => ({ ...prev, [key]: file }));
-  const handleRemove = (key) => setUploads(prev => { const n = { ...prev }; delete n[key]; return n; });
+  const [uploads, setUploads] = useState(initialUploads || {});
+  const handleUpload = (key, file) => {
+    const next = { ...uploads, [key]: file };
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
+  };
+  const handleRemove = (key) => {
+    const next = { ...uploads };
+    delete next[key];
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
+  };
 
   // Partition the FULL checklist — nothing is dropped.
   const selfSourced = checklist.filter(isSelfSourced);
@@ -302,17 +326,16 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
   const handleUploadAll = () => {
     const targets = [...provide];
     if (flags.showWolfsberg) targets.push({ requirement: 'Wolfsberg CBDDQ' });
-    setUploads(prev => {
-      const next = { ...prev };
-      targets.forEach(i => {
-        if (!next[i.requirement]) {
-          const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
-          try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
-          catch { next[i.requirement] = { name: fname, size: 13 }; }
-        }
-      });
-      return next;
+    const next = { ...uploads };
+    targets.forEach(i => {
+      if (!next[i.requirement]) {
+        const fname = `test-${i.requirement.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
+        try { next[i.requirement] = new File([new Blob(['test document'])], fname, { type: 'application/pdf' }); }
+        catch { next[i.requirement] = { name: fname, size: 13 }; }
+      }
     });
+    setUploads(next);
+    onUploadsChange && onUploadsChange(next);
   };
 
   // Progress = mandatory, client-provided items the customer must upload.
@@ -337,6 +360,13 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
     onComplete({ uploads, submittedRequirements, checklist, flags });
   };
 
+  // When the parent renders Continue outside the card, it needs a live
+  // reference to trigger it. Runs every render (no deps) so it's always the
+  // current closure over `uploads` - a ref write, not state, so it can't loop.
+  useEffect(() => {
+    onExposeContinue && onExposeContinue(handleContinue);
+  });
+
   if (loading) return <LoadingState />;
   if (error) return <div style={styles.errorState}>Could not load document requirements: {error}</div>;
 
@@ -346,7 +376,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         {onboardingCountry && (
           <div style={styles.jurisdictionBanner}>
             <span>📋</span>
-            <span>Requirements for <strong>{companyName}</strong> — onboarding via <strong>Nium {onboardingCountry}</strong></span>
+            <span>Requirements for <strong>{companyName}</strong>{onboardingCountry ? <> - onboarding via <strong>{brandName ? `${brandName} ${onboardingCountry}` : onboardingCountry}</strong></> : null}</span>
           </div>
         )}
         {requiredTotal > 0 && (
@@ -363,7 +393,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         )}
         {SHOW_TEST_TOOLS && (
           <div style={styles.testRow}>
-            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only — fills all required uploads with sample documents">
+            <button type="button" style={styles.testBtn} onClick={handleUploadAll} title="Testing only - fills all required uploads with sample documents">
               ✨ Fill with test data
             </button>
           </div>
@@ -374,7 +404,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Already sourced for you</h3>
           <p style={styles.sectionDesc}>
-            We found {uncoveredAutoSourced.length === 1 ? 'this document' : 'these documents'} automatically — no action needed.
+            We found {uncoveredAutoSourced.length === 1 ? 'this document' : 'these documents'} automatically - no action needed.
           </p>
           {uncoveredAutoSourced.map(d => (
             <div
@@ -392,13 +422,13 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
       )}
 
       {/* Company-registry documents retrieved by the self-source agent on the
-          Documents step — surfaced here too and marked auto-sourced. Only the
+          Documents step - surfaced here too and marked auto-sourced. Only the
           successfully retrieved items (not the manual/captcha ones). */}
       {(selfSourceResults?.results || []).some(r => r.status === 'retrieved' || r.status === 'retrieved_unverified') && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Sourced from company registry</h3>
           <p style={styles.sectionDesc}>
-            Retrieved automatically from official registries — no action needed.
+            Retrieved automatically from official registries - no action needed.
           </p>
           {(selfSourceResults.results || [])
             .filter(r => r.status === 'retrieved' || r.status === 'retrieved_unverified')
@@ -426,6 +456,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
           onComplete={handleUpload}
           onRemove={handleRemove}
           autoSourcedResult={getAutoSourcedResult('Wolfsberg CBDDQ', docSearchResults, selfSourceResults)}
+          brandName={brandName}
         />
       )}
 
@@ -433,7 +464,7 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Company documents</h3>
           {coreItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} brandName={brandName} />
           ))}
         </div>
       )}
@@ -446,21 +477,21 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
             {flags.showDirectorSection && 'Required for each relevant director. '}
           </p>
           {personItems.map(item => (
-            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
+            <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} brandName={brandName} />
           ))}
         </div>
       )}
 
-      {/* "Nium will retrieve these for you" (self-sourced) section — hidden for
+      {/* "We will retrieve these for you" (self-sourced) section - hidden for
           now per request, but kept here for future use. `selfSourced` is still
           computed above and still counted as submitted in handleContinue, so the
           downstream document gate is unaffected; only the UI is hidden. To
           restore, un-comment this block.
       {selfSourced.length > 0 && (
         <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Nium will retrieve these for you</h3>
+          <h3 style={styles.sectionTitle}>We will retrieve these for you</h3>
           <p style={styles.sectionDesc}>
-            We source these from official registries — no action needed. You can optionally upload any you already have to speed up review.
+            We source these from official registries - no action needed. You can optionally upload any you already have to speed up review.
           </p>
           {selfSourced.map(item => (
             <DocumentUploadCard key={item.requirement} item={item} onUpload={handleUpload} onRemove={handleRemove} uploaded={uploads[item.requirement]} autoSourcedResult={getAutoSourcedResult(item.requirement, docSearchResults, selfSourceResults)} />
@@ -472,10 +503,12 @@ export default function Step2DynamicForm({ step1Data, onComplete, docSearchResul
       <div style={styles.footer}>
         <p style={styles.footerNote}>
           {allDone
-            ? 'All required documents provided — you can continue.'
+            ? 'All required documents provided - you can continue.'
             : `${requiredTotal - requiredDone} required item${requiredTotal - requiredDone > 1 ? 's' : ''} still needed. You can continue and complete them before declaration.`}
         </p>
-        <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>
+        {renderOwnContinue && (
+          <button style={styles.continueBtn} onClick={handleContinue}>Continue →</button>
+        )}
       </div>
     </div>
   );

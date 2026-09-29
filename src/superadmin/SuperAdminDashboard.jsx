@@ -48,9 +48,11 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
   const sortedTenants = useMemo(() => {
     const list = [...tenants];
     list.sort((a, b) => {
-      // Nium always first
-      if (a.tenantId === "nium") return -1;
-      if (b.tenantId === "nium") return 1;
+      // Protected tenants first - read from the registry's own flag rather
+      // than by comparing names, which is the rule everywhere else in this
+      // codebase and was quietly broken here.
+      if (a.isProtected && !b.isProtected) return -1;
+      if (b.isProtected && !a.isProtected) return 1;
       // Then by createdAt desc
       const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -95,6 +97,27 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
     }
   }
 
+  async function handleTogglePreboarding(tenant) {
+    const next = !tenant.preboardingEnabled;
+    const verb = next ? "Enable" : "Disable";
+    if (!window.confirm(`${verb} pre-boarding for ${tenant.companyName || tenant.tenantId}?`)) return;
+    try {
+      const r = await fetch(
+        `/api/tenants?action=toggle-preboarding&tenantId=${encodeURIComponent(tenant.tenantId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ preboardingEnabled: next }),
+        }
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      loadTenants();
+    } catch (err) {
+      alert("Could not update pre-boarding: " + err.message);
+    }
+  }
+
   return (
     <div style={adminStyles.pageWrapper}>
       <TopBar onSignOut={onSignOut} />
@@ -110,7 +133,7 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
           <StatCard label="Total Tenants" value={stats.total} />
           <StatCard label="Active" value={stats.active} accent={adminColors.statusComplete} />
-          <StatCard label="Configured" value={stats.configured} accent={adminColors.niumBlue} />
+          <StatCard label="Configured" value={stats.configured} accent={adminColors.brandBlue} />
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
@@ -144,6 +167,7 @@ export default function SuperAdminDashboard({ token, onSignOut }) {
               tenant={t}
               onResetPassword={(tenant) => setShowReset({ tenantId: tenant.tenantId, companyName: tenant.companyName })}
               onToggleStatus={handleToggleStatus}
+              onTogglePreboarding={handleTogglePreboarding}
             />
           ))}
           {!sortedTenants.length && !loading && (
@@ -201,7 +225,7 @@ function TopBar({ onSignOut }) {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 24px",
-        background: adminColors.niumBlue,
+        background: adminColors.brandBlue,
         color: "#fff",
       }}
     >
@@ -212,7 +236,7 @@ function TopBar({ onSignOut }) {
             height: 28,
             borderRadius: 6,
             background: "#fff",
-            color: adminColors.niumBlue,
+            color: adminColors.brandBlue,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

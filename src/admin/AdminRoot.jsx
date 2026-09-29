@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AdminDashboard from "./AdminDashboard";
 import { adminColors, adminStyles } from "./adminDesign";
-import buildDefaultConfig, { buildBlankConfig } from "./defaultConfig";
+import { buildLocalDefaultConfig } from "../config/localDefaultConfig";
 import { getTenantId } from "../utils/tenant";
+import { endSession } from "../auth/endSession";
 
 const TOKEN_KEY = "admin_token";
 const TENANT_KEY = "tenant_id";
@@ -39,8 +40,11 @@ export default function AdminRoot() {
       // eslint-disable-next-line no-console
       console.error("Admin config load failed, falling back to client default:", err);
       setConfigError(err.message);
-      // Offline fallback: Nium gets the defaults, other tenants get a blank.
-      setTenantConfig(tenantId === "nium" ? buildDefaultConfig(tenantId) : buildBlankConfig(tenantId));
+      // Offline fallback: a neutral local config so the admin UI still renders.
+      // No tenant is special-cased — the live config is the only source of a
+      // tenant's real settings, and "Apply default settings" (Step 5) is how a
+      // template is pulled in deliberately.
+      setTenantConfig({ ...buildLocalDefaultConfig(), _tenantId: tenantId, _isBlank: true });
     } finally {
       setConfigLoading(false);
     }
@@ -58,7 +62,10 @@ export default function AdminRoot() {
     setToken(authToken);
   }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    // Tell the server first: clearing our own copy leaves the token working for
+    // anyone else holding one. Never blocks - the browser forgets it either way.
+    await endSession(token);
     try {
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TENANT_KEY);
@@ -76,11 +83,15 @@ export default function AdminRoot() {
 
   // First-login wizard fires for brand-new blank tenants (created via
   // /super-admin) and for any tenant that has zero licences configured.
-  // The Nium tenant is excluded because it ships with default seed config —
-  // pushing it into the wizard on every fresh session would be annoying.
+  // No tenant is excluded by id - the comment used to say that while the code
+  // did exactly that. The platform tenant ships with seed config, so it has
+  // licences and does not reach the wizard anyway; if it ever has none, it IS
+  // unconfigured and the wizard is the right answer. The one exception is the
+  // offline fallback above, which marks every tenant _isBlank - an
+  // API-unreachable admin session shows the wizard regardless.
   const firstLogin =
     tenantConfig._isBlank === true ||
-    ((tenantConfig.licences?.length || 0) === 0 && tenantId !== "nium");
+    (tenantConfig.licences?.length || 0) === 0;
 
   return (
     <>
@@ -101,7 +112,7 @@ export default function AdminRoot() {
           }}
           title={configError}
         >
-          API offline — using local defaults
+          API offline - using local defaults
         </div>
       )}
       <AdminDashboard
@@ -151,9 +162,9 @@ function PasswordGate({ tenantId, onSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId || "nium")}`, {
+      const r = await fetch(`/api/admin-auth?tenant=${encodeURIComponent(tenantId)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId || "nium" },
+        headers: { "Content-Type": "application/json", "X-Tenant-Id": tenantId },
         body: JSON.stringify({ password }),
       });
       if (!r.ok) {
@@ -196,7 +207,7 @@ function PasswordGate({ tenantId, onSuccess }) {
               width: 56,
               height: 56,
               borderRadius: 14,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -213,7 +224,7 @@ function PasswordGate({ tenantId, onSuccess }) {
             Intelligence-Led Onboarding Platform
           </p>
           {gateCompanyName && (
-            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.niumBlue, fontSize: 11, fontWeight: 600 }}>
+            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 99, background: "rgba(11,61,145,0.08)", color: adminColors.brandBlue, fontSize: 11, fontWeight: 600 }}>
               {gateCompanyName}
             </div>
           )}
@@ -283,7 +294,7 @@ function Loading() {
             width: 56,
             height: 56,
             borderRadius: 14,
-            background: adminColors.niumBlue,
+            background: adminColors.brandBlue,
             color: "#fff",
             display: "flex",
             alignItems: "center",

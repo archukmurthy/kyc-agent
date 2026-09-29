@@ -19,8 +19,12 @@
  */
 
 const { fetchOnboardingConstants, NiumAPIError } = require("../../lib/niumClient");
+const { applyCors, requireAdmin } = require("../../lib/routeAuth");
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: this route had no credential check. It exposes provider configuration and has no caller in the app.
+  if (!(await requireAdmin(req, res))) return undefined;
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }

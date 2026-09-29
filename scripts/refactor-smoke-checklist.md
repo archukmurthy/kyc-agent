@@ -14,7 +14,7 @@ Setup: `npm start` → open `http://localhost:3000/?demo=true`
 | 3 | Confirm page shows People Found cards | Continue from Applicant | People/stakeholder cards render for directors/UBOs (not a raw JSON blob) |
 | 4 | Fill Gaps has no applicant section | Continue to Fill Gaps | No "applicant" section heading among the gap sections (applicant fields live on the earlier Applicant page); stakeholder section IS present |
 | 5 | Required Docs shows a document checklist | Continue to Required Docs step | Checklist of required documents renders, not empty |
-| 6 | Invite-link path works end to end | Pre-boarding agent (password ARCH) → run demo research → Save dossier → copy invite link (`?dossierId=…&journey=customer`) → open it in a fresh tab | Lands on Applicant page with fields populated; Required Docs step shows documents (not empty) |
+| 6 | Invite-link path works end to end | Pre-boarding agent (password from the server-side `PREBOARDING_PASSWORD` environment variable) → run demo research → Save dossier → copy invite link (`?dossierId=…&journey=customer`) → open it in a fresh tab | Lands on Applicant page with fields populated; Required Docs step shows documents (not empty) |
 
 Baseline run 2026-07-20 (pre-refactor): all 6 checks PASS. Reusable local demo
 dossier for check 6:

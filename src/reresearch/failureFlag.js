@@ -34,7 +34,7 @@ function buildReresearchFailureEvent({
     changeType: "changed",
     beforeValue: null,
     afterValue: { fellBackTo: "manual", stage, reason },
-    workflow: "ops_review", // neutral data point — NOT an analyst escalation
+    workflow: "ops_review", // neutral data point - NOT an analyst escalation
     escalation: false,
     decided: true,
     matchedRule: RERESEARCH_FALLBACK_RULE,
@@ -48,11 +48,14 @@ function buildReresearchFailureEvent({
  * Returns the event object that was sent (handy for tests / local logging).
  */
 function postReresearchFailureFlag(args = {}) {
-  const event = buildReresearchFailureEvent(args);
+  const { headers = {}, ...eventArgs } = args;
+  const event = buildReresearchFailureEvent(eventArgs);
   if (typeof fetch === "function") {
     fetch("/api/change-events", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // Callers pass the tab's dossier credential; this module stays free of
+      // browser storage so it remains runnable under node --test.
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(event),
     }).catch((err) => console.warn("[reresearch] failure flag write failed:", err));
   }

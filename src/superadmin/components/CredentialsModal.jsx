@@ -18,6 +18,7 @@ export default function CredentialsModal({
   const origin = typeof window !== "undefined" ? window.location.origin : "yourdomain.com";
   const fullAdminUrl = origin + (adminUrl || `/admin?tenant=${tenantId}`);
   const fullCustomerUrl = origin + (customerUrl || `/?tenant=${tenantId}`);
+  const preboardingUrl = `${origin}/preboarding?tenant=${tenantId}`;
 
   const formatted = [
     `Company:      ${companyName || tenantId}`,
@@ -27,6 +28,7 @@ export default function CredentialsModal({
     `Password:     ${password}`,
     ``,
     `Customer URL: ${fullCustomerUrl}`,
+    `Pre-boarding URL: ${preboardingUrl}`,
   ].join("\n");
 
   async function copyAll() {
@@ -84,7 +86,7 @@ export default function CredentialsModal({
             fontWeight: 600,
           }}
         >
-          ⚠ Save this password now — it cannot be recovered later. You can reset it but not view it again.
+          ⚠ Save this password now - it cannot be recovered later. You can reset it but not view it again.
         </div>
 
         <pre
@@ -121,7 +123,7 @@ export default function CredentialsModal({
         </button>
 
         <div style={{ fontSize: 11, color: adminColors.textMuted, textAlign: "center", marginTop: 10 }}>
-          Click Done to dismiss — this dialog will not close on its own.
+          Click Done to dismiss - this dialog will not close on its own.
         </div>
       </div>
     </div>

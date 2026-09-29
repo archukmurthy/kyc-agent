@@ -34,7 +34,7 @@
  * FLAG STATE UNDER JEST (characterised, not assumed):
  *   NODE_ENV="test"      → SHOW_TEST_TOOLS === true
  *   no ?test=1 in jsdom  → TEST_FLAG === false
- *   no ?demo / no storage→ demoMode starts FALSE, so card D (Nium) is ABSENT
+ *   no ?demo / no storage→ demoMode starts FALSE, so card D (registry) is ABSENT
  *   jsdom host localhost → demoToggleVisible === true, so the DemoToggle IS
  *                          mounted and demo mode is reachable by clicking it
  *                          (a user-facing control — no production flag is
@@ -43,11 +43,12 @@
  *                          visible test change rather than a silent one.
  *
  * KNOWN UNREACHABLE (see the report, not a gap in the assertions):
- *   The locked search-cap state. `const [seededBy] = useState("analyst")` has no
- *   setter (App.js ~314), and proceedFromJourney only increments searchAttempts
- *   when seededBy === "customer" (~2521). searchAttempts is therefore pinned at
- *   0 for the whole life of the app, so evaluateSearchCap never returns
- *   locked/isSecondAttempt. The unlocked state is characterised instead, as a
+ *   The locked search-cap state, from this driver. seededBy only becomes
+ *   "customer" after a foundational-fact correction on the Applicant page, and
+ *   searchAttempts is then set from the server's count (/api/search-attempt or
+ *   /api/research-attempt) — this net never corrects a fact, so it stays 0 and
+ *   evaluateSearchCap never returns locked/isSecondAttempt here (the cap is
+ *   covered by the correction tests). The unlocked state is characterised instead, as a
  *   positive assertion that NEITHER banner renders and NO card is disabled.
  *
  * CHARACTERISATION, not specification: these assert what the picker does TODAY.
@@ -59,6 +60,7 @@ import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
+import { buildLocalDefaultConfig } from "../../../config/localDefaultConfig";
 
 jest.setTimeout(60000);
 
@@ -130,7 +132,7 @@ async function driveToPicker() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
   await settle(0);
@@ -152,17 +154,36 @@ const card = (title) => screen.getByText(title).parentElement;
 const CARD_A = "Upload documents & let AI fill the rest";
 const CARD_B = "Let AI research your company";
 const CARD_C = "I'll complete the form myself";
-const CARD_D = "Nium API Lookup";
+const CARD_D = "Registry API Lookup";
 const CARD_E = "Run for max prefill";
+
+// Task 13: Card C only renders when the tenant configured its own manual
+// application form URL (App.js manualFormUrl_ / JourneyPicker's manualFormUrl
+// prop). The suite's default fetch mock (see beforeEach above) falls back to
+// buildLocalDefaultConfig(), which ships an empty manualFormUrl by design —
+// so by default Card C is ABSENT. Tests that exercise Card C's own behaviour
+// opt in via this helper, which makes only /api/config resolve (with a
+// manual form URL configured), leaving every other endpoint rejecting exactly
+// as the suite-wide mock does.
+const TEST_MANUAL_FORM_URL = "https://acme.example/apply";
+function withManualFormUrlConfigured() {
+  const base = buildLocalDefaultConfig();
+  global.fetch = jest.fn((url) => {
+    if (typeof url === "string" && url.startsWith("/api/config")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...base,
+          company: { ...base.company, manualFormUrl: TEST_MANUAL_FORM_URL },
+        }),
+      });
+    }
+    return Promise.reject(new Error("offline test"));
+  });
+}
 
 const continueBtn = () => screen.getByRole("button", { name: /^Continue/ });
 const backBtn = () => screen.getByRole("button", { name: /Back/ });
-
-/** The step-indicator pill labels — the observable read-out of journeyType. */
-const stepPills = () =>
-  Array.from(document.querySelectorAll("span"))
-    .map((s) => s.textContent.trim())
-    .filter((t) => ["Company", "Documents", "Research", "Applicant"].includes(t));
 
 /**
  * The journeys the research kickoff actually fired with, read off the
@@ -201,12 +222,18 @@ describe("reaching the journey picker", () => {
 });
 
 describe("the cards that render", () => {
-  it("renders cards A, B, C and E", async () => {
+  it("renders cards A, B and E; card C is absent with no manual form URL configured", async () => {
     await driveToPicker();
     expect(screen.getByText(CARD_A)).toBeInTheDocument();
     expect(screen.getByText(CARD_B)).toBeInTheDocument();
-    expect(screen.getByText(CARD_C)).toBeInTheDocument();
+    expect(screen.queryByText(CARD_C)).not.toBeInTheDocument();
     expect(screen.getByText(CARD_E)).toBeInTheDocument();
+  });
+
+  it("renders card C once the tenant has configured a manual form URL", async () => {
+    withManualFormUrlConfigured();
+    await driveToPicker();
+    expect(screen.getByText(CARD_C)).toBeInTheDocument();
   });
 
   it("badges card A as Recommended and card E as New", async () => {
@@ -219,11 +246,16 @@ describe("the cards that render", () => {
     await driveToPicker();
     expect(screen.getByText(/Fastest · Most accurate · Lowest effort/)).toBeInTheDocument();
     expect(screen.getByText(/~30 seconds · No uploads needed/)).toBeInTheDocument();
-    expect(screen.getByText(/Full control · No AI · ~15 minutes/)).toBeInTheDocument();
     expect(screen.getByText(/Most comprehensive · Highest coverage/)).toBeInTheDocument();
   });
 
-  it("does NOT render card D (Nium API Lookup) — demoMode is off by default", async () => {
+  it("renders card C's supporting copy once configured", async () => {
+    withManualFormUrlConfigured();
+    await driveToPicker();
+    expect(screen.getByText(/Full control · No AI · ~15 minutes/)).toBeInTheDocument();
+  });
+
+  it("does NOT render card D (Registry API Lookup) - demoMode is off by default", async () => {
     await driveToPicker();
     expect(screen.queryByText(CARD_D)).not.toBeInTheDocument();
   });
@@ -293,7 +325,7 @@ describe("Continue with nothing selected", () => {
   });
 });
 
-describe("routing — card A (documents + AI)", () => {
+describe("routing - card A (documents + AI)", () => {
   it("advances to the Documents step", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_A));
@@ -311,17 +343,23 @@ describe("routing — card A (documents + AI)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sets journeyType ai_documents, which inserts the Documents pill", async () => {
+  it("sets journeyType ai_documents, which routes to the Documents step", async () => {
+    // The step-pill stepper was removed from the UI (no more visual step
+    // indicator), so journeyType routing is now observed via the actual step
+    // content rendered, not a pill label.
     await driveToPicker();
-    // Before: the non-ai_documents step names, no Documents pill.
-    expect(stepPills()).not.toContain("Documents");
+    expect(
+      screen.queryByRole("heading", { level: 2, name: "Upload your documents" })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(card(CARD_A));
     await settle(0);
     fireEvent.click(continueBtn());
     await settle(0);
 
-    expect(stepPills()).toContain("Documents");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Upload your documents" })
+    ).toBeInTheDocument();
   });
 
   it("does not kick off research from the picker", async () => {
@@ -334,7 +372,7 @@ describe("routing — card A (documents + AI)", () => {
   });
 });
 
-describe("routing — card B (AI research only)", () => {
+describe("routing - card B (AI research only)", () => {
   it("kicks off research with journey ai_only", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_B));
@@ -357,7 +395,6 @@ describe("routing — card B (AI research only)", () => {
         name: /How would you like to complete your application\?/,
       })
     ).not.toBeInTheDocument();
-    expect(stepPills()).not.toContain("Documents");
   });
 
   it("falls back to Company Lookup with the failure message when the call fails", async () => {
@@ -374,7 +411,13 @@ describe("routing — card B (AI research only)", () => {
   });
 });
 
-describe("routing — card C (manual form)", () => {
+describe("routing - card C (manual form)", () => {
+  // Card C only renders once the tenant has configured a manual form URL —
+  // see withManualFormUrlConfigured() above.
+  beforeEach(() => {
+    withManualFormUrlConfigured();
+  });
+
   it("opens the manual form in a new tab", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_C));
@@ -415,7 +458,7 @@ describe("routing — card C (manual form)", () => {
   });
 });
 
-describe("routing — card E (max prefill)", () => {
+describe("routing - card E (max prefill)", () => {
   it("kicks off research with journey max_prefill", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_E));
@@ -426,14 +469,16 @@ describe("routing — card E (max prefill)", () => {
     expect(researchStartedJourneys()).toEqual(["max_prefill"]);
   });
 
-  it("routes through standard research — no Documents step", async () => {
+  it("routes through standard research - no Documents step", async () => {
     await driveToPicker();
     fireEvent.click(card(CARD_E));
     await settle(0);
     fireEvent.click(continueBtn());
     await settle(0);
 
-    expect(stepPills()).not.toContain("Documents");
+    expect(
+      screen.queryByRole("heading", { level: 2, name: "Upload your documents" })
+    ).toBeNull();
   });
 });
 
@@ -471,7 +516,7 @@ describe("demo-mode short-circuit", () => {
   it("shows the demo-mode notice on the picker while it is on", async () => {
     await driveToPicker();
     await enableDemoMode();
-    expect(screen.getByText(/Demo mode active — using sample data/)).toBeInTheDocument();
+    expect(screen.getByText(/Demo mode active - using sample data/)).toBeInTheDocument();
   });
 });
 
@@ -490,6 +535,7 @@ describe("the ← Back control", () => {
   });
 
   it("clears the manual-opened notice", async () => {
+    withManualFormUrlConfigured();
     await driveToPicker();
     fireEvent.click(card(CARD_C));
     await settle(0);
@@ -550,7 +596,7 @@ describe("the ← Back control", () => {
   });
 });
 
-describe("the search cap — unlocked state (the only reachable one)", () => {
+describe("the search cap - unlocked state (the only reachable one)", () => {
   it("renders neither cap banner at zero attempts", async () => {
     await driveToPicker();
     expect(screen.queryByTestId("search-locked-banner")).not.toBeInTheDocument();
@@ -566,7 +612,7 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
     });
   });
 
-  it("card E is clickable and sets no opacity at all — it has no lock branch", async () => {
+  it("card E is clickable and sets no opacity at all - it has no lock branch", async () => {
     await driveToPicker();
     // Recorded fact: card E is a search card that proceedFromJourney DOES cap
     // (isSearchCard includes "E"), yet its style has no locked branch, so it
@@ -575,7 +621,8 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
     expect(card(CARD_E).style.opacity).toBe("");
   });
 
-  it("card C carries no lock styling — it is the never-blocked exception", async () => {
+  it("card C carries no lock styling - it is the never-blocked exception", async () => {
+    withManualFormUrlConfigured();
     await driveToPicker();
     // Cards A/B read `locked` into cursor+opacity; card C hardcodes
     // cursor:"pointer" and opacity:0.92 and has no locked branch at all.
@@ -583,7 +630,7 @@ describe("the search cap — unlocked state (the only reachable one)", () => {
   });
 });
 
-describe("SHOW_NIUM_REG_PANEL is false — the reg-resolver panel must not render", () => {
+describe("SHOW_NIUM_REG_PANEL is false - the reg-resolver panel must not render", () => {
   it("renders no registration-number resolver in the default (non-demo) picker", async () => {
     await driveToPicker();
     expect(screen.queryByLabelText(/Registration Number/i)).not.toBeInTheDocument();

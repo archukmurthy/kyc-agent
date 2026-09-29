@@ -13,18 +13,28 @@
 // documentRequirements.js engine. Tenant + config resolution mirror api/config.js
 // so the benchmark scores exactly the tenant the customer flow would serve.
 //
+// Admin-only: Authorization: Bearer <tenant admin password>, checked against
+// authorizeAdminForTenant(tenant, token) before the tenant config is even read.
+//
 // POST /api/benchmark?tenant=<id>
+//   headers: Authorization: Bearer <tenant admin password>
 //   body: { companies: [ { companyName, countryCode, country?, entityType,
 //                          ownershipType?, sector?, incorporationCountry? } ] }
 // GET  /api/benchmark?tenant=<id>&companyName=...&countryCode=GB&entityType=Corporate&ownershipType=private_limited
+//   headers: Authorization: Bearer <tenant admin password>
 //   (single-company convenience form for quick testing)
 
-const storage = require("../lib/storage");
-const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { runResearchPipeline } = require("../src/pipeline");
 const { getRequirements } = require("../documentRequirements.js");
 const { persistBenchmarkEntity } = require("../lib/persist");
+const { readConfigForTenant, authorizeAdminForTenant } = require("./config");
+const { readBearer } = require("../lib/dossierAccess");
+const { applyCors } = require("../lib/routeAuth");
+const { fetchWithTimeout } = require("../lib/providerCall");
+
+// Injected deps (overridable in tests via __setDeps).
+let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
 
 const MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 16000;
@@ -72,33 +82,6 @@ const COUNTRY_NAMES = {
   LK: "Sri Lanka", AM: "Armenia",
 };
 
-// ── Tenant config (mirrors api/config.js readConfig/seedTenant) ──────────────
-function configKey(tenant) {
-  return `config:${tenant}`;
-}
-
-async function seedTenant(tenant) {
-  const seeded = tenant === "nium" ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
-  seeded._tenantId = tenant;
-  await storage.set(configKey(tenant), seeded);
-  return seeded;
-}
-
-async function readConfig(tenant) {
-  let stored = await storage.get(configKey(tenant));
-  if (!stored) return seedTenant(tenant);
-  if (tenant === "nium") {
-    const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
-    if (!hasLicences) {
-      const fresh = buildDefaultConfig(tenant);
-      fresh._tenantId = tenant;
-      await storage.set(configKey(tenant), fresh);
-      return fresh;
-    }
-  }
-  return stored;
-}
-
 function readBody(req) {
   return new Promise((resolve, reject) => {
     if (req.body && typeof req.body === "object") return resolve(req.body);
@@ -124,7 +107,7 @@ async function callAnthropic({ prompt, tools }) {
   };
   if (Array.isArray(tools) && tools.length > 0) requestBody.tools = tools;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -216,11 +199,8 @@ async function benchmarkCompany(input, tenantConfig) {
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Tenant-Id");
-  res.setHeader("Cache-Control", "no-store");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (applyCors(req, res)) return undefined;
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -229,7 +209,16 @@ module.exports = async function handler(req, res) {
   const tenant = getTenantIdFromRequest(req);
 
   try {
-    const tenantConfig = await readConfig(tenant);
+    // Admin-only: every benchmark run spends Claude tokens.
+    const token = readBearer(req);
+    if (!tenant || !token || !(await _deps.authorizeAdmin(tenant, token))) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    const tenantConfig = await _deps.readConfigForTenant(tenant);
+    if (!tenantConfig) {
+      return res.status(404).json({ error: "tenant_not_found" });
+    }
 
     // Build the company list from POST body or GET query.
     let companies;
@@ -283,6 +272,9 @@ module.exports = async function handler(req, res) {
             entityName: result.input.companyName,
             segment: company.segment || null,
             ownershipType: result.input.ownershipType,
+            // Whoever ran it. These rows used to be filed under one particular
+            // company no matter who ran the benchmark.
+            tenantId: tenant,
           });
         } catch (e) {
           // eslint-disable-next-line no-console
@@ -319,3 +311,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server error", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };

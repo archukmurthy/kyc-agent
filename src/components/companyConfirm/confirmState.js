@@ -478,8 +478,8 @@ export function submitBlockers({
       fieldId: item.field,
       label: item.label || item.field,
       reason: disputed
-        ? "You marked this as wrong — enter the correct value."
-        : "From a company or unverified source — confirm it or correct it.",
+        ? "You marked this as wrong - enter the correct value."
+        : "From a company or unverified source - confirm it or correct it.",
     });
   });
 
@@ -492,7 +492,7 @@ export function submitBlockers({
       kind: BLOCKER_KIND.PERSON_ATTRIBUTE,
       fieldId: `${p.stakeholderId}::${p.key}`,
       stakeholderId: p.stakeholderId,
-      label: p.personName ? `${p.label} — ${p.personName}` : p.label,
+      label: p.personName ? `${p.label} - ${p.personName}` : p.label,
       reason: "Confirm this detail or correct it.",
     });
   });
@@ -508,7 +508,7 @@ export function submitBlockers({
       fieldId: d.fieldId,
       stakeholderId: d.stakeholderId || null,
       label: d.personName || d.fieldLabel
-        ? `${d.docType} — ${d.personName || d.fieldLabel}`
+        ? `${d.docType} - ${d.personName || d.fieldLabel}`
         : d.docType,
       reason: "Your change needs this document before we can continue.",
     });

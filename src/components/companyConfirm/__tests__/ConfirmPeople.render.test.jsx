@@ -76,7 +76,7 @@ async function driveToConfirm() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -200,5 +200,62 @@ describe("the submit gate on real data", () => {
     expect(within(footer).getByText(/Resolve these to continue/)).toBeInTheDocument();
     const cta = within(footer).getAllByRole("button").pop();
     expect(cta).toBeDisabled();
+  });
+});
+
+describe("Confirm All (real data)", () => {
+  it("settles every outstanding row and person attribute in one click, unblocking the gate", async () => {
+    await driveToConfirm();
+    const footer = screen.getByRole("button", { name: /← Back/ }).parentElement;
+    expect(within(footer).getByText(/Resolve these to continue/)).toBeInTheDocument();
+    expect(within(footer).getAllByRole("button").pop()).toBeDisabled();
+
+    fireEvent.click(within(footer).getByRole("button", { name: "✓ Confirm All" }));
+    await settle(0);
+
+    expect(within(footer).getByText("Everything's ready")).toBeInTheDocument();
+    const cta = within(footer).getAllByRole("button").pop();
+    expect(cta).toHaveTextContent("Confirm and Continue");
+    expect(cta).toBeEnabled();
+  });
+
+  it("retracts a DISPUTED row's stale doc_required dialogue, clearing the MISSING_DOCUMENT blocker too", async () => {
+    await driveToConfirm();
+
+    // Registered Address Line 1 is tier1 (structured_registry) in the dummy
+    // set, so disputing it via the pencil ("Edit" -> toggleCheck, same flow as
+    // "Mark as incorrect" - see FoundFieldsTable's control-pair comment) mounts
+    // ChangeDialogue and asks exactly the registry question (address's only
+    // planned step). Answering "Not yet" -> registryStatus not_reflected hits
+    // policyTable's ADDRESS-NOT-REFLECTED rule: doc_required, "Notice of Change
+    // of Address". This is the doc_required workflow the bug report names — a
+    // genuinely disputed row with an already-answered dialogue, the case
+    // confirmAll's own bulk re-tick used to skip cleaning up.
+    fireEvent.click(screen.getByRole("button", { name: "Edit Registered Address Line 1" }));
+    await settle(0);
+    fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    await settle(0);
+
+    expect(screen.getByText(/Documents we.ll need \(1\)/i)).toBeInTheDocument();
+    // Appears twice: the summary panel AND the inline card under the row.
+    expect(screen.getAllByText("Notice of Change of Address").length).toBeGreaterThan(0);
+
+    const footer = screen.getByRole("button", { name: /← Back/ }).parentElement;
+    fireEvent.click(within(footer).getByRole("button", { name: "✓ Confirm All" }));
+    await settle(0);
+
+    // The row is re-ticked (disputed -> confirmed) by Confirm All. Its stale
+    // dialogue snapshot must retract WITH it: docsNeededFrom(dialogueStateRef)
+    // is what feeds this panel and the submit gate's MISSING_DOCUMENT blocker,
+    // so if the snapshot survived, the panel and the gate would still show the
+    // document as owed even though the row itself now renders confirmed.
+    expect(screen.queryAllByText("Notice of Change of Address")).toHaveLength(0);
+    expect(screen.getByText("Documents we'll need")).toBeInTheDocument();
+    expect(screen.getByText("None triggered yet")).toBeInTheDocument();
+
+    expect(within(footer).getByText("Everything's ready")).toBeInTheDocument();
+    const cta = within(footer).getAllByRole("button").pop();
+    expect(cta).toHaveTextContent("Confirm and Continue");
+    expect(cta).toBeEnabled();
   });
 });

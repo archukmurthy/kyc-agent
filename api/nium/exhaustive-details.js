@@ -26,10 +26,14 @@
 
 const { fetchExhaustiveDetails, NiumAPIError } = require("../../lib/niumClient");
 const storage = require("../../lib/storage");
+const { applyCors, requireAdmin } = require("../../lib/routeAuth");
 
 const CACHE_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
 
 module.exports = async function handler(req, res) {
+  if (applyCors(req, res)) return undefined;
+  // Batch 0: this route had no credential check. It calls a CHARGEABLE third-party lookup, so an anonymous caller could spend our money.
+  if (!(await requireAdmin(req, res))) return undefined;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

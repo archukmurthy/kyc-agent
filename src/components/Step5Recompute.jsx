@@ -72,7 +72,7 @@ export default function Step5Recompute({
     <div style={styles.container}>
       <div style={styles.gapsBanner}>
         <strong>{mandatoryGaps.length} required item{mandatoryGaps.length > 1 ? 's' : ''} still needed</strong>
-        <span> — these must be provided before you can declare.</span>
+        <span> - these must be provided before you can declare.</span>
       </div>
 
       <div style={styles.gapsList}>

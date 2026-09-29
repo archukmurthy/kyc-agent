@@ -1,0 +1,281 @@
+"use strict";
+
+// The route table (PROC-3).
+//
+// Every file under api/ is a public endpoint the moment it is deployed - Vercel
+// turns the directory into functions by filesystem convention. So every file
+// declares, here, who may call it. Add a file without listing it and this test
+// fails; that is the point.
+//
+// It also freezes today's exceptions. Routes that still have no credential are
+// listed by name with the reason and the batch that fixes them, and the list
+// cannot grow: a new open route fails the test even though the existing ones
+// pass. Honest about what is not yet fixed, while stopping it spreading.
+
+const { test } = require("node:test");
+const assert = require("node:assert");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const API_DIR = path.join(__dirname, "..");
+
+/** Policies:
+ *  admin          - tenant admin password (lib/adminAuth.js)
+ *  super-admin    - platform password
+ *  dossier        - analyst or customer credential (lib/dossierAccess.js)
+ *  staff          - a signed-in Clerk user, checked by requireStaff. Some
+ *                   actions inside may demand a role; the table records that a
+ *                   credential is required at all.
+ *  cron           - CRON_SECRET, scheduler only
+ *  public-login   - the login endpoints themselves; public by definition
+ *  public-status  - a liveness check. Open on purpose: a health check behind a
+ *                   login cannot tell you the login is broken. Kept OUT of the
+ *                   frozen open-route list below, deliberately and visibly,
+ *                   because that list is about routes that DO something for a
+ *                   caller; this one answers booleans and is held to a stricter
+ *                   rule of its own (see the test at the end of this file).
+ *  open-limited   - no credential yet, rate-limited. Batch 1 gives these a real
+ *                   session; until then the limiter is the only brake.
+ *  unguessable-id - reachable with a random id only (IDVSEC-2)
+ *  webhook        - provider callback; needs signature verification (IDV-3)
+ *  module         - not an HTTP handler, just code that lives under api/
+ *  lab-only       - an Evidence Lab endpoint that is refused in production by
+ *                   the deployment boundary (vercel.json denies /api/evidence,
+ *                   .vercelignore keeps the files out of the upload). These are
+ *                   not access-controlled; they are not deployed. The test
+ *                   below checks that boundary still exists, because the day it
+ *                   stops existing these become 40 open endpoints.
+ */
+const LAB_PREFIX = "evidence/";
+const ROUTES = {
+  "health.js": "public-status",
+  // Destroys a session the caller already holds - nothing to gate, and a
+  // sign-out that can be refused leaves people stuck.
+  "sign-out.js": "public-status",
+
+  "admin-auth.js": "public-login",
+  "preboarding-auth.js": "public-login",
+  "super-admin-auth.js": "public-login",
+
+  "config.js": "admin",
+  "config-versions.js": "admin",
+  "config-templates.js": "admin",
+  "benchmark.js": "admin",
+  "change-intelligence-metrics.js": "admin",
+  "nium/constants.js": "admin",
+  "nium/public-details.js": "admin",
+  "nium/exhaustive-details.js": "admin",
+  "ubo-recalculate.js": "admin",
+  "idv-match/reviewer.js": "admin",
+
+  "tenants.js": "super-admin",
+
+  "get-dossier.js": "dossier",
+  "save-dossier.js": "dossier",
+  "change-events.js": "dossier",
+  "amendment-documents.js": "dossier",
+  "submit.js": "dossier",
+  "search-attempt.js": "dossier",
+  "invite.js": "dossier",
+  "revoke-dossier-token.js": "dossier",
+  "dossier-reseed.js": "dossier",
+
+  "finalize-submissions.js": "cron",
+
+  // Reached by the wizard before anyone has signed in. A credential needs the
+  // session work in Batch 1; the rate limiter is what stands there today.
+  "research.js": "open-limited",
+  "research-attempt.js": "open-limited",
+  "doc-search.js": "open-limited",
+  "self-source.js": "open-limited",
+  "generate-policy.js": "open-limited",
+  "ubo-discovery.js": "open-limited",
+  "company-search.js": "open-limited",
+  "kyc-lookup.js": "open-limited",
+  "document-requirements.js": "open-limited",
+  "track-event.js": "open-limited",
+  "upload-document.js": "open-limited",
+  "get-document.js": "open-limited",
+
+  // Identity flow, reachable only with a random attempt id (IDVSEC-2).
+  "idv-match/session.js": "unguessable-id",
+  "idv-match/confirm.js": "unguessable-id",
+  "idv-match/status.js": "unguessable-id",
+  "idv-match/explain.js": "unguessable-id",
+  "idv-match/flags.js": "unguessable-id",
+  "idv-match/resolve.js": "unguessable-id",
+
+  // Provider callbacks. Signature verification is IDV-3.
+  // UBO. All three reach Anthropic, all three are rate-limited, and all three
+  // now call requireStaff - which is inert until CLERK_SECRET_KEY is set, so
+  // they are still counted as open until the key lands in an environment.
+  "ubo-invite.js": "staff",
+  "ubo-people.js": "staff",
+  // Reached by the UBO demo screens, by signed-in trial users - not by an
+  // administrator with a shared password. Batch 0 got this wrong; see the
+  // comment in the route.
+  "ubo-control-lab.js": "staff",
+  "ubo-demo-customer-ownership-chart.js": "open-limited",
+  "ubo-demo-entity-resolution.js": "open-limited",
+
+  "idv-match/webhook.js": "webhook",
+  "idv-match/screening/webhook.js": "webhook",
+};
+
+const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron", "staff"]);
+const GATE = /requireAdmin|requireActor|requireStaff|verifyClerkSession|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
+
+function listApiFiles(dir = API_DIR, prefix = "") {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "__tests__") continue;
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...listApiFiles(path.join(dir, entry.name), rel));
+    else if (entry.name.endsWith(".js")) out.push(rel);
+  }
+  return out;
+}
+
+function read(rel) {
+  return fs.readFileSync(path.join(API_DIR, rel), "utf8");
+}
+
+const FILES = listApiFiles();
+const HANDLERS = Object.keys(ROUTES);
+
+test("every file under api/ is either a declared route or declared not-a-route", () => {
+  const undeclared = FILES.filter((f) => !(f in ROUTES) && !f.startsWith(LAB_PREFIX) && !isModule(f));
+  assert.deepEqual(
+    undeclared,
+    [],
+    "Files under api/ become public endpoints on deploy. Add each to ROUTES in this file " +
+      "with the policy it enforces, or make it plainly a module (no exported handler)."
+  );
+});
+
+function isModule(rel) {
+  const src = read(rel);
+  return !/module\.exports\s*=\s*(async\s*)?function handler|module\.exports\s*=\s*handler\b|export default async function handler|module\.exports\s*=\s*(async\s*)?\(req/.test(src);
+}
+
+test("a declared route really is a handler", () => {
+  const notHandlers = HANDLERS.filter((f) => isModule(f));
+  assert.deepEqual(notHandlers, [], "listed as routes but export no handler - remove them from ROUTES");
+});
+
+test("every route that claims a credential actually checks one", () => {
+  const missing = HANDLERS.filter((f) => CREDENTIAL_POLICIES.has(ROUTES[f]) && !GATE.test(read(f)));
+  assert.deepEqual(missing, [], "declared as credential-gated but no gate found in the file");
+});
+
+test("no route sends a wildcard CORS header", () => {
+  const offenders = FILES.filter((f) => read(f).includes('Access-Control-Allow-Origin", "*"'));
+  assert.deepEqual(offenders, [], "use applyCors from lib/routeAuth.js instead of a wildcard");
+});
+
+test("the list of routes with no credential cannot grow", () => {
+  // Honest about what is still open, and a brake on it spreading. Shrink this
+  // list as Batch 1 lands; never add to it without a decision recorded in
+  // docs/PRODUCTION-READINESS-PLAN.md.
+  const open = HANDLERS.filter((f) => ["open-limited", "unguessable-id", "webhook"].includes(ROUTES[f])).sort();
+  assert.equal(open.length, 22, `open routes changed - was 22, now ${open.length}: ${open.join(", ")}`);
+});
+
+test("a route with no credential is at least rate-limited", () => {
+  const unlimited = HANDLERS
+    .filter((f) => ROUTES[f] === "open-limited")
+    .filter((f) => !/enforceRateLimit/.test(read(f)));
+  assert.deepEqual(unlimited, [], "open to anyone and not rate-limited - add enforceRateLimit");
+});
+
+test("the Evidence Lab routes stay undeployable", () => {
+  // 40 endpoints under api/evidence are safe only because production refuses
+  // them. If this config is edited away they become 40 open routes, so the
+  // guarantee is asserted here rather than trusted.
+  const vercel = JSON.parse(fs.readFileSync(path.join(API_DIR, "..", "vercel.json"), "utf8"));
+  const denied = (vercel.routes || []).filter((r) => r.status === 404).map((r) => r.src);
+  assert.ok(
+    denied.some((src) => src.includes("/api/evidence")),
+    "vercel.json must keep denying /api/evidence - without it the Evidence Lab ships"
+  );
+
+  const ignore = fs.readFileSync(path.join(API_DIR, "..", ".vercelignore"), "utf8");
+  assert.ok(ignore.includes("api/evidence"), ".vercelignore must keep the lab functions out of the upload");
+});
+
+test("the UBO routes ask Clerk who is calling", () => {
+  // The gate is inert without CLERK_SECRET_KEY, so this cannot assert a
+  // refusal. What it can assert is that the call is wired at all - a UBO route
+  // added later without it would otherwise be open the day Clerk is switched on
+  // and nobody would notice.
+  const uboRoutes = ["ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js"];
+  const missing = uboRoutes.filter((f) => !read(f).includes("requireStaff"));
+  assert.deepEqual(missing, [], "UBO routes must go through requireStaff");
+});
+
+test("a route that spends money or writes has a rate limit", () => {
+  // Wider than the open-route rule above: a signed-in caller can still cost us
+  // money or fill a table, so the limit is about the resource, not the login.
+  const mustBeLimited = [
+    "research.js", "doc-search.js", "self-source.js", "generate-policy.js",
+    "ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js",
+    "ubo-control-lab.js",
+    "kyc-lookup.js", "company-search.js", "upload-document.js", "get-document.js",
+    "submit.js", "save-dossier.js", "change-events.js", "amendment-documents.js",
+    "idv-match/session.js", "idv-match/resolve.js", "idv-match/confirm.js",
+  ];
+  const missing = mustBeLimited.filter((f) => !read(f).includes("enforceRateLimit"));
+  assert.deepEqual(missing, [], "these spend money or write on every call and must be rate-limited");
+});
+
+test("a public status route answers booleans and never values", () => {
+  // It is open, so it is reconnaissance if it leaks. A connection string, a
+  // hostname, a version or a count of customers tells an attacker where to
+  // start; "storage: true" tells them nothing and tells us everything.
+  const statusRoutes = HANDLERS.filter((f) => ROUTES[f] === "public-status");
+  assert.ok(statusRoutes.length > 0, "the policy exists, so something should use it");
+
+  for (const file of statusRoutes) {
+    const src = read(file);
+    assert.ok(/enforceRateLimit/.test(src), `${file} is open and must be rate-limited`);
+    // Every process.env read is wrapped in Boolean(...) - the value never
+    // reaches the response.
+    for (const envRead of src.match(/process\.env\.[A-Z_]+/g) || []) {
+      const pattern = new RegExp("Boolean\\(\\s*" + envRead.replace(/\./g, "\\."));
+      assert.ok(pattern.test(src), `${file} reads ${envRead} without reducing it to a boolean`);
+    }
+  }
+});
+
+test("every route is reachable in dev, not only in production", () => {
+  // The other half of invariant 1. Vercel turns each file here into a live
+  // endpoint by itself; `npm start` does not, so a route must also be mounted
+  // by hand in src/setupProxy.js. Forget that and it works in production and
+  // 404s on the developer's machine - which is how /ubo-trials was broken
+  // locally for weeks while working fine when deployed (PLAT-11).
+  //
+  // The declaration test above checks each route says who may call it. Nothing
+  // checked that anyone could reach it (PROC-7).
+  const proxy = fs.readFileSync(path.join(API_DIR, "..", "src", "setupProxy.js"), "utf8");
+
+  // Runs on a schedule, invoked by the platform rather than by a browser, so
+  // there is nothing for the dev server to serve. The only exception, and it
+  // stays a named one.
+  const CRON_ONLY = new Set(["finalize-submissions.js"]);
+
+  const unreachable = HANDLERS
+    .filter((f) => !CRON_ONLY.has(f))
+    .filter((f) => !proxy.includes(f) && !proxy.includes(f.replace(/\.js$/, "")));
+
+  assert.deepEqual(
+    unreachable,
+    [],
+    "these are live in production and 404 under npm start - mount them in src/setupProxy.js:\n" + unreachable.join("\n")
+  );
+});
+
+test("the cron exception is real, not a way round the rule", () => {
+  // A named exception is only honest while the thing it names still exists.
+  assert.ok(HANDLERS.includes("finalize-submissions.js"));
+  assert.equal(ROUTES["finalize-submissions.js"], "cron");
+});

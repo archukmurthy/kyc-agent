@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import { adminColors, adminStyles } from "../admin/adminDesign";
+import { endSession } from "../auth/endSession";
 
 const TOKEN_KEY = "super_admin_token";
 
@@ -23,7 +24,8 @@ export default function SuperAdminRoot() {
     setToken(authToken);
   }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await endSession(token);
     try {
       sessionStorage.removeItem(TOKEN_KEY);
     } catch (_) {}
@@ -92,7 +94,7 @@ function PasswordGate({ onSuccess }) {
               width: 56,
               height: 56,
               borderRadius: 14,
-              background: adminColors.niumBlue,
+              background: adminColors.brandBlue,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -123,7 +125,7 @@ function PasswordGate({ onSuccess }) {
             textAlign: "center",
           }}
         >
-          ⚠ Internal use only — Zayzo personnel only
+          ⚠ Internal use only - Zayzo personnel only
         </div>
 
         <label style={adminStyles.label}>Password</label>

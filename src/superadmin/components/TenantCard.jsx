@@ -1,18 +1,23 @@
 import React, { useState } from "react";
 import { adminColors, adminStyles } from "../../admin/adminDesign";
 
-// One tenant tile in the super-admin dashboard. Nium is rendered with a
-// niumBlue left rail and an "Internal" badge; nothing else is special-cased
-// beyond hiding the deactivate button (Nium can never be turned off).
-export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) {
-  const isNium = tenant.tenantId === "nium" || tenant.isInternal;
+// One tenant tile in the super-admin dashboard. A protected (platform) tenant
+// is rendered with a brandBlue left rail and an "Internal" badge; nothing else
+// is special-cased beyond hiding the deactivate button (the server refuses to
+// deactivate a protected tenant anyway).
+export default function TenantCard({ tenant, onResetPassword, onToggleStatus, onTogglePreboarding }) {
+  // Protection is a registry flag, never a tenant id: isInternal is the
+  // legacy spelling of the same idea, so both count (mirrors
+  // lib/tenantRegistry.js#entryIsProtected).
+  const isProtected = tenant.isProtected || tenant.isInternal;
   const [showTechnical, setShowTechnical] = useState(false);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  const adminUrl =
-    isNium ? "/admin" : `/admin?tenant=${tenant.tenantId}`;
-  const customerUrl =
-    isNium ? "/" : `/?tenant=${tenant.tenantId}`;
+  // Every URL carries its tenant. Tenant resolution is 3-strict: a bare /admin
+  // or / resolves to no tenant at all and lands on the no-tenant screen.
+  const adminUrl = `/admin?tenant=${tenant.tenantId}`;
+  const customerUrl = `/?tenant=${tenant.tenantId}`;
+  const preboardingUrl = `/preboarding?tenant=${tenant.tenantId}`;
 
   return (
     <div
@@ -20,7 +25,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
         background: "#fff",
         borderRadius: 12,
         border: `1px solid ${adminColors.border}`,
-        borderLeft: isNium ? `4px solid ${adminColors.niumBlue}` : `1px solid ${adminColors.border}`,
+        borderLeft: isProtected ? `4px solid ${adminColors.brandBlue}` : `1px solid ${adminColors.border}`,
         padding: 18,
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
@@ -31,18 +36,17 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
             <span style={{ fontSize: 20 }}>🏢</span>
             <div style={{ fontSize: 16, fontWeight: 800, color: adminColors.text }}>
               {tenant.companyName || tenant.tenantId}
-              {isNium && (
+              {isProtected && (
                 <span style={{ fontWeight: 500, color: adminColors.textMuted, marginLeft: 6 }}>
                   (Platform Tenant)
                 </span>
               )}
             </div>
-            <StatusBadge isInternal={isNium} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
+            <StatusBadge isInternal={isProtected} isActive={tenant.isActive !== false} isBlank={!!tenant.isBlank} />
           </div>
-          {/* Tenant ID is the routing/storage key, not a display name — kept
+          {/* Tenant ID is the routing/storage key, not a display name - kept
               behind an expander so it stays available to operators without
-              surfacing "nium" on the branded dashboard. A full rename to a
-              prod-ready ID is tracked separately (see the Notion task). */}
+              putting a storage key on a branded dashboard. */}
           <div style={{ marginTop: 4 }}>
             <button
               type="button"
@@ -72,17 +76,23 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
 
           <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap", fontSize: 12, color: adminColors.textMuted }}>
             <span>
-              Created: <strong style={{ color: adminColors.text }}>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—"}</strong>
+              Created: <strong style={{ color: adminColors.text }}>{tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "-"}</strong>
             </span>
             <span>
               Last published: <strong style={{ color: adminColors.text }}>
                 {tenant.lastPublishedAt ? new Date(tenant.lastPublishedAt).toLocaleDateString() : "Never"}
               </strong>
             </span>
+            <span>
+              Pre-boarding: <strong style={{ color: tenant.preboardingEnabled ? adminColors.statusComplete : adminColors.textMuted }}>
+                {tenant.preboardingEnabled ? "On" : "Off"}
+              </strong>
+            </span>
           </div>
 
           <UrlRow label="Admin URL" value={origin + adminUrl} />
           <UrlRow label="Customer URL" value={origin + customerUrl} />
+          <UrlRow label="Pre-boarding URL" value={origin + preboardingUrl} />
         </div>
       </div>
 
@@ -108,7 +118,14 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
         >
           Reset Password
         </button>
-        {!isNium && (
+        <button
+          type="button"
+          onClick={() => onTogglePreboarding(tenant)}
+          style={adminStyles.btnGhost}
+        >
+          {tenant.preboardingEnabled ? "Disable pre-boarding" : "Enable pre-boarding"}
+        </button>
+        {!isProtected && (
           <button
             type="button"
             onClick={() => onToggleStatus(tenant)}
@@ -127,7 +144,7 @@ export default function TenantCard({ tenant, onResetPassword, onToggleStatus }) 
 
 function StatusBadge({ isInternal, isActive, isBlank }) {
   if (isInternal) {
-    return <span style={{ ...adminStyles.statusBadge("complete"), background: "rgba(11,61,145,0.1)", color: adminColors.niumBlue }}>INTERNAL</span>;
+    return <span style={{ ...adminStyles.statusBadge("complete"), background: "rgba(11,61,145,0.1)", color: adminColors.brandBlue }}>INTERNAL</span>;
   }
   if (isBlank) {
     return <span style={adminStyles.statusBadge("incomplete")}>⚠ Setup pending</span>;

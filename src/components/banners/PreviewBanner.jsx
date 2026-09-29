@@ -5,8 +5,11 @@
 //   - amber: preview requested but no staged config in sessionStorage (e.g.
 //     someone shared a /?preview=true link). Falls back to the published
 //     config and offers a link into /admin to stage a real preview.
-export function PreviewBanner({ missing, timestamp }) {
+export function PreviewBanner({ missing, timestamp, tenantId }) {
   const bg = missing ? "#B45309" : "#0B3D91";
+  // No dangling "?tenant=" when tenantId is empty - an operator on a
+  // no-tenant preview has no tenant to go to anyway.
+  const adminHref = tenantId ? `/admin?tenant=${encodeURIComponent(tenantId)}` : "/admin";
   const btnBase = {
     background: "rgba(255,255,255,0.2)",
     border: "1px solid rgba(255,255,255,0.4)",
@@ -20,7 +23,7 @@ export function PreviewBanner({ missing, timestamp }) {
   };
   let capturedAt = "";
   if (timestamp) {
-    try { capturedAt = ` — captured at ${new Date(timestamp).toLocaleTimeString()}`; }
+    try { capturedAt = ` - captured at ${new Date(timestamp).toLocaleTimeString()}`; }
     catch (_) { capturedAt = ""; }
   }
   return (
@@ -39,7 +42,7 @@ export function PreviewBanner({ missing, timestamp }) {
         }}>PREVIEW</span>
         <span>
           {missing
-            ? "No preview config found — showing published version instead."
+            ? "No preview config found - showing published version instead."
             : `Previewing unpublished changes${capturedAt}`}
         </span>
       </div>
@@ -52,7 +55,7 @@ export function PreviewBanner({ missing, timestamp }) {
         {missing && (
           <button
             type="button"
-            onClick={() => window.open("/admin", "_blank")}
+            onClick={() => window.open(adminHref, "_blank")}
             style={btnBase}
           >
             Go to admin →

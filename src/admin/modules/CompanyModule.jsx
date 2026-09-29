@@ -13,7 +13,7 @@ const FIELDS = [
   { key: "submissionEmail", label: "Submission notification email", type: "email",
     hint: "Admin metadata. Reserved for the future submission backend." },
   { key: "primaryContactName", label: "Primary contact name", type: "text",
-    hint: "Admin reference — who owns this tenant. Not shown to customers." },
+    hint: "Admin reference - who owns this tenant. Not shown to customers." },
   { key: "primaryContactEmail", label: "Primary contact email", type: "email",
     hint: "Admin reference. Also surfaced as a \"Contact\" footer link on the customer pages." },
 ];
@@ -93,7 +93,7 @@ export default function CompanyModule({ config, patchConfig, markSaved }) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
-          {saved && <span style={{ color: tokens.teal, fontSize: 12, fontWeight: 600 }}>✓ Saved locally — publish to apply</span>}
+          {saved && <span style={{ color: tokens.teal, fontSize: 12, fontWeight: 600 }}>✓ Saved locally - publish to apply</span>}
           <button style={btnPrimary} onClick={handleSave}>Save</button>
         </div>
       </div>

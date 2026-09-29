@@ -48,7 +48,7 @@ test('an active doc_required event with a real docType produces one line', async
   });
 });
 
-test('RETRACT ON REVERT — a doc_required superseded by a non-doc event drops off', async () => {
+test('RETRACT ON REVERT - a doc_required superseded by a non-doc event drops off', async () => {
   const db = makeFakeDb();
   // Customer change calls for a document...
   const e1 = await writeEvent(
@@ -98,11 +98,11 @@ test('the document follows the CURRENT event when a later event also needs a doc
   );
 
   const docs = deriveAmendmentDocuments(await load(db));
-  assert.equal(docs.length, 1, 'one line per field — only the current event');
+  assert.equal(docs.length, 1, 'one line per field - only the current event');
   assert.equal(docs[0].docType, 'New Doc');
 });
 
-test('NULL docType is excluded — the slice never invents a document', async () => {
+test('NULL docType is excluded - the slice never invents a document', async () => {
   const db = makeFakeDb();
   await writeEvent(
     db,
@@ -110,7 +110,7 @@ test('NULL docType is excluded — the slice never invents a document', async ()
       fieldId: 'pep.status',
       fieldClass: 'pep',
       workflow: 'doc_required',
-      docType: null, // un-ratified — bound for analyst review, not a doc line
+      docType: null, // un-ratified - bound for analyst review, not a doc line
       decided: false,
     }),
   );

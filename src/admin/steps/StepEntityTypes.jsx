@@ -103,7 +103,7 @@ export default function StepEntityTypes({
           : e
       );
       pushEntities(nextEntities);
-      flash(`Schema needed for ${ent.label} × ${licenceId} — configure it in Step 4`);
+      flash(`Schema needed for ${ent.label} × ${licenceId} - configure it in Step 4`);
     }
   }
 
@@ -147,7 +147,7 @@ export default function StepEntityTypes({
     }
     const id = draft.id || slugId(draft.label);
     if (entityTypes.find((e) => e.id === id)) {
-      alert(`Entity type id "${id}" already exists — choose a different label.`);
+      alert(`Entity type id "${id}" already exists - choose a different label.`);
       return;
     }
     const next = [...entityTypes, { ...draft, id, sortOrder: entityTypes.length + 1 }];
@@ -155,7 +155,7 @@ export default function StepEntityTypes({
     setShowAddForm(false);
     setDraft(BLANK());
     const n = (draft.associatedLicenceIds || []).length;
-    flash(`✅ Entity type added${n ? ` — schemas needed for ${n} licence combination${n === 1 ? "" : "s"}` : ""}`);
+    flash(`✅ Entity type added${n ? ` - schemas needed for ${n} licence combination${n === 1 ? "" : "s"}` : ""}`);
   }
 
   // Compute schema gaps for the warning panel
@@ -203,7 +203,7 @@ export default function StepEntityTypes({
         ))}
         {!entityTypes.length && (
           <div style={{ padding: 16, border: `1px dashed ${adminColors.border}`, borderRadius: 10, color: adminColors.textMuted, fontSize: 13, textAlign: "center" }}>
-            No entity types yet — add one below.
+            No entity types yet - add one below.
           </div>
         )}
       </div>
@@ -259,7 +259,7 @@ export default function StepEntityTypes({
             fontFamily: "inherit",
             fontSize: 13,
             fontWeight: 700,
-            color: adminColors.niumBlue,
+            color: adminColors.brandBlue,
           }}
         >
           + Add Entity Type
@@ -352,8 +352,8 @@ function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, on
                       borderRadius: 99,
                       fontSize: 12,
                       fontWeight: 600,
-                      border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                      background: on ? adminColors.niumBlue : "#fff",
+                      border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                      background: on ? adminColors.brandBlue : "#fff",
                       color: on ? "#fff" : adminColors.text,
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -378,7 +378,7 @@ function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, on
               <button
                 type="button"
                 onClick={() => onSetAllOwnership(true)}
-                style={{ ...adminStyles.btnGhost, padding: "4px 8px", fontSize: 12, color: adminColors.niumBlue, border: `1px solid ${adminColors.border}` }}
+                style={{ ...adminStyles.btnGhost, padding: "4px 8px", fontSize: 12, color: adminColors.brandBlue, border: `1px solid ${adminColors.border}` }}
               >
                 Select All
               </button>
@@ -427,7 +427,7 @@ function EntityCard({ entity, licences, schemas, expanded, onToggle, onPatch, on
           <button
             type="button"
             onClick={onToggle}
-            style={{ ...adminStyles.btnGhost, color: adminColors.niumBlue, fontWeight: 700 }}
+            style={{ ...adminStyles.btnGhost, color: adminColors.brandBlue, fontWeight: 700 }}
           >
             {expanded ? "Close ▴" : "Edit ▾"}
           </button>
@@ -541,8 +541,8 @@ function EntityFields({ entity, licences, onPatch, onToggleLicence, hideLicences
                     borderRadius: 99,
                     fontSize: 12,
                     fontWeight: 600,
-                    border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                    background: on ? adminColors.niumBlue : "#fff",
+                    border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                    background: on ? adminColors.brandBlue : "#fff",
                     color: on ? "#fff" : adminColors.text,
                     cursor: "pointer",
                     fontFamily: "inherit",

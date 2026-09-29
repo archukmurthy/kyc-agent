@@ -7,7 +7,7 @@ import {
   ATTRIBUTE_BY_FIELD_KEY,
 } from "../personType";
 
-describe("resolvePersonType — the real interface wins", () => {
+describe("resolvePersonType - the real interface wins", () => {
   it("reads explicit flags and reports them as non-stub", () => {
     expect(resolvePersonType({ isDirector: true, isUBO: false }, "anything")).toMatchObject({
       isDirector: true, isUBO: false, personType: PERSON_TYPE.DIRECTOR, source: "flags", isStub: false,
@@ -17,7 +17,7 @@ describe("resolvePersonType — the real interface wins", () => {
     });
   });
 
-  it("types a dual-role person as UBO — CD-03 gives them UBO treatment", () => {
+  it("types a dual-role person as UBO - CD-03 gives them UBO treatment", () => {
     const r = resolvePersonType({ isDirector: true, isUBO: true }, "directors");
     expect(r.personType).toBe(PERSON_TYPE.UBO);
     expect(r.isDirector).toBe(true);
@@ -30,7 +30,7 @@ describe("resolvePersonType — the real interface wins", () => {
   });
 });
 
-describe("resolvePersonType — the STUB tiers", () => {
+describe("resolvePersonType - the STUB tiers", () => {
   it("infers UBO from a ubo-like field and marks it a stub", () => {
     const r = resolvePersonType({}, "ubo_ownership_analysis");
     expect(r).toMatchObject({ isUBO: true, personType: PERSON_TYPE.UBO, source: "field-inferred", isStub: true });
@@ -41,12 +41,12 @@ describe("resolvePersonType — the STUB tiers", () => {
     expect(r).toMatchObject({ isDirector: true, isUBO: false, personType: PERSON_TYPE.DIRECTOR, source: "field-inferred", isStub: true });
   });
 
-  it("defaults to UBO when there is nothing to go on — over-collect is the safe failure", () => {
+  it("defaults to UBO when there is nothing to go on - over-collect is the safe failure", () => {
     const r = resolvePersonType({}, "");
     expect(r).toMatchObject({ isUBO: true, personType: PERSON_TYPE.UBO, source: "stub-default", isStub: true });
   });
 
-  it("never returns pseudo_ubo — that case is not derivable and stays UNDECIDED", () => {
+  it("never returns pseudo_ubo - that case is not derivable and stays UNDECIDED", () => {
     const samples = [{}, { isUBO: true }, { isDirector: true }];
     const fields = ["", "directors", "ubo", "shareholders"];
     samples.forEach((p) => fields.forEach((f) => {
@@ -70,7 +70,7 @@ describe("composite fieldId (Investigation C)", () => {
     expect(parsePersonFieldId("")).toBeNull();
   });
 
-  it("addresses each person-attribute independently — the basis of per-attribute supersede", () => {
+  it("addresses each person-attribute independently - the basis of per-attribute supersede", () => {
     const a = personFieldId("ubo", "sh_1", "dob");
     const b = personFieldId("ubo", "sh_1", "nationality");
     const c = personFieldId("ubo", "sh_2", "dob");
@@ -78,7 +78,7 @@ describe("composite fieldId (Investigation C)", () => {
   });
 });
 
-describe("listDocumentFor — the shared list-document rule", () => {
+describe("listDocumentFor - the shared list-document rule", () => {
   it("director → list of directors, UBO → ownership chart", () => {
     expect(listDocumentFor(PERSON_TYPE.DIRECTOR)).toBe("List of Directors");
     expect(listDocumentFor(PERSON_TYPE.UBO)).toBe("Ownership Chart");

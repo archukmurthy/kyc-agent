@@ -155,7 +155,7 @@ export function StakeholderGapForms({
           placeholder="e.g. Companies House / ACRA number"
         />
 
-        {/* Registered country — pre-filled & verified when the AI found it */}
+        {/* Registered country - pre-filled & verified when the AI found it */}
         <PrePopulatedField
           id={`stk_${fieldId}_${s.id}_reg_country`}
           label="Registered Country"
@@ -178,7 +178,7 @@ export function StakeholderGapForms({
           placeholder="e.g. 100"
         />
 
-        {/* Positions — repeatable { title, start_date } */}
+        {/* Positions - repeatable { title, start_date } */}
         <div style={{ marginBottom: 4 }}>
           <label style={stakeholderLabelStyle}>Position(s)</label>
           {positions.length === 0 && (
@@ -343,7 +343,7 @@ export function StakeholderGapForms({
             <>
               {isRejected && stakeholder.full_name_original && (
                 <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 4px" }}>
-                  AI found: "{stakeholder.full_name_original}" — please enter the correct name
+                  AI found: "{stakeholder.full_name_original}" - please enter the correct name
                 </p>
               )}
               <StableInput
@@ -378,7 +378,7 @@ export function StakeholderGapForms({
             />
           )}
 
-          {/* Nationality — pre-filled & locked (editable) when the AI found it */}
+          {/* Nationality - pre-filled & locked (editable) when the AI found it */}
           <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_nationality`}
             label="Nationality"
@@ -391,7 +391,7 @@ export function StakeholderGapForms({
             placeholder="e.g. British, American, Singaporean"
           />
 
-          {/* Date of birth — pre-filled & locked (editable) when the AI found it */}
+          {/* Date of birth - pre-filled & locked (editable) when the AI found it */}
           <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_dob`}
             label="Date of Birth"
@@ -405,7 +405,7 @@ export function StakeholderGapForms({
             placeholder="YYYY-MM-DD"
           />
 
-          {/* Country of residence — pre-filled & locked (editable) when the AI
+          {/* Country of residence - pre-filled & locked (editable) when the AI
               found it on the registry; falls through to a country picker when empty */}
           <PrePopulatedField
             id={`stk_${fieldId}_${stakeholder.id}_country`}
@@ -419,7 +419,7 @@ export function StakeholderGapForms({
           />
 
           {/* Identity Document Type and Identity Document Number are intentionally
-              hidden at Fill Gaps — these are collected later in the verification
+              hidden at Fill Gaps - these are collected later in the verification
               flow, not from the registry. Uncomment to restore.
           <StableInput
             id={`stk_${fieldId}_${stakeholder.id}_id_type`}
@@ -527,7 +527,7 @@ export function StakeholderGapForms({
                 {isPartial ? `Other ${fieldLabel}` : fieldLabel}
               </div>
               <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
-                Publicly listed company — verified from official sources. No additional details required.
+                Publicly listed company - verified from official sources. No additional details required.
               </div>
             </div>
           </div>
@@ -659,7 +659,7 @@ export function StakeholderGapForms({
         </div>
         <div style={{ padding: 16 }}>
           <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
-            Identify-only — a listed company's directors are public record, so we only need to know
+            Identify-only - a listed company's directors are public record, so we only need to know
             who replaces the person you removed.
           </p>
           <div style={{ marginBottom: 14 }}>
@@ -799,7 +799,7 @@ export function StakeholderGapForms({
         <div style={{ padding: 16 }}>
           <p style={{ fontSize: 11, color: "#1a3a4a80", fontStyle: "italic", margin: "0 0 12px" }}>
             You marked {corrected.length === 1 ? "a detail" : "these details"} as incorrect on the previous
-            page. Correct {corrected.length === 1 ? "it" : "them"} below — we only collect the
+            page. Correct {corrected.length === 1 ? "it" : "them"} below - we only collect the
             value{corrected.length > 1 ? "s" : ""} you're fixing.
           </p>
           {corrected.map((f) => renderCorrectionField(fieldId, s, f))}
@@ -891,26 +891,26 @@ export function StakeholderGapForms({
         ) : null}
         {needingDetails.map((s, i) => renderStakeholderCard(fieldId, s, i))}
 
-        {/* Listed-company light replacement cards — only for unticked people. */}
+        {/* Listed-company light replacement cards - only for unticked people. */}
         {lightReplacements.length > 0 && (
           <>
             <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
               You removed {lightReplacements.length === 1 ? `a ${personLabel}` : `${lightReplacements.length} ${personLabel}s`} on
-              the previous page. Please identify {lightReplacements.length === 1 ? "their replacement" : "their replacements"} below —
+              the previous page. Please identify {lightReplacements.length === 1 ? "their replacement" : "their replacements"} below -
               just a name and role. A listed company's {personLabel}s are public record, so no further details are needed.
             </p>
             {lightReplacements.map((s) => renderLightReplacementCard(fieldId, s))}
           </>
         )}
 
-        {/* Listed-company field-level corrections — kept people whose surfaced
+        {/* Listed-company field-level corrections - kept people whose surfaced
             value(s) the customer unticked to fix. Correction-only, no EDD. */}
         {fieldCorrections.length > 0 && (
           <>
             <p style={{ fontSize: 12, color: "#1a3a4a80", margin: "4px 0 14px", lineHeight: 1.5 }}>
               You marked {fieldCorrections.length === 1 ? "a detail" : "some details"} as incorrect on the
               previous page. Please correct {fieldCorrections.length === 1 ? "it" : "them"} below. As a listed
-              company, no further details are collected — only the values you're fixing.
+              company, no further details are collected - only the values you're fixing.
             </p>
             {fieldCorrections.map((s) => renderFieldCorrectionCard(fieldId, s, ubo))}
           </>
@@ -951,7 +951,7 @@ export function StakeholderGapForms({
             <span style={{ fontSize: 18 }}>✅</span>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#1a6b56" }}>
-                {heading} — No action required
+                {heading} - No action required
               </div>
               <div style={{ fontSize: 12, color: "#1a6b56", opacity: 0.8, marginTop: 2 }}>
                 This is a publicly listed company. Ownership information is publicly disclosed through
@@ -992,7 +992,7 @@ export function StakeholderGapForms({
 
   return (
     <>
-            {/* 3. Stakeholder forms — only people who need customer input
+            {/* 3. Stakeholder forms - only people who need customer input
                 (private directors/UBOs, or listed-company >= 25% UBOs). */}
             {hasStakeholderForms && (
               <div style={{
@@ -1003,12 +1003,12 @@ export function StakeholderGapForms({
                 display: "flex", alignItems: "center", gap: 8,
               }}>
                 <span>👥</span>
-                <span>People — additional details needed</span>
+                <span>People - additional details needed</span>
               </div>
             )}
             {stakeholderFormNodes}
 
-            {/* 4. Verified stakeholder summary — read-only reference, last. */}
+            {/* 4. Verified stakeholder summary - read-only reference, last. */}
             {hasStakeholderSummary && (
               <div style={{
                 fontSize: 11, fontWeight: 700, color: "#1a3a4a80",
@@ -1018,7 +1018,7 @@ export function StakeholderGapForms({
                 display: "flex", alignItems: "center", gap: 8,
               }}>
                 <span>✅</span>
-                <span>Verified information — for reference</span>
+                <span>Verified information - for reference</span>
               </div>
             )}
             {stakeholderSummaryNodes}

@@ -1,4 +1,5 @@
 "use strict";
+const { evidenceLabTenantId } = require("./tenant");
 
 const path = require("node:path");
 const { CompaniesHouseEvidenceService } = require("../../evidence/a2/service");
@@ -36,7 +37,7 @@ function createHandler(dependencyFactory) {
         producerRequestKey: req.body?.producerRequestKey,
         collectionCoordinates: req.body?.collectionCoordinates,
         mode,
-        tenantId: req.body?.tenantId || "nium",
+        tenantId: req.body?.tenantId || evidenceLabTenantId(),
         contextReference: req.body?.contextReference || null,
       });
       return res.status(200).json({ success: true, replayed: !!result.replayed, summary: result.summary, inspection: result.inspection });

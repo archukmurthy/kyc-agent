@@ -27,7 +27,7 @@ export default function SourceRow({ source, showFlag, onToggleActive, onDelete }
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: adminColors.text }}>{source.name}</div>
         <div style={{ fontSize: 11, color: adminColors.textMuted, fontFamily: "monospace" }}>
-          {source.pattern || "—"}
+          {source.pattern || "-"}
         </div>
       </div>
       <label

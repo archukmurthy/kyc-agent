@@ -11,18 +11,29 @@ const assert = require('node:assert/strict');
 const path = require('path');
 
 const handler = require(path.join(__dirname, '..', '..', '..', 'api', 'dossier-reseed.js'));
+const routeAuth = require(path.join(__dirname, '..', '..', '..', 'lib', 'routeAuth.js'));
+
+// The route takes a dossier credential (Batch 0). These tests are about the
+// state machine, so they stand in an authorised customer; the refusal itself is
+// asserted separately at the bottom of this file.
+routeAuth.__setDeps({
+  resolveDossierActor: async () => ({ kind: 'customer', tenantId: 'acme', dossierId: '1', reason: null }),
+});
 
 function mockRes() {
   return {
     statusCode: 200,
     body: null,
+    headers: {},
+    setHeader(k, v) { this.headers[String(k).toLowerCase()] = v; },
     status(c) { this.statusCode = c; return this; },
     json(d) { this.body = d; return this; },
+    end() { return this; },
   };
 }
 async function call(body, method = 'POST') {
   const res = mockRes();
-  await handler({ method, body }, res);
+  await handler({ method, body, headers: {}, query: {} }, res);
   return res;
 }
 
@@ -66,4 +77,14 @@ test('missing dispute kind is rejected', async () => {
 test('non-POST is 405', async () => {
   const res = await call({ disputeKind: 'identity' }, 'GET');
   assert.equal(res.statusCode, 405);
+});
+
+test('an anonymous caller is refused', async () => {
+  routeAuth.__resetDeps();
+  routeAuth.__setDeps({ resolveDossierActor: async () => ({ kind: 'none', reason: 'unauthorized' }) });
+  const res = await call({ disputeKind: 'identity', disputedClassifiers: ['companyName'] });
+  assert.equal(res.statusCode, 401);
+  routeAuth.__setDeps({
+    resolveDossierActor: async () => ({ kind: 'customer', tenantId: 'acme', dossierId: '1', reason: null }),
+  });
 });

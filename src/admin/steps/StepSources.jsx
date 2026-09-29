@@ -94,7 +94,7 @@ export default function StepSources({ config, onChange, isStandalone = false }) 
         const text = await uploadedFile.text();
         const rows = parseCsv(text);
         const mapped = mapCsvToSources(rows);
-        if (!mapped.length) throw new Error("No rows parsed — check that the CSV has the expected headers.");
+        if (!mapped.length) throw new Error("No rows parsed - check that the CSV has the expected headers.");
         setExtractedSources(mapped);
       } else {
         setExtractionError(
@@ -349,7 +349,7 @@ function Banner({ open, setOpen, children }) {
           background: "rgba(11,61,145,0.06)",
           border: `1px solid rgba(11,61,145,0.16)`,
           borderRadius: 8,
-          color: adminColors.niumBlue,
+          color: adminColors.brandBlue,
           fontWeight: 600,
           fontSize: 12,
           cursor: "pointer",
@@ -409,7 +409,7 @@ function ExtractedPreview({ rows, onRowChange, onRowDelete, onCancel, onApply })
   return (
     <div style={{ marginTop: 14, padding: 14, border: `1px solid ${adminColors.border}`, borderRadius: 10, background: "#fff" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>Preview — {rows.length} sources</div>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Preview - {rows.length} sources</div>
         <div style={{ fontSize: 11, color: adminColors.textMuted }}>Review and edit before applying.</div>
       </div>
       <div style={{ overflowX: "auto" }}>
@@ -480,7 +480,7 @@ function ExtractedPreview({ rows, onRowChange, onRowDelete, onCancel, onApply })
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
         <button type="button" onClick={onCancel} style={{ ...adminStyles.btnGhost, color: adminColors.textMuted }}>
-          Cancel — discard upload
+          Cancel - discard upload
         </button>
         <button type="button" onClick={onApply} style={adminStyles.btnPrimary}>
           Apply {rows.length} sources →
@@ -522,7 +522,7 @@ function PrimaryByCountry({ primaryByCountry, onUpdate, onDelete, onAdd }) {
             <button
               type="button"
               onClick={() => setAdding(k)}
-              style={{ ...adminStyles.btnGhost, color: adminColors.niumBlue, fontSize: 12, marginTop: 6, padding: 0 }}
+              style={{ ...adminStyles.btnGhost, color: adminColors.brandBlue, fontSize: 12, marginTop: 6, padding: 0 }}
             >
               + Add source for {k === "__global__" ? "global" : countryName(k)}
             </button>
@@ -582,7 +582,7 @@ function AddSourceForm({ onAdd, onCancel, showCountry, presetCountry }) {
       <div style={{ display: "grid", gridTemplateColumns: showCountry ? "120px 1fr 1fr" : "1fr 1fr", gap: 8 }}>
         {showCountry && (
           <select value={country} onChange={(e) => setCountry(e.target.value)} style={adminStyles.input}>
-            <option value="">— Country —</option>
+            <option value="">- Country -</option>
             {COUNTRIES.map((c) => (
               <option key={c.code} value={c.code}>{c.name}</option>
             ))}

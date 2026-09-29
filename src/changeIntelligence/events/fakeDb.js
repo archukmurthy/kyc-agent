@@ -51,7 +51,9 @@ function makeFakeDb() {
         return [clone(row)];
       }
       case 'get_by_id':
-        return rows.filter((r) => r.id === params[0]).map((r) => ({ id: r.id }));
+        return rows
+          .filter((r) => r.id === params[0] && r.submission_id === params[1])
+          .map((r) => ({ id: r.id }));
       case 'is_superseded':
         return rows.filter((r) => r.supersedes === params[0]).map((r) => ({ id: r.id }));
       case 'by_submission':

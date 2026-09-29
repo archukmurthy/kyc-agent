@@ -4,16 +4,21 @@
   "private": true,
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
+    "@clerk/backend": "^3.18.1",
+    "@clerk/clerk-react": "^5.61.10",
+    "@complycube/api": "^1.1.14",
     "@neondatabase/serverless": "^1.1.0",
-    "@vercel/blob": "^2.5.0",
+    "@vercel/blob": "^2.8.0",
     "@vercel/kv": "^3.0.0",
     "dompurify": "^3.4.14",
     "formidable": "^3.5.4",
     "ioredis": "^5.11.0",
     "playwright": "^1.61.0",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
+    "ws": "^8.21.3",
     "xlsx": "^0.18.5"
   },
   "scripts": {
@@ -23,15 +28,22 @@
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "postbuild": "node scripts/evidence-deployment-boundary.js --sanitize-build --verify",
     "test": "react-scripts test",
+    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js db/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js",
     "test:ubo-demo:critical": "node scripts/run-ubo-demo-critical.js",
     "test:ubo-demo:regression": "node scripts/run-ubo-demo-regression.js",
     "test:ubo-poc:release-smoke": "node scripts/ubo-poc-release-smoke.js",
     "test:smoke:db": "node scripts/real-db-smoke.js",
+    "worker:finalize": "node -r dotenv/config scripts/run-finalize-worker.js dotenv_config_path=.env.local",
     "idv:test": "node --test idv/__tests__/providerContract.nodetest.js idv/__tests__/lifecycle.nodetest.js idv/__tests__/securityAndRouting.nodetest.js idv/__tests__/failureModes.nodetest.js idv/__tests__/secureIdentity.nodetest.js idv/__tests__/metrics.nodetest.js idv/__tests__/productionGuards.nodetest.js",
     "idv:security-scan": "node idv/scripts/securityScan.js",
     "idv:migrate": "node idv/persistence/applyModuleSchema.js",
+    "idv:db:migrate": "node -r dotenv/config db/apply-idv.js dotenv_config_path=.env.local",
+    "idv:db:seed": "node -r dotenv/config scripts/demo/seed-complete.js dotenv_config_path=.env.local",
+    "idv:db:seed:populated": "node -r dotenv/config scripts/demo/seed-populated.js dotenv_config_path=.env.local",
     "idv:harness": "node idv/harness/server.js",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "access": "node -r dotenv/config scripts/access.js",
+    "db:migrate": "node db/migrate-all.js"
   },
   "eslintConfig": {
     "extends": [

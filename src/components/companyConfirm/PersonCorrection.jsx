@@ -57,9 +57,9 @@ const LINK = {
 };
 
 const NAME_OPTIONS = [
-  { value: "typo", label: "You spelled this person's name wrong", hint: "Same person — we just read it incorrectly." },
+  { value: "typo", label: "You spelled this person's name wrong", hint: "Same person - we just read it incorrectly." },
   { value: "legal_change", label: "This person's name has legally changed", hint: "Same person, new legal name (marriage, deed poll)." },
-  { value: "wrong_person", label: "This isn't the right person — they've been replaced", hint: "We'll remove them from the list." },
+  { value: "wrong_person", label: "This isn't the right person - they've been replaced", hint: "We'll remove them from the list." },
 ];
 
 export function PersonCorrection({
@@ -155,7 +155,7 @@ export function PersonCorrection({
 const REMOVAL_REASONS = [
   { value: "no_longer_director", label: "No longer a director" },
   { value: "no_longer_owner", label: "No longer holds a qualifying shareholding" },
-  { value: "never_involved", label: "Never held this role — you have the wrong person" },
+  { value: "never_involved", label: "Never held this role - you have the wrong person" },
 ];
 
 /**

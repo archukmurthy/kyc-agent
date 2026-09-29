@@ -25,9 +25,10 @@
  *
  * ONE STUB, DELIBERATELY. /api/save-dossier is stubbed to resolve with a
  * dossierId for the populated-invite tests. Without it dossierId stays null and
- * generateLink() takes its legacy `?ref=` fallback — a real path, covered
- * separately. Both branches are live user paths, so both are pinned. Same shape
- * as the AI-Documents net's /api/self-source stub.
+ * Send invite is disabled — a saved dossier is required to produce a working,
+ * cross-device link (the legacy `?ref=` localStorage-snapshot link is no longer
+ * generated or emailed). Same shape as the AI-Documents net's /api/self-source
+ * stub.
  *
  * CHARACTERISATION, not specification: these assert what the surface does TODAY.
  * After B's move this file must stay green UNCHANGED — with ONE deliberate
@@ -35,7 +36,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KYCAgent from "../../../App";
 
@@ -45,15 +46,23 @@ let fetchRoutes = {};
 
 beforeEach(() => {
   fetchRoutes = {};
+  fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve(
+          opts && opts.method === "POST"
+            ? { success: true, token: "ARCH", tenantId: "nium", companyName: "Nium" }
+            : { available: true, reason: null, companyName: "Nium" }
+        ),
+    });
   global.fetch = jest.fn((url, opts) => {
     const key = Object.keys(fetchRoutes).find((k) => String(url).includes(k));
     if (key) return fetchRoutes[key](url, opts);
     return Promise.reject(new Error("offline test"));
   });
   jest.useFakeTimers();
-  // The entry mechanism: the param is read during render, so it must be set
-  // BEFORE the first render for the early-return branch to fire.
-  window.history.pushState({}, "", "/?preboarding=1");
+  window.history.pushState({}, "", "/preboarding?tenant=nium");
 });
 
 afterEach(() => {
@@ -88,14 +97,14 @@ const codeInput = () => screen.getByPlaceholderText(/Enter access code/i);
 /** Step 1 — pushState is already done in beforeEach; this just mounts. */
 async function mountAtGate() {
   await act(async () => {
-    render(<KYCAgent />);
+    render(<KYCAgent preboarding />);
   });
   await settle(0);
 }
 
-/** Step 2 — ARCH is the PREBOARDING_PASSWORD constant in App.js. */
-async function unlock() {
-  fireEvent.change(codeInput(), { target: { value: "ARCH" } });
+/** Step 2 — the password is checked by /api/preboarding-auth, not the bundle. */
+async function unlock(code = "ARCH") {
+  fireEvent.change(codeInput(), { target: { value: code } });
   fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
   await settle(0);
 }
@@ -117,7 +126,7 @@ async function driveToDossier() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -133,7 +142,7 @@ async function driveToInvite() {
 }
 
 /* ═══════════════════════════════════════════
-   1. The gate — entry and unlock
+   1. The gate - entry and unlock
    ═══════════════════════════════════════════ */
 describe("pre-boarding gate", () => {
   it("?preboarding=1 lands on the gate, not the onboarding lookup screen", async () => {
@@ -146,18 +155,49 @@ describe("pre-boarding gate", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("REGRESSION (Finding 1): /preview with the legacy pre-boarding param stays on the gate, in preview mode, instead of falling through to the customer flow", async () => {
+    // Mirrors how index.js's /preview branch renders KYCAgent now that it
+    // passes the legacy-param-derived preboarding flag alongside previewMode.
+    // Before that fix the branch rendered `<KYCAgent previewMode />` with no
+    // preboarding prop, so `isPreboardingSurface` was false, the redirect
+    // effect's early-return guard never tripped, and the component fell
+    // through to the ordinary customer flow instead of the gate — discarding
+    // preview mode. See task-11-report.md for this test's failing run against
+    // the pre-fix call shape.
+    //
+    // LIMIT OF THIS TEST: it renders `<KYCAgent previewMode preboarding />`
+    // directly, proving the COMPONENT's contract for that prop combination.
+    // It does not — and under jsdom cannot — execute src/index.js itself, so
+    // it cannot catch a regression in index.js's /preview branch (e.g. a
+    // revert back to `<KYCAgent previewMode />` with the preboarding prop
+    // dropped). That branch has no test of its own; a future reader should
+    // not mistake this test for end-to-end coverage of it.
+    await act(async () => {
+      render(<KYCAgent previewMode preboarding />);
+    });
+    await settle(0);
+    expect(bodyText()).toMatch(/Pre-boarding Agent/i);
+    expect(codeInput()).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Company Lookup/i })
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the access-code prompt as a password field", async () => {
     await mountAtGate();
     expect(codeInput()).toHaveAttribute("type", "password");
     expect(buttonsWithText(/Access Pre-boarding Agent/i).length).toBe(1);
   });
 
-  it("a wrong code does NOT unlock", async () => {
+  it("a wrong code does NOT unlock — the server rejects it", async () => {
     await mountAtGate();
-    fireEvent.change(codeInput(), { target: { value: "WRONG" } });
-    fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
-    await settle(0);
-    // Still gated.
+    fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
+      Promise.resolve(
+        opts && opts.method === "POST"
+          ? { ok: false, status: 401, json: () => Promise.resolve({ error: "invalid_password" }) }
+          : { ok: true, json: () => Promise.resolve({ available: true, reason: null, companyName: "Nium" }) }
+      );
+    await unlock("WRONG");
     expect(screen.getByPlaceholderText(/Enter access code/i)).toBeInTheDocument();
   });
 
@@ -171,10 +211,63 @@ describe("pre-boarding gate", () => {
     expect(bodyText()).toMatch(/Pre-boarding/i);
     expect(screen.getByPlaceholderText(/Tesco PLC/i)).toBeInTheDocument();
   });
+
+  it("a tenant with pre-boarding switched off never shows the password form", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "preboarding_disabled", companyName: "Acme" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/not available/i);
+  });
+
+  it("a deactivated tenant is told so, not gated", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "tenant_inactive", companyName: "Acme" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/not active|deactivated/i);
+  });
+
+  it("an unknown tenant is told so, not gated", async () => {
+    fetchRoutes["/api/preboarding-auth"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ available: false, reason: "tenant_not_found", companyName: "" }),
+      });
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);
+  });
+
+  it("the availability probe rejecting (offline/server error) degrades to the unavailable screen, not a crash or a password box", async () => {
+    // PreboardingGate's probe effect has a `catch` fallback for a rejected
+    // fetch (network down, server 500 before it can even answer) that no
+    // other test exercises — it always resolves. Force that branch: the GET
+    // probe rejects outright rather than resolving with an `available` body.
+    fetchRoutes["/api/preboarding-auth"] = () => Promise.reject(new Error("network down"));
+    await mountAtGate();
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/don't recognise|not recognised|doesn't exist/i);
+  });
+
+  it("/preboarding with no tenant explains what to add instead of gating", async () => {
+    window.history.pushState({}, "", "/preboarding");
+    await act(async () => { render(<KYCAgent preboarding />); });
+    await settle(0);
+    expect(screen.queryByPlaceholderText(/Enter access code/i)).not.toBeInTheDocument();
+    expect(bodyText()).toMatch(/No tenant selected/i);
+    expect(bodyText()).toMatch(/analyst flow/i);
+  });
 });
 
 /* ═══════════════════════════════════════════
-   2. THE BACK-BUTTON DEAD END — pins a BUG
+   2. THE BACK-BUTTON DEAD END - pins a BUG
    ═══════════════════════════════════════════ */
 describe("back to agent selection", () => {
   /**
@@ -196,7 +289,7 @@ describe("back to agent selection", () => {
    * assertion should be rewritten again — to expect an actual return to agent
    * selection.
    */
-  it("the back-to-agent-selection control is PARKED — no dead-end affordance renders", async () => {
+  it("the back-to-agent-selection control is PARKED - no dead-end affordance renders", async () => {
     await mountAtGate();
     expect(codeInput()).toBeInTheDocument();
 
@@ -210,7 +303,7 @@ describe("back to agent selection", () => {
 });
 
 /* ═══════════════════════════════════════════
-   3. The dossier view — reached with NO stub
+   3. The dossier view - reached with NO stub
    ═══════════════════════════════════════════ */
 describe("dossier view", () => {
   it("opens after research even though the offline save fails", async () => {
@@ -269,6 +362,67 @@ describe("dossier view", () => {
     await driveToDossier();
     expect(buttonsWithText(/Invite Customer to Onboard/i).length).toBe(1);
   });
+
+  /* ── save-failure banner (this fix) ── */
+  it("shows a save-failure banner with a Retry save button when the offline save fails", async () => {
+    // No /api/save-dossier stub is registered, so the fetch mock rejects
+    // ("offline test") and saveDossier's catch sets dossierSaveError.
+    await driveToDossier();
+    expect(bodyText()).toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(1);
+  });
+
+  it("disables Invite Customer to Onboard with a hint while unsaved (dossierId is null)", async () => {
+    await driveToDossier();
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+    expect(bodyText()).toMatch(/Save the dossier before inviting\./i);
+  });
+
+  it("Retry save clears the banner and enables Invite once the save succeeds", async () => {
+    await driveToDossier();
+    expect(buttonsWithText(/Retry save/i).length).toBe(1);
+
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true, dossierId: "dossier_retry123" }),
+      });
+
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(0);
+    expect(buttonsWithText(/Invite Customer to Onboard/i)[0]).not.toBeDisabled();
+  });
+
+  /**
+   * A 403 dossier_locked means the save DID land — under the customer, not
+   * lost — so this must NOT look like the offline-save-failure case above:
+   * no "hasn't been saved" banner, no Retry save button (retrying can never
+   * succeed once the customer owns it). Instead the analyst goes read-only.
+   */
+  it("a 403 dossier_locked on save switches to read-only instead of showing a save-failure banner", async () => {
+    await driveToDossier();
+    expect(buttonsWithText(/Retry save/i).length).toBe(1); // offline first save failed
+
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ error: "dossier_locked" }),
+      });
+
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/hasn't been saved/i);
+    expect(buttonsWithText(/Retry save/i).length).toBe(0);
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+    expect(bodyText()).toMatch(/The customer has taken over this application\./i);
+  });
 });
 
 /* ═══════════════════════════════════════════
@@ -296,7 +450,7 @@ describe("ask for more information", () => {
 });
 
 /* ═══════════════════════════════════════════
-   5. The invite screen — BOTH branches
+   5. The invite screen - BOTH branches
    ═══════════════════════════════════════════ */
 describe("invite screen", () => {
   const inviteForm = () => ({
@@ -314,6 +468,15 @@ describe("invite screen", () => {
   }
 
   it("the dossier's invite control opens the invite screen", async () => {
+    // Reaching the invite screen now requires a saved dossier (this fix
+    // disables the DossierView Invite button until dossierId is set), so
+    // stub the save to succeed before driving through it.
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }),
+      });
+
     await driveToInvite();
     expect(inviteForm().name).toBeInTheDocument();
     expect(inviteForm().email).toBeInTheDocument();
@@ -321,23 +484,40 @@ describe("invite screen", () => {
     expect(bodyText()).not.toMatch(/📄 Documents Sourced/);
   });
 
-  // ── FALLBACK branch: no stub, save fails, dossierId stays null ──
-  it("FALLBACK — with no saved dossier the link falls back to a ?ref= token", async () => {
-    await driveToInvite();
-    await sendInvite();
+  // ── UNSAVED branch: no stub, save fails, dossierId stays null. This fix
+  // moves the gate earlier — the DossierView Invite button is now disabled,
+  // so the invite screen is never reached at all (InviteScreen's own
+  // dossierId-gated Send button, asserted separately, is defense-in-depth
+  // for the unlikely case dossierId is cleared after this screen opens). ──
+  it("UNSAVED - with no saved dossier, the invite screen is never reached", async () => {
+    await driveToDossier();
 
-    const text = bodyText();
-    expect(text).toMatch(/Onboarding link/i);
-    expect(text).toContain("?ref=");
-    expect(text).not.toContain("dossierId=");
+    const inviteButton = buttonsWithText(/Invite Customer to Onboard/i)[0];
+    expect(inviteButton).toBeDisabled();
+
+    fireEvent.click(inviteButton);
+    await settle(0);
+
+    // Still on the dossier — clicking a disabled button does not navigate.
+    expect(bodyText()).toMatch(/Intelligence Dossier/i);
+    expect(screen.queryByPlaceholderText(/Sarah Chen/i)).not.toBeInTheDocument();
   });
 
   // ── POPULATED branch: /api/save-dossier stubbed so dossierId is real ──
-  it("POPULATED — a saved dossier produces a dossier-backed customer link", async () => {
+  it("POPULATED - a saved dossier produces a dossier-backed customer link", async () => {
     fetchRoutes["/api/save-dossier"] = () =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
+      });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
       });
 
     await driveToInvite();
@@ -345,21 +525,174 @@ describe("invite screen", () => {
 
     const text = bodyText();
     expect(text).toMatch(/Onboarding link/i);
-    expect(text).toContain("dossierId=dossier_abc123");
+    expect(text).toContain("dossierToken=signed.tok");
     expect(text).toContain("journey=customer");
-    // The legacy fallback must NOT be used when a dossier exists.
+    // No raw dossier id and no legacy link ever reach the screen.
+    expect(text).not.toContain("dossierId=");
     expect(text).not.toContain("?ref=");
   });
 
-  it("POPULATED — offers a copy control alongside the link", async () => {
+  it("POPULATED - offers a copy control alongside the link", async () => {
     fetchRoutes["/api/save-dossier"] = () =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ dossierId: "dossier_abc123" }),
+      });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          sent: false,
+          simulated: true,
+          link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer",
+        }),
       });
 
     await driveToInvite();
     await sendInvite();
     expect(buttonsWithText(/Copy link/i).length).toBe(1);
+  });
+
+  it("POPULATED - the invite request carries the analyst credential", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    let inviteHeaders = null;
+    fetchRoutes["/api/invite"] = (url, opts) => {
+      inviteHeaders = opts && opts.headers;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=t&journey=customer" }) });
+    };
+    await driveToInvite();
+    await sendInvite();
+    expect(inviteHeaders.Authorization).toBe("Bearer ARCH");
+  });
+
+  /* ── Finding 1: a failed /api/invite must show a visible error, not silently no-op ── */
+
+  it("401 unauthorized - shows a session-expired message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: "unauthorized" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/pre-boarding session is no longer valid/i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+    // Still on the invite form, not silently stuck - Send invite is available to retry.
+    expect(buttonsWithText(/Send invite/i).length).toBe(1);
+  });
+
+  it("500 not_configured - shows a generic retry message and no link", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: "not_configured" }),
+      });
+
+    await driveToInvite();
+    await sendInvite();
+
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).not.toMatch(/Invite sent to/i);
+    expect(buttonsWithText(/Copy link/i).length).toBe(0);
+  });
+
+  it("a retried send clears the previous error once it succeeds", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, dossierId: "dossier_abc123" }) });
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "lookup_failed" }) });
+
+    await driveToInvite();
+    await sendInvite();
+    expect(bodyText()).toMatch(/Couldn't create the invite link\. Try again\./i);
+
+    fetchRoutes["/api/invite"] = () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ link: "http://localhost/?tenant=nium&dossierToken=signed.tok&journey=customer" }),
+      });
+    fireEvent.click(buttonsWithText(/Send invite/i)[0]);
+    await settle(0);
+
+    expect(bodyText()).not.toMatch(/Couldn't create the invite link\. Try again\./i);
+    expect(bodyText()).toMatch(/Onboarding link/i);
+  });
+});
+
+describe("dossier creation is idempotent", () => {
+  const saveBodies = () =>
+    global.fetch.mock.calls
+      .filter(([url]) => String(url).includes("/api/save-dossier"))
+      .map(([, init]) => JSON.parse(init.body));
+
+  it("a retried first save re-sends the SAME creation key", async () => {
+    let attempt = 0;
+    fetchRoutes["/api/save-dossier"] = () => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error("network lost after insert"))
+        : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    };
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/Retry save/i)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].creationKey).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(bodies[1].creationKey).toBe(bodies[0].creationKey);
+    expect(bodies[0].dossierId).toBeFalsy();
+  });
+
+  it("a save of an existing dossier sends no creation key", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    fireEvent.click(buttonsWithText(/^Update$/)[0]);
+    await settle(0);
+
+    const bodies = saveBodies();
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    const last = bodies[bodies.length - 1];
+    expect(last.dossierId).toBe("d-1");
+    expect(last).not.toHaveProperty("creationKey");
+  });
+});
+
+describe("analyst resume", () => {
+  it("resuming a saved dossier returns the analyst to the dossier view with its registry documents", async () => {
+    fetchRoutes["/api/save-dossier"] = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true, dossierId: "d-1" }) });
+    await driveToDossier();
+    // Seed a registry document into the live draft the way the Documents step would,
+    // by writing the draft directly (the analyst journey has no self-source step in the dummy path).
+    await settle(1000); // let the debounced draft save run
+    const { DRAFT_KEY } = require("../../../utils/submissionDraft");
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    expect(draft && draft.state && draft.state.dossierId).toBe("d-1");
+    draft.state.selfSourceResults = {
+      results: [{ requirement: "Certificate of Incorporation", localEquivalent: "Companies House certificate", status: "retrieved", retrievedAt: "2026-09-16T10:00:00Z" }],
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+
+    cleanup();
+    await mountAtGate();
+    await unlock();
+    fireEvent.click(buttonsWithText(/^Resume$/)[0]);
+    await settle(0);
+
+    expect(bodyText()).toMatch(/Documents Sourced/);
+    expect(bodyText()).toMatch(/Companies House certificate/);
+    expect(bodyText()).not.toMatch(/Company Lookup/);
   });
 });

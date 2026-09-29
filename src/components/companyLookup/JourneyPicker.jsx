@@ -25,7 +25,7 @@
  *   - selectedJourneyCard / manualOpened stay because proceedFromJourney and
  *     resetAll drive them, and ConfirmStep resets them on a re-search.
  *   - searchAttempts stays (read-only here); the server counter is authoritative
- *     and buildDossierPayload carries it.
+ *     (it is read from the dossier / attempt endpoints, never saved by the client).
  *   - companyName / countryCode are READ-ONLY here — three references, all in
  *     the Nium fixture check and the resolver button. They belong to the Company
  *     Lookup screen, which is still inline in App.js (its own later slice).
@@ -41,12 +41,10 @@
  *
  * NOTE ON THE LOCKED SEARCH-CAP BRANCH: the evaluateSearchCap lock (banner,
  * opacity-0.45 cards, not-allowed cursor, CONTACT_ADMIN_MSG) moved byte-identical
- * even though no test reaches it. It is currently unreachable in the running app
- * — `const [seededBy] = useState("analyst")` has no setter, so the increment in
- * proceedFromJourney never fires and searchAttempts is pinned at 0. That is a
- * pre-existing, separately-logged gap. It is NOT this move's business to fix,
- * and the wiring it uses is the same drilled searchAttempts the covered unlocked
- * state uses.
+ * even though no test reaches it. It is reachable once a customer (a link
+ * customer, or one who corrected a fact — App's isCustomerResearch) has used
+ * their server-counted searches; the wiring is the same drilled searchAttempts
+ * the covered unlocked state uses.
  */
 
 import React from "react";
@@ -81,6 +79,11 @@ export function JourneyPicker({
   manualOpened,
   setManualOpened,
   proceedFromJourney,
+  // ── the tenant's own manual application form URL; Card C ("I'll complete
+  //     the form myself") only renders when this is configured — there is no
+  //     platform-wide fallback, a link to another company's form is worse
+  //     than no card at all ──
+  manualFormUrl,
   // ── read-only lookup facts, owned by the Company Lookup screen ──
   companyName,
   countryCode,
@@ -152,7 +155,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#4a9e8e", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>Recommended</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🔍📄</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Upload documents &amp; let AI fill the rest</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Upload any documents you have — we extract data from them instantly. For anything we can't find in your documents, our AI searches public registries and web sources.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Upload any documents you have - we extract data from them instantly. For anything we can't find in your documents, our AI searches public registries and web sources.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#4a9e8e" }}>Fastest · Most accurate · Lowest effort</div>
             </div>
           );
@@ -180,8 +183,10 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card C */}
-        {(() => {
+        {/* Card C — only when the tenant configured its own manual application
+            form. There is no platform-wide fallback: a link to someone else's
+            form is worse than no card at all. */}
+        {manualFormUrl ? (() => {
           const sel = selectedJourneyCard === "C";
           return (
             <div
@@ -199,9 +204,9 @@ export function JourneyPicker({
               <div style={{ fontSize: 11, fontWeight: 600, color: "#1a3a4a90" }}>Full control · No AI · ~15 minutes</div>
             </div>
           );
-        })()}
+        })() : null}
 
-        {/* Card D — Nium API Lookup. TEST MODE ONLY: visible when demoMode
+        {/* Card D - Nium API Lookup. TEST MODE ONLY: visible when demoMode
             is on OR ?test=1 is in the URL. Pulls verified registry data
             straight from the Nium eKYB API (the KYC Lookup Agent) instead
             of AI research, then flows into the same Confirm step. Clicking
@@ -227,9 +232,9 @@ export function JourneyPicker({
                   countryCode === "SG";
                 if (!isFixtureSelection) {
                   window.alert(
-                    "🔗 Nium API Lookup — Test Environment\n\n" +
+                    "🔗 Registry API Lookup - Test Environment\n\n" +
                     "This sandbox has limited data. The next screen will show " +
-                    "sample data for \"STAR FINANCE PRIVATE LIMITED\" — not live " +
+                    "sample data for \"STAR FINANCE PRIVATE LIMITED\" - not live " +
                     "data for the company you entered.\n\n" +
                     "Click OK to continue with the demo."
                   );
@@ -246,7 +251,7 @@ export function JourneyPicker({
               }}
             >
               <div style={{ fontSize: 24, marginBottom: 6 }}>🔗</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nium API Lookup</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Registry API Lookup</div>
               <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>
                 Pull verified registry data directly from Nium's KYB infrastructure. Fastest and most accurate for supported markets.
               </div>
@@ -257,7 +262,7 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card E — Max Prefill. Runs every available source at once for
+        {/* Card E - Max Prefill. Runs every available source at once for
             the highest possible pre-fill. The dedicated pipeline is TBD
             (wired next); for now selecting it routes through standard AI
             research so both the onboarding and pre-boarding flows demo end
@@ -277,7 +282,7 @@ export function JourneyPicker({
               <span style={{ position: "absolute", top: 10, right: 10, background: "#7C3AED", color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>New</span>
               <div style={{ fontSize: 24, marginBottom: 6 }}>🚀</div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Run for max prefill</div>
-              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once — uploaded documents, public registries, web research and Nium's KYB data — to pre-fill as much of your application as possible.</div>
+              <div style={{ fontSize: 12, color: "#1a3a4a80", lineHeight: 1.5, marginBottom: 8 }}>Pull from every available source at once - uploaded documents, public registries, web research and registry data - to pre-fill as much of your application as possible.</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED" }}>Most comprehensive · Highest coverage</div>
             </div>
           );
@@ -291,7 +296,7 @@ export function JourneyPicker({
       {SHOW_NIUM_REG_PANEL && (demoMode || new URLSearchParams(window.location.search).get("test") === "1") && (
         <div style={{ marginBottom: 14, padding: "12px 14px", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 10 }}>
           <label htmlFor="niumRegNumber" style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#0E7490", marginBottom: 4 }}>
-            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>— required for Nium API Lookup</span>
+            🔗 Registration Number <span style={{ fontWeight: 500, color: "#0891B2" }}>- required for Registry API Lookup</span>
           </label>
           <p style={{ fontSize: 11, color: "#0891B2", margin: "0 0 8px", lineHeight: 1.4 }}>
             The Nium KYB registry searches by registration number (a name-only search isn't supported). Type it, or look it up from the company name (UK only). <em>Preprod test value: 00445790 (GB).</em>
@@ -324,7 +329,7 @@ export function JourneyPicker({
           {niumSearchResults && niumSearchResults.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
-                {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} — top one filled in, pick another if needed:
+                {niumSearchResults.length} match{niumSearchResults.length !== 1 ? "es" : ""} - top one filled in, pick another if needed:
               </div>
               {niumSearchResults.map((m) => {
                 const picked = m.registrationNumber === niumRegNumber;
@@ -357,7 +362,7 @@ export function JourneyPicker({
 
       {demoMode && (
         <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#92400E", borderLeft: "3px solid #FCD34D" }}>
-          Demo mode active — using sample data. Document extraction and web research are simulated.
+          Demo mode active - using sample data. Document extraction and web research are simulated.
         </div>
       )}
 

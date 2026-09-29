@@ -1,4 +1,5 @@
 "use strict";
+const { evidenceLabTenantId } = require("./tenant");
 
 const path = require("node:path");
 const { createPostgresDb } = require("../../evidence/a2/postgresDb");
@@ -22,7 +23,7 @@ function createHandler(dependencyFactory = liveDependencies) {
     try {
       dependencies = await dependencyFactory(req.body || {});
       const service = new LiveArtifactInterpretationService(dependencies);
-      const result = await service.interpret({ artifactId: req.body?.artifactId, artifactIds: req.body?.artifactIds, tenantId: process.env.EVIDENCE_LAB_TENANT_ID || process.env.TENANT_ID || "nium" });
+      const result = await service.interpret({ artifactId: req.body?.artifactId, artifactIds: req.body?.artifactIds, tenantId: evidenceLabTenantId() });
       return res.status(200).json({ success: true, result });
     } catch (error) {
       return res.status(error.statusCode || 500).json({ error: "A3 preserved-Artifact interpretation failed", code: error.code || "a3_interpretation_failed", message: error.message, details: error.details || {} });

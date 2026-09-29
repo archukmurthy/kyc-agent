@@ -10,6 +10,7 @@ import {
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
   abortActiveDemoResearchJobs, acquireDemoResearch, demoSourceRelevantEntityIds, projectDemoGraph, readLastSuccessfulResearch, saveLastSuccessfulResearch,
 } from "./demoResearch";
+import { limitNotice } from "../trials/limitNotice";
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isDemoAuditPath, isDemoResearchPath, isDemoReviewPath, navigateDemo } from "./demoRoute";
 import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff";
@@ -223,8 +224,24 @@ function ProviderOutcomes({ outcomes = [] }) {
   return <section className="ubo-demo-provider-outcomes" aria-label="Research source status">{outcomes.map((item) => <div key={item.provider}><strong>{item.provider === "COMPANIES_HOUSE" ? "Companies House" : item.provider === "WEB_RESEARCH" ? "Web research" : item.provider}</strong><span className={item.outcome.toLowerCase()}>{item.outcome}</span><p>{item.reasonText}{item.httpStatus ? ` (HTTP ${item.httpStatus})` : ""}</p><small>Correlation ID: {item.correlationId || "not recorded"}</small></div>)}</section>;
 }
 
+// A limit reached and a failure are different things and used to look
+// identical. See src/trials/limitNotice.js.
 function ResearchError({ error, result, replays, onRetry, onReplay, onEdit }) {
-  return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-failure"><span className="ubo-demo-eyebrow">Research unavailable</span><h1>Live research could not be completed</h1><ProviderOutcomes outcomes={result?.providerOutcomes} /><p>{error}</p><p><strong>No conclusion about the ownership structure has been made from these provider failures.</strong></p><div className="ubo-demo-error-actions"><button className="ubo-demo-primary" onClick={onRetry}>Try live research again</button>{replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}<button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button></div></section></main>;
+  const message = typeof error === "string" ? error : (error && error.message) || "";
+  const code = typeof error === "string" ? null : error && error.code;
+  const notice = limitNotice(code, message);
+
+  if (notice) {
+    return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-limit"><span className="ubo-demo-eyebrow">{notice.action === "contact" ? "Trial" : "Please wait"}</span><h1>{notice.title}</h1><p>{notice.body}</p><div className="ubo-demo-error-actions">
+      {/* "Try again" cannot succeed on an ended trial, and offering it turns a
+          sales moment into a loop of refusals. */}
+      {notice.action === "wait" && <button className="ubo-demo-primary" onClick={onRetry}>Try again</button>}
+      {replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}
+      <button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button>
+    </div></section></main>;
+  }
+
+  return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-failure"><span className="ubo-demo-eyebrow">Research unavailable</span><h1>Live research could not be completed</h1><ProviderOutcomes outcomes={result?.providerOutcomes} /><p>{message}</p><p><strong>No conclusion about the ownership structure has been made from these provider failures.</strong></p><div className="ubo-demo-error-actions"><button className="ubo-demo-primary" onClick={onRetry}>Try live research again</button>{replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}<button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button></div></section></main>;
 }
 
 export default function UboDemoRoot() {
@@ -298,7 +315,7 @@ export default function UboDemoRoot() {
     const replayId = demoCase.analysisContext?.replayId || draft.replayId;
     const replayRecord = sourceMode === "REPLAY" ? findReplayById(replays, replayId) : null;
     if (sourceMode === "REPLAY" && !replayRecord) {
-      setResearchError("The selected saved research record is not available on this browser origin. No live search was started.");
+      setResearchError({ message: "The selected saved research record is not available on this browser origin. No live search was started.", code: null });
       setResearchResult(null);
       return undefined;
     }
@@ -333,6 +350,12 @@ export default function UboDemoRoot() {
       setResearchResult(compact);
     }).catch((cause) => {
       if (!subscribed || cause.code === "RESEARCH_ABORTED") return;
+      // A reached limit is shown as a limit - never papered over with a saved result.
+      if (limitNotice(cause.code, cause.message)) {
+        setResearchError({ message: cause.message, code: cause.code });
+        setResearchResult(null);
+        return;
+      }
       const message = `${cause.code ? `${cause.code}: ` : ""}${cause.message}`;
       const fallback = sourceMode === "LIVE" ? readLastSuccessfulResearch(demoCase.company) : null;
       if (fallback) {
@@ -433,9 +456,9 @@ export default function UboDemoRoot() {
     if (mode === "REPLAY") {
       const available = replays.length ? replays : readLabReplays();
       const record = findReplayById(available, nextDraft.replayId) || available[0] || null;
-      if (!record) { setResearchError("The selected saved research record is not available on this browser origin. No live search was started."); setResearchResult(null); return; }
+      if (!record) { setResearchError({ message: "The selected saved research record is not available on this browser origin. No live search was started.", code: null }); setResearchResult(null); return; }
       try { nextDraft = bindDraftToReplay(nextDraft, record); }
-      catch (cause) { setResearchError(`${cause.message} No live search was started.`); setResearchResult(null); return; }
+      catch (cause) { setResearchError({ message: `${cause.message} No live search was started.`, code: null }); setResearchResult(null); return; }
     }
     const nextCase = createDemoCase(nextDraft);
     abortActiveDemoResearchJobs();

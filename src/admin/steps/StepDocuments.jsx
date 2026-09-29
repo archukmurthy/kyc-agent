@@ -229,8 +229,8 @@ export default function StepDocuments({
                 fontFamily: "inherit",
                 fontSize: 13,
                 fontWeight: 700,
-                color: on ? adminColors.niumBlue : adminColors.textMuted,
-                borderBottom: on ? `2px solid ${adminColors.niumBlue}` : "2px solid transparent",
+                color: on ? adminColors.brandBlue : adminColors.textMuted,
+                borderBottom: on ? `2px solid ${adminColors.brandBlue}` : "2px solid transparent",
                 cursor: "pointer",
                 marginBottom: -1,
               }}
@@ -290,7 +290,7 @@ export default function StepDocuments({
         ))}
         {!visibleDocs.length && (
           <div style={{ padding: 16, color: adminColors.textMuted, fontSize: 13, textAlign: "center", gridColumn: "1 / -1" }}>
-            {showAllDocs ? "Document library is empty — add a custom document below." : "No suggested documents for this entity type. Switch to 'Show all documents' or add one below."}
+            {showAllDocs ? "Document library is empty - add a custom document below." : "No suggested documents for this entity type. Switch to 'Show all documents' or add one below."}
           </div>
         )}
       </div>
@@ -311,7 +311,7 @@ export default function StepDocuments({
             fontFamily: "inherit",
             fontSize: 13,
             fontWeight: 700,
-            color: adminColors.niumBlue,
+            color: adminColors.brandBlue,
           }}
         >
           + Add custom document
@@ -340,7 +340,7 @@ export default function StepDocuments({
             onChange={(e) => setCopyFromId(e.target.value)}
             style={{ ...adminStyles.input, flex: 1 }}
           >
-            <option value="">— Select entity type —</option>
+            <option value="">- Select entity type -</option>
             {entityTypes
               .filter((e) => e.id !== selectedEntityType)
               .map((e) => (
@@ -415,8 +415,8 @@ function CustomDocForm({ draft, entityTypes, onPatch, onCancel, onAdd }) {
                     borderRadius: 99,
                     fontSize: 11,
                     fontWeight: 600,
-                    border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                    background: on ? adminColors.niumBlue : "#fff",
+                    border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                    background: on ? adminColors.brandBlue : "#fff",
                     color: on ? "#fff" : adminColors.text,
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -491,8 +491,8 @@ function CustomDocForm({ draft, entityTypes, onPatch, onCancel, onAdd }) {
                     borderRadius: 99,
                     fontSize: 11,
                     fontWeight: 600,
-                    border: `1px solid ${on ? adminColors.niumBlue : adminColors.border}`,
-                    background: on ? adminColors.niumBlue : "#fff",
+                    border: `1px solid ${on ? adminColors.brandBlue : adminColors.border}`,
+                    background: on ? adminColors.brandBlue : "#fff",
                     color: on ? "#fff" : adminColors.text,
                     cursor: "pointer",
                     fontFamily: "inherit",

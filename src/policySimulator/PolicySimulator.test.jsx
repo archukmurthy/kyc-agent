@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import PolicySimulator, { buildUserMessage, createInitialForm, sanitizePolicyHtml } from './PolicySimulator';
+import { rateLimitMessage } from '../utils/rateLimitMessage';
 
 function completeForm() {
   fireEvent.change(screen.getByLabelText(/Firm type/), { target: { value: 'Authorised EMI' } });
@@ -126,5 +127,26 @@ describe('generation and output', () => {
 
   it('removes all non-allow-listed HTML and attributes', () => {
     expect(sanitizePolicyHtml('<h1 onclick="bad()">Safe</h1><a href="x">link</a><img src=x>')).toBe('<h1>Safe</h1>link');
+  });
+
+  it('sends the structured form, never a prompt', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ policyHtml: '<h1>P</h1>' }) });
+    render(<PolicySimulator />);
+    completeForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Policy' }));
+    await screen.findByRole('heading', { name: 'P' });
+    const [url, init] = global.fetch.mock.calls[0];
+    expect(url).toBe('/api/generate-policy');
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('prompt');
+    expect(body.form).toMatchObject({ firmType: 'Authorised EMI', geography: 'Global (all jurisdictions)', pepAppetite: 'Domestic PEPs with EDD' });
+  });
+
+  it('shows the rate-limit message on a 429', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, json: async () => ({ error: 'rate_limited', retryAfterSeconds: 300 }) });
+    render(<PolicySimulator />);
+    completeForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Policy' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(rateLimitMessage(300));
   });
 });

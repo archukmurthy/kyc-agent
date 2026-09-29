@@ -1,3 +1,4 @@
+import { clerkAuthHeaders } from "../auth/clerkFetch";
 export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE", REPLAY: "REPLAY" });
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
@@ -92,7 +93,7 @@ export async function runDemoResearch(input, fetchImpl = window.fetch, { signal,
     const operation = async () => {
       response = await fetchImpl("/api/ubo-control-lab", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(await clerkAuthHeaders()) },
         body: JSON.stringify({ ...request, jobId }),
         signal: controller.signal,
       });
@@ -126,7 +127,11 @@ export async function runDemoResearch(input, fetchImpl = window.fetch, { signal,
   }
   if (!response.ok) {
     const error = new Error(result?.message || result?.error || "Research could not be completed safely.");
-    error.code = result?.code;
+    // Two shapes arrive here: most refusals name themselves in `code`, the rate
+    // limiter in `error`. Reading only one of them is how a 429 arrived at the
+    // screen with no code at all and got shown as a crash.
+    error.code = result?.code || result?.error || null;
+    error.status = response.status;
     throw error;
   }
   console.info(`[ubo-research:${jobId}] browser terminal ${result?.terminalState || "COMPLETE"}`);

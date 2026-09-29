@@ -17,8 +17,8 @@ function Panel({ title, items, onChange }) {
       <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{title}</h3>
       <p style={{ fontSize: 11, color: tokens.textMuted, margin: "0 0 12px" }}>
         {title.includes("Primary")
-          ? "Authoritative registries — values from these sources are auto-accepted on the Confirm page."
-          : "Lower-trust sources — flagged for customer verification on the Confirm page."}
+          ? "Authoritative registries - values from these sources are auto-accepted on the Confirm page."
+          : "Lower-trust sources - flagged for customer verification on the Confirm page."}
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 80px 40px", gap: 6, padding: "6px 8px", background: tokens.navy, borderRadius: "6px 6px 0 0", color: "#fff", fontSize: 9, fontWeight: 700 }}>
@@ -82,7 +82,7 @@ export default function SourcesModule({ config, patchConfig, markSaved }) {
           <input
             type="checkbox" checked={documentsArePrimary}
             onChange={(e) => { setDocumentsArePrimary(e.target.checked); setSaved(false); }}
-            style={{ accentColor: tokens.niumBlue, width: 16, height: 16 }}
+            style={{ accentColor: tokens.brandBlue, width: 16, height: 16 }}
           />
           Documents are primary sources
         </label>

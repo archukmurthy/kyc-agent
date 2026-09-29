@@ -4,7 +4,9 @@
 // endpoints work locally as on Vercel in production. This file is NOT
 // bundled into the React app — it only runs in the dev server process.
 //
-// Requires ANTHROPIC_API_KEY, ADMIN_PASSWORD, TENANT_ID in .env.local.
+// Requires ANTHROPIC_API_KEY and ADMIN_PASSWORD in .env.local. There is no
+// TENANT_ID: tenant resolution is strict, so every local URL carries its own
+// ?tenant= just as it does in production.
 
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -13,7 +15,9 @@ const { pathToFileURL } = require("url");
 // locations so dev and production run the exact same code paths.
 const configHandler = require(path.join(__dirname, "..", "api", "config.js"));
 const adminAuthHandler = require(path.join(__dirname, "..", "api", "admin-auth.js"));
+const preboardingAuthHandler = require(path.join(__dirname, "..", "api", "preboarding-auth.js"));
 const configVersionsHandler = require(path.join(__dirname, "..", "api", "config-versions.js"));
+const configTemplatesHandler = require(path.join(__dirname, "..", "api", "config-templates.js"));
 const superAdminAuthHandler = require(path.join(__dirname, "..", "api", "super-admin-auth.js"));
 const tenantsHandler = require(path.join(__dirname, "..", "api", "tenants.js"));
 const niumConstantsHandler = require(path.join(__dirname, "..", "api", "nium", "constants.js"));
@@ -25,6 +29,15 @@ const docSearchHandler = require(path.join(__dirname, "..", "api", "doc-search.j
 const submitHandler = require(path.join(__dirname, "..", "api", "submit.js"));
 const trackEventHandler = require(path.join(__dirname, "..", "api", "track-event.js"));
 const saveDossierHandler = require(path.join(__dirname, "..", "api", "save-dossier.js"));
+const idvMatchWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "webhook.js"));
+const idvMatchStatusHandler = require(path.join(__dirname, "..", "api", "idv-match", "status.js"));
+const idvScreeningWebhookHandler = require(path.join(__dirname, "..", "api", "idv-match", "screening", "webhook.js"));
+const idvMatchFlagsHandler = require(path.join(__dirname, "..", "api", "idv-match", "flags.js"));
+const idvMatchResolveHandler = require(path.join(__dirname, "..", "api", "idv-match", "resolve.js"));
+const idvMatchExplainHandler = require(path.join(__dirname, "..", "api", "idv-match", "explain.js"));
+const idvMatchSessionHandler = require(path.join(__dirname, "..", "api", "idv-match", "session.js"));
+const idvMatchConfirmHandler = require(path.join(__dirname, "..", "api", "idv-match", "confirm.js"));
+const idvMatchReviewerHandler = require(path.join(__dirname, "..", "api", "idv-match", "reviewer.js"));
 const kycLookupHandler = require(path.join(__dirname, "..", "api", "kyc-lookup.js"));
 const companySearchHandler = require(path.join(__dirname, "..", "api", "company-search.js"));
 const selfSourceHandler = require(path.join(__dirname, "..", "api", "self-source.js"));
@@ -36,13 +49,20 @@ const uboPocHealthHandler = require(path.join(__dirname, "..", "api", "ubo-poc-h
 const uboPocCaseHandler = require(path.join(__dirname, "..", "api", "ubo-poc-case.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
+const uboInviteHandler = require(path.join(__dirname, "..", "api", "ubo-invite.js"));
+const uboPeopleHandler = require(path.join(__dirname, "..", "api", "ubo-people.js"));
+const healthHandler = require(path.join(__dirname, "..", "api", "health.js"));
+const signOutHandler = require(path.join(__dirname, "..", "api", "sign-out.js"));
 const getDossierHandler = require(path.join(__dirname, "..", "api", "get-dossier.js"));
 const changeEventsHandler = require(path.join(__dirname, "..", "api", "change-events.js"));
 const amendmentDocumentsHandler = require(path.join(__dirname, "..", "api", "amendment-documents.js"));
 const dossierReseedHandler = require(path.join(__dirname, "..", "api", "dossier-reseed.js"));
 const searchAttemptHandler = require(path.join(__dirname, "..", "api", "search-attempt.js"));
+const researchAttemptHandler = require(path.join(__dirname, "..", "api", "research-attempt.js"));
+const revokeDossierTokenHandler = require(path.join(__dirname, "..", "api", "revoke-dossier-token.js"));
 const changeIntelligenceMetricsHandler = require(path.join(__dirname, "..", "api", "change-intelligence-metrics.js"));
 const generatePolicyHandler = require(path.join(__dirname, "..", "api", "generate-policy.js"));
+const researchHandler = require(path.join(__dirname, "..", "api", "research.js"));
 const evidenceStatusHandler = require(path.join(__dirname, "..", "api", "evidence", "status.js"));
 const evidenceA1FixtureHandler = require(path.join(__dirname, "..", "api", "evidence", "a1-fixture.js"));
 const evidenceA2CollectHandler = require(path.join(__dirname, "..", "api", "evidence", "a2-collect.js"));
@@ -80,6 +100,19 @@ const evidenceR2HistoryHandler = require(path.join(__dirname, "..", "api", "evid
 const evidenceR2PreflightHandler = require(path.join(__dirname, "..", "api", "evidence", "r2-preflight.js"));
 const officersLayer = require(path.join(__dirname, "..", "lib", "applyOfficersLayer.js"));
 
+// The dev server does not parse JSON bodies for these routes, so the handler
+// gets nothing unless we read the stream first. Every POST below does this;
+// the older ones inline their own copy.
+function readJsonBody(req, done) {
+  let raw = "";
+  req.setEncoding("utf8");
+  req.on("data", (chunk) => { raw += chunk; });
+  req.on("end", () => {
+    try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+    done();
+  });
+}
+
 function adapt(handler) {
   // Wrap CRA's req/res so it looks enough like a Vercel handler. CRA's
   // bodyParser may have already populated req.body; if not, the handler
@@ -96,6 +129,15 @@ function adapt(handler) {
 }
 
 module.exports = function (app) {
+  // Local parity with middleware.js: without this, npm start would serve
+  // routes the deployed UBO site refuses, and we would develop against a
+  // product that does not exist.
+  const productMode = require(path.join(__dirname, "..", "lib", "productMode.js"));
+  app.use((req, res, next) => {
+    if (productMode.refuseIfHidden(req, res)) return undefined;
+    return next();
+  });
+
   // CRA serves the staged UBO graph assets from build/ in production, but
   // `npm start` does not run the staging script. Expose the same canonical
   // files in local development so the ownership-graph iframe receives JS/CSS
@@ -149,122 +191,41 @@ module.exports = function (app) {
     });
   });
 
+  // Research — the real handler (server-built prompts, rate limit, cache).
   app.post("/api/research", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
     req.on("data", (chunk) => { raw += chunk; });
-    req.on("end", async () => {
-      try {
-        const body = JSON.parse(raw || "{}");
-        const { prompt, messages, model, tools, max_tokens,
-                companyName, jurisdiction, entityType, forceRefresh,
-                registrationNumber } = body;
-        if (!prompt && !messages) {
-          return res.status(400).json({ error: "Missing prompt or messages in request body" });
-        }
-
-        // ─── CACHE LAYER (opt-in) ───
-        // Mirrors api/research.js so caching works under `npm start` too. Only
-        // the main research call passes `companyName`, so other callers (doc
-        // extraction, gap recovery) are untouched. researchCache.js is ESM, so
-        // it's loaded via dynamic import() from this CJS dev-server file. Cache
-        // failures always fall through to the live API.
-        const cacheEnabled = !!companyName;
-        let cacheMod = null;
-        if (cacheEnabled) {
-          try {
-            // Node's ESM dynamic import() needs a file:// URL on Windows — a raw
-            // "C:\..." path throws "protocol 'c:'" and the cache silently never
-            // loads (every research run then hits the paid API). pathToFileURL fixes it.
-            cacheMod = await import(pathToFileURL(path.join(__dirname, "..", "lib", "researchCache.js")).href);
-          } catch (err) {
-            console.error("[research-cache] Failed to load cache module:", err.message);
-          }
-        }
-        if (cacheMod && !forceRefresh) {
-          try {
-            const cached = await cacheMod.getCachedResearch(companyName, jurisdiction, entityType);
-            if (cached) {
-              console.log(`[research-cache] HIT for "${companyName}" — serving from DB`);
-              return res.status(200).json(cached);
-            }
-            console.log(`[research-cache] MISS for "${companyName}" — calling Anthropic API`);
-          } catch (err) {
-            console.error("[research-cache] Cache lookup error, falling through:", err.message);
-          }
-        } else if (cacheMod && forceRefresh) {
-          console.log(`[research-cache] FORCE REFRESH for "${companyName}" — bypassing cache`);
-        }
-
-        // ─── LAYER 1 — Companies House Officers API (deterministic) ───
-        // Mirrors api/research.js: for UK (GB) companies fetch all active
-        // officers before the Anthropic call; the director field is replaced
-        // with this data after the call. Failures fall back to AI web search.
-        const chOfficers = await officersLayer.fetchOfficersLayer({
-          companyName, jurisdiction, registrationNumber,
-        });
-
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (!apiKey) {
-          return res.status(500).json({
-            error: "Server API key not configured",
-            message: "Add ANTHROPIC_API_KEY=sk-ant-... to .env.local at the repo root and restart `npm start`.",
-          });
-        }
-
-        const finalMessages = messages || [{ role: "user", content: prompt }];
-        const finalModel = model || "claude-sonnet-4-5";
-        const finalMaxTokens = max_tokens || 16000;
-        const finalTools = Array.isArray(tools)
-          ? tools
-          : [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
-
-        const requestBody = {
-          model: finalModel,
-          max_tokens: finalMaxTokens,
-          messages: finalMessages,
-        };
-        if (finalTools.length > 0) requestBody.tools = finalTools;
-
-        const r = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        const data = await r.json();
-
-        if (!r.ok) {
-          return res.status(r.status).json({ error: "Claude API error", details: data });
-        }
-
-        // Runs before the cache save so the cached copy carries them too. No-op
-        // when chOfficers is null/empty (non-GB, key absent, or fetch failed).
-        officersLayer.injectOfficers(data, chOfficers);
-
-        // ─── SAVE TO CACHE (opt-in; same gate as the lookup above) ───
-        if (cacheMod) {
-          try {
-            await cacheMod.saveResearchToCache(companyName, jurisdiction, entityType, data, finalModel);
-          } catch (err) {
-            console.error("[research-cache] Failed to save to cache:", err.message);
-          }
-        }
-
-        res.status(200).json(data);
-      } catch (err) {
-        res.status(500).json({ error: "Server error", message: err.message });
-      }
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(researchHandler)(req, res);
     });
   });
 
+  // Trial invitations and staff access. GET reads req.query; POST needs the
+  // JSON body the dev server does not parse for us.
+  app.get("/api/ubo-invite", adapt(uboInviteHandler));
+  app.post("/api/ubo-invite", (req, res) => readJsonBody(req, () => adapt(uboInviteHandler)(req, res)));
+  app.get("/api/ubo-people", adapt(uboPeopleHandler));
+  app.post("/api/ubo-people", (req, res) => readJsonBody(req, () => adapt(uboPeopleHandler)(req, res)));
+
+  app.get("/api/health", adapt(healthHandler));
+  app.post("/api/sign-out", (req, res) => readJsonBody(req, () => adapt(signOutHandler)(req, res)));
+
   app.all("/api/config", adapt(configHandler));
   app.all("/api/config-versions", adapt(configVersionsHandler));
+  app.get("/api/config-templates", adapt(configTemplatesHandler));
   app.post("/api/admin-auth", adapt(adminAuthHandler));
+  app.get("/api/preboarding-auth", adapt(preboardingAuthHandler));
+  app.post("/api/preboarding-auth", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(preboardingAuthHandler)(req, res);
+    });
+  });
   app.post("/api/super-admin-auth", adapt(superAdminAuthHandler));
   app.all("/api/tenants", adapt(tenantsHandler));
 
@@ -399,6 +360,80 @@ module.exports = function (app) {
     });
   });
 
+  // Identity Discrepancy Bands (idv-match). The webhook needs the RAW body for
+  // HMAC signature verification (do NOT JSON-parse it); status is read-only.
+  app.post("/api/idv-match/webhook", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { req.rawBody = raw; adapt(idvMatchWebhookHandler)(req, res); });
+  });
+  app.get("/api/idv-match/status", adapt(idvMatchStatusHandler));
+  app.post("/api/idv-match/status", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchStatusHandler)(req, res);
+    });
+  });
+  // Read-only feature-flag probe for the browser + the live band-resolution call.
+  app.get("/api/idv-match/flags", adapt(idvMatchFlagsHandler));
+  app.post("/api/idv-match/resolve", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchResolveHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-match/explain", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchExplainHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-match/session", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchSessionHandler)(req, res);
+    });
+  });
+  app.post("/api/idv-match/confirm", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchConfirmHandler)(req, res);
+    });
+  });
+  app.get("/api/idv-match/reviewer", adapt(idvMatchReviewerHandler));
+  app.post("/api/idv-match/reviewer", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(idvMatchReviewerHandler)(req, res);
+    });
+  });
+  // ComplyCube screening webhook — needs the RAW body for signature verification.
+  app.post("/api/idv-match/screening/webhook", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => { req.rawBody = raw; adapt(idvScreeningWebhookHandler)(req, res); });
+  });
+
   // KYC Lookup Agent → Nium eKYB. POST; parse the JSON body the dev server
   // doesn't auto-parse (mirrors the routes above).
   app.post("/api/kyc-lookup", (req, res) => {
@@ -435,6 +470,17 @@ module.exports = function (app) {
         req.body = {};
       }
       adapt(inviteHandler)(req, res);
+    });
+  });
+
+  // Revoke every outstanding customer link for a dossier (analyst only).
+  app.post("/api/revoke-dossier-token", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(revokeDossierTokenHandler)(req, res);
     });
   });
 
@@ -531,7 +577,7 @@ module.exports = function (app) {
   const uploadDocument = esmHandler("upload-document.js");
   app.post("/api/upload-document", (req, res) => {
     if (process.env.DEV_FAKE_BLOB === "1" || !process.env.BLOB_READ_WRITE_TOKEN) {
-      console.warn("[upload-document] DEV STUB — file not stored to Vercel Blob");
+      console.warn("[upload-document] DEV STUB - file not stored to Vercel Blob");
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
       return res.end(JSON.stringify({ blobUrl: "https://example.invalid/DEV-FAKE", filename: "dev-stub" }));
@@ -562,6 +608,17 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(searchAttemptHandler)(req, res);
+    });
+  });
+
+  // Fresh-customer re-search counter (no dossier). POST; parse the JSON body.
+  app.post("/api/research-attempt", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(researchAttemptHandler)(req, res);
     });
   });
 

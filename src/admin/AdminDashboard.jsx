@@ -54,7 +54,7 @@ export default function AdminDashboard({
   tenantConfig,
   firstLogin,
   token,
-  tenantId = "nium",
+  tenantId,
   onSignOut,
   onReloadConfig,
 }) {
@@ -148,7 +148,7 @@ export default function AdminDashboard({
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      setPublishMsg({ ok: true, text: `Published — v${data.version} is live` });
+      setPublishMsg({ ok: true, text: `Published - v${data.version} is live` });
       setHasUnpublishedChanges(false);
       // Clear staged preview now that the same config is live — prevents an
       // open preview tab from continuing to show pre-publish state on refresh.
@@ -173,15 +173,13 @@ export default function AdminDashboard({
       // from the same origin (modern Chrome/Firefox/Safari). Each tab gets its
       // own session, so this does not leak between unrelated tabs.
       sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(localConfig));
-      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId || "nium");
+      sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId);
       sessionStorage.setItem(PREVIEW_TS_KEY, new Date().toISOString());
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn("Could not write preview config:", e);
     }
-    const tenantParam = tenantId && tenantId !== "nium"
-      ? `&tenant=${encodeURIComponent(tenantId)}`
-      : "";
+    const tenantParam = tenantId ? `&tenant=${encodeURIComponent(tenantId)}` : "";
     window.open(`/?preview=true${tenantParam}`, "_blank");
   }
 
@@ -364,8 +362,8 @@ export default function AdminDashboard({
             padding: "14px 18px",
             borderRadius: 10,
             background: "#fff",
-            border: `1.5px solid ${adminColors.niumBlue}`,
-            color: adminColors.niumBlue,
+            border: `1.5px solid ${adminColors.brandBlue}`,
+            color: adminColors.brandBlue,
             fontWeight: 700,
             fontSize: 14,
             cursor: "pointer",
@@ -421,7 +419,7 @@ function ConfigStatusCard({ status, onContinue }) {
         <div style={{ fontSize: 13, color: allOk ? adminColors.statusComplete : adminColors.textMuted }}>
           {allOk
             ? "✅ All configuration complete"
-            : "Your configuration has gaps — some onboarding flows may not work correctly."}
+            : "Your configuration has gaps - some onboarding flows may not work correctly."}
         </div>
         {!allOk && (
           <button type="button" onClick={onContinue} style={adminStyles.btnPrimary}>
@@ -518,7 +516,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
             Welcome to your onboarding platform
           </h2>
           <p style={{ fontSize: 14, color: adminColors.textMuted, margin: "10px 0 0" }}>
-            Let&apos;s get you set up. We&apos;ll guide you through configuring your onboarding flows —
+            Let&apos;s get you set up. We&apos;ll guide you through configuring your onboarding flows -
             it takes about 10 minutes and you can pause at any time.
           </p>
         </div>
@@ -544,7 +542,7 @@ function WelcomeModal({ onWizard, onDashboard }) {
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, color: adminColors.textMuted, textAlign: "center" }}>
-          Your current configuration is pre-loaded with Nium defaults — nothing is blank.
+          Your current configuration is pre-loaded with the default settings - nothing is blank.
         </div>
       </div>
     </div>
@@ -555,7 +553,7 @@ function WelcomeOption({ recommended, icon, title, body, cta, ctaStyle, onClick 
   return (
     <div
       style={{
-        border: `1.5px solid ${recommended ? adminColors.niumBlue : adminColors.border}`,
+        border: `1.5px solid ${recommended ? adminColors.brandBlue : adminColors.border}`,
         background: recommended ? "rgba(11,61,145,0.04)" : "#fff",
         borderRadius: 12,
         padding: 14,

@@ -1,4 +1,5 @@
 "use strict";
+const { evidenceLabTenantId } = require("./tenant");
 
 const path=require("node:path");
 const {createPostgresDb}=require("../../evidence/a2/postgresDb");
@@ -21,7 +22,7 @@ function create(){
 function authorization(req,body={}){
   if(req.evidenceAuthorization)return req.evidenceAuthorization;
   if(process.env.NODE_ENV==="production"||process.env.VERCEL)throw Object.assign(new Error("Trusted host Evidence authorization is required"),{code:"access_denied",statusCode:403});
-  return{tenantId:process.env.EVIDENCE_LAB_TENANT_ID||process.env.TENANT_ID||"nium",contextId:body.contextId,callerScope:"evidence_lab:r2",actorType:"human",actorId:process.env.EVIDENCE_LAB_ACTOR_ID||"local-product-reviewer"};
+  return{tenantId:evidenceLabTenantId(),contextId:body.contextId,callerScope:"evidence_lab:r2",actorType:"human",actorId:process.env.EVIDENCE_LAB_ACTOR_ID||"local-product-reviewer"};
 }
 
 module.exports={authorization,create};

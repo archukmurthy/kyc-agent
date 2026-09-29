@@ -30,13 +30,10 @@
  * A surprising assertion is a recorded fact. After the move this file must stay
  * green UNCHANGED — editing it to make the move pass defeats the point.
  *
- * TWO PATHS ARE UNREACHABLE AND ARE NOT ASSERTED (both reported, not papered
- * over):
- *   1. The pendingReseedMode === "re_derive" short-circuit on Continue.
- *      setPendingReseedMode is never called with "re_derive" anywhere in src/ —
- *      its only call site passes null, inside applyReDerive itself. The branch
- *      is dead in the current build.
- *   2. The four inline validation messages ("Please enter a company name." etc).
+ * ONE PATH IS UNREACHABLE AND IS NOT ASSERTED (reported, not papered over).
+ * (The old pendingReseedMode "re_derive" short-circuit on Continue was dead and
+ * has been deleted: corrections now re-derive in place on the Applicant page.)
+ *   1. The four inline validation messages ("Please enter a company name." etc).
  *      Continue's disabled prop tests the SAME four conditions as its onClick
  *      guards, so the button cannot be clicked while any message would fire.
  *      Defensive code, currently unreachable through the UI.
@@ -112,7 +109,7 @@ async function fillAll({ country = "United King", regNumber } = {}) {
   fireEvent.focus(ownershipInput());
   pickOption("Private Limited Company");
   fireEvent.change(countryInput(), { target: { value: country } });
-  pickOption(country === "United King" ? "GB — United Kingdom" : "FR — France");
+  pickOption(country === "United King" ? "GB - United Kingdom" : "FR - France");
   await settle(0);
 }
 
@@ -264,7 +261,7 @@ describe("licence banner", () => {
   it("shows the licensed-market banner for GB", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     await settle(0);
 
     const text = bodyText();
@@ -278,7 +275,7 @@ describe("licence banner", () => {
   it("shows the no-licence fallback for a non-licensed market (FR)", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "France" } });
-    pickOption("FR — France");
+    pickOption("FR - France");
     await settle(0);
 
     const text = bodyText();
@@ -290,7 +287,7 @@ describe("licence banner", () => {
   it("adds the Corporate form-set line once an entity type is chosen", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     await settle(0);
     // Form set only renders with an entity type.
     expect(bodyText()).not.toMatch(/📑 Form set:/);
@@ -305,7 +302,7 @@ describe("licence banner", () => {
   it("shows the FI form set for a Financial Institution", async () => {
     await mountLookup();
     fireEvent.change(countryInput(), { target: { value: "United King" } });
-    pickOption("GB — United Kingdom");
+    pickOption("GB - United Kingdom");
     fireEvent.change(entityInput(), { target: { value: "Financial Institution" } });
     pickOption("Financial Institution");
     await settle(0);
@@ -333,7 +330,7 @@ describe("force-refresh cache override", () => {
 
     fireEvent.click(box);
     await settle(0);
-    expect(bodyText()).toMatch(/⚠ Live API call — this will cost tokens/);
+    expect(bodyText()).toMatch(/⚠ Live API call - this will cost tokens/);
     expect(bodyText()).not.toMatch(/Cache saves API costs/);
 
     fireEvent.click(document.querySelector('input[type="checkbox"]'));
@@ -385,7 +382,7 @@ describe("Continue gate", () => {
     expect(isGated(continueBtn())).toBe(true); // country still missing
   });
 
-  it("a gated Continue is inert — clicking it does not open the picker", async () => {
+  it("a gated Continue is inert - clicking it does not open the picker", async () => {
     await mountLookup();
     fireEvent.change(nameInput(), { target: { value: "Britannia Group Limited" } });
     await settle(0);
@@ -406,7 +403,7 @@ describe("Continue gate", () => {
     expect(continueBtn().style.opacity).toBe("1");
   });
 
-  it("OPENS the journey picker — the seam into JourneyPicker", async () => {
+  it("OPENS the journey picker - the seam into JourneyPicker", async () => {
     await mountLookup();
     await fillAll();
 

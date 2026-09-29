@@ -87,7 +87,7 @@ async function satisfyConfirmGate() {
     );
     if (cont) return cont;
   }
-  throw new Error("Confirm gate never opened — the driver, not the cluster, is broken");
+  throw new Error("Confirm gate never opened - the driver, not the cluster, is broken");
 }
 
 /** Company → dummy research → Applicant → Confirm (stops there). */
@@ -115,7 +115,7 @@ async function driveToConfirm() {
   fireEvent.change(screen.getByPlaceholderText(/Select or type country/i), {
     target: { value: "United King" },
   });
-  pickOption("GB — United Kingdom");
+  pickOption("GB - United Kingdom");
 
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
@@ -327,11 +327,11 @@ describe("reaching Fill Gaps with the stakeholder forms rendered", () => {
   it("shows the forms divider and NOT the summary divider for a private company", async () => {
     await driveToFillGaps();
     // hasStakeholderForms → true (everyone needs details when not listed).
-    expect(screen.getByText("People — additional details needed")).toBeInTheDocument();
+    expect(screen.getByText("People - additional details needed")).toBeInTheDocument();
     // hasStakeholderSummary → false: renderStakeholderSummary returns null for a
     // private company because confirmedOnly is empty (App.js:4559). This is the
     // assertion that catches a divider rendering with nothing under it.
-    expect(screen.queryByText("Verified information — for reference")).not.toBeInTheDocument();
+    expect(screen.queryByText("Verified information - for reference")).not.toBeInTheDocument();
   });
 
   it("renders a forms group per stakeholder research row, headed by the schema label", async () => {
@@ -397,7 +397,7 @@ describe("the person cards", () => {
   });
 });
 
-describe("the mutation path — updateStakeholderField → setStakeholders → re-render", () => {
+describe("the mutation path - updateStakeholderField → setStakeholders → re-render", () => {
   it("answering PEP 'Yes' reveals the conditional PEP details field", async () => {
     await driveToFillGaps();
     expect(
@@ -545,7 +545,7 @@ describe("the page around the cluster", () => {
  * Everything below is unreachable on the private journey above, and all of it
  * lives inside the 3666–4622 span slice 1 lifts, so it needs an oracle too.
  */
-describe("listed company — the light replacement card", () => {
+describe("listed company - the light replacement card", () => {
   it("asks for a replacement for the director the customer removed", async () => {
     await driveToListedFillGaps();
     expect(
@@ -556,7 +556,7 @@ describe("listed company — the light replacement card", () => {
     expect(screen.getByText("⚠ Name needed")).toBeInTheDocument();
   });
 
-  it("collects only a name and role — no EDD set", async () => {
+  it("collects only a name and role - no EDD set", async () => {
     await driveToListedFillGaps();
     const light = cardHolding("Replacement director", /Identify-only/);
     expect(
@@ -582,19 +582,19 @@ describe("listed company — the light replacement card", () => {
   });
 });
 
-describe("listed company — the read-only summary", () => {
+describe("listed company - the read-only summary", () => {
   it("NOW shows the summary divider, which the private journey does not", async () => {
     await driveToListedFillGaps();
     // hasStakeholderSummary is true here: the untouched directors need no input,
     // so renderStakeholderSummary returns a node instead of null. This is the
     // exact inverse of the private-journey assertion above.
-    expect(screen.getByText("Verified information — for reference")).toBeInTheDocument();
+    expect(screen.getByText("Verified information - for reference")).toBeInTheDocument();
   });
 
   it("renders the listed summary card for the directors who need nothing", async () => {
     await driveToListedFillGaps();
     expect(
-      screen.getByText(/Publicly listed company — verified from official sources/)
+      screen.getByText(/Publicly listed company - verified from official sources/)
     ).toBeInTheDocument();
     expect(screen.getByText("🏛 Listed Company")).toBeInTheDocument();
     expect(
@@ -618,7 +618,7 @@ describe("listed company — the read-only summary", () => {
   });
 });
 
-describe("listed company — the EDD carve-out in the forms section", () => {
+describe("listed company - the EDD carve-out in the forms section", () => {
   it("still collects full details from a >= 25% beneficial owner", async () => {
     await driveToListedFillGaps();
     // needsStakeholderDetails returns true for a listed company's UBOs at or

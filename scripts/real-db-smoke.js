@@ -571,8 +571,8 @@ async function main() {
       body: fixture.submitPayload,
     });
     assert.equal(submitRes.statusCode, 200);
-    assert.equal(submitRes.body?.success, true, submitRes.body?.warning || "Submission failed");
-    assert.ok(submitRes.body.sessionId, "Submission did not return a session id");
+    assert.equal(submitRes.body?.status, "saved", submitRes.body?.warning || "Submission did not save inline");
+    assert.ok(submitRes.body?.sessionId, "Submission did not return a session id");
     assert.ok(submitRes.body.clientId, "Submission did not return a client id");
     assert.ok(submitRes.body.journeyId, "Journey-model persistence did not return a journey id");
     ids.sessionId = submitRes.body.sessionId;

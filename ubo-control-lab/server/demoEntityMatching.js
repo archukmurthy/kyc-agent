@@ -1,3 +1,4 @@
+const { fetchWithTimeout } = require("../../lib/providerCall");
 "use strict";
 
 const ALLOWED_CLASSIFICATIONS = new Set(["SAME_ENTITY", "LIKELY_SAME_ENTITY", "UNCERTAIN", "DIFFERENT_ENTITY"]);
@@ -99,7 +100,7 @@ function validateMatches(payload, candidates) {
   });
 }
 
-function anthropicProvider({ apiKey = process.env.ANTHROPIC_API_KEY, model = process.env.UBO_DEMO_ENTITY_MATCH_MODEL || "claude-sonnet-4-5", fetchImpl = global.fetch } = {}) {
+function anthropicProvider({ apiKey = process.env.ANTHROPIC_API_KEY, model = process.env.UBO_DEMO_ENTITY_MATCH_MODEL || "claude-sonnet-4-5", fetchImpl = fetchWithTimeout } = {}) {
   return {
     async match(candidates) {
       if (!apiKey) throw Object.assign(new Error("Entity matching AI is unavailable"), { code: "entity_match_provider_unavailable", statusCode: 503 });

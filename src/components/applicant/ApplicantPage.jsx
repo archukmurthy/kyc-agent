@@ -33,6 +33,7 @@ import { SHOW_TEST_TOOLS } from "../../constants/appConstants";
 import { StableInput } from "../inputs/StableInput";
 import { DocumentUploadCard } from "../Step2DynamicForm";
 import FoundationalFactsGate from "../companyConfirm/FoundationalFactsGate";
+import IdvMatchVerification from "../../idv-match/IdvMatchVerification";
 import {
   OWNERSHIP_TYPE_LIBRARY,
   ownershipTypeLabel,
@@ -43,6 +44,13 @@ import {
   APPLICANT_FALLBACK_FIELDS,
   getApplicantCandidates as deriveApplicantCandidates,
 } from "../../workflows/applicantWorkflow";
+
+// Applicant gap-fields the identity document supplies (shown as the verified
+// cells after Didit). Excluded from the blank "extra fields" rendered under the
+// cells so the same field is never asked twice.
+const DOCUMENT_COVERED_APPLICANT_FIELDS = new Set([
+  "applicantFirstName", "applicantLastName", "applicantDateOfBirth", "applicantNationality",
+]);
 
 export function ApplicantPage({
   // ── lookup facts shown by the gate ──
@@ -70,6 +78,13 @@ export function ApplicantPage({
   resolveOwnershipChange,
   declareRegNumberChanged,
   resolveRegNumberChange,
+  onApplyCorrections,
+  correctionBusy = false,
+  correctionError = "",
+  // An analyst previewing the dossier: facts are shown but cannot be corrected.
+  factsReadOnly = false,
+  countryOptions = [],
+  entityTypeOptions = [],
   // ── the seven Applicant useStates: values AND setters, both drilled ──
   applicantSelectedPerson,
   setApplicantSelectedPerson,
@@ -97,6 +112,14 @@ export function ApplicantPage({
   resetAll,
   cardStyle,
   Btn,
+  // ── IDV discrepancy bands (flag-gated; OFF = today's behaviour exactly) ──
+  idvBandsEnabled = false,
+  applicationId = null,
+  onIdvResolved,
+  onIdvVerifiedFields,
+  idvResult = null,
+  onIdvResultCache,
+  brandName,
 }) {
   const card = cardStyle;
 
@@ -179,9 +202,9 @@ export function ApplicantPage({
         >
           <option value="">Select your name...</option>
           {candidates.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}  —  {c.role}</option>
+            <option key={c.id} value={c.id}>{c.name}  -  {c.role}</option>
           ))}
-          <option value="none">I am not listed — fill in manually</option>
+          <option value="none">I am not listed - fill in manually</option>
         </select>
         <p style={{ fontSize: 11, color: "#1a3a4a70", margin: "6px 2px 0" }}>
           Picking your name pre-fills the fields below from the official registry. Edit any field that's wrong.
@@ -194,13 +217,16 @@ export function ApplicantPage({
   // nationality, PEP) rendered as a standalone block. Same StableInput rendering
   // the Fill Gaps applicant section used — extracted here now that Applicant is
   // its own step.
-  const renderApplicantFields = () => {
+  const renderApplicantFields = ({ exclude } = {}) => {
     const schemaItems = getCombinedGaps()
       .filter((g) => g.section === "applicant")
       .filter(dependsOnSatisfied);
     // Fall back to the hardcoded applicant fields when the schema yields none
     // (activeSchema null / not yet resolved), so the page is never blank.
-    const items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    let items = schemaItems.length > 0 ? schemaItems : APPLICANT_FALLBACK_FIELDS;
+    // When shown alongside the document-fetched cells (bands flow), drop the
+    // fields the document already provides so they aren't asked twice.
+    if (exclude) items = items.filter((g) => !exclude.has(g.field));
     if (items.length === 0) return null;
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
@@ -276,7 +302,7 @@ export function ApplicantPage({
     // The five foundational facts used to research the company. Reg-number
     // provenance (G2) is gated on the EXPLICIT `regNumberSource` flag, never on
     // `regNumber` truthiness — so a number restored from a loaded dossier (the
-    // ?dossierId / ?ref link journeys, which leave the source null) is treated as
+    // token link journey, which leaves the source null) is treated as
     // system-retrieved and stays verifiable, not locked as "you provided this".
     // A customer-typed number (source === "customer") is pre-confirmed and
     // display-only; otherwise the schema-correct registration-number research
@@ -303,7 +329,7 @@ export function ApplicantPage({
     const regValue = customerReg || systemReg || "";
 
     const facts = [
-      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "—", disputable: true },
+      { key: "companyName", label: "Company legal name", value: research?.companyName || companyName || "-", editValue: research?.companyName || companyName || "", disputable: true },
       {
         key: "registrationNumber",
         label: "Registration / company number",
@@ -313,17 +339,18 @@ export function ApplicantPage({
         value: regNumberChangeDeclared?.to
           ? regNumberChangeDeclared.to
           : (regValue || "Not provided"),
+        editValue: regValue,
         disputable: regProvenance === "system",
         note: regNumberChangeDeclared?.to
-          ? `Changed from "${regNumberChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          ? `Changed from "${regNumberChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
           : regProvenance === "customer"
             ? "✓ You provided this"
             : regProvenance === "system"
-            ? "Found by research — please verify"
+            ? "Found by research - please verify"
             : "Not provided on lookup",
       },
-      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "—", disputable: true },
-      { key: "entityType", label: "Entity type", value: entityType || "—", disputable: true },
+      { key: "country", label: "Registration country", value: countryObj?.name || countryCode || "-", editValue: countryCode || "", disputable: true },
+      { key: "entityType", label: "Entity type", value: entityType || "-", editValue: entityType || "", disputable: true },
       {
         key: "ownershipType",
         label: "Ownership type",
@@ -333,16 +360,18 @@ export function ApplicantPage({
         // and note that the supporting documents were added to Fill Gaps.
         value: ownershipChangeDeclared?.to
           ? ownershipChangeDeclared.to
-          : (ownershipTypeLabel(ownershipType) || ownershipType || "—"),
+          : (ownershipTypeLabel(ownershipType) || ownershipType || "-"),
+        editValue: ownershipType || "",
         disputable: true,
         note: ownershipChangeDeclared?.to
-          ? `Changed from "${ownershipChangeDeclared.from}" — additional documents are required and have been added to your Fill Gaps checklist.`
+          ? `Changed from "${ownershipChangeDeclared.from}" - additional documents are required and have been added to your Fill Gaps checklist.`
           : undefined,
       },
     ];
 
     // All five confirmed (a disputed fact, or a pending ownership fork, hides the
-    // applicant section below). A four-fact dispute resets; ownership forks.
+    // applicant section below). A disputed fact opens its correction input in
+    // the gate (nothing resets); ownership and registration number fork first.
     const fourDisputed = facts.some((f) => f.key !== "ownershipType" && f.key !== "registrationNumber" && f.disputable && factChecks[f.key] === false);
     const ownershipDisputed = factChecks.ownershipType === false;
     const regNumberDisputed = factChecks.registrationNumber === false;
@@ -407,8 +436,62 @@ export function ApplicantPage({
     // Hard gate: Signatory ID is always required — Continue is blocked until the
     // file is uploaded, for every applicant. Combined with the conditional
     // authority-to-act gate below.
-    const signatoryGateBlocks = !signatoryIdFile;
+    // When the bands feature is on, Didit identity verification replaces the
+    // manual Signatory-ID upload, so its gate no longer applies.
+    const signatoryGateBlocks = !idvBandsEnabled && !signatoryIdFile;
     const continueBlocked = signatoryGateBlocks || authorityGateBlocks;
+
+    // Auto-match (one-click): when research found candidate officers, the applicant
+    // no longer picks themselves from a dropdown. We show the Didit QR immediately,
+    // freeze the WHOLE candidate list on the attempt, and the backend picks the
+    // matching officer from the document — or routes to LOA if none match.
+    const applicantCandidates = getApplicantCandidates();
+    const autoMatchActive = idvBandsEnabled && applicantCandidates.length > 0;
+    // Unlisted applicants (research found NO candidate officers) verify identity
+    // too (verify-only), AFTER they've uploaded their authority-to-act document.
+    const unlistedVerifyActive = idvBandsEnabled && applicantUnlisted && !!authorityToActFile;
+
+    // Progressive disclosure (flag ON): the auto-match verification shows straight
+    // away once the foundational facts are confirmed; the manual (flag-off / no-
+    // candidate) path still waits for "who is completing this?".
+    const personChosen = !!applicantSelectedPerson || applicantNotListed;
+    const showApplicantBody = !idvBandsEnabled || personChosen || autoMatchActive;
+
+    // QR/verification flow showing but not yet resolved — drives the dynamic
+    // title/subtitle below (Change 3/4).
+    const scanning = (autoMatchActive || unlistedVerifyActive) && !idvResult;
+
+    // Shared "proceed to Confirm" used by both the manual Continue button and the
+    // bands success path. Skips the signatory check when the flag is on.
+    const proceedToConfirm = () => {
+      if (!idvBandsEnabled && !signatoryIdFile) {
+        setApplicantValidationError("Please upload the signatory ID document before continuing.");
+        return;
+      }
+      if (applicantUnlisted && !authorityToActFile) {
+        setApplicantValidationError("Please upload your authority-to-act document before continuing.");
+        return;
+      }
+      const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
+      const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
+      if (missing.length > 0) {
+        setApplicantValidationError("Please fill in " + missing.length + " required field" + (missing.length > 1 ? "s" : "") + " before continuing.");
+        return;
+      }
+      setApplicantValidationError(null);
+      scrollAndSetStep(STEPS.confirm);
+    };
+
+    // After the applicant confirms: write the DECLARED fields (name/DOB/nationality)
+    // into the form (as today's applicant data), and report ONLY the opaque Vault
+    // reference up for the submission — the sensitive extras (document number, etc.)
+    // live in the Vault, never on the submission.
+    const writeVerifiedFields = (fields) => {
+      const toGap = { firstName: "applicantFirstName", lastName: "applicantLastName", dateOfBirth: "applicantDateOfBirth", nationality: "applicantNationality" };
+      Object.entries(toGap).forEach(([k, g]) => { if (fields && fields[k] != null && fields[k] !== "") gapRef.current[g] = fields[k]; });
+      setFormVersion((v) => v + 1);
+      if (onIdvVerifiedFields) onIdvVerifiedFields({ secureIdentityReference: (fields && fields.secureIdentityReference) || null });
+    };
 
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 0 40px" }}>
@@ -418,7 +501,6 @@ export function ApplicantPage({
           onToggle={toggleFact}
           ownershipFork={ownershipFork}
           ownershipChangeFrom={ownershipChangeDeclared?.from || ""}
-          onReset={resetAll}
           onOwnershipChanged={declareOwnershipChanged}
           onCancel={cancelFactDispute}
           ownershipTypeOptions={OWNERSHIP_TYPE_LIBRARY.map((o) => ({ value: o.id, label: o.label }))}
@@ -427,6 +509,12 @@ export function ApplicantPage({
           regNumberChangeFrom={regNumberChangeDeclared?.from || ""}
           onRegNumberChanged={() => declareRegNumberChanged(regValue)}
           onRegNumberChangeResolved={resolveRegNumberChange}
+          countryOptions={countryOptions}
+          entityTypeOptions={entityTypeOptions}
+          onApplyCorrections={(corrections) => onApplyCorrections(corrections, { registrationNumber: regValue })}
+          correctionBusy={correctionBusy}
+          correctionError={correctionError}
+          readOnly={factsReadOnly}
         />
 
         {factsConfirmed && (
@@ -434,18 +522,19 @@ export function ApplicantPage({
             <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
               <div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a3a4a", margin: "0 0 8px 0" }}>
-                  Tell us about yourself
+                  {scanning ? "Scan the code for verification" : "Tell us about yourself"}
                 </h2>
                 <p style={{ fontSize: 14, color: "#1a3a4a80", margin: 0, lineHeight: 1.6 }}>
-                  As the person completing this application, we need a few details about you.
-                  We have pre-filled what we already know.
+                  {scanning
+                    ? "Scan the QR code with your phone to verify your identity."
+                    : "As the person completing this application, we need a few details about you. We have pre-filled what we already know."}
                 </p>
               </div>
               {SHOW_TEST_TOOLS && (
                 <button
                   type="button"
                   onClick={fillApplicantTestData}
-                  title="Testing only — fills the applicant form with sample data"
+                  title="Testing only - fills the applicant form with sample data"
                   style={{
                     flexShrink: 0,
                     padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -459,19 +548,27 @@ export function ApplicantPage({
               )}
             </div>
 
-            <div style={card}>
-              {renderApplicantPersonSelector()}
-              {renderApplicantFields()}
-            </div>
+            {/* Auto-match (bands ON, candidates found): no dropdown - go straight
+                to Didit; the fields appear as the fetched cells after. The manual
+                path (flag OFF / no candidates) still shows the selector + fields.
+                In the auto-match flow both children below are false, so the card
+                is skipped entirely rather than rendering empty. */}
+            {!autoMatchActive && (
+              <div style={card}>
+                {renderApplicantPersonSelector()}
+                {showApplicantBody && renderApplicantFields()}
+              </div>
+            )}
 
-            {/* PR-072 — Signatory ID proof, COPIED from Required Docs. Always
+            {/* PR-072 - Signatory ID proof, COPIED from Required Docs. Always
                 shown (every applicant), directly below the applicant fields and
                 ABOVE the conditional Authority-to-act card. Reuses the exact same
-                Required Docs DocumentUploadCard. This is a COPY — the Signatory ID
+                Required Docs DocumentUploadCard. This is a COPY - the Signatory ID
                 card ALSO still renders in Required Docs (Step2DynamicForm),
                 unchanged. The upload slot here is INDEPENDENT of the Required Docs
                 one (see signatoryIdFile comment; one-satisfies-both is a deferred
                 future enhancement). */}
+            {!idvBandsEnabled && (
             <div style={{ ...card, marginTop: 16 }}>
               <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
                 Please upload government-issued photo ID for each authorised
@@ -483,10 +580,12 @@ export function ApplicantPage({
                 onUpload={(_req, file) => handleSignatoryIdUpload(file)}
                 onRemove={() => setSignatoryIdFile(null)}
                 autoSourcedResult={null}
+                brandName={brandName}
               />
             </div>
+            )}
 
-            {/* PR-044 — Authority-to-act proof, directly below the applicant
+            {/* PR-044 - Authority-to-act proof, directly below the applicant
                 fields, shown whenever the applicant is unlisted: either "I am not
                 listed" was selected, or no directors/UBOs were found (manual-entry
                 fallback). Reuses the Required Docs DocumentUploadCard. */}
@@ -502,59 +601,91 @@ export function ApplicantPage({
                   onUpload={(_req, file) => handleAuthorityToActUpload(file)}
                   onRemove={() => setAuthorityToActFile(null)}
                   autoSourcedResult={null}
+                  brandName={brandName}
+                />
+              </div>
+            )}
+
+            {/* IDV discrepancy bands (flag ON): inline Didit verification for a
+                listed officer. It creates a server-bound attempt, shows the QR,
+                and on completion resolves the band + renders the outcome. On a
+                passing outcome the applicant proceeds via proceedToConfirm. */}
+            {autoMatchActive && (
+              <div style={{ ...card, marginTop: 16 }}>
+                <IdvMatchVerification
+                  applicationId={applicationId}
+                  officerCandidates={applicantCandidates}
+                  onProceed={proceedToConfirm}
+                  onResolved={onIdvResolved}
+                  savedResult={idvResult}
+                  onResultCache={onIdvResultCache}
+                  onConfirmedFields={writeVerifiedFields}
+                  extraFields={renderApplicantFields({ exclude: DOCUMENT_COVERED_APPLICANT_FIELDS })}
+                  loaUploaded={!!authorityToActFile}
+                  loaUpload={
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ fontSize: 13, color: "#1a3a4a", margin: "0 0 12px", lineHeight: 1.6 }}>
+                        Because we couldn't confirm you against the company's registered
+                        officers, please upload a document showing you are authorised to act
+                        for the company before continuing.
+                      </p>
+                      <DocumentUploadCard
+                        item={authorityToActItem}
+                        uploaded={authorityToActFile}
+                        onUpload={(_req, file) => handleAuthorityToActUpload(file)}
+                        onRemove={() => setAuthorityToActFile(null)}
+                        autoSourcedResult={null}
+                        brandName={brandName}
+                      />
+                    </div>
+                  }
+                  Btn={Btn}
+                  cardStyle={{}}
+                />
+              </div>
+            )}
+
+            {/* Unlisted applicant: verify-only identity check after authority-to-act. */}
+            {unlistedVerifyActive && (
+              <div style={{ ...card, marginTop: 16 }}>
+                <IdvMatchVerification
+                  applicationId={applicationId}
+                  verifyOnly
+                  onProceed={proceedToConfirm}
+                  onResolved={onIdvResolved}
+                  savedResult={idvResult}
+                  onResultCache={onIdvResultCache}
+                  onConfirmedFields={writeVerifiedFields}
+                  Btn={Btn}
+                  cardStyle={{}}
                 />
               </div>
             )}
 
             {/* PR: Continue + Start Over share one row (Start Over left, Continue
-                right). Start Over is onboarding-only (!landedViaLink) — hidden on
+                right). Start Over is onboarding-only (!landedViaLink) - hidden on
                 the dossier/invite journey; the empty <span/> keeps Continue
                 right-aligned there. Start Over reuses resetAll (pre-filled lookup,
-                not a blank wipe). Layout only — onClick/gating unchanged. */}
+                not a blank wipe). Layout only - onClick/gating unchanged. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 24 }}>
               {!landedViaLink ? <Btn variant="secondary" onClick={resetAll}>Start Over</Btn> : <span />}
+            {!autoMatchActive && !unlistedVerifyActive && showApplicantBody && (
             <button
               disabled={continueBlocked}
-              onClick={() => {
-                // Hard gate (PR-072): Signatory ID is always required for every
-                // applicant — check it before the conditional authority-to-act gate.
-                if (!signatoryIdFile) {
-                  setApplicantValidationError(
-                    "Please upload the signatory ID document before continuing."
-                  );
-                  return;
-                }
-                // Hard gate: unlisted applicants must upload authority-to-act first.
-                if (applicantUnlisted && !authorityToActFile) {
-                  setApplicantValidationError(
-                    "Please upload your authority-to-act document before continuing."
-                  );
-                  return;
-                }
-                const required = ["applicantFirstName", "applicantLastName", "applicantEmail"];
-                const missing = required.filter((f) => !String(gapRef.current[f] || "").trim());
-                if (missing.length > 0) {
-                  setApplicantValidationError(
-                    "Please fill in " + missing.length + " required field" +
-                    (missing.length > 1 ? "s" : "") + " before continuing."
-                  );
-                  return;
-                }
-                setApplicantValidationError(null);
-                scrollAndSetStep(STEPS.confirm);
-              }}
+              onClick={proceedToConfirm}
               style={{
                 padding: "12px 28px",
-                background: continueBlocked ? "#9CA3AF" : (C.niumBlue || "#0B3D91"),
+                background: continueBlocked ? "#9CA3AF" : (C.brandBlue || "#0B3D91"),
                 color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 700,
                 fontFamily: "inherit", cursor: continueBlocked ? "not-allowed" : "pointer",
               }}
             >
               Continue →
             </button>
+            )}
             </div>
 
-            {/* PR-072 — Signatory ID gate reason. Shown first (always-required
+            {/* PR-072 - Signatory ID gate reason. Shown first (always-required
                 slot); the authority-to-act reason follows when that card blocks too. */}
             {signatoryGateBlocks && (
               <div style={{

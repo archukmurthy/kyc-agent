@@ -1,6 +1,6 @@
 import { isDateField, isIsoDate, resolveInputType } from "../dateFields";
 
-describe("isDateField — the fields that must get a date picker", () => {
+describe("isDateField - the fields that must get a date picker", () => {
   it("detects the schema's date fields, none of which declare inputType", () => {
     expect(isDateField({ field: "registeredDate", label: "Date of Incorporation" })).toBe(true);
     expect(isDateField({ field: "incorporation_date", label: "Date of Incorporation" })).toBe(true);
@@ -18,7 +18,7 @@ describe("isDateField — the fields that must get a date picker", () => {
   });
 });
 
-describe("isDateField — what must NOT become a date picker", () => {
+describe("isDateField - what must NOT become a date picker", () => {
   it("ignores words that merely contain 'date'", () => {
     ["update", "lastUpdate", "candidate", "mandate", "validated", "updated_by"].forEach((f) => {
       expect(isDateField({ field: f })).toBe(false);

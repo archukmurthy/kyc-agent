@@ -2,9 +2,8 @@
 // Ownership-type library + research-strategy definitions.
 //
 // Single source of truth for the customer flow (src/App.js) and the admin
-// (src/admin/steps/StepEntityTypes.jsx, src/admin/defaultConfig.js). Defined
-// once here and imported wherever needed so the 21-item list never drifts
-// between the two surfaces.
+// (src/admin/steps/StepEntityTypes.jsx). Defined once here and imported
+// wherever needed so the 21-item list never drifts between the two surfaces.
 //
 // Each ownership type maps to a `researchStrategy` key in RESEARCH_STRATEGIES,
 // which Phase 0 of the research pipeline uses to set search flags and tune the
@@ -108,7 +107,7 @@ function getResearchStrategy(ownershipTypeId) {
 
 // The Nium default enabled ownership types — used as the fallback when an
 // entity type in the live config has no explicit `ownershipTypes` array.
-const NIUM_DEFAULT_OWNERSHIP_TYPES = [
+const DEFAULT_OWNERSHIP_TYPES = [
   "private_limited",
   "public_listed",
   "trust",
@@ -128,6 +127,6 @@ module.exports = {
   OWNERSHIP_TYPE_LIBRARY,
   RESEARCH_STRATEGIES,
   getResearchStrategy,
-  NIUM_DEFAULT_OWNERSHIP_TYPES,
+  DEFAULT_OWNERSHIP_TYPES,
   ownershipTypeLabel,
 };

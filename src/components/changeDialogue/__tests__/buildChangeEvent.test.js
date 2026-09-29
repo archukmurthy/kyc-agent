@@ -65,7 +65,7 @@ describe('buildChangeEvent', () => {
     expect(event.fieldId).toBe('director.0');
     expect(event.fieldClass).toBe('director');
     expect(event.beforeValue).toBe('Jane Doe');
-    expect(event.afterValue).toBeNull(); // capture mode — final value is later
+    expect(event.afterValue).toBeNull(); // capture mode - final value is later
     expect(event.changeType).toBe('changed'); // stored vocab, not engine vocab
     expect(event.sourceProvider).toBe('Companies House');
     expect(event.sourceTier).toBe(1);

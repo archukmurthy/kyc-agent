@@ -45,7 +45,7 @@ function clickByText(text) {
 const question = () => container.querySelector('[data-testid="change-dialogue-question"]');
 const notice = () => container.querySelector('[data-testid="change-dialogue-notice"]');
 
-describe('ChangeDialogue — question flow + single emit', () => {
+describe('ChangeDialogue - question flow + single emit', () => {
   test('ubo (structured registry): intent → registry → ONE event, doc notice', () => {
     const onEvent = jest.fn();
     render(
@@ -106,7 +106,7 @@ describe('ChangeDialogue — question flow + single emit', () => {
   });
 });
 
-describe('ChangeDialogue — UNDECIDED and escalation both render neutral', () => {
+describe('ChangeDialogue - UNDECIDED and escalation both render neutral', () => {
   test('UNDECIDED (director genuine_update "changed" has no rule) → neutral, decided:false', () => {
     const onEvent = jest.fn();
     render(
@@ -124,7 +124,7 @@ describe('ChangeDialogue — UNDECIDED and escalation both render neutral', () =
     expect(container.textContent).not.toMatch(/UNDECIDED|error/i);
   });
 
-  test('escalation (PEP) renders identically to ops_review — never revealed', () => {
+  test('escalation (PEP) renders identically to ops_review - never revealed', () => {
     const onEvent = jest.fn();
     render(<ChangeDialogue field={{ fieldId: 'is_pep', value: 'No', sourceTier: 'tier1' }} onEvent={onEvent} />);
 
@@ -138,7 +138,7 @@ describe('ChangeDialogue — UNDECIDED and escalation both render neutral', () =
   });
 });
 
-describe('ChangeDialogue — verifiability fallback skips the registry question', () => {
+describe('ChangeDialogue - verifiability fallback skips the registry question', () => {
   test('non-structured director asks intent only, then routes via the engine', () => {
     const onEvent = jest.fn();
     render(
@@ -163,7 +163,7 @@ describe('ChangeDialogue — verifiability fallback skips the registry question'
   });
 });
 
-describe('ChangeDialogue — boundary: write-only, no Fill-Gaps coupling', () => {
+describe('ChangeDialogue - boundary: write-only, no Fill-Gaps coupling', () => {
   const componentSrc = fs.readFileSync(
     path.join(__dirname, '..', 'ChangeDialogue.jsx'),
     'utf8',

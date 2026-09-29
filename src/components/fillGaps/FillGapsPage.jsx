@@ -115,7 +115,7 @@ export function FillGapsPage({
         <div style={cfg.twoCol ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" } : {}}>
           {items.map(g => <StableInput key={g.field} id={g.field} label={g.label} type={g.inputType} value={gapRef.current[g.field] || ""} onUpdate={updateGap} required={g.required} options={g.options} placeholder={g.placeholder || ("Enter " + g.label.toLowerCase())} />)}
         </div>
-        {/* Part 8 — analyst custom questions (from pre-boarding) wired into the
+        {/* Part 8 - analyst custom questions (from pre-boarding) wired into the
             customer's Fill Gaps for this section, rendered as fillable fields. */}
         {customQuestions.filter(q => q.section === sectionKey).map(q => (
           <div key={q.id} style={{ marginBottom: 4 }}>
@@ -155,7 +155,7 @@ export function FillGapsPage({
                   <button
                     type="button"
                     onClick={fillTestData}
-                    title="Testing only — fills all visible fields with sample data"
+                    title="Testing only - fills all visible fields with sample data"
                     style={{
                       marginLeft: "auto", flexShrink: 0,
                       padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
@@ -186,7 +186,7 @@ export function FillGapsPage({
               </div>
             )}
 
-            {/* 1. Corrections required + 2. Missing gap fields — corrections
+            {/* 1. Corrections required + 2. Missing gap fields - corrections
                 come first inside gapSectionOrder(), then missing fields. */}
             {gapSectionOrder().filter(s => s !== "applicant").map(s => renderGapSection(s))}
 

@@ -8,13 +8,27 @@
 // POST   /api/tenants                                 — create new tenant (config + password + registry entry)
 // PUT    /api/tenants?action=reset-password&tenantId  — reset a tenant's password
 // PUT    /api/tenants?action=toggle-status&tenantId   — toggle isActive
+// PUT    /api/tenants?action=toggle-preboarding&tenantId — toggle preboardingEnabled
 
 const storage = require("../lib/storage");
-const { buildDefaultConfig, buildBlankConfig } = require("../lib/seedConfig");
+const { buildBlankConfig } = require("../lib/seedConfig");
+const { buildTemplateConfig } = require("../lib/configTemplates");
 const { hashPassword } = require("../lib/auth");
 const { sanitiseTenantId } = require("../lib/tenant");
+const tenantRegistry = require("../lib/tenantRegistry");
+const { applyCors } = require("../lib/routeAuth");
+const session = require("../lib/session");
 
-const REGISTRY_KEY = "tenant-registry";
+// What the create-tenant screen sends when somebody picks "start from the
+// default settings". The two "nium-" spellings are what older clients and
+// stored records still send.
+const DEFAULTS_REQUESTED = new Set(["default", "defaults", "nium-default", "nium-defaults"]);
+
+
+// Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
+let _deps = { storage, registry: tenantRegistry };
+
+const REGISTRY_KEY = tenantRegistry.REGISTRY_KEY;
 
 function configKey(tid) {
   return `config:${tid}`;
@@ -23,7 +37,10 @@ function authKey(tid) {
   return `tenant-auth:${tid}`;
 }
 
-const RESERVED_TENANT_IDS = new Set(["super-admin", "admin", "api"]);
+// Path names that would collide with a real URL, plus the platform's own
+// workspace - which the create screen refused but the API did not, so a
+// tenant created through the API could have collided with it.
+const RESERVED_TENANT_IDS = new Set(["super-admin", "admin", "api", ...tenantRegistry.PLATFORM_TENANT_IDS]);
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -39,65 +56,69 @@ function readBody(req) {
   });
 }
 
-function requireSuperAdmin(req, res) {
-  const expected = process.env.SUPER_ADMIN_PASSWORD;
-  if (!expected) {
-    res.status(500).json({ error: "SUPER_ADMIN_PASSWORD not configured on server" });
-    return false;
-  }
+async function requireSuperAdmin(req, res) {
+  // A session from /api/super-admin-auth, not the password. The old check also
+  // compared with `!==`, which is not constant-time; there is nothing left here
+  // to compare against a secret.
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-  if (token !== expected) {
+  const result = await session.verify(token);
+  if (!result.valid || result.payload.role !== "super-admin") {
     res.status(401).json({ error: "Unauthorized" });
     return false;
   }
   return true;
 }
 
-async function readRegistry() {
-  return (await storage.get(REGISTRY_KEY)) || null;
-}
-
 async function ensureRegistry() {
-  let reg = await readRegistry();
-  if (!reg) {
-    reg = [
-      {
-        tenantId: "nium",
-        companyName: "Nium",
-        createdAt: new Date().toISOString(),
-        createdBy: "system",
-        lastPublishedAt: null,
-        isActive: true,
-        isInternal: true,
-        isBlank: false,
-      },
-    ];
-    await storage.set(REGISTRY_KEY, reg);
+  // readRegistryStrict, NOT readRegistry: the fail-soft reader answers [] for
+  // both "empty" and "unreadable" (lib/storage.js#get throws on KV/Redis
+  // failure), and seeding on a read blip would overwrite every real tenant
+  // entry with a platform-only registry. An unreadable registry propagates to
+  // the handler's catch → 500 with no write, which is what happened before
+  // the registry module existed.
+  let reg = await _deps.registry.readRegistryStrict();
+  if (!reg.length) {
+    reg = _deps.registry.PLATFORM_TENANT_IDS.map((tenantId) => ({
+      tenantId,
+      companyName: tenantId,
+      createdAt: new Date().toISOString(),
+      createdBy: "system",
+      lastPublishedAt: null,
+      isActive: true,
+      isInternal: true,
+      isProtected: true,
+      preboardingEnabled: true,
+      isBlank: false,
+    }));
+    await _deps.storage.set(REGISTRY_KEY, reg);
+    return reg;
   }
-  return reg;
-}
-
-async function updateRegistryEntry(tenantId, patch) {
-  const reg = (await readRegistry()) || [];
-  const idx = reg.findIndex((t) => t.tenantId === tenantId);
-  if (idx >= 0) {
-    reg[idx] = { ...reg[idx], ...patch };
-  } else {
-    reg.push({ tenantId, ...patch });
-  }
-  await storage.set(REGISTRY_KEY, reg);
+  // Back-fill flags for registries written before those flags existed.
+  //   isProtected — isInternal was the old spelling of the same idea.
+  //   preboardingEnabled — on by default for every tenant (owner decision
+  //     2026-09-17), so an entry that never had the flag gets true.
+  // Additive and idempotent: an entry that already carries a flag — including
+  // an explicit `false` a super-admin set — is never re-patched.
+  let changed = false;
+  reg = reg.map((t) => {
+    if (!t) return t;
+    const patch = {};
+    if (t.isProtected === undefined && t.isInternal === true) patch.isProtected = true;
+    if (t.preboardingEnabled === undefined) patch.preboardingEnabled = true;
+    if (!Object.keys(patch).length) return t;
+    changed = true;
+    return { ...t, ...patch };
+  });
+  if (changed) await _deps.storage.set(REGISTRY_KEY, reg);
   return reg;
 }
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (applyCors(req, res)) return undefined;
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  if (req.method === "OPTIONS") return res.status(200).end();
 
-  if (!requireSuperAdmin(req, res)) return;
+  if (!(await requireSuperAdmin(req, res))) return;
 
   try {
     if (req.method === "GET") {
@@ -111,7 +132,7 @@ module.exports = async function handler(req, res) {
       const tenants = await Promise.all(
         registry.map(async (t) => {
           try {
-            const cfg = await storage.get(configKey(t.tenantId));
+            const cfg = await _deps.storage.get(configKey(t.tenantId));
             const liveName = cfg && cfg.company && cfg.company.name;
             if (typeof liveName === "string" && liveName.trim()) {
               return { ...t, companyName: liveName.trim() };
@@ -147,17 +168,17 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Password is required." });
       }
 
-      const existingConfig = await storage.get(configKey(tenantId));
+      const existingConfig = await _deps.storage.get(configKey(tenantId));
       if (existingConfig && existingConfig._isBlank !== true) {
         return res.status(409).json({ error: `Tenant "${tenantId}" already exists.` });
       }
-      const existingAuth = await storage.get(authKey(tenantId));
+      const existingAuth = await _deps.storage.get(authKey(tenantId));
       if (existingAuth) {
         return res.status(409).json({ error: `Tenant "${tenantId}" already exists.` });
       }
 
       // Persist auth
-      await storage.set(authKey(tenantId), {
+      await _deps.storage.set(authKey(tenantId), {
         passwordHash: hashPassword(password),
         createdAt: new Date().toISOString(),
         createdBy: "super-admin",
@@ -167,30 +188,27 @@ module.exports = async function handler(req, res) {
 
       // Persist config
       let config;
-      if (startFrom === "nium-defaults") {
-        config = buildDefaultConfig(tenantId);
-        config._tenantId = tenantId;
-        config._isDefault = false;
-        config._isBlank = false;
+      if (DEFAULTS_REQUESTED.has(startFrom)) {
+        config = buildTemplateConfig("default", tenantId);
       } else {
         config = buildBlankConfig(tenantId);
       }
       config.company = { ...(config.company || {}), name: companyName.trim() };
-      await storage.set(configKey(tenantId), config);
+      await _deps.storage.set(configKey(tenantId), config);
 
       // Update registry
-      const reg = (await readRegistry()) || [];
-      reg.push({
-        tenantId,
+      await _deps.registry.upsertEntry(tenantId, {
         companyName: companyName.trim(),
         createdAt: new Date().toISOString(),
         createdBy: "super-admin",
         lastPublishedAt: null,
         isActive: true,
         isInternal: false,
-        isBlank: startFrom !== "nium-defaults",
+        isProtected: false,
+        // On by default (owner decision 2026-09-17); a super-admin can switch it off.
+        preboardingEnabled: true,
+        isBlank: !DEFAULTS_REQUESTED.has(startFrom),
       });
-      await storage.set(REGISTRY_KEY, reg);
 
       return res.status(200).json({
         success: true,
@@ -198,6 +216,7 @@ module.exports = async function handler(req, res) {
         companyName: companyName.trim(),
         adminUrl: `/admin?tenant=${tenantId}`,
         customerUrl: `/?tenant=${tenantId}`,
+        preboardingUrl: `/preboarding?tenant=${tenantId}`,
       });
     }
 
@@ -217,8 +236,8 @@ module.exports = async function handler(req, res) {
         if (!newPassword.trim()) {
           return res.status(400).json({ error: "New password is required" });
         }
-        const existingAuth = (await storage.get(authKey(tenantId))) || {};
-        await storage.set(authKey(tenantId), {
+        const existingAuth = (await _deps.storage.get(authKey(tenantId))) || {};
+        await _deps.storage.set(authKey(tenantId), {
           ...existingAuth,
           tenantId,
           passwordHash: hashPassword(newPassword),
@@ -228,13 +247,23 @@ module.exports = async function handler(req, res) {
       }
 
       if (action === "toggle-status") {
-        if (tenantId === "nium") {
-          return res.status(400).json({ error: "Nium tenant cannot be deactivated." });
+        if (await _deps.registry.isProtectedTenant(tenantId)) {
+          return res.status(400).json({ error: "A protected platform tenant cannot be deactivated." });
         }
         const body = await readBody(req);
         const isActive = body && typeof body.isActive === "boolean" ? body.isActive : true;
-        await updateRegistryEntry(tenantId, { isActive });
+        await _deps.registry.upsertEntry(tenantId, { isActive });
         return res.status(200).json({ success: true, isActive });
+      }
+
+      if (action === "toggle-preboarding") {
+        if (!(await _deps.registry.tenantExists(tenantId))) {
+          return res.status(404).json({ error: "tenant_not_found" });
+        }
+        const body = await readBody(req);
+        const preboardingEnabled = !!(body && body.preboardingEnabled);
+        await _deps.registry.upsertEntry(tenantId, { preboardingEnabled });
+        return res.status(200).json({ success: true, preboardingEnabled });
       }
 
       return res.status(400).json({ error: `Unknown action "${action}"` });
@@ -247,3 +276,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Server error", message: err.message });
   }
 };
+
+// Test seam only.
+module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };

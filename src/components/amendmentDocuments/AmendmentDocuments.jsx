@@ -25,6 +25,7 @@ import React, { useEffect, useState } from 'react';
 import { AmendmentDocCard } from './AmendmentDocCard';
 import { uploadAmendmentDoc } from './uploadAmendmentDoc';
 import { canonicalDocs, docKey } from '../companyConfirm/confirmState';
+import { getDossierAuthHeaders } from '../../utils/dossierCredential';
 
 const SECTION = {
   background: '#FEF9EF',
@@ -63,7 +64,7 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
   useEffect(() => {
     if (!submissionId) return undefined;
     let cancelled = false;
-    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`)
+    fetch(`/api/amendment-documents?submissionId=${encodeURIComponent(submissionId)}`, { headers: getDossierAuthHeaders() })
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;

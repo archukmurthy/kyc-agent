@@ -1,0 +1,276 @@
+const { test, afterEach } = require("node:test");
+const assert = require("node:assert");
+
+const SECRET = "test-dossier-secret";
+
+function fakeRes() {
+  return {
+    statusCode: null, body: null, headers: {},
+    setHeader(k, v) { this.headers[k] = v; },
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.body = b; return this; },
+    end() { return this; },
+  };
+}
+
+function fakeStore() {
+  const data = {};
+  return { data, async set(key, value) { data[key] = value; } };
+}
+
+function fakeSql(row) {
+  const sql = () => Promise.resolve(row ? [row] : []);
+  return sql;
+}
+
+function accessWith(actor) {
+  const real = require("../../lib/dossierAccess");
+  return { ...real, resolveDossierActor: async () => actor };
+}
+
+const ANALYST = { kind: "analyst", tenantId: "acme", dossierId: null, reason: null };
+const ROW = { id: "dossier-1", tenant_id: "acme" };
+const basePayload = { email: "sarah@company.com", contactName: "Sarah Chen", companyName: "Acme Ltd", dossierId: "dossier-1" };
+
+function reqWith(body, headers) {
+  return { method: "POST", body, headers: headers || { host: "kyc-agent-deploy.vercel.app" }, query: {} };
+}
+
+function setup(t, { actor = ANALYST, row = ROW, secret = SECRET, dbUrl = "postgres://test", sql, sendEmail, readConfigForTenant } = {}) {
+  const handler = require("../invite");
+  const prevKey = process.env.RESEND_API_KEY;
+  const prevSecret = process.env.DOSSIER_TOKEN_SECRET;
+  const prevDbUrl = process.env.DATABASE_URL;
+  delete process.env.RESEND_API_KEY;
+  if (secret === null) delete process.env.DOSSIER_TOKEN_SECRET; else process.env.DOSSIER_TOKEN_SECRET = secret;
+  if (dbUrl === null) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = dbUrl;
+  t.after(() => {
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = prevKey;
+    if (prevSecret === undefined) delete process.env.DOSSIER_TOKEN_SECRET; else process.env.DOSSIER_TOKEN_SECRET = prevSecret;
+    if (prevDbUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevDbUrl;
+  });
+  const store = fakeStore();
+  handler.__setDeps({
+    store,
+    neon: () => sql || fakeSql(row),
+    access: accessWith(actor),
+    readConfigForTenant: readConfigForTenant || (async () => ({ company: { name: "Acme Payments" } })),
+    sendEmail: sendEmail || (async () => { throw new Error("sendEmail called without a test-provided fake"); }),
+  });
+  return { handler, store };
+}
+
+afterEach(() => {
+  const handler = require("../invite");
+  handler.__setDeps({ store: fakeStore(), sendEmail: async () => { throw new Error("no fake"); } });
+});
+
+test("a customer or anonymous caller cannot send invites", async (t) => {
+  const { handler } = setup(t, { actor: { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" } });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 401);
+
+  const { handler: h2 } = setup(t, { actor: { kind: "customer", tenantId: "acme", dossierId: "dossier-1", reason: null } });
+  const res2 = fakeRes();
+  await h2(reqWith({ ...basePayload }), res2);
+  assert.strictEqual(res2.statusCode, 403);
+  assert.deepStrictEqual(res2.body, { error: "forbidden" });
+});
+
+test("400 when email, contactName or dossierId is missing", async (t) => {
+  const { handler } = setup(t);
+  for (const body of [{ ...basePayload, email: "" }, { ...basePayload, contactName: "" }, { ...basePayload, dossierId: "" }]) {
+    const res = fakeRes();
+    await handler(reqWith(body), res);
+    assert.strictEqual(res.statusCode, 400);
+  }
+});
+
+test("a dossier outside the analyst's tenant is a 404", async (t) => {
+  const { handler } = setup(t, { row: null });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 404);
+});
+
+test("without DOSSIER_TOKEN_SECRET no link can be issued", async (t) => {
+  const { handler } = setup(t, { secret: null });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "not_configured" });
+});
+
+function withMintSpy(t) {
+  const real = require("../../lib/dossierToken");
+  let minted = false;
+  const handler = require("../invite");
+  handler.__setDeps({ dossierToken: { ...real, mint: (...args) => { minted = true; return real.mint(...args); } } });
+  t.after(() => { handler.__setDeps({ dossierToken: real }); });
+  return () => minted;
+}
+
+test("without DATABASE_URL the request fails closed before minting or storing anything", async (t) => {
+  const { handler, store } = setup(t, { dbUrl: null });
+  const mintedFn = withMintSpy(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "not_configured" });
+  assert.strictEqual(mintedFn(), false);
+  assert.strictEqual(Object.keys(store.data).length, 0);
+});
+
+test("a failing dossier lookup fails closed before minting or storing anything", async (t) => {
+  const throwingSql = () => { throw new Error("connection refused"); };
+  const { handler, store } = setup(t, { sql: throwingSql });
+  const mintedFn = withMintSpy(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.deepStrictEqual(res.body, { error: "lookup_failed" });
+  assert.strictEqual(mintedFn(), false);
+  assert.strictEqual(Object.keys(store.data).length, 0);
+});
+
+test("the emailed link carries a verifiable token and no raw dossier id", async (t) => {
+  const { handler } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 200);
+  const url = new URL(res.body.link);
+  assert.strictEqual(url.origin, "https://kyc-agent-deploy.vercel.app");
+  assert.strictEqual(url.searchParams.get("tenant"), "acme");
+  assert.strictEqual(url.searchParams.get("journey"), "customer");
+  assert.strictEqual(url.searchParams.get("dossierId"), null);
+  const tok = url.searchParams.get("dossierToken");
+  assert.ok(tok);
+  const verified = await require("../../lib/dossierToken").verify(tok);
+  assert.strictEqual(verified.valid, true);
+  assert.strictEqual(verified.payload.dossierId, "dossier-1");
+  assert.strictEqual(verified.payload.tenantId, "acme");
+});
+
+test("an uppercase/differently-cased dossierId mints a token for the CANONICAL id the lookup returned", async (t) => {
+  // Postgres's uuid type matches an uppercase input to the same row as its
+  // canonical lowercase form. Minting with the caller's spelling would embed
+  // an id in the token that api/get-dossier's canReadDossier later refuses,
+  // because every other write (save-dossier, revoke) uses the canonical id.
+  const canonical = "d1111111-1111-1111-1111-111111111111";
+  const { handler } = setup(t, { row: { id: canonical, tenant_id: "acme" } });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload, dossierId: "D1111111-1111-1111-1111-111111111111" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.dossierId, canonical);
+  const url = new URL(res.body.link);
+  const tok = url.searchParams.get("dossierToken");
+  const verified = await require("../../lib/dossierToken").verify(tok);
+  assert.strictEqual(verified.payload.dossierId, canonical);
+});
+
+test("the tenant comes from the credential; a body tenantId and a client link are ignored", async (t) => {
+  const { handler } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload, tenantId: "evil", link: "https://evil.example.com/x" }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.match(res.body.link, /^https:\/\/kyc-agent-deploy\.vercel\.app\//);
+  assert.strictEqual(new URL(res.body.link).searchParams.get("tenant"), "acme");
+});
+
+test("the persisted invite record never contains the link or the token", async (t) => {
+  const { handler, store } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  const records = Object.values(store.data);
+  assert.strictEqual(records.length, 1);
+  const serialised = JSON.stringify(records[0]);
+  assert.doesNotMatch(serialised, /dossierToken/);
+  assert.strictEqual(records[0].link, undefined);
+  assert.strictEqual(records[0].dossierId, "dossier-1");
+  assert.strictEqual(records[0].tenantId, "acme");
+});
+
+test("the email uses the tenant's own company name", async (t) => {
+  const { handler } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.match(res.body.subject, /Acme Payments/);
+  assert.doesNotMatch(res.body.subject, /Nium/i);
+  assert.match(res.body.body, /dossierToken=/);
+});
+
+test("a tenant with no configured company name falls back to its tenant id", async (t) => {
+  const { handler } = setup(t, { readConfigForTenant: async () => ({ company: {} }) });
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.match(res.body.subject, /acme/);
+});
+
+test("a real send passes the token link to the provider", async (t) => {
+  let sent = null;
+  const { handler } = setup(t, { sendEmail: async (args) => { sent = args; return { ok: true, data: { id: "p-1" } }; } });
+  process.env.RESEND_API_KEY = "test-key";
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.sent, true);
+  assert.match(sent.text, /dossierToken=/);
+  assert.doesNotMatch(sent.text, /dossierId=/);
+});
+
+test("a provider error reports a fixed code, never the raw provider response", async (t) => {
+  const { handler } = setup(t, {
+    sendEmail: async () => ({ ok: false, data: { message: "Domain not verified", apiKeyPrefix: "re_live_secret123" } }),
+  });
+  process.env.RESEND_API_KEY = "test-key";
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 502);
+  assert.deepStrictEqual(res.body.error, "email_send_failed");
+  assert.strictEqual(res.body.details, undefined);
+  assert.strictEqual(JSON.stringify(res.body).includes("re_live_secret123"), false);
+});
+
+test("a thrown send error reports a fixed code, never the raw error text", async (t) => {
+  const { handler } = setup(t, {
+    sendEmail: async () => { throw new Error("connect ECONNREFUSED 10.0.0.1:443 — internal detail"); },
+  });
+  process.env.RESEND_API_KEY = "test-key";
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }), res);
+  assert.strictEqual(res.statusCode, 502);
+  assert.deepStrictEqual(res.body.error, "email_send_failed");
+  assert.strictEqual(res.body.message, undefined);
+  assert.strictEqual(JSON.stringify(res.body).includes("ECONNREFUSED"), false);
+});
+
+test("a link built on a dev server is one a browser can actually open", async (t) => {
+  // Vercel sets x-forwarded-proto, so deployments stay https. A local dev
+  // server sets nothing, and defaulting to https produced
+  // https://localhost:3000 links that do not load - which made the customer
+  // half of the flow untestable without deploying.
+  const { handler } = setup(t);
+  for (const host of ["localhost:3000", "127.0.0.1:3001", "localhost"]) {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload }, { host }), res);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(new URL(res.body.link).protocol, "http:", `${host} should be reachable`);
+  }
+});
+
+test("everything that is not localhost stays https", async (t) => {
+  const { handler } = setup(t);
+  for (const host of ["kyc-agent-deploy.vercel.app", "onboarding.example.com", "localhost.evil.test"]) {
+    const res = fakeRes();
+    await handler(reqWith({ ...basePayload }, { host }), res);
+    assert.strictEqual(new URL(res.body.link).protocol, "https:", `${host} must not be downgraded`);
+  }
+});
+
+test("the platform's own header still wins over the guess", async (t) => {
+  const { handler } = setup(t);
+  const res = fakeRes();
+  await handler(reqWith({ ...basePayload }, { host: "localhost:3000", "x-forwarded-proto": "https" }), res);
+  assert.strictEqual(new URL(res.body.link).protocol, "https:");
+});
