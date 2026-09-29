@@ -695,3 +695,67 @@ documents. These are the gates. Owner items are marked; the rest are ours.
 - **Now:** the three drop the flag with a comment saying what does scope them. `api/ubo-discovery.js` keeps it, reads it, and handles the switched-off case explicitly with `UBO_DEV_TENANT_ID`.
 - **Enforced:** a test walks every route in `api/` and fails any that asks for a tenant without reading one.
 - **The rule, written where it is used** (`lib/routeAuth.js`): roles are refused when there is no identity; a tenant is allowed through as null, because the one route that reads it handles that - but a route that will not read it must not ask.
+
+## UBO demo integration (2026-09-29)
+
+The partner's UBO POC (`codex/ubo-demo-integrated`, `ef14ef2`) is merged with
+our platform work and becomes the base of a demo real testers use with real
+documents. Owner decisions, taken in discussion and recorded here so they are
+not lost with it:
+
+- **Home branch:** `codex/ubo-demo-integrated`. Merged locally, tested, then pushed; `dev/local-work` stops.
+- **Calculations move to the server.** Today the browser computes the assessment and the server stores it as sent.
+- **Customer access:** server-created case id; a signed, single-case, revocable, **recipient-bound** link, valid 30 days (configurable). Opening it sends a one-time code to the recipient's email; the session it starts lasts hours, not 30 days. The partner agreed.
+- **IDV:** demo is the skip button only, switched on the server (`UBO_POC_IDV_MODE`), recorded as `DEMO - not verified`. Real is Didit + ComplyCube; a customer's own provider later, as an adapter.
+- **Data:** tester uploads are real personal data. Kept during the trial; buyers keep everything (7-year rule); non-buyers deleted 90 days after the trial ends, backups included, legal holds respected.
+- **Demo limits:** 25 research runs in total across all testers, and a separate 25 chart uploads in total. Companies House lookups are free and uncounted.
+- **Infrastructure:** its own Vercel project and database holding UBO + Evidence only, never KYC tables. Treated as a demo database; a buyer's data moves to the real one later. Vercel address with Clerk's development banner until a domain is bought (GOLIVE-3).
+- **Partner's answers:** Way B holds for the real product (text references to Evidence, no cross-product foreign keys); in-process package now, transport-neutral interface; analyst read-only on customer facts after handoff but may add notes, request information or reopen (new version + audit event); automatic review stays in the demo, labelled provisional; sample companies and replays hidden behind a staff-only flag; UK companies only; no proof-of-address, and never claimed; `pr62` stays out.
+
+### UBO-12 - The UBO demo's own endpoints have no gate
+- **Category:** Security - **Priority:** P0 - **Status:** OPEN (next commit)
+- **What:** `api/ubo-poc-case.js` reads and writes any case by id with no sign-in, tenant or limit, taking its tenant from `process.env.TENANT_ID || "nium"` (`ubo-control-lab/server/pocCaseState.js`). `api/ubo-poc-health.js` accepts `ADMIN_PASSWORD` as its key and calls paid providers unmetered. Neither is in the route table, so `routeTable.nodetest.js` is red on the merge commit.
+
+### UBO-13 - The server trusts what the browser says
+- **Category:** Security / correctness - **Priority:** P0 - **Status:** OPEN
+- **What:** the assessment, the questions, IDV completion and `actorType` are all supplied by the browser and stored as sent. Decided: calculations move to the server; IDV completion is recorded only when the server's mode allows it.
+
+### UBO-14 - Two `fetchWithTimeout` helpers with different signatures
+- **Category:** Duplication - **Priority:** P3 - **Status:** OPEN
+- **What:** `lib/providerCall.js#fetchWithTimeout(url, opts, config)` and `agents/ubo/boundedAsync.js#fetchWithTimeout(fetchImpl, url, opts, config)`. The merge kept hers in the web-research adapter. Pick one.
+
+### UBO-15 - One live run may be charged twice to the discovery allowance
+- **Category:** Cost - **Priority:** P2 - **Status:** OPEN - verify first
+- **What:** `START_LIVE` in `api/ubo-control-lab.js` spends the `ubo-discovery` bucket, then its nested call to `api/ubo-discovery.js` (now carrying the caller's headers) spends it again. The demo path (`START_DEMO_REVIEW_LIVE`) only spends it once, in the nested call. Settle on one place, which matters once the demo cap is 25 runs in total.
+
+### UBO-16 - Chart-job polling spends the rate limit
+- **Category:** Cost / UX - **Priority:** P1 - **Status:** OPEN
+- **What:** one upload makes up to 12 POSTs to `ubo-demo-customer-ownership-chart` while polling; each passes `enforceRateLimit("ubo-demo-chart")`, which allows 15 an hour. The demo cap must count uploads, not status polls.
+
+### UBO-17 - Chart jobs are reachable by id alone
+- **Category:** Security - **Priority:** P1 - **Status:** OPEN
+- **What:** `GET/PROCESS/RETRY_EXTRACTION_JOB` take a `jobId` and never check it belongs to the caller's tenant.
+
+### UBO-18 - Audit writes are fire-and-forget on a serverless platform
+- **Category:** Correctness - **Priority:** P2 - **Status:** OPEN
+- **What:** `schedulePersistence` in `api/ubo-discovery.js` starts the cache, audit and database writes after the response is sent. On Vercel the function can be frozen once it has responded, so an audit record can be silently lost. Use the platform's `waitUntil`, or await the audit write.
+
+### UBO-19 - The migration runner cannot build a UBO-only database
+- **Category:** Deploy - **Priority:** P1 - **Status:** OPEN (before the demo database is migrated)
+- **What:** `npm run db:migrate` applies every file in `db/migrations/`, which would put KYC tables into the UBO database. `ubo-dev` was built by calling `migrationRunner.run` with only 001, 009, the evidence files and 021. That needs to be a supported option, not a one-off.
+
+### UBO-20 - The brand-default test does not look where the partner's code lives
+- **Category:** Process - **Priority:** P1 - **Status:** OPEN
+- **What:** `brandDefaults.nodetest.js` skips `evidence/`, `ubo-control-lab/` and `scripts/`, which hold `TENANT_ID || "nium"` and `tenantId = "nium"` today. Widen the scan and remove them.
+
+### UBO-21 - Two of the partner's tests are run by no script
+- **Category:** Process - **Priority:** P2 - **Status:** OPEN
+- **What:** `evidence/customerOwnershipJobs/__tests__/service.nodetest.js` and `evidence/a3/__tests__/ownershipChartProfile.nodetest.js`.
+
+### UBO-22 - The case wrapper and client carry no sign-in, and names sit in browser storage
+- **Category:** Security / privacy - **Priority:** P1 - **Status:** OPEN
+- **What:** `DurablePocCaseBoundary` wraps the tree outside `ClerkGate`; `pocCaseClient.js` sends no Clerk headers; `localStorage` holds the case pointer, research session and trace, including people's names (invariant 5).
+
+### UBO-23 - The live POC is public and unmetered today
+- **Category:** Security / cost - **Priority:** P0 - **Status:** OPEN - owner action, not code
+- **What:** `ubo-poc-v1.vercel.app` has no sign-in and no limits, and makes paid Anthropic calls. Until the hardened demo replaces it, turn on Vercel password protection for that project.
