@@ -293,7 +293,14 @@ function projectCommand(current, operation, payload, release) {
 }
 
 class PostgresPocCaseRepository {
-  constructor(db, tenantId = process.env.TENANT_ID || "nium") { this.db = db; this.tenantId = tenantId; }
+  // Every query below filters on this tenant. It comes from the signed-in
+  // caller (api/ubo-poc-case.js); there is no default, because a default is
+  // how every case ended up filed under one hard-coded company.
+  constructor(db, tenantId) {
+    if (!tenantId) throw new Error("PostgresPocCaseRepository needs the caller's tenant");
+    this.db = db;
+    this.tenantId = tenantId;
+  }
 
   async get(caseId, executor = this.db) {
     const row = first(await executor.query(`SELECT case_id, tenant_id, company, current_stage,

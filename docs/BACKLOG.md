@@ -713,7 +713,7 @@ not lost with it:
 - **Partner's answers:** Way B holds for the real product (text references to Evidence, no cross-product foreign keys); in-process package now, transport-neutral interface; analyst read-only on customer facts after handoff but may add notes, request information or reopen (new version + audit event); automatic review stays in the demo, labelled provisional; sample companies and replays hidden behind a staff-only flag; UK companies only; no proof-of-address, and never claimed; `pr62` stays out.
 
 ### UBO-12 - The UBO demo's own endpoints have no gate
-- **Category:** Security - **Priority:** P0 - **Status:** OPEN (next commit)
+- **Category:** Security - **Priority:** P0 - **Status:** DONE (2026-09-29) - Clerk + rate limit + tenant from the caller (`uboCallerTenant`, never on Vercel for the dev fallback) + 3 MB cap; health takes only `UBO_POC_HEALTH_KEY`. Verified against a real database that one workspace cannot read or write another's case.
 - **What:** `api/ubo-poc-case.js` reads and writes any case by id with no sign-in, tenant or limit, taking its tenant from `process.env.TENANT_ID || "nium"` (`ubo-control-lab/server/pocCaseState.js`). `api/ubo-poc-health.js` accepts `ADMIN_PASSWORD` as its key and calls paid providers unmetered. Neither is in the route table, so `routeTable.nodetest.js` is red on the merge commit.
 
 ### UBO-13 - The server trusts what the browser says
@@ -753,9 +753,14 @@ not lost with it:
 - **What:** `evidence/customerOwnershipJobs/__tests__/service.nodetest.js` and `evidence/a3/__tests__/ownershipChartProfile.nodetest.js`.
 
 ### UBO-22 - The case wrapper and client carry no sign-in, and names sit in browser storage
-- **Category:** Security / privacy - **Priority:** P1 - **Status:** OPEN
+- **Category:** Security / privacy - **Priority:** P1 - **Status:** PARTLY DONE (2026-09-29) - wrapper inside the gates, client sends the token. Names in `localStorage` remain; so does the active case id across a sign-out.
 - **What:** `DurablePocCaseBoundary` wraps the tree outside `ClerkGate`; `pocCaseClient.js` sends no Clerk headers; `localStorage` holds the case pointer, research session and trace, including people's names (invariant 5).
 
 ### UBO-23 - The live POC is public and unmetered today
 - **Category:** Security / cost - **Priority:** P0 - **Status:** OPEN - owner action, not code
 - **What:** `ubo-poc-v1.vercel.app` has no sign-in and no limits, and makes paid Anthropic calls. Until the hardened demo replaces it, turn on Vercel password protection for that project.
+
+### UBO-24 - A case id taken in another workspace answers 500
+- **Category:** Security (low) / UX - **Priority:** P3 - **Status:** OPEN - goes away with server-created case ids
+- **What:** `ubo_poc_cases.case_id` is the primary key on its own. A write to an id another workspace owns fails on the key (nothing written, nothing read) but answers 500 where an unknown id answers 200, so it confirms the id exists elsewhere. Ids are random UUIDs made in the browser, so it needs a leaked id. Fixed properly when the server creates case ids (the signed customer link work); otherwise key on `(tenant_id, case_id)` or answer 409.
+- **Found by:** adversarial review of UBO-12.

@@ -27,6 +27,8 @@ const API_DIR = path.join(__dirname, "..");
  *                   actions inside may demand a role; the table records that a
  *                   credential is required at all.
  *  cron           - CRON_SECRET, scheduler only
+ *  internal-key   - a dedicated secret for an operator's tool (a release smoke
+ *                   test, a health report). Its own env var, never a password.
  *  public-login   - the login endpoints themselves; public by definition
  *  public-status  - a liveness check. Open on purpose: a health check behind a
  *                   login cannot tell you the login is broken. Kept OUT of the
@@ -115,6 +117,9 @@ const ROUTES = {
   // administrator with a shared password. Batch 0 got this wrong; see the
   // comment in the route.
   "ubo-control-lab.js": "staff",
+  "ubo-poc-case.js": "staff",
+
+  "ubo-poc-health.js": "internal-key",
   "ubo-demo-customer-ownership-chart.js": "open-limited",
   "ubo-demo-entity-resolution.js": "open-limited",
 
@@ -122,7 +127,7 @@ const ROUTES = {
   "idv-match/screening/webhook.js": "webhook",
 };
 
-const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron", "staff"]);
+const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron", "staff", "internal-key"]);
 const GATE = /requireAdmin|requireActor|requireStaff|verifyClerkSession|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
 
 function listApiFiles(dir = API_DIR, prefix = "") {
@@ -208,7 +213,7 @@ test("the UBO routes ask Clerk who is calling", () => {
   // refusal. What it can assert is that the call is wired at all - a UBO route
   // added later without it would otherwise be open the day Clerk is switched on
   // and nobody would notice.
-  const uboRoutes = ["ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js"];
+  const uboRoutes = ["ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js", "ubo-poc-case.js"];
   const missing = uboRoutes.filter((f) => !read(f).includes("requireStaff"));
   assert.deepEqual(missing, [], "UBO routes must go through requireStaff");
 });
@@ -219,7 +224,7 @@ test("a route that spends money or writes has a rate limit", () => {
   const mustBeLimited = [
     "research.js", "doc-search.js", "self-source.js", "generate-policy.js",
     "ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js",
-    "ubo-control-lab.js",
+    "ubo-control-lab.js", "ubo-poc-case.js",
     "kyc-lookup.js", "company-search.js", "upload-document.js", "get-document.js",
     "submit.js", "save-dossier.js", "change-events.js", "amendment-documents.js",
     "idv-match/session.js", "idv-match/resolve.js", "idv-match/confirm.js",

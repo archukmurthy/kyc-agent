@@ -35,6 +35,7 @@ const CALLS = [
   { route: "api/ubo-control-lab.js", caller: "src/uboDemo/demoResearch.js", url: "/api/ubo-control-lab" },
   { route: "api/ubo-demo-customer-ownership-chart.js", caller: "src/uboDemo/customer/CustomerOwnershipChartPage.jsx", url: "/api/ubo-demo-customer-ownership-chart" },
   { route: "api/ubo-demo-entity-resolution.js", caller: "src/uboDemo/customer/ChartResearchComparison.jsx", url: "/api/ubo-demo-entity-resolution" },
+  { route: "api/ubo-poc-case.js", caller: "src/uboDemo/pocCaseClient.js", url: "/api/ubo-poc-case" },
   { route: "api/ubo-invite.js", caller: "src/trials/trialApi.js", url: "/api/ubo-invite" },
   { route: "api/ubo-people.js", caller: "src/people/peopleApi.js", url: "/api/ubo-people" },
 ];
@@ -124,7 +125,8 @@ test("a route that demands a tenant actually reads one", () => {
     const src = fs2.readFileSync(path2.join(apiDir, name), "utf8");
     if (!/requireTenant:\s*true/.test(src)) continue;
     // It must go on to read the tenant off the actor it was given.
-    if (!/actor\.tenantId|\.tenantId\b/.test(src)) offenders.push(name);
+    // uboCallerTenant(actor) is that read, in the one place that decides it.
+    if (!/actor\.tenantId|\.tenantId\b|uboCallerTenant\(actor\)/.test(src)) offenders.push(name);
   }
 
   assert.deepEqual(

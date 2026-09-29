@@ -1,3 +1,4 @@
+import { clerkAuthHeaders } from "../auth/clerkFetch";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "./demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
@@ -46,7 +47,7 @@ async function parse(response) {
 
 export async function loadPocCase(caseId, fetchImpl = window.fetch) {
   if (!caseId) return null;
-  return parse(await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}`, { headers: { Accept: "application/json" } }));
+  return parse(await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}`, { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } }));
 }
 
 export async function persistPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl = window.fetch) {
@@ -54,7 +55,7 @@ export async function persistPocCase(operation, { caseId, payload, idempotencyKe
   const durablePayload = compactCasePayload(payload);
   const record = await parse(await fetchImpl("/api/ubo-poc-case", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await clerkAuthHeaders()) },
     body: JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType }),
   }));
   rememberActivePocCase(caseId);

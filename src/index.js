@@ -56,22 +56,24 @@ if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
   tree = <ClerkGate><PeopleAdmin /></ClerkGate>;
   title = "People | Ownership review";
 } else if (isCustomerCompletePath(path)) {
-  tree = <ClerkGate><TrialGate><CustomerCompletePage /></TrialGate></ClerkGate>;
+  // The durable case is restored INSIDE the gates: it loads the case from the
+  // server, and outside them there is no session to load it with.
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerCompletePage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Complete | Ownership review demo";
 } else if (isCustomerIdvPath(path)) {
-  tree = <ClerkGate><TrialGate><CustomerIdvPage /></TrialGate></ClerkGate>;
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerIdvPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Identity verification | Ownership review demo";
 } else if (isCustomerQuestionsPath(path)) {
-  tree = <ClerkGate><TrialGate><CustomerQuestionsPage /></TrialGate></ClerkGate>;
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerQuestionsPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Questions | Ownership review demo";
 } else if (isCustomerOwnershipChartPath(path)) {
-  tree = <ClerkGate><TrialGate><CustomerOwnershipChartPage /></TrialGate></ClerkGate>;
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerOwnershipChartPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Upload ownership chart | Ownership review demo";
 } else if (isCustomerCompanyPath(path)) {
-  tree = <ClerkGate><TrialGate><CustomerCompanyPage /></TrialGate></ClerkGate>;
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerCompanyPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Company details | Ownership review demo";
 } else if (isUboDemoPath(path)) {
-  tree = <ClerkGate><TrialGate><UboDemoRoot /></TrialGate></ClerkGate>;
+  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><UboDemoRoot /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Ownership review demo";
 } else if (UBO_ONLY) {
   // Anything outside the UBO surfaces simply does not exist here. Deliberately
@@ -122,5 +124,4 @@ if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
 }
 
 document.title = title;
-if (isUboDemoPath(path)) tree = <DurablePocCaseBoundary>{tree}</DurablePocCaseBoundary>;
 root.render(<React.StrictMode>{tree}</React.StrictMode>);

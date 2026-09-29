@@ -9,7 +9,7 @@ const { withTimeout } = require("../agents/ubo/boundedAsync");
 const { randomUUID } = require("crypto");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const { checkTextFields } = require("../lib/inputLimits");
-const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { logFailure, attachRequestId } = require("../lib/requestLog");
 
 // Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
@@ -99,15 +99,8 @@ module.exports = async function handler(req, res) {
   // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set.
   const actor = await _deps.requireStaff(req, res, { requireTenant: true });
   if (!actor) return undefined;
-  // A named caller brings their own tenant. Nobody else gets one by accident.
-  //
-  // The exception is deliberate and opt-in: public/ubo-lab.html posts no tenant
-  // at all, so with Clerk switched off (local development) an explicitly
-  // configured UBO_DEV_TENANT_ID keeps that lab working. Absent the variable
-  // the request is refused, so forgetting to configure Clerk in production
-  // cannot quietly restore the old "nium" default.
-  const devTenant = actor.kind === "unauthenticated" ? (process.env.UBO_DEV_TENANT_ID || "") : "";
-  const tenantId = actor.tenantId || devTenant;
+  // Tenant from the caller, never the body (UBO-1). See uboCallerTenant.
+  const tenantId = uboCallerTenant(actor);
   if (!tenantId) {
     return res.status(400).json({ error: "tenant_required" });
   }

@@ -1,20 +1,45 @@
 "use strict";
 
+// A UBO case: the company, the research, the customer's answers and the
+// assessment. Reading one tells you who owns a company and what its customer
+// said; writing one changes a compliance record. So: signed in, rate-limited,
+// and always inside the caller's own workspace - never one named in the request.
+
 const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PocCaseService, PostgresPocCaseRepository } = require("../ubo-control-lab/server/pocCaseState.js");
+const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
+const { enforceRateLimit } = require("../lib/rateLimit");
 
-function dependencies() {
+// ponytail: a fixed ceiling, well under Vercel's 4.5 MB request cap. The
+// screens compact what they send (pocCaseClient.js); raise it only if a real
+// case is measured above it.
+const MAX_BODY_BYTES = 3 * 1024 * 1024;
+
+function dependencies(tenantId) {
   if (!process.env.DATABASE_URL) throw Object.assign(new Error("POC case persistence requires DATABASE_URL"), { statusCode: 503, code: "poc_case_persistence_unavailable" });
   const db = createPostgresDb();
-  return { service: new PocCaseService(new PostgresPocCaseRepository(db)), close: () => db.close() };
+  return { service: new PocCaseService(new PostgresPocCaseRepository(db, tenantId)), close: () => db.close() };
 }
 
-function createHandler(factory = dependencies) {
+const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit };
+
+function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
   return async function uboPocCase(req, res) {
+    if (gates.applyCors(req, res)) return undefined;
+    if (!(await gates.enforceRateLimit(req, res, "ubo-poc-case"))) return undefined;
+    const actor = await gates.requireStaff(req, res, { requireTenant: true });
+    if (!actor) return undefined;
+    const tenantId = uboCallerTenant(actor);
+    if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
+
+    if (req.method === "POST" && Buffer.byteLength(JSON.stringify(req.body || {})) > MAX_BODY_BYTES) {
+      return res.status(413).json({ success: false, code: "case_payload_too_large", message: "This case update is too large to save." });
+    }
+
     let active;
     try {
       res.setHeader("Cache-Control", "no-store");
-      active = factory();
+      active = factory(tenantId);
       if (req.method === "GET") {
         const caseId = String(req.query?.caseId || "").trim();
         if (!caseId) return res.status(400).json({ success: false, code: "case_id_required", message: "caseId is required" });
@@ -43,4 +68,5 @@ function createHandler(factory = dependencies) {
 
 const handler = createHandler();
 handler.createHandler = createHandler;
+handler.MAX_BODY_BYTES = MAX_BODY_BYTES;
 module.exports = handler;

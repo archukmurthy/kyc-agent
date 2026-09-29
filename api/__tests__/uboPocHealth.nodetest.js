@@ -98,3 +98,17 @@ test("internal POC health reports a production-like durable cache and release id
     assert.deepEqual(res.body.checks.researchCache, { status: "HEALTHY", backend: "redis", roundTrip: "passed" });
   });
 });
+
+test("the shared admin password does not open the health report", async () => {
+  // It used to be the fallback key. A password that unlocks the admin screens
+  // must not also be accepted here - one leaked secret would open both, and
+  // passwords are never request credentials (AUTH-2).
+  await withEnvironment({ UBO_POC_HEALTH_KEY: null, ADMIN_PASSWORD: "admin-secret" }, async () => {
+    let dbCalls = 0;
+    const handler = health.createHandler({ dbFactory: () => { dbCalls += 1; throw new Error("must not run"); } });
+    const res = response();
+    await handler({ method: "GET", headers: { "x-internal-health-key": "admin-secret" } }, res);
+    assert.equal(res.statusCode, 401);
+    assert.equal(dbCalls, 0);
+  });
+});

@@ -1,19 +1,18 @@
 "use strict";
 
-const { randomUUID, timingSafeEqual } = require("node:crypto");
+const { randomUUID } = require("node:crypto");
+const { verifyEnvBearer } = require("../lib/auth");
 const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PostgresCustomerExtractionJobRepository } = require("../evidence/customerOwnershipJobs/repository.js");
 const storage = require("../lib/storage.js");
 
 const CONNECTIVITY_TIMEOUT_MS = 5000;
 
+// Its own key and nothing else. It used to fall back to ADMIN_PASSWORD, so the
+// shared admin secret opened this report too; passwords are never request
+// credentials (AUTH-2). No key configured means nobody gets in.
 function authorized(req) {
-  const expected = process.env.UBO_POC_HEALTH_KEY || process.env.ADMIN_PASSWORD;
-  const supplied = req.headers?.["x-internal-health-key"];
-  if (!expected || !supplied) return false;
-  const left = Buffer.from(String(expected));
-  const right = Buffer.from(String(supplied));
-  return left.length === right.length && timingSafeEqual(left, right);
+  return verifyEnvBearer(req.headers?.["x-internal-health-key"], "UBO_POC_HEALTH_KEY");
 }
 
 async function boundedFetch(url, options = {}) {
