@@ -15,6 +15,17 @@
  *                                             an 8-hour session for that one
  *                                             case if their verified email is
  *                                             the one the link was made for
+ *   POST { action: "resume" }                 CUSTOMER - the session again,
+ *                                             from its HttpOnly cookie, after
+ *                                             a page load
+ *   POST { action: "leave" }                  clears that cookie
+ *
+ * Her customer screens move between pages with full page loads, and a session
+ * must never sit in browser storage (CLAUDE.md, invariant 5). So "open" also
+ * sets the session as an HttpOnly cookie - scripts cannot read it - sent only
+ * to THIS route (Path). Each page asks "resume" and keeps what it gets in
+ * memory; every other route accepts the session only as a header, so a
+ * customer cookie in a browser never changes what the analyst screens do.
  *
  * The workspace always comes from the analyst, never the request. A customer
  * session can never make or withdraw links. With sign-in switched off, "open"
@@ -41,6 +52,21 @@ async function caseExists(tenantId, caseId) {
 }
 
 const DEFAULT_DEPS = { applyCors, requireStaff, enforceRateLimit, caseExists, clerk: clerkAuth };
+const COOKIE = "ubo_customer_session";
+
+function sessionCookie(value, maxAgeSeconds) {
+  const secure = process.env.VERCEL ? "; Secure" : "";
+  return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/api/ubo-customer-link; Max-Age=${maxAgeSeconds}${secure}`;
+}
+
+function cookieValue(req) {
+  for (const part of String(req.headers?.cookie || "").split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === COOKIE) return rest.join("=");
+  }
+  return "";
+}
+
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
 function send(res, status, body) {
@@ -57,6 +83,15 @@ function createHandler(deps = DEFAULT_DEPS) {
 
     try {
       if (body.action === "open") return await open(req, res, body, deps);
+      if (body.action === "resume") {
+        const verified = await customerLink.verifyCustomerSession(cookieValue(req));
+        if (!verified.valid) return send(res, 401, { error: "no_customer_session" });
+        return send(res, 200, { session: cookieValue(req), caseId: verified.payload.caseId, expiresAt: new Date(verified.payload.exp).toISOString() });
+      }
+      if (body.action === "leave") {
+        res.setHeader("Set-Cookie", sessionCookie("", 0));
+        return send(res, 200, { left: true });
+      }
 
       if (body.action === "create" || body.action === "revoke") {
         // Keys to a case are the analyst's to hand out; a customer session
@@ -108,6 +143,7 @@ async function open(req, res, body, deps) {
   }
 
   const { session, expiresAt } = customerLink.mintCustomerSession(verified.payload);
+  res.setHeader("Set-Cookie", sessionCookie(session, customerLink.SESSION_HOURS * 60 * 60));
   return send(res, 200, { session, caseId: verified.payload.caseId, expiresAt });
 }
 

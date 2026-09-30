@@ -133,3 +133,49 @@ test("a forged link is refused", async () => {
   const res = await call(handler({ clerk: signedInAs("customer@example.test") }), { action: "open", link: "forged.link" });
   assert.strictEqual(res.statusCode, 401);
 });
+
+// Her customer screens move between pages with full page loads, and the
+// session must not sit in browser storage. So opening also sets an HttpOnly
+// cookie - unreadable by scripts, sent only to this route - and each page asks
+// "resume" for the session again. Every other route still needs the header.
+function cookieFrom(res) {
+  return String(res.headers?.["set-cookie"] || "");
+}
+function withHeaders() {
+  const res = fakeRes();
+  res.headers = {};
+  res.setHeader = function set(name, value) { this.headers[String(name).toLowerCase()] = value; return this; };
+  return res;
+}
+
+test("opening a link sets an HttpOnly cookie that only this route receives", async () => {
+  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const res = withHeaders();
+  await handler({ clerk: signedInAs("customer@example.test") })({ method: "POST", headers: {}, body: { action: "open", link: token } }, res);
+  const cookie = cookieFrom(res);
+  assert.match(cookie, /^ubo_customer_session=[^;]+;/);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Path=\/api\/ubo-customer-link/);
+  assert.match(cookie, /Max-Age=28800/);
+});
+
+test("after a page load, resume gives the session back from the cookie", async () => {
+  const { session } = customerLink.mintCustomerSession({ caseId: "case-1", tenantId: ANALYST.tenantId });
+  const res = await call(handler(), { action: "resume" }, { cookie: `other=1; ubo_customer_session=${session}` });
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.session, session);
+  assert.strictEqual(res.body.caseId, "case-1");
+});
+
+test("resume without a valid session cookie answers that there is none", async () => {
+  assert.strictEqual((await call(handler(), { action: "resume" })).statusCode, 401);
+  assert.strictEqual((await call(handler(), { action: "resume" }, { cookie: "ubo_customer_session=forged.token" })).statusCode, 401);
+});
+
+test("leaving clears the cookie", async () => {
+  const res = withHeaders();
+  await handler()({ method: "POST", headers: {}, body: { action: "leave" } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.match(cookieFrom(res), /^ubo_customer_session=;.*Max-Age=0/);
+});
