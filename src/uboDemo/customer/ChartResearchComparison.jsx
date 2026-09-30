@@ -3,18 +3,19 @@ import { allCandidateFacts } from "../demoResearch";
 import { formatAssertionMeasurement } from "../assertionPresentation";
 import { buildChartResearchComparison, buildChartResearchIdentityCandidates, filterComparisonEntriesRelevantToCustomer, partitionResearchEntriesForComparison, summarizeOwnershipComparison } from "./chartComparison";
 import { clerkAuthHeaders } from "../../auth/clerkFetch";
+import { uboStore } from "../browserStore";
 
 const IDENTITY_CACHE_KEY = "ubo-control-demo.cross-source-party-resolution.v1";
 
 function readIdentityCache() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(IDENTITY_CACHE_KEY) || "[]");
+    const stored = JSON.parse(uboStore.getItem(IDENTITY_CACHE_KEY) || "[]");
     return Array.isArray(stored) ? stored : [];
   } catch (_) { return []; }
 }
 
 function writeIdentityCache(matches) {
-  try { window.localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify(matches.slice(-100))); } catch (_) { /* Comparison remains usable without cache. */ }
+  try { uboStore.setItem(IDENTITY_CACHE_KEY, JSON.stringify(matches.slice(-100))); } catch (_) { /* Comparison remains usable without cache. */ }
 }
 
 function factReference(fact, source) {

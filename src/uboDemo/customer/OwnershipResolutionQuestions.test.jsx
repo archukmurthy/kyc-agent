@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
 import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
@@ -43,7 +44,7 @@ function qualifyingChartAnalysis() {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
+  uboStore.clear();
   window.fetch = jest.fn(async (_url, request) => {
     const body = JSON.parse(request.body);
     return {
@@ -75,7 +76,7 @@ test("verified ownership creates no customer question and keeps analyst assessme
 test("Continue stays disabled until discovery is ready and finalizes the shared verification assessment", async () => {
   const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
   input.result.chartAnalysis = qualifyingChartAnalysis();
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase: { demoCaseId: context.demoCaseId, company: context.company }, researchResult: input.researchResult }));
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase: { demoCaseId: context.demoCaseId, company: context.company }, researchResult: input.researchResult }));
   render(<OwnershipResolutionQuestions {...input} />);
   const continueButton = screen.getByRole("button", { name: /Continue to identity verification/i });
   expect(continueButton).toBeDisabled();
@@ -84,7 +85,7 @@ test("Continue stays disabled until discovery is ready and finalizes the shared 
   fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
   await waitFor(() => expect(continueButton).toBeEnabled());
   fireEvent.submit(continueButton.closest("form"));
-  const trace = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace;
+  const trace = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace;
   expect(trace.discoveryState).toBe(DISCOVERY_STATE.IDV_IN_PROGRESS);
   expect(trace.verificationAssessment.finalized).toBe(true);
   expect(trace.verificationPopulation).toEqual([expect.objectContaining({ personName: "Alice Morgan", verificationStatus: "NOT_STARTED" })]);
@@ -100,7 +101,7 @@ test("a restored completed questionnaire consumes its one StrictMode recalculati
   fireEvent.click(within(nominee).getByLabelText("No"));
   fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
   await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect(Object.values(JSON.parse(window.localStorage.getItem("ubo-demo.ownership-resolution.v1:case-questions:chart-artifact")).answers)).toHaveLength(2));
+  await waitFor(() => expect(Object.values(JSON.parse(uboStore.getItem("ubo-demo.ownership-resolution.v1:case-questions:chart-artifact")).answers)).toHaveLength(2));
   firstVisit.unmount();
 
   let finishRecalculation;
@@ -166,7 +167,7 @@ test("start questions again clears saved answers and restores the initial journe
   fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
   fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
   await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
-  expect(window.localStorage.length).toBeGreaterThan(0);
+  expect(uboStore.length).toBeGreaterThan(0);
 
   fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
 

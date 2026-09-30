@@ -1,6 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { uboStore } from "./browserStore";
 const mockPersistPocCase = jest.fn();
 const mockOpenCustomerViewHandoff = jest.fn();
 jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args) }));
@@ -47,8 +48,8 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { window.localStorage.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); });
-afterEach(() => { abortActiveDemoResearchJobs(); window.localStorage.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
+beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); });
+afterEach(() => { abortActiveDemoResearchJobs(); uboStore.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
 test("analyst demo displays unobtrusive build metadata", () => {
@@ -108,7 +109,7 @@ test("Start research invokes the existing live Lab composition and preserves a l
   expect(body).toEqual(expect.objectContaining({ operation: "START_DEMO_REVIEW_LIVE", payload: expect.objectContaining({ companyContext: expect.objectContaining({ legalEntityName: "Acme Holdings Limited", registrationNumber: "0012AB34", jurisdiction: "GB" }) }) }));
   expect(JSON.stringify(body)).not.toContain("calculationMethod");
   await screen.findByRole("heading", { name: "Ownership structure" });
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase.company.registrationNumber).toBe("0012AB34");
 });
 
 test("the actual research route under StrictMode joins one logical live job", async () => {
@@ -156,7 +157,7 @@ test("failed live research reaches FAILED UI instead of returning to an indefini
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: "Live research could not be completed" })).toBeInTheDocument();
   expect(screen.getByText(/PROVIDER_UNAVAILABLE/)).toBeInTheDocument();
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("FAILED");
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("FAILED");
 });
 
 test("terminal provider failure shows source reasons and no ownership conclusion", async () => {
@@ -202,7 +203,7 @@ test("retry uses a new job and falls back to the same-company last successful re
   expect(screen.getByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
   const secondJobId = JSON.parse(window.fetch.mock.calls[1][1].body).jobId;
   expect(secondJobId).not.toBe(firstJobId);
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("PARTIAL");
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("PARTIAL");
 });
 
 test("a successful live result is saved locally and enables replay without storing a second capture in the demo session", async () => {
@@ -212,7 +213,7 @@ test("a successful live result is saved locally and enables replay without stori
   fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["fresh-live-capture"]);
-  const savedSession = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  const savedSession = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
   expect(savedSession.researchResult.replayCapture).toBeUndefined();
   expect(savedSession.researchResult.replayReference).toEqual({ replayId: "fresh-live-capture", savedAt: "2026-09-16T08:00:00.000Z" });
   fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
@@ -223,7 +224,7 @@ test("a successful live result is saved locally and enables replay without stori
 
 test("saved replay binds the selected record identity, reaches the graph, and restores it without a provider operation", async () => {
   const record = britishAirwaysReplay();
-  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
+  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
   window.fetch = jest.fn(() => okJson(britishAirwaysSession(record.replayId)));
   const first = renderStart();
   completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
@@ -242,7 +243,7 @@ test("saved replay binds the selected record identity, reaches the graph, and re
   expect(request.operation).toBe("START_DEMO_REVIEW_REPLAY");
   expect(request.payload.replayRecord.replayId).toBe(record.replayId);
   expect(JSON.stringify(request)).not.toContain("START_DEMO_REVIEW_LIVE");
-  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY));
+  const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
   expect(saved.demoCase.company).toEqual(expect.objectContaining({ legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }));
   expect(saved.demoCase.analysisContext.replayId).toBe(record.replayId);
   expect(saved.researchResult.replay).toEqual(expect.objectContaining({ replayId: record.replayId, transportCalls: 0 }));
@@ -253,13 +254,13 @@ test("saved replay binds the selected record identity, reaches the graph, and re
   expect(screen.getByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
   expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
   expect(window.fetch).not.toHaveBeenCalled();
-  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))).toHaveLength(1);
+  expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY))).toHaveLength(1);
 });
 
 test("repeated saved company names remain independently selectable by stable ID and sort by actual save time", () => {
   const older = britishAirwaysReplay("capture-british-airways-older", "2026-09-14T08:00:00.000Z");
   const newer = britishAirwaysReplay("capture-british-airways-newer", "2026-09-15T08:00:00.000Z");
-  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([older, newer]));
+  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([older, newer]));
   expect(readLabReplays().map(({ replayId }) => replayId)).toEqual([newer.replayId, older.replayId]);
   expect(replayOptionLabel(newer, 2)).toMatch(/BRITISH AIRWAYS PLC · 01777777 · saved 15 Sept 2026, 08:00 UTC · ys-newer$/);
   expect(bindDraftToReplay({ ...emptyDemoDraft(), calculationMethod: "PSC_CONDITION_ATTRIBUTION" }, older)).toEqual(expect.objectContaining({ replayId: older.replayId, legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", calculationMethod: "PSC_CONDITION_ATTRIBUTION" }));
@@ -272,15 +273,15 @@ test("a newer usable capture removes only older zero-assertion captures for the 
     companyContext: { ...britishAirwaysReplay().companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber: "01471587" },
   };
   const unrelatedEmpty = emptyReplay("unrelated-empty", "2026-09-16T07:00:00.000Z", "09999999");
-  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([failedVodafone, unrelatedEmpty]));
+  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([failedVodafone, unrelatedEmpty]));
   expect(saveLabReplay(usableVodafone).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
   expect(readLabReplays().map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
-  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY)).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
+  expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY)).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
 });
 
 test("a replay capture retained by an older completed session is recovered and enables no-provider replay", async () => {
   const record = britishAirwaysReplay("recover-from-session");
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     draft: { ...emptyDemoDraft(), legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777" },
     demoCase: { demoCaseId: "demo-recover", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
@@ -305,7 +306,7 @@ test("a replay library exports and imports across browser origins without a prov
 
 test("a missing or corrupt saved subject fails locally without a live fallback or deleting the capture", () => {
   const corrupt = { ...britishAirwaysReplay("corrupt-capture"), subject: null };
-  window.localStorage.setItem(LAB_REPLAY_KEY, JSON.stringify([corrupt]));
+  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([corrupt]));
   renderStart();
   completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
   fireEvent.click(screen.getByLabelText(/Saved live replay/));
@@ -313,16 +314,16 @@ test("a missing or corrupt saved subject fails locally without a live fallback o
   fireEvent.click(screen.getByRole("button", { name: /Replay saved research/ }));
   expect(screen.getByText(/does not contain its captured subject identity/)).toBeInTheDocument();
   expect(window.fetch).not.toHaveBeenCalled();
-  expect(JSON.parse(window.localStorage.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
+  expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
 });
 
 test("old sessions default to effective ownership and selector state survives refresh", () => {
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "", calculationMethod: "POLICY_ALL_ROUTES" }, demoCase: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } }, researchResult: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } } }));
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, draft: { legalName: "Old Ltd", registrationNumber: "00000001", countryCode: "GB", ownershipType: "PRIVATE_LIMITED", referenceCaseId: "", sourceMode: "LIVE", replayId: "", calculationMethod: "POLICY_ALL_ROUTES" }, demoCase: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } }, researchResult: { analysisContext: { calculationMethod: "POLICY_ALL_ROUTES" } } }));
   renderStart();
   expect(screen.getByLabelText(/Effective ownership/)).toBeChecked();
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).calculationDefaultVersion).toBe(2);
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).calculationDefaultVersion).toBe(2);
   fireEvent.click(screen.getByLabelText(/Control attribution/));
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
 });
 
 test("Alice example uses one fixture operation and presents the recorded 10 plus 18 equals 28 engine result", async () => {
@@ -350,7 +351,7 @@ test("Alice example uses one fixture operation and presents the recorded 10 plus
   expect(screen.getByText(/This assessment route is not supported/)).toBeInTheDocument();
   expect(screen.getByText("At least one policy route is satisfied")).toBeInTheDocument();
   expect(window.fetch).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).draft.calculationMethod).toBe("PSC_CONDITION_ATTRIBUTION");
 });
 
 test("engine output and ownership structure start expanded, collapse independently, and use the intended graph defaults", async () => {
@@ -403,7 +404,7 @@ test("hidden analyst open questions do not alter existing causes or source asser
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByTitle("Ownership structure");
   expect(screen.queryByRole("heading", { name: "Open questions" })).not.toBeInTheDocument();
-  const saved = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult;
+  const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult;
   expect(saved.analystCustomerRequests || []).toEqual([]);
   expect(saved.candidateSources[0].candidateFacts).toEqual([fact]);
 });
@@ -418,7 +419,7 @@ test("analyst topic selection previews and stores a structured activation", asyn
   expect(screen.getByText(/Follow-up questions will only appear where relevant/i)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Add to customer questions" }));
   expect(within(voting).getByText(/queued/i)).toBeInTheDocument();
-  await waitFor(() => expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.investigationTopicActivations).toEqual([
+  await waitFor(() => expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.investigationTopicActivations).toEqual([
     expect.objectContaining({ topicCode: "VOTING_RIGHTS", origin: "ANALYST", status: "ACTIVE", caseId: expect.any(String) }),
   ]));
 });
@@ -496,8 +497,8 @@ test("a response without an evaluated snapshot exposes no invented graph or ques
 
 test("refresh restores the normalized result and Start new case clears it", async () => {
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByLabelText(/Reviewed ASDA fixture/)); fireEvent.click(screen.getByRole("button", { name: /Start research/ })); await screen.findByTitle("Ownership structure");
-  expect(window.localStorage.getItem(DEMO_SESSION_KEY)).toContain("graph-1");
-  fireEvent.click(screen.getByRole("button", { name: "Start new case" })); expect(window.localStorage.getItem(DEMO_SESSION_KEY)).toBeNull(); expect(screen.getByLabelText(/Company name/)).toHaveValue("");
+  expect(uboStore.getItem(DEMO_SESSION_KEY)).toContain("graph-1");
+  fireEvent.click(screen.getByRole("button", { name: "Start new case" })); expect(uboStore.getItem(DEMO_SESSION_KEY)).toBeNull(); expect(screen.getByLabelText(/Company name/)).toHaveValue("");
 });
 
 test("pure boundaries preserve ranges and filter raw blocked work", () => {

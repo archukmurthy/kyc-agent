@@ -7,6 +7,7 @@ import {
 } from "./pocCaseClient";
 import { DEMO_SESSION_KEY } from "./demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customer/customerOwnershipChartSession";
+import { uboStore } from "./browserStore";
 
 function response(body, ok = true) {
   return { ok, status: ok ? 200 : 503, json: async () => body };
@@ -26,7 +27,7 @@ const record = {
   },
 };
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => uboStore.clear());
 
 test("loads a case by durable identifier rather than browser state", async () => {
   const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
@@ -36,8 +37,8 @@ test("loads a case by durable identifier rather than browser state", async () =>
 
 test("rehydrates a fresh browser from the server projection", () => {
   expect(hydrateBrowserFromPocCase(record)).toBe(true);
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).demoCase.demoCaseId).toBe("case-cross-session");
-  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).result.durableExtraction).toEqual({ jobId: "job-1", artifactId: "artifact-1", state: "COMPLETE" });
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase.demoCaseId).toBe("case-cross-session");
+  expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).result.durableExtraction).toEqual({ jobId: "job-1", artifactId: "artifact-1", state: "COMPLETE" });
   expect(activePocCaseId()).toBe("case-cross-session");
 });
 
@@ -49,8 +50,8 @@ test("rehydrates the durable assessment trace when the case has no research proj
   };
 
   expect(hydrateBrowserFromPocCase(assessmentOnly)).toBe(true);
-  expect(JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(trace);
-  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.researchResult.ownershipResolutionTrace).toEqual(trace);
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(trace);
+  expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.researchResult.ownershipResolutionTrace).toEqual(trace);
 });
 
 test("rehydration compacts duplicated immutable snapshots and replaces stale case caches", () => {
@@ -96,7 +97,10 @@ test("a duplicate browser submission carries the same idempotency key", async ()
   const bodies = fetchImpl.mock.calls.map(([, options]) => JSON.parse(options.body));
   expect(bodies[0].idempotencyKey).toBe("answer:q1:no");
   expect(bodies[1]).toEqual(bodies[0]);
-  expect(window.localStorage.getItem(ACTIVE_POC_CASE_KEY)).toBe("case-cross-session");
+  // The only thing kept in the browser is which case this tab is on (UBO-22).
+  expect(window.sessionStorage.getItem(ACTIVE_POC_CASE_KEY)).toBe("case-cross-session");
+  expect(window.localStorage.length).toBe(0);
+  expect(Object.keys(window.sessionStorage)).toEqual([ACTIVE_POC_CASE_KEY]);
 });
 
 test("research persistence sends the bounded transfer projection instead of duplicated immutable internals", async () => {

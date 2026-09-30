@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { activePocCaseId, clearActivePocCase, hydrateBrowserFromPocCase, loadPocCase, rememberActivePocCase } from "./pocCaseClient";
 import { currentCustomerSession } from "../auth/customerSession";
+import { forgetLegacyBrowserCopies } from "./browserStore";
 
 // A customer's session names their case; otherwise the case this browser was last on.
 const caseToRestore = () => currentCustomerSession()?.caseId || activePocCaseId();
@@ -8,6 +9,8 @@ const caseToRestore = () => currentCustomerSession()?.caseId || activePocCaseId(
 export default function DurablePocCaseBoundary({ children }) {
   const [state, setState] = useState(() => caseToRestore() ? { status: "LOADING" } : { status: "READY" });
   useEffect(() => {
+    // Earlier versions kept the case, names included, in the browser (UBO-22).
+    forgetLegacyBrowserCopies();
     const caseId = caseToRestore();
     if (!caseId) { setState({ status: "READY" }); return undefined; }
     const controller = new AbortController();

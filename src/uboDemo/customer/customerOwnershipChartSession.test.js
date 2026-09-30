@@ -9,6 +9,7 @@ import {
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
 } from "./customerOwnershipChartSession";
+import { uboStore } from "../browserStore";
 
 const context = {
   demoCaseId: "case-1",
@@ -29,7 +30,7 @@ const result = {
   candidateFacts: [{ factId: "fact-1" }],
 };
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => uboStore.clear());
 
 test("saves and restores a company-bound structured extraction without source document bytes", () => {
   saveCustomerOwnershipChartExtraction({ context, result });
@@ -41,7 +42,7 @@ test("saves and restores a company-bound structured extraction without source do
       calculationMethod: "EFFECTIVE_INTEREST",
     }),
   ]);
-  const stored = window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY);
+  const stored = uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY);
   expect(stored).not.toMatch(/contentBase64|blob:|filesystemPath|storagePath|fileBytes/);
 });
 

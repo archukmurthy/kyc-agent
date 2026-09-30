@@ -754,7 +754,7 @@ not lost with it:
 - **What:** `evidence/customerOwnershipJobs/__tests__/service.nodetest.js` and `evidence/a3/__tests__/ownershipChartProfile.nodetest.js`.
 
 ### UBO-22 - The case wrapper and client carry no sign-in, and names sit in browser storage
-- **Category:** Security / privacy - **Priority:** P1 - **Status:** PARTLY DONE (2026-09-29) - wrapper inside the gates, client sends the token. Names in `localStorage` remain; so does the active case id across a sign-out.
+- **Category:** Security / privacy - **Priority:** P1 - **Status:** DONE (2026-09-30) - the UBO screens keep their working copy (research, charts, answers, names) in page memory (`src/uboDemo/browserStore.js`), rebuilt from the server on every load. The browser keeps only which case a tab is on - a random id, per tab, gone when the tab closes, so it does not outlive a sign-out. What earlier versions saved is removed on the next visit. A test fails if a UBO screen touches browser storage again. Not covered: the Evidence/UBO control lab (`ubo-control-lab/browser`), which is development-only (GOLIVE-8).
 - **What:** `DurablePocCaseBoundary` wraps the tree outside `ClerkGate`; `pocCaseClient.js` sends no Clerk headers; `localStorage` holds the case pointer, research session and trace, including people's names (invariant 5).
 
 ### UBO-23 - The live POC is public and unmetered today

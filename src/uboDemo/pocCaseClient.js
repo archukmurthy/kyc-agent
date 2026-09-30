@@ -5,8 +5,9 @@ import {
   CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
 } from "./customer/customerOwnershipChartSession";
 import { compactResearchResultForTransfer } from "./customerHandoff";
+import { casePointerStore, uboStore } from "./browserStore";
 
-export const ACTIVE_POC_CASE_KEY = "ubo-demo.active-poc-case.v1";
+export const ACTIVE_POC_CASE_KEY = "ubo-case-pointer.v1";
 const RESOLUTION_PREFIX = "ubo-demo.ownership-resolution.v1";
 const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 
@@ -20,13 +21,13 @@ export function smallStableHash(value) {
   return (result >>> 0).toString(16).padStart(8, "0");
 }
 
-export function activePocCaseId(storage = window.localStorage, location = window.location) {
+export function activePocCaseId(storage = casePointerStore, location = window.location) {
   const requested = new URLSearchParams(location.search).get("case");
   if (requested) return requested;
   try { return storage.getItem(ACTIVE_POC_CASE_KEY) || null; } catch (_) { return null; }
 }
 
-export function rememberActivePocCase(caseId, { storage = window.localStorage, location = window.location, history = window.history } = {}) {
+export function rememberActivePocCase(caseId, { storage = casePointerStore, location = window.location, history = window.history } = {}) {
   if (!caseId) return;
   try { storage.setItem(ACTIVE_POC_CASE_KEY, caseId); } catch (_) { /* The server remains canonical. */ }
   const url = new URL(location.href);
@@ -35,7 +36,7 @@ export function rememberActivePocCase(caseId, { storage = window.localStorage, l
   history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-export function clearActivePocCase(storage = window.localStorage) {
+export function clearActivePocCase(storage = casePointerStore) {
   try { storage.removeItem(ACTIVE_POC_CASE_KEY); } catch (_) { /* No durable case is deleted. */ }
 }
 
@@ -112,7 +113,7 @@ function clearRestoredProjection(storage) {
   resolutionKeys.forEach((key) => storage.removeItem(key));
 }
 
-export function hydrateBrowserFromPocCase(record, storage = window.localStorage) {
+export function hydrateBrowserFromPocCase(record, storage = uboStore) {
   const projection = record?.projection;
   const demoCase = projection?.demoCase;
   if (!demoCase?.demoCaseId || !projection?.draft) return false;
@@ -166,7 +167,7 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
       }));
     }
   }
-  storage.setItem(ACTIVE_POC_CASE_KEY, demoCase.demoCaseId);
+  casePointerStore.setItem(ACTIVE_POC_CASE_KEY, demoCase.demoCaseId);
   return true;
 }
 

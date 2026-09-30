@@ -1,4 +1,5 @@
 import { customerCompanyKey } from "./customerOwnershipChartSession";
+import { uboStore } from "../browserStore";
 
 export const CUSTOMER_OWNERSHIP_CHART_PREVIEW_KEY = "ubo-demo.customer-ownership-chart-preview.v1";
 const PREVIEW_VERSION = "ubo-demo-customer-ownership-chart-preview-v1";
@@ -7,7 +8,7 @@ function safeParse(raw) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-export function writeCustomerOwnershipChartPreview({ context, result, file, contentBase64 }, storage = window.sessionStorage) {
+export function writeCustomerOwnershipChartPreview({ context, result, file, contentBase64 }, storage = uboStore) {
   if (!context?.demoCaseId || !result?.artifact?.artifactId || !file?.type || !contentBase64) throw new TypeError("An active chart upload is required for preview.");
   const preview = {
     contractVersion: PREVIEW_VERSION,
@@ -22,7 +23,7 @@ export function writeCustomerOwnershipChartPreview({ context, result, file, cont
   return preview;
 }
 
-export function customerOwnershipChartPreviewFor({ context, result }, storage = window.sessionStorage) {
+export function customerOwnershipChartPreviewFor({ context, result }, storage = uboStore) {
   const preview = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_PREVIEW_KEY));
   if (preview?.contractVersion !== PREVIEW_VERSION) return null;
   if (preview.demoCaseId !== context?.demoCaseId || preview.companyKey !== customerCompanyKey(context?.company)) return null;
@@ -30,6 +31,6 @@ export function customerOwnershipChartPreviewFor({ context, result }, storage = 
   return preview;
 }
 
-export function clearCustomerOwnershipChartPreview(storage = window.sessionStorage) {
+export function clearCustomerOwnershipChartPreview(storage = uboStore) {
   storage.removeItem(CUSTOMER_OWNERSHIP_CHART_PREVIEW_KEY);
 }

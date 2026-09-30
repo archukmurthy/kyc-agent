@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
 import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
 import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcileSubjectIdentity } from "./ChartAnalysisPanel";
@@ -81,7 +82,7 @@ const analysis = {
 analysis.chartAnalysis.view.graph = analysis.sourceGraph;
 
 function seed(overrides = {}) {
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     draft: {},
     demoCase,
@@ -91,8 +92,8 @@ function seed(overrides = {}) {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
-  window.sessionStorage.clear();
+  uboStore.clear();
+  uboStore.clear();
   window.history.replaceState({}, "", CUSTOMER_OWNERSHIP_CHART_PATH);
   window.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ success: true, result: analysis }) }));
 });
@@ -239,7 +240,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
   });
   expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("status")).toHaveTextContent(/Evidence saved the Artifact and validated extraction durably/i);
-  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+  expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
 
 test("a queued upload polls the durable job and ignores a rapid duplicate click", async () => {
@@ -259,7 +260,7 @@ test("a queued upload polls the durable job and ignores a rapid duplicate click"
   await screen.findByRole("heading", { name: /Continue to questions/i });
   expect(window.fetch).toHaveBeenCalledTimes(2);
   expect(JSON.parse(window.fetch.mock.calls[1][1].body)).toEqual({ operation: "PROCESS_EXTRACTION_JOB", jobId: "job-1" });
-  expect(window.localStorage.getItem(CUSTOMER_OWNERSHIP_JOB_KEY)).toBeNull();
+  expect(uboStore.getItem(CUSTOMER_OWNERSHIP_JOB_KEY)).toBeNull();
 });
 
 test("refresh resumes the same persisted extraction job without uploading bytes again", async () => {
@@ -419,7 +420,7 @@ test("replacing a rendered chart preserves the saved extraction for no-cost repl
   fireEvent.click(screen.getByRole("button", { name: /Replace chart/i }));
 
   expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
-  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
+  expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
 
 test("invalid file types are rejected before any request", () => {
@@ -454,7 +455,7 @@ test("customer result refresh restore is case-bound and preserves an opaque rese
   writeCustomerOwnershipChartSession({ context, result: analysis });
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByText("ownership-chart.png")).toBeInTheDocument();
-  expect(JSON.parse(window.localStorage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.opaqueResearchReference).toEqual(context.opaqueResearchReference);
+  expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY)).context.opaqueResearchReference).toEqual(context.opaqueResearchReference);
 });
 
 test("an active extraction from another company is never restored even when a reused case ID matches", () => {

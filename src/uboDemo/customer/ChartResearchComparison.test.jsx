@@ -2,12 +2,13 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ChartResearchComparison from "./ChartResearchComparison";
+import { uboStore } from "../browserStore";
 
 const owner = { name: "Alice Morgan", entityType: "NATURAL_PERSON" };
 const company = { name: "Vodafone Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
 
 beforeEach(() => {
-  window.localStorage.clear();
+  uboStore.clear();
   jest.restoreAllMocks();
 });
 

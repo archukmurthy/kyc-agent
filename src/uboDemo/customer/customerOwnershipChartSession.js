@@ -1,5 +1,6 @@
 import { chartSourceCoverage } from "./caseResolution";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
+import { uboStore } from "../browserStore";
 
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_KEY = "ubo-demo.customer-ownership-chart.v1";
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION = "ubo-demo-customer-ownership-chart-session-v1";
@@ -53,7 +54,7 @@ function assertReplaySafe(value, path = "result") {
   });
 }
 
-export function readCustomerDemoContext(storage = window.localStorage) {
+export function readCustomerDemoContext(storage = uboStore) {
   const session = safeParse(storage.getItem(DEMO_SESSION_KEY));
   const demoCase = session?.demoCase;
   if (!demoCase?.demoCaseId || !demoCase?.company?.legalName) return null;
@@ -69,12 +70,12 @@ export function readCustomerDemoContext(storage = window.localStorage) {
   };
 }
 
-export function readCustomerOwnershipChartSession(storage = window.localStorage) {
+export function readCustomerOwnershipChartSession(storage = uboStore) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY));
   return parsed?.contractVersion === CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION ? parsed : null;
 }
 
-export function customerOwnershipChartSessionForContext(context, storage = window.localStorage) {
+export function customerOwnershipChartSessionForContext(context, storage = uboStore) {
   const session = readCustomerOwnershipChartSession(storage);
   if (!session || session.context?.demoCaseId !== context?.demoCaseId) return null;
   if (!sameCustomerCompany(session.context?.company, context?.company)) return null;
@@ -82,13 +83,13 @@ export function customerOwnershipChartSessionForContext(context, storage = windo
   return session;
 }
 
-export function readCustomerOwnershipChartExtractions(storage = window.localStorage) {
+export function readCustomerOwnershipChartExtractions(storage = uboStore) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY));
   if (parsed?.contractVersion !== CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION || !Array.isArray(parsed.records)) return [];
   return parsed.records.filter((record) => record?.recordId && record?.result?.artifact?.artifactId);
 }
 
-export function customerOwnershipChartExtractionsForContext(context, storage = window.localStorage) {
+export function customerOwnershipChartExtractionsForContext(context, storage = uboStore) {
   const key = customerCompanyKey(context?.company);
   return readCustomerOwnershipChartExtractions(storage).filter((record) => record.companyKey === key
     && (!record.result?.company || sameCustomerCompany(record.result.company, context.company)));
@@ -109,7 +110,7 @@ export function reusableCustomerOwnershipChartExtraction(records, digest, profil
   }) || null;
 }
 
-export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = window.localStorage) {
+export function saveCustomerOwnershipChartExtraction({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = uboStore) {
   if (!context?.company || !result?.artifact?.artifactId || !resultKey(result)) throw new TypeError("A company-bound Artifact extraction is required for local replay.");
   if (result.company && !sameCustomerCompany(context.company, result.company)) throw new TypeError("The extraction belongs to a different company and cannot be saved to this case.");
   assertReplaySafe(result);
@@ -139,7 +140,7 @@ export function saveCustomerOwnershipChartExtraction({ context, result, calculat
   return records;
 }
 
-export function writeCustomerDemoCase({ draft, demoCase }, storage = window.localStorage) {
+export function writeCustomerDemoCase({ draft, demoCase }, storage = uboStore) {
   const current = safeParse(storage.getItem(DEMO_SESSION_KEY));
   const sameCompany = sameCustomerCompany(current?.demoCase?.company, demoCase?.company);
   const opaqueReferences = Object.fromEntries(RESEARCH_REFERENCE_KEYS
@@ -156,7 +157,7 @@ export function writeCustomerDemoCase({ draft, demoCase }, storage = window.loca
   }));
 }
 
-export function writeCustomerOwnershipChartSession({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = window.localStorage) {
+export function writeCustomerOwnershipChartSession({ context, result, calculationMethod = "EFFECTIVE_INTEREST" }, storage = uboStore) {
   storage.setItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY, JSON.stringify({
     contractVersion: CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
     savedAt: new Date().toISOString(),
@@ -166,20 +167,20 @@ export function writeCustomerOwnershipChartSession({ context, result, calculatio
   }));
 }
 
-export function clearCustomerOwnershipChartSession(storage = window.localStorage) {
+export function clearCustomerOwnershipChartSession(storage = uboStore) {
   storage.removeItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY);
 }
 
-export function readCustomerOwnershipJob(storage = window.localStorage) {
+export function readCustomerOwnershipJob(storage = uboStore) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_JOB_KEY));
   return parsed?.jobId && parsed?.demoCaseId ? parsed : null;
 }
 
-export function writeCustomerOwnershipJob({ jobId, demoCaseId, artifactId, correlationId }, storage = window.localStorage) {
+export function writeCustomerOwnershipJob({ jobId, demoCaseId, artifactId, correlationId }, storage = uboStore) {
   storage.setItem(CUSTOMER_OWNERSHIP_JOB_KEY, JSON.stringify({ jobId, demoCaseId, artifactId, correlationId, savedAt: new Date().toISOString() }));
 }
 
-export function clearCustomerOwnershipJob(storage = window.localStorage) {
+export function clearCustomerOwnershipJob(storage = uboStore) {
   storage.removeItem(CUSTOMER_OWNERSHIP_JOB_KEY);
 }
 

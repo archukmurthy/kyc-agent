@@ -5,6 +5,7 @@ import CustomerQuestionsPage from "./CustomerQuestionsPage";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { readCustomerDemoContext, writeCustomerOwnershipChartSession } from "./customerOwnershipChartSession";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, CUSTOMER_QUESTIONS_PATH, isCustomerQuestionsPath } from "./customerRoute";
+import { uboStore } from "../browserStore";
 
 const company = { legalName: "Target Limited", registrationNumber: "00112233", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" };
 const alice = { name: "Alice Morgan", entityType: "NATURAL_PERSON", jurisdiction: "GB" };
@@ -20,7 +21,7 @@ const chartResult = {
 };
 
 function seedContext() {
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     draft: {},
     demoCase: { demoCaseId: "questions-case", referenceCaseId: "CASE-Q1", company },
@@ -29,7 +30,7 @@ function seedContext() {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
+  uboStore.clear();
   window.history.replaceState({}, "", CUSTOMER_QUESTIONS_PATH);
 });
 

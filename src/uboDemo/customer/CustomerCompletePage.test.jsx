@@ -5,13 +5,14 @@ import CustomerCompletePage from "./CustomerCompletePage";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { DISCOVERY_STATE } from "./verificationAssessment";
+import { uboStore } from "../browserStore";
 
 const demoCase = { demoCaseId: "complete-case", company: { legalName: "Customer Limited" } };
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => uboStore.clear());
 
 function seed(discoveryState) {
-  window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase, researchResult: { ownershipResolutionTrace: { discoveryState } } }));
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase, researchResult: { ownershipResolutionTrace: { discoveryState } } }));
 }
 
 test("complete page fails closed until every current IDV requirement is complete", () => {

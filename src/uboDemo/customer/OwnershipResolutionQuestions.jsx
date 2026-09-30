@@ -13,6 +13,7 @@ import {
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { uboStore } from "../browserStore";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 const SESSION_PREFIX = "ubo-demo.ownership-resolution.v1";
@@ -23,21 +24,21 @@ const MEDIA_MISMATCH_MESSAGE = "This file is labelled as a PDF, PNG or JPEG, but
 function sessionKey(context, result) { return `${SESSION_PREFIX}:${context?.demoCaseId || "case"}:${result?.artifact?.artifactId || "artifact"}`; }
 function readSession(context, result) {
   try {
-    const value = JSON.parse(window.localStorage.getItem(sessionKey(context, result)) || "null");
+    const value = JSON.parse(uboStore.getItem(sessionKey(context, result)) || "null");
     return value?.contractVersion === OWNERSHIP_RESOLUTION_SESSION_VERSION ? value : null;
   } catch (_) { return null; }
 }
 function saveSession(context, result, state) {
-  try { window.localStorage.setItem(sessionKey(context, result), JSON.stringify({ contractVersion: OWNERSHIP_RESOLUTION_SESSION_VERSION, savedAt: new Date().toISOString(), ...state })); }
+  try { uboStore.setItem(sessionKey(context, result), JSON.stringify({ contractVersion: OWNERSHIP_RESOLUTION_SESSION_VERSION, savedAt: new Date().toISOString(), ...state })); }
   catch (_) { /* Resolution remains usable when browser-local persistence is unavailable. */ }
 }
 function clearSession(context, result) {
-  try { window.localStorage.removeItem(sessionKey(context, result)); }
+  try { uboStore.removeItem(sessionKey(context, result)); }
   catch (_) { /* In-memory reset still works when browser-local persistence is unavailable. */ }
 }
 function readCurrentTrace(context) {
   try {
-    const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+    const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
     if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId) return null;
     return session.researchResult?.ownershipResolutionTrace || null;
   } catch (_) { return null; }
@@ -315,7 +316,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   }, [answers, context?.demoCaseId, currentTrace, evidence, recalculations]);
   useEffect(() => {
     try {
-      const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+      const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
       if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return;
       const activationStatus = new Map((engine.topicActivations || []).map((item) => [item.id, item]));
       const nextResearch = {
@@ -323,7 +324,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         investigationTopicActivations: (session.researchResult.investigationTopicActivations || []).map((item) => ({ ...item, ...(activationStatus.get(item.id) ? { displayStatus: activationStatus.get(item.id).displayStatus, statusReason: activationStatus.get(item.id).reason } : {}) })),
         ownershipResolutionTrace: currentTrace,
       };
-      window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: nextResearch }));
+      uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: nextResearch }));
     } catch (_) { /* Customer questions remain usable when analyst trace persistence is unavailable. */ }
   }, [context?.demoCaseId, currentTrace, engine.topicActivations]);
   useEffect(() => {
@@ -513,9 +514,9 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     const finalEngine = evaluateCase(inputs, { answers, evidence, recalculations, now: new Date().toISOString() });
     const finalTrace = resolutionTrace({ engine: finalEngine, rows, answers, previousTrace: readCurrentTrace(context), recalculations, finalized: true });
     try {
-      const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+      const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
       if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return;
-      window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: finalTrace } }));
+      uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: finalTrace } }));
       await persistPocCase("FINALIZE_ASSESSMENT", {
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
@@ -529,8 +530,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       window.location.assign(CUSTOMER_IDV_PATH);
     } catch (cause) {
       try {
-        const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
-        if (session?.researchResult) window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: currentTrace } }));
+        const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
+        if (session?.researchResult) uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: currentTrace } }));
       } catch (_) { /* Server submission failed; the page remains blocked from navigation. */ }
       setErrors((current) => ({ ...current, finalize: cause.message || "The assessment could not be saved." }));
     }

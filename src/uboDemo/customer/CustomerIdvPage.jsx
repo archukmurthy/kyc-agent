@@ -7,10 +7,11 @@ import { idvSubjectsFromTrace, traceReadyForIdv } from "./idvSubjects";
 import { completeIdentityVerification, DISCOVERY_STATE, VERIFICATION_REASON } from "./verificationAssessment";
 import "./customerOwnershipChart.css";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { uboStore } from "../browserStore";
 
 function readTrace(context) {
   try {
-    const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+    const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
     if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId) return null;
     return session.researchResult?.ownershipResolutionTrace || null;
   } catch (_) { return null; }
@@ -18,9 +19,9 @@ function readTrace(context) {
 
 function writeTrace(context, trace) {
   try {
-    const session = JSON.parse(window.localStorage.getItem(DEMO_SESSION_KEY) || "null");
+    const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
     if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return false;
-    window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: trace } }));
+    uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: trace } }));
     return true;
   } catch (_) { return false; }
 }

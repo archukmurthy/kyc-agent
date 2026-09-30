@@ -1,4 +1,5 @@
 import { COUNTRIES } from "../constants/appConstants";
+import { uboStore } from "./browserStore";
 
 export const DEMO_SESSION_CONTRACT = "ubo-demo-browser-session-v1";
 export const DEMO_SESSION_KEY = "ubo-demo.case.v1";
@@ -140,7 +141,7 @@ export function replayOptionLabel(record, duplicateNameCount = 1) {
   }
 }
 
-export function readDemoSession(storage = window.localStorage) {
+export function readDemoSession(storage = uboStore) {
   try {
     const parsed = JSON.parse(storage.getItem(DEMO_SESSION_KEY));
     if (parsed?.contractVersion !== DEMO_SESSION_CONTRACT || !parsed.draft) return null;
@@ -159,7 +160,7 @@ export function readDemoSession(storage = window.localStorage) {
   }
 }
 
-export function writeDemoSession({ draft, demoCase, researchResult }, storage = window.localStorage) {
+export function writeDemoSession({ draft, demoCase, researchResult }, storage = uboStore) {
   storage.setItem(DEMO_SESSION_KEY, JSON.stringify({
     contractVersion: DEMO_SESSION_CONTRACT,
     calculationDefaultVersion: CALCULATION_DEFAULT_VERSION,
@@ -221,7 +222,7 @@ export function pruneSupersededEmptyLabReplays(records) {
   });
 }
 
-export function readLabReplays(storage = window.localStorage) {
+export function readLabReplays(storage = uboStore) {
   try {
     const records = JSON.parse(storage.getItem(LAB_REPLAY_KEY) || "[]");
     if (!Array.isArray(records)) return [];
@@ -234,14 +235,14 @@ export function readLabReplays(storage = window.localStorage) {
   }
 }
 
-export function saveLabReplay(record, storage = window.localStorage) {
+export function saveLabReplay(record, storage = uboStore) {
   if (!validLabReplay(record)) throw new TypeError("The Discovery replay record is invalid and was not saved.");
   const records = pruneSupersededEmptyLabReplays(mergeLabReplays([record], readLabReplays(storage)));
   storage.setItem(LAB_REPLAY_KEY, JSON.stringify(records));
   return records;
 }
 
-export function availableLabReplays(researchResult, storage = window.localStorage) {
+export function availableLabReplays(researchResult, storage = uboStore) {
   return pruneSupersededEmptyLabReplays(mergeLabReplays(readLabReplays(storage), researchResult?.replayCapture ? [researchResult.replayCapture] : []));
 }
 
@@ -251,7 +252,7 @@ export function serializeReplayLibrary(records, now = () => new Date().toISOStri
   return JSON.stringify({ contractVersion: REPLAY_LIBRARY_EXPORT_CONTRACT, exportedAt: now(), records: validated }, null, 2);
 }
 
-export function importReplayLibrary(serialized, storage = window.localStorage) {
+export function importReplayLibrary(serialized, storage = uboStore) {
   let parsed;
   try { parsed = JSON.parse(serialized); } catch (_) { throw new TypeError("Choose a valid UBO demo replay-library JSON file."); }
   if (parsed?.contractVersion !== REPLAY_LIBRARY_EXPORT_CONTRACT || !Array.isArray(parsed.records)
@@ -263,6 +264,6 @@ export function importReplayLibrary(serialized, storage = window.localStorage) {
   return records;
 }
 
-export function clearDemoSession(storage = window.localStorage) {
+export function clearDemoSession(storage = uboStore) {
   storage.removeItem(DEMO_SESSION_KEY);
 }
