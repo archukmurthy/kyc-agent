@@ -131,7 +131,7 @@ const ROUTES = {
 };
 
 const CREDENTIAL_POLICIES = new Set(["admin", "super-admin", "dossier", "cron", "staff", "internal-key"]);
-const GATE = /requireAdmin|requireActor|requireStaff|verifyClerkSession|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
+const GATE = /requireAdmin|requireActor|requireStaff|requireUboCaller|verifyClerkSession|resolveDossierActor|authorizeAdmin|verifyEnvBearer|CRON_SECRET|SUPER_ADMIN_PASSWORD/;
 
 function listApiFiles(dir = API_DIR, prefix = "") {
   const out = [];
@@ -217,7 +217,8 @@ test("the UBO routes ask Clerk who is calling", () => {
   // added later without it would otherwise be open the day Clerk is switched on
   // and nobody would notice.
   const uboRoutes = ["ubo-discovery.js", "ubo-demo-customer-ownership-chart.js", "ubo-demo-entity-resolution.js", "ubo-poc-case.js"];
-  const missing = uboRoutes.filter((f) => !read(f).includes("requireStaff"));
+  // requireUboCaller is requireStaff for anyone without a customer session.
+  const missing = uboRoutes.filter((f) => !/requireStaff|requireUboCaller/.test(read(f)));
   assert.deepEqual(missing, [], "UBO routes must go through requireStaff");
 });
 

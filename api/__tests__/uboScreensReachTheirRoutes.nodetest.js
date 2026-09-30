@@ -52,7 +52,7 @@ test("a screen calling a staff-gated route sends the session token", () => {
   // is to set it, and that is the moment these would have started refusing.
   const missing = [];
   for (const { route, caller } of CALLS) {
-    if (!/requireStaff/.test(read(route))) continue;
+    if (!/requireStaff|requireUboCaller/.test(read(route))) continue;
     if (!/clerkAuthHeaders/.test(read(caller))) missing.push(`${caller} -> ${route}`);
   }
   assert.deepEqual(
@@ -147,7 +147,7 @@ test("every UBO screen file that calls a staff-gated route sends the session tok
   // the questions screen posted evidence uploads and recalculations to the
   // chart route with no token, and nothing here looked at it. So this reads
   // every file under src/uboDemo instead of a list.
-  const staffRoutes = CALLS.filter(({ route }) => /requireStaff/.test(read(route))).map(({ url }) => url);
+  const staffRoutes = CALLS.filter(({ route }) => /requireStaff|requireUboCaller/.test(read(route))).map(({ url }) => url);
   const dir = path.join(ROOT, "src", "uboDemo");
   const files = [];
   (function walk(d) {

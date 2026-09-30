@@ -45,7 +45,7 @@ function handlerWith({ actor = { kind: "staff", tenantId: "acme", role: "analyst
       if (limited) { res.status(429).json({ error: "rate_limited" }); return false; }
       return true;
     },
-    requireStaff: async (req, res, options) => {
+    requireUboCaller: async (req, res, options) => {
       calls.gate.push(options);
       if (!actor) { res.status(401).json({ error: "unauthorized" }); return null; }
       return actor;
@@ -167,9 +167,71 @@ test("the caller's workspace row exists before a case is written", async () => {
   const handler = route.createHandler((tenantId) => {
     factoryCalls.push(tenantId);
     return { db: { query: async (text, params) => { queries.push({ text, params }); return { rows: [] }; } }, service: service(), close: async () => {} };
-  }, { applyCors: () => false, enforceRateLimit: async () => true, requireStaff: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }) });
+  }, { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }) });
   await handler({ method: "POST", body: { caseId: "case-1", operation: "UPSERT_CASE" }, headers: {} }, fakeRes());
   assert.strictEqual(queries.length, 1);
   assert.match(queries[0].text, /INSERT INTO tenants/);
   assert.deepStrictEqual(queries[0].params, ["trial-acme-1a2b3c4d"]);
+});
+
+// Customers (a session for ONE case, lib/uboCustomerLink.js).
+const CUSTOMER = { kind: "customer", tenantId: "trial-acme-1a2b3c4d", caseId: "case-1", role: "customer" };
+
+function recordingHandler(actor) {
+  const applied = [];
+  const loaded = [];
+  const handler = route.createHandler((tenantId) => {
+    factoryCalls.push(tenantId);
+    return {
+      service: { load: async (caseId) => { loaded.push(caseId); return { caseId }; }, apply: async (command) => { applied.push(command); return { caseId: command.caseId }; } },
+      close: async () => {},
+    };
+  }, { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor });
+  return { handler, applied, loaded };
+}
+
+test("a customer reads their own case and no other", async () => {
+  const { handler, loaded } = recordingHandler(CUSTOMER);
+  const own = fakeRes();
+  await handler({ method: "GET", query: { caseId: "case-1" }, headers: {} }, own);
+  assert.strictEqual(own.statusCode, 200);
+  const other = fakeRes();
+  await handler({ method: "GET", query: { caseId: "case-2" }, headers: {} }, other);
+  assert.strictEqual(other.statusCode, 404, "the same answer as a case that does not exist");
+  assert.deepStrictEqual(loaded, ["case-1"]);
+});
+
+test("a customer can answer their own case, recorded as the customer whatever the request claims", async () => {
+  const { handler, applied } = recordingHandler(CUSTOMER);
+  const res = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { caseId: "case-1", operation: "SUBMIT_ANSWER", idempotencyKey: "k", actorType: "ANALYST", payload: {} } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(applied[0].actorType, "CUSTOMER");
+});
+
+test("a customer cannot write to another case", async () => {
+  const { handler, applied } = recordingHandler(CUSTOMER);
+  const res = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { caseId: "case-2", operation: "SUBMIT_ANSWER", idempotencyKey: "k", payload: {} } }, res);
+  assert.strictEqual(res.statusCode, 404);
+  const sneaky = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { operation: "UPSERT_CASE", idempotencyKey: "k", payload: { demoCase: { demoCaseId: "case-2" } } } }, sneaky);
+  assert.strictEqual(sneaky.statusCode, 404, "the case id inside the payload is checked too");
+  assert.deepStrictEqual(applied, []);
+});
+
+test("a customer cannot do the analyst's work on their case", async () => {
+  const { handler, applied } = recordingHandler(CUSTOMER);
+  for (const operation of ["SAVE_RESEARCH", "SAVE_ANALYST_STATE", "SOMETHING_NEW"]) {
+    const res = fakeRes();
+    await handler({ method: "POST", headers: {}, body: { caseId: "case-1", operation, idempotencyKey: "k", payload: {} } }, res);
+    assert.strictEqual(res.statusCode, 403, operation);
+  }
+  assert.deepStrictEqual(applied, []);
+});
+
+test("an analyst's operations are recorded as the analyst's", async () => {
+  const { handler, applied } = recordingHandler({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" });
+  await handler({ method: "POST", headers: {}, body: { caseId: "case-1", operation: "SAVE_RESEARCH", idempotencyKey: "k", actorType: "CUSTOMER", payload: {} } }, fakeRes());
+  assert.strictEqual(applied[0].actorType, "ANALYST");
 });

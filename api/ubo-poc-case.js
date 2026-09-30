@@ -7,7 +7,7 @@
 
 const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PocCaseService, PostgresPocCaseRepository } = require("../ubo-control-lab/server/pocCaseState.js");
-const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
+const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const { ensureTenantRow } = require("../lib/tenantRow");
 
@@ -22,19 +22,39 @@ function dependencies(tenantId) {
   return { db, service: new PocCaseService(new PostgresPocCaseRepository(db, tenantId)), close: () => db.close() };
 }
 
-const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit };
+// What a customer (a session for ONE case) may do to that case. Research and
+// the analyst's own state are the analyst's; anything new is refused until it
+// is deliberately added here.
+const CUSTOMER_OPERATIONS = new Set(["UPSERT_CASE", "ASSOCIATE_CHART", "SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "COMPLETE_IDV"]);
+
+function commandCaseId(body) {
+  return String(body?.caseId || body?.payload?.demoCase?.demoCaseId || "").trim();
+}
+
+const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit };
 
 function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
   return async function uboPocCase(req, res) {
     if (gates.applyCors(req, res)) return undefined;
     if (!(await gates.enforceRateLimit(req, res, "ubo-poc-case"))) return undefined;
-    const actor = await gates.requireStaff(req, res, { requireTenant: true });
+    const actor = await gates.requireUboCaller(req, res, { requireTenant: true });
     if (!actor) return undefined;
     const tenantId = uboCallerTenant(actor);
     if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
 
     if (req.method === "POST" && Buffer.byteLength(JSON.stringify(req.body || {})) > MAX_BODY_BYTES) {
       return res.status(413).json({ success: false, code: "case_payload_too_large", message: "This case update is too large to save." });
+    }
+
+    // A customer's session names one case. Another case answers exactly as a
+    // case that does not exist would.
+    const customer = actor.kind === "customer";
+    const requested = req.method === "GET" ? String(req.query?.caseId || "").trim() : commandCaseId(req.body);
+    if (customer && requested !== actor.caseId) {
+      return res.status(404).json({ success: false, code: "case_not_found", message: "The POC case was not found." });
+    }
+    if (customer && req.method === "POST" && !CUSTOMER_OPERATIONS.has(req.body?.operation)) {
+      return res.status(403).json({ success: false, code: "not_a_customer_operation", message: "This step is not available from a customer link." });
     }
 
     let active;
@@ -50,7 +70,8 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
       }
       if (req.method === "POST") {
         if (active.db) await ensureTenantRow(active.db, tenantId);
-        const record = await active.service.apply(req.body || {});
+        // Who acted is the credential's answer, not the request's.
+        const record = await active.service.apply({ ...(req.body || {}), actorType: customer ? "CUSTOMER" : "ANALYST" });
         return res.status(200).json({ success: true, case: record });
       }
       res.setHeader("Allow", "GET, POST");
