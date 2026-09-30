@@ -235,3 +235,18 @@ test("an analyst's operations are recorded as the analyst's", async () => {
   await handler({ method: "POST", headers: {}, body: { caseId: "case-1", operation: "SAVE_RESEARCH", idempotencyKey: "k", actorType: "CUSTOMER", payload: {} } }, fakeRes());
   assert.strictEqual(applied[0].actorType, "ANALYST");
 });
+
+
+test("a customer cannot create a case, only work on one that exists", async () => {
+  // Review: a customer holding a link to a deleted case (a purged trial) could
+  // write it back into existence.
+  const applied = [];
+  const handler = route.createHandler(() => ({
+    service: { load: async () => null, apply: async (command) => { applied.push(command); return {}; } },
+    close: async () => {},
+  }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => CUSTOMER });
+  const res = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { caseId: "case-1", operation: "UPSERT_CASE", idempotencyKey: "k", payload: {} } }, res);
+  assert.strictEqual(res.statusCode, 404);
+  assert.deepStrictEqual(applied, []);
+});

@@ -32,7 +32,8 @@
  * works on the link alone in local development and never on Vercel.
  */
 
-const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { applyCors, requireStaff, uboCallerTenant, verifyCustomerCaller, isLocalDevelopment } = require("../lib/routeAuth");
+const storage = require("../lib/storage");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const clerkAuth = require("../lib/clerkAuth");
 const customerLink = require("../lib/uboCustomerLink");
@@ -51,11 +52,12 @@ async function caseExists(tenantId, caseId) {
   }
 }
 
-const DEFAULT_DEPS = { applyCors, requireStaff, enforceRateLimit, caseExists, clerk: clerkAuth };
+const DEFAULT_DEPS = { applyCors, requireStaff, enforceRateLimit, caseExists, clerk: clerkAuth, storageBackend: () => storage.backend() };
 const COOKIE = "ubo_customer_session";
 
-function sessionCookie(value, maxAgeSeconds) {
-  const secure = process.env.VERCEL ? "; Secure" : "";
+function sessionCookie(req, value, maxAgeSeconds) {
+  const https = process.env.VERCEL || String(req.headers?.["x-forwarded-proto"] || "").split(",")[0].trim() === "https" || req.socket?.encrypted;
+  const secure = https ? "; Secure" : "";
   return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/api/ubo-customer-link; Max-Age=${maxAgeSeconds}${secure}`;
 }
 
@@ -80,16 +82,24 @@ function createHandler(deps = DEFAULT_DEPS) {
     if (!(await deps.enforceRateLimit(req, res, "ubo-customer-link"))) return undefined;
     res.setHeader("Cache-Control", "no-store");
     const body = req.body || {};
+    // A withdrawal written to one server's local disk is invisible to the
+    // others, so on a hosted deployment links need shared storage (review).
+    if (["create", "revoke", "open"].includes(body.action) && process.env.VERCEL && (deps.storageBackend || DEFAULT_DEPS.storageBackend)() === "filesystem") {
+      return send(res, 503, { error: "shared_storage_required" });
+    }
 
     try {
       if (body.action === "open") return await open(req, res, body, deps);
       if (body.action === "resume") {
-        const verified = await customerLink.verifyCustomerSession(cookieValue(req));
-        if (!verified.valid) return send(res, 401, { error: "no_customer_session" });
-        return send(res, 200, { session: cookieValue(req), caseId: verified.payload.caseId, expiresAt: new Date(verified.payload.exp).toISOString() });
+        // Only the person who opened the link gets it back.
+        const token = cookieValue(req);
+        const checked = await verifyCustomerCaller(req, token, deps.clerk);
+        if (!checked.actor) return send(res, 401, { error: "no_customer_session" });
+        const { payload } = await customerLink.verifyCustomerSession(token);
+        return send(res, 200, { session: token, caseId: payload.caseId, expiresAt: new Date(payload.exp).toISOString() });
       }
       if (body.action === "leave") {
-        res.setHeader("Set-Cookie", sessionCookie("", 0));
+        res.setHeader("Set-Cookie", sessionCookie(req, "", 0));
         return send(res, 200, { left: true });
       }
 
@@ -99,7 +109,7 @@ function createHandler(deps = DEFAULT_DEPS) {
         if (req.headers?.["x-ubo-customer-session"] !== undefined) return send(res, 403, { error: "forbidden" });
         const actor = await deps.requireStaff(req, res, { requireTenant: true });
         if (!actor) return undefined;
-        const tenantId = actor.tenantId;
+        const tenantId = uboCallerTenant(actor);
         if (!tenantId) return send(res, 400, { error: "tenant_required" });
         const caseId = String(body.caseId || "").trim();
         if (!caseId || caseId.length > 200) return send(res, 400, { error: "case_id_required" });
@@ -128,6 +138,11 @@ async function open(req, res, body, deps) {
   const verified = await customerLink.verifyLink(String(body.link || ""));
   if (!verified.valid) return send(res, 401, { error: "link_invalid", message: "This link has expired or been withdrawn. Ask for a new one." });
 
+  if (!(await deps.caseExists(verified.payload.tenantId, verified.payload.caseId))) {
+    return send(res, 404, { error: "case_not_found", message: "This case is no longer available." });
+  }
+
+  let subject = null;
   if (deps.clerk.isConfigured()) {
     const session = await deps.clerk.verifyClerkSession(req);
     if (!session.ok) return send(res, 401, { error: "unauthorized" });
@@ -137,13 +152,14 @@ async function open(req, res, body, deps) {
     if (!customerLink.emailMatches(verified.payload, email)) {
       return send(res, 403, { error: "wrong_recipient", message: "This link was sent to a different email address. Sign in with that address, or ask for a new link." });
     }
-  } else if (process.env.VERCEL) {
+    subject = session.userId;
+  } else if (!isLocalDevelopment()) {
     // Nobody can prove who they are, so the link alone would be the key.
     return send(res, 503, { error: "sign_in_not_configured" });
   }
 
-  const { session, expiresAt } = customerLink.mintCustomerSession(verified.payload);
-  res.setHeader("Set-Cookie", sessionCookie(session, customerLink.SESSION_HOURS * 60 * 60));
+  const { session, expiresAt } = customerLink.mintCustomerSession({ ...verified.payload, subject });
+  res.setHeader("Set-Cookie", sessionCookie(req, session, customerLink.SESSION_HOURS * 60 * 60));
   return send(res, 200, { session, caseId: verified.payload.caseId, expiresAt });
 }
 

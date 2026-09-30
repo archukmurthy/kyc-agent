@@ -179,3 +179,66 @@ test("leaving clears the cookie", async () => {
   assert.strictEqual(res.statusCode, 200);
   assert.match(cookieFrom(res), /^ubo_customer_session=;.*Max-Age=0/);
 });
+
+
+// Review fixes.
+function clerkAs(userId, email) {
+  return { isConfigured: () => true, verifyClerkSession: async () => (userId ? { ok: true, userId } : { ok: false }), verifiedEmailFor: async () => email };
+}
+
+test("the session is bound to the person who opened the link, and only they can resume it", async () => {
+  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const opened = await call(handler({ clerk: clerkAs("user_customer", "customer@example.test") }), { action: "open", link: token });
+  assert.strictEqual((await customerLink.verifyCustomerSession(opened.body.session)).payload.sub, "user_customer");
+  const cookie = { cookie: `ubo_customer_session=${opened.body.session}` };
+  assert.strictEqual((await call(handler({ clerk: clerkAs("user_next_person", "next@example.test") }), { action: "resume" }, cookie)).statusCode, 401);
+  assert.strictEqual((await call(handler({ clerk: clerkAs(null, null) }), { action: "resume" }, cookie)).statusCode, 401);
+  assert.strictEqual((await call(handler({ clerk: clerkAs("user_customer", "customer@example.test") }), { action: "resume" }, cookie)).statusCode, 200);
+});
+
+test("a link to a case that no longer exists does not open", async () => {
+  const { token } = customerLink.mintLink({ caseId: "deleted-case", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const res = await call(handler({ clerk: clerkAs("user_customer", "customer@example.test") }), { action: "open", link: token });
+  assert.strictEqual(res.statusCode, 404);
+});
+
+test("without shared storage on a hosted deployment, links are neither made nor withdrawn", async () => {
+  // A withdrawal written to one server's local disk is invisible to the others.
+  process.env.VERCEL = "1";
+  const h = route.createHandler({
+    applyCors: () => false, enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST, caseExists: async () => true,
+    clerk: clerkAs("user_customer", "customer@example.test"), storageBackend: () => "filesystem",
+  });
+  assert.strictEqual((await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).statusCode, 503);
+  assert.strictEqual((await call(h, { action: "revoke", caseId: "case-1" })).statusCode, 503);
+});
+
+test("a production build never opens a link on the link alone, wherever it runs", async () => {
+  const savedEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+    assert.strictEqual((await call(handler(), { action: "open", link: token })).statusCode, 503);
+  } finally {
+    process.env.NODE_ENV = savedEnv;
+  }
+});
+
+test("the cookie is Secure on any HTTPS request", async () => {
+  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const res = withHeaders();
+  await handler({ clerk: clerkAs("user_customer", "customer@example.test") })({ method: "POST", headers: { "x-forwarded-proto": "https" }, body: { action: "open", link: token } }, res);
+  assert.match(cookieFrom(res), /; Secure/);
+});
+
+test("an owner's link is made in the workspace they are working in", async () => {
+  const h = handler({ staff: { kind: "unauthenticated", tenantId: null, role: null } });
+  const saved = process.env.UBO_DEV_TENANT_ID;
+  process.env.UBO_DEV_TENANT_ID = ANALYST.tenantId;
+  try {
+    assert.strictEqual((await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).statusCode, 200);
+  } finally {
+    if (saved === undefined) delete process.env.UBO_DEV_TENANT_ID; else process.env.UBO_DEV_TENANT_ID = saved;
+  }
+});

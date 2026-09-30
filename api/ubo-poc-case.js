@@ -69,6 +69,11 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
         return res.status(200).json({ success: true, case: record });
       }
       if (req.method === "POST") {
+        // A customer works on a case that exists; they never create one - a
+        // link to a deleted case (a purged trial) must not write it back.
+        if (customer && !(await active.service.load(actor.caseId))) {
+          return res.status(404).json({ success: false, code: "case_not_found", message: "The POC case was not found." });
+        }
         if (active.db) await ensureTenantRow(active.db, tenantId);
         // Who acted is the credential's answer, not the request's.
         const record = await active.service.apply({ ...(req.body || {}), actorType: customer ? "CUSTOMER" : "ANALYST" });
