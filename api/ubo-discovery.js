@@ -11,9 +11,10 @@ const { enforceRateLimit } = require("../lib/rateLimit");
 const { checkTextFields } = require("../lib/inputLimits");
 const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { logFailure, attachRequestId } = require("../lib/requestLog");
+const demoAllowance = require("../lib/demoAllowance");
 
 // Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
-const DEFAULT_DEPS = { requireStaff, enforceRateLimit, runUboFramework, getFresh, cacheResult, appendAudit, persistUboInvestigation };
+const DEFAULT_DEPS = { requireStaff, enforceRateLimit, runUboFramework, getFresh, cacheResult, appendAudit, persistUboInvestigation, demoAllowance };
 let _deps = { ...DEFAULT_DEPS };
 
 const PERSISTENCE_TIMEOUT_MS = Number(process.env.UBO_PERSISTENCE_TIMEOUT_MS || 2500);
@@ -135,6 +136,9 @@ module.exports = async function handler(req, res) {
         return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
       }
     }
+    // Past the cache: this run reaches Companies House and Anthropic, so it
+    // uses one of a public demo's shared runs (a no-op anywhere else).
+    await _deps.demoAllowance.record("ubo-discovery");
     const jobController = createResearchJobController(req, res);
     let result;
     try {

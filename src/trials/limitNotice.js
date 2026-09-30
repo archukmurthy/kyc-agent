@@ -28,6 +28,11 @@ const NOTICES = {
     action: "contact",
     fallback: "This trial has used all its research runs. Your work is still here - get in touch to continue.",
   },
+  demo_allowance_spent: {
+    title: "This demo has used all its runs",
+    action: "contact",
+    fallback: "This demo has used all its research runs. Get in touch to continue.",
+  },
   spend_cap_reached: {
     title: "Research is paused for today",
     action: "wait",

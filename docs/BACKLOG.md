@@ -726,11 +726,11 @@ not lost with it:
 - **What:** `lib/providerCall.js#fetchWithTimeout(url, opts, config)` and `agents/ubo/boundedAsync.js#fetchWithTimeout(fetchImpl, url, opts, config)`. The merge kept hers in the web-research adapter. Pick one.
 
 ### UBO-15 - One live run may be charged twice to the discovery allowance
-- **Category:** Cost - **Priority:** P2 - **Status:** OPEN - verify first
+- **Category:** Cost - **Priority:** P2 - **Status:** DONE (2026-09-30) - confirmed (the nested call now carries the caller's identity and charges the bucket itself); the lab's own charge is removed, and a rule-test forbids it coming back.
 - **What:** `START_LIVE` in `api/ubo-control-lab.js` spends the `ubo-discovery` bucket, then its nested call to `api/ubo-discovery.js` (now carrying the caller's headers) spends it again. The demo path (`START_DEMO_REVIEW_LIVE`) only spends it once, in the nested call. Settle on one place, which matters once the demo cap is 25 runs in total.
 
 ### UBO-16 - Chart-job polling spends the rate limit
-- **Category:** Cost / UX - **Priority:** P1 - **Status:** OPEN
+- **Category:** Cost / UX - **Priority:** P1 - **Status:** DONE (2026-09-30) - polls, processing and re-evaluation use a free `ubo-demo-chart-status` bucket; only starting an upload (or a retry) is paid. They also no longer eat the trial's budget.
 - **What:** one upload makes up to 12 POSTs to `ubo-demo-customer-ownership-chart` while polling; each passes `enforceRateLimit("ubo-demo-chart")`, which allows 15 an hour. The demo cap must count uploads, not status polls.
 
 ### UBO-17 - Chart jobs are reachable by id alone

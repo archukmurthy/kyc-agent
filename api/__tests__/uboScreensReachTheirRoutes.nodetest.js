@@ -87,12 +87,18 @@ test("every route a UBO screen calls is rate-limited", () => {
   assert.deepEqual(unlimited, [], "a UBO screen's route with no limiter:\n" + unlimited.join("\n"));
 });
 
-test("the demo's live research passes the same paid allowance as the direct route", () => {
-  // Two routes onto one provider. Sharing the bucket is what stops a person
-  // getting two allowances by using both, and it is what puts the trial's
-  // budget and end date in front of the path the demo actually uses.
+test("the demo's live research passes the same paid allowance as the direct route, once", () => {
+  // Two routes onto one provider. Every live lab path reaches the provider
+  // through a nested call to /api/ubo-discovery, which charges the paid
+  // allowance - per-person limit, trial budget and end date, spend ceiling,
+  // the demo's total. That only works if the caller's identity goes with the
+  // call; without it the nested route sees nobody. And the lab must not charge
+  // the bucket itself as well, or one run counts twice (UBO-15).
   const lab = read("api/ubo-control-lab.js");
-  assert.match(lab, /START_LIVE[\s\S]{0,400}enforceRateLimit\(req, res, "ubo-discovery"\)/);
+  const calls = lab.split("\n").filter((line) => line.includes("invokeLegacyDiscovery("));
+  assert.ok(calls.length >= 3, "expected the definition and at least two nested calls");
+  assert.deepStrictEqual(calls.filter((line) => !line.includes("callerHeaders")), [], "a nested discovery call without the caller's identity");
+  assert.doesNotMatch(lab, /enforceRateLimit\(req, res, "ubo-discovery"\)/, "the lab charges the discovery bucket itself - one run would count twice");
 });
 
 test("every owner-only or role-gated UBO action names its roles", () => {

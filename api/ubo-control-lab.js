@@ -261,12 +261,10 @@ module.exports = async function handler(req, res) {
       case OPERATIONS.START_FIXTURE:
         return send(res, 200, startFixture(input.payload));
       case OPERATIONS.START_LIVE:
-        // The one operation here that reaches a provider, so the one that has
-        // to pass the paid allowance: the per-person limit, the trial's budget
-        // and end date, and the daily spend ceiling. It shares the bucket with
-        // /api/ubo-discovery deliberately - two routes onto the same provider
-        // must not hand one person two allowances.
-        if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
+        // Reaches a provider through the nested /api/ubo-discovery call, which
+        // carries the caller's identity (callerHeaders) and charges the paid
+        // allowance itself - per-person limit, trial budget, spend ceiling, the
+        // demo's total. Charging here as well counted one run twice (UBO-15).
         return send(res, 200, await startLive({
           ...input.payload,
           transport: { invoke: ({ body }) => invokeLegacyDiscovery(body, { callerHeaders: req.headers || {} }) },

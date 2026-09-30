@@ -4,15 +4,21 @@ const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } =
 const { createCustomerOwnershipJobService } = require("../evidence/customerOwnershipJobs/dependencies.js");
 const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
+const demoAllowance = require("../lib/demoAllowance");
 
-const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit };
+const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit, demoAllowance };
 
 function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService, gates = DEFAULT_GATES) {
   return async function customerOwnershipChartHandler(req, res) {
     if (gates.applyCors(req, res)) return undefined;
     // Merged from the UBO demo with no credential and no limit. Reaches document extraction and Anthropic, so an anonymous caller can spend our money.
     // Clerk gives these a real caller identity; the limiter is what holds until then.
-    if (!(await gates.enforceRateLimit(req, res, "ubo-demo-chart"))) return undefined;
+    // Starting an upload is the paid call. Polling a job, processing it and
+    // re-evaluating a saved result are not, and one upload polls up to twelve
+    // times - they used to spend the paid hourly limit and the trial's budget.
+    const operation = req.body?.operation;
+    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION"].includes(operation);
+    if (!(await gates.enforceRateLimit(req, res, paid ? "ubo-demo-chart" : "ubo-demo-chart-status"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
     // The job operations read the caller's workspace (uboCallerTenant below), so
@@ -41,7 +47,11 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);
       else if (body.operation === "RETRY_EXTRACTION_JOB") job = await dependencies.service.retry(body.jobId);
-      else job = await dependencies.service.start(body);
+      else {
+        job = await dependencies.service.start(body);
+        // One of a public demo's shared uploads (a no-op anywhere else).
+        await gates.demoAllowance.record("ubo-demo-chart");
+      }
       if (job?.correlationId) res.setHeader("X-Correlation-Id", job.correlationId);
       const terminal = ["COMPLETE", "PARTIAL", "FAILED"].includes(job?.state);
       return res.status(terminal ? 200 : 202).json({ success: true, job });
