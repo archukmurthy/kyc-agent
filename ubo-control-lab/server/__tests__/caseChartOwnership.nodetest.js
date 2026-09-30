@@ -24,7 +24,7 @@ function associate(service, jobId) {
 }
 
 test("a case's own chart job can be attached", async () => {
-  const repo = repository({ "job-1": { jobId: "job-1", demoCaseId: "case-1" } });
+  const repo = repository({ "job-1": { jobId: "job-1", demoCaseId: "case-1", state: "COMPLETE", result: { candidateFacts: [] } } });
   await associate(new PocCaseService(repo), "job-1");
   assert.strictEqual(repo.applied.length, 1);
 });
