@@ -44,19 +44,17 @@ export default function CustomerIdvPage() {
     const assessmentId = next?.verificationAssessment?.assessmentVersionId;
     setPendingPersonId(personId); setSaveError("");
     try {
-      await persistPocCase("COMPLETE_IDV", {
+      // The server decides and records the completion from its own stored
+      // assessment; the browser sends only who. Its answer is what we show.
+      const record = await persistPocCase("COMPLETE_IDV", {
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
         idempotencyKey: `idv:${smallStableHash([assessmentId, personId, "DEMO"])}`,
-        payload: {
-          personId,
-          trace: next,
-          assessment: { assessmentId, trace: next },
-          researchResult: { ...context.researchResult, ownershipResolutionTrace: next },
-        },
+        payload: { personId },
       });
-      writeTrace(context, next);
-      setTrace(next);
+      const saved = record?.projection?.assessment?.trace || next;
+      writeTrace(context, saved);
+      setTrace(saved);
     } catch (cause) { setSaveError(cause.message || "Identity-verification completion could not be saved."); }
     finally { setPendingPersonId(null); }
   };

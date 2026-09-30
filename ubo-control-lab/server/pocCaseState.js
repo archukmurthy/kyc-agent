@@ -1,5 +1,6 @@
 "use strict";
 
+const { completeIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { createHash } = require("node:crypto");
 
 const CASE_CONTRACT = "ubo-poc-case-v1";
@@ -468,6 +469,37 @@ class PostgresPocCaseRepository {
   }
 }
 
+// The demo's identity verification is a button: no document is checked. That
+// stays honest only while the SERVER decides it - the deployment is in demo
+// mode, the person is one its own stored assessment requires, and the record
+// says plainly that nothing was verified. Anything the browser sends as a
+// trace, assessment or research result for this operation is discarded.
+async function demoIdentityVerificationPayload(repository, caseId, payload) {
+  if (String(process.env.UBO_POC_IDV_MODE || "").trim().toUpperCase() !== "DEMO") {
+    throw Object.assign(new Error("Identity verification is not available on this deployment."), { statusCode: 403, code: "idv_demo_mode_off" });
+  }
+  const record = await repository.get(caseId);
+  const stored = traceFrom(record?.projection);
+  const now = new Date().toISOString();
+  const next = stored ? completeIdentityVerification(stored, payload?.personId, now) : null;
+  // completeIdentityVerification hands back the same trace when the person is
+  // not a natural person the stored assessment currently requires.
+  if (!next || next === stored) {
+    throw Object.assign(new Error("This person does not need identity verification in the current assessment."), { statusCode: 400, code: "idv_person_not_required" });
+  }
+  // Same comparison the engine uses to find the subject (verificationAssessment.js#normalized).
+  const key = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const samePerson = (item) => key(item?.personId) === key(payload?.personId);
+  const completed = next.idvCompletionHistory.find(samePerson);
+  const trace = {
+    ...next,
+    idvCompletionHistory: next.idvCompletionHistory.map((item) => item === completed && !item.verificationMode
+      ? { ...item, verificationMode: "DEMO", verificationLabel: "DEMO - not verified" }
+      : item),
+  };
+  return { personId: completed.personId, trace, assessment: { ...(record.projection?.assessment || {}), trace } };
+}
+
 class PocCaseService {
   constructor(repository) { this.repository = repository; }
 
@@ -483,7 +515,9 @@ class PocCaseService {
     const caseId = String(command.caseId || command.payload?.demoCase?.demoCaseId || "").trim();
     if (!caseId) throw Object.assign(new Error("caseId is required"), { statusCode: 400, code: "case_id_required" });
     if (!command.idempotencyKey) throw Object.assign(new Error("idempotencyKey is required"), { statusCode: 400, code: "idempotency_key_required" });
-    const payload = compactCasePayload(command.payload);
+    const payload = command.operation === "COMPLETE_IDV"
+      ? await demoIdentityVerificationPayload(this.repository, caseId, command.payload)
+      : compactCasePayload(command.payload);
     const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
     const result = await this.repository.apply({ ...command, payload, caseId, actorType: command.actorType || "SYSTEM", release });
     return { ...(await this.load(caseId)), duplicate: result.duplicate, researchRelease: release || result.record?.projection?.researchRelease || null };

@@ -717,6 +717,7 @@ not lost with it:
 - **What:** `api/ubo-poc-case.js` reads and writes any case by id with no sign-in, tenant or limit, taking its tenant from `process.env.TENANT_ID || "nium"` (`ubo-control-lab/server/pocCaseState.js`). `api/ubo-poc-health.js` accepts `ADMIN_PASSWORD` as its key and calls paid providers unmetered. Neither is in the route table, so `routeTable.nodetest.js` is red on the merge commit.
 
 ### UBO-13 - The server trusts what the browser says
+- **Progress (2026-09-30):** identity verification is decided on the server - demo mode must be switched on (`UBO_POC_IDV_MODE=DEMO`, unset refuses), the person must be in the stored assessment, the server applies the completion to its own stored trace and records `DEMO - not verified`. The rest (research, chart, resolution) is plan steps 3-7.
 - **Category:** Security / correctness - **Priority:** P0 - **Status:** OPEN
 - **What:** the assessment, the questions, IDV completion and `actorType` are all supplied by the browser and stored as sent. Decided: calculations move to the server; IDV completion is recorded only when the server's mode allows it.
 
