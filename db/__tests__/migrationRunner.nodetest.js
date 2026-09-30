@@ -123,3 +123,11 @@ test("baseline adopts an existing database without running anything", async () =
   const after = await runner.run({ sql: fakeSql(), files: FILES });
   assert.deepEqual(after.applied, []);
 });
+
+test("a dollar-quoted function body stays one statement", () => {
+  const { statementsOf: split } = require("../migrationRunner");
+  const sql = "CREATE TABLE t (a int);\nCREATE OR REPLACE FUNCTION f() RETURNS trigger AS $$\nBEGIN\n  RAISE EXCEPTION 'no; really';\nEND;\n$$ LANGUAGE plpgsql;\n-- a comment; with a semicolon\nCREATE TRIGGER g BEFORE UPDATE ON t FOR EACH ROW EXECUTE FUNCTION f();";
+  const statements = split(sql);
+  assert.strictEqual(statements.length, 3, JSON.stringify(statements));
+  assert.match(statements[1], /^CREATE OR REPLACE FUNCTION f\(\)[\s\S]*END;\n\$\$ LANGUAGE plpgsql$/);
+});

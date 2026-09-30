@@ -45,6 +45,7 @@ function publicJob(job) {
     contractVersion: "evidence-customer-extraction-job-v1",
     jobId: job.id,
     artifactId: job.artifactId,
+    demoCaseId: job.demoCaseId || null,
     state: job.state,
     attemptCount: job.attemptCount,
     maxAttempts: job.maxAttempts,

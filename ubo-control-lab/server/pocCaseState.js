@@ -1,6 +1,7 @@
 "use strict";
 
 const { computeCaseAssessment } = require("./caseAssessment");
+const auditLedger = require("./auditLedger");
 const { completeIdentityVerification, isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { createHash } = require("node:crypto");
 
@@ -373,6 +374,11 @@ class PostgresPocCaseRepository {
     };
   }
 
+  /** The case's audit ledger (UBO-33), oldest first. */
+  async ledger(caseId) {
+    return auditLedger.list(this.db, this.tenantId, caseId);
+  }
+
   async history(caseId) {
     return rows(await this.db.query(`SELECT event_id, event_type, actor_type, occurred_at
       FROM ubo_poc_case_events WHERE case_id = $1 ORDER BY occurred_at, event_id`, [caseId])).map((row) => ({
@@ -398,7 +404,7 @@ class PostgresPocCaseRepository {
     return row ? { result: row.result, evidenceHandoff: row.evidence_handoff } : null;
   }
 
-  async apply({ caseId, operation, idempotencyKey, actorType, payload, release }) {
+  async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release }) {
     return this.db.transaction(async (client) => {
       const company = payload.demoCase?.company || payload.company;
       const existingCase = await this.get(caseId, client);
@@ -427,6 +433,13 @@ class PostgresPocCaseRepository {
         assessmentId, json(projection)]);
       await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
+      // The audit ledger, in the same transaction: the step and its record
+      // stand or fall together (UBO-33).
+      await auditLedger.record(client, this.tenantId, auditLedger.eventsForCommand({
+        caseId, operation, before: existing?.projection, after: projection, payload, operationId: idempotencyKey,
+        actor: { type: actorType, id: actorId }, correlationId, receivedAt,
+        researchChanged: operation === "SAVE_RESEARCH" && researchIdentity(existing?.projection?.researchResult) !== researchIdentity(projection.researchResult),
+      }));
       if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, idempotencyKey);
       console.info("[ubo-poc-case] projection-applied", {
         caseRef: stableHash(caseId).slice(0, 12),
@@ -598,6 +611,11 @@ function sameCompany(a, b) {
 
 class PocCaseService {
   constructor(repository) { this.repository = repository; }
+
+  /** The case's audit ledger - for staff; the route decides who asks. */
+  async ledger(caseId) {
+    return this.repository.ledger ? this.repository.ledger(caseId) : [];
+  }
 
   async load(caseId) {
     const record = await this.repository.get(caseId);

@@ -250,3 +250,44 @@ test("a customer cannot create a case, only work on one that exists", async () =
   assert.strictEqual(res.statusCode, 404);
   assert.deepStrictEqual(applied, []);
 });
+
+// UBO-33: the audit ledger's who, when and which request come from the
+// credential and the server - never from the request body.
+test("who acted, when it arrived and the correlation id are the server's, not the request's", async () => {
+  factoryCalls = [];
+  let applied;
+  const handler = route.createHandler(() => ({ service: { load: async () => ({}), apply: async (command) => { applied = command; return {}; } }, close: async () => {} }), {
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "customer", tenantId: "acme", caseId: "case-1", userId: "user_real" }),
+  });
+  const res = fakeRes();
+  await handler({ method: "POST", headers: { "x-correlation-id": "corr-from-caller-123" }, query: {}, body: { operation: "RESET_ANSWERS", caseId: "case-1", idempotencyKey: "k", actorId: "user_forged", actorType: "ANALYST", receivedAt: "2000-01-01T00:00:00.000Z", correlationId: "forged", payload: {} } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(applied.actorId, "user_real");
+  assert.strictEqual(applied.actorType, "CUSTOMER");
+  assert.notStrictEqual(applied.receivedAt, "2000-01-01T00:00:00.000Z");
+  assert.strictEqual(applied.correlationId, "corr-from-caller-123", "a caller's plain correlation id is carried");
+  assert.strictEqual(res.headers["x-correlation-id"], "corr-from-caller-123");
+});
+
+test("a correlation id that is not a plain id is replaced", async () => {
+  let applied;
+  const handler = route.createHandler(() => ({ service: { load: async () => ({}), apply: async (command) => { applied = command; return {}; } }, close: async () => {} }), {
+    applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "user_a" }),
+  });
+  await handler({ method: "POST", headers: { "x-correlation-id": "<script>" }, query: {}, body: { operation: "UPSERT_CASE", caseId: "case-1", idempotencyKey: "k", payload: {} } }, fakeRes());
+  assert.match(applied.correlationId, /^[0-9a-f-]{36}$/);
+});
+
+test("the audit ledger is read by staff; to a customer it does not exist", async () => {
+  const ledgerService = { load: async () => ({}), ledger: async (caseId) => [{ eventType: "CASE_CREATED", caseId }] };
+  const make = (actor) => route.createHandler(() => ({ service: ledgerService, close: async () => {} }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor });
+  const staff = fakeRes();
+  await make({ kind: "staff", tenantId: "acme", role: "analyst" })({ method: "GET", headers: {}, query: { caseId: "case-1", ledger: "1" } }, staff);
+  assert.strictEqual(staff.statusCode, 200);
+  assert.deepStrictEqual(staff.body.events, [{ eventType: "CASE_CREATED", caseId: "case-1" }]);
+  const customer = fakeRes();
+  await make({ kind: "customer", tenantId: "acme", caseId: "case-1" })({ method: "GET", headers: {}, query: { caseId: "case-1", ledger: "1" } }, customer);
+  assert.strictEqual(customer.statusCode, 404);
+});

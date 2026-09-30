@@ -57,7 +57,9 @@ function readMigrations(dir = MIGRATIONS_DIR) {
 }
 
 /** Splits a file into statements. Mirrors db/apply.js: strip `--` comments
- *  first so a semicolon inside one cannot split a statement in half. */
+ *  first so a semicolon inside one cannot split a statement in half. A
+ *  $$-quoted body (a trigger function's) is kept whole: its own semicolons
+ *  are not statement ends. */
 function statementsOf(contents) {
   const stripped = contents
     .split("\n")
@@ -66,7 +68,15 @@ function statementsOf(contents) {
       return i === -1 ? line : line.slice(0, i);
     })
     .join("\n");
-  return stripped.split(";").map((s) => s.trim()).filter(Boolean);
+  const out = [];
+  let current = "";
+  let quoted = false;
+  for (const part of stripped.split(/(\$\$|;)/)) {
+    if (part === "$$") quoted = !quoted;
+    if (part === ";" && !quoted) { out.push(current); current = ""; } else current += part;
+  }
+  out.push(current);
+  return out.map((s) => s.trim()).filter(Boolean);
 }
 
 /**

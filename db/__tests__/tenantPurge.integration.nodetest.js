@@ -130,7 +130,7 @@ after(async () => {
   if (!db) return;
   if (ready) {
     // Leave nothing behind even if an assertion failed half-way.
-    for (const tenant of [A, B, D, E]) await purgeTenant(db, tenant).catch(() => {});
+    for (const tenant of [A, B, D, E, L]) await purgeTenant(db, tenant).catch(() => {});
   }
   await db.close();
   if (root) fs.rmSync(root, { recursive: true, force: true });
@@ -244,4 +244,37 @@ test("once nothing else touches it, the workspace is deleted in full", async (t)
 
 test("a workspace id is required", async () => {
   await assert.rejects(purgeTenant({ transaction: async () => {} }, ""), /tenant/);
+});
+
+// UBO-33: the audit ledger, on the real database.
+const L = `trial-purge-l-${RUN}`;
+const COMPANY_L = { ...COMPANY, legalName: "LEDGER TEST LIMITED", registrationNumber: `L${RUN}`.slice(0, 8).toUpperCase() };
+
+test("the audit ledger records the journey, cannot be changed, and goes with the workspace", async (t) => {
+  if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+  const present = await db.query("SELECT to_regclass('public.ubo_audit_events') l");
+  if (!present.rows[0].l) return t.skip("needs migration 029 (npm run db:migrate:ubo)");
+  const log = console.info;
+  console.info = () => {};
+  try { await seed(L, COMPANY_L); } finally { console.info = log; }
+  try {
+    const caseId = `purge-case-${L}`;
+    const types = (await db.query("SELECT event_type FROM ubo_audit_events WHERE tenant_id = $1 AND case_id = $2", [L, caseId])).rows.map((r) => r.event_type);
+    for (const type of ["CASE_CREATED", "RESEARCH_RECORDED", "OWNERSHIP_CHART_ATTACHED", "QUESTION_ASKED", "CUSTOMER_ANSWER_RECEIVED", "EVIDENCE_RECEIVED", "UBO_ASSESSMENT_COMPLETED", "IDV_COMPLETED"]) {
+      assert.ok(types.includes(type), `${type} was not recorded: ${[...new Set(types)].join(", ")}`);
+    }
+    const answer = (await db.query("SELECT occurred_at, received_at, recorded_at, retain_until FROM ubo_audit_events WHERE tenant_id = $1 AND event_type = 'CUSTOMER_ANSWER_RECEIVED' LIMIT 1", [L])).rows[0];
+    assert.ok(answer.occurred_at && answer.received_at && answer.recorded_at, "the times are kept apart");
+    assert.ok(new Date(answer.retain_until) > new Date(Date.now() + 6 * 365 * 24 * 3600 * 1000), "kept for seven years");
+
+    const total = await count("SELECT count(*) n FROM ubo_audit_events WHERE tenant_id = $1", [L]);
+    await assert.rejects(db.query("UPDATE ubo_audit_events SET event_type = 'FORGED' WHERE tenant_id = $1", [L]), /append-only/);
+    await assert.rejects(db.query("DELETE FROM ubo_audit_events WHERE tenant_id = $1", [L]), /append-only/);
+    await assert.rejects(db.query('TRUNCATE ubo_audit_events'), /append-only/);
+    assert.strictEqual(await count("SELECT count(*) n FROM ubo_audit_events WHERE tenant_id = $1 AND event_type = 'FORGED'", [L]), 0, "an event was changed");
+    assert.strictEqual(await count("SELECT count(*) n FROM ubo_audit_events WHERE tenant_id = $1", [L]), total, "an event was deleted");
+  } finally {
+    await purgeTenant(db, L);
+  }
+  assert.strictEqual(await count("SELECT count(*) n FROM ubo_audit_events WHERE tenant_id = $1", [L]), 0, "the trial's ledger went with it");
 });

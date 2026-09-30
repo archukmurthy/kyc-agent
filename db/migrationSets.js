@@ -24,6 +24,7 @@ const SETS = Object.freeze({
     "019_evidence_packages.sql",
     "020_evidence_customer_extraction_jobs.sql",
     "021_ubo_poc_case_state.sql",
+    "029_ubo_audit_events.sql",
   ]),
 });
 

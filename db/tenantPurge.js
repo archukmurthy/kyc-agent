@@ -175,6 +175,10 @@ async function purgeTenant(db, tenantId, { dryRun = false, beforeCommit = null }
   try {
     await db.transaction(async (client) => {
       await client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+      // The audit ledger refuses deletes (029_ubo_audit_events.sql) except in a
+      // transaction that says it is this purge: a non-buyer's trial is truly
+      // deleted, its audit rows with it (UBO-26, UBO-33).
+      await client.query("SET LOCAL ubo.audit_purge = 'on'");
       // Sealed packages name rows by text, which no foreign key protects, so a
       // package frozen after this snapshot would be invisible to it. Taken
       // before the first read; skipped where the table does not exist.

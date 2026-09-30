@@ -6,6 +6,16 @@ const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAu
 const { enforceRateLimit } = require("../lib/rateLimit");
 const demoAllowance = require("../lib/demoAllowance");
 const { ensureTenantRow } = require("../lib/tenantRow");
+const auditLedger = require("../ubo-control-lab/server/auditLedger");
+
+// Which ledger event a job's answer is, if any (UBO-33): a new upload, or a
+// reading that has just finished one way or the other.
+function documentEventType(started, job) {
+  if (started) return job?.reused ? null : "DOCUMENT_UPLOADED";
+  if (job?.state === "FAILED") return "DOCUMENT_EXTRACTION_FAILED";
+  if (job?.state === "COMPLETE" || job?.state === "PARTIAL") return "DOCUMENT_EXTRACTED";
+  return null;
+}
 
 const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance };
 
@@ -62,6 +72,7 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         if (!ours) return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
       }
       let job;
+      let started = false;
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);
       else if (body.operation === "RETRY_EXTRACTION_JOB") {
@@ -74,10 +85,16 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         // A trial workspace has no tenants row until its first write.
         if (dependencies.db) await ensureTenantRow(dependencies.db, tenantId);
         job = await dependencies.service.start(body);
+        started = true;
         // One of a public demo's shared uploads (a no-op anywhere else).
         await gates.demoAllowance.record("ubo-demo-chart");
       }
       if (job?.correlationId) res.setHeader("X-Correlation-Id", job.correlationId);
+      const eventType = documentEventType(started, job);
+      if (eventType && dependencies.db && job?.demoCaseId) {
+        const actorType = actor.kind === "customer" ? "CUSTOMER" : "ANALYST";
+        await auditLedger.record(dependencies.db, tenantId, [auditLedger.documentEvent({ tenantJob: job, eventType, actor: { type: actorType, id: actor.userId }, receivedAt: new Date().toISOString() })]);
+      }
       const terminal = ["COMPLETE", "PARTIAL", "FAILED"].includes(job?.state);
       return res.status(terminal ? 200 : 202).json({ success: true, job });
     } catch (error) {

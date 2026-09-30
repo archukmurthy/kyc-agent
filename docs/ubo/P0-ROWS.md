@@ -1,4 +1,7 @@
-# The sixteen P0 rows — what is done, what is not
+What is left: rows 4 and 12 need the demo's Vercel project and database
+(UBO-39, UBO-32; the UBO-only table setup, UBO-19, is ready for it); row 9 waits
+on the partner's definition (UBO-34); and row 13's last part is deferred by
+the owner (UBO-36).# The sixteen P0 rows — what is done, what is not
 
 Your partner's production-readiness list for the UBO module: sixteen rows, all
 marked P0. This file exists because the list arrived as screenshots and lived
@@ -37,7 +40,7 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 | 7 | Questions | **Done** (2026-09-30) | Her flow; the server raises the questions and checks every answer (UBO-13, four adversarial reviews). |
 | 8 | Analyst review | **Done** (2026-09-30) | Her analyst view, and a finalised review reopened from it by the analyst only (UBO-29). |
 | 9 | Policy mode | **Waiting on the partner** | A named rulebook and three calculation methods exist; what the row requires is not written anywhere (UBO-34). |
-| 10 | Audit history | **Partly** | Case events and the calculation's own events are kept. Left: one append-only ledger (UBO-33). |
+| 10 | Audit history | **Done** (2026-09-30) | One append-only ledger per case (`ubo_audit_events`): who, what, four kinds of time, a correlation id, what it relates to and why - refused any change by the database, written with the step it records (UBO-33, `docs/ubo/AUDIT-LEDGER-PLAN.md`). |
 | 11 | Observability | **Done bar the alarm** (2026-09-22) | `lib/requestLog.js`, `GET /api/health`, and `api/ubo-poc-health.js` behind its own key. Left: somewhere for failures to raise an alarm (GOLIVE-6). |
 | 12 | Backups and recovery | **Not started** | Needs the demo's database; then a restore actually proven (UBO-32). |
 | 13 | Retention | **Partly** | The seven-year rule is stamped on every record; non-buyers' trial data is truly deleted 90 days after the trial (UBO-26). Left, deferred by the owner: deleting buyers' data after seven years (UBO-36). |
@@ -47,13 +50,13 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 
 ## The count
 
-As at 2026-09-30: **eleven rows done** (2, 3, 5, 6, 7, 8, 14, 15, 16, and 1 and 11 bar
-a setting the owner controls). **Four partly** (4, 10, 13, and 9 waiting on the
+As at 2026-09-30: **twelve rows done** (2, 3, 5, 6, 7, 8, 10, 14, 15, 16, and 1 and 11
+bar a setting the owner controls). **Three partly** (4, 13, and 9 waiting on the
 partner's definition). **One not started** (12, which needs the demo's database).
 
 As at 2026-09-22 it was five done, three partly and eight waiting.
 
-What is left splits three ways: code we are building now (row 10 - UBO-33); things that need the demo's Vercel project and database
+What is left splits two ways, and one row waits: things that need the demo's Vercel project and database
 (rows 4 and 12 - UBO-39, UBO-19, UBO-32); and one row waiting on the partner's
 definition (row 9 - UBO-34). Row 13's last part is deferred by the owner (UBO-36).
 
