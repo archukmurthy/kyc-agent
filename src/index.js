@@ -16,6 +16,7 @@ import DurablePocCaseBoundary from "./uboDemo/DurablePocCaseBoundary";
 import { isCustomerCompanyPath, isCustomerCompletePath, isCustomerIdvPath, isCustomerOwnershipChartPath, isCustomerQuestionsPath } from "./uboDemo/customer/customerRoute";
 import ClerkGate from "./auth/ClerkGate";
 import TrialGate from "./trials/TrialGate";
+import CustomerGate from "./uboDemo/customer/CustomerGate";
 import TrialAdmin from "./trials/TrialAdmin";
 import PeopleAdmin from "./people/PeopleAdmin";
 
@@ -23,6 +24,10 @@ import PeopleAdmin from "./people/PeopleAdmin";
 // shows the ownership review module and nothing else. The server refuses the
 // rest as well (middleware.js) - this half only stops the screens rendering.
 const UBO_ONLY = (process.env.REACT_APP_PRODUCT_MODE || "platform").toLowerCase() === "ubo";
+
+// A customer page without a customer link is an analyst trying the view:
+// they go through the trial gate exactly as before.
+const trialFallback = (page) => <TrialGate>{page}</TrialGate>;
 
 const path = window.location.pathname;
 const search = new URLSearchParams(window.location.search);
@@ -58,19 +63,19 @@ if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
 } else if (isCustomerCompletePath(path)) {
   // The durable case is restored INSIDE the gates: it loads the case from the
   // server, and outside them there is no session to load it with.
-  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerCompletePage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
+  tree = <ClerkGate><CustomerGate fallback={trialFallback}><DurablePocCaseBoundary><CustomerCompletePage /></DurablePocCaseBoundary></CustomerGate></ClerkGate>;
   title = "Complete | Ownership review demo";
 } else if (isCustomerIdvPath(path)) {
-  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerIdvPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
+  tree = <ClerkGate><CustomerGate fallback={trialFallback}><DurablePocCaseBoundary><CustomerIdvPage /></DurablePocCaseBoundary></CustomerGate></ClerkGate>;
   title = "Identity verification | Ownership review demo";
 } else if (isCustomerQuestionsPath(path)) {
-  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerQuestionsPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
+  tree = <ClerkGate><CustomerGate fallback={trialFallback}><DurablePocCaseBoundary><CustomerQuestionsPage /></DurablePocCaseBoundary></CustomerGate></ClerkGate>;
   title = "Questions | Ownership review demo";
 } else if (isCustomerOwnershipChartPath(path)) {
-  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerOwnershipChartPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
+  tree = <ClerkGate><CustomerGate fallback={trialFallback}><DurablePocCaseBoundary><CustomerOwnershipChartPage /></DurablePocCaseBoundary></CustomerGate></ClerkGate>;
   title = "Upload ownership chart | Ownership review demo";
 } else if (isCustomerCompanyPath(path)) {
-  tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><CustomerCompanyPage /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
+  tree = <ClerkGate><CustomerGate fallback={trialFallback}><DurablePocCaseBoundary><CustomerCompanyPage /></DurablePocCaseBoundary></CustomerGate></ClerkGate>;
   title = "Company details | Ownership review demo";
 } else if (isUboDemoPath(path)) {
   tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><UboDemoRoot /></DurablePocCaseBoundary></TrialGate></ClerkGate>;

@@ -1,6 +1,7 @@
 import React from "react";
 import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
+import { currentCustomerSession } from "../../auth/customerSession";
 
 const STEPS = ["Company", "Ownership", "Questions", "Identity verification", "Complete"];
 
@@ -18,8 +19,9 @@ export default function CustomerJourneyHeader({ currentStep, onViewOwnershipAnal
         <span className="ubo-customer-secure">Customer journey · Demo</span>
         <nav className="ubo-customer-analyst-links" aria-label="Analyst views">
           {showCustomerOwnershipAnalysis() && <a href={ownershipAnalysisPath} aria-current={ownershipAnalysisVisible ? "page" : undefined} onClick={onViewOwnershipAnalysis ? (event) => { event.preventDefault(); onViewOwnershipAnalysis(); } : undefined}>View Ownership Analysis</a>}
-          <a href={DEMO_REVIEW_PATH}>Open Analyst Review</a>
-          <a href={DEMO_AUDIT_PATH}>Open Audit</a>
+          {/* Analyst screens: not for a customer, who could not open them anyway. */}
+          {!currentCustomerSession() && <a href={DEMO_REVIEW_PATH}>Open Analyst Review</a>}
+          {!currentCustomerSession() && <a href={DEMO_AUDIT_PATH}>Open Audit</a>}
         </nav>
       </div>
     </header>

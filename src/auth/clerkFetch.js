@@ -1,3 +1,5 @@
+import { currentCustomerSession } from "./customerSession";
+
 /**
  * The token the UBO screens attach to API calls.
  *
@@ -12,14 +14,18 @@
 
 /** @returns {Promise<Record<string,string>>} headers to spread into a fetch */
 export async function clerkAuthHeaders() {
+  // A customer holding a session for one case sends it with every UBO call
+  // (src/auth/customerSession.js); the server scopes them to that case.
+  const customer = currentCustomerSession();
+  const headers = customer ? { "x-ubo-customer-session": customer.session } : {};
   try {
     const clerk = typeof window !== "undefined" ? window.Clerk : null;
-    if (!clerk || !clerk.session) return {};
+    if (!clerk || !clerk.session) return headers;
     const token = await clerk.session.getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return token ? { Authorization: `Bearer ${token}`, ...headers } : headers;
   } catch (_) {
     // A failure to attach a token must not break the page; the server refuses
     // the call and the UI shows that refusal.
-    return {};
+    return headers;
   }
 }

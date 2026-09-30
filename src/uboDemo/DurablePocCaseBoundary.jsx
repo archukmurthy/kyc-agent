@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { activePocCaseId, clearActivePocCase, hydrateBrowserFromPocCase, loadPocCase, rememberActivePocCase } from "./pocCaseClient";
+import { currentCustomerSession } from "../auth/customerSession";
+
+// A customer's session names their case; otherwise the case this browser was last on.
+const caseToRestore = () => currentCustomerSession()?.caseId || activePocCaseId();
 
 export default function DurablePocCaseBoundary({ children }) {
-  const [state, setState] = useState(() => activePocCaseId() ? { status: "LOADING" } : { status: "READY" });
+  const [state, setState] = useState(() => caseToRestore() ? { status: "LOADING" } : { status: "READY" });
   useEffect(() => {
-    const caseId = activePocCaseId();
+    const caseId = caseToRestore();
     if (!caseId) { setState({ status: "READY" }); return undefined; }
     const controller = new AbortController();
     loadPocCase(caseId, (url, options) => window.fetch(url, { ...options, signal: controller.signal }))
