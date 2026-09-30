@@ -42,4 +42,21 @@ async function appendAudit(record) {
   return id;
 }
 
-module.exports = { identity, resultKey, entityKey, getFresh, cacheResult, appendAudit, CACHE_TTL };
+/** Everything stored here for one workspace - its cached research and its
+ *  audit snapshots - for when a non-buyer's trial is deleted (lib/uboTrialPurge.js).
+ *  ponytail: scans every audit key, since they are keyed by id rather than by
+ *  workspace; fine at demo scale, key them by workspace if it grows. */
+async function forgetTenant(tenantId, store = storage) {
+  const workspace = normalise(requireTenant(tenantId));
+  let removed = 0;
+  for (const prefix of [`ubo:result:${CACHE_VERSION}:${workspace}:`, `ubo:web:${CACHE_VERSION}:${workspace}:`]) {
+    for (const key of await store.list(prefix)) { await store.del(key); removed += 1; }
+  }
+  for (const key of await store.list("ubo:audit:")) {
+    const record = await store.get(key);
+    if (record && normalise(record.tenantId) === workspace) { await store.del(key); removed += 1; }
+  }
+  return removed;
+}
+
+module.exports = { identity, resultKey, entityKey, getFresh, cacheResult, appendAudit, forgetTenant, CACHE_TTL };

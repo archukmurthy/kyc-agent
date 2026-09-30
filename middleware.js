@@ -23,6 +23,7 @@ const UBO_PATHS = [
   "/api/ubo-control-lab",
   "/api/ubo-poc-case",
   "/api/ubo-poc-health",
+  "/api/purge-trial-data",
   "/api/health",
   "/api/sign-out",
   "/api/company-search",

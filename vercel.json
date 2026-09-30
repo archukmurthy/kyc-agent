@@ -7,10 +7,12 @@
     "api/doc-search.js": { "maxDuration": 60 },
     "api/self-source.js": { "maxDuration": 60 },
     "api/generate-policy.js": { "maxDuration": 300 },
-    "api/finalize-submissions.js": { "maxDuration": 60 }
+    "api/finalize-submissions.js": { "maxDuration": 60 },
+    "api/purge-trial-data.js": { "maxDuration": 300 }
   },
   "crons": [
-    { "path": "/api/finalize-submissions", "schedule": "* * * * *" }
+    { "path": "/api/finalize-submissions", "schedule": "* * * * *" },
+    { "path": "/api/purge-trial-data", "schedule": "0 3 * * *" }
   ],
   "routes": [
     { "src": "/api/evidence(/.*)?", "status": 404 },

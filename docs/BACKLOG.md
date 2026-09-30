@@ -786,3 +786,9 @@ not lost with it:
 ### CRON-1 - The submission worker runs for anyone when CRON_SECRET is unset
 - **Category:** Security - **Priority:** P2 - **Status:** OPEN
 - **What:** `api/finalize-submissions.js` checks the secret only `if (secret && ...)`, so an unconfigured deployment lets any caller run the worker. It only retries queued work, which limits the harm; a cron route that deletes data must never copy this (the UBO trial purge refuses when the secret is unset).
+
+### UBO-26 - Non-buyers' trial data deleted 90 days after the trial ends
+- **Category:** Privacy - **Priority:** P0 - **Status:** DONE (2026-09-30)
+- **Decision:** owner, 2026-09-30, agreed by the UBO product owner: truly delete (rows and files), keep a one-line tombstone; buyers are marked on /ubo-trials and keep everything. Overrides lib/uboRetention.js's "never hard-delete" for trial data only.
+- **Built:** `db/tenantPurge.js` (walks the live foreign keys, one transaction, shared Evidence records removed only when nothing else uses them), `lib/uboTrialPurge.js` (files first, then rows, research, access, the person), `api/purge-trial-data.js` (daily at 03:00 UTC, scheduler secret only, refuses when it is unset; `?dryRun=1`). Verified against ubo-dev with two workspaces sharing a company record.
+- **Deploy gate (DEP-UBO-CRON):** set `CRON_SECRET` on the demo deployment. Without it the purge refuses to run, so nothing is ever deleted and the privacy notice's promise is broken. First deletion is possible 97 days after the first trial starts.

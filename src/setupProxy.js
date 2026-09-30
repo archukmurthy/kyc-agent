@@ -46,6 +46,7 @@ const uboDiscoveryHandler = require(path.join(__dirname, "..", "api", "ubo-disco
 const uboControlLabHandler = require(path.join(__dirname, "..", "api", "ubo-control-lab.js"));
 const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", "api", "ubo-demo-customer-ownership-chart.js"));
 const uboPocHealthHandler = require(path.join(__dirname, "..", "api", "ubo-poc-health.js"));
+const purgeTrialDataHandler = require(path.join(__dirname, "..", "api", "purge-trial-data.js"));
 const uboPocCaseHandler = require(path.join(__dirname, "..", "api", "ubo-poc-case.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
@@ -148,6 +149,8 @@ module.exports = function (app) {
   app.get("/ubo-control-lab/vendor/ownership-graph.css", (_req, res) => res.sendFile(path.join(__dirname, "..", "ubo-control-ui", "ownership-graph.css")));
 
   app.get("/api/ubo-poc-health", adapt(uboPocHealthHandler));
+  // Scheduled daily in production; mounted here so a dry run can be tried locally.
+  app.get("/api/purge-trial-data", adapt(purgeTrialDataHandler));
   app.get("/api/ubo-poc-case", adapt(uboPocCaseHandler));
 
   app.post("/api/ubo-poc-case", (req, res) => {

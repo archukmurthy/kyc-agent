@@ -276,7 +276,9 @@ test("accepted evidence remains visible with its filename and an inline preview"
     const acceptedEvidence = screen.getByText("current-register.pdf").closest("article");
     expect(within(acceptedEvidence).getByText("satisfied")).toBeInTheDocument();
     expect(within(acceptedEvidence).getByText(/passed the existing Evidence staging/i)).toBeInTheDocument();
-    expect(within(acceptedEvidence).getByText("View uploaded document")).toBeInTheDocument();
+    // The preview link renders one update after the acceptance message; waiting
+    // for it rather than asserting at once is what makes this stable under load.
+    expect(await within(acceptedEvidence).findByText("View uploaded document")).toBeInTheDocument();
     fireEvent.click(within(acceptedEvidence).getByText("View uploaded document"));
     expect(within(acceptedEvidence).getByTitle("Preview of current-register.pdf")).toHaveAttribute("src", "blob:accepted-evidence");
     expect(screen.getByText(/Supporting evidence has been accepted and remains visible below/i)).toBeInTheDocument();

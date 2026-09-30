@@ -83,6 +83,7 @@ const ROUTES = {
   "dossier-reseed.js": "dossier",
 
   "finalize-submissions.js": "cron",
+  "purge-trial-data.js": "cron",
 
   // Reached by the wizard before anyone has signed in. A credential needs the
   // session work in Batch 1; the rate limiter is what stands there today.
