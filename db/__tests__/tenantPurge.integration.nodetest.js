@@ -28,6 +28,10 @@ let root;
 const RUN = Date.now().toString(36);
 const A = `trial-purge-a-${RUN}`;
 const B = `trial-purge-b-${RUN}`;
+// A second pair for the attack that broke the first version: one workspace
+// building on another's shared data (Evidence allows this for public data).
+const D = `trial-purge-d-${RUN}`;
+const E = `trial-purge-e-${RUN}`;
 const COMPANY = { legalName: "PURGE TEST LIMITED", registrationNumber: `P${RUN}`.slice(0, 8).toUpperCase(), countryCode: "GB", countryName: "United Kingdom", ownershipType: "LIMITED_COMPANY" };
 
 async function count(sql, params) {
@@ -51,7 +55,9 @@ async function snapshot(tenantId) {
   return out;
 }
 
-async function seed(tenantId) {
+const COMPANY_DE = { ...COMPANY, legalName: "PURGE PAIR LIMITED", registrationNumber: `Q${RUN}`.slice(0, 8).toUpperCase() };
+
+async function seed(tenantId, company = COMPANY) {
   const { createCustomerOwnershipJobService } = require("../../evidence/customerOwnershipJobs/dependencies");
   const { FileArtifactStore } = require("../../evidence/a2/artifactStore");
   const { PocCaseService, PostgresPocCaseRepository } = require("../../ubo-control-lab/server/pocCaseState");
@@ -62,12 +68,12 @@ async function seed(tenantId) {
   const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x01, 0xff, 0xd9, ...Buffer.from(tenantId)]);
   const caseId = `purge-case-${tenantId}`;
   await deps.service.start({
-    demoContext: { demoCaseId: caseId, referenceCaseId: "ref", company: COMPANY },
+    demoContext: { demoCaseId: caseId, referenceCaseId: "ref", company },
     file: { originalFilename: "ownership.jpg", declaredMediaType: "image/jpeg", sizeBytes: bytes.length, contentBase64: bytes.toString("base64") },
   });
 
   const cases = new PocCaseService(new PostgresPocCaseRepository(db, tenantId));
-  await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company: COMPANY } });
+  await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company } });
   const trace = {
     updatedAt: new Date().toISOString(),
     verificationAssessment: {
@@ -97,7 +103,7 @@ before(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "tenant-purge-"));
   const log = console.info;
   console.info = () => {};
-  try { await seed(A); await seed(B); } finally { console.info = log; }
+  try { await seed(A); await seed(B); await seed(D, COMPANY_DE); await seed(E, COMPANY_DE); } finally { console.info = log; }
   ready = true;
 });
 
@@ -105,7 +111,9 @@ after(async () => {
   if (!db) return;
   if (ready) {
     // Leave nothing behind even if an assertion failed half-way.
-    for (const tenant of [A, B]) await purgeTenant(db, tenant).catch(() => {});
+    await db.query("DELETE FROM evidence_requirement_assets WHERE requirement_id IN (SELECT r.id FROM evidence_requirements r JOIN evidence_contexts c ON c.id = r.context_id WHERE c.tenant_id = $1)", [E]).catch(() => {});
+    await db.query("DELETE FROM evidence_requirements WHERE context_id IN (SELECT id FROM evidence_contexts WHERE tenant_id = $1)", [E]).catch(() => {});
+    for (const tenant of [A, B, D, E]) await purgeTenant(db, tenant).catch(() => {});
   }
   await db.close();
   if (root) fs.rmSync(root, { recursive: true, force: true });
@@ -129,7 +137,8 @@ test("deleting a workspace leaves none of its rows, and every other workspace in
   for (const [table, n] of Object.entries(await snapshot(A))) assert.strictEqual(n, 0, `${table} still holds rows of the deleted workspace`);
   assert.strictEqual(await count("SELECT count(*) n FROM tenants WHERE id = $1", [A]), 0, "the workspace's tenants row");
   assert.deepStrictEqual(await snapshot(B), beforeB, "another workspace lost data");
-  assert.ok(result.storageKeys.length >= 1, "the uploaded file's key is handed back so its bytes can be deleted");
+  assert.ok(result.files.length >= 1, "the uploaded file is handed back so its bytes can be deleted");
+  assert.ok(result.files.every((file) => file.key && file.provider), JSON.stringify(result.files));
   assert.strictEqual(await sharedSubjectCount(), 1, "a company record the other workspace still uses was deleted");
 });
 
@@ -138,6 +147,29 @@ test("the shared company record goes with the last workspace that used it", asyn
   await purgeTenant(db, B);
   for (const [table, n] of Object.entries(await snapshot(B))) assert.strictEqual(n, 0, `${table} still holds rows of the deleted workspace`);
   assert.strictEqual(await sharedSubjectCount(), 0);
+});
+
+test("another workspace's rows built on this workspace's data survive its deletion", async (t) => {
+  // The review that stopped the first version: Evidence lets one workspace use
+  // another's public data, so a row with no tenant of its own can belong to
+  // someone else. Reproduced here the way the reviewer did it - E links D's
+  // uploaded asset into an evidence requirement of E's own.
+  if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+  const q = async (sql, params) => (await db.query(sql, params)).rows;
+  const [dAsset] = await q(`SELECT a.id FROM evidence_assets a JOIN evidence_acquisitions ac ON ac.id = a.acquisition_id WHERE ac.tenant_id = $1 LIMIT 1`, [D]);
+  const [eContext] = await q("SELECT id, subject_reference_id FROM evidence_contexts WHERE tenant_id = $1 LIMIT 1", [E]);
+  const [eRequirement] = await q("INSERT INTO evidence_requirements (context_id, subject_reference_id, requirement_key, description) VALUES ($1, $2, 'purge-test', 'purge-test') RETURNING id", [eContext.id, eContext.subject_reference_id]);
+  await q("INSERT INTO evidence_requirement_assets (requirement_id, asset_id, associated_context_id) VALUES ($1, $2, $3)", [eRequirement.id, dAsset.id, eContext.id]);
+  const beforeE = await snapshot(E);
+
+  await purgeTenant(db, D);
+
+  assert.strictEqual(await count("SELECT count(*) n FROM evidence_requirements WHERE id = $1", [eRequirement.id]), 1, "E's own requirement was deleted with D");
+  assert.strictEqual(await count("SELECT count(*) n FROM evidence_requirement_assets WHERE requirement_id = $1", [eRequirement.id]), 1, "E's link was deleted with D");
+  assert.strictEqual(await count("SELECT count(*) n FROM evidence_assets WHERE id = $1", [dAsset.id]), 1, "the asset E still uses was deleted");
+  assert.deepStrictEqual(await snapshot(E), beforeE, "E lost data");
+  assert.strictEqual(await count("SELECT count(*) n FROM ubo_poc_cases WHERE tenant_id = $1", [D]), 0, "D's own case survived");
+  assert.strictEqual(await count("SELECT count(*) n FROM evidence_customer_extraction_jobs WHERE tenant_id = $1", [D]), 0, "D's own jobs survived");
 });
 
 test("a workspace id is required", async () => {

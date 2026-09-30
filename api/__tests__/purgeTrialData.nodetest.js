@@ -22,7 +22,7 @@ let runs;
 let saved;
 function handler() {
   return route.createHandler({
-    connect: () => ({ db: {}, artifactStore: {}, close: async () => {} }),
+    connect: () => ({ db: {}, deleteFile: async () => {}, close: async () => {} }),
     runTrialPurge: async (options) => { runs.push(options); return { deleted: [], failed: [], planned: [] }; },
   });
 }

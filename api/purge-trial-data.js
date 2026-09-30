@@ -15,10 +15,18 @@ const { verifyEnvBearer } = require("../lib/auth");
 const { runTrialPurge } = require("../lib/uboTrialPurge");
 
 function connect() {
+  const path = require("node:path");
   const { createPostgresDb } = require("../evidence/a2/postgresDb");
-  const { createArtifactStore } = require("../evidence/customerOwnershipJobs/dependencies");
+  const { FileArtifactStore, VercelBlobArtifactStore } = require("../evidence/a2/artifactStore");
   const db = createPostgresDb();
-  return { db, artifactStore: createArtifactStore(), close: () => db.close() };
+  // Each file is deleted from the store its row says it is in. A store this
+  // deployment cannot reach throws, and the file waits on the pending list.
+  const deleteFile = async ({ provider, key }) => {
+    if (provider === "vercel_blob" && process.env.BLOB_READ_WRITE_TOKEN) return new VercelBlobArtifactStore().delete(key);
+    if (provider === "filesystem" && process.env.EVIDENCE_ARTIFACT_DIR) return new FileArtifactStore(path.resolve(process.env.EVIDENCE_ARTIFACT_DIR)).delete(key);
+    throw Object.assign(new Error(`no store for ${provider}`), { code: "file_store_unavailable" });
+  };
+  return { db, deleteFile, close: () => db.close() };
 }
 
 function createHandler(deps = { connect, runTrialPurge }) {
@@ -29,11 +37,11 @@ function createHandler(deps = { connect, runTrialPurge }) {
     if (!process.env.DATABASE_URL && deps.connect === connect) return res.status(503).json({ error: "database_not_configured" });
 
     const dryRun = String(req.query?.dryRun || "") === "1";
-    const { db, artifactStore, close } = deps.connect();
+    const { db, deleteFile, close } = deps.connect();
     try {
-      const report = await deps.runTrialPurge({ db, artifactStore, dryRun });
+      const report = await deps.runTrialPurge({ db, deleteFile, dryRun });
       // Workspace ids only - no people, no company names - so it is safe to log.
-      console.info("[purge-trial-data]", JSON.stringify({ dryRun, deleted: report.deleted.map((w) => w.tenantId), failed: report.failed }));
+      console.info("[purge-trial-data]", JSON.stringify({ dryRun, disabled: Boolean(report.disabled), deleted: report.deleted.map((w) => w.tenantId), failed: report.failed, pendingFiles: report.pendingFiles }));
       return res.status(report.failed.length ? 500 : 200).json({ ok: report.failed.length === 0, dryRun, ...report });
     } finally {
       await close();
