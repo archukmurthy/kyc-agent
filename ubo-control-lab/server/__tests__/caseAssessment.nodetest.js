@@ -94,3 +94,10 @@ test("the case store keeps the server's assessment, not the one sent", async () 
   assert.deepStrictEqual(stored.assessment.trace.verificationAssessment.verificationPopulation.map((p) => p.personName), ["Alice Morgan"]);
   assert.strictEqual(stored.resolution.trace.verificationAssessment.finalized, false);
 });
+
+test("a date answer is a date a person could mean", () => {
+  const { validFor } = require("../caseAssessment");
+  const question = { type: "DATE" };
+  assert.strictEqual(validFor(question, "2026-09-12"), true);
+  for (const value of ["0000-01-01", "0999-12-31", "2026-9-12", "not a date"]) assert.strictEqual(validFor(question, value), false, value);
+});

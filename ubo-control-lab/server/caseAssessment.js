@@ -62,7 +62,9 @@ function validFor(question, value) {
     case QUESTION_TYPE.PERCENTAGE:
       return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
     case QUESTION_TYPE.DATE:
-      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
+      // Years 1000-9999: "0000-01-01" parses, and the database then refused
+      // it as the answer's effective date (review).
+      return typeof value === "string" && /^[1-9]\d{3}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
     case QUESTION_TYPE.SINGLE_SELECT:
     case QUESTION_TYPE.BOOLEAN:
     case QUESTION_TYPE.ENTITY_SELECT:

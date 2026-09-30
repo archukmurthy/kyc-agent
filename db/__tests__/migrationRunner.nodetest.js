@@ -131,3 +131,15 @@ test("a dollar-quoted function body stays one statement", () => {
   assert.strictEqual(statements.length, 3, JSON.stringify(statements));
   assert.match(statements[1], /^CREATE OR REPLACE FUNCTION f\(\)[\s\S]*END;\n\$\$ LANGUAGE plpgsql$/);
 });
+
+test("every script that applies migrations splits them the runner's way", () => {
+  // A copy of the old splitter in db/apply.js broke 029's trigger function
+  // into fragments and left the audit ledger unprotected (review).
+  const fs = require("node:fs");
+  const path = require("node:path");
+  for (const file of ["apply.js", "apply-idv.js"]) {
+    const source = fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+    assert.match(source, /require\("\.\/migrationRunner"\)/, `${file} must use the runner's statementsOf`);
+    assert.doesNotMatch(source, /\.split\(["'];["']\)/, `${file} splits on ; by itself`);
+  }
+});

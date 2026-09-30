@@ -48,7 +48,10 @@ export default function middleware(request) {
   const mode = (process.env.PRODUCT_MODE || "platform").toLowerCase();
   if (mode === "all") return undefined;
 
-  const { pathname } = new URL(request.url);
+  // Checked as a handler will read it: /api/%75bo-poc-case is /api/ubo-poc-case.
+  const raw = new URL(request.url).pathname;
+  let pathname = raw;
+  try { pathname = decodeURIComponent(raw); } catch (_) { /* keep the raw path */ }
   if (mode !== "ubo") {
     if (!UBO_OWN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return undefined;
     return notFound();

@@ -21,13 +21,9 @@ const MIGRATIONS = [
   "022_idv_vault", "023_idv_identity_events",
 ].map((n) => `db/migrations/${n}.sql`);
 
-function statementsOf(content) {
-  const stripped = content
-    .split("\n")
-    .map((line) => { const i = line.indexOf("--"); return i === -1 ? line : line.slice(0, i); })
-    .join("\n");
-  return stripped.split(";").map((s) => s.trim()).filter((s) => s.length > 0);
-}
+// The migration runner's splitter: one copy, so a $$-quoted body is kept whole
+// here too.
+const { statementsOf } = require("./migrationRunner");
 
 async function main() {
   const url = process.env.IDV_DATABASE_URL || process.env.DATABASE_URL;

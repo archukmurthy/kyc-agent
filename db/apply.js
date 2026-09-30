@@ -17,6 +17,7 @@ require("dotenv").config({ path: ".env.local" });
 const { neon } = require("@neondatabase/serverless");
 const fs = require("fs");
 const path = require("path");
+const { statementsOf } = require("./migrationRunner");
 
 async function apply() {
   const file = process.argv[2];
@@ -38,20 +39,10 @@ async function apply() {
   const sql = neon(process.env.DATABASE_URL);
   const content = fs.readFileSync(fullPath, "utf8");
 
-  // Strip `--` comments line-by-line FIRST (a `;` inside a comment would
-  // otherwise break the split), then split into statements on `;`.
-  const stripped = content
-    .split("\n")
-    .map((line) => {
-      const i = line.indexOf("--");
-      return i === -1 ? line : line.slice(0, i);
-    })
-    .join("\n");
-
-  const statements = stripped
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  // The runner's own splitter: comments stripped first, and a $$-quoted
+  // function body kept whole. A copy here split 029's trigger function into
+  // fragments and left the audit ledger unprotected (review).
+  const statements = statementsOf(content);
 
   console.log(`Applying ${file} — ${statements.length} statement(s)\n`);
 

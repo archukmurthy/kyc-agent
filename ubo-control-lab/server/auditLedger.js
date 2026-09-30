@@ -99,7 +99,7 @@ function eventsForCommand({ caseId, operation, before, after, payload = {}, oper
   const submitted = operation === "SUBMIT_ANSWER" ? after?.resolution?.submittedAnswer : null;
   if (submitted?.question?.id) {
     const { question, answer } = submitted;
-    const dated = question.type === "DATE" && typeof answer?.value === "string" && Number.isFinite(Date.parse(answer.value));
+    const dated = question.type === "DATE" && typeof answer?.value === "string" && /^[1-9]\d{3}-\d{2}-\d{2}$/.test(answer.value) && Number.isFinite(Date.parse(answer.value));
     add("CUSTOMER_ANSWER_RECEIVED", {
       relatedQuestionId: question.id,
       subject: question.id,
@@ -180,13 +180,13 @@ async function record(executor, tenantId, events) {
   }
 }
 
-/** A case's ledger, oldest first. */
+/** A case's ledger, oldest first - the most recent `limit` events of a long one. */
 async function list(executor, tenantId, caseId, limit = 1000) {
   const result = await executor.query(`SELECT event_id, actor_type, actor_id, event_type, occurred_at, received_at, recorded_at, effective_at,
       correlation_id, operation_id, related_assertion_id, related_artifact_id, related_assessment_id, related_question_id, reason_code, detail
-    FROM ubo_audit_events WHERE tenant_id = $1 AND case_id = $2 ORDER BY recorded_at, occurred_at, event_id LIMIT $3`, [tenantId, caseId, limit]);
+    FROM ubo_audit_events WHERE tenant_id = $1 AND case_id = $2 ORDER BY recorded_at DESC, occurred_at DESC, event_id DESC LIMIT $3`, [tenantId, caseId, limit]);
   const iso = (value) => (value instanceof Date ? value.toISOString() : value);
-  return (result?.rows || result || []).map((row) => ({
+  return (result?.rows || result || []).slice().reverse().map((row) => ({
     eventId: row.event_id,
     actorType: row.actor_type,
     actorId: row.actor_id,

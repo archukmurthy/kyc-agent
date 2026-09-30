@@ -27,7 +27,7 @@ import PeopleAdmin from "./people/PeopleAdmin";
 // this half only stops the screens rendering.
 const PRODUCT_MODE = (process.env.REACT_APP_PRODUCT_MODE || "platform").toLowerCase();
 const UBO_ONLY = PRODUCT_MODE === "ubo";
-const UBO_HIDDEN = PRODUCT_MODE === "platform";
+const UBO_HIDDEN = PRODUCT_MODE !== "ubo" && PRODUCT_MODE !== "all";
 
 // A customer page without a customer link is an analyst trying the view:
 // they go through the trial gate exactly as before.
