@@ -1,5 +1,6 @@
 "use strict";
 
+const { computeCaseAssessment } = require("./caseAssessment");
 const { completeIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { createHash } = require("node:crypto");
 
@@ -264,22 +265,15 @@ function projectCommand(current, operation, payload, release) {
     currentStage: "OWNERSHIP_COMPLETE",
   };
   if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"].includes(operation)) {
-    const incomingTrace = traceFrom({ assessment: payload.assessment, resolution: payload.resolution, researchResult: durableResearchResult });
-    const currentTrace = traceFrom(base);
-    const incomingTime = traceTime(incomingTrace);
-    const currentTime = traceTime(currentTrace);
-    const stale = incomingTime != null && currentTime != null && incomingTime < currentTime;
-    const incomingResolution = mergeResolution(base.resolution, payload.resolution);
-    const resolution = stale ? mergeResolution(incomingResolution, base.resolution) : incomingResolution;
-    const assessment = stale ? base.assessment : (payload.assessment || base.assessment);
-    const researchResult = stale ? base.researchResult : (durableResearchResult || base.researchResult);
-    const selectedTrace = traceFrom({ assessment, resolution, researchResult }) || currentTrace;
+    // Computed by the server from what it holds (caseAssessment.js), so it
+    // replaces what was stored rather than being merged with it: merging let
+    // answers the customer had withdrawn reappear, and there is no browser
+    // version to be "stale" against any more.
     return {
       ...base,
-      resolution,
-      assessment,
-      researchResult,
-      currentStage: stageFromTrace(selectedTrace, "QUESTIONS"),
+      resolution: payload.resolution,
+      assessment: payload.assessment,
+      currentStage: stageFromTrace(payload.assessment?.trace, "QUESTIONS"),
     };
   }
   if (operation === "COMPLETE_IDV") return {
@@ -336,6 +330,15 @@ class PostgresPocCaseRepository {
     const row = first(await this.db.query(`SELECT id, artifact_id, state, result, completed_at, demo_case_id, company
       FROM evidence_customer_extraction_jobs WHERE id = $1 AND tenant_id = $2`, [jobId, this.tenantId]));
     return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id, company: row.company } : null;
+  }
+
+  /** The server's extraction of an evidence file uploaded for this case. */
+  async evidenceResult(caseId, artifactId) {
+    if (!artifactId) return null;
+    const row = first(await this.db.query(`SELECT result FROM evidence_customer_extraction_jobs
+      WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3 AND state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL
+      ORDER BY completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    return row ? row.result : null;
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, payload, release }) {
@@ -515,6 +518,10 @@ function serverChartProjection(job, caseId) {
   }
 }
 
+// The operations whose resolution and assessment the server computes itself
+// (UBO-13): the browser's copy is only ever a source of the customer's answers.
+const SERVER_COMPUTED = new Set(["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"]);
+
 class PocCaseService {
   constructor(repository) { this.repository = repository; }
 
@@ -547,6 +554,17 @@ class PocCaseService {
       // The chart is the server's own extraction, never the copy the browser
       // sends back (UBO-13).
       incoming = { ...incoming, chartProjection: serverChartProjection(job, caseId) };
+    }
+    if (SERVER_COMPUTED.has(command.operation)) {
+      const record = await this.repository.get(caseId);
+      const computed = await computeCaseAssessment({
+        projection: record?.projection,
+        caseId,
+        operation: command.operation,
+        incoming,
+        findEvidenceResult: (artifactId) => (this.repository.evidenceResult ? this.repository.evidenceResult(caseId, artifactId) : null),
+      });
+      incoming = { resolution: computed.resolution, assessment: computed.assessment };
     }
     const payload = command.operation === "COMPLETE_IDV"
       ? await demoIdentityVerificationPayload(this.repository, caseId, incoming)

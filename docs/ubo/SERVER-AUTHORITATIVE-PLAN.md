@@ -56,3 +56,21 @@ Tests for each step: the server ignores a forged resolution/trace/assessment;
 a forged IDV completion is refused; a person outside the population cannot be
 verified; recomputation from stored inputs equals the engine's output for the
 same inputs.
+
+## Status - 2026-09-30
+
+1. Shared engines - done.
+2. Shared glue - done (caseResolution.js).
+3. Server recomputes - done. `ubo-control-lab/server/caseAssessment.js`;
+   research recorded by SAVE_RESEARCH alone; the chart is the server's own
+   extraction, re-evaluated on the server; answers merge per question, most
+   recent wins, so out-of-order requests cannot lose one.
+4. Evidence outcome on the server - done (from the evidence job the server
+   ran for that artifact and case).
+5. Identity verification - done (server-controlled demo mode, stored trace).
+6. Actor from the caller - done (at the route).
+7. Screens show the server's answer - partly: the identity-verification screen
+   shows the server's trace; the questions screen still renders its own
+   (identical) calculation while the server's is what is stored and what
+   decides finalising and verification. Making it render the returned trace
+   is a UI change, not a trust one.

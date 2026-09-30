@@ -66,6 +66,7 @@ run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence char
   "ubo-control-lab/server/__tests__/idvDemoMode.nodetest.js",
   "ubo-control-lab/server/__tests__/caseChartOwnership.nodetest.js",
   "ubo-control-lab/server/__tests__/serverAuthority.nodetest.js",
+  "ubo-control-lab/server/__tests__/caseAssessment.nodetest.js",
   "ubo-control-lab/server/__tests__/demoEntityMatching.nodetest.js",
   "agents/ubo/__tests__/recursiveCompaniesHouseExpansion.nodetest.js",
   "agents/ubo/__tests__/researchStability.nodetest.js",

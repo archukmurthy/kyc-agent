@@ -129,16 +129,29 @@ test("case actions are idempotent and survive a service restart", async () => {
   assert.equal(restored.projection.demoCase.company.name, "Example Limited");
 });
 
+// UBO-13: answers are computed on by the server from the case it holds, so
+// these cases carry real research and a real chart (fixtures/caseAssessmentFixture).
+const fixture = require("./fixtures/caseAssessmentFixture");
+const { computeCaseAssessment } = require("../caseAssessment.js");
+
+async function seededCase(repository, service, caseId) {
+  await service.apply({ operation: "UPSERT_CASE", caseId, idempotencyKey: `create-${caseId}`, payload: { company: fixture.company } });
+  const record = await repository.get(caseId);
+  repository.state.set(caseId, { ...record, projection: { ...record.projection, ...fixture.projection() } });
+  const { resolution } = await computeCaseAssessment({ projection: fixture.projection(), caseId, operation: "SYNC_RESOLUTION", incoming: {}, findEvidenceResult: async () => null });
+  return resolution.questions[0];
+}
+
 test("answer retries retain a single append-only action", async () => {
   const repository = new MemoryRepository();
   const service = new PocCaseService(repository);
-  await service.apply({ operation: "UPSERT_CASE", caseId: "case-2", idempotencyKey: "create-2", payload: { company: { name: "Example Limited" } } });
+  const question = await seededCase(repository, service, "case-2");
   const answer = {
     operation: "SUBMIT_ANSWER",
     caseId: "case-2",
     idempotencyKey: "answer:q1:no",
     actorType: "CUSTOMER",
-    payload: { resolution: { answers: { q1: { value: "NO" } } } },
+    payload: { resolution: { answers: { [question.id]: { value: "NO", answeredAt: "2026-09-30T10:00:00.000Z", comparisonItemId: question.comparisonItemId } }, submittedAnswer: { question: { id: question.id } } } },
   };
   await service.apply(answer);
   const drifted = await repository.get("case-2");
@@ -146,26 +159,20 @@ test("answer retries retain a single append-only action", async () => {
   const retry = await service.apply(answer);
   assert.equal(retry.duplicate, true);
   assert.equal((await repository.history("case-2")).filter(({ eventType }) => eventType === "SUBMIT_ANSWER").length, 1);
-  assert.deepEqual((await repository.get("case-2")).projection.resolution.answers, { q1: { value: "NO" } });
+  assert.equal((await repository.get("case-2")).projection.resolution.answers[question.id].value, "NO");
 });
 
-test("durable projection preserves submitted answers when an older sync completes later", () => {
-  const current = projectCommand({}, "SYNC_RESOLUTION", {
-    resolution: { answers: { q1: { value: 40 } }, trace: { updatedAt: "2026-09-28T10:00:02.000Z", discoveryState: "READY_FOR_IDV" } },
-    assessment: { trace: { updatedAt: "2026-09-28T10:00:02.000Z", discoveryState: "READY_FOR_IDV" } },
-  });
-  const restored = projectCommand(current, "SUBMIT_ANSWER", {
-    resolution: {
-      answers: {},
-      submittedAnswer: { question: { id: "q2" }, answer: { value: "YES" } },
-      trace: { updatedAt: "2026-09-28T10:00:01.000Z", discoveryState: "DISCOVERY_IN_PROGRESS" },
-    },
-    assessment: { trace: { updatedAt: "2026-09-28T10:00:01.000Z", discoveryState: "DISCOVERY_IN_PROGRESS" } },
-  });
-
-  assert.deepEqual(restored.resolution.answers, { q1: { value: 40 }, q2: { value: "YES" } });
-  assert.equal(restored.assessment.trace.discoveryState, "READY_FOR_IDV");
-  assert.equal(restored.currentStage, "READY_FOR_IDV");
+test("durable projection preserves submitted answers when an older sync completes later", async () => {
+  // Requests arrive out of order. The server merges answers and, per question,
+  // keeps the most recent - an older sync cannot take a newer answer away.
+  const repository = new MemoryRepository();
+  const service = new PocCaseService(repository);
+  const question = await seededCase(repository, service, "case-3");
+  const newer = { value: "NEWER", answeredAt: "2026-09-28T10:00:02.000Z", comparisonItemId: question.comparisonItemId };
+  const older = { value: "OLDER", answeredAt: "2026-09-28T10:00:01.000Z", comparisonItemId: question.comparisonItemId };
+  await service.apply({ operation: "SUBMIT_ANSWER", caseId: "case-3", idempotencyKey: "answer:newer", payload: { resolution: { answers: { [question.id]: newer }, submittedAnswer: { question: { id: question.id } } } } });
+  await service.apply({ operation: "SYNC_RESOLUTION", caseId: "case-3", idempotencyKey: "sync:older", payload: { resolution: { answers: { [question.id]: older } } } });
+  assert.equal((await repository.get("case-3")).projection.resolution.answers[question.id].value, "NEWER");
 });
 
 test("case restore removes repeated immutable analysis internals without losing graph or assessment facts", () => {

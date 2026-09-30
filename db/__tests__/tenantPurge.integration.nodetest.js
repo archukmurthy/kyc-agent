@@ -67,26 +67,23 @@ async function seed(tenantId, company = COMPANY) {
   const deps = createCustomerOwnershipJobService({ db, tenantId, artifactStore: new FileArtifactStore(root), provider: { configuration: () => ({ provider: "test", model: "test" }) } });
   const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x01, 0xff, 0xd9, ...Buffer.from(tenantId)]);
   const caseId = `purge-case-${tenantId}`;
-  await deps.service.start({
+  const job = await deps.service.start({
     demoContext: { demoCaseId: caseId, referenceCaseId: "ref", company },
     file: { originalFilename: "ownership.jpg", declaredMediaType: "image/jpeg", sizeBytes: bytes.length, contentBase64: bytes.toString("base64") },
   });
 
+  // Stands in for the paid extraction: the job finishes with a realistic chart.
+  const fx = require("../../ubo-control-lab/server/__tests__/fixtures/caseAssessmentFixture");
+  await db.query("UPDATE evidence_customer_extraction_jobs SET state = 'COMPLETE', result = $2::jsonb, completed_at = now() WHERE id = $1", [job.jobId, JSON.stringify(fx.chartResult(30, company))]);
   const cases = new PocCaseService(new PostgresPocCaseRepository(db, tenantId));
-  await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company } });
-  const trace = {
-    updatedAt: new Date().toISOString(),
-    verificationAssessment: {
-      assessmentVersionId: `av-${tenantId}`, inputStateVersion: "in-1", calculatedAt: new Date().toISOString(),
-      verificationPopulation: [{ personId: "alice", personName: "Alice", partyType: "NATURAL_PERSON", currentRequirementStatus: "REQUIRED", assessmentVersionId: `av-${tenantId}` }],
-    },
-    idvCompletionHistory: [],
-    auditEvents: [],
-  };
-  await cases.apply({ caseId, operation: "FINALIZE_ASSESSMENT", idempotencyKey: "f", actorType: "CUSTOMER", payload: { assessment: { assessmentId: `av-${tenantId}`, trace } } });
+  await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company, demoCase: { demoCaseId: caseId, company } } });
+  await cases.apply({ caseId, operation: "SAVE_RESEARCH", idempotencyKey: "r", actorType: "ANALYST", payload: { researchResult: fx.researchResult(25, company) } });
+  await cases.apply({ caseId, operation: "ASSOCIATE_CHART", idempotencyKey: "c", actorType: "CUSTOMER", payload: { chartReference: { jobId: job.jobId } } });
+  const synced = await cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s", actorType: "CUSTOMER", payload: {} });
+  const person = synced.projection.assessment.trace.verificationAssessment.verificationPopulation[0];
   const mode = process.env.UBO_POC_IDV_MODE;
   process.env.UBO_POC_IDV_MODE = "DEMO";
-  try { await cases.apply({ caseId, operation: "COMPLETE_IDV", idempotencyKey: "i", actorType: "CUSTOMER", payload: { personId: "alice" } }); }
+  try { await cases.apply({ caseId, operation: "COMPLETE_IDV", idempotencyKey: "i", actorType: "CUSTOMER", payload: { personId: person.personId } }); }
   finally { if (mode === undefined) delete process.env.UBO_POC_IDV_MODE; else process.env.UBO_POC_IDV_MODE = mode; }
 }
 

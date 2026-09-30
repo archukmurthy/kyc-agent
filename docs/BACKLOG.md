@@ -718,7 +718,7 @@ not lost with it:
 
 ### UBO-13 - The server trusts what the browser says
 - **Progress (2026-09-30):** identity verification is decided on the server - demo mode must be switched on (`UBO_POC_IDV_MODE=DEMO`, unset refuses), the person must be in the stored assessment, the server applies the completion to its own stored trace and records `DEMO - not verified`. The rest (research, chart, resolution) is plan steps 3-7.
-- **Category:** Security / correctness - **Priority:** P0 - **Status:** OPEN
+- **Category:** Security / correctness - **Priority:** P0 - **Status:** DONE (2026-09-30) - the server computes the resolution and assessment from its own research, chart and evidence results; see docs/ubo/SERVER-AUTHORITATIVE-PLAN.md (Status). The remaining UI step 7 is not a trust issue.
 - **What:** the assessment, the questions, IDV completion and `actorType` are all supplied by the browser and stored as sent. Decided: calculations move to the server; IDV completion is recorded only when the server's mode allows it.
 
 ### UBO-14 - Two `fetchWithTimeout` helpers with different signatures
@@ -803,6 +803,6 @@ not lost with it:
 - **What:** `api/evidence/a2-collect.js` reads `tenantId` from the body with no caller check, and `src/setupProxy.js` mounts it under `npm start`. Production refuses `/api/evidence` (vercel.json, .vercelignore), so it is development only - but anyone reaching a dev server can write Evidence rows under any workspace, including a trial one, and so change what the trial purge sees. Found by the third purge review.
 
 ### UBO-27 - Customer links: built and reviewed; real customers wait for UBO-13
-- **Category:** Security - **Priority:** P0 - **Status:** OPEN - RELEASE BLOCKER for real customers (testers are fine)
+- **Category:** Security - **Priority:** P0 - **Status:** UNBLOCKED (2026-09-30) - UBO-13 is done: the server computes what the customer's browser used to. Before real customers: an adversarial review of the server calculation, and a browser QA pass of the full customer journey.
 - **Built (2026-09-30):** signed, recipient-bound, 30-day (max 90), withdrawable links; Clerk's emailed code proves the recipient; an 8-hour session bound to that Clerk user and one case; customers limited to customer steps on their own case, their own chart jobs, and only a case that exists; staff routes refuse customer sessions. Adversarial review found and we fixed: a trial user escaping their budget through the customer bucket (HIGH), the shared-computer session pickup, withdrawal failing without shared storage, the link-length setting undoing withdrawals, links outliving deleted cases, a chart job of another case attachable to this one.
 - **Why real customers must wait:** on the partner's flow the customer's browser computes the research trace, the questions and the assessment (who needs identity verification, finalised or not) and the server stores what it is sent (review HIGH, reproduced). A customer could send a forged assessment. That is UBO-13 step 3 (server keeps its own research and chart copies and recomputes), which comes next. Testers are invited staff, playing with their own data.
