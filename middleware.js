@@ -2,7 +2,8 @@
  * One guard in front of every request.
  *
  * A deployment with PRODUCT_MODE=ubo serves the ownership review module and
- * nothing else. Hiding screens in the browser stops nobody - anyone can type
+ * nothing else; the default (the KYC app) serves none of UBO's own pages or
+ * endpoints; PRODUCT_MODE=all serves both (see lib/productMode.js). Hiding screens in the browser stops nobody - anyone can type
  * /admin, or post to an API route directly - so the refusal happens here,
  * before any handler runs.
  *
@@ -36,19 +37,29 @@ const UBO_PATHS = [
 
 const ALWAYS = ["/static", "/favicon", "/manifest", "/robots", "/asset-manifest", "/index.html", "/__clerk"];
 
+const UBO_OWN_PREFIXES = ["/ubo-", "/api/ubo-", "/api/purge-trial-data"];
+
 export const config = {
   // Everything except Vercel's own internals.
   matcher: ["/((?!_next|_vercel).*)"],
 };
 
 export default function middleware(request) {
-  if ((process.env.PRODUCT_MODE || "platform").toLowerCase() !== "ubo") return undefined;
+  const mode = (process.env.PRODUCT_MODE || "platform").toLowerCase();
+  if (mode === "all") return undefined;
 
   const { pathname } = new URL(request.url);
+  if (mode !== "ubo") {
+    if (!UBO_OWN_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return undefined;
+    return notFound();
+  }
   if (pathname === "/") return undefined;
   if (ALWAYS.some((prefix) => pathname.startsWith(prefix))) return undefined;
   if (UBO_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return undefined;
+  return notFound();
+}
 
+function notFound() {
   // Deliberately a plain 404 with no explanation. A deployment that says "this
   // exists but is disabled here" tells a stranger what else to look for.
   return new Response(JSON.stringify({ error: "not_found" }), {

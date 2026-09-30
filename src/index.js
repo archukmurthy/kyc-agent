@@ -20,10 +20,14 @@ import CustomerGate from "./uboDemo/customer/CustomerGate";
 import TrialAdmin from "./trials/TrialAdmin";
 import PeopleAdmin from "./people/PeopleAdmin";
 
-// One codebase, two products. A deployment built with REACT_APP_PRODUCT_MODE=ubo
-// shows the ownership review module and nothing else. The server refuses the
-// rest as well (middleware.js) - this half only stops the screens rendering.
-const UBO_ONLY = (process.env.REACT_APP_PRODUCT_MODE || "platform").toLowerCase() === "ubo";
+// One codebase, two products (lib/productMode.js). A deployment built with
+// REACT_APP_PRODUCT_MODE=ubo shows the ownership review module and nothing
+// else; the default - the KYC app - shows none of it (UBO-38); "all" shows both,
+// for local development. The server refuses the same paths (middleware.js) -
+// this half only stops the screens rendering.
+const PRODUCT_MODE = (process.env.REACT_APP_PRODUCT_MODE || "platform").toLowerCase();
+const UBO_ONLY = PRODUCT_MODE === "ubo";
+const UBO_HIDDEN = PRODUCT_MODE === "platform";
 
 // A customer page without a customer link is an analyst trying the view:
 // they go through the trial gate exactly as before.
@@ -50,7 +54,11 @@ document.body.classList.toggle("policy-simulator-page", isPolicySimulator);
 // The UBO surfaces sit behind a Clerk login. ClerkGate is inert until
 // REACT_APP_CLERK_PUBLISHABLE_KEY is set, so these render unchanged until the
 // keys land - the same switch the API uses with CLERK_SECRET_KEY.
-if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
+if (UBO_HIDDEN && path.startsWith("/ubo-")) {
+  // The KYC app does not have the ownership review; the same plain page as any
+  // other unknown address.
+  tree = <KYCAgent />;
+} else if (path === "/ubo-trials" || path.startsWith("/ubo-trials/")) {
   // Owner-only screen for creating trial links. Hiding it is convenience; the
   // check that matters is in api/ubo-invite.js, on every call.
   tree = <ClerkGate><TrialAdmin /></ClerkGate>;
