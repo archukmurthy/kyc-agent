@@ -837,7 +837,7 @@ not lost with it:
 - **Category:** Product - **Priority:** P0 (P0 row 9) - **Status:** WAITING on the partner - row 9 of her list is called "Policy mode" in our paraphrase, and nothing written says what it requires. The code has a named rulebook (UK corporate UBO, version 1.0) and three calculation methods; her lab shows a test and a real label. Asked (via the owner): which rules apply (25% or 10%), old cases keeping old rules, a test/live switch, who may change it - and the 16 rows as text.
 
 ### UBO-35 - See and safely retry a failed job
-- **Category:** Support - **Priority:** P0 (P0 rows 5 and 16) - **Status:** IN PROGRESS (2026-09-30) - chart-reading jobs are durable, but a failed one can be neither inspected nor retried from any screen.
+- **Category:** Support - **Priority:** P0 (P0 rows 5 and 16) - **Status:** DONE (2026-09-30) - the analyst Audit page lists the workspace's failed readings and stuck ones (running past their lease, or waiting 10 minutes past their next attempt) with the reason, attempts and reference - never the document or what was read from it - and tries them again. Staff only (`LIST_JOBS_NEEDING_ATTENTION`, 404 for a customer, free bucket). A retry that queues the job again now counts as one of the demo's chart uploads, for customers too - before, it was checked against the total but never added to it.
 
 ### UBO-36 - Delete buyers' data after seven years
 - **Category:** Retention - **Priority:** P1 - **Status:** DEFERRED (owner, 2026-09-30) - the seven-year rule is stamped on every record (`lib/uboRetention.js`) but nothing deletes when it runs out. Distinct from UBO-RET-1 (making the period configurable) and from UBO-26 (non-buyers, done).

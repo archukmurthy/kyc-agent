@@ -132,3 +132,38 @@ test("a customer follows only their own case's jobs, checked before anything run
   await handler({ method: "POST", headers: {}, body: { operation: "PROCESS_EXTRACTION_JOB", jobId: "job-1" } }, own);
   assert.strictEqual(own.statusCode, 200);
 });
+
+// UBO-35: support sees failed and stuck jobs, and a retry is paid for.
+function supportHandler(actor, service, recorded) {
+  return route.createHandler(null, undefined, () => ({ service, close: async () => {} }), {
+    applyCors: () => false,
+    enforceRateLimit: async (req, res, bucket) => { recorded.buckets.push(bucket); return true; },
+    requireUboCaller: async () => actor,
+    demoAllowance: { record: async (bucket) => { recorded.spent.push(bucket); } },
+  });
+}
+
+test("staff see the jobs needing attention; a customer cannot list them", async () => {
+  const recorded = { buckets: [], spent: [] };
+  const service = { needingAttention: async () => [{ jobId: "job-9", state: "FAILED" }], ownedByCase: async () => true };
+  const res = fakeRes();
+  await supportHandler({ kind: "staff", tenantId: "acme", role: "analyst" }, service, recorded)({ method: "POST", headers: {}, body: { operation: "LIST_JOBS_NEEDING_ATTENTION" } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: "job-9", state: "FAILED" }]);
+  assert.deepStrictEqual(recorded.buckets, ["ubo-demo-chart-status"], "listing spends nothing");
+  const customer = fakeRes();
+  await supportHandler({ kind: "customer", tenantId: "acme", caseId: "case-1" }, service, recorded)({ method: "POST", headers: {}, body: { operation: "LIST_JOBS_NEEDING_ATTENTION" } }, customer);
+  assert.strictEqual(customer.statusCode, 404);
+});
+
+test("a retry that runs the reading again counts toward the demo's uploads; one that does nothing does not", async () => {
+  const recorded = { buckets: [], spent: [] };
+  let queued = true;
+  const service = { retry: async () => ({ jobId: "job-9", state: queued ? "QUEUED" : "COMPLETE", retried: queued }), ownedByCase: async () => true };
+  const handler = supportHandler({ kind: "staff", tenantId: "acme", role: "analyst" }, service, recorded);
+  await handler({ method: "POST", headers: {}, body: { operation: "RETRY_EXTRACTION_JOB", jobId: "job-9" } }, fakeRes());
+  queued = false;
+  await handler({ method: "POST", headers: {}, body: { operation: "RETRY_EXTRACTION_JOB", jobId: "job-9" } }, fakeRes());
+  assert.deepStrictEqual(recorded.spent, ["ubo-demo-chart"]);
+  assert.deepStrictEqual(recorded.buckets, ["ubo-demo-chart", "ubo-demo-chart"], "a retry is checked against the paid limit");
+});

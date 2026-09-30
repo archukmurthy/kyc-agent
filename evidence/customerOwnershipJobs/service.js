@@ -186,11 +186,34 @@ class CustomerOwnershipExtractionJobService {
     return publicJob(job);
   }
 
+  /** Retries a failed job. `retried` says whether it was queued again - the
+   *  reading, and its cost, happen again only then. */
   async retry(jobId) {
     const job = await this.repository.retryFailed({ id: jobId, tenantId: this.tenantId, correlationId: `customer-chart:${randomUUID()}` });
-    if (!job) return this.status(jobId);
+    if (!job) return { ...(await this.status(jobId)), retried: false };
     console.info("[ubo-customer-extraction] job-retry", { jobId: job.id, correlationId: job.correlationId });
-    return publicJob(job);
+    return { ...publicJob(job), retried: true };
+  }
+
+  /** What support needs to see about failed and stuck jobs (UBO-35) - never
+   *  the document, nor what was read from it. */
+  async needingAttention() {
+    const jobs = await this.repository.needingAttention({ tenantId: this.tenantId });
+    return jobs.map((job) => ({
+      jobId: job.id,
+      state: job.state,
+      stuck: job.state !== "FAILED",
+      kind: job.evidenceHandoff ? "SUPPORTING_EVIDENCE" : "OWNERSHIP_CHART",
+      caseId: job.demoCaseId,
+      company: job.company?.legalName || null,
+      attempts: job.attemptCount,
+      maxAttempts: job.maxAttempts,
+      reasonCode: job.lastReasonCode || null,
+      reason: job.lastReasonMessage || null,
+      upstreamStatus: job.upstreamStatus,
+      correlationId: job.correlationId,
+      updatedAt: job.updatedAt,
+    }));
   }
 
   async process(jobId) {

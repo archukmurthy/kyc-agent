@@ -50,6 +50,7 @@ class MemoryJobs {
   async markRetry({ id, code, message, upstreamStatus, nextAttemptAt }) { const job = this.jobs.get(id); Object.assign(job, { state: "RETRYING", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, nextAttemptAt }); return structuredClone(job); }
   async completeJob({ id, state, result }) { const job = this.jobs.get(id); Object.assign(job, { state, result: structuredClone(result), completedAt: new Date().toISOString() }); return structuredClone(job); }
   async failJob({ id, code, message, upstreamStatus }) { const job = this.jobs.get(id); Object.assign(job, { state: "FAILED", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, completedAt: new Date().toISOString() }); return structuredClone(job); }
+  async needingAttention({ tenantId }) { (this.attentionAskedFor ||= []).push(tenantId); return [...this.jobs.values()].filter((job) => job.state === "FAILED").map((job) => structuredClone(job)); }
   async retryFailed({ id, correlationId }) { const job = this.jobs.get(id); if (job?.state !== "FAILED") return null; Object.assign(job, { state: "QUEUED", attemptCount: 0, correlationId, completedAt: null, nextAttemptAt: null }); return structuredClone(job); }
 }
 
@@ -166,4 +167,33 @@ test("double-click start does not duplicate Artifact, job, Fact set or graph", a
   const first = await h.service.start(input()); const second = await h.service.start(input());
   assert.equal(second.jobId, first.jobId); await h.service.process(first.jobId); await h.service.process(second.jobId);
   assert.equal(h.ingestion.operations.size, 1); assert.equal(h.repository.jobs.size, 1); assert.equal(h.calls(), 1);
+});
+
+// UBO-35: support can see what failed or stuck, and retry it safely.
+test("jobs needing attention are listed with what support needs, and nothing of the document", async () => {
+  const { service, repository } = harness([failure("provider_unavailable", 502)]);
+  const started = await service.start(input());
+  await processToTerminal(service, started.jobId);
+  const list = await service.needingAttention();
+  assert.equal(list.length, 1);
+  const [item] = list;
+  assert.equal(item.jobId, started.jobId);
+  assert.equal(item.state, "FAILED");
+  assert.equal(item.caseId, "case-1");
+  assert.equal(item.company, "POC LIMITED");
+  assert.equal(item.kind, "OWNERSHIP_CHART");
+  assert.ok(item.reasonCode);
+  for (const key of ["result", "contentBase64", "file", "artifactSha256", "cacheKey"]) assert.equal(item[key], undefined, `${key} must not be listed`);
+  assert.ok(repository.attentionAskedFor.every((tenantId) => tenantId === "test-tenant"), "only this workspace's jobs");
+});
+
+test("a retry says whether it actually queued the job again", async () => {
+  const { service } = harness([failure("provider_unavailable", 502)]);
+  const started = await service.start(input());
+  const failed = await processToTerminal(service, started.jobId);
+  assert.equal(failed.state, "FAILED");
+  const retried = await service.retry(started.jobId);
+  assert.equal(retried.retried, true);
+  const again = await service.retry(started.jobId);
+  assert.equal(again.retried, false, "a job that is not failed is not retried, and nothing more is spent");
 });

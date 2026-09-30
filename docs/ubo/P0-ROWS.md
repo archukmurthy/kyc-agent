@@ -32,10 +32,10 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 | 2 | Organisations and roles | **Done** (2026-09-22) | `/ubo-people`, `api/ubo-people.js`. Owner / admin / analyst enforced server-side; a customer is a session on one case, never a role. |
 | 3 | Tenant isolation | **Done** (2026-09-30) | Every UBO row and job is scoped to its workspace, a customer to one case; a trial purge proves no other workspace is touched before it deletes. |
 | 4 | Database / persistence | **Partly** | Her tables (`021_ubo_poc_case_state.sql`, Evidence jobs) are merged, with a `tenants` table they needed. Left: creating them in the demo's database (UBO-19, UBO-39). |
-| 5 | Durable jobs | **Partly** | Chart-reading jobs are durable and resumable. Left: inspecting and retrying a failed one (UBO-35). |
+| 5 | Durable jobs | **Done** (2026-09-30) | Chart-reading jobs are durable and resumable; failed and stuck ones are listed for support and retried safely, a retry counted as the upload it pays for (UBO-35). |
 | 6 | Evidence upload | **Done** (2026-09-30) | Her flow; the server now decides from its own reading of each upload, made as evidence for that request. |
 | 7 | Questions | **Done** (2026-09-30) | Her flow; the server raises the questions and checks every answer (UBO-13, four adversarial reviews). |
-| 8 | Analyst review | **Partly** | Her analyst view; the server has an analyst-only reopen. Left: the reopen button (UBO-29). |
+| 8 | Analyst review | **Done** (2026-09-30) | Her analyst view, and a finalised review reopened from it by the analyst only (UBO-29). |
 | 9 | Policy mode | **Waiting on the partner** | A named rulebook and three calculation methods exist; what the row requires is not written anywhere (UBO-34). |
 | 10 | Audit history | **Partly** | Case events and the calculation's own events are kept. Left: one append-only ledger (UBO-33). |
 | 11 | Observability | **Done bar the alarm** (2026-09-22) | `lib/requestLog.js`, `GET /api/health`, and `api/ubo-poc-health.js` behind its own key. Left: somewhere for failures to raise an alarm (GOLIVE-6). |
@@ -43,18 +43,17 @@ way `CLAUDE.md` is updated — a stale status here is worse than none.
 | 13 | Retention | **Partly** | The seven-year rule is stamped on every record; non-buyers' trial data is truly deleted 90 days after the trial (UBO-26). Left, deferred by the owner: deleting buyers' data after seven years (UBO-36). |
 | 14 | Provider controls | **Done** | Timeouts and ceilings (2026-09-22); the public demo adds shared totals of 25 research runs and 25 chart uploads. |
 | 15 | Security regression tests | **Done** | The attack suite, and for the UBO demo the server-authority and customer-link attacks - every review finding is a test. |
-| 16 | Admin and support basics | **Partly** | People and trial screens, and "Mark as customer". Left: failed jobs (UBO-35). |
+| 16 | Admin and support basics | **Done** (2026-09-30) | People and trial screens, "Mark as customer", and failed or stuck document readings seen and retried (UBO-35). |
 
 ## The count
 
-As at 2026-09-30: **eight rows done** (2, 3, 6, 7, 14, 15, and 1 and 11 bar a setting
-the owner controls). **Seven partly** (4, 5, 8, 10, 13, 16, and 9 waiting on the
+As at 2026-09-30: **eleven rows done** (2, 3, 5, 6, 7, 8, 14, 15, 16, and 1 and 11 bar
+a setting the owner controls). **Four partly** (4, 10, 13, and 9 waiting on the
 partner's definition). **One not started** (12, which needs the demo's database).
 
 As at 2026-09-22 it was five done, three partly and eight waiting.
 
-What is left splits three ways: code we are building now (rows 5, 8, 10, 16 -
-UBO-29, UBO-33, UBO-35); things that need the demo's Vercel project and database
+What is left splits three ways: code we are building now (row 10 - UBO-33); things that need the demo's Vercel project and database
 (rows 4 and 12 - UBO-39, UBO-19, UBO-32); and one row waiting on the partner's
 definition (row 9 - UBO-34). Row 13's last part is deferred by the owner (UBO-36).
 

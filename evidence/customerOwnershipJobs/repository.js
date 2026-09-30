@@ -150,6 +150,16 @@ class PostgresCustomerExtractionJobRepository {
     return mapJob(rows(result)[0]);
   }
 
+  /** Failed jobs, and jobs that stopped moving: running past their lease, or
+   *  waiting well past their next attempt. This workspace's only. */
+  async needingAttention({ tenantId, limit = 50 }) {
+    const result = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
+      WHERE tenant_id=$1 AND (state='FAILED' OR (state='RUNNING' AND lease_expires_at<NOW())
+        OR (state IN ('QUEUED','RETRYING') AND COALESCE(next_attempt_at, updated_at) < NOW() - INTERVAL '10 minutes'))
+      ORDER BY updated_at DESC LIMIT $2`, [tenantId, limit]);
+    return rows(result).map(mapJob);
+  }
+
   async health() {
     const result = await this.db.query(`SELECT
       COUNT(*) FILTER (WHERE state IN ('QUEUED','RETRYING'))::int queued,

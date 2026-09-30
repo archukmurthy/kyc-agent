@@ -18,6 +18,7 @@ import CustomerLinkPanel from "./CustomerLinkPanel";
 import AnalystInvestigationTopics from "./AnalystInvestigationTopics";
 import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
+import JobsNeedingAttention from "./JobsNeedingAttention";
 import { clearActivePocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
 import "./uboDemo.css";
 
@@ -516,5 +517,5 @@ export default function UboDemoRoot() {
   else if (researchResult?.status === "FAILED" || researchError) content = <ResearchError error={researchError || researchResult?.error || "Research failed."} result={researchResult} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
   else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} prepareCustomerLink={prepareCustomerLink} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
   else content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
-  return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{content}<DemoFooter pathname={pathname} /></div>;
+  return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{content}{audit && <JobsNeedingAttention />}<DemoFooter pathname={pathname} /></div>;
 }

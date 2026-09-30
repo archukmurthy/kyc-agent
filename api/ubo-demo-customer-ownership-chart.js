@@ -18,7 +18,7 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
     // re-evaluating a saved result are not, and one upload polls up to twelve
     // times - they used to spend the paid hourly limit and the trial's budget.
     const operation = req.body?.operation;
-    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION"].includes(operation);
+    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION"].includes(operation);
     if (!(await gates.enforceRateLimit(req, res, paid ? "ubo-demo-chart" : "ubo-demo-chart-status"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
@@ -45,6 +45,13 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
       dependencies = jobFactory({ tenantId });
 
+      // Support's view of the workspace's failed and stuck jobs (UBO-35): staff
+      // only - a customer sees their own case's jobs and nothing else.
+      if (body.operation === "LIST_JOBS_NEEDING_ATTENTION") {
+        if (actor.kind === "customer") return res.status(404).json({ success: false, code: "not_found" });
+        return res.status(200).json({ success: true, jobs: await dependencies.service.needingAttention() });
+      }
+
       // A customer's session names one case: uploads only for it, and only its
       // jobs - checked before a job is processed or retried, not after.
       if (actor.kind === "customer") {
@@ -57,7 +64,12 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       let job;
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);
-      else if (body.operation === "RETRY_EXTRACTION_JOB") job = await dependencies.service.retry(body.jobId);
+      else if (body.operation === "RETRY_EXTRACTION_JOB") {
+        job = await dependencies.service.retry(body.jobId);
+        // A retry reads the document again, and pays again: one of the demo's
+        // uploads, as the first reading was. Checked with the paid limit above.
+        if (job?.retried) await gates.demoAllowance.record("ubo-demo-chart");
+      }
       else {
         // A trial workspace has no tenants row until its first write.
         if (dependencies.db) await ensureTenantRow(dependencies.db, tenantId);
