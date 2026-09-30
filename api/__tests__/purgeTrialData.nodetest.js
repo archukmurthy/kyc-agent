@@ -23,7 +23,7 @@ let saved;
 function handler() {
   return route.createHandler({
     connect: () => ({ db: {}, deleteFile: async () => {}, close: async () => {} }),
-    runTrialPurge: async (options) => { runs.push(options); return { deleted: [], failed: [], planned: [] }; },
+    runTrialPurge: async (options) => { runs.push(options); return { deleted: [], blocked: [], failed: [], planned: [] }; },
   });
 }
 beforeEach(() => { runs = []; saved = process.env.CRON_SECRET; });

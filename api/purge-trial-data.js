@@ -41,7 +41,7 @@ function createHandler(deps = { connect, runTrialPurge }) {
     try {
       const report = await deps.runTrialPurge({ db, deleteFile, dryRun });
       // Workspace ids only - no people, no company names - so it is safe to log.
-      console.info("[purge-trial-data]", JSON.stringify({ dryRun, disabled: Boolean(report.disabled), deleted: report.deleted.map((w) => w.tenantId), failed: report.failed, pendingFiles: report.pendingFiles }));
+      console.info("[purge-trial-data]", JSON.stringify({ dryRun, disabled: Boolean(report.disabled), deleted: report.deleted.map((w) => w.tenantId), blocked: report.blocked.map((w) => w.tenantId), failed: report.failed, pendingFiles: report.pendingFiles }));
       return res.status(report.failed.length ? 500 : 200).json({ ok: report.failed.length === 0, dryRun, ...report });
     } finally {
       await close();

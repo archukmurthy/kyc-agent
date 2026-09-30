@@ -12,29 +12,35 @@
  * rows have no tenant_id - they belong to a workspace through chains of keys.
  * A hand-written table list would be wrong the day a table is added.
  *
- * THE RULE, learnt the hard way (the first version deleted another workspace's
- * rows, caught in review before it shipped): a row with no tenant of its own is
- * NOT necessarily this workspace's. Evidence deliberately shares public data -
- * a Companies House filing one workspace collected can be used by another. So:
+ * THE RULE: ALL OR NOTHING. Two adversarial reviews showed that "delete my
+ * part, keep what others use" cannot be done safely here: a row with no
+ * tenant_id is not necessarily this workspace's (Evidence shares public data
+ * between workspaces), and keeping a shared row while deleting what hangs
+ * below it still guts it. Ownership is not written down, so it is not guessed:
  *
  *   MINE   = rows with tenant_id = this workspace, and every row reachable
- *            from them by following foreign keys downward (child -> parent),
- *            never crossing into a row that has another tenant_id.
- *   OTHERS = the same walk from every OTHER workspace's rows.
- *   DELETE = MINE minus OTHERS, then minus anything a surviving row still
- *            points at (by foreign key, or by text in a sealed evidence
- *            package), repeated until nothing changes.
+ *            from them by foreign keys downward, never crossing into a row
+ *            that has another tenant_id.
+ *   OTHERS = the same walk from every other workspace's rows.
  *
- * What survives is data another workspace built on - public company data, not
- * the tester's own. Two tables are shared by design and have no owner at all
- * (SHARED_TABLES): their rows go only once nothing references them.
+ * If ANY other workspace touches MINE - a row in both walks, a row outside
+ * MINE whose foreign key points into it, or a sealed evidence package naming
+ * a row of it (by "<type>:<id>" text, no foreign key) - NOTHING is deleted
+ * and the result says blocked, with the reasons, for a person to look at. In
+ * the demo's own flow a workspace's Evidence rows come from its private chart
+ * uploads, which no other workspace can use, so blocked should be rare - and
+ * when it happens it is seen, not silently half-done.
+ *
+ * Otherwise every row of MINE goes, then the rows of the two shared-by-design
+ * tables (SHARED_TABLES) that nothing references any more, then the tenants
+ * row.
  *
  * Runs at REPEATABLE READ, so every statement sees one snapshot: row addresses
  * (ctid) cannot be recycled under it, and a concurrent change to a row being
  * deleted fails the transaction instead of deleting something else.
  *
- * Returns what was (or on a dry run, would be) deleted per table, what was kept
- * because others use it, and the uploaded files - { provider, key } - whose
+ * Returns blocked (with how others touch it) or what was (on a dry run, would
+ * be) deleted per table, and the uploaded files - { provider, key } - whose
  * bytes live outside the database. The caller deletes those AFTER this commits,
  * and only if no row still names them.
  */
@@ -126,30 +132,43 @@ function unreferenced(table, fks) {
     .join(" AND ") || "TRUE";
 }
 
-/** Takes out of the delete set anything a surviving row still needs, until stable. */
-async function keepWhatOthersUse(client, fks, idTables, hasPackages) {
-  const survivor = (table, alias) => `NOT EXISTS (SELECT 1 FROM purge_delete x WHERE x.tbl = '${table}' AND x.rid = ${alias}.ctid)`;
-  for (let removed = 1; removed > 0;) {
-    removed = 0;
-    const deleting = new Set((await client.query("SELECT DISTINCT tbl FROM purge_delete")).rows.map((r) => r.tbl));
-    const needed = fks.filter((f) => deleting.has(f.parent)).map((fk) => `SELECT '${fk.parent}'::text AS tbl, p.ctid AS rid
-      FROM ${q(fk.parent)} p JOIN purge_delete d ON d.tbl = '${fk.parent}' AND d.rid = p.ctid
-      WHERE EXISTS (SELECT 1 FROM ${q(fk.child)} c WHERE ${cols("c", fk.childCols)} = ${cols("p", fk.parentCols)} AND ${survivor(fk.child, "c")})`);
-    // Sealed evidence packages name their members by text, with no foreign key.
-    if (hasPackages) {
-      for (const table of [...deleting].filter((t) => idTables.has(t))) {
-        needed.push(`SELECT '${table}'::text AS tbl, t.ctid AS rid
-          FROM ${q(table)} t JOIN purge_delete d ON d.tbl = '${table}' AND d.rid = t.ctid
-          WHERE t.id::text IN (SELECT m.canonical_member_reference FROM evidence_package_members m WHERE ${survivor("evidence_package_members", "m")})`);
-      }
-    }
-    if (!needed.length) break;
-    const result = await client.query(`DELETE FROM purge_delete d WHERE (d.tbl, d.rid) IN (${needed.join(" UNION ")})`);
-    removed = result.rowCount || 0;
+/** How other workspaces touch MINE. Any non-zero answer blocks the purge. */
+async function foreignTouches(client, fks, idTables, hasPackages) {
+  const touches = {};
+  const overlap = await client.query(`SELECT m.tbl, count(*)::int AS n FROM purge_marks m WHERE m.tag = 'mine'
+    AND EXISTS (SELECT 1 FROM purge_marks o WHERE o.tag = 'others' AND o.tbl = m.tbl AND o.rid = m.rid) GROUP BY m.tbl`);
+  for (const row of overlap.rows) touches[`shared:${row.tbl}`] = row.n;
+
+  const mineTables = new Set((await client.query("SELECT DISTINCT tbl FROM purge_marks WHERE tag = 'mine'")).rows.map((r) => r.tbl));
+  const edges = fks.filter((fk) => mineTables.has(fk.parent) && fk.parent !== "tenants");
+  if (edges.length) {
+    const selects = edges.map((fk) => `SELECT '${fk.child}->${fk.parent}'::text AS edge, count(*)::int AS n
+      FROM ${q(fk.child)} c JOIN ${q(fk.parent)} p ON ${cols("c", fk.childCols)} = ${cols("p", fk.parentCols)}
+      JOIN purge_marks pm ON pm.tag = 'mine' AND pm.tbl = '${fk.parent}' AND pm.rid = p.ctid
+      WHERE NOT EXISTS (SELECT 1 FROM purge_marks cm WHERE cm.tag = 'mine' AND cm.tbl = '${fk.child}' AND cm.rid = c.ctid)`);
+    const refs = await client.query(`SELECT edge, n FROM (${selects.join(" UNION ALL ")}) r WHERE n > 0`);
+    for (const row of refs.rows) touches[`referenced:${row.edge}`] = row.n;
   }
+
+  if (hasPackages) {
+    for (const table of [...mineTables].filter((t) => idTables.has(t))) {
+      // Members are "<type>:<id>" (evidence/a5b/domain.js); ids are UUIDs, so
+      // the suffix identifies the row whatever the type is called.
+      const named = await client.query(`SELECT count(*)::int AS n FROM ${q(table)} t
+        JOIN purge_marks pm ON pm.tag = 'mine' AND pm.tbl = '${table}' AND pm.rid = t.ctid
+        WHERE EXISTS (SELECT 1 FROM evidence_package_members m
+          WHERE m.canonical_member_reference LIKE '%:' || t.id::text
+            AND NOT EXISTS (SELECT 1 FROM purge_marks x WHERE x.tag = 'mine' AND x.tbl = 'evidence_package_members' AND x.rid = m.ctid))`);
+      if (named.rows[0].n) touches[`packaged:${table}`] = named.rows[0].n;
+    }
+  }
+  return touches;
 }
 
-async function purgeTenant(db, tenantId, { dryRun = false } = {}) {
+/** @param beforeCommit optional async (files) => void, called with the files
+ *  about to lose their rows while the transaction is still open - so the
+ *  caller can record them durably before the rows that name them are gone. */
+async function purgeTenant(db, tenantId, { dryRun = false, beforeCommit = null } = {}) {
   if (!tenantId) throw new Error("purgeTenant needs a tenant");
   let outcome;
   try {
@@ -162,22 +181,19 @@ async function purgeTenant(db, tenantId, { dryRun = false } = {}) {
       const hasPackages = (await tablesWithColumn(client, "canonical_member_reference")).has("evidence_package_members");
 
       await client.query("CREATE TEMP TABLE purge_marks (tag text NOT NULL, tbl text NOT NULL, rid tid NOT NULL, PRIMARY KEY (tag, tbl, rid)) ON COMMIT DROP");
-      await client.query("CREATE TEMP TABLE purge_delete (tbl text NOT NULL, rid tid NOT NULL, PRIMARY KEY (tbl, rid)) ON COMMIT DROP");
       await walkDown(client, { tag: "mine", seed: "tenant_id = $1", guard: "tenant_id = $1", params: [tenantId], fks, tenantTables });
       await walkDown(client, { tag: "others", seed: "tenant_id <> $1", guard: "tenant_id <> $1", params: [tenantId], fks, tenantTables });
-      await client.query(`INSERT INTO purge_delete SELECT m.tbl, m.rid FROM purge_marks m WHERE m.tag = 'mine'
-        AND NOT EXISTS (SELECT 1 FROM purge_marks o WHERE o.tag = 'others' AND o.tbl = m.tbl AND o.rid = m.rid)`);
-      await keepWhatOthersUse(client, fks, idTables, hasPackages);
-
-      const tally = async (sql) => Object.fromEntries((await client.query(sql)).rows.map((r) => [r.tbl, r.n]));
-      const counts = await tally("SELECT tbl, count(*)::int AS n FROM purge_delete GROUP BY tbl");
-      const kept = await tally(`SELECT m.tbl, count(*)::int AS n FROM purge_marks m WHERE m.tag = 'mine'
-        AND NOT EXISTS (SELECT 1 FROM purge_delete d WHERE d.tbl = m.tbl AND d.rid = m.rid) GROUP BY m.tbl`);
+      const counts = Object.fromEntries((await client.query("SELECT tbl, count(*)::int AS n FROM purge_marks WHERE tag = 'mine' GROUP BY tbl")).rows.map((r) => [r.tbl, r.n]));
+      const touches = await foreignTouches(client, fks, idTables, hasPackages);
+      if (Object.keys(touches).length) {
+        outcome = { tenantId, dryRun, blocked: true, touches, counts, sharedRemoved: {}, files: [] };
+        throw new DryRun(); // roll back: nothing of it is deleted
+      }
 
       const files = [];
       if (counts.evidence_artifacts) {
         const rows = await client.query(`SELECT a.storage_provider AS provider, a.storage_key AS key FROM evidence_artifacts a
-          WHERE a.ctid IN (SELECT rid FROM purge_delete WHERE tbl = 'evidence_artifacts') AND a.storage_key IS NOT NULL`);
+          WHERE a.ctid IN (SELECT rid FROM purge_marks WHERE tag = 'mine' AND tbl = 'evidence_artifacts') AND a.storage_key IS NOT NULL`);
         files.push(...rows.rows);
       }
 
@@ -191,7 +207,7 @@ async function purgeTenant(db, tenantId, { dryRun = false } = {}) {
             SELECT '${fk.parent}', p.ctid FROM ${q(fk.parent)} p
             WHERE ${cols("p", fk.parentCols)} IN (
               SELECT ${fk.childCols.map((n) => `c.${q(n)}`).join(", ")} FROM ${q(fk.child)} c
-              WHERE c.ctid IN (SELECT rid FROM purge_delete WHERE tbl = '${fk.child}')
+              WHERE c.ctid IN (SELECT rid FROM purge_marks WHERE tag = 'mine' AND tbl = '${fk.child}')
                  OR c.ctid IN (SELECT rid FROM purge_shared WHERE tbl = '${fk.child}'))
             ON CONFLICT DO NOTHING`);
           added += result.rowCount || 0;
@@ -201,19 +217,20 @@ async function purgeTenant(db, tenantId, { dryRun = false } = {}) {
       const shared = {};
       if (!dryRun) {
         for (const table of deleteOrder(Object.keys(counts), fks)) {
-          await client.query(`DELETE FROM ${q(table)} WHERE ctid IN (SELECT rid FROM purge_delete WHERE tbl = '${table}')`);
+          await client.query(`DELETE FROM ${q(table)} WHERE ctid IN (SELECT rid FROM purge_marks WHERE tag = 'mine' AND tbl = '${table}')`);
         }
         for (const table of deleteOrder(SHARED_TABLES, fks)) {
-          const textGuard = hasPackages ? `AND t.id::text NOT IN (SELECT canonical_member_reference FROM evidence_package_members)` : "";
+          const textGuard = hasPackages ? `AND NOT EXISTS (SELECT 1 FROM evidence_package_members m WHERE m.canonical_member_reference LIKE '%:' || t.id::text)` : "";
           const removed = await client.query(`DELETE FROM ${q(table)} t
             WHERE t.ctid IN (SELECT rid FROM purge_shared WHERE tbl = '${table}') AND ${unreferenced(table, fks)} ${textGuard}`);
           if (removed.rowCount) shared[table] = removed.rowCount;
         }
         // The workspace itself, unless something still points at it.
         await client.query(`DELETE FROM tenants t WHERE t.id = $1 AND ${unreferenced("tenants", fks)}`, [tenantId]);
+        if (beforeCommit) await beforeCommit(files);
       }
 
-      outcome = { tenantId, dryRun, counts, kept, sharedRemoved: shared, files };
+      outcome = { tenantId, dryRun, blocked: false, counts, sharedRemoved: shared, files };
       if (dryRun) throw new DryRun();
     });
   } catch (error) {

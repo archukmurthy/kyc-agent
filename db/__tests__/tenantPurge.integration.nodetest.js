@@ -111,8 +111,6 @@ after(async () => {
   if (!db) return;
   if (ready) {
     // Leave nothing behind even if an assertion failed half-way.
-    await db.query("DELETE FROM evidence_requirement_assets WHERE requirement_id IN (SELECT r.id FROM evidence_requirements r JOIN evidence_contexts c ON c.id = r.context_id WHERE c.tenant_id = $1)", [E]).catch(() => {});
-    await db.query("DELETE FROM evidence_requirements WHERE context_id IN (SELECT id FROM evidence_contexts WHERE tenant_id = $1)", [E]).catch(() => {});
     for (const tenant of [A, B, D, E]) await purgeTenant(db, tenant).catch(() => {});
   }
   await db.close();
@@ -149,27 +147,71 @@ test("the shared company record goes with the last workspace that used it", asyn
   assert.strictEqual(await sharedSubjectCount(), 0);
 });
 
-test("another workspace's rows built on this workspace's data survive its deletion", async (t) => {
-  // The review that stopped the first version: Evidence lets one workspace use
-  // another's public data, so a row with no tenant of its own can belong to
-  // someone else. Reproduced here the way the reviewer did it - E links D's
-  // uploaded asset into an evidence requirement of E's own.
-  if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+// The two reviews that stopped earlier versions: Evidence lets one workspace
+// use another's data, so a row with no tenant of its own can be someone
+// else's, and keeping it while deleting what hangs below it guts it. The rule
+// is all or nothing: if another workspace touches any of D's rows, nothing of
+// D is deleted and the answer is "blocked". Each scenario is the reviewers'.
+async function touchScenario(kind) {
   const q = async (sql, params) => (await db.query(sql, params)).rows;
-  const [dAsset] = await q(`SELECT a.id FROM evidence_assets a JOIN evidence_acquisitions ac ON ac.id = a.acquisition_id WHERE ac.tenant_id = $1 LIMIT 1`, [D]);
+  const [dArt] = await q(`SELECT ar.id, ar.asset_id FROM evidence_artifacts ar JOIN evidence_assets a ON a.id = ar.asset_id
+    JOIN evidence_acquisitions ac ON ac.id = a.acquisition_id WHERE ac.tenant_id = $1 LIMIT 1`, [D]);
   const [eContext] = await q("SELECT id, subject_reference_id FROM evidence_contexts WHERE tenant_id = $1 LIMIT 1", [E]);
-  const [eRequirement] = await q("INSERT INTO evidence_requirements (context_id, subject_reference_id, requirement_key, description) VALUES ($1, $2, 'purge-test', 'purge-test') RETURNING id", [eContext.id, eContext.subject_reference_id]);
-  await q("INSERT INTO evidence_requirement_assets (requirement_id, asset_id, associated_context_id) VALUES ($1, $2, $3)", [eRequirement.id, dAsset.id, eContext.id]);
-  const beforeE = await snapshot(E);
+  const hex = () => require("node:crypto").randomBytes(32).toString("hex");
+  const undo = [];
+  const survivors = [];
+  if (kind === "link") {
+    const [req] = await q("INSERT INTO evidence_requirements (context_id, subject_reference_id, requirement_key, description) VALUES ($1, $2, 'purge-test', 'purge-test') RETURNING id", [eContext.id, eContext.subject_reference_id]);
+    await q("INSERT INTO evidence_requirement_assets (requirement_id, asset_id, associated_context_id) VALUES ($1, $2, $3)", [req.id, dArt.asset_id, eContext.id]);
+    survivors.push(["evidence_requirements", req.id]);
+    undo.push(["DELETE FROM evidence_requirement_assets WHERE requirement_id = $1", req.id], ["DELETE FROM evidence_requirements WHERE id = $1", req.id]);
+  }
+  if (kind === "extraction") {
+    const [run] = await q("INSERT INTO evidence_extraction_runs (asset_id, artifact_id, extractor_type, extractor_name, schema_reference, status, started_at, completed_at) VALUES ($1, $2, 'ai', 'x', 's', 'completed', now(), now()) RETURNING id", [dArt.asset_id, dArt.id]);
+    const [value] = await q(`INSERT INTO evidence_extracted_values (extraction_run_id, schema_field_id, extracted_value) VALUES ($1, 'f', '"v"'::jsonb) RETURNING id`, [run.id]);
+    const [op] = await q("INSERT INTO evidence_interpretation_operations (tenant_id, context_id, caller_scope, operation_key, request_fingerprint, request_manifest, status, extraction_run_id, started_at, completed_at) VALUES ($1, $2, 'x', 'k', $3, '{}'::jsonb, 'completed', $4, now(), now()) RETURNING id", [E, eContext.id, hex(), run.id]);
+    const [fact] = await q("INSERT INTO evidence_facts (extraction_run_id, artifact_id, semantic_concept_id, request_status, grounding_type, fact_value, support_state) VALUES ($1, $2, 'c', 'discovered', 'direct', '1'::jsonb, 'supported') RETURNING id", [run.id, dArt.id]);
+    survivors.push(["evidence_facts", fact.id], ["evidence_extracted_values", value.id], ["evidence_interpretation_operations", op.id]);
+    undo.push(["DELETE FROM evidence_facts WHERE id = $1", fact.id], ["DELETE FROM evidence_interpretation_operations WHERE id = $1", op.id],
+      ["DELETE FROM evidence_extracted_values WHERE id = $1", value.id], ["DELETE FROM evidence_extraction_runs WHERE id = $1", run.id]);
+  }
+  if (kind === "package") {
+    const [pkg] = await q(`INSERT INTO evidence_packages (id, tenant_id, context_id, subject_reference_id, purpose_code, as_of, frozen_at, frozen_by_actor_type, caller_scope, freeze_operation_key, request_fingerprint, a5a_availability_rules_version, manifest_version, canonicalization_version, canonical_manifest_bytes, manifest_fingerprint_algorithm, manifest_fingerprint_value, limitations)
+      VALUES (gen_random_uuid(), $1, $2, $3, 'internal_review', now(), now(), 'analyst', 'x', 'fk', $4, 'v', 'v', 'v', $6, 'sha256', $5, '[]'::jsonb) RETURNING id`, [E, eContext.id, eContext.subject_reference_id, hex(), hex(), Buffer.from([0])]);
+    await q("INSERT INTO evidence_package_members (package_id, ordinal, member_type, canonical_member_reference, canonical_member_key, member_role) VALUES ($1, 1, 'evidence_artifact', $2, '{}'::jsonb, 'r')", [pkg.id, `evidence_artifact:${dArt.id}`]);
+    survivors.push(["evidence_packages", pkg.id]);
+    undo.push(["DELETE FROM evidence_package_members WHERE package_id = $1", pkg.id], ["DELETE FROM evidence_packages WHERE id = $1", pkg.id]);
+  }
+  return { dArt, survivors, undo: async () => { for (const [sql, id] of undo) await q(sql, [id]); } };
+}
 
-  await purgeTenant(db, D);
+for (const kind of ["link", "extraction", "package"]) {
+  test(`another workspace touching this one's data (${kind}) blocks the purge - nothing is deleted`, async (t) => {
+    if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+    const scenario = await touchScenario(kind);
+    try {
+      const beforeD = await snapshot(D);
+      const beforeE = await snapshot(E);
+      const result = await purgeTenant(db, D);
+      assert.strictEqual(result.blocked, true, JSON.stringify(result));
+      assert.ok(Object.keys(result.touches).length > 0);
+      assert.deepStrictEqual(result.files, [], "no file is handed back for deletion when nothing is deleted");
+      assert.deepStrictEqual(await snapshot(D), beforeD, "D lost rows although the purge was blocked");
+      assert.deepStrictEqual(await snapshot(E), beforeE, "E lost data");
+      assert.strictEqual(await count("SELECT count(*) n FROM evidence_artifacts WHERE id = $1", [scenario.dArt.id]), 1, "D's file row");
+      for (const [table, id] of scenario.survivors) assert.strictEqual(await count(`SELECT count(*) n FROM "${table}" WHERE id = $1`, [id]), 1, `E's ${table} row`);
+    } finally {
+      await scenario.undo();
+    }
+  });
+}
 
-  assert.strictEqual(await count("SELECT count(*) n FROM evidence_requirements WHERE id = $1", [eRequirement.id]), 1, "E's own requirement was deleted with D");
-  assert.strictEqual(await count("SELECT count(*) n FROM evidence_requirement_assets WHERE requirement_id = $1", [eRequirement.id]), 1, "E's link was deleted with D");
-  assert.strictEqual(await count("SELECT count(*) n FROM evidence_assets WHERE id = $1", [dAsset.id]), 1, "the asset E still uses was deleted");
-  assert.deepStrictEqual(await snapshot(E), beforeE, "E lost data");
-  assert.strictEqual(await count("SELECT count(*) n FROM ubo_poc_cases WHERE tenant_id = $1", [D]), 0, "D's own case survived");
-  assert.strictEqual(await count("SELECT count(*) n FROM evidence_customer_extraction_jobs WHERE tenant_id = $1", [D]), 0, "D's own jobs survived");
+test("once nothing else touches it, the workspace is deleted in full", async (t) => {
+  if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+  const result = await purgeTenant(db, D);
+  assert.strictEqual(result.blocked, false, JSON.stringify(result.touches));
+  for (const [table, n] of Object.entries(await snapshot(D))) assert.strictEqual(n, 0, `${table} still holds rows of the deleted workspace`);
+  assert.ok(result.files.length >= 1);
 });
 
 test("a workspace id is required", async () => {
