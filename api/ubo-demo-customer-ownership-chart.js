@@ -5,6 +5,7 @@ const { createCustomerOwnershipJobService } = require("../evidence/customerOwner
 const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const demoAllowance = require("../lib/demoAllowance");
+const { ensureTenantRow } = require("../lib/tenantRow");
 
 const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit, demoAllowance };
 
@@ -48,6 +49,8 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);
       else if (body.operation === "RETRY_EXTRACTION_JOB") job = await dependencies.service.retry(body.jobId);
       else {
+        // A trial workspace has no tenants row until its first write.
+        if (dependencies.db) await ensureTenantRow(dependencies.db, tenantId);
         job = await dependencies.service.start(body);
         // One of a public demo's shared uploads (a no-op anywhere else).
         await gates.demoAllowance.record("ubo-demo-chart");

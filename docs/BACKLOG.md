@@ -773,3 +773,16 @@ not lost with it:
 ### EVID-LAB-1 - Two Evidence Lab API tests fail, and no suite runs them
 - **Category:** Process - **Priority:** P3 - **Status:** OPEN
 - **What:** `evidence/a2/__tests__` "A2 fixture API is explicitly labelled..." and `evidence/a4a/__tests__` "selection API returns persisted options..." fail on `dev/local-work` too, so they predate the UBO merge. None of the `evidence/*/__tests__` folders except the two UBO ones is in any script, so nobody sees them. Decide whether the Evidence Lab suite runs in CI; if it does, fix these first.
+
+### UBO-25 - Every trial tester's first UBO save failed on the tenants foreign key
+- **Category:** Correctness - **Priority:** P0 - **Status:** DONE (2026-09-30)
+- **What was wrong:** every UBO and Evidence table references `tenants(id)`. The partner's POC wrote everything under "nium", which had a row; trial workspaces (`trial-acme-1a2b3c4d`) never got one, because trials live in KV. The first case save or chart upload of every trial tester would have answered 500. Hidden in development because test tenants were inserted by hand.
+- **Fix:** `lib/tenantRow.js#ensureTenantRow`, called by `api/ubo-poc-case.js` and the chart route before they write. Verified on the ubo-dev database with a fresh trial workspace.
+
+### TENANT-ROW-1 - Two more inline copies of the tenants-row upsert
+- **Category:** Duplication - **Priority:** P3 - **Status:** OPEN
+- **What:** `api/save-dossier.js` and `api/lib/finalizeSubmission.js` insert the tenants row inline. Move them to `lib/tenantRow.js` (both Guarded - full review).
+
+### CRON-1 - The submission worker runs for anyone when CRON_SECRET is unset
+- **Category:** Security - **Priority:** P2 - **Status:** OPEN
+- **What:** `api/finalize-submissions.js` checks the secret only `if (secret && ...)`, so an unconfigured deployment lets any caller run the worker. It only retries queued work, which limits the harm; a cron route that deletes data must never copy this (the UBO trial purge refuses when the secret is unset).

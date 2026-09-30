@@ -158,3 +158,18 @@ test("the dev workspace is never used on a hosted deployment", async () => {
     else process.env.VERCEL = savedVercel;
   }
 });
+
+test("the caller's workspace row exists before a case is written", async () => {
+  // Every UBO and Evidence table references tenants(id). A trial workspace
+  // (trial-acme-1a2b3c4d) had no row there, so every case save by a trial
+  // tester failed on the foreign key. The route makes sure it exists.
+  const queries = [];
+  const handler = route.createHandler((tenantId) => {
+    factoryCalls.push(tenantId);
+    return { db: { query: async (text, params) => { queries.push({ text, params }); return { rows: [] }; } }, service: service(), close: async () => {} };
+  }, { applyCors: () => false, enforceRateLimit: async () => true, requireStaff: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }) });
+  await handler({ method: "POST", body: { caseId: "case-1", operation: "UPSERT_CASE" }, headers: {} }, fakeRes());
+  assert.strictEqual(queries.length, 1);
+  assert.match(queries[0].text, /INSERT INTO tenants/);
+  assert.deepStrictEqual(queries[0].params, ["trial-acme-1a2b3c4d"]);
+});

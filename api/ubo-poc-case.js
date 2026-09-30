@@ -9,6 +9,7 @@ const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PocCaseService, PostgresPocCaseRepository } = require("../ubo-control-lab/server/pocCaseState.js");
 const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
+const { ensureTenantRow } = require("../lib/tenantRow");
 
 // ponytail: a fixed ceiling, well under Vercel's 4.5 MB request cap. The
 // screens compact what they send (pocCaseClient.js); raise it only if a real
@@ -18,7 +19,7 @@ const MAX_BODY_BYTES = 3 * 1024 * 1024;
 function dependencies(tenantId) {
   if (!process.env.DATABASE_URL) throw Object.assign(new Error("POC case persistence requires DATABASE_URL"), { statusCode: 503, code: "poc_case_persistence_unavailable" });
   const db = createPostgresDb();
-  return { service: new PocCaseService(new PostgresPocCaseRepository(db, tenantId)), close: () => db.close() };
+  return { db, service: new PocCaseService(new PostgresPocCaseRepository(db, tenantId)), close: () => db.close() };
 }
 
 const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit };
@@ -48,6 +49,7 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
         return res.status(200).json({ success: true, case: record });
       }
       if (req.method === "POST") {
+        if (active.db) await ensureTenantRow(active.db, tenantId);
         const record = await active.service.apply(req.body || {});
         return res.status(200).json({ success: true, case: record });
       }

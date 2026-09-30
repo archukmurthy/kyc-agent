@@ -77,3 +77,15 @@ test("a caller with no workspace never reaches a job", async () => {
 test("the job service cannot be built without a workspace", () => {
   assert.throws(() => new CustomerOwnershipExtractionJobService({}), /tenant/i);
 });
+
+test("the caller's workspace row exists before a chart job is started", async () => {
+  const queries = [];
+  const handler = route.createHandler(null, undefined, (options) => {
+    factoryCalls.push(options);
+    const job = { jobId: "job-1", state: "QUEUED" };
+    return { db: { query: async (text, params) => { queries.push({ text, params }); return { rows: [] }; } }, service: { start: async () => job }, close: async () => {} };
+  }, { applyCors: () => false, enforceRateLimit: async () => true, requireStaff: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }), demoAllowance: { record: async () => {} } });
+  await handler({ method: "POST", headers: {}, body: { demoContext: {}, file: {} } }, fakeRes());
+  assert.strictEqual(queries.length, 1);
+  assert.deepStrictEqual(queries[0].params, ["trial-acme-1a2b3c4d"]);
+});
