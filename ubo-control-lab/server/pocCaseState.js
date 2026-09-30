@@ -333,9 +333,9 @@ class PostgresPocCaseRepository {
 
   async extraction(jobId) {
     if (!jobId) return null;
-    const row = first(await this.db.query(`SELECT id, artifact_id, state, result, completed_at
+    const row = first(await this.db.query(`SELECT id, artifact_id, state, result, completed_at, demo_case_id
       FROM evidence_customer_extraction_jobs WHERE id = $1 AND tenant_id = $2`, [jobId, this.tenantId]));
-    return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at } : null;
+    return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id } : null;
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, payload, release }) {
@@ -515,6 +515,13 @@ class PocCaseService {
     const caseId = String(command.caseId || command.payload?.demoCase?.demoCaseId || "").trim();
     if (!caseId) throw Object.assign(new Error("caseId is required"), { statusCode: 400, code: "case_id_required" });
     if (!command.idempotencyKey) throw Object.assign(new Error("idempotencyKey is required"), { statusCode: 400, code: "idempotency_key_required" });
+    // A case's chart is a job started for THIS case. Jobs are scoped to the
+    // workspace, so another case's job id would show its uploaded chart here.
+    const jobId = command.operation === "ASSOCIATE_CHART" ? command.payload?.chartReference?.jobId : null;
+    if (jobId) {
+      const job = await this.repository.extraction(jobId);
+      if (!job || job.demoCaseId !== caseId) throw Object.assign(new Error("Extraction job was not found."), { statusCode: 404, code: "job_not_found" });
+    }
     const payload = command.operation === "COMPLETE_IDV"
       ? await demoIdentityVerificationPayload(this.repository, caseId, command.payload)
       : compactCasePayload(command.payload);
