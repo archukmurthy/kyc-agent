@@ -219,8 +219,14 @@ function stageFromTrace(trace, fallback = "QUESTIONS") {
   return fallback;
 }
 
-function traceFrom(value) {
-  return value?.assessment?.trace || value?.resolution?.trace || value?.researchResult?.ownershipResolutionTrace || null;
+/** The case's own assessment trace: written by the server, held in the
+ *  assessment or resolution. A copy inside the research result, or a trace a
+ *  browser wrote before UBO-13, is not it - one travelled back in the
+ *  analyst's research save, froze a case and let verification complete
+ *  against a stale assessment (review). */
+function serverTraceOf(projection) {
+  const trace = projection?.assessment?.trace || projection?.resolution?.trace || null;
+  return trace?.computedBy === "server" ? trace : null;
 }
 
 function traceTime(trace) {
@@ -242,7 +248,28 @@ function mergeResolution(current, incoming) {
   };
 }
 
+/** The case with everything computed from its inputs dropped - the
+ *  customer's answers and uploads kept as their input. Nothing, identity
+ *  verification included, acts on it until the server computes again. */
+function uncomputed(base) {
+  // The last server trace stays as history only (not read as the case's
+  // assessment): completed verifications and the audit trail carry into the
+  // next one, so an unchanged recomputation does not reset them.
+  const priorTrace = serverTraceOf(base) || base.resolution?.priorTrace;
+  return {
+    resolution: base.resolution ? { createdAt: base.resolution.createdAt, answers: base.resolution.answers, evidence: base.resolution.evidence, ...(priorTrace ? { priorTrace } : {}) } : base.resolution,
+    assessment: null,
+  };
+}
+
+/** What makes research different research - the same fields the analyst
+ *  screen's save signature uses. Re-saving the same research changes nothing. */
+function researchIdentity(research) {
+  return research ? stableHash([research.jobId, research.status, research.completedAt, research.investigationTopicActivations, research.analystCustomerRequests]) : null;
+}
+
 function projectCommand(current, operation, payload, release) {
+  const previousCompany = current?.demoCase?.company || current?.company || null;
   const base = { contractVersion: CASE_CONTRACT, ...compactCaseProjection(current || {}) };
   payload = compactCasePayload(payload);
   const durableResearchResult = payload?.researchResult
@@ -251,9 +278,20 @@ function projectCommand(current, operation, payload, release) {
   if (payload?.draft) base.draft = payload.draft;
   if (payload?.demoCase) base.demoCase = payload.demoCase;
   if (payload?.company) base.company = payload.company;
-  if (operation === "UPSERT_CASE") return { ...base, currentStage: base.currentStage || "COMPANY_DETAILS" };
+  if (operation === "UPSERT_CASE") {
+    // Research and chart facts are matched to the company: renaming it (the
+    // analyst's to do) makes what was computed for the old name meaningless.
+    const renamed = previousCompany && (payload?.demoCase?.company || payload?.company) && !sameCompany(previousCompany, base.demoCase?.company || base.company);
+    if (!renamed) return { ...base, currentStage: base.currentStage || "COMPANY_DETAILS" };
+    // The chart was read for the old company too.
+    const { chartReference: _reference, chartProjection: _chart, ...rest } = base;
+    return { ...rest, ...uncomputed(base), currentStage: "COMPANY_DETAILS" };
+  }
+  if (operation === "REOPEN_CASE") return { ...base, ...uncomputed(base), currentStage: "QUESTIONS" };
   if (operation === "SAVE_RESEARCH") return {
     ...base,
+    // Questions come from the research: new research drops what was computed from the old.
+    ...(researchIdentity(current?.researchResult) !== researchIdentity(durableResearchResult) ? uncomputed(base) : {}),
     researchResult: durableResearchResult,
     researchRelease: release,
     currentStage: release.mayProceed ? "RESEARCH_COMPLETE" : "DISCOVERY_IN_PROGRESS",
@@ -265,8 +303,7 @@ function projectCommand(current, operation, payload, release) {
     // Computed from the previous chart: dropped, so nothing - identity
     // verification included - acts on it until the server recomputes. The
     // customer's answers and uploads are kept as their input.
-    resolution: base.resolution ? { createdAt: base.resolution.createdAt, answers: base.resolution.answers, evidence: base.resolution.evidence } : base.resolution,
-    assessment: null,
+    ...uncomputed(base),
     currentStage: "OWNERSHIP_COMPLETE",
   };
   if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "RESET_ANSWERS"].includes(operation)) {
@@ -332,9 +369,9 @@ class PostgresPocCaseRepository {
 
   async extraction(jobId) {
     if (!jobId) return null;
-    const row = first(await this.db.query(`SELECT id, artifact_id, state, result, completed_at, demo_case_id, company
+    const row = first(await this.db.query(`SELECT id, artifact_id, state, result, completed_at, demo_case_id, company, evidence_handoff
       FROM evidence_customer_extraction_jobs WHERE id = $1 AND tenant_id = $2`, [jobId, this.tenantId]));
-    return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id, company: row.company } : null;
+    return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id, company: row.company, evidenceHandoff: row.evidence_handoff } : null;
   }
 
   /** The server's extraction of an evidence file uploaded for this case. */
@@ -489,7 +526,7 @@ async function demoIdentityVerificationPayload(repository, caseId, payload) {
     throw Object.assign(new Error("Identity verification is not available on this deployment."), { statusCode: 403, code: "idv_demo_mode_off" });
   }
   const record = await repository.get(caseId);
-  const stored = traceFrom(record?.projection);
+  const stored = serverTraceOf(record?.projection);
   // Only from the server's own assessment, finalised and ready - not from a
   // trace a browser wrote before UBO-13, and not while questions are open.
   if (!stored || stored.computedBy !== "server" || !stored.verificationAssessment?.finalized || !isReadyForIdentityVerification(stored)) {
@@ -572,6 +609,12 @@ class PocCaseService {
     // - a resolution or assessment is only ever the server's own; carried by any
     //   other step it wrote audit rows (and could pre-empt the server's ids).
     if (operation !== "SAVE_RESEARCH") delete incoming.researchResult;
+    if (incoming.researchResult?.ownershipResolutionTrace !== undefined) {
+      const { ownershipResolutionTrace: _trace, ...research } = incoming.researchResult;
+      incoming.researchResult = research;
+    }
+    // Reopening a finalised case is the analyst's decision.
+    if (operation === "REOPEN_CASE" && customer) throw Object.assign(new Error("Only the analyst can reopen a review."), { statusCode: 403, code: "not_a_customer_operation" });
     if (customer || operation === "ASSOCIATE_CHART") { delete incoming.company; delete incoming.demoCase; delete incoming.draft; }
     if (!SERVER_COMPUTED.has(operation)) { delete incoming.resolution; delete incoming.assessment; }
 
@@ -583,7 +626,11 @@ class PocCaseService {
       if (!jobId) throw Object.assign(new Error("A chart is attached from its extraction job."), { statusCode: 400, code: "job_required" });
       const job = await this.repository.extraction(jobId);
       if (!job || job.demoCaseId !== caseId) throw Object.assign(new Error("Extraction job was not found."), { statusCode: 404, code: "job_not_found" });
+      if (job.evidenceHandoff) throw Object.assign(new Error("That file was uploaded as evidence, not as the ownership chart."), { statusCode: 409, code: "not_a_chart" });
       const record = await this.repository.get(caseId);
+      if (serverTraceOf(record?.projection)?.verificationAssessment?.finalized) {
+        throw Object.assign(new Error("This review has been finalised; the analyst can reopen it."), { statusCode: 409, code: "case_finalized" });
+      }
       const caseCompany = record?.projection?.demoCase?.company || record?.company;
       if (!sameCompany(job.company, caseCompany)) throw Object.assign(new Error("This chart was read for a different company."), { statusCode: 409, code: "chart_company_mismatch" });
       const method = CALCULATION_METHODS.has(incoming.chartReference?.calculationMethod) ? incoming.chartReference.calculationMethod : "EFFECTIVE_INTEREST";
@@ -597,8 +644,8 @@ class PocCaseService {
       const record = await this.repository.get(caseId);
       // A finalised assessment is what identity verification was started
       // from; answers after that would change it with no new finalisation.
-      const stored = traceFrom(record?.projection);
-      if (stored?.computedBy === "server" && stored.verificationAssessment?.finalized) {
+      const stored = serverTraceOf(record?.projection);
+      if (stored?.verificationAssessment?.finalized) {
         throw Object.assign(new Error("This review has been finalised and can no longer be changed."), { statusCode: 409, code: "case_finalized" });
       }
       const computed = await computeCaseAssessment({
@@ -614,6 +661,14 @@ class PocCaseService {
       ? await demoIdentityVerificationPayload(this.repository, caseId, incoming)
       : compactCasePayload(incoming);
     const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
+    if (operation === "SAVE_RESEARCH" || operation === "UPSERT_CASE") {
+      // New research or a renamed company would drop a finalised assessment
+      // that identity verification started from: the analyst reopens first.
+      const record = await this.repository.get(caseId);
+      if (serverTraceOf(record?.projection)?.verificationAssessment?.finalized && !projectCommand(record.projection, operation, payload, release).assessment) {
+        throw Object.assign(new Error("This review has been finalised; reopen it before changing its research or company."), { statusCode: 409, code: "case_finalized" });
+      }
+    }
     const result = await this.repository.apply({ ...command, payload, caseId, actorType: command.actorType || "SYSTEM", release });
     return { ...(await this.load(caseId)), duplicate: result.duplicate, researchRelease: release || result.record?.projection?.researchRelease || null };
   }

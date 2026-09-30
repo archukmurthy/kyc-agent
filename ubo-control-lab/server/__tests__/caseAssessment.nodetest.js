@@ -35,24 +35,24 @@ async function withEvidenceRequest() {
   const { resolution: base } = await compute("SYNC_RESOLUTION", {});
   const question = base.questions.find((q) => q.id.includes("EXPLAIN_OWNERSHIP_DIFFERENCE"));
   const answers = { [question.id]: { value: "SHARE_TRANSFER", answeredAt: NOW, comparisonItemId: question.comparisonItemId, factRequirementId: question.factRequirementId } };
-  const { resolution } = await compute("SYNC_RESOLUTION", { resolution: { answers } });
+  const { resolution } = await compute("SUBMIT_ANSWER", { resolution: { answers, submittedAnswer: { question: { id: question.id } } } });
   assert.ok(resolution.evidenceRequirements.length > 0, "the fixture no longer asks for evidence - this test would prove nothing");
-  return { answers, requirement: resolution.evidenceRequirements[0] };
+  return { answers, requirement: resolution.evidenceRequirements[0], projection: { ...fx.projection(), resolution } };
 }
 
 test("evidence claimed as accepted without an upload the server read is not accepted", async () => {
-  const { answers, requirement } = await withEvidenceRequest();
-  const noUpload = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", filename: "forged.pdf" } } } });
+  const { answers, requirement, projection } = await withEvidenceRequest();
+  const noUpload = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", filename: "forged.pdf" } } } }, { projection });
   assert.strictEqual(noUpload.resolution.evidence[requirement.id].status, "REJECTED");
-  const unread = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "artifact-9" } } } });
+  const unread = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "artifact-9" } } } }, { projection });
   assert.strictEqual(unread.resolution.evidence[requirement.id].status, "VALIDATING");
 });
 
 test("an upload's outcome is decided from the server's own reading of it", async () => {
-  const { answers, requirement } = await withEvidenceRequest();
+  const { answers, requirement, projection } = await withEvidenceRequest();
   const asked = [];
   await computeCaseAssessment({
-    projection: fx.projection(), caseId: "case-1", operation: "SYNC_RESOLUTION", now: NOW,
+    projection, caseId: "case-1", operation: "SYNC_RESOLUTION", now: NOW,
     incoming: { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "artifact-9" } } } },
     findEvidenceResult: async (artifactId) => { asked.push(artifactId); return null; },
   });
@@ -62,7 +62,7 @@ test("an upload's outcome is decided from the server's own reading of it", async
 test("only the customer's answer itself is kept - nothing that travels with it", async () => {
   const { resolution: base } = await compute("SYNC_RESOLUTION", {});
   const question = base.questions[0];
-  const { resolution } = await compute("SYNC_RESOLUTION", { resolution: { answers: { [question.id]: { value: question.options[0].value, answeredAt: NOW, comparisonItemId: question.comparisonItemId, determination: "DEFINITE_NON_UBO", injected: { a: 1 } } } } });
+  const { resolution } = await compute("SUBMIT_ANSWER", { resolution: { answers: { [question.id]: { value: question.options[0].value, answeredAt: NOW, comparisonItemId: question.comparisonItemId, determination: "DEFINITE_NON_UBO", injected: { a: 1 } } }, submittedAnswer: { question: { id: question.id } } } });
   assert.deepStrictEqual(Object.keys(resolution.answers[question.id]).sort(), ["answeredAt", "comparisonItemId", "factRequirementId", "value"]);
 });
 

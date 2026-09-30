@@ -116,9 +116,13 @@ export function hydrateBrowserFromPocCase(record, storage = window.localStorage)
   const projection = record?.projection;
   const demoCase = projection?.demoCase;
   if (!demoCase?.demoCaseId || !projection?.draft) return false;
-  const trace = projection.assessment?.trace || projection.resolution?.trace || projection.researchResult?.ownershipResolutionTrace || null;
+  // The case's trace is the server's current one. A copy saved inside the
+  // research by records from before UBO-13 is not: after a reopen it showed a
+  // finalised review that no longer is.
+  const trace = projection.assessment?.trace || projection.resolution?.trace || null;
+  const { ownershipResolutionTrace: _stale, ...storedResearch } = projection.researchResult || {};
   const researchResult = projection.researchResult
-    ? { ...projection.researchResult, ...(trace ? { ownershipResolutionTrace: trace } : {}) }
+    ? { ...storedResearch, ...(trace ? { ownershipResolutionTrace: trace } : {}) }
     : trace ? { ownershipResolutionTrace: trace } : null;
   const browserResearchResult = researchResult?.view
     ? { ...researchResult, view: withoutImmutableSnapshot(researchResult.view) }

@@ -21,7 +21,6 @@ const { reevaluateSavedCustomerOwnershipChart } = require("./customerOwnershipCh
 const MAX_ANSWERS = 200;
 const MAX_TEXT = 2000;
 // A browser clock a little ahead is normal; far ahead would pin an answer.
-const CLOCK_SKEW_MS = 5 * 60 * 1000;
 // Outcomes a browser may report for an upload that never reached extraction.
 // Anything that would count as accepted needs the server's own reading.
 const UNPROVEN_EVIDENCE = new Set([EVIDENCE_STATUS.RECEIVED, EVIDENCE_STATUS.VALIDATING, EVIDENCE_STATUS.REJECTED, EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE]);
@@ -35,7 +34,9 @@ const text = (value) => (value == null ? null : String(value).slice(0, MAX_TEXT)
 /** The browser's timestamp, if it is a real one and not from the future. */
 function answeredAt(value, now) {
   const at = Date.parse(value);
-  if (!Number.isFinite(at) || at > Date.parse(now) + CLOCK_SKEW_MS) return now;
+  // Never later than the server's own clock: a device running ahead would
+  // otherwise keep its answer over the customer's later change (review).
+  if (!Number.isFinite(at) || at > Date.parse(now)) return now;
   return new Date(at).toISOString();
 }
 
@@ -96,16 +97,24 @@ function evaluate(inputs, state) {
 /** Keeps only answers to questions the case is asking, in a form each allows.
  *  Asking is progressive - one answer can raise the next question - so it is
  *  settled over a few rounds. */
+function sameKeys(a, b) {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => key in b);
+}
+
 function acceptedAnswers(inputs, candidate, now, createdAt) {
   let accepted = {};
-  for (let round = 0; round < 5; round += 1) {
+  // Settled when a round accepts exactly what the last one did. A fixed
+  // depth dropped honest answers six levels down (senior management); the
+  // cap only bounds a pathological case (candidates are capped at 200).
+  for (let round = 0; round <= Object.keys(candidate).length; round += 1) {
     const asked = new Map(evaluate(inputs, { answers: accepted, evidence: {}, recalculations: {}, now: createdAt }).questions.map((q) => [q.id, q]));
     const next = {};
     for (const [questionId, answer] of Object.entries(candidate)) {
       const question = asked.get(questionId);
       if (question && validFor(question, answer.value)) next[questionId] = answer;
     }
-    if (Object.keys(next).length === Object.keys(accepted).length) return next;
+    if (sameKeys(next, accepted)) return next;
     accepted = next;
   }
   return accepted;
@@ -125,7 +134,6 @@ function uploadedFor(stored, requested) {
  *  chart, and not one file counted for two requests. */
 async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, now) {
   const out = {};
-  const used = new Set();
   for (const record of engine.evidenceRequirements) {
     const submitted = raw?.[record.id];
     if (!submitted || typeof submitted !== "object") continue;
@@ -134,16 +142,18 @@ async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, 
       out[record.id] = { ...base, status: UNPROVEN_EVIDENCE.has(submitted.status) ? submitted.status : EVIDENCE_STATUS.REJECTED };
       continue;
     }
-    const found = base.artifactId === chartArtifactId || used.has(base.artifactId) ? null : await findEvidenceResult(base.artifactId);
+    // One register can genuinely evidence two transfers: its contents are
+    // checked against each request (evidenceResultStatus), so a file is not
+    // limited to one. The ownership chart itself never evidences itself.
+    const found = base.artifactId === chartArtifactId ? null : await findEvidenceResult(base.artifactId);
     if (!found) {
-      out[record.id] = { ...base, status: base.artifactId === chartArtifactId || used.has(base.artifactId) ? EVIDENCE_STATUS.REJECTED : EVIDENCE_STATUS.VALIDATING };
+      out[record.id] = { ...base, status: base.artifactId === chartArtifactId ? EVIDENCE_STATUS.REJECTED : EVIDENCE_STATUS.VALIDATING, ...(base.artifactId === chartArtifactId ? { reason: "The ownership chart cannot be its own evidence." } : {}) };
       continue;
     }
     if (!uploadedFor(found.evidenceHandoff, record.handoff)) {
       out[record.id] = { ...base, status: EVIDENCE_STATUS.REJECTED, reason: "This file was not uploaded as evidence for this request." };
       continue;
     }
-    used.add(base.artifactId);
     const resolution = engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === record.comparisonItemId);
     out[record.id] = { ...base, ...evidenceResultStatus(found.result, resolution, record), validatedAt: now };
   }
@@ -176,7 +186,9 @@ function recalculate(engine, inputs, chartResult, demoContext, now) {
  *  UBO-13 is not history to build on - its verification completions and
  *  audit events are the browser's claims. */
 function serverTrace(projection) {
-  const trace = projection?.assessment?.trace || projection?.resolution?.trace || null;
+  // A reopened case has no current trace; the last one is its history, so
+  // completed verifications and the audit trail carry into the next.
+  const trace = projection?.assessment?.trace || projection?.resolution?.trace || projection?.resolution?.priorTrace || null;
   return trace?.computedBy === "server" ? trace : null;
 }
 
@@ -203,11 +215,19 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   const createdAt = stored.createdAt || now;
   const demoContext = { demoCaseId: caseId, referenceCaseId: projection.demoCase?.referenceCaseId || "", company };
 
-  const incomingAnswers = cleanAnswers(operation === "RESET_ANSWERS" ? {} : incoming?.resolution?.answers, now);
+  // An answer is given by submitting it, one at a time. Whatever else a
+  // request carries (a sync resends the browser's whole copy) is not an
+  // answer: a stale copy brought old answers back (review).
   const submittedId = operation === "SUBMIT_ANSWER" ? String(incoming?.resolution?.submittedAnswer?.question?.id || "") : "";
+  const submittedRaw = submittedId ? incoming?.resolution?.answers?.[submittedId] : undefined;
+  const incomingAnswers = cleanAnswers(submittedRaw ? { [submittedId]: submittedRaw } : {}, now);
   const storedAnswers = acceptedAnswers(inputs, cleanAnswers(stored.answers, now), now, createdAt);
-  const answers = acceptedAnswers(inputs, mergeAnswers(storedAnswers, incomingAnswers), now, createdAt);
-  if (submittedId && (!incomingAnswers[submittedId] || answers[submittedId] !== mergeAnswers(storedAnswers, incomingAnswers)[submittedId])) {
+  // Most recent wins: a late retry of an older answer does not undo a newer
+  // one. (ponytail: ordered by the device's clock, capped at the server's -
+  // a second device running behind cannot change an answer for that long.)
+  const merged = mergeAnswers(storedAnswers, incomingAnswers);
+  const answers = acceptedAnswers(inputs, merged, now, createdAt);
+  if (submittedId && (!incomingAnswers[submittedId] || (merged[submittedId] === incomingAnswers[submittedId] && answers[submittedId] !== merged[submittedId]))) {
     throw fail("invalid_answer", "That answer is not one this question accepts.", 400);
   }
   let evidenceSubmitted = operation === "RESET_ANSWERS" ? {} : { ...submittedEvidence(stored.evidence), ...submittedEvidence(incoming?.resolution?.evidence) };
@@ -261,4 +281,4 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   return { resolution, assessment: { assessmentId: trace.verificationAssessment?.assessmentVersionId, trace, evidence } };
 }
 
-module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers, validFor };
+module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers, validFor, decideEvidenceForTest: decideEvidence };

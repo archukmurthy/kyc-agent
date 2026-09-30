@@ -11,9 +11,9 @@ const fx = require("./fixtures/caseAssessmentFixture");
 
 const CHART_JOB = { jobId: "job-chart", demoCaseId: "case-1", artifactId: "chart-artifact", state: "COMPLETE", company: fx.company, result: null, evidenceHandoff: null };
 
-function memoryRepository() {
+function memoryRepository(chartPercentage = 30) {
   const state = new Map();
-  const jobs = new Map([["job-chart", { ...CHART_JOB, result: fx.chartResult() }]]);
+  const jobs = new Map([["job-chart", { ...CHART_JOB, result: fx.chartResult(chartPercentage) }]]);
   const evidence = new Map();
   const persisted = [];
   return {
@@ -32,13 +32,13 @@ function memoryRepository() {
   };
 }
 
-async function openCase() {
-  const repository = memoryRepository();
+async function openCase({ research = 25, chart = 30 } = {}) {
+  const repository = memoryRepository(chart);
   const service = new PocCaseService(repository);
   const analyst = (operation, payload, key = operation) => service.apply({ caseId: "case-1", operation, idempotencyKey: key, actorType: "ANALYST", payload });
   const customer = (operation, payload, key = operation) => service.apply({ caseId: "case-1", operation, idempotencyKey: key, actorType: "CUSTOMER", payload });
   await analyst("UPSERT_CASE", { company: fx.company, demoCase: { demoCaseId: "case-1", referenceCaseId: "", company: fx.company }, draft: {} });
-  await analyst("SAVE_RESEARCH", { researchResult: fx.researchResult() });
+  await analyst("SAVE_RESEARCH", { researchResult: fx.researchResult(research) });
   await customer("ASSOCIATE_CHART", { chartReference: { jobId: "job-chart" } });
   await customer("SYNC_RESOLUTION", {});
   return { repository, service, analyst, customer, projection: () => repository.state.get("case-1").projection };
@@ -178,4 +178,174 @@ test("an upload made as evidence for this request counts; one made for another k
   assert.strictEqual(projection().resolution.evidence[requirement.id].status, "REJECTED");
   await customer("SYNC_RESOLUTION", { resolution: { evidence: { [requirement.id]: { artifactId: "transfer-record" } } } }, "right-kind");
   assert.strictEqual(projection().resolution.evidence[requirement.id].status, "SATISFIED");
+});
+
+// Second review of the fixes (every finding reproduced first).
+
+// How the questions screen would answer each question on an honest journey.
+function honestValue(q) {
+  const options = (q.options || []).map((o) => o.value);
+  if (q.id.includes("EXPLAIN")) return "SHARE_TRANSFER";
+  if (q.type === "PERCENTAGE") return 30;
+  if (q.type === "DATE") return "2026-06-01";
+  if (q.id.includes("CONFIRM_CURRENT")) return "YES";
+  if (options.includes("NO")) return "NO";
+  if (options.includes("DAY_TO_DAY_MANAGEMENT")) return "DAY_TO_DAY_MANAGEMENT";
+  if (options.length) return options[0];
+  return q.id.includes("ROLE") ? "Managing Director" : "Bob Smith";
+}
+
+test("an honest customer can answer the no-owner journey all the way down to senior management", async () => {
+  // Review: answers were accepted one question level per round, five rounds
+  // at most - the senior-manager questions, six deep, were refused and the
+  // case could never be finalised.
+  const { customer, projection } = await openCase({ research: 5, chart: 5 });
+  let answered = 0;
+  for (let round = 0; round < 20; round += 1) {
+    const open = questionsOf(projection()).find((q) => !projection().resolution.answers[q.id]);
+    if (!open) break;
+    await answer(customer, open, honestValue(open), `deep-${round}`);
+    answered += 1;
+  }
+  assert.ok(answered >= 6, `only ${answered} questions were asked - the journey did not go deep`);
+  assert.strictEqual(Object.keys(projection().resolution.answers).length, answered, "an honest answer was dropped");
+});
+
+test("a finalised trace copied into the analyst's research is not taken for the case's own", async () => {
+  // Review: a finalised trace travelled back inside SAVE_RESEARCH, froze the
+  // case and let identity verification complete against it.
+  const { analyst, customer, projection } = await openCase();
+  const stale = { ...projection().assessment.trace, computedBy: "server", discoveryState: "READY_FOR_IDV", verificationAssessment: { ...projection().assessment.trace.verificationAssessment, finalized: true, blockingIssues: [] } };
+  await analyst("SAVE_RESEARCH", { researchResult: { ...fx.researchResult(), ownershipResolutionTrace: stale } }, "resave");
+  assert.strictEqual(projection().researchResult.ownershipResolutionTrace, undefined, "research does not carry a trace");
+  await customer("SYNC_RESOLUTION", {}, "after-resave");
+  const person = stale.verificationAssessment.verificationPopulation[0];
+  await assert.rejects(customer("COMPLETE_IDV", { personId: person.personId }, "stale-idv"), (error) => error.code === "not_finalized");
+});
+
+async function finalisedCase() {
+  const opened = await openCase();
+  const { repository, projection } = opened;
+  const record = repository.state.get("case-1");
+  const finalised = { ...projection().assessment.trace, computedBy: "server", verificationAssessment: { ...projection().assessment.trace.verificationAssessment, finalized: true } };
+  repository.state.set("case-1", { ...record, projection: { ...record.projection, assessment: { trace: finalised }, resolution: { ...record.projection.resolution, trace: finalised } } });
+  return opened;
+}
+
+test("a finalised case's chart cannot be re-attached to get round the lock", async () => {
+  const { customer, projection } = await finalisedCase();
+  await assert.rejects(customer("ASSOCIATE_CHART", { chartReference: { jobId: "job-chart", calculationMethod: "POLICY_ALL_ROUTES" } }, "reattach"), (error) => error.code === "case_finalized");
+  assert.ok(projection().assessment, "the finalised assessment is still there");
+});
+
+test("an analyst can reopen a finalised case; a customer cannot", async () => {
+  const { analyst, customer, projection } = await finalisedCase();
+  await assert.rejects(customer("REOPEN_CASE", {}, "c-reopen"), (error) => error.code === "not_a_customer_operation" || error.statusCode === 403);
+  await analyst("REOPEN_CASE", {}, "reopen");
+  assert.strictEqual(projection().assessment, null);
+  await customer("SYNC_RESOLUTION", {}, "after-reopen");
+  assert.ok(projection().assessment.trace.computedBy === "server");
+});
+
+test("one document can evidence two requests when its contents support both", async () => {
+  const { customer } = await openCase();
+  const { decideEvidenceForTest } = require("../caseAssessment");
+  const verified = { artifact: { integrityVerified: true }, candidateFacts: [] };
+  const records = [{ id: "r1", comparisonItemId: "c1", handoff: { requestedConcepts: ["ECONOMIC_OWNERSHIP"] } }, { id: "r2", comparisonItemId: "c2", handoff: { requestedConcepts: ["ECONOMIC_OWNERSHIP"] } }];
+  const out = await decideEvidenceForTest({ evidenceRequirements: records, resolutions: [] }, { r1: { artifactId: "register" }, r2: { artifactId: "register" } }, async () => ({ result: verified, evidenceHandoff: { requestedConcepts: ["ECONOMIC_OWNERSHIP"] } }), "chart-artifact", new Date().toISOString());
+  assert.strictEqual(out.r1.status, out.r2.status, "the same document was judged differently for two requests it equally supports");
+  void customer;
+});
+
+test("a changed answer wins, whatever another device's clock said", async () => {
+  // Review: an answer stamped a few minutes ahead by one device beat a later
+  // change from another; the server kept the old answer and said 200.
+  const { customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  const ahead = new Date(Date.now() + 4 * 60 * 1000).toISOString();
+  await customer("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: { value: q.options[0].value, answeredAt: ahead, comparisonItemId: q.comparisonItemId } }, submittedAnswer: { question: { id: q.id } } } }, "fast-clock");
+  await answer(customer, q, q.options[1].value, "changed");
+  assert.strictEqual(projection().resolution.answers[q.id].value, q.options[1].value);
+});
+
+test("a file uploaded as evidence cannot be attached as the ownership chart", async () => {
+  const { repository, customer } = await openCase();
+  repository.jobs.set("job-evidence", { ...CHART_JOB, jobId: "job-evidence", artifactId: "evidence-artifact", result: fx.chartResult(), evidenceHandoff: { requestedConcepts: ["ECONOMIC_OWNERSHIP"] } });
+  await assert.rejects(customer("ASSOCIATE_CHART", { chartReference: { jobId: "job-evidence" } }, "evidence-as-chart"), (error) => error.code === "job_not_found" || error.code === "not_a_chart");
+});
+
+test("an analyst renaming the company drops the assessment computed for the old name", async () => {
+  const { analyst, projection } = await openCase();
+  assert.ok(projection().assessment);
+  await analyst("UPSERT_CASE", { company: { ...fx.company, legalName: "Target Holdings Limited" }, demoCase: { demoCaseId: "case-1", company: { ...fx.company, legalName: "Target Holdings Limited" } } }, "rename");
+  assert.strictEqual(projection().assessment, null);
+});
+
+// Third review: the second round's fixes, attacked.
+
+test("a late retry of an older answer does not undo the newer one", async () => {
+  // Review: stamping every submission with the server's time let a retried
+  // older request win over the answer the customer gave after it.
+  const { customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  const older = { value: q.options[0].value, answeredAt: new Date(Date.now() - 60 * 1000).toISOString(), comparisonItemId: q.comparisonItemId };
+  const submitOlder = () => customer("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: older }, submittedAnswer: { question: { id: q.id } } } }, "older");
+  await submitOlder();
+  await answer(customer, q, q.options[1].value, "newer");
+  await submitOlder();
+  assert.strictEqual(projection().resolution.answers[q.id].value, q.options[1].value);
+});
+
+test("a sync cannot bring an old answer back, however far ahead its clock", async () => {
+  const { customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  const ahead = new Date(Date.now() + 4 * 60 * 1000).toISOString();
+  await customer("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: { value: q.options[0].value, answeredAt: ahead, comparisonItemId: q.comparisonItemId } }, submittedAnswer: { question: { id: q.id } } } }, "fast");
+  await answer(customer, q, q.options[1].value, "changed");
+  await customer("SYNC_RESOLUTION", { resolution: { answers: { [q.id]: { value: q.options[0].value, answeredAt: ahead, comparisonItemId: q.comparisonItemId } } } }, "fast-sync");
+  assert.strictEqual(projection().resolution.answers[q.id].value, q.options[1].value);
+});
+
+test("research on a finalised case cannot be changed without reopening it", async () => {
+  const { analyst, projection } = await finalisedCase();
+  const current = projection().researchResult;
+  await analyst("SAVE_RESEARCH", { researchResult: current }, "same-research");
+  assert.ok(projection().assessment, "re-saving the same research is harmless");
+  await assert.rejects(analyst("SAVE_RESEARCH", { researchResult: { ...fx.researchResult(60), jobId: "another-job" } }, "new-research"), (error) => error.code === "case_finalized");
+});
+
+test("new research drops the assessment computed from the old", async () => {
+  const { analyst, projection } = await openCase();
+  assert.ok(projection().assessment);
+  await analyst("SAVE_RESEARCH", { researchResult: { ...fx.researchResult(60), jobId: "another-job" } }, "new-research");
+  assert.strictEqual(projection().assessment, null);
+});
+
+test("renaming the company drops the chart read for the old one, and is refused once finalised", async () => {
+  const renamed = { ...fx.company, legalName: "Target Holdings Limited" };
+  const open = await openCase();
+  await open.analyst("UPSERT_CASE", { company: renamed, demoCase: { demoCaseId: "case-1", company: renamed } }, "rename");
+  assert.strictEqual(open.projection().chartProjection, undefined);
+  assert.strictEqual(open.projection().chartReference, undefined);
+  const final = await finalisedCase();
+  await assert.rejects(final.analyst("UPSERT_CASE", { company: renamed, demoCase: { demoCaseId: "case-1", company: renamed } }, "rename-final"), (error) => error.code === "case_finalized");
+});
+
+test("reopening keeps the case's history for the next assessment", async () => {
+  // Review: the reopened case lost its identity-verification completions and
+  // audit trail - and the recomputed, identical assessment reset completed
+  // people to REQUIRED.
+  const { analyst, customer, projection, repository } = await finalisedCase();
+  const record = repository.state.get("case-1");
+  const ready = { ...projection().assessment.trace, discoveryState: "READY_FOR_IDV", verificationAssessment: { ...projection().assessment.trace.verificationAssessment, blockingIssues: [] } };
+  repository.state.set("case-1", { ...record, projection: { ...record.projection, assessment: { trace: ready }, resolution: { ...record.projection.resolution, trace: ready } } });
+  const person = ready.verificationAssessment.verificationPopulation[0];
+  await customer("COMPLETE_IDV", { personId: person.personId }, "idv");
+  const completed = projection().assessment.trace.idvCompletionHistory.map(({ personId }) => personId);
+  assert.ok(completed.includes(person.personId));
+  await analyst("REOPEN_CASE", {}, "reopen");
+  await customer("SYNC_RESOLUTION", {}, "after-reopen");
+  const trace = projection().assessment.trace;
+  assert.strictEqual(trace.verificationAssessment.finalized, false);
+  assert.ok((trace.idvCompletionHistory || []).some(({ personId }) => personId === person.personId), "the completed verification was lost on reopening");
 });
