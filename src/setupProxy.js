@@ -48,6 +48,7 @@ const uboDemoCustomerOwnershipChartHandler = require(path.join(__dirname, "..", 
 const uboPocHealthHandler = require(path.join(__dirname, "..", "api", "ubo-poc-health.js"));
 const purgeTrialDataHandler = require(path.join(__dirname, "..", "api", "purge-trial-data.js"));
 const uboPocCaseHandler = require(path.join(__dirname, "..", "api", "ubo-poc-case.js"));
+const uboCustomerLinkHandler = require(path.join(__dirname, "..", "api", "ubo-customer-link.js"));
 const uboDemoEntityResolutionHandler = require(path.join(__dirname, "..", "api", "ubo-demo-entity-resolution.js"));
 const uboRecalculateHandler = require(path.join(__dirname, "..", "api", "ubo-recalculate.js"));
 const uboInviteHandler = require(path.join(__dirname, "..", "api", "ubo-invite.js"));
@@ -160,6 +161,16 @@ module.exports = function (app) {
     req.on("end", () => {
       try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
       adapt(uboPocCaseHandler)(req, res);
+    });
+  });
+
+  app.post("/api/ubo-customer-link", (req, res) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { raw += chunk; });
+    req.on("end", () => {
+      try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; }
+      adapt(uboCustomerLinkHandler)(req, res);
     });
   });
 

@@ -119,6 +119,8 @@ const ROUTES = {
   // comment in the route.
   "ubo-control-lab.js": "staff",
   "ubo-poc-case.js": "staff",
+  // Analysts make links; customers open them after Clerk proves their email.
+  "ubo-customer-link.js": "staff",
 
   "ubo-poc-health.js": "internal-key",
   "ubo-demo-customer-ownership-chart.js": "open-limited",
