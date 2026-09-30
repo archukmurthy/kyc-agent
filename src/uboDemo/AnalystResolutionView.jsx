@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { persistPocCase } from "./pocCaseClient";
 
 function humanize(value) { return String(value || "Not recorded").replaceAll("_", " ").toLowerCase(); }
 function measurement(value) {
@@ -50,7 +51,36 @@ function AuditFact({ item, companyName }) {
   return <article className="ubo-analyst-audit-card"><h3>{relationship ? `${factName(source, "subject")} → ${factName(source, "object")}` : declarationHeading(item, companyName)}</h3><dl><dt>Original comparison</dt><dd>{item.originalComparison?.status || "DECLARATION"} · {item.originalComparison?.detail || "No comparison detail"}</dd><dt>Customer assertion</dt><dd>{relationship ? measurement(item.customerAssertion?.measurement) : declarationValue(source)}</dd><dt>Independent assertion</dt><dd>{relationship ? measurement(item.independentAssertion?.measurement) : "Not applicable"}</dd><dt>Fact requirements</dt><dd>{item.factRequirements?.map(({ type }) => type).join(", ") || "None"}</dd><dt>Questions generated</dt><dd>{item.questions?.map(({ prompt, status, answer }) => `${prompt} [${status}]${answer !== undefined ? ` Answer: ${answer}` : ""}`).join(" · ") || "Not required"}</dd><dt>Evidence</dt><dd>{item.evidence?.map(({ status, purpose }) => `${status}: ${purpose}`).join(" · ") || "Not required"}</dd><dt>Resulting fact</dt><dd>{relationship ? measurement(item.resultingFact?.measurement) : declarationValue(source)}</dd><dt>Ownership establishment</dt><dd>{item.ownershipEstablishment}</dd><dt>Path / edge outcome</dt><dd>{item.ownershipLink?.outcome || "Not applicable"}</dd><dt>Resolution state</dt><dd>{item.resolutionStatus}</dd><dt>Reason</dt><dd>{item.reason || "Not recorded"}</dd></dl></article>;
 }
 
-export default function AnalystResolutionView({ mode, demoCase, result }) {
+// Reopening sets the finalised assessment aside and keeps the customer's
+// answers and uploads (REOPEN_CASE, analyst only). The page then reloads the
+// case from the server, which is where it now stands.
+async function reopenOnServer(caseId, idempotencyKey) {
+  await persistPocCase("REOPEN_CASE", { caseId, idempotencyKey, actorType: "ANALYST", payload: {} });
+  window.location.reload();
+}
+
+function ReopenReview({ caseId, verification, reopenCase }) {
+  const [stage, setStage] = useState("IDLE");
+  const [error, setError] = useState("");
+  const reopen = async () => {
+    setStage("SAVING");
+    setError("");
+    try {
+      await reopenCase(caseId, `reopen:${verification.assessmentVersionId}:${verification.calculatedAt || Date.now()}`);
+    } catch (caught) {
+      setError(caught.message);
+      setStage("IDLE");
+    }
+  };
+  return <section className="ubo-demo-card ubo-analyst-summary"><h2>Finalised review</h2>
+    {stage === "IDLE" && <button type="button" onClick={() => setStage("CONFIRM")}>Reopen review</button>}
+    {stage !== "IDLE" && <><p>The finalised assessment is set aside and the customer can change their answers again. Their answers, uploads and completed identity checks are kept.</p>
+      <button type="button" onClick={reopen} disabled={stage === "SAVING"}>Yes, reopen</button> <button type="button" onClick={() => setStage("IDLE")} disabled={stage === "SAVING"}>Cancel</button></>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}
+
+export default function AnalystResolutionView({ mode, demoCase, result, reopenCase = reopenOnServer }) {
   const trace = result?.ownershipResolutionTrace;
   const audit = mode === "AUDIT";
   if (!trace) return <main className="ubo-demo-results"><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">{audit ? "Audit" : "Analyst review"}</span><h1>Customer resolution trace is not available yet</h1><p>Complete the customer ownership and Questions steps. This page will update when the shared Questions Engine records its conclusions.</p></section></main>;
@@ -64,6 +94,7 @@ export default function AnalystResolutionView({ mode, demoCase, result }) {
   const summary = verification?.summary || {};
   return <main className="ubo-demo-results ubo-analyst-resolution"><header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">{audit ? "Audit" : "Analyst review"}</span><h1>{audit ? "Analyst reasoning and traceability" : "Assessment Details"}</h1><p>{demoCase?.company?.legalName} · {audit ? "Technical engine history and policy record" : "What the system concluded and why"}</p></div></header>
     {!audit ? <>
+      {verification?.finalized && demoCase?.demoCaseId && <ReopenReview caseId={demoCase.demoCaseId} verification={verification} reopenCase={reopenCase} />}
       <section className="ubo-demo-card ubo-analyst-summary"><h2>Current ownership/control assessment</h2><p>Legal-entity links are traversal steps. UBO and IDV conclusions are made only for canonical natural-person assessments.</p><dl><div><dt>Natural persons assessed</dt><dd>{summary.naturalPersonsAssessed ?? people.length}</dd></div><div><dt>Beneficial owners identified</dt><dd>{summary.beneficialOwnersIdentified ?? trace.uboAssessments?.length ?? 0}</dd></div><div><dt>People requiring IDV</dt><dd>{summary.peopleRequiringIdv ?? verificationPopulation.length}</dd></div><div><dt>IDV completed</dt><dd>{summary.idvCompleted ?? completions.length} of {summary.peopleRequiringIdv ?? verificationPopulation.length}</dd></div><div><dt>Current journey state</dt><dd>{humanize(trace.discoveryState)}</dd></div><div><dt>Assessment version</dt><dd>{verification?.assessmentVersionId || "Not finalized"}</dd></div></dl></section>
       <section className="ubo-analyst-section"><h2>Significant ownership relationships</h2>{relationshipFacts.length ? relationshipFacts.map((item) => <OwnershipFactReview key={item.id} item={item} companyName={demoCase?.company?.legalName} />) : <p>No significant ownership relationships have been recorded.</p>}</section>
       {declarationFacts.length > 0 && <section className="ubo-analyst-section"><h2>Ownership declarations</h2>{declarationFacts.map((item) => <OwnershipFactReview key={item.id} item={item} companyName={demoCase?.company?.legalName} />)}</section>}

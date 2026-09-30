@@ -82,3 +82,40 @@ test("a no-nominee declaration is presented as a declaration rather than an unkn
   expect(screen.getByRole("heading", { name: "Nominee arrangement for Customer Limited" })).toBeInTheDocument();
   expect(screen.queryByText(/Unknown party/)).not.toBeInTheDocument();
 });
+
+// UBO-29: the analyst reopens a finalised review from this screen.
+describe("reopening a finalised review", () => {
+  const { fireEvent, waitFor } = require("@testing-library/react");
+  const finalised = { ...trace, discoveryState: "IDV_IN_PROGRESS", verificationAssessment: { assessmentVersionId: "ubo-assessment:abc", calculatedAt: "2026-09-30T10:00:00.000Z", finalized: true, verificationPopulation: [] } };
+  const reopenProps = { demoCase: { demoCaseId: "case-1", company: { legalName: "Customer Limited" } }, result: { ownershipResolutionTrace: finalised } };
+
+  test("is offered only on a finalised review", () => {
+    const { rerender } = render(<AnalystResolutionView mode="REVIEW" {...props} />);
+    expect(screen.queryByRole("button", { name: /reopen/i })).toBeNull();
+    rerender(<AnalystResolutionView mode="AUDIT" {...reopenProps} />);
+    expect(screen.queryByRole("button", { name: /reopen/i })).toBeNull();
+    rerender(<AnalystResolutionView mode="REVIEW" {...reopenProps} />);
+    expect(screen.getByRole("button", { name: "Reopen review" })).toBeInTheDocument();
+  });
+
+  test("asks once more, then reopens this case and reloads it from the server", async () => {
+    const reopenCase = jest.fn().mockResolvedValue(undefined);
+    render(<AnalystResolutionView mode="REVIEW" {...reopenProps} reopenCase={reopenCase} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reopen review" }));
+    expect(reopenCase).not.toHaveBeenCalled();
+    expect(screen.getByText(/finalised assessment is set aside/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Yes, reopen" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reopen review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, reopen" }));
+    await waitFor(() => expect(reopenCase).toHaveBeenCalledWith("case-1", "reopen:ubo-assessment:abc:2026-09-30T10:00:00.000Z"));
+  });
+
+  test("says so when the server refuses", async () => {
+    const reopenCase = jest.fn().mockRejectedValue(new Error("Only the analyst can reopen a review."));
+    render(<AnalystResolutionView mode="REVIEW" {...reopenProps} reopenCase={reopenCase} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reopen review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, reopen" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only the analyst can reopen a review.");
+  });
+});
