@@ -15,7 +15,7 @@
 
 const { caseInputs, evaluateCase, resolutionTrace } = require("../../src/uboDemo/customer/caseResolution");
 const { applyResultingFact, determinationFromChartAnalysis, evidenceResultStatus, EVIDENCE_STATUS, QUESTION_TYPE } = require("../../src/uboDemo/customer/ownershipResolutionEngine");
-const { isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
+const { DISCOVERY_STATE, isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { reevaluateSavedCustomerOwnershipChart } = require("./customerOwnershipChartDemo");
 
 const MAX_ANSWERS = 200;
@@ -226,15 +226,22 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   // one. (ponytail: ordered by the device's clock, capped at the server's -
   // a second device running behind cannot change an answer for that long.)
   const merged = mergeAnswers(storedAnswers, incomingAnswers);
-  const answers = acceptedAnswers(inputs, merged, now, createdAt);
-  if (submittedId && (!incomingAnswers[submittedId] || (merged[submittedId] === incomingAnswers[submittedId] && answers[submittedId] !== merged[submittedId]))) {
-    throw fail("invalid_answer", "That answer is not one this question accepts.", 400);
+  if (submittedId) {
+    // Checked as if it had won: an invalid answer is refused even when a newer
+    // stored answer keeps it out (review).
+    const alone = { ...merged, [submittedId]: incomingAnswers[submittedId] };
+    if (!incomingAnswers[submittedId] || acceptedAnswers(inputs, alone, now, createdAt)[submittedId] !== incomingAnswers[submittedId]) {
+      throw fail("invalid_answer", "That answer is not one this question accepts.", 400);
+    }
   }
+  const answers = acceptedAnswers(inputs, merged, now, createdAt);
+  // A late retry of an older answer changes nothing and is not this request's answer.
+  const submittedWon = Boolean(submittedId) && answers[submittedId] === incomingAnswers[submittedId];
   let evidenceSubmitted = operation === "RESET_ANSWERS" ? {} : { ...submittedEvidence(stored.evidence), ...submittedEvidence(incoming?.resolution?.evidence) };
 
   // A changed answer, as on the questions screen: evidence given for the old
   // answer no longer counts, and answers the new state no longer asks for go.
-  const submitted = submittedId ? answers[submittedId] : null;
+  const submitted = submittedWon ? answers[submittedId] : null;
   if (submitted && storedAnswers[submittedId] && storedAnswers[submittedId].value !== submitted.value) {
     const before = evaluate(inputs, { answers: storedAnswers, evidence: {}, recalculations: {}, now: createdAt });
     for (const { id } of before.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === submitted.comparisonItemId)) delete evidenceSubmitted[id];
@@ -259,9 +266,16 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
     if (!isReadyForIdentityVerification(current)) throw fail("not_ready_to_finalize", current.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions first.");
   }
   const trace = { ...resolutionTrace({ engine, rows: inputs.rows, answers, previousTrace, recalculations, finalized: finalizing, now }), computedBy: "server" };
+  // Verification starts from a finalised assessment. A reopened case carries
+  // its completed checks as history, but is not "in verification" (nor
+  // complete) until it is finalised again (review).
+  if (!finalizing && [DISCOVERY_STATE.IDV_IN_PROGRESS, DISCOVERY_STATE.IDV_COMPLETE].includes(trace.discoveryState)) {
+    trace.discoveryState = DISCOVERY_STATE.READY_FOR_IDV;
+    trace.verificationAssessment = { ...trace.verificationAssessment, discoveryState: DISCOVERY_STATE.READY_FOR_IDV };
+  }
 
   let submittedAnswer;
-  if (operation === "SUBMIT_ANSWER") {
+  if (submittedWon) {
     const question = [...engine.questions, ...engineForEvidence.questions].find(({ id }) => id === submittedId);
     if (!question || !answers[submittedId]) throw fail("unknown_question", "That question is not part of this case.", 400);
     submittedAnswer = { question, answer: answers[submittedId] };

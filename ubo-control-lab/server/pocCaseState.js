@@ -265,7 +265,14 @@ function uncomputed(base) {
 /** What makes research different research - the same fields the analyst
  *  screen's save signature uses. Re-saving the same research changes nothing. */
 function researchIdentity(research) {
-  return research ? stableHash([research.jobId, research.status, research.completedAt, research.investigationTopicActivations, research.analystCustomerRequests]) : null;
+  return research ? stableHash(canonical([research.jobId, research.status, research.completedAt, research.investigationTopicActivations, research.analystCustomerRequests, research.candidateSources])) : null;
+}
+
+/** Key order made irrelevant: stored research comes back from jsonb reordered. */
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  return value;
 }
 
 function projectCommand(current, operation, payload, release) {
@@ -284,18 +291,24 @@ function projectCommand(current, operation, payload, release) {
     const renamed = previousCompany && (payload?.demoCase?.company || payload?.company) && !sameCompany(previousCompany, base.demoCase?.company || base.company);
     if (!renamed) return { ...base, currentStage: base.currentStage || "COMPANY_DETAILS" };
     // The chart was read for the old company too.
+    // So were its identity checks: nothing of the old company's history carries over.
     const { chartReference: _reference, chartProjection: _chart, ...rest } = base;
-    return { ...rest, ...uncomputed(base), currentStage: "COMPANY_DETAILS" };
+    const { priorTrace: _history, ...resolution } = uncomputed(base).resolution || {};
+    return { ...rest, resolution: base.resolution ? resolution : base.resolution, assessment: null, currentStage: "COMPANY_DETAILS" };
   }
   if (operation === "REOPEN_CASE") return { ...base, ...uncomputed(base), currentStage: "QUESTIONS" };
-  if (operation === "SAVE_RESEARCH") return {
-    ...base,
+  if (operation === "SAVE_RESEARCH") {
+    // The same research saved again (the analyst screen does, on load) changes nothing.
+    if (current?.researchResult && researchIdentity(current.researchResult) === researchIdentity(durableResearchResult)) return { ...base, researchRelease: release };
     // Questions come from the research: new research drops what was computed from the old.
-    ...(researchIdentity(current?.researchResult) !== researchIdentity(durableResearchResult) ? uncomputed(base) : {}),
-    researchResult: durableResearchResult,
-    researchRelease: release,
-    currentStage: release.mayProceed ? "RESEARCH_COMPLETE" : "DISCOVERY_IN_PROGRESS",
-  };
+    return {
+      ...base,
+      ...uncomputed(base),
+      researchResult: durableResearchResult,
+      researchRelease: release,
+      currentStage: release.mayProceed ? "RESEARCH_COMPLETE" : "DISCOVERY_IN_PROGRESS",
+    };
+  }
   if (operation === "ASSOCIATE_CHART") return {
     ...base,
     chartReference: payload.chartReference,
@@ -489,7 +502,7 @@ class PostgresPocCaseRepository {
     await client.query(`INSERT INTO ubo_poc_assessment_versions
       (assessment_id, case_id, policy_id, policy_version, input_state_version, evidence_references, assessment, calculated_at, finalized_at)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
-      ON CONFLICT (case_id, assessment_id) DO NOTHING`, [current.assessmentVersionId, caseId,
+      ON CONFLICT (case_id, assessment_id) DO UPDATE SET finalized_at = EXCLUDED.finalized_at`, [current.assessmentVersionId, caseId,
       trace.policy?.policyId || "UK_CORPORATE_UBO", current.policyVersion || trace.policy?.policyVersion || "1.0",
       current.inputStateVersion, json(evidenceReferences), json(trace), current.calculatedAt,
       current.finalized ? (current.calculatedAt || new Date().toISOString()) : null]);

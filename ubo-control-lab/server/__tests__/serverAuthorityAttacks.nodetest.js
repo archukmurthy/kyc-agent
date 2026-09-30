@@ -349,3 +349,61 @@ test("reopening keeps the case's history for the next assessment", async () => {
   assert.strictEqual(trace.verificationAssessment.finalized, false);
   assert.ok((trace.idvCompletionHistory || []).some(({ personId }) => personId === person.personId), "the completed verification was lost on reopening");
 });
+
+// Fourth review: a case finalised the honest way, verified, then reopened.
+
+async function verifiedCase() {
+  process.env.UBO_POC_IDV_MODE = "DEMO";
+  const opened = await openCase({ research: 30, chart: 30 });
+  const { customer, projection } = opened;
+  for (let round = 0; round < 20; round += 1) {
+    const open = questionsOf(projection()).find((q) => !projection().resolution.answers[q.id]);
+    if (!open) break;
+    await answer(customer, open, honestValue(open), `v-${round}`);
+  }
+  await customer("FINALIZE_ASSESSMENT", {}, "finalise");
+  const person = projection().assessment.trace.verificationAssessment.verificationPopulation[0];
+  await customer("COMPLETE_IDV", { personId: person.personId }, "idv");
+  return { ...opened, person };
+}
+
+test("an identity check done for one company does not carry over to a renamed one", async () => {
+  const { analyst, projection } = await verifiedCase();
+  await analyst("REOPEN_CASE", {}, "reopen");
+  const renamed = { ...fx.company, legalName: "Other Holdings Limited", registrationNumber: "99887766" };
+  await analyst("UPSERT_CASE", { company: renamed, demoCase: { demoCaseId: "case-1", company: renamed } }, "rename");
+  assert.strictEqual(projection().resolution?.priorTrace, undefined, "the old company's history went with the rename");
+});
+
+test("a reopened case is not shown as in verification, or complete, until finalised again", async () => {
+  const { analyst, customer, projection } = await verifiedCase();
+  await analyst("REOPEN_CASE", {}, "reopen");
+  await customer("SYNC_RESOLUTION", {}, "after-reopen");
+  const trace = projection().assessment.trace;
+  assert.ok(!["IDV_IN_PROGRESS", "IDV_COMPLETE"].includes(trace.discoveryState), trace.discoveryState);
+  assert.ok(!["IDENTITY_VERIFICATION", "COMPLETE"].includes(projection().currentStage), projection().currentStage);
+});
+
+test("research with the same job but different facts is new research", async () => {
+  const { analyst, projection } = await verifiedCase();
+  const stage = projection().currentStage;
+  await analyst("SAVE_RESEARCH", { researchResult: projection().researchResult }, "identical");
+  assert.strictEqual(projection().currentStage, stage, "an identical re-save moved the case's stage");
+  await assert.rejects(analyst("SAVE_RESEARCH", { researchResult: { ...projection().researchResult, candidateSources: fx.researchResult(5).candidateSources } }, "changed-facts"), (error) => error.code === "case_finalized");
+});
+
+test("an invalid answer is refused even when a newer answer is already stored", async () => {
+  const { customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  await answer(customer, q, q.options[1].value, "current");
+  await assert.rejects(customer("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: { value: "GARBAGE", answeredAt: "2000-01-01T00:00:00.000Z", comparisonItemId: q.comparisonItemId } }, submittedAnswer: { question: { id: q.id } } } }, "garbage"), (error) => error.code === "invalid_answer");
+});
+
+test("a late, older answer is kept out without being recorded as this request's answer", async () => {
+  const { customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  await answer(customer, q, q.options[1].value, "current");
+  await customer("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: { value: q.options[0].value, answeredAt: "2000-01-01T00:00:00.000Z", comparisonItemId: q.comparisonItemId } }, submittedAnswer: { question: { id: q.id } } } }, "late");
+  assert.strictEqual(projection().resolution.answers[q.id].value, q.options[1].value);
+  assert.strictEqual(projection().resolution.submittedAnswer, undefined, "the stored answer was recorded under the late request");
+});
