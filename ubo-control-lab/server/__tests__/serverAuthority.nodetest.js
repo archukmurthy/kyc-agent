@@ -13,9 +13,9 @@ function repository() {
   const applied = [];
   return {
     applied,
-    get: async (caseId) => ({ caseId, projection: {} }),
+    get: async (caseId) => ({ caseId, projection: { demoCase: { company: { legalName: "Target Limited", registrationNumber: "00112233" } } } }),
     history: async () => [],
-    extraction: async (jobId) => (jobId === "job-1" ? { jobId: "job-1", demoCaseId: "case-1", artifactId: "artifact-1", state: "COMPLETE", result: SERVER_RESULT } : null),
+    extraction: async (jobId) => (jobId === "job-1" ? { jobId: "job-1", demoCaseId: "case-1", artifactId: "artifact-1", state: "COMPLETE", company: { legalName: "Target Limited", registrationNumber: "00112233" }, result: SERVER_RESULT } : null),
     apply: async (command) => { applied.push(command); return { duplicate: false, record: null }; },
   };
 }
@@ -48,6 +48,6 @@ test("the chart attached to a case is the server's own extraction, not the brows
 
 test("a chart whose extraction has not finished cannot be attached", async () => {
   const repo = repository();
-  repo.extraction = async () => ({ jobId: "job-1", demoCaseId: "case-1", state: "PROCESSING", result: null });
+  repo.extraction = async () => ({ jobId: "job-1", demoCaseId: "case-1", state: "PROCESSING", company: { legalName: "Target Limited", registrationNumber: "00112233" }, result: null });
   await assert.rejects(new PocCaseService(repo).apply({ caseId: "case-1", operation: "ASSOCIATE_CHART", idempotencyKey: "k", payload: { chartReference: { jobId: "job-1" } } }), (error) => error.code === "extraction_not_ready");
 });

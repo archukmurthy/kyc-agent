@@ -79,8 +79,30 @@ async function seed(tenantId, company = COMPANY) {
   await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company, demoCase: { demoCaseId: caseId, company } } });
   await cases.apply({ caseId, operation: "SAVE_RESEARCH", idempotencyKey: "r", actorType: "ANALYST", payload: { researchResult: fx.researchResult(25, company) } });
   await cases.apply({ caseId, operation: "ASSOCIATE_CHART", idempotencyKey: "c", actorType: "CUSTOMER", payload: { chartReference: { jobId: job.jobId } } });
-  const synced = await cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s", actorType: "CUSTOMER", payload: {} });
-  const person = synced.projection.assessment.trace.verificationAssessment.verificationPopulation[0];
+  // The customer's side, done honestly: answer what is asked, upload evidence
+  // for the request it raises, finalise, then complete identity verification.
+  let record = await cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s0", actorType: "CUSTOMER", payload: {} });
+  const now = () => new Date().toISOString();
+  const valueFor = (q) => (q.type === "PERCENTAGE" ? 30 : q.type === "DATE" ? "2026-09-01" : q.id.includes("EXPLAIN_OWNERSHIP_DIFFERENCE") ? "SHARE_TRANSFER" : (q.options.find((o) => (o.value ?? o) === "NO") || q.options[0]).value);
+  for (let round = 0; round < 6; round += 1) {
+    const open = record.projection.resolution.questions.find((q) => !record.projection.resolution.answers[q.id]);
+    if (!open) break;
+    record = await cases.apply({ caseId, operation: "SUBMIT_ANSWER", idempotencyKey: `a${round}`, actorType: "CUSTOMER", payload: { resolution: { answers: { [open.id]: { value: valueFor(open), answeredAt: now(), comparisonItemId: open.comparisonItemId, factRequirementId: open.factRequirementId } }, submittedAnswer: { question: { id: open.id } } } } });
+  }
+  const requirement = record.projection.resolution.evidenceRequirements[0];
+  const evidenceBytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x02, 0xff, 0xd9, ...Buffer.from(`evidence-${tenantId}`)]);
+  const evidenceJob = await deps.service.start({
+    demoContext: { demoCaseId: caseId, referenceCaseId: "ref", company },
+    file: { originalFilename: "transfer.jpg", declaredMediaType: "image/jpeg", sizeBytes: evidenceBytes.length, contentBase64: evidenceBytes.toString("base64") },
+    evidenceHandoff: requirement.handoff,
+  });
+  // What a real extraction of a transfer record returns: integrity-checked, showing the 30%.
+  const chartReading = fx.chartResult(30, company);
+  const evidenceReading = { ...chartReading, artifact: { ...chartReading.artifact, integrityVerified: true } };
+  await db.query("UPDATE evidence_customer_extraction_jobs SET state = 'COMPLETE', result = $2::jsonb, completed_at = now() WHERE id = $1", [evidenceJob.jobId, JSON.stringify(evidenceReading)]);
+  record = await cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s1", actorType: "CUSTOMER", payload: { resolution: { evidence: { [requirement.id]: { artifactId: evidenceJob.artifactId, filename: "transfer.jpg" } } } } });
+  record = await cases.apply({ caseId, operation: "FINALIZE_ASSESSMENT", idempotencyKey: "f", actorType: "CUSTOMER", payload: {} });
+  const person = record.projection.assessment.trace.verificationAssessment.verificationPopulation[0];
   const mode = process.env.UBO_POC_IDV_MODE;
   process.env.UBO_POC_IDV_MODE = "DEMO";
   try { await cases.apply({ caseId, operation: "COMPLETE_IDV", idempotencyKey: "i", actorType: "CUSTOMER", payload: { personId: person.personId } }); }

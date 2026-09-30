@@ -12,7 +12,7 @@ function repository(jobs) {
   const applied = [];
   return {
     applied,
-    get: async (caseId) => ({ caseId, projection: {} }),
+    get: async (caseId) => ({ caseId, projection: { demoCase: { company: { legalName: "Target Limited", registrationNumber: "00112233" } } } }),
     history: async () => [],
     extraction: async (jobId) => jobs[jobId] || null,
     apply: async (command) => { applied.push(command); return { duplicate: false, record: null }; },
@@ -24,7 +24,7 @@ function associate(service, jobId) {
 }
 
 test("a case's own chart job can be attached", async () => {
-  const repo = repository({ "job-1": { jobId: "job-1", demoCaseId: "case-1", state: "COMPLETE", result: { candidateFacts: [] } } });
+  const repo = repository({ "job-1": { jobId: "job-1", demoCaseId: "case-1", state: "COMPLETE", company: { legalName: "Target Limited", registrationNumber: "00112233" }, result: { candidateFacts: [] } } });
   await associate(new PocCaseService(repo), "job-1");
   assert.strictEqual(repo.applied.length, 1);
 });

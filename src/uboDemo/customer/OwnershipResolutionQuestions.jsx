@@ -436,6 +436,9 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   };
   const resetAnswers = () => {
     clearSession(context, result);
+    // The server keeps the answers it is given (merged, most recent wins), so
+    // starting again has to be said to it, not only done in this browser.
+    if (context?.demoCaseId) persistPocCase("RESET_ANSWERS", { caseId: context.demoCaseId, actorType: "CUSTOMER", idempotencyKey: `reset:${Date.now()}`, payload: {} }).catch(() => {});
     requestedRecalculations.current.clear();
     setAnswers({});
     setEvidence({});

@@ -5,22 +5,25 @@
 //
 // It does what the questions screen does, with the same code
 // (src/uboDemo/customer/caseResolution.js and the engines), from what the
-// SERVER holds: the analyst's research, the chart the server extracted, and
-// the extraction results of evidence the customer uploaded. From the browser it
-// takes only the customer's own input - their answers, and which uploaded file
-// was meant for which evidence request. Everything computed - questions,
-// evidence outcomes, recalculations, who is a beneficial owner, who needs
-// identity verification, whether it is finalised - is the server's.
+// SERVER holds: the analyst's research, the chart it extracted, and its own
+// extraction of each evidence upload. From the browser it takes only the
+// customer's input - answers to questions it is actually asking, in the form
+// each question allows, and which upload was meant for which evidence request.
+// Everything computed - questions, evidence outcomes, recalculations, who is a
+// beneficial owner, who needs identity verification, whether it is finalised -
+// is the server's, and the trace says so (computedBy: "server").
 
 const { caseInputs, evaluateCase, resolutionTrace } = require("../../src/uboDemo/customer/caseResolution");
-const { applyResultingFact, determinationFromChartAnalysis, evidenceResultStatus, EVIDENCE_STATUS } = require("../../src/uboDemo/customer/ownershipResolutionEngine");
+const { applyResultingFact, determinationFromChartAnalysis, evidenceResultStatus, EVIDENCE_STATUS, QUESTION_TYPE } = require("../../src/uboDemo/customer/ownershipResolutionEngine");
 const { isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { reevaluateSavedCustomerOwnershipChart } = require("./customerOwnershipChartDemo");
 
 const MAX_ANSWERS = 200;
 const MAX_TEXT = 2000;
+// A browser clock a little ahead is normal; far ahead would pin an answer.
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
 // Outcomes a browser may report for an upload that never reached extraction.
-// Anything that would count as accepted needs the server's own result.
+// Anything that would count as accepted needs the server's own reading.
 const UNPROVEN_EVIDENCE = new Set([EVIDENCE_STATUS.RECEIVED, EVIDENCE_STATUS.VALIDATING, EVIDENCE_STATUS.REJECTED, EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE]);
 
 function fail(code, message, statusCode = 409) {
@@ -29,15 +32,21 @@ function fail(code, message, statusCode = 409) {
 
 const text = (value) => (value == null ? null : String(value).slice(0, MAX_TEXT));
 
-/** The customer's answers, and nothing else that might travel with them. */
-function cleanAnswers(raw) {
+/** The browser's timestamp, if it is a real one and not from the future. */
+function answeredAt(value, now) {
+  const at = Date.parse(value);
+  if (!Number.isFinite(at) || at > Date.parse(now) + CLOCK_SKEW_MS) return now;
+  return new Date(at).toISOString();
+}
+
+/** Only the fields an answer has, with a timestamp the server accepts. */
+function cleanAnswers(raw, now) {
   const out = {};
   for (const [questionId, answer] of Object.entries(raw && typeof raw === "object" ? raw : {}).slice(0, MAX_ANSWERS)) {
     if (!answer || typeof answer !== "object") continue;
-    const value = ["string", "number", "boolean"].includes(typeof answer.value) || answer.value === null ? answer.value : text(JSON.stringify(answer.value));
     out[String(questionId).slice(0, 200)] = {
-      value: typeof value === "string" ? value.slice(0, MAX_TEXT) : value,
-      answeredAt: text(answer.answeredAt),
+      value: answer.value,
+      answeredAt: answeredAt(answer.answeredAt, now),
       factRequirementId: text(answer.factRequirementId),
       comparisonItemId: text(answer.comparisonItemId),
     };
@@ -45,24 +54,98 @@ function cleanAnswers(raw) {
   return out;
 }
 
-/** Each evidence outcome decided from the extraction the server itself ran. */
-async function decideEvidence(engine, raw, findEvidenceResult, now) {
+/** Whether a value is one this question can take. */
+function validFor(question, value) {
+  const options = (question.options || []).map((option) => (option && typeof option === "object" ? option.value : option));
+  switch (question.type) {
+    case QUESTION_TYPE.PERCENTAGE:
+      return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+    case QUESTION_TYPE.DATE:
+      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
+    case QUESTION_TYPE.SINGLE_SELECT:
+    case QUESTION_TYPE.BOOLEAN:
+    case QUESTION_TYPE.ENTITY_SELECT:
+      return options.length ? options.includes(value) : typeof value === "string" && value.length > 0 && value.length <= MAX_TEXT;
+    case QUESTION_TYPE.FREE_TEXT:
+    default:
+      return typeof value === "string" && value.trim().length > 0 && value.length <= MAX_TEXT;
+  }
+}
+
+/** Per question, the most recent answer wins. Requests arrive out of order -
+ *  an older sync completing after a newer answer must not take it away. */
+function mergeAnswers(stored, incoming) {
+  const out = { ...stored };
+  for (const [questionId, answer] of Object.entries(incoming)) {
+    if (!out[questionId] || String(answer.answeredAt || "") >= String(out[questionId].answeredAt || "")) out[questionId] = answer;
+  }
+  return out;
+}
+
+/** The engine, with its own failure on impossible input turned into a refusal
+ *  of the request rather than a stored, permanently broken case. */
+function evaluate(inputs, state) {
+  try {
+    return evaluateCase(inputs, state);
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof RangeError) throw fail("invalid_answer", "An answer could not be used.", 400);
+    throw error;
+  }
+}
+
+/** Keeps only answers to questions the case is asking, in a form each allows.
+ *  Asking is progressive - one answer can raise the next question - so it is
+ *  settled over a few rounds. */
+function acceptedAnswers(inputs, candidate, now, createdAt) {
+  let accepted = {};
+  for (let round = 0; round < 5; round += 1) {
+    const asked = new Map(evaluate(inputs, { answers: accepted, evidence: {}, recalculations: {}, now: createdAt }).questions.map((q) => [q.id, q]));
+    const next = {};
+    for (const [questionId, answer] of Object.entries(candidate)) {
+      const question = asked.get(questionId);
+      if (question && validFor(question, answer.value)) next[questionId] = answer;
+    }
+    if (Object.keys(next).length === Object.keys(accepted).length) return next;
+    accepted = next;
+  }
+  return accepted;
+}
+
+/** Whether an upload was made as evidence for a request of this kind. The job
+ *  keeps only the concepts it was asked to establish (evidence/customerOwnershipJobs
+ *  /service.js#validateRequest), so: some, and all of them this request's. */
+function uploadedFor(stored, requested) {
+  const concepts = stored?.requestedConcepts || [];
+  const wanted = new Set(requested?.requestedConcepts || []);
+  return concepts.length > 0 && concepts.every((concept) => wanted.has(concept));
+}
+
+/** Each evidence outcome decided from the extraction the server itself ran of
+ *  an upload made AS EVIDENCE for a request of this kind - not the ownership
+ *  chart, and not one file counted for two requests. */
+async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, now) {
   const out = {};
-  for (const [requirementId, submitted] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
-    const record = engine.evidenceRequirements.find(({ id }) => id === requirementId);
-    if (!record || !submitted || typeof submitted !== "object") continue;
+  const used = new Set();
+  for (const record of engine.evidenceRequirements) {
+    const submitted = raw?.[record.id];
+    if (!submitted || typeof submitted !== "object") continue;
     const base = { filename: text(submitted.filename), artifactId: submitted.artifactId ? String(submitted.artifactId) : null };
     if (!base.artifactId) {
-      out[requirementId] = { ...base, status: UNPROVEN_EVIDENCE.has(submitted.status) ? submitted.status : EVIDENCE_STATUS.REJECTED, reason: text(submitted.reason) };
+      out[record.id] = { ...base, status: UNPROVEN_EVIDENCE.has(submitted.status) ? submitted.status : EVIDENCE_STATUS.REJECTED };
       continue;
     }
-    const result = await findEvidenceResult(base.artifactId);
-    if (!result) {
-      out[requirementId] = { ...base, status: EVIDENCE_STATUS.VALIDATING };
+    const found = base.artifactId === chartArtifactId || used.has(base.artifactId) ? null : await findEvidenceResult(base.artifactId);
+    if (!found) {
+      out[record.id] = { ...base, status: base.artifactId === chartArtifactId || used.has(base.artifactId) ? EVIDENCE_STATUS.REJECTED : EVIDENCE_STATUS.VALIDATING };
       continue;
     }
+    if (!uploadedFor(found.evidenceHandoff, record.handoff)) {
+      out[record.id] = { ...base, status: EVIDENCE_STATUS.REJECTED, reason: "This file was not uploaded as evidence for this request." };
+      continue;
+    }
+    used.add(base.artifactId);
     const resolution = engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === record.comparisonItemId);
-    out[requirementId] = { ...base, ...evidenceResultStatus(result, resolution, record), validatedAt: text(submitted.validatedAt) || now };
+    out[record.id] = { ...base, ...evidenceResultStatus(found.result, resolution, record), validatedAt: now };
   }
   return out;
 }
@@ -72,9 +155,9 @@ async function decideEvidence(engine, raw, findEvidenceResult, now) {
 function recalculate(engine, inputs, chartResult, demoContext, now) {
   const material = engine.resolutions.filter((resolution) => resolution.resultingFact?.type === "RELATIONSHIP" && resolution.resultingFact.relationship === "ECONOMIC_OWNERSHIP");
   if (!material.length) return {};
-  const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), chartResult);
   let chartAnalysis;
   try {
+    const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), chartResult);
     chartAnalysis = reevaluateSavedCustomerOwnershipChart({ demoContext, savedResult }).chartAnalysis;
   } catch (error) {
     return Object.fromEntries(material.map((resolution) => [resolution.comparisonItemId, {
@@ -89,32 +172,24 @@ function recalculate(engine, inputs, chartResult, demoContext, now) {
   return out;
 }
 
-/** The stored answers with the incoming ones: per question, the most recent
- *  answer wins. Requests can arrive out of order - an older sync completing
- *  after a newer answer must not take the newer answer away. */
-function mergeAnswers(stored, incoming) {
-  const out = { ...stored };
-  for (const [questionId, answer] of Object.entries(incoming)) {
-    if (!out[questionId] || String(answer.answeredAt || "") >= String(out[questionId].answeredAt || "")) out[questionId] = answer;
-  }
-  return out;
+/** The stored trace, if the server wrote it. A trace a browser wrote before
+ *  UBO-13 is not history to build on - its verification completions and
+ *  audit events are the browser's claims. */
+function serverTrace(projection) {
+  const trace = projection?.assessment?.trace || projection?.resolution?.trace || null;
+  return trace?.computedBy === "server" ? trace : null;
 }
 
-/** What an evidence entry was submitted as, without the server's verdict. */
 function submittedEvidence(evidence) {
-  return Object.fromEntries(Object.entries(evidence || {}).map(([id, e]) => [id, { filename: e?.filename, artifactId: e?.artifactId, status: e?.status, reason: e?.reason, validatedAt: e?.validatedAt }]));
-}
-
-function traceFrom(projection) {
-  return projection?.assessment?.trace || projection?.resolution?.trace || projection?.researchResult?.ownershipResolutionTrace || null;
+  return Object.fromEntries(Object.entries(evidence || {}).map(([id, e]) => [id, { filename: e?.filename, artifactId: e?.artifactId, status: e?.status }]));
 }
 
 /**
  * @param projection the case as stored
  * @param incoming   the browser's payload - only answers, evidence choices and
  *                   the id of a submitted question are read from it
- * @param findEvidenceResult async (artifactId) => the server's extraction
- *                   result for an evidence upload of this case, or null
+ * @param findEvidenceResult async (artifactId) => { result, evidenceHandoff }
+ *                   of the server's extraction of an upload for this case, or null
  * @returns {{ resolution, assessment }} to be stored as the case's own
  */
 async function computeCaseAssessment({ projection, caseId, operation, incoming, findEvidenceResult, now = new Date().toISOString() }) {
@@ -124,40 +199,46 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   if (!researchResult || !chartResult || !company) throw fail("case_not_ready", "The case needs its research and ownership chart before questions can be answered.");
 
   const inputs = caseInputs({ researchResult, chartResult, company });
-  const createdAt = projection.resolution?.createdAt || now;
+  const stored = operation === "RESET_ANSWERS" ? { createdAt: projection.resolution?.createdAt } : (projection.resolution || {});
+  const createdAt = stored.createdAt || now;
   const demoContext = { demoCaseId: caseId, referenceCaseId: projection.demoCase?.referenceCaseId || "", company };
-  const stored = projection.resolution || {};
-  const answers = mergeAnswers(cleanAnswers(stored.answers), cleanAnswers(incoming?.resolution?.answers));
-  let evidenceSubmitted = { ...submittedEvidence(stored.evidence), ...submittedEvidence(incoming?.resolution?.evidence) };
+
+  const incomingAnswers = cleanAnswers(operation === "RESET_ANSWERS" ? {} : incoming?.resolution?.answers, now);
+  const submittedId = operation === "SUBMIT_ANSWER" ? String(incoming?.resolution?.submittedAnswer?.question?.id || "") : "";
+  const storedAnswers = acceptedAnswers(inputs, cleanAnswers(stored.answers, now), now, createdAt);
+  const answers = acceptedAnswers(inputs, mergeAnswers(storedAnswers, incomingAnswers), now, createdAt);
+  if (submittedId && (!incomingAnswers[submittedId] || answers[submittedId] !== mergeAnswers(storedAnswers, incomingAnswers)[submittedId])) {
+    throw fail("invalid_answer", "That answer is not one this question accepts.", 400);
+  }
+  let evidenceSubmitted = operation === "RESET_ANSWERS" ? {} : { ...submittedEvidence(stored.evidence), ...submittedEvidence(incoming?.resolution?.evidence) };
 
   // A changed answer, as on the questions screen: evidence given for the old
   // answer no longer counts, and answers the new state no longer asks for go.
-  const submittedId = operation === "SUBMIT_ANSWER" ? String(incoming?.resolution?.submittedAnswer?.question?.id || "") : "";
   const submitted = submittedId ? answers[submittedId] : null;
-  if (submitted && stored.answers?.[submittedId] && stored.answers[submittedId].value !== submitted.value) {
-    const before = evaluateCase(inputs, { answers: cleanAnswers(stored.answers), evidence: {}, recalculations: {}, now: createdAt });
+  if (submitted && storedAnswers[submittedId] && storedAnswers[submittedId].value !== submitted.value) {
+    const before = evaluate(inputs, { answers: storedAnswers, evidence: {}, recalculations: {}, now: createdAt });
     for (const { id } of before.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === submitted.comparisonItemId)) delete evidenceSubmitted[id];
   }
   if (submitted) {
-    const active = new Set(evaluateCase(inputs, { answers, evidence: {}, recalculations: {}, now: createdAt }).questions.map(({ id }) => id));
+    const active = new Set(evaluate(inputs, { answers, evidence: {}, recalculations: {}, now: createdAt }).questions.map(({ id }) => id));
     for (const [questionId, answer] of Object.entries(answers)) {
       if (questionId !== submittedId && answer.comparisonItemId === submitted.comparisonItemId && !active.has(questionId)) delete answers[questionId];
     }
   }
 
-  const engineForEvidence = evaluateCase(inputs, { answers, evidence: {}, recalculations: {}, now: createdAt });
-  const evidence = await decideEvidence(engineForEvidence, evidenceSubmitted, findEvidenceResult, now);
-  const engineForRecalculation = evaluateCase(inputs, { answers, evidence, recalculations: {}, now: createdAt });
+  const engineForEvidence = evaluate(inputs, { answers, evidence: {}, recalculations: {}, now: createdAt });
+  const evidence = await decideEvidence(engineForEvidence, evidenceSubmitted, findEvidenceResult, projection.chartReference?.artifactId || null, now);
+  const engineForRecalculation = evaluate(inputs, { answers, evidence, recalculations: {}, now: createdAt });
   const recalculations = recalculate(engineForRecalculation, inputs, chartResult, demoContext, now);
 
   const finalizing = operation === "FINALIZE_ASSESSMENT";
-  const engine = evaluateCase(inputs, { answers, evidence, recalculations, now: finalizing ? now : createdAt });
-  const previousTrace = traceFrom(projection);
+  const engine = evaluate(inputs, { answers, evidence, recalculations, now: finalizing ? now : createdAt });
+  const previousTrace = serverTrace(projection);
   if (finalizing) {
     const current = resolutionTrace({ engine, rows: inputs.rows, answers, previousTrace, recalculations, now });
     if (!isReadyForIdentityVerification(current)) throw fail("not_ready_to_finalize", current.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions first.");
   }
-  const trace = resolutionTrace({ engine, rows: inputs.rows, answers, previousTrace, recalculations, finalized: finalizing, now });
+  const trace = { ...resolutionTrace({ engine, rows: inputs.rows, answers, previousTrace, recalculations, finalized: finalizing, now }), computedBy: "server" };
 
   let submittedAnswer;
   if (operation === "SUBMIT_ANSWER") {
@@ -180,4 +261,4 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   return { resolution, assessment: { assessmentId: trace.verificationAssessment?.assessmentVersionId, trace, evidence } };
 }
 
-module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers };
+module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers, validFor };

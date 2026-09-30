@@ -62,18 +62,18 @@ test("an upload's outcome is decided from the server's own reading of it", async
 test("only the customer's answer itself is kept - nothing that travels with it", async () => {
   const { resolution: base } = await compute("SYNC_RESOLUTION", {});
   const question = base.questions[0];
-  const { resolution } = await compute("SYNC_RESOLUTION", { resolution: { answers: { [question.id]: { value: "x", answeredAt: NOW, comparisonItemId: question.comparisonItemId, determination: "DEFINITE_NON_UBO", injected: { a: 1 } } } } });
+  const { resolution } = await compute("SYNC_RESOLUTION", { resolution: { answers: { [question.id]: { value: question.options[0].value, answeredAt: NOW, comparisonItemId: question.comparisonItemId, determination: "DEFINITE_NON_UBO", injected: { a: 1 } } } } });
   assert.deepStrictEqual(Object.keys(resolution.answers[question.id]).sort(), ["answeredAt", "comparisonItemId", "factRequirementId", "value"]);
 });
 
 test("a submitted answer names a question of this case, and the question is the server's", async () => {
   const { resolution: base } = await compute("SYNC_RESOLUTION", {});
   const question = base.questions[0];
-  const answers = { [question.id]: { value: "x", answeredAt: NOW, comparisonItemId: question.comparisonItemId } };
+  const answers = { [question.id]: { value: question.options[0].value, answeredAt: NOW, comparisonItemId: question.comparisonItemId } };
   const { resolution } = await compute("SUBMIT_ANSWER", { resolution: { answers, submittedAnswer: { question: { id: question.id, label: "forged label" }, answer: answers[question.id] } } });
   assert.strictEqual(resolution.submittedAnswer.question.id, question.id);
   assert.notStrictEqual(resolution.submittedAnswer.question.label, "forged label");
-  await assert.rejects(compute("SUBMIT_ANSWER", { resolution: { answers: { "invented-question": { value: "x" } }, submittedAnswer: { question: { id: "invented-question" } } } }), (error) => error.code === "unknown_question");
+  await assert.rejects(compute("SUBMIT_ANSWER", { resolution: { answers: { "invented-question": { value: "x" } }, submittedAnswer: { question: { id: "invented-question" } } } }), (error) => error.code === "invalid_answer" && error.statusCode === 400, "an invented question is refused: nothing the case is not asking is accepted");
 });
 
 test("questions wait for the research and the chart", async () => {

@@ -13,9 +13,14 @@ const { PocCaseService } = require("../pocCaseState");
 const STORED_TRACE = {
   contractVersion: "ubo-investigation-trace-v2",
   updatedAt: "2026-09-30T10:00:00.000Z",
+  // What verification starts from: the server's own assessment, finalised and ready.
+  computedBy: "server",
+  discoveryState: "READY_FOR_IDV",
   verificationAssessment: {
     assessmentVersionId: "assessment-1",
     inputStateVersion: "input-1",
+    finalized: true,
+    blockingIssues: [],
     verificationPopulation: [
       { personId: "alice", personName: "Alice Example", partyType: "NATURAL_PERSON", currentRequirementStatus: "REQUIRED", assessmentVersionId: "assessment-1" },
       { personId: "bob", personName: "Bob Example", partyType: "NATURAL_PERSON", currentRequirementStatus: "REQUIRED", assessmentVersionId: "assessment-1" },
@@ -100,7 +105,7 @@ test("a person the stored assessment does not require cannot be marked verified"
 test("a case with no stored assessment cannot have anyone verified", async () => {
   process.env.UBO_POC_IDV_MODE = "DEMO";
   const repository = repositoryWith(null);
-  await assert.rejects(completeIdv(new PocCaseService(repository), "alice"), (error) => error.code === "idv_person_not_required");
+  await assert.rejects(completeIdv(new PocCaseService(repository), "alice"), (error) => error.code === "not_finalized");
   assert.strictEqual(repository.applied.length, 0);
 });
 

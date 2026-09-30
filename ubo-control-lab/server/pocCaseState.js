@@ -1,7 +1,7 @@
 "use strict";
 
 const { computeCaseAssessment } = require("./caseAssessment");
-const { completeIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
+const { completeIdentityVerification, isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { createHash } = require("node:crypto");
 
 const CASE_CONTRACT = "ubo-poc-case-v1";
@@ -261,10 +261,15 @@ function projectCommand(current, operation, payload, release) {
   if (operation === "ASSOCIATE_CHART") return {
     ...base,
     chartReference: payload.chartReference,
-    chartProjection: payload.chartProjection || base.chartProjection,
+    chartProjection: payload.chartProjection,
+    // Computed from the previous chart: dropped, so nothing - identity
+    // verification included - acts on it until the server recomputes. The
+    // customer's answers and uploads are kept as their input.
+    resolution: base.resolution ? { createdAt: base.resolution.createdAt, answers: base.resolution.answers, evidence: base.resolution.evidence } : base.resolution,
+    assessment: null,
     currentStage: "OWNERSHIP_COMPLETE",
   };
-  if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"].includes(operation)) {
+  if (["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "RESET_ANSWERS"].includes(operation)) {
     // Computed by the server from what it holds (caseAssessment.js), so it
     // replaces what was stored rather than being merged with it: merging let
     // answers the customer had withdrawn reappear, and there is no browser
@@ -335,10 +340,12 @@ class PostgresPocCaseRepository {
   /** The server's extraction of an evidence file uploaded for this case. */
   async evidenceResult(caseId, artifactId) {
     if (!artifactId) return null;
-    const row = first(await this.db.query(`SELECT result FROM evidence_customer_extraction_jobs
+    const row = first(await this.db.query(`SELECT result, evidence_handoff FROM evidence_customer_extraction_jobs
       WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3 AND state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL
-      ORDER BY completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
-    return row ? row.result : null;
+      ORDER BY (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    // Which request the upload answered travels with it: an upload that was
+    // not made as evidence (the ownership chart itself, say) has none.
+    return row ? { result: row.result, evidenceHandoff: row.evidence_handoff } : null;
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, payload, release }) {
@@ -483,6 +490,11 @@ async function demoIdentityVerificationPayload(repository, caseId, payload) {
   }
   const record = await repository.get(caseId);
   const stored = traceFrom(record?.projection);
+  // Only from the server's own assessment, finalised and ready - not from a
+  // trace a browser wrote before UBO-13, and not while questions are open.
+  if (!stored || stored.computedBy !== "server" || !stored.verificationAssessment?.finalized || !isReadyForIdentityVerification(stored)) {
+    throw Object.assign(new Error("Identity verification starts once the ownership review has been finalised."), { statusCode: 409, code: "not_finalized" });
+  }
   const now = new Date().toISOString();
   const next = stored ? completeIdentityVerification(stored, payload?.personId, now) : null;
   // completeIdentityVerification hands back the same trace when the person is
@@ -520,7 +532,19 @@ function serverChartProjection(job, caseId) {
 
 // The operations whose resolution and assessment the server computes itself
 // (UBO-13): the browser's copy is only ever a source of the customer's answers.
-const SERVER_COMPUTED = new Set(["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT"]);
+const SERVER_COMPUTED = new Set(["SYNC_RESOLUTION", "SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "RESET_ANSWERS"]);
+// The methods the screens offer (src/uboDemo/calculationPresentation.js).
+const CALCULATION_METHODS = new Set(["POLICY_ALL_ROUTES", "EFFECTIVE_INTEREST", "PSC_CONDITION_ATTRIBUTION"]);
+
+function companyKey(company) {
+  const text = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `${text(company?.registrationNumber)}|${text(company?.legalName)}`;
+}
+
+/** A chart is only for the company the case is about. */
+function sameCompany(a, b) {
+  return Boolean(a && b) && companyKey(a) === companyKey(b);
+}
 
 class PocCaseService {
   constructor(repository) { this.repository = repository; }
@@ -537,30 +561,50 @@ class PocCaseService {
     const caseId = String(command.caseId || command.payload?.demoCase?.demoCaseId || "").trim();
     if (!caseId) throw Object.assign(new Error("caseId is required"), { statusCode: 400, code: "case_id_required" });
     if (!command.idempotencyKey) throw Object.assign(new Error("idempotencyKey is required"), { statusCode: 400, code: "idempotency_key_required" });
-    // A case's chart is a job started for THIS case. Jobs are scoped to the
-    // workspace, so another case's job id would show its uploaded chart here.
-    let incoming = command.payload || {};
-    // Research is the analyst's, recorded by SAVE_RESEARCH alone. Anything
-    // else that arrives with a research result - a customer's step, say - is
-    // not allowed to replace it (UBO-13).
-    if (command.operation !== "SAVE_RESEARCH" && incoming.researchResult !== undefined) {
-      const { researchResult: _ignored, ...rest } = incoming;
-      incoming = rest;
-    }
-    const jobId = command.operation === "ASSOCIATE_CHART" ? incoming.chartReference?.jobId : null;
-    if (jobId) {
+    const operation = command.operation;
+    const customer = command.actorType === "CUSTOMER";
+    let incoming = { ...(command.payload || {}) };
+
+    // What each step may carry (UBO-13, and its adversarial review):
+    // - research is the analyst's, recorded by SAVE_RESEARCH alone;
+    // - the company the case is about is the analyst's - a customer renaming it
+    //   emptied the questions, since research and chart facts are matched to it;
+    // - a resolution or assessment is only ever the server's own; carried by any
+    //   other step it wrote audit rows (and could pre-empt the server's ids).
+    if (operation !== "SAVE_RESEARCH") delete incoming.researchResult;
+    if (customer || operation === "ASSOCIATE_CHART") { delete incoming.company; delete incoming.demoCase; delete incoming.draft; }
+    if (!SERVER_COMPUTED.has(operation)) { delete incoming.resolution; delete incoming.assessment; }
+
+    if (operation === "ASSOCIATE_CHART") {
+      // The chart is a job started for THIS case, for THIS company - and the
+      // server's own reading of it. Nothing about it is taken from the request
+      // but the job id and the calculation method.
+      const jobId = incoming.chartReference?.jobId;
+      if (!jobId) throw Object.assign(new Error("A chart is attached from its extraction job."), { statusCode: 400, code: "job_required" });
       const job = await this.repository.extraction(jobId);
       if (!job || job.demoCaseId !== caseId) throw Object.assign(new Error("Extraction job was not found."), { statusCode: 404, code: "job_not_found" });
-      // The chart is the server's own extraction, never the copy the browser
-      // sends back (UBO-13).
-      incoming = { ...incoming, chartProjection: serverChartProjection(job, caseId) };
-    }
-    if (SERVER_COMPUTED.has(command.operation)) {
       const record = await this.repository.get(caseId);
+      const caseCompany = record?.projection?.demoCase?.company || record?.company;
+      if (!sameCompany(job.company, caseCompany)) throw Object.assign(new Error("This chart was read for a different company."), { statusCode: 409, code: "chart_company_mismatch" });
+      const method = CALCULATION_METHODS.has(incoming.chartReference?.calculationMethod) ? incoming.chartReference.calculationMethod : "EFFECTIVE_INTEREST";
+      incoming = {
+        chartReference: { jobId: job.jobId, artifactId: job.artifactId, state: job.state, calculationMethod: method },
+        chartProjection: serverChartProjection(job, caseId),
+      };
+    }
+
+    if (SERVER_COMPUTED.has(operation)) {
+      const record = await this.repository.get(caseId);
+      // A finalised assessment is what identity verification was started
+      // from; answers after that would change it with no new finalisation.
+      const stored = traceFrom(record?.projection);
+      if (stored?.computedBy === "server" && stored.verificationAssessment?.finalized) {
+        throw Object.assign(new Error("This review has been finalised and can no longer be changed."), { statusCode: 409, code: "case_finalized" });
+      }
       const computed = await computeCaseAssessment({
         projection: record?.projection,
         caseId,
-        operation: command.operation,
+        operation,
         incoming,
         findEvidenceResult: (artifactId) => (this.repository.evidenceResult ? this.repository.evidenceResult(caseId, artifactId) : null),
       });
