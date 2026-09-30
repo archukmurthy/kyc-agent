@@ -803,7 +803,7 @@ not lost with it:
 - **What:** `api/evidence/a2-collect.js` reads `tenantId` from the body with no caller check, and `src/setupProxy.js` mounts it under `npm start`. Production refuses `/api/evidence` (vercel.json, .vercelignore), so it is development only - but anyone reaching a dev server can write Evidence rows under any workspace, including a trial one, and so change what the trial purge sees. Found by the third purge review.
 
 ### UBO-27 - Customer links: built and reviewed; real customers wait for UBO-13
-- **Category:** Security - **Priority:** P0 - **Status:** UNBLOCKED (2026-09-30) - UBO-13 is done: the server computes what the customer's browser used to. Before real customers: an adversarial review of the server calculation, and a browser QA pass of the full customer journey.
+- **Category:** Security - **Priority:** P0 - **Status:** UNBLOCKED (2026-09-30) - UBO-13 is done and has passed four adversarial reviews (UBO-28). Before real customers: the browser QA passes, UBO-30 (local) and UBO-31 (deployed).
 - **Built (2026-09-30):** signed, recipient-bound, 30-day (max 90), withdrawable links; Clerk's emailed code proves the recipient; an 8-hour session bound to that Clerk user and one case; customers limited to customer steps on their own case, their own chart jobs, and only a case that exists; staff routes refuse customer sessions. Adversarial review found and we fixed: a trial user escaping their budget through the customer bucket (HIGH), the shared-computer session pickup, withdrawal failing without shared storage, the link-length setting undoing withdrawals, links outliving deleted cases, a chart job of another case attachable to this one.
 - **Why real customers must wait:** on the partner's flow the customer's browser computes the research trace, the questions and the assessment (who needs identity verification, finalised or not) and the server stores what it is sent (review HIGH, reproduced). A customer could send a forged assessment. That is UBO-13 step 3 (server keeps its own research and chart copies and recomputes), which comes next. Testers are invited staff, playing with their own data.
 
@@ -820,3 +820,35 @@ not lost with it:
 
 ### UBO-29 - Reopen button for the analyst
 - **Category:** Feature - **Priority:** P1 - **Status:** TODO - the server step `REOPEN_CASE` exists (UBO-28); the analyst screen has no button for it yet, so a finalised case is reopened only by calling the API.
+
+### UBO-30 - Browser QA of the whole journey, locally
+- **Category:** QA - **Priority:** P0 - **Status:** TODO (owner will say when) - on `npm start` against ubo-dev, in a real browser, both roles: analyst (sign in, case, research, customer link) and customer (link, emailed code, company, chart upload, questions, evidence, finalise, demo identity check), plus the attacks (another case, a withdrawn link, an expired session). Research runs and chart readings are paid calls: ask the owner before each.
+
+### UBO-31 - Browser QA on the deployed demo
+- **Category:** QA - **Priority:** P0 - **Status:** BLOCKED on UBO-39 (Vercel access) - the same journey as UBO-30 on the live address; mainly proves the deployment's settings, since UBO-30 finds the code's bugs.
+
+### UBO-32 - Backups: prove a restore
+- **Category:** Operations - **Priority:** P0 (P0 row 12) - **Status:** BLOCKED on UBO-39 - Neon keeps point-in-time history; the work is to restore it into a spare database and check the data came back, then write the steps down. A backup nobody has restored is not a backup.
+
+### UBO-33 - A full, append-only audit ledger
+- **Category:** Compliance - **Priority:** P0 (P0 row 10) - **Status:** IN PROGRESS (2026-09-30) - the Production Readiness Solution Guide, section 19: every step recorded permanently and never edited - who (customer, analyst, system), what (a fixed list of event names), when, a correlation id tying related events together, and the reason. Today the case keeps its own events and the trace keeps the calculation's; nothing is one ledger.
+
+### UBO-34 - Policy mode: what row 9 requires
+- **Category:** Product - **Priority:** P0 (P0 row 9) - **Status:** WAITING on the partner - row 9 of her list is called "Policy mode" in our paraphrase, and nothing written says what it requires. The code has a named rulebook (UK corporate UBO, version 1.0) and three calculation methods; her lab shows a test and a real label. Asked (via the owner): which rules apply (25% or 10%), old cases keeping old rules, a test/live switch, who may change it - and the 16 rows as text.
+
+### UBO-35 - See and safely retry a failed job
+- **Category:** Support - **Priority:** P0 (P0 rows 5 and 16) - **Status:** IN PROGRESS (2026-09-30) - chart-reading jobs are durable, but a failed one can be neither inspected nor retried from any screen.
+
+### UBO-36 - Delete buyers' data after seven years
+- **Category:** Retention - **Priority:** P1 - **Status:** DEFERRED (owner, 2026-09-30) - the seven-year rule is stamped on every record (`lib/uboRetention.js`) but nothing deletes when it runs out. Distinct from UBO-RET-1 (making the period configurable) and from UBO-26 (non-buyers, done).
+
+### UBO-37 - Vercel's free plan refuses an every-minute scheduled job
+- **Category:** Deploy - **Priority:** P0 - **Status:** IN PROGRESS (2026-09-30) - `vercel.json` runs `/api/finalize-submissions` every minute. On a Hobby plan a cron more frequent than daily fails the deployment. The KYC worker means nothing to the UBO demo.
+
+### UBO-38 - Keep UBO off on the KYC app
+- **Category:** Security - **Priority:** P0 (before any merge to `main`) - **Status:** IN PROGRESS (2026-09-30) - every file in `api/` becomes a public endpoint on every deployment. Merged into `main`, the UBO endpoints would reach the KYC app, whose database has no UBO tables. A switch keeps them off unless a deployment turns UBO on.
+
+### UBO-39 - Where the demo runs: the partner's project, transferred
+- **Category:** Deploy - **Priority:** P0 - **Status:** WAITING on the partner (2026-09-30) - her answer: reuse the dedicated POC project if access can be granted (Vercel `ubo-poc-v1`, Neon `ubo-poc-db`, Blob `ubo-poc-evidence`, cache `ubo-poc-cache`), never the KYC database. The owner's plan: she transfers the project to the owner's Vercel account, checking the storage moves with it; until then she password-protects the live POC (UBO-23), and removes that protection once ours replaces it.
+- **Settings the demo needs in Vercel (Production):** `REACT_APP_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` (a Clerk app with email-code sign-in), `PLATFORM_OWNER_CLERK_IDS`, `ANTHROPIC_API_KEY`, `COMPANIES_HOUSE_API_KEY`, `SESSION_SECRET`, `CRON_SECRET`, `UBO_POC_HEALTH_KEY` (three long random strings, typed straight into Vercel), `UBO_TRIAL_PURGE_ENABLED=1`, `UBO_POC_IDV_MODE=DEMO`, `DEMO_TOTAL_RESEARCH_RUNS=25`, `DEMO_TOTAL_CHART_UPLOADS=25`; the database, Blob and cache settings come with the connected storage. Then the UBO-only tables (UBO-19) and a look at the old POC data (keep or clear).
+- **Regions:** the Blob store is in Singapore (`sin1`), so testers' documents are stored there; the privacy notice must say so, or a London store replaces it. The database and cache regions are still to be confirmed.

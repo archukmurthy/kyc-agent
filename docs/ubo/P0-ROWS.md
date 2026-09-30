@@ -23,40 +23,40 @@ finalises the flow. Her follow-up answers settled four things:
 - **Retention is seven years**, hard-coded with a comment, nothing ever
   hard-deleted, and a backlog item to make it configurable later (UBO-RET-1).
 
-Status as at 2026-09-22. Update this table in the same commit as the work, the
+Status as at 2026-09-30, after the partner's POC was merged and hardened (branch `ubo/integrate`). Update this table in the same commit as the work, the
 way `CLAUDE.md` is updated — a stale status here is worse than none.
 
 | # | Row | Status | Where it stands |
 | --- | --- | --- | --- |
-| 1 | Authentication | **Done bar the owner's Clerk settings** | Clerk sign-in, server-side verification, trial gate, and a person nobody has added yet is now told so rather than shown a bare error. What remains is not code: password reset / MFA toggles in Clerk, and a production instance - blocked on the domain decision (GOLIVE-3). |
-| 2 | Organisations and roles | **Done** (2026-09-22) | `/ubo-people`, `api/ubo-people.js`. Owner / admin / analyst enforced server-side; invitations by email claimed at first sign-in. The "customer role" is deliberately unbuilt. |
-| 3 | Tenant isolation | **Half done** | The server half: every caller's company comes from our access list, never from the URL or the body. The data half needs UBO's tables to scope. |
-| 4 | Database / persistence | **Hers** | `docs/ubo/SCHEMA-PROPOSAL.md` is a proposal only — nothing applied, five open questions. Seven rows wait on this. |
-| 5 | Durable jobs | **Blocked** | The machinery could be built from the submission-queue shape, but the moment it needs a jobs table it stops. Guessing the shape wastes the work. |
-| 6 | Evidence upload | **Hers** | Needs tables and a flow. |
-| 7 | Questions | **Hers** | Needs tables and a flow. |
-| 8 | Analyst review | **Hers** | Needs tables and a flow. |
-| 9 | Policy mode | **Hers** | Needs tables and a flow. |
-| 10 | Audit history | **In scope again** (owner, 2026-09-24) | Previously "do not action". The Production Readiness Solution Guide asks for a full append-only event ledger (its section 19) with a named event list, actor, four kinds of time, correlation id and reason codes. Waits on the data model, not on permission. |
-| 11 | Observability | **Done bar the alarm** (2026-09-22) | `lib/requestLog.js`: one structured line per failure with a request id the caller can quote, and nothing anybody typed. `GET /api/health` answers booleans only, 503 when the store is down. What remains is the owner's: somewhere for those lines to raise an alarm (GOLIVE-6). |
-| 12 | Backups and recovery | **Blocked** | Nothing to restore until the tables exist. A backup nobody has restored is not a backup. |
-| 13 | Retention | **The rule is done** (2026-09-22) | `lib/uboRetention.js`: seven years, hard-coded, with a test that fails if it is ever read from configuration. Records are stamped on write with the period they were made under. Enforcement over UBO case data follows the tables - and will not have to be remembered then (UBO-RET-1). |
-| 14 | Provider controls | **Done** (2026-09-22) | Timeouts on every provider call, two daily ceilings (100 per account, 500 platform-wide) with alerts at 60% and 85%, keys server-side. Figures are arithmetic, not measurement — COST-1. |
-| 15 | Security regression tests | **Done** (2026-09-22) | `api/__tests__/adversarial.nodetest.js` - 13 tests written from the attacker's side: taking another workspace, escalating a role, spending on an ended trial, forging an address for a fresh allowance, oversized and disguised uploads. Three of them found real defects rather than confirming good behaviour (UBO-3, UBO-4, SEC-1). |
-| 16 | Admin and support basics | **Partly** (2026-09-22) | The people screen and the trial screen, which now shows research runs used per prospect and flags one about to run out. Inspecting a failed job, retrying it safely and seeing a submission queue all still need the jobs table. |
+| 1 | Authentication | **Done bar the owner's Clerk settings** | Clerk sign-in and server-side verification for staff; customers come in through a signed, recipient-bound link proved by Clerk's emailed code. Left: email-code sign-in switched on, and a production instance - blocked on the domain (GOLIVE-3). |
+| 2 | Organisations and roles | **Done** (2026-09-22) | `/ubo-people`, `api/ubo-people.js`. Owner / admin / analyst enforced server-side; a customer is a session on one case, never a role. |
+| 3 | Tenant isolation | **Done** (2026-09-30) | Every UBO row and job is scoped to its workspace, a customer to one case; a trial purge proves no other workspace is touched before it deletes. |
+| 4 | Database / persistence | **Partly** | Her tables (`021_ubo_poc_case_state.sql`, Evidence jobs) are merged, with a `tenants` table they needed. Left: creating them in the demo's database (UBO-19, UBO-39). |
+| 5 | Durable jobs | **Partly** | Chart-reading jobs are durable and resumable. Left: inspecting and retrying a failed one (UBO-35). |
+| 6 | Evidence upload | **Done** (2026-09-30) | Her flow; the server now decides from its own reading of each upload, made as evidence for that request. |
+| 7 | Questions | **Done** (2026-09-30) | Her flow; the server raises the questions and checks every answer (UBO-13, four adversarial reviews). |
+| 8 | Analyst review | **Partly** | Her analyst view; the server has an analyst-only reopen. Left: the reopen button (UBO-29). |
+| 9 | Policy mode | **Waiting on the partner** | A named rulebook and three calculation methods exist; what the row requires is not written anywhere (UBO-34). |
+| 10 | Audit history | **Partly** | Case events and the calculation's own events are kept. Left: one append-only ledger (UBO-33). |
+| 11 | Observability | **Done bar the alarm** (2026-09-22) | `lib/requestLog.js`, `GET /api/health`, and `api/ubo-poc-health.js` behind its own key. Left: somewhere for failures to raise an alarm (GOLIVE-6). |
+| 12 | Backups and recovery | **Not started** | Needs the demo's database; then a restore actually proven (UBO-32). |
+| 13 | Retention | **Partly** | The seven-year rule is stamped on every record; non-buyers' trial data is truly deleted 90 days after the trial (UBO-26). Left, deferred by the owner: deleting buyers' data after seven years (UBO-36). |
+| 14 | Provider controls | **Done** | Timeouts and ceilings (2026-09-22); the public demo adds shared totals of 25 research runs and 25 chart uploads. |
+| 15 | Security regression tests | **Done** | The attack suite, and for the UBO demo the server-authority and customer-link attacks - every review finding is a test. |
+| 16 | Admin and support basics | **Partly** | People and trial screens, and "Mark as customer". Left: failed jobs (UBO-35). |
 
 ## The count
 
-As at 2026-09-22: **five rows done** (2, 13's rule, 14, 15, and 11 and 1 bar a
-setting the owner controls). **Three partly** (3, 13's enforcement, 16). **Eight
-waiting**, of which seven wait on the schema and one waits on her instruction.
+As at 2026-09-30: **eight rows done** (2, 3, 6, 7, 14, 15, and 1 and 11 bar a setting
+the owner controls). **Seven partly** (4, 5, 8, 10, 13, 16, and 9 waiting on the
+partner's definition). **One not started** (12, which needs the demo's database).
 
-Everything buildable without the schema is now built. What is left on this list
-is hers, or waits on her tables.
+As at 2026-09-22 it was five done, three partly and eight waiting.
 
-That reads thin and is not: rows 1 and 2 are the two rows that decide whether a
-prospect can touch anything at all, and row 14 is the one that decides what a
-bad week costs us.
+What is left splits three ways: code we are building now (rows 5, 8, 10, 16 -
+UBO-29, UBO-33, UBO-35); things that need the demo's Vercel project and database
+(rows 4 and 12 - UBO-39, UBO-19, UBO-32); and one row waiting on the partner's
+definition (row 9 - UBO-34). Row 13's last part is deferred by the owner (UBO-36).
 
 ## What the attack suite found
 
@@ -102,8 +102,8 @@ taken:
 6. **UBO-2.** A rate-limited call showed "No completed result was returned";
    the lab now shows what the server actually said.
 
-## The one question that changes the count
+## The question that used to change the count
 
-*"Shall I define the UBO tables, or will you?"* If the answer is us, rows 3, 4,
-5, 6 and 16 all become buildable at once. Nothing else on this page is worth as
-much.
+*"Shall I define the UBO tables, or will you?"* Answered by the merge: her tables
+arrived with her POC (2026-09-29), and rows 3, 6 and 7 became done once her flow
+was put behind our gates and the calculation moved to the server.
