@@ -14,6 +14,7 @@ import { limitNotice } from "../trials/limitNotice";
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isDemoAuditPath, isDemoResearchPath, isDemoReviewPath, navigateDemo } from "./demoRoute";
 import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff";
+import CustomerLinkPanel from "./CustomerLinkPanel";
 import AnalystInvestigationTopics from "./AnalystInvestigationTopics";
 import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
@@ -179,7 +180,7 @@ function CalculationPanel({ view, result, method, onMethodChange, onShowPath }) 
   </section>;
 }
 
-function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest, onActivateTopic, onCancelTopic }) {
+function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, prepareCustomerLink, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest, onActivateTopic, onCancelTopic }) {
   const view = result.view;
   const pending = (result.decisionTargets?.candidateParties?.length || 0) + (result.decisionTargets?.candidateClaims?.length || 0);
   const scope = result.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT;
@@ -216,6 +217,7 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
     {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button><button className="ubo-demo-primary" onClick={onSwitchCustomer}>Switch to customer view</button></div>
     {customerSwitchState && <p className={`ubo-demo-handoff-status ${customerSwitchState.kind}`} role="status">{customerSwitchState.message}</p>}
+    {prepareCustomerLink && <CustomerLinkPanel caseId={demoCase.demoCaseId} prepare={prepareCustomerLink} />}
   </main>;
 }
 
@@ -483,6 +485,12 @@ export default function UboDemoRoot() {
       setReplayLibraryStatus({ kind: "success", message: `${imported.length} saved replay${imported.length === 1 ? "" : "s"} available. Replaying them makes no provider call.` });
     } catch (cause) { setReplayLibraryStatus({ kind: "error", message: cause.message || "The replay library could not be imported." }); }
   };
+  // The same readiness check as the hand-off: the case is saved first, and no
+  // link while research could still change who needs identity verification.
+  const prepareCustomerLink = async () => {
+    const saved = await saveResearchDurably();
+    if (!saved.researchRelease?.mayProceed) throw new Error(saved.researchRelease?.reason || "Discovery is still in progress because unresolved research could change who requires identity verification.");
+  };
   const switchToCustomerView = async () => {
     try {
       setCustomerSwitchState({ kind: "pending", message: "Opening the customer view and transferring this case…" });
@@ -506,7 +514,7 @@ export default function UboDemoRoot() {
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
   else if (researchResult?.status === "FAILED" || researchError) content = <ResearchError error={researchError || researchResult?.error || "Research failed."} result={researchResult} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
-  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
+  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} prepareCustomerLink={prepareCustomerLink} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
   else content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
   return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{content}<DemoFooter pathname={pathname} /></div>;
 }
