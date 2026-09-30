@@ -152,12 +152,13 @@ async function foreignTouches(client, fks, idTables, hasPackages) {
 
   if (hasPackages) {
     for (const table of [...mineTables].filter((t) => idTables.has(t))) {
-      // Members are "<type>:<id>" (evidence/a5b/domain.js); ids are UUIDs, so
-      // the suffix identifies the row whatever the type is called.
+      // Members are "<type>:<id>" or, for joins, "<type>:<id>:<id>:<role>"
+      // (evidence/a5b/domain.js). Ids are UUIDs, so any ":"-delimited segment
+      // equal to the id names the row, whatever the type is called.
       const named = await client.query(`SELECT count(*)::int AS n FROM ${q(table)} t
         JOIN purge_marks pm ON pm.tag = 'mine' AND pm.tbl = '${table}' AND pm.rid = t.ctid
         WHERE EXISTS (SELECT 1 FROM evidence_package_members m
-          WHERE m.canonical_member_reference LIKE '%:' || t.id::text
+          WHERE position(':' || t.id::text || ':' in m.canonical_member_reference || ':') > 0
             AND NOT EXISTS (SELECT 1 FROM purge_marks x WHERE x.tag = 'mine' AND x.tbl = 'evidence_package_members' AND x.rid = m.ctid))`);
       if (named.rows[0].n) touches[`packaged:${table}`] = named.rows[0].n;
     }
@@ -174,6 +175,16 @@ async function purgeTenant(db, tenantId, { dryRun = false, beforeCommit = null }
   try {
     await db.transaction(async (client) => {
       await client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+      // Sealed packages name rows by text, which no foreign key protects, so a
+      // package frozen after this snapshot would be invisible to it. Taken
+      // before the first read; skipped where the table does not exist.
+      await client.query("SAVEPOINT package_lock");
+      try {
+        await client.query("LOCK TABLE evidence_package_members IN SHARE MODE");
+        await client.query("RELEASE SAVEPOINT package_lock");
+      } catch (_) {
+        await client.query("ROLLBACK TO SAVEPOINT package_lock");
+      }
       const fks = await foreignKeys(client);
       const tenantTables = await tablesWithColumn(client, "tenant_id");
       tenantTables.delete("tenants");
@@ -220,7 +231,7 @@ async function purgeTenant(db, tenantId, { dryRun = false, beforeCommit = null }
           await client.query(`DELETE FROM ${q(table)} WHERE ctid IN (SELECT rid FROM purge_marks WHERE tag = 'mine' AND tbl = '${table}')`);
         }
         for (const table of deleteOrder(SHARED_TABLES, fks)) {
-          const textGuard = hasPackages ? `AND NOT EXISTS (SELECT 1 FROM evidence_package_members m WHERE m.canonical_member_reference LIKE '%:' || t.id::text)` : "";
+          const textGuard = hasPackages ? `AND NOT EXISTS (SELECT 1 FROM evidence_package_members m WHERE position(':' || t.id::text || ':' in m.canonical_member_reference || ':') > 0)` : "";
           const removed = await client.query(`DELETE FROM ${q(table)} t
             WHERE t.ctid IN (SELECT rid FROM purge_shared WHERE tbl = '${table}') AND ${unreferenced(table, fks)} ${textGuard}`);
           if (removed.rowCount) shared[table] = removed.rowCount;

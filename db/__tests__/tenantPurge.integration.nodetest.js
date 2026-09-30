@@ -182,10 +182,19 @@ async function touchScenario(kind) {
     survivors.push(["evidence_packages", pkg.id]);
     undo.push(["DELETE FROM evidence_package_members WHERE package_id = $1", pkg.id], ["DELETE FROM evidence_packages WHERE id = $1", pkg.id]);
   }
+  if (kind === "composite package member") {
+    // Review 3: join-table members name rows in the middle of the reference.
+    const [run] = await q("INSERT INTO evidence_extraction_runs (asset_id, artifact_id, extractor_type, extractor_name, schema_reference, status, started_at, completed_at) VALUES ($1, $2, 'ai', 'x', 's', 'completed', now(), now()) RETURNING id", [dArt.asset_id, dArt.id]);
+    const [pkg] = await q(`INSERT INTO evidence_packages (id, tenant_id, context_id, subject_reference_id, purpose_code, as_of, frozen_at, frozen_by_actor_type, caller_scope, freeze_operation_key, request_fingerprint, a5a_availability_rules_version, manifest_version, canonicalization_version, canonical_manifest_bytes, manifest_fingerprint_algorithm, manifest_fingerprint_value, limitations)
+      VALUES (gen_random_uuid(), $1, $2, $3, 'internal_review', now(), now(), 'analyst', 'x', 'fk', $4, 'v', 'v', 'v', $6, 'sha256', $5, '[]'::jsonb) RETURNING id`, [E, eContext.id, eContext.subject_reference_id, hex(), hex(), Buffer.from([0])]);
+    await q("INSERT INTO evidence_package_members (package_id, ordinal, member_type, canonical_member_reference, canonical_member_key, member_role) VALUES ($1, 1, 'evidence_extraction_run_artifact', $2, '{}'::jsonb, 'r')", [pkg.id, `evidence_extraction_run_artifact:${run.id}:${dArt.id}:primary`]);
+    survivors.push(["evidence_packages", pkg.id], ["evidence_extraction_runs", run.id]);
+    undo.push(["DELETE FROM evidence_package_members WHERE package_id = $1", pkg.id], ["DELETE FROM evidence_packages WHERE id = $1", pkg.id], ["DELETE FROM evidence_extraction_runs WHERE id = $1", run.id]);
+  }
   return { dArt, survivors, undo: async () => { for (const [sql, id] of undo) await q(sql, [id]); } };
 }
 
-for (const kind of ["link", "extraction", "package"]) {
+for (const kind of ["link", "extraction", "package", "composite package member"]) {
   test(`another workspace touching this one's data (${kind}) blocks the purge - nothing is deleted`, async (t) => {
     if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
     const scenario = await touchScenario(kind);
