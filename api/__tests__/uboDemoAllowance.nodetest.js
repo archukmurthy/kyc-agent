@@ -63,7 +63,7 @@ function chartWith() {
   }), {
     applyCors: () => false,
     enforceRateLimit: async (req, res, bucket) => { buckets.push(bucket); return true; },
-    requireStaff: async () => ({ kind: "staff", tenantId: "acme", role: "analyst" }),
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst" }),
     demoAllowance: { record: async (bucket) => { counted.push(bucket); } },
   });
   return { handler, buckets, counted };

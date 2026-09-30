@@ -173,6 +173,13 @@ class CustomerOwnershipExtractionJobService {
     return publicJob(job);
   }
 
+  /** Whether a job belongs to this UBO case - asked before a customer, whose
+   *  session names one case, may see or touch it. */
+  async ownedByCase(jobId, caseId) {
+    const job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
+    return Boolean(job && caseId && job.demoCaseId === caseId);
+  }
+
   async status(jobId) {
     const job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
     if (!job) throw Object.assign(new Error("Extraction job was not found."), { code: "job_not_found", statusCode: 404 });

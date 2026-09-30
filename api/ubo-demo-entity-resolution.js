@@ -1,7 +1,7 @@
 "use strict";
 
 const { createDemoEntityMatcher } = require("../ubo-control-lab/server/demoEntityMatching.js");
-const { applyCors, requireStaff } = require("../lib/routeAuth");
+const { applyCors, requireUboCaller } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
 function createHandler(matchEntities = createDemoEntityMatcher()) {
@@ -17,7 +17,9 @@ function createHandler(matchEntities = createDemoEntityMatcher()) {
     // and their workspace itself (lib/rateLimit.js#callerKey). Asking for a
     // tenant we then discard is a claim a reader believes and the code does not
     // keep, and with the login switched off it cannot be enforced anyway.
-    if (!(await requireStaff(req, res))) return undefined;
+    // Staff, or a customer comparing names on their own chart. It reads no
+    // stored data, so a customer session needs no further scoping here.
+    if (!(await requireUboCaller(req, res))) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ success: false, code: "method_not_allowed" });

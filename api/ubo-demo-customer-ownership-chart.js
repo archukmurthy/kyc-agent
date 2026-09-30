@@ -2,12 +2,12 @@
 
 const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
 const { createCustomerOwnershipJobService } = require("../evidence/customerOwnershipJobs/dependencies.js");
-const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
+const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const demoAllowance = require("../lib/demoAllowance");
 const { ensureTenantRow } = require("../lib/tenantRow");
 
-const DEFAULT_GATES = { applyCors, requireStaff, enforceRateLimit, demoAllowance };
+const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance };
 
 function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService, gates = DEFAULT_GATES) {
   return async function customerOwnershipChartHandler(req, res) {
@@ -24,7 +24,7 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
     // route behaves exactly as before until the keys land.
     // The job operations read the caller's workspace (uboCallerTenant below), so
     // this asks for one. Re-evaluating a saved result reads no stored data.
-    const actor = await gates.requireStaff(req, res, { requireTenant: true });
+    const actor = await gates.requireUboCaller(req, res, { requireTenant: true });
     if (!actor) return undefined;
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
@@ -44,6 +44,16 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       const tenantId = uboCallerTenant(actor);
       if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
       dependencies = jobFactory({ tenantId });
+
+      // A customer's session names one case: uploads only for it, and only its
+      // jobs - checked before a job is processed or retried, not after.
+      if (actor.kind === "customer") {
+        const jobOperation = ["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB"].includes(body.operation);
+        const ours = jobOperation
+          ? await dependencies.service.ownedByCase(body.jobId, actor.caseId)
+          : String(body.demoContext?.demoCaseId || "") === actor.caseId;
+        if (!ours) return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
+      }
       let job;
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);

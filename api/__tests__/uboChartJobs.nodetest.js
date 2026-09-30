@@ -33,7 +33,7 @@ function handlerWith(actor) {
   return route.createHandler(null, undefined, jobFactory, {
     applyCors: () => false,
     enforceRateLimit: async () => true,
-    requireStaff: async () => actor,
+    requireUboCaller: async () => actor,
   });
 }
 
@@ -84,8 +84,51 @@ test("the caller's workspace row exists before a chart job is started", async ()
     factoryCalls.push(options);
     const job = { jobId: "job-1", state: "QUEUED" };
     return { db: { query: async (text, params) => { queries.push({ text, params }); return { rows: [] }; } }, service: { start: async () => job }, close: async () => {} };
-  }, { applyCors: () => false, enforceRateLimit: async () => true, requireStaff: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }), demoAllowance: { record: async () => {} } });
+  }, { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }), demoAllowance: { record: async () => {} } });
   await handler({ method: "POST", headers: {}, body: { demoContext: {}, file: {} } }, fakeRes());
   assert.strictEqual(queries.length, 1);
   assert.deepStrictEqual(queries[0].params, ["trial-acme-1a2b3c4d"]);
+});
+
+// Customers: a session for ONE case.
+const CUSTOMER = { kind: "customer", tenantId: "trial-acme-1a2b3c4d", caseId: "case-1", role: "customer" };
+
+function customerHandler() {
+  const done = [];
+  const job = { jobId: "job-1", state: "COMPLETE" };
+  const handler = route.createHandler(null, async () => ({ ok: true }), () => ({
+    service: {
+      ownedByCase: async (jobId, caseId) => jobId === "job-1" && caseId === "case-1",
+      start: async () => { done.push("start"); return job; },
+      status: async () => { done.push("status"); return job; },
+      process: async () => { done.push("process"); return job; },
+      retry: async () => { done.push("retry"); return job; },
+    },
+    close: async () => {},
+  }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => CUSTOMER, demoAllowance: { record: async () => {} } });
+  return { handler, done };
+}
+
+test("a customer uploads a chart for their own case, and not for another", async () => {
+  const { handler, done } = customerHandler();
+  const own = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, own);
+  assert.strictEqual(own.statusCode, 200);
+  const other = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-2" }, file: {} } }, other);
+  assert.strictEqual(other.statusCode, 404);
+  assert.deepStrictEqual(done, ["start"]);
+});
+
+test("a customer follows only their own case's jobs, checked before anything runs", async () => {
+  const { handler, done } = customerHandler();
+  for (const operation of ["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB"]) {
+    const res = fakeRes();
+    await handler({ method: "POST", headers: {}, body: { operation, jobId: "job-of-another-case" } }, res);
+    assert.strictEqual(res.statusCode, 404, operation);
+  }
+  assert.deepStrictEqual(done, [], "nothing was processed or retried for another case");
+  const own = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { operation: "PROCESS_EXTRACTION_JOB", jobId: "job-1" } }, own);
+  assert.strictEqual(own.statusCode, 200);
 });
