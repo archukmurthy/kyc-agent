@@ -43,7 +43,8 @@
     "idv:harness": "node idv/harness/server.js",
     "eject": "react-scripts eject",
     "access": "node -r dotenv/config scripts/access.js",
-    "db:migrate": "node db/migrate-all.js"
+    "db:migrate": "node db/migrate-all.js",
+    "db:migrate:ubo": "node db/migrate-all.js --set=ubo"
   },
   "eslintConfig": {
     "extends": [

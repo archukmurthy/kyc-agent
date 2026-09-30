@@ -6,6 +6,8 @@
  *
  *   npm run db:migrate         apply what is pending
  *   npm run db:migrate -- --dry   say what would happen, change nothing
+ *   npm run db:migrate:ubo     the UBO demo's database: UBO's and Evidence's
+ *                              tables only, never KYC's (db/migrationSets.js)
  *
  * Replaces applying files by hand with db/apply.js and remembering which
  * environment had which. The old script stays for one-off use; this is the one
@@ -17,10 +19,13 @@
 require("dotenv").config({ path: ".env.local" });
 const { neon } = require("@neondatabase/serverless");
 const runner = require("./migrationRunner");
+const { filesFor, looksLikeSet } = require("./migrationSets");
 
 async function main() {
   const dryRun = process.argv.includes("--dry");
   const baseline = process.argv.includes("--baseline");
+  const set = (process.argv.find((arg) => arg.startsWith("--set=")) || "").slice("--set=".length) || null;
+  const everything = process.argv.includes("--all");
 
   if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL is not set. Nothing to migrate against.");
@@ -45,7 +50,21 @@ async function main() {
     console.log("Only correct on a database that was already migrated by hand.\n");
   }
 
-  const result = await runner.run({ sql, dryRun, baseline, log: (line) => console.log(`  ${line}`) });
+  if (!set && !everything) {
+    // Every file against a database that has only ever had one set - the UBO
+    // demo's - would put KYC's tables into it.
+    const applied = await sql("SELECT filename FROM schema_migrations ORDER BY filename;").then((rows) => rows.map((row) => row.filename), () => []);
+    const only = looksLikeSet(applied);
+    if (only) {
+      console.error(`This database has only ever had the ${only} set. Run npm run db:migrate:${only},`);
+      console.error("or add --all if it really should get every table.");
+      process.exit(1);
+    }
+  }
+  if (set) console.log(`Only the ${set} set.
+`);
+
+  const result = await runner.run({ sql, files: filesFor(set, runner.readMigrations()), dryRun, baseline, log: (line) => console.log(`  ${line}`) });
 
   if (result.drift.length) {
     // Recorded as applied here but missing from the folder. Worth stopping for:

@@ -742,7 +742,7 @@ not lost with it:
 - **What:** `schedulePersistence` in `api/ubo-discovery.js` starts the cache, audit and database writes after the response is sent. On Vercel the function can be frozen once it has responded, so an audit record can be silently lost. Use the platform's `waitUntil`, or await the audit write.
 
 ### UBO-19 - The migration runner cannot build a UBO-only database
-- **Category:** Deploy - **Priority:** P1 - **Status:** OPEN (before the demo database is migrated)
+- **Category:** Deploy - **Priority:** P1 - **Status:** DONE (2026-09-30) - `npm run db:migrate:ubo` applies only the UBO set (`db/migrationSets.js`); a full `db:migrate` against a database that has only had the UBO set is refused unless `--all`; a test fails if a new `ubo_`/`evidence_` migration is not in the set, or the set references a table it does not create. Every file in the set re-runs safely, so the partner's hand-built database can be brought up to date (dry run first).
 - **What:** `npm run db:migrate` applies every file in `db/migrations/`, which would put KYC tables into the UBO database. `ubo-dev` was built by calling `migrationRunner.run` with only 001, 009, the evidence files and 021. That needs to be a supported option, not a one-off.
 
 ### UBO-20 - The brand-default test does not look where the partner's code lives
