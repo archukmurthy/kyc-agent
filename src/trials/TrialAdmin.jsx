@@ -10,7 +10,7 @@
  * use it, and a prettier version is time not spent on the product.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { createInvite, inviteLink, listInvites, revokeInvite } from "./trialApi";
+import { createInvite, inviteLink, listInvites, markCustomer, revokeInvite } from "./trialApi";
 
 const FONT = "system-ui, -apple-system, Segoe UI, sans-serif";
 const page = { maxWidth: 860, margin: "40px auto", padding: "0 20px", fontFamily: FONT, lineHeight: 1.5 };
@@ -131,6 +131,7 @@ export default function TrialAdmin() {
               <td style={cell}>
                 {invite.company}
                 {invite.revoked ? <div style={{ color: "#a40e26", fontSize: 12 }}>withdrawn</div> : null}
+                {invite.customer ? <div style={{ color: "#1a7f37", fontSize: 12, fontWeight: 600 }}>customer - work kept</div> : null}
               </td>
               <td style={{ ...cell, fontFamily: "ui-monospace, Menlo, monospace", wordBreak: "break-all" }}>
                 {inviteLink(invite.code)}
@@ -152,6 +153,18 @@ export default function TrialAdmin() {
               </td>
               <td style={cell}>{invite.days}</td>
               <td style={cell}>
+                {/* A non-buyer's work is deleted 90 days after the trial ends.
+                    This is the only thing that keeps a buyer's. */}
+                <button
+                  type="button"
+                  style={{ ...button, background: "#fff", color: invite.customer ? "#57606a" : "#1a7f37", border: "1px solid #d0d7de", padding: "4px 10px", fontSize: 12, marginRight: 6 }}
+                  onClick={async () => {
+                    await markCustomer(invite.code, !invite.customer);
+                    refresh();
+                  }}
+                >
+                  {invite.customer ? "Undo customer" : "Mark as customer"}
+                </button>
                 {invite.revoked ? null : (
                   <button
                     type="button"

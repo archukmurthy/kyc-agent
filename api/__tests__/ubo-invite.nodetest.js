@@ -105,3 +105,28 @@ test("redemption is rate-limited before anything is looked up", async () => {
   assert.equal(res.statusCode, 429);
   assert.equal(lookedUp, false);
 });
+
+test("only an owner can mark a trial as a customer", async () => {
+  // The mark decides whose data survives the 90-day deletion.
+  let marked = false;
+  invite.__setDeps({
+    requireStaff: async (_req, res) => { res.status(403).json({ error: "forbidden" }); return null; },
+    trials: { markCustomer: async () => { marked = true; return true; } },
+  });
+  const { req, res } = call({ body: { action: "mark_customer", code: "ACME-7D3K", customer: true } });
+  await invite(req, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(marked, false);
+});
+
+test("an owner marks a trial as a customer, recorded against them", async () => {
+  let args;
+  invite.__setDeps({
+    requireStaff: async () => ({ kind: "staff", userId: "user_owner", role: "owner", tenantId: null }),
+    trials: { markCustomer: async (code, options) => { args = { code, ...options }; return true; } },
+  });
+  const { req, res } = call({ body: { action: "mark_customer", code: "ACME-7D3K", customer: true } });
+  await invite(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(args, { code: "ACME-7D3K", customer: true, by: "user_owner" });
+});

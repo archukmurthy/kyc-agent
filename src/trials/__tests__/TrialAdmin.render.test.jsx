@@ -12,10 +12,12 @@ import TrialAdmin from "../TrialAdmin";
 const mockListInvites = jest.fn();
 const mockCreateInvite = jest.fn();
 const mockRevokeInvite = jest.fn();
+const mockMarkCustomer = jest.fn();
 jest.mock("../trialApi", () => ({
   listInvites: (...a) => mockListInvites(...a),
   createInvite: (...a) => mockCreateInvite(...a),
   revokeInvite: (...a) => mockRevokeInvite(...a),
+  markCustomer: (...a) => mockMarkCustomer(...a),
   inviteLink: (code) => `https://example.test/ubo-demo?invite=${code}`,
 }));
 
@@ -23,6 +25,7 @@ beforeEach(() => {
   mockListInvites.mockReset();
   mockCreateInvite.mockReset();
   mockRevokeInvite.mockReset();
+  mockMarkCustomer.mockReset();
 });
 
 test("creating a link asks the server for one and shows it", async () => {
@@ -118,4 +121,20 @@ test("an invite from before the count existed reads as zero, not as blank", asyn
   });
   render(<TrialAdmin />);
   expect(await screen.findByText("0 / 100")).toBeInTheDocument();
+});
+
+test("marking a trial as a customer is one click, shown, and undoable", async () => {
+  // A non-buyer's work is deleted 90 days after the trial ends; this mark is
+  // what keeps a buyer's.
+  mockListInvites
+    .mockResolvedValueOnce({ invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 5, seatsUsed: 2, days: 7, revoked: false, customer: null }] })
+    .mockResolvedValueOnce({ invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 5, seatsUsed: 2, days: 7, revoked: false, customer: { markedAt: "2026-09-30T10:00:00.000Z", markedBy: "user_owner" } }] });
+  mockMarkCustomer.mockResolvedValue({ code: "ACME-7D3K", customer: true });
+
+  render(<TrialAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: /mark as customer/i }));
+
+  await waitFor(() => expect(mockMarkCustomer).toHaveBeenCalledWith("ACME-7D3K", true));
+  expect(await screen.findByText(/customer - work kept/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /undo customer/i })).toBeInTheDocument();
 });

@@ -31,6 +31,7 @@ async function call(body, { method = "POST", query = "" } = {}) {
 
 export const createInvite = (invite) => call({ action: "create", ...invite });
 export const revokeInvite = (code) => call({ action: "revoke", code });
+export const markCustomer = (code, customer) => call({ action: "mark_customer", code, customer });
 export const listInvites = () => call(null, { method: "GET", query: "?action=list" });
 export const redeemInvite = (code) => call({ action: "redeem", code });
 export const trialStatus = () => call(null, { method: "GET", query: "?action=status" });

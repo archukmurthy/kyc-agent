@@ -11,6 +11,9 @@
  *                                     left
  *   POST { action: "create", ... }    OWNER ONLY - makes a link
  *   POST { action: "revoke", code }   OWNER ONLY - kills a link
+ *   POST { action: "mark_customer", code, customer }
+ *                                     OWNER ONLY - marks a company as a buyer,
+ *                                     so its work is never auto-deleted
  *   GET  ?action=list                 OWNER ONLY - every invite and its seats
  *
  * The owner actions are checked HERE, on the server. The screen that calls them
@@ -52,7 +55,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // ── owner actions ────────────────────────────────────────────────────
-    if (action === "create" || action === "revoke" || action === "list") {
+    if (action === "create" || action === "revoke" || action === "list" || action === "mark_customer") {
       const owner = await ownerOf(req, res);
       if (!owner) return undefined;
 
@@ -67,6 +70,15 @@ module.exports = async function handler(req, res) {
           createdBy: owner.userId,
         });
         return send(res, 200, { invite });
+      }
+
+      if (action === "mark_customer") {
+        // Decides whose work survives the 90-day deletion of non-buyers' data.
+        const code = String((req.body || {}).code || "");
+        if (!code) return send(res, 400, { error: "code_required" });
+        const customer = (req.body || {}).customer !== false;
+        const done = await _deps.trials.markCustomer(code, { customer, by: owner.userId });
+        return send(res, done ? 200 : 404, done ? { code, customer } : { error: "invite_invalid" });
       }
 
       if (action === "revoke") {
