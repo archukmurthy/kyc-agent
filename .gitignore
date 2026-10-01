@@ -42,3 +42,6 @@ watch-claude.ps1
 # Local scratch/preview work (standalone HTML previews of parked screens, throwaway
 # harnesses). Kept on disk as a local tool; never tracked.
 scratch/
+
+# Documents uploaded while testing UBO locally (EVIDENCE_ARTIFACT_DIR)
+.evidence-files/
