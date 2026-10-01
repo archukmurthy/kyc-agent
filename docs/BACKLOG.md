@@ -881,3 +881,14 @@ not lost with it:
 
 ### UBO-47 - A sync erased answers saved at the same moment
 - **Category:** Data integrity - **Priority:** P0 - **Status:** DONE (2026-10-01) - found in the browser test: the questions screen sends a sync with each answer; the server computed the sync from the case as it was before the answer, then wrote that whole state back, erasing the answer (two of three answers lost; the audit ledger still recorded all three). Server-computed steps now carry the version of the case they read (`updated_at` to the microsecond); the write is refused if the case changed meanwhile, and the step reads and recomputes again (up to three times). Tested with a staged race and with truly simultaneous requests on Postgres.
+
+### UBO-48 - Findings from the end-to-end browser test (2026-10-01)
+- **Category:** Quality - **Priority:** P2 - **Status:** OPEN - the full journey passed (research, customer link, chart, questions, finalise, demo identity checks, analyst review, reopen, case ledger) on one research run and one chart reading. Left over:
+- **"Continue to identity verification" shows while questions are still open.** The server refuses it correctly; the button should not be offered until nothing is open.
+- **Stale copy on the chart page:** "This browser also keeps a convenient replay copy" - untrue since UBO-22.
+- **Demo identity checks read as real ones.** The customer page shows "✓ Identity verification completed" and the analyst page "IDV completed 2 of 2"; only a footnote says DEMO. The stored record is correct (`verificationMode: "DEMO"`); the label should say "Demo - not verified" wherever it is shown.
+- **After a reopen the analyst page says "Customer resolution trace is not available yet".** True but unhelpful: it should say the review was reopened and is waiting for the customer.
+- **"1 paid AI steps left"** - singular.
+- **Typed answer vanished once on the questions page after a reload** (retyped and it stuck). Not yet confirmed as a product bug versus automation timing; reproduce by hand before fixing.
+- **Decision needed:** a customer's chart or evidence reading is not counted against the trial's paid AI steps (only against the demo total). Should it be?
+- **Expected, not a bug:** the chart reading missed one of two 50% holders; the customer's questions caught it and the answer completed the picture.
