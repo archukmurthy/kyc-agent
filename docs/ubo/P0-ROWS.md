@@ -10,6 +10,11 @@ could answer, and only until they forgot. That is the failure
 `docs/HOW-WE-BUILD.md` names: a finding that exists only in a conversation or a
 commit message.
 
+**Which list this is (2026-10-01):** asked to write the rows out, the partner
+described a different list - the sixteen things every assessment must record
+(UBO-41). Nobody has the original screenshot. This file stays as our production
+checklist; her list is tracked separately.
+
 **A caveat that matters:** the row titles below are our paraphrase, taken from
 the discussion of her list, not her verbatim wording. The numbers are hers and
 have been used consistently in every conversation since. If she sends the list
