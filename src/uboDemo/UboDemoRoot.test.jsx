@@ -717,18 +717,18 @@ test("an ended trial reads as a sales moment, not a malfunction", async () => {
   expect(screen.queryByRole("button", { name: /try/i })).not.toBeInTheDocument();
 });
 
-test("a spent research budget says so, and offers a conversation", async () => {
+test("a spent trial budget says so, and offers a conversation", async () => {
   window.fetch = jest.fn(() => refusal(403, {
     code: "trial_budget_spent",
-    message: "This trial has used all 100 research runs. Your work is still here - get in touch to continue.",
+    message: "This trial has used all 100 paid AI steps (research runs and document readings). Your work is still here - get in touch to continue.",
   }));
 
   renderStart();
   completeRequiredFields();
   fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
 
-  expect(await screen.findByText(/used all its research runs/i)).toBeInTheDocument();
-  expect(screen.getByText(/all 100 research runs/)).toBeInTheDocument();
+  expect(await screen.findByText(/used all its paid AI steps/i)).toBeInTheDocument();
+  expect(screen.getByText(/all 100 paid AI steps/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /try/i })).not.toBeInTheDocument();
 });
 

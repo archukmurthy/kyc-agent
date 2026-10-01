@@ -5,6 +5,7 @@ const { createCustomerOwnershipJobService } = require("../evidence/customerOwner
 const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const demoAllowance = require("../lib/demoAllowance");
+const trials = require("../lib/uboTrials");
 const { ensureTenantRow } = require("../lib/tenantRow");
 const auditLedger = require("../ubo-control-lab/server/auditLedger");
 
@@ -17,7 +18,7 @@ function documentEventType(started, job) {
   return null;
 }
 
-const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance };
+const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance, trials };
 
 function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService, gates = DEFAULT_GATES) {
   return async function customerOwnershipChartHandler(req, res) {
@@ -79,7 +80,10 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         job = await dependencies.service.retry(body.jobId);
         // A retry reads the document again, and pays again: one of the demo's
         // uploads, as the first reading was. Checked with the paid limit above.
-        if (job?.retried) await gates.demoAllowance.record("ubo-demo-chart");
+        if (job?.retried) {
+          await gates.demoAllowance.record("ubo-demo-chart");
+          await (gates.trials || trials).countPaidStep(actor);
+        }
       }
       else {
         // A trial workspace has no tenants row until its first write.
@@ -88,6 +92,8 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         started = true;
         // One of a public demo's shared uploads (a no-op anywhere else).
         await gates.demoAllowance.record("ubo-demo-chart");
+        // ...and one of the caller's trial steps, here where it is spent (UBO-44).
+        await (gates.trials || trials).countPaidStep(actor);
       }
       if (job?.correlationId) res.setHeader("X-Correlation-Id", job.correlationId);
       const eventType = documentEventType(started, job);

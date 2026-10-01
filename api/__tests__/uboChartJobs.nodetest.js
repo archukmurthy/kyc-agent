@@ -167,3 +167,18 @@ test("a retry that runs the reading again counts toward the demo's uploads; one 
   assert.deepStrictEqual(recorded.spent, ["ubo-demo-chart"]);
   assert.deepStrictEqual(recorded.buckets, ["ubo-demo-chart", "ubo-demo-chart"], "a retry is checked against the paid limit");
 });
+
+test("starting a chart reading uses one trial step for the caller, a status poll none", async () => {
+  const counted = [];
+  const service = { start: async () => ({ jobId: "job-1", state: "QUEUED", demoCaseId: "case-1" }), status: async () => ({ jobId: "job-1", state: "QUEUED" }) };
+  const handler = route.createHandler(null, undefined, () => ({ service, close: async () => {} }), {
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "user_1" }),
+    demoAllowance: { record: async () => {} },
+    trials: { countPaidStep: async (actor) => { counted.push(actor.userId); } },
+  });
+  await handler({ method: "POST", headers: {}, body: { operation: "GET_EXTRACTION_JOB", jobId: "job-1" } }, fakeRes());
+  await handler({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, fakeRes());
+  assert.deepEqual(counted, ["user_1"]);
+});

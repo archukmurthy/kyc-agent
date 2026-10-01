@@ -126,3 +126,37 @@ test("a signed-in caller cannot be overridden by the dev variable", async () => 
   assert.equal(seenTenant, "acme");
   delete process.env.UBO_DEV_TENANT_ID;
 });
+
+// UBO-44: a trial's paid AI step is counted where the AI call starts - never
+// for a request that is refused, or answered from the cache.
+function counting() {
+  const counted = [];
+  discovery.__setDeps({
+    enforceRateLimit: async () => true,
+    demoAllowance: { record: async () => {} },
+    trials: { countPaidStep: async (actor) => { counted.push(actor.userId); } },
+    runUboFramework: async () => ({ status: "COMPLETE", entities: [] }),
+  });
+  return counted;
+}
+
+test("a request refused for want of a workspace uses no trial step", async () => {
+  const counted = counting();
+  discovery.__setDeps({ requireStaff: async () => ({ kind: "staff", userId: "user_owner", role: "owner", tenantId: null }) });
+  const { req, res } = fakeReqRes(VALID);
+  await discovery(req, res);
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(counted, []);
+});
+
+test("a cached result uses no trial step; a live run uses exactly one", async () => {
+  const counted = counting();
+  discovery.__setDeps({ requireStaff: async () => ({ kind: "staff", userId: "user_1", role: "analyst", tenantId: "trial-acme-1a2b3c4d" }) });
+  discovery.__setDeps({ getFresh: async () => ({ result: { status: "COMPLETE" }, cachedAt: "2026-10-01T00:00:00.000Z", expiresAt: "2026-10-02T00:00:00.000Z" }) });
+  await discovery(fakeReqRes(VALID).req, fakeReqRes(VALID).res);
+  assert.deepEqual(counted, [], "the cache spent nothing");
+  discovery.__setDeps({ getFresh: async () => null });
+  const live = fakeReqRes(VALID);
+  await discovery(live.req, live.res);
+  assert.deepEqual(counted, ["user_1"]);
+});

@@ -179,9 +179,11 @@ test("a trial that has spent its research budget cannot spend more", async () =>
   assert.match(res.body.message, /all 100 paid AI steps/);
 });
 
-test("a live trial's research is counted, so the budget is a real number", async () => {
-  // It was not being counted at all: statusFor computed a budget nobody ever
-  // decremented, so "100 research runs" was decoration.
+test("a live trial's research step is counted where it is spent, not at the door", async () => {
+  // It was not being counted at all once: statusFor computed a budget nobody
+  // ever decremented. Then it was counted here, before the request was checked,
+  // so a refused request used a step too (UBO-44). The research route now
+  // counts it where the AI call starts (api/__tests__/ubo-discovery-tenant.nodetest.js).
   const recorded = armLimiter({
     session: { userId: "user_1" },
     access: { tenantId: "trial-acme-1", role: "analyst" },
@@ -189,7 +191,10 @@ test("a live trial's research is counted, so the budget is a real number", async
   });
   const { req, res } = reqRes({ headers: { authorization: "Bearer t" } });
   assert.equal(await rateLimit.enforceRateLimit(req, res, "ubo-discovery"), true);
-  assert.deepEqual(recorded.trialSpend, ["user_1"]);
+  assert.deepEqual(recorded.trialSpend, [], "the door does not count it");
+  const other = reqRes({ headers: { authorization: "Bearer t" } });
+  assert.equal(await rateLimit.enforceRateLimit(other.req, other.res, "research"), true);
+  assert.deepEqual(recorded.trialSpend, ["user_1"], "a paid route that does not count for itself is still counted here");
 });
 
 test("a read does not burn a trial's research budget", async () => {
