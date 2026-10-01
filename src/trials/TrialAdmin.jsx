@@ -56,11 +56,12 @@ const SCOPED_CSS = `
 
 const NO_ACCESS = "Your account is not set up yet. Whoever invited you needs to add you before you can see anything here.";
 
-/** How full a count is, as a bar: green, amber when nearly used, red when used up. */
-function Meter({ used, total, warn }) {
+/** How full a count is, as a bar: green, amber when nearly used, red when used
+ *  up - unless being full is fine (every seat taken is a good sign). */
+function Meter({ used, total, warn, fullIsFine = false }) {
   const share = total > 0 ? Math.min(1, used / total) : 0;
   const full = total > 0 && used >= total;
-  const colour = full ? C.red : warn ? C.amber : C.green;
+  const colour = full && !fullIsFine ? C.red : warn ? C.amber : C.green;
   return (
     <div aria-hidden="true" style={{ height: 6, borderRadius: 3, background: C.mint, marginTop: 6, overflow: "hidden", width: 120 }}>
       <div style={{ width: `${Math.round(share * 100)}%`, height: "100%", background: colour, borderRadius: 3 }} />
@@ -73,7 +74,7 @@ function Pill({ tone, children }) {
     active: { color: C.green, background: C.mint },
     customer: { color: C.greenDark, background: "#d6efe6" },
     withdrawn: { color: C.red, background: C.redBg },
-    full: { color: C.amber, background: C.amberBg },
+    full: { color: C.greenDark, background: "#d6efe6" },
   };
   return <span style={{ display: "inline-block", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 999, marginRight: 6, ...tones[tone] }}>{children}</span>;
 }
@@ -274,7 +275,7 @@ export default function TrialAdmin() {
                     </td>
                     <td style={{ ...cell, fontVariantNumeric: "tabular-nums" }}>
                       <span style={{ fontWeight: 600 }}>{invite.seatsUsed} / {invite.seats}</span>
-                      <Meter used={invite.seatsUsed} total={invite.seats} />
+                      <Meter used={invite.seatsUsed} total={invite.seats} fullIsFine />
                     </td>
                     <td style={{ ...cell, fontVariantNumeric: "tabular-nums" }}>
                       {/* Seats say how many arrived; runs say whether they actually
