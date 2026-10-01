@@ -24,14 +24,14 @@ const NOTICES = {
     fallback: "This trial has ended. Your work is still here and can be viewed - get in touch to continue.",
   },
   trial_budget_spent: {
-    title: "This trial has used all its research runs",
+    title: "This trial has used all its paid AI steps",
     action: "contact",
-    fallback: "This trial has used all its research runs. Your work is still here - get in touch to continue.",
+    fallback: "This trial has used all its paid AI steps (research runs and document readings). Your work is still here - get in touch to continue.",
   },
   demo_allowance_spent: {
     title: "This demo has used all its runs",
     action: "contact",
-    fallback: "This demo has used all its research runs. Get in touch to continue.",
+    fallback: "This demo has reached its limit. Get in touch to continue.",
   },
   spend_cap_reached: {
     title: "Research is paused for today",

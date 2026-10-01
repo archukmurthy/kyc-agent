@@ -130,3 +130,35 @@ test("an owner marks a trial as a customer, recorded against them", async () => 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(args, { code: "ACME-7D3K", customer: true, by: "user_owner" });
 });
+
+test("only an owner can change a trial's paid AI steps", async () => {
+  invite.__setDeps({
+    requireStaff: async (_req, res) => { res.status(403).json({ error: "forbidden" }); return null; },
+    trials: { setBudget: async () => { throw new Error("must not be reached"); } },
+  });
+  const { req, res } = call({ body: { action: "set_budget", code: "ACME-7D3K", budget: 50 } });
+  await invite(req, res);
+  assert.equal(res.statusCode, 403);
+});
+
+test("an owner changes a trial's paid AI steps; a bad number or unknown link is refused", async () => {
+  invite.__setDeps({
+    requireStaff: async () => ({ kind: "staff", userId: "user_owner", role: "owner", tenantId: null }),
+    trials: {
+      setBudget: async (code, budget) => {
+        if (!Number.isInteger(budget) || budget < 1) throw Object.assign(new Error("A budget is a whole number from 1 to 10,000."), { code: "budget_invalid" });
+        return code === "ACME-7D3K" ? { code, budget } : null;
+      },
+    },
+  });
+  const ok = call({ body: { action: "set_budget", code: "ACME-7D3K", budget: 50 } });
+  await invite(ok.req, ok.res);
+  assert.equal(ok.res.statusCode, 200);
+  assert.equal(ok.res.body.invite.budget, 50);
+  const bad = call({ body: { action: "set_budget", code: "ACME-7D3K", budget: 0 } });
+  await invite(bad.req, bad.res);
+  assert.equal(bad.res.statusCode, 400);
+  const unknown = call({ body: { action: "set_budget", code: "NOPE", budget: 5 } });
+  await invite(unknown.req, unknown.res);
+  assert.equal(unknown.res.statusCode, 404);
+});

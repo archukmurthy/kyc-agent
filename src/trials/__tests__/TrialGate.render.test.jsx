@@ -86,7 +86,7 @@ test("days remaining are shown while the trial is live", async () => {
   render(<TrialGate><div>the product</div></TrialGate>);
 
   expect(await screen.findByText(/3 days remaining/i)).toBeInTheDocument();
-  expect(screen.getByText(/42 research runs left/i)).toBeInTheDocument();
+  expect(screen.getByText(/42 paid AI steps left/i)).toBeInTheDocument();
 });
 
 test("a broken status call does not become an outage", async () => {

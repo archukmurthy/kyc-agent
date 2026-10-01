@@ -16,8 +16,8 @@ test("an ended trial is a sales moment, not an error", () => {
 });
 
 test("a spent budget says what happens next, not what went wrong", () => {
-  const notice = limitNotice("trial_budget_spent", "This trial has used all 100 research runs.");
-  expect(notice.title).toMatch(/research runs/i);
+  const notice = limitNotice("trial_budget_spent", "This trial has used all 100 paid AI steps.");
+  expect(notice.title).toMatch(/paid AI steps/i);
   expect(notice.body).toMatch(/100/);
   expect(notice.action).toBe("contact");
   expect(isRetryable("trial_budget_spent")).toBe(false);

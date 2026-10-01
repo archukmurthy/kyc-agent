@@ -10,7 +10,7 @@
  * use it, and a prettier version is time not spent on the product.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { createInvite, inviteLink, listInvites, markCustomer, revokeInvite } from "./trialApi";
+import { createInvite, inviteLink, listInvites, markCustomer, setBudget, revokeInvite } from "./trialApi";
 
 const FONT = "system-ui, -apple-system, Segoe UI, sans-serif";
 const page = { maxWidth: 860, margin: "40px auto", padding: "0 20px", fontFamily: FONT, lineHeight: 1.5 };
@@ -20,6 +20,34 @@ const button = { padding: "9px 16px", border: 0, borderRadius: 6, background: "#
 const cell = { padding: "8px 10px", borderBottom: "1px solid #eaeef2", fontSize: 13, textAlign: "left", verticalAlign: "top" };
 
 const NO_ACCESS = "Your account is not set up yet. Whoever invited you needs to add you before you can see anything here.";
+
+// Paid AI steps - research runs and document readings together - can be
+// changed after a link has gone out: what was spent stays spent, and raising
+// it lets a used-up trial carry on. The server checks the caller is the owner.
+function BudgetEditor({ invite, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(String(invite.budget));
+  const [error, setError] = useState("");
+  const save = async () => {
+    setError("");
+    try {
+      await setBudget(invite.code, Number(value));
+      setOpen(false);
+      onSaved();
+    } catch (caught) {
+      setError(caught.message || "The budget could not be changed.");
+    }
+  };
+  if (!open) {
+    return <div><button type="button" style={{ ...button, background: "#f6f8fa", color: "#24292f", border: "1px solid #d0d7de", marginTop: 6, padding: "2px 8px", fontSize: 12 }} onClick={() => { setValue(String(invite.budget)); setOpen(true); }}>Change</button></div>;
+  }
+  return <div style={{ marginTop: 6 }}>
+    <input aria-label={`Paid AI steps for ${invite.company}`} style={{ ...input, width: 80, padding: "2px 6px" }} type="number" min="1" max="10000" value={value} onChange={(e) => setValue(e.target.value)} />
+    <button type="button" style={{ ...button, padding: "2px 8px", fontSize: 12, marginLeft: 4 }} onClick={save}>Save</button>
+    <button type="button" style={{ ...button, background: "#fff", color: "#24292f", border: "1px solid #d0d7de", padding: "2px 8px", fontSize: 12, marginLeft: 4 }} onClick={() => setOpen(false)}>Cancel</button>
+    {error ? <div role="alert" style={{ color: "#a40e26", fontSize: 12 }}>{error}</div> : null}
+  </div>;
+}
 
 export default function TrialAdmin() {
   const [invites, setInvites] = useState([]);
@@ -106,7 +134,7 @@ export default function TrialAdmin() {
           <input id="days" style={input} type="number" min="1" max="90" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} />
         </div>
         <div>
-          <label style={label} htmlFor="budget">Research runs</label>
+          <label style={label} htmlFor="budget" title="Research runs and document readings together">Paid AI steps</label>
           <input id="budget" style={input} type="number" min="1" max="10000" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
         </div>
         <button type="submit" style={button} disabled={busy}>{busy ? "Creating…" : "Create link"}</button>
@@ -118,7 +146,7 @@ export default function TrialAdmin() {
             <th style={{ ...cell, fontWeight: 600 }}>Company</th>
             <th style={{ ...cell, fontWeight: 600 }}>Link</th>
             <th style={{ ...cell, fontWeight: 600 }}>Seats</th>
-            <th style={{ ...cell, fontWeight: 600 }}>Research runs</th>
+            <th style={{ ...cell, fontWeight: 600 }} title="Research runs and document readings together">Paid AI steps</th>
             <th style={{ ...cell, fontWeight: 600 }}>Days</th>
             <th style={{ ...cell, fontWeight: 600 }}></th>
           </tr>
@@ -150,6 +178,7 @@ export default function TrialAdmin() {
                   {invite.budgetSpent ?? 0} / {invite.budget}
                 </span>
                 {invite.nearlySpent ? <div style={{ fontSize: 11, color: "#a04100" }}>nearly used up</div> : null}
+                <BudgetEditor invite={invite} onSaved={refresh} />
               </td>
               <td style={cell}>{invite.days}</td>
               <td style={cell}>

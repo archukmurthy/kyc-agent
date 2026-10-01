@@ -13,11 +13,13 @@ const mockListInvites = jest.fn();
 const mockCreateInvite = jest.fn();
 const mockRevokeInvite = jest.fn();
 const mockMarkCustomer = jest.fn();
+const mockSetBudget = jest.fn();
 jest.mock("../trialApi", () => ({
   listInvites: (...a) => mockListInvites(...a),
   createInvite: (...a) => mockCreateInvite(...a),
   revokeInvite: (...a) => mockRevokeInvite(...a),
   markCustomer: (...a) => mockMarkCustomer(...a),
+  setBudget: (...a) => mockSetBudget(...a),
   inviteLink: (code) => `https://example.test/ubo-demo?invite=${code}`,
 }));
 
@@ -26,6 +28,7 @@ beforeEach(() => {
   mockCreateInvite.mockReset();
   mockRevokeInvite.mockReset();
   mockMarkCustomer.mockReset();
+  mockSetBudget.mockReset();
 });
 
 test("creating a link asks the server for one and shows it", async () => {
@@ -137,4 +140,29 @@ test("marking a trial as a customer is one click, shown, and undoable", async ()
   await waitFor(() => expect(mockMarkCustomer).toHaveBeenCalledWith("ACME-7D3K", true));
   expect(await screen.findByText(/customer - work kept/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /undo customer/i })).toBeInTheDocument();
+});
+
+test("the owner changes a link's paid AI steps after it has gone out", async () => {
+  mockListInvites.mockResolvedValue({
+    invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 1, seatsUsed: 1, days: 7, budget: 1, budgetSpent: 1, nearlySpent: true, revoked: false }],
+  });
+  mockSetBudget.mockResolvedValue({ invite: { code: "ACME-7D3K", budget: 3 } });
+  render(<TrialAdmin />);
+  expect(await screen.findByText("Paid AI steps", { selector: "th" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Change" }));
+  fireEvent.change(screen.getByLabelText("Paid AI steps for Acme Bank"), { target: { value: "3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(mockSetBudget).toHaveBeenCalledWith("ACME-7D3K", 3));
+  await waitFor(() => expect(mockListInvites).toHaveBeenCalledTimes(2));
+});
+
+test("a refused change says why", async () => {
+  mockListInvites.mockResolvedValue({
+    invites: [{ code: "ACME-7D3K", company: "Acme Bank", seats: 1, seatsUsed: 0, days: 7, budget: 5, budgetSpent: 0, revoked: false }],
+  });
+  mockSetBudget.mockRejectedValue(new Error("A budget is a whole number from 1 to 10,000."));
+  render(<TrialAdmin />);
+  fireEvent.click(await screen.findByRole("button", { name: "Change" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("whole number");
 });

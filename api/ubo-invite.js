@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // ── owner actions ────────────────────────────────────────────────────
-    if (action === "create" || action === "revoke" || action === "list" || action === "mark_customer") {
+    if (action === "create" || action === "revoke" || action === "list" || action === "mark_customer" || action === "set_budget") {
       const owner = await ownerOf(req, res);
       if (!owner) return undefined;
 
@@ -70,6 +70,19 @@ module.exports = async function handler(req, res) {
           createdBy: owner.userId,
         });
         return send(res, 200, { invite });
+      }
+
+      if (action === "set_budget") {
+        // More (or fewer) paid AI steps for a link already sent.
+        const code = String((req.body || {}).code || "");
+        if (!code) return send(res, 400, { error: "code_required" });
+        try {
+          const updated = await _deps.trials.setBudget(code, Number((req.body || {}).budget));
+          return send(res, updated ? 200 : 404, updated ? { invite: updated } : { error: "invite_invalid" });
+        } catch (err) {
+          if (err.code === "budget_invalid") return send(res, 400, { error: "budget_invalid", message: err.message });
+          throw err;
+        }
       }
 
       if (action === "mark_customer") {

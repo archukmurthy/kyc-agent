@@ -176,7 +176,7 @@ test("a trial that has spent its research budget cannot spend more", async () =>
   const { req, res } = reqRes({ headers: { authorization: "Bearer t" } });
   assert.equal(await rateLimit.enforceRateLimit(req, res, "research"), false);
   assert.equal(res.body.error, "trial_budget_spent");
-  assert.match(res.body.message, /all 100 research runs/);
+  assert.match(res.body.message, /all 100 paid AI steps/);
 });
 
 test("a live trial's research is counted, so the budget is a real number", async () => {
