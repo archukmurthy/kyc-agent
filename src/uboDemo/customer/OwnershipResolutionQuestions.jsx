@@ -60,9 +60,10 @@ function answerValue(question, raw) {
 }
 function humanize(value) { return String(value || "").replaceAll("_", " ").toLowerCase(); }
 function evidenceUploadFailure(payload, responseStatus) {
-  // A limit reached is not a verdict on the file: the file was never read.
+  // A limit reached is not a verdict on the file: it was refused before it was
+  // received, so the request stays open rather than offering a retry that fails.
   const limit = limitNotice(payload?.error, payload?.message);
-  if (limit) return { status: EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, message: `${limit.title}. ${limit.body}` };
+  if (limit) return { status: EVIDENCE_STATUS.OPEN, message: `${limit.title}. ${limit.body}` };
   const code = String(payload?.code || "evidence_validation_failed");
   if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
     return { status: EVIDENCE_STATUS.REJECTED, message: MEDIA_MISMATCH_MESSAGE };
