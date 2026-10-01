@@ -278,3 +278,44 @@ test("the audit ledger records the journey, cannot be changed, and goes with the
   }
   assert.strictEqual(await count("SELECT count(*) n FROM ubo_audit_events WHERE tenant_id = $1", [L]), 0, "the trial's ledger went with it");
 });
+
+// Found in the browser test: an answer and the screen's syncs arrive together;
+// a sync computed from the case before the answer erased it. On the real
+// database, with the requests genuinely concurrent, every answer must stay.
+const R2 = `trial-purge-r-${RUN}`;
+test("an answer and simultaneous syncs: the answer is kept", async (t) => {
+  if (!ready) return t.skip("needs the UBO and Evidence tables (ubo-dev)");
+  const { createCustomerOwnershipJobService } = require("../../evidence/customerOwnershipJobs/dependencies");
+  const { FileArtifactStore } = require("../../evidence/a2/artifactStore");
+  const { PocCaseService, PostgresPocCaseRepository } = require("../../ubo-control-lab/server/pocCaseState");
+  const { ensureTenantRow } = require("../../lib/tenantRow");
+  const fx = require("../../ubo-control-lab/server/__tests__/fixtures/caseAssessmentFixture");
+  const company = { ...COMPANY, legalName: "RACE TEST LIMITED", registrationNumber: `R${RUN}`.slice(0, 8).toUpperCase() };
+  const log = console.info;
+  console.info = () => {};
+  try {
+    await ensureTenantRow(db, R2);
+    const deps = createCustomerOwnershipJobService({ db, tenantId: R2, artifactStore: new FileArtifactStore(root), provider: { configuration: () => ({ provider: "test", model: "test" }) } });
+    const caseId = `race-case-${R2}`;
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x03, 0xff, 0xd9, ...Buffer.from(R2)]);
+    const job = await deps.service.start({ demoContext: { demoCaseId: caseId, referenceCaseId: "ref", company }, file: { originalFilename: "c.jpg", declaredMediaType: "image/jpeg", sizeBytes: bytes.length, contentBase64: bytes.toString("base64") } });
+    await db.query("UPDATE evidence_customer_extraction_jobs SET state = 'COMPLETE', result = $2::jsonb, completed_at = now() WHERE id = $1", [job.jobId, JSON.stringify(fx.chartResult(30, company))]);
+    const cases = new PocCaseService(new PostgresPocCaseRepository(db, R2));
+    await cases.apply({ caseId, operation: "UPSERT_CASE", idempotencyKey: "u", actorType: "ANALYST", payload: { company, demoCase: { demoCaseId: caseId, company } } });
+    await cases.apply({ caseId, operation: "SAVE_RESEARCH", idempotencyKey: "r", actorType: "ANALYST", payload: { researchResult: fx.researchResult(25, company) } });
+    await cases.apply({ caseId, operation: "ASSOCIATE_CHART", idempotencyKey: "c", actorType: "CUSTOMER", payload: { chartReference: { jobId: job.jobId } } });
+    const record = await cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s0", actorType: "CUSTOMER", payload: {} });
+    const q = record.projection.resolution.questions[0];
+    const value = q.options[1].value;
+    await Promise.all([
+      cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s1", actorType: "CUSTOMER", payload: {} }),
+      cases.apply({ caseId, operation: "SUBMIT_ANSWER", idempotencyKey: "a1", actorType: "CUSTOMER", payload: { resolution: { answers: { [q.id]: { value, answeredAt: new Date().toISOString(), comparisonItemId: q.comparisonItemId, factRequirementId: q.factRequirementId } }, submittedAnswer: { question: { id: q.id } } } } }),
+      cases.apply({ caseId, operation: "SYNC_RESOLUTION", idempotencyKey: "s2", actorType: "CUSTOMER", payload: {} }),
+    ]);
+    const stored = (await db.query("SELECT current_projection p FROM ubo_poc_cases WHERE case_id = $1", [caseId])).rows[0].p;
+    assert.strictEqual(stored.resolution.answers[q.id]?.value, value, "a simultaneous sync erased the answer");
+  } finally {
+    console.info = log;
+    await purgeTenant(db, R2).catch(() => {});
+  }
+});

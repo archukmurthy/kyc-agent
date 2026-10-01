@@ -407,3 +407,39 @@ test("a late, older answer is kept out without being recorded as this request's 
   assert.strictEqual(projection().resolution.answers[q.id].value, q.options[1].value);
   assert.strictEqual(projection().resolution.submittedAnswer, undefined, "the stored answer was recorded under the late request");
 });
+
+// Found in the browser test: the questions screen sends a sync alongside each
+// answer. The sync read the case before the answer was written, computed from
+// that old state, and wrote it back - erasing the answer. The server must not
+// write a computation made from a case that has changed since it was read.
+test("a sync computed from a case that changed meanwhile does not erase the answer saved in between", async () => {
+  const { repository, customer, projection } = await openCase();
+  const q = questionsOf(projection())[0];
+  let version = 1;
+  const realGet = repository.get.bind(repository);
+  const realApply = repository.apply.bind(repository);
+  repository.get = async (caseId) => { const record = await realGet(caseId); return record && { ...record, version: String(version) }; };
+  repository.apply = async (command) => {
+    if (command.expectedVersion && command.expectedVersion !== String(version)) throw Object.assign(new Error("The case changed while this was computed."), { code: "case_changed", retryable: true });
+    const out = await realApply(command);
+    version += 1;
+    return out;
+  };
+  // The sync reads now, but the answer lands before it writes.
+  let releaseSync;
+  const syncRead = new Promise((resolve) => { releaseSync = resolve; });
+  const firstGet = repository.get;
+  let syncHeld = false;
+  repository.get = async (caseId) => {
+    const record = await firstGet(caseId);
+    if (!syncHeld) { syncHeld = true; await syncRead; }
+    return record;
+  };
+  const sync = customer("SYNC_RESOLUTION", {}, "racing-sync");
+  await new Promise((resolve) => setImmediate(resolve));
+  repository.get = firstGet;
+  await answer(customer, q, q.options[1].value, "answer-in-between");
+  releaseSync();
+  await sync;
+  assert.strictEqual(projection().resolution.answers[q.id]?.value, q.options[1].value, "the sync erased the answer saved in between");
+});

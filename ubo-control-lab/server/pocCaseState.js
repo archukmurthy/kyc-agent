@@ -356,7 +356,7 @@ class PostgresPocCaseRepository {
   async get(caseId, executor = this.db) {
     const row = first(await executor.query(`SELECT case_id, tenant_id, company, current_stage,
       research_release_state, latest_extraction_job_id, latest_artifact_id, current_assessment_id,
-      current_projection, created_at, updated_at
+      current_projection, created_at, updated_at, updated_at::text AS version
       FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2`, [caseId, this.tenantId]));
     if (!row) return null;
     return {
@@ -371,6 +371,7 @@ class PostgresPocCaseRepository {
       projection: row.current_projection,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      version: row.version,
     };
   }
 
@@ -404,7 +405,7 @@ class PostgresPocCaseRepository {
     return row ? { result: row.result, evidenceHandoff: row.evidence_handoff } : null;
   }
 
-  async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release }) {
+  async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
     return this.db.transaction(async (client) => {
       const company = payload.demoCase?.company || payload.company;
       const existingCase = await this.get(caseId, client);
@@ -413,7 +414,13 @@ class PostgresPocCaseRepository {
         await client.query(`INSERT INTO ubo_poc_cases (case_id, tenant_id, company, current_projection)
           VALUES ($1, $2, $3::jsonb, '{}'::jsonb)`, [caseId, this.tenantId, json(company)]);
       }
-      await client.query("SELECT case_id FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2 FOR UPDATE", [caseId, this.tenantId]);
+      const locked = first(await client.query("SELECT updated_at::text AS version FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2 FOR UPDATE", [caseId, this.tenantId]));
+      // A result computed from an older read of the case would overwrite what
+      // changed since - the questions screen's sync erased answers saved in
+      // between (found in the browser test). The service recomputes instead.
+      if (expectedVersion && locked && locked.version !== expectedVersion) {
+        throw Object.assign(new Error("The case changed while this step was being worked out."), { statusCode: 409, code: "case_changed", retryable: true });
+      }
       const inserted = first(await client.query(`INSERT INTO ubo_poc_case_events
         (case_id, event_type, idempotency_key, actor_type, payload)
         VALUES ($1, $2, $3, $4, $5::jsonb)
@@ -671,8 +678,13 @@ class PocCaseService {
       };
     }
 
+    const requested = incoming;
+    for (let attempt = 1; ; attempt += 1) {
+    incoming = requested;
+    let expectedVersion = null;
     if (SERVER_COMPUTED.has(operation)) {
       const record = await this.repository.get(caseId);
+      expectedVersion = record?.version || null;
       // A finalised assessment is what identity verification was started
       // from; answers after that would change it with no new finalisation.
       const stored = serverTraceOf(record?.projection);
@@ -700,8 +712,17 @@ class PocCaseService {
         throw Object.assign(new Error("This review has been finalised; reopen it before changing its research or company."), { statusCode: 409, code: "case_finalized" });
       }
     }
-    const result = await this.repository.apply({ ...command, payload, caseId, actorType: command.actorType || "SYSTEM", release });
+    let result;
+    try {
+      result = await this.repository.apply({ ...command, payload, caseId, actorType: command.actorType || "SYSTEM", release, ...(expectedVersion ? { expectedVersion } : {}) });
+    } catch (error) {
+      // Worked out from a case that changed meanwhile: read it again and
+      // recompute (a few times - two steps rarely collide more than once).
+      if (error.code === "case_changed" && attempt < 3) continue;
+      throw error;
+    }
     return { ...(await this.load(caseId)), duplicate: result.duplicate, researchRelease: release || result.record?.projection?.researchRelease || null };
+    }
   }
 }
 
