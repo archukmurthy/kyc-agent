@@ -451,3 +451,20 @@
   .ubo-demo-spinner { animation: ubo-demo-spin 1s linear infinite; }
   @keyframes ubo-demo-spin { to { transform: rotate(360deg); } }
 }
+
+/* The analyst's "send the customer a link" panel (CustomerLinkPanel.jsx). */
+.ubo-demo-customer-link { max-width: 760px; margin: 28px auto 8px; padding: 24px 28px; border: 1px solid var(--ubo-demo-border); border-radius: 16px; background: white; text-align: left; }
+.ubo-demo-customer-link h2 { margin: 0 0 4px; font-size: 18px; font-weight: 800; color: var(--ubo-demo-ink); }
+.ubo-demo-customer-link > p { margin: 0 0 16px; color: var(--ubo-demo-muted); font-size: 13px; }
+.ubo-demo-customer-link form { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: end; }
+.ubo-demo-customer-link form label { grid-column: 1 / -1; font-size: 12px; font-weight: 750; color: var(--ubo-demo-ink); }
+.ubo-demo-customer-link input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; border: 1px solid var(--ubo-demo-border); border-radius: 10px; font: inherit; font-size: 14px; color: var(--ubo-demo-ink); background: white; }
+.ubo-demo-customer-link input:focus-visible { outline: 3px solid var(--ubo-demo-green); outline-offset: 1px; }
+.ubo-demo-customer-link form .ubo-demo-secondary { min-height: 44px; padding: 0 18px; border-radius: 10px; background: var(--ubo-demo-green); color: white; }
+.ubo-demo-customer-link form .ubo-demo-secondary:hover { background: var(--ubo-demo-green-dark); }
+.ubo-demo-customer-link [role="status"], .ubo-demo-customer-link [role="alert"] { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--ubo-demo-mint); }
+.ubo-demo-customer-link [role="alert"] { background: #fff0f0; color: #9b2525; }
+.ubo-demo-customer-link [role="status"] p { margin: 0 0 10px; font-size: 13px; color: var(--ubo-demo-ink); }
+.ubo-demo-customer-link [role="status"] input[readonly] { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ubo-demo-muted); background: #fbfcfc; margin-bottom: 10px; }
+.ubo-demo-customer-link [role="status"] .ubo-demo-secondary { min-height: 36px; padding: 0 12px; margin-right: 8px; border: 1px solid var(--ubo-demo-border); border-radius: 8px; background: white; }
+@media (max-width: 640px) { .ubo-demo-customer-link form { grid-template-columns: 1fr; } }

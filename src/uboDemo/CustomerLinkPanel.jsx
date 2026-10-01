@@ -56,6 +56,8 @@ export default function CustomerLinkPanel({ caseId, prepare }) {
 
   return (
     <section className="ubo-demo-customer-link" aria-label="Send the customer a link">
+      <h2>Send the customer their link</h2>
+      <p>Only the address you enter can open it - they confirm it with a code we email them. It lasts 30 days, and you can withdraw it.</p>
       <form onSubmit={create}>
         <label htmlFor="ubo-customer-link-email">Customer's email address</label>
         <input id="ubo-customer-link-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
