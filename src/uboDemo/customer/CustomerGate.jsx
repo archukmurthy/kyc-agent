@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { openCustomerLink, resumeCustomerSession } from "../../auth/customerSession";
 
 /**
@@ -14,19 +14,28 @@ import { openCustomerLink, resumeCustomerSession } from "../../auth/customerSess
  *
  * The link is taken off the address bar once used, so it is not left in the
  * browser's history or shown to anyone looking at the screen.
+ *
+ * The link is read once, when the page first draws, and checked once: React
+ * runs a page's start-up twice in development, and the first run removing the
+ * link left the second thinking there was none - so the wrong person was shown
+ * the staff preview instead of being told (found in the browser test).
  */
 export default function CustomerGate({ children, fallback }) {
   const [state, setState] = useState({ phase: "checking" });
+  const [link] = useState(() => new URL(window.location.href).searchParams.get("link"));
+  const check = useRef(null);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const url = new URL(window.location.href);
-      const link = url.searchParams.get("link");
       if (link) {
-        url.searchParams.delete("link");
-        window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
-        const opened = await openCustomerLink(link);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("link")) {
+          url.searchParams.delete("link");
+          window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+        }
+        if (!check.current) check.current = openCustomerLink(link);
+        const opened = await check.current;
         if (!active) return;
         setState(opened.ok ? { phase: "customer" } : { phase: "refused", error: opened.payload?.error, message: opened.payload?.message });
         return;
@@ -35,7 +44,7 @@ export default function CustomerGate({ children, fallback }) {
       if (active) setState({ phase: resumed.ok ? "customer" : "not-customer" });
     })().catch(() => { if (active) setState({ phase: "not-customer" }); });
     return () => { active = false; };
-  }, []);
+  }, [link]);
 
   if (state.phase === "checking") {
     return <main className="ubo-demo-main ubo-demo-empty"><span>Opening</span><h1>Opening your ownership review…</h1></main>;

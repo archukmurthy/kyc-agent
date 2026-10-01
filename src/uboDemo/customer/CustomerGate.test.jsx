@@ -63,3 +63,25 @@ test("with no link and no session, it is an analyst trying the view - through th
   expect(await screen.findByTestId("trial-gate")).toBeInTheDocument();
   expect(currentCustomerSession()).toBeNull();
 });
+
+// Found in the browser test: in development React runs a page's start-up
+// twice. The first run took the link off the address bar and was thrown
+// away; the second saw no link and showed the staff preview, so the wrong
+// person was never told the link was not theirs.
+test("under React's double start-up the wrong person is still told, and the link is checked once", async () => {
+  respondWith({ open: [403, { error: "wrong_recipient", message: "This link was sent to a different email address." }], resume: [401, {}] });
+  at("/ubo-demo/customer/?link=signed-link-token");
+  render(<React.StrictMode><CustomerGate fallback={trialGate}>{page}</CustomerGate></React.StrictMode>);
+  expect(await screen.findByText("This link was sent to a different email address")).toBeInTheDocument();
+  expect(screen.queryByTestId("trial-gate")).toBeNull();
+  const opens = window.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action === "open");
+  expect(opens).toHaveLength(1);
+});
+
+test("under React's double start-up the right person still gets in", async () => {
+  respondWith({ open: [200, { session: "s-2", caseId: "case-2", expiresAt: "2026-10-01T00:00:00.000Z" }], resume: [401, {}] });
+  at("/ubo-demo/customer/?link=another-signed-link");
+  render(<React.StrictMode><CustomerGate fallback={trialGate}>{page}</CustomerGate></React.StrictMode>);
+  expect(await screen.findByText("Customer page")).toBeInTheDocument();
+  expect(currentCustomerSession()).toEqual({ session: "s-2", caseId: "case-2", expiresAt: "2026-10-01T00:00:00.000Z" });
+});
