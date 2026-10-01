@@ -162,3 +162,22 @@ test("an owner changes a trial's paid AI steps; a bad number or unknown link is 
   await invite(unknown.req, unknown.res);
   assert.equal(unknown.res.statusCode, 404);
 });
+
+test("only redeeming uses the strict limit; the owner's screen and the trial check use a generous one", async () => {
+  // Found in the browser test: the 10-an-hour limit meant for guessing codes
+  // also counted every list load, budget change and "am I in a trial?" check,
+  // and locked the owner out of their own screen within minutes.
+  const buckets = [];
+  invite.__setDeps({
+    enforceRateLimit: async (_req, _res, bucket) => { buckets.push(bucket); return true; },
+    requireStaff: async () => ({ kind: "staff", userId: "user_owner", role: "owner", tenantId: null }),
+    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_1", email: "a@example.test" }) },
+    trials: { listInvites: async () => [], statusFor: async () => ({ inTrial: false }), redeem: async () => ({ ok: true, access: {} }) },
+  });
+  for (const request of [
+    call({ method: "GET", query: { action: "list" } }),
+    call({ method: "GET", query: { action: "status" } }),
+    call({ body: { action: "redeem", code: "ACME-7D3K" } }),
+  ]) await invite(request.req, request.res);
+  assert.deepStrictEqual(buckets, ["ubo-invite-manage", "ubo-invite-manage", "ubo-invite"]);
+});

@@ -45,13 +45,17 @@ async function ownerOf(req, res) {
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return undefined;
 
-  // Redemption is the one action an attacker can spray: it is the only way to
-  // discover a working code. Rate-limited before anything else happens.
-  if (!(await _deps.enforceRateLimit(req, res, "ubo-invite"))) return undefined;
-
   const action = req.method === "GET"
     ? (req.query && req.query.action) || "status"
     : ((req.body && req.body.action) || "").toString();
+
+  // Redemption is the one action an attacker can spray: it is the only way to
+  // discover a working code, so it alone has the tight limit. Everything else
+  // - the owner's screen, and every demo page asking "am I in a trial?" - is
+  // signed in and owner-checked or read-only, and sharing that limit locked
+  // the owner out of their own screen within minutes (found in the browser
+  // test). Rate-limited before anything else happens, either way.
+  if (!(await _deps.enforceRateLimit(req, res, action === "redeem" ? "ubo-invite" : "ubo-invite-manage"))) return undefined;
 
   try {
     // ── owner actions ────────────────────────────────────────────────────
