@@ -28,6 +28,12 @@ const NOTICES = {
     action: "contact",
     fallback: "This trial has used all its paid AI steps (research runs and document readings). Your work is still here - get in touch to continue.",
   },
+  // A customer of a trial whose paid steps are used up or whose trial ended.
+  review_limit_reached: {
+    title: "Document reading is paused for this review",
+    action: "contact",
+    fallback: "This review cannot read more documents right now. Your answers so far are saved - please contact the person who sent you this link.",
+  },
   demo_allowance_spent: {
     title: "This demo has used all its runs",
     action: "contact",

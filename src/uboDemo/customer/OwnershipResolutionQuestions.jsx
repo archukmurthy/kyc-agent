@@ -14,6 +14,7 @@ import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
 import { uboStore } from "../browserStore";
+import { limitNotice } from "../../trials/limitNotice";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 const SESSION_PREFIX = "ubo-demo.ownership-resolution.v1";
@@ -59,6 +60,9 @@ function answerValue(question, raw) {
 }
 function humanize(value) { return String(value || "").replaceAll("_", " ").toLowerCase(); }
 function evidenceUploadFailure(payload, responseStatus) {
+  // A limit reached is not a verdict on the file: the file was never read.
+  const limit = limitNotice(payload?.error, payload?.message);
+  if (limit) return { status: EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, message: `${limit.title}. ${limit.body}` };
   const code = String(payload?.code || "evidence_validation_failed");
   if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
     return { status: EVIDENCE_STATUS.REJECTED, message: MEDIA_MISMATCH_MESSAGE };

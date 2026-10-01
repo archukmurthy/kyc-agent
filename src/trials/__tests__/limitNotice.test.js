@@ -53,3 +53,12 @@ test("a genuine failure is not dressed up as a limit", () => {
   expect(limitNotice(undefined, undefined)).toBeNull();
   expect(isRetryable("provider_timeout")).toBe(true);
 });
+
+test("a customer of a used-up trial hears about the review, never about a trial (UBO-48)", () => {
+  const notice = limitNotice("review_limit_reached");
+  expect(notice.title).not.toMatch(/trial/i);
+  expect(notice.body).not.toMatch(/trial/i);
+  expect(notice.body).toMatch(/person who sent you this link/);
+  expect(notice.action).toBe("contact");
+  expect(isRetryable("review_limit_reached")).toBe(false);
+});
