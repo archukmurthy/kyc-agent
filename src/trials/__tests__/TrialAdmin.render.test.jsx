@@ -166,3 +166,12 @@ test("a refused change says why", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("whole number");
 });
+
+test("a list that failed to load is never shown as an empty one", async () => {
+  // Found in the browser test: a rate-limited load read "No invitations yet"
+  // while the owner's links were all there.
+  mockListInvites.mockRejectedValue(Object.assign(new Error("You have used all 10 requests for this hour."), { status: 429 }));
+  render(<TrialAdmin />);
+  expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument();
+  expect(screen.queryByText("No invitations yet.")).toBeNull();
+});

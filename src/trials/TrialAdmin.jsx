@@ -50,7 +50,9 @@ function BudgetEditor({ invite, onSaved }) {
 }
 
 export default function TrialAdmin() {
-  const [invites, setInvites] = useState([]);
+  // null until the list has loaded: a list that failed to load is not an
+  // empty one, and must never read as "No invitations yet".
+  const [invites, setInvites] = useState(null);
   const [form, setForm] = useState({ company: "", seats: 5, days: 7, budget: 100 });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -152,7 +154,9 @@ export default function TrialAdmin() {
           </tr>
         </thead>
         <tbody>
-          {invites.length === 0 ? (
+          {invites === null ? (
+            <tr><td style={{ ...cell, color: "#57606a" }} colSpan={6}>{error ? "The invitations could not be loaded - see the message above." : "Loading invitations…"}</td></tr>
+          ) : invites.length === 0 ? (
             <tr><td style={{ ...cell, color: "#57606a" }} colSpan={6}>No invitations yet.</td></tr>
           ) : invites.map((invite) => (
             <tr key={invite.code} style={{ opacity: invite.revoked ? 0.5 : 1 }}>
