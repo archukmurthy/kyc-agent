@@ -864,3 +864,12 @@ not lost with it:
 
 ### UBO-42 - A trial's budget: say what it counts, and let the owner change it
 - **Category:** Product - **Priority:** P1 - **Status:** DONE (2026-10-01) - found preparing the browser test: a trial's budget counts every paid AI step (research runs, document readings, AI name checks - the paid buckets in `lib/rateLimit.js`), but every screen and message called it "research runs", and once a link was sent nothing could change it. Now one number named "Paid AI steps (research runs and document readings)" on `/ubo-trials`, in the trial banner and in the limit messages; and the owner can change it on a sent link (`set_budget`, owner only; a whole number 1-10,000; what was spent stays spent; raising it lets a used-up trial carry on).
+
+### UBO-43 - An owner who joined a trial had no workspace
+- **Category:** Security / access - **Priority:** P1 - **Status:** DONE (2026-10-01) - found in the browser test: the owner opened their own invite to try the demo, and every case step answered `tenant_required`, because the bootstrap-owner check returned "owner, no workspace" before looking at the trial the owner had joined. `lib/userAccess.js#getAccess` now gives a bootstrap owner the workspace of a trial they joined; a stored row still never demotes them, and an unreadable access list still leaves them owner (no workspace).
+
+### UBO-44 - A refused research request still uses a trial's paid AI step
+- **Category:** Billing correctness - **Priority:** P1 - **Status:** OPEN (2026-10-01) - found in the browser test: the rate limiter records a trial's spend (`lib/rateLimit.js`, the trial block) before the route checks the caller's workspace, so a request refused for `tenant_required` (UBO-43) still counted one of Test LTD's paid AI steps although no AI was called. The demo's shared total is counted only where money is spent (`lib/demoAllowance.js`) and stayed correct. Fix: count the trial step where the paid call actually starts, as the demo total does.
+
+### UBO-45 - Copy that still says "saved in this browser"
+- **Category:** Copy - **Priority:** P3 - **Status:** OPEN (2026-10-01) - the company form says "Saved in this browser for this demo only." Since UBO-22 nothing about the case is kept in the browser; the case is saved on the server.
