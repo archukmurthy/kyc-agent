@@ -14,6 +14,8 @@
 
 const UBO_PATHS = [
   "/ubo-demo",
+  "/ubo-demo-graph.html",
+  "/ubo-control-lab/vendor",
   "/ubo-trials",
   "/ubo-people",
   "/api/ubo-discovery",
