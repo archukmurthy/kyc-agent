@@ -265,8 +265,20 @@ function buildAiPartyMatchCandidates(researchFacts = [], chartFacts = []) {
     });
     return [...found.values()];
   };
+  // A party already matched for certain on the other side has its answer: it
+  // is not offered to the AI against anyone else. Two co-owners of one company
+  // sit in the same place in the structure, and were being sent to the AI to
+  // ask whether one is the other - a paid call (found in the browser test).
+  const researchParties = uniqueParties(researchFacts);
+  const chartParties = uniqueParties(chartFacts);
+  const settled = new Set();
+  researchParties.forEach((a) => chartParties.forEach((b) => {
+    const exact = resolveCrossSourceParty({ sourcePartyA: a, sourcePartyB: b, structuralContextA: researchContexts.get(partyFingerprint(a)), structuralContextB: chartContexts.get(partyFingerprint(b)) });
+    if (exact.autoLinked) { settled.add(`A:${partyFingerprint(a)}`); settled.add(`B:${partyFingerprint(b)}`); }
+  }));
   const candidates = [];
-  uniqueParties(researchFacts).forEach((sourcePartyA) => uniqueParties(chartFacts).forEach((sourcePartyB) => {
+  researchParties.forEach((sourcePartyA) => chartParties.forEach((sourcePartyB) => {
+    if (settled.has(`A:${partyFingerprint(sourcePartyA)}`) || settled.has(`B:${partyFingerprint(sourcePartyB)}`)) return;
     const deterministic = resolveCrossSourceParty({
       sourcePartyA,
       sourcePartyB,

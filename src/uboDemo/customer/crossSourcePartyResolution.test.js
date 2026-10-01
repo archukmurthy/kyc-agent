@@ -84,3 +84,26 @@ test("AI candidate generation excludes deterministic matches and incompatible le
   expect(candidates.some(({ sourcePartyA, sourcePartyB }) => sourcePartyA.name === "Target Company Limited" && sourcePartyB.name === "Target Company Ltd")).toBe(false);
   expect(candidates.length).toBeLessThanOrEqual(20);
 });
+
+// Found in the browser test: two co-owners of the same company, each named
+// identically in both sources, were still sent to the AI against each other
+// because they sit in the same place in the structure - a paid call to ask
+// whether Nicola is Sophie.
+test("a party already matched exactly is not sent to the AI against anyone else", () => {
+  const person = (name) => ({ name, entityType: "NATURAL_PERSON", jurisdiction: "GB" });
+  const holdco = party("Mezzanine Ltd", { registrationNumber: "09708504" });
+  const target = party("Bubbles & Nibbles Ltd", { registrationNumber: "13509252" });
+  const both = [relationship(holdco, target), relationship(person("Ms Nicola Jane Woods"), holdco), relationship(person("Ms Sophie Marie Pons Escribano"), holdco)];
+  expect(buildAiPartyMatchCandidates(both, both)).toEqual([]);
+});
+
+test("parties with no exact match are still offered to the AI", () => {
+  const person = (name) => ({ name, entityType: "NATURAL_PERSON", jurisdiction: "GB" });
+  const holdco = party("Mezzanine Ltd", { registrationNumber: "09708504" });
+  const target = party("Bubbles & Nibbles Ltd", { registrationNumber: "13509252" });
+  const research = [relationship(holdco, target), relationship(person("Ms Nicola Jane Woods"), holdco), relationship(person("Ms Sophie Marie Pons Escribano"), holdco)];
+  const chart = [relationship(holdco, target), relationship(person("N J Woods"), holdco), relationship(person("S M Pons"), holdco)];
+  const candidates = buildAiPartyMatchCandidates(research, chart);
+  expect(candidates.length).toBeGreaterThan(0);
+  expect(candidates.every(({ sourcePartyA }) => sourcePartyA.name !== "Mezzanine Ltd")).toBe(true);
+});

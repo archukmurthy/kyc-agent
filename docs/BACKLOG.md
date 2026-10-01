@@ -873,3 +873,8 @@ not lost with it:
 
 ### UBO-45 - Copy that still says "saved in this browser"
 - **Category:** Copy - **Priority:** P3 - **Status:** DONE (2026-10-01) - now "Saved to this case on our server - nothing about it stays in your browser"; the chart page's "reuse an earlier chart" panel says those are kept only for this visit. Was: the company form says "Saved in this browser for this demo only." Since UBO-22 nothing about the case is kept in the browser; the case is saved on the server.
+
+### UBO-46 - Small fixes from the browser test (2026-10-01)
+- **Category:** Quality - **Priority:** P2 - **Status:** DONE (2026-10-01)
+- **Fixed:** the ownership graph showed `{"error":"not_found"}` on the UBO-only demo (its page and scripts were not on the allow-list); the wrong person opening a customer link saw the staff preview instead of "this link was sent to a different email address" (React's double start-up in development removed the link before the second run read it); the customer-link panel had no styles; the AI name check paired co-owners who already had exact matches (a paid call per pair) - an exactly-matched party is no longer offered to the AI.
+- **Not bugs, checked:** "Only can open this link" was the page-reading tool dropping the bold email (a test already covers the email); typing that seemed to vanish was the automation's timing - the form is not shown until the trial check has finished.
