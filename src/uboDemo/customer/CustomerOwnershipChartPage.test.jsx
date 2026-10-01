@@ -239,7 +239,7 @@ test("one uploaded chart is sent to the isolated Evidence demo endpoint and rend
     expect(within(card).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
   });
   expect(within(chartAssertions).getByRole("button", { name: "Collapse" })).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("status")).toHaveTextContent(/Evidence saved the Artifact and validated extraction durably/i);
+  expect(screen.getByRole("status")).toHaveTextContent(/Your chart is saved to this case on our server/i);
   expect(JSON.parse(uboStore.getItem(CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY)).records).toHaveLength(1);
 });
 

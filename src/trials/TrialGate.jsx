@@ -133,7 +133,7 @@ export default function TrialGate({ children }) {
           ) : (
             <span>
               Trial - {daysLeft(status.trialEndsAt)} day{daysLeft(status.trialEndsAt) === 1 ? "" : "s"} remaining
-              {typeof status.budgetLeft === "number" ? `, ${status.budgetLeft} paid AI steps left (research runs and document readings)` : ""}.
+              {typeof status.budgetLeft === "number" ? `, ${status.budgetLeft} paid AI step${status.budgetLeft === 1 ? "" : "s"} left (research runs and document readings)` : ""}.
             </span>
           )}
         </div>

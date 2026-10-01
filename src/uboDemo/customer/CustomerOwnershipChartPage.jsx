@@ -254,9 +254,9 @@ export default function CustomerOwnershipChartPage() {
       writeCustomerOwnershipChartSession({ context, result: durableResult });
       saveCustomerOwnershipChartExtraction({ context, result: durableResult });
       setSavedExtractions(customerOwnershipChartExtractionsForContext(context));
-      setPersistenceNotice({ kind: "success", message: "Evidence saved the Artifact and validated extraction durably. This browser also keeps a convenient replay copy." });
+      setPersistenceNotice({ kind: "success", message: "Your chart is saved to this case on our server and has been read." });
     } catch (saveError) {
-      setPersistenceNotice({ kind: "warning", message: `The durable Evidence result is available, but this browser could not save its replay copy: ${saveError.message || "local storage unavailable"}` });
+      setPersistenceNotice({ kind: "warning", message: "Your chart is saved to this case on our server. This page could not show it - reload the page to continue." });
     }
   };
 

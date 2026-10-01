@@ -28,7 +28,7 @@ test("IDV route shows each qualifying natural person once, completes dummy IDV a
   expect(screen.queryByText("Holding Limited")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Application information complete/i })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: /^Complete identity verification$/i }));
-  expect(await screen.findByText(/Identity verification completed/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Demo check recorded - not verified/i)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Application information complete/i })).toHaveAttribute("href", CUSTOMER_COMPLETE_PATH);
   const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace;
   expect(saved.discoveryState).toBe(DISCOVERY_STATE.IDV_COMPLETE);
