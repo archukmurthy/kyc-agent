@@ -79,7 +79,7 @@ function CompanyStart({ draft, errors, replays, replayLibraryStatus, onChange, o
         </fieldset>
       </div>
       <div className="ubo-demo-examples"><span>Instant engine examples</span><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.ALICE_28)}>Load Alice example — no provider call</button><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.METHOD_60_40)}>Load 60/40 method comparison — no provider call</button></div>
-      <div className="ubo-demo-actions"><p>Saved in this browser for this demo only.</p><button className="ubo-demo-primary" type="submit">{replayMode ? "Replay saved research — no provider call" : "Start research"} <span>→</span></button></div>
+      <div className="ubo-demo-actions"><p>Saved to this case on our server - nothing about it stays in your browser.</p><button className="ubo-demo-primary" type="submit">{replayMode ? "Replay saved research — no provider call" : "Start research"} <span>→</span></button></div>
     </form>
   </main>;
 }

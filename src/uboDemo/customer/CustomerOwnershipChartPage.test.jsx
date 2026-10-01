@@ -317,7 +317,7 @@ test("a saved same-company extraction can be replayed without a provider call", 
 
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: /Reuse an earlier chart analysis/i })).toBeInTheDocument();
-  expect(screen.getByText(/original document bytes are not retained/i)).toBeInTheDocument();
+  expect(screen.getByText(/original document is not kept here/i)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Use saved extraction — no provider call/i }));
 
   expect(window.fetch).not.toHaveBeenCalled();

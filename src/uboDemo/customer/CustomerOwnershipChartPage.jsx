@@ -120,7 +120,7 @@ function UploadPanel({ file, error, busy, retryAvailable, onChoose, onAnalyse, o
 function SavedExtractionsPanel({ records, onUse }) {
   if (!records.length) return null;
   return <section className="ubo-customer-card ubo-customer-saved-extractions">
-    <div><small>Saved document extracts</small><h2>Reuse an earlier chart analysis</h2><p>These structured results are stored in this browser for the same company. The original document bytes are not retained.</p></div>
+    <div><small>Saved document extracts</small><h2>Reuse an earlier chart analysis</h2><p>Charts read earlier in this visit for the same company. They are kept only until you close or reload this page; the original document is not kept here.</p></div>
     <div>{records.map((record) => { const coverage = chartSourceCoverage(record.result); return <button type="button" key={record.recordId} onClick={() => onUse(record)}>
       <strong>{record.result.artifact.originalFilename || "Ownership chart"}</strong>
       <span>{record.result.candidateFacts?.length || 0} assertions · {record.result.sourceGraph?.relationships?.length || 0} relationships · saved {new Date(record.savedAt).toLocaleString()}</span>
