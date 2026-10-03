@@ -889,3 +889,23 @@ test("after a reload, failed live research still falls back to the workspace's s
   expect(session.researchResult.fallback).toEqual(expect.objectContaining({ savedAt: "2026-10-03T07:00:00.000Z" }));
   expect(session.researchResult.ownershipResolutionTrace).toBeUndefined();
 });
+
+// End-to-end check (2026-10-04): a misspelt company name ("Vodaphone LTD")
+// made the customer's chart describe a different company. A completed
+// research run gives the case the registry's name for its own number.
+test("completed research gives a misspelt case the registry's company name, keeping what was typed", async () => {
+  mockListSavedResearch.mockResolvedValue([{ caseId: "case-voda", company: { legalName: "Vodaphone LTD", registrationNumber: "01471587", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" }]);
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  research.candidateSources = [...research.candidateSources, { sourceRecordId: "registry", candidateFacts: [{ factId: "registry-context", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", value: { legalName: "VODAFONE LIMITED", registrationNumber: "01471587", companyType: "ltd" } }] }];
+  mockLoadPocCase.mockResolvedValue({ projection: { researchResult: research } });
+  renderStart();
+  const option = await screen.findByLabelText(/Saved research/);
+  await waitFor(() => expect(option).toBeEnabled());
+  fireEvent.click(option);
+  fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-voda" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start from saved research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  await waitFor(() => expect(sessionCase().company).toEqual(expect.objectContaining({ legalName: "VODAFONE LIMITED", enteredLegalName: "Vodaphone LTD" })));
+  const renamed = mockPersistPocCase.mock.calls.find(([operation, command]) => operation === "UPSERT_CASE" && command.idempotencyKey.startsWith("case-registry-name:"));
+  expect(renamed[1].payload.demoCase.company.legalName).toBe("VODAFONE LIMITED");
+});

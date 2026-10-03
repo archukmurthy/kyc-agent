@@ -14,9 +14,10 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/ubo-demo/customer/");
 });
 
-test("customer screens link to ownership analysis, Analyst Review and Audit", () => {
+test("customer screens link to Analyst Review and Audit; ownership analysis waits for a chart", () => {
   render(<CustomerCompanyPage />);
-  expect(screen.getByRole("link", { name: "View Ownership Analysis" })).toHaveAttribute("href", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
+  // Nothing to analyse yet (the link with a chart: CustomerOwnershipChartPage tests).
+  expect(screen.queryByRole("link", { name: "View Ownership Analysis" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open Analyst Review" })).toHaveAttribute("href", DEMO_REVIEW_PATH);
   expect(screen.getByRole("link", { name: "Open Audit" })).toHaveAttribute("href", DEMO_AUDIT_PATH);
 });
@@ -91,4 +92,23 @@ test("a connected analyst case keeps its case identity and every source assertio
   expect(saved.demoCase.demoCaseId).toBe("analyst-case-63");
   expect(saved.researchResult.candidateSources[0].candidateFacts.map(({ factId }) => factId)).toEqual(["fact-1", "fact-2"]);
   expect(saved.researchResult.analystCustomerRequests[0].informationNeedId).toBe("need-1");
+});
+
+test("on a customer link the company details are shown as fixed, with who to tell if they are wrong", () => {
+  const { setCustomerSession, clearCustomerSession } = require("../../auth/customerSession");
+  setCustomerSession({ session: "s-1", caseId: "case-1" });
+  try {
+    render(<CustomerCompanyPage />);
+    expect(screen.getByPlaceholderText("Enter the registered company name")).toHaveAttribute("readonly");
+    expect(screen.getByPlaceholderText("For example, 00445790")).toHaveAttribute("readonly");
+    expect(screen.getByRole("note")).toHaveTextContent(/tell the person who sent you this link/);
+  } finally {
+    clearCustomerSession();
+  }
+});
+
+test("without a customer link (an analyst trying the view) the details can still be corrected", () => {
+  render(<CustomerCompanyPage />);
+  expect(screen.getByPlaceholderText("Enter the registered company name")).not.toHaveAttribute("readonly");
+  expect(screen.queryByRole("note")).not.toBeInTheDocument();
 });

@@ -22,6 +22,7 @@ import JobsNeedingAttention from "./JobsNeedingAttention";
 import CaseLedger from "./CaseLedger";
 import { clearActivePocCase, customerEngagement, listSavedResearch, loadPocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
 import { customerCompanyKey } from "./customer/customerOwnershipChartSession";
+import { adoptRegistryName } from "./registryName";
 import "./uboDemo.css";
 
 // Temporarily hide the legacy analyst open-questions panel without removing its implementation.
@@ -228,7 +229,7 @@ function ResearchResult({ demoCase, result, linkNotice, onEdit, onRetry, onSwitc
   };
   const calculationMethod = result.analysisContext?.calculationMethod || demoCase.analysisContext?.calculationMethod || "EFFECTIVE_INTEREST";
   return <main className="ubo-demo-results">
-    <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.fallback ? "CACHED FALLBACK — LIVE REFRESH FAILED" : result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : `${result.status} LIVE RESEARCH — PROVISIONAL DEMO RESULT`}</span></header>
+    <header className="ubo-demo-result-heading"><div><span className="ubo-demo-eyebrow">Ownership research</span><h1>{demoCase.company.legalName}</h1><p>{demoCase.company.registrationNumber} · {demoCase.company.countryName} · {result.canonicalCompanyTypeLabel || ownershipLabelFor(demoCase.company.ownershipType)}</p></div><span className={`ubo-demo-source-badge ${result.sourceMode.toLowerCase()}`}>{result.fallback ? "CACHED FALLBACK — LIVE REFRESH FAILED" : result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.ALICE_28 || result.selectedFixtureId === DEMO_CALCULATION_FIXTURES.METHOD_60_40 ? "Synthetic calculation fixture · no provider call" : result.sourceMode === "FIXTURE" ? "Reviewed fixture · not this company’s live result" : result.sourceMode === "REPLAY" ? "Saved live replay — provisional demo result" : result.sourceMode === "SAVED" ? "Saved research · no provider call" : `${result.status} LIVE RESEARCH — PROVISIONAL DEMO RESULT`}</span></header>
     <ProviderOutcomes outcomes={result.providerOutcomes} />
     {result.fallback && <section className="ubo-demo-review-wait" role="status"><strong>Showing the last usable result saved {new Date(result.fallback.savedAt).toLocaleString("en-GB")}.</strong><p>The live refresh failed: {result.fallback.reason}. This cached result may be stale and is reported as PARTIAL, not as a successful live refresh.</p></section>}
     {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></>}
@@ -361,6 +362,18 @@ export default function UboDemoRoot() {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
     let subscribed = true;
     const sourceMode = demoCase.analysisContext?.sourceMode || draft.sourceMode;
+    // A usable result names the company as the registry records it: the case
+    // takes that name (what was typed is kept), before any chart is read.
+    const takeResearch = (result) => {
+      const adopted = adoptRegistryName({ demoCase, draft, researchResult: result });
+      if (adopted) {
+        setDemoCase(adopted.demoCase);
+        setDraft(adopted.draft);
+        persistPocCase("UPSERT_CASE", { caseId: adopted.demoCase.demoCaseId, idempotencyKey: `case-registry-name:${adopted.demoCase.demoCaseId}:${smallStableHash(adopted.demoCase.company.legalName)}`, payload: { draft: adopted.draft, demoCase: adopted.demoCase }, actorType: "ANALYST" })
+          .catch((cause) => setReplayLibraryStatus({ kind: "error", message: `${cause.message} The registry's company name could not be saved to the case.` }));
+      }
+      setResearchResult(result);
+    };
     if (sourceMode === "SAVED") {
       // The research another case of this workspace already holds, read back
       // from the server: no provider call. Only the research comes across -
@@ -370,7 +383,7 @@ export default function UboDemoRoot() {
         const saved = record?.projection?.researchResult;
         if (!saved) throw new Error("That saved research is no longer available.");
         const { ownershipResolutionTrace: _trace, analystCustomerRequests: _requests, investigationTopicActivations: _topics, ...research } = saved;
-        setResearchResult({ ...research, sourceMode: "SAVED", savedFrom: { caseId: draft.savedCaseId, loadedAt: new Date().toISOString() } });
+        takeResearch({ ...research, sourceMode: "SAVED", savedFrom: { caseId: draft.savedCaseId, loadedAt: new Date().toISOString() } });
       }).catch((cause) => {
         if (!subscribed) return;
         setResearchError({ message: `${cause.message || "The saved research could not be loaded."} No live search was started.`, code: null });
@@ -409,10 +422,10 @@ export default function UboDemoRoot() {
           if (!subscribed) return;
           if (!fallback) { setResearchResult(compact); return; }
           setResearchError("");
-          setResearchResult({ ...fallback.result, status: "PARTIAL", providerOutcomes: compact.providerOutcomes, fallback: { savedAt: fallback.savedAt, reason: "The live providers did not return a usable result." }, completedAt: new Date().toISOString() });
+          takeResearch({ ...fallback.result, status: "PARTIAL", providerOutcomes: compact.providerOutcomes, fallback: { savedAt: fallback.savedAt, reason: "The live providers did not return a usable result." }, completedAt: new Date().toISOString() });
         });
       }
-      setResearchResult(compact);
+      takeResearch(compact);
       return undefined;
     }).catch((cause) => {
       if (!subscribed || cause.code === "RESEARCH_ABORTED") return;
@@ -427,7 +440,7 @@ export default function UboDemoRoot() {
         if (!subscribed) return;
         if (fallback) {
           setResearchError("");
-          setResearchResult({ ...fallback.result, status: "PARTIAL", fallback: { savedAt: fallback.savedAt, reason: message }, completedAt: new Date().toISOString() });
+          takeResearch({ ...fallback.result, status: "PARTIAL", fallback: { savedAt: fallback.savedAt, reason: message }, completedAt: new Date().toISOString() });
         } else {
           setResearchError(message);
           setResearchResult({ status: "FAILED", sourceMode, jobId: lease.jobId, error: message, completedAt: new Date().toISOString() });
@@ -622,7 +635,11 @@ export default function UboDemoRoot() {
   const analystResultPath = research || review || audit;
 
   let content;
-  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} newCaseNotice={newCaseNotice} onNewCaseContinue={continueNewCase} onNewCaseCancel={() => setNewCaseNotice(null)} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
+  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} newCaseNotice={newCaseNotice} onNewCaseContinue={continueNewCase} onNewCaseCancel={() => setNewCaseNotice(null)} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => {
+    const saved = savedResearch.find((item) => item.caseId === caseId);
+    setDraft((current) => ({ ...current, savedCaseId: caseId, ...(saved ? { legalName: saved.company.legalName, registrationNumber: saved.company.registrationNumber, countryCode: saved.company.countryCode || current.countryCode } : {}) }));
+    setErrors((current) => ({ ...current, savedCaseId: undefined }));
+  }} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (review && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="REVIEW" demoCase={demoCase} result={researchResult} />;
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
