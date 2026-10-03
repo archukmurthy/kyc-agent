@@ -1,12 +1,15 @@
 import { chartSourceCoverage } from "./caseResolution";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
-import { uboStore } from "../browserStore";
+import { casePointerStore, uboStore } from "../browserStore";
 
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_KEY = "ubo-demo.customer-ownership-chart.v1";
 export const CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION = "ubo-demo-customer-ownership-chart-session-v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_KEY = "ubo-demo.customer-ownership-chart-library.v1";
 export const CUSTOMER_OWNERSHIP_CHART_LIBRARY_VERSION = "ubo-demo-customer-ownership-chart-library-v1";
-export const CUSTOMER_OWNERSHIP_JOB_KEY = "ubo-demo.customer-ownership-job.v1";
+// Like the case pointer, the chart job pointer is kept per tab: ids only, no
+// names or document content. In page memory alone a reload lost a reading in
+// progress, and the customer uploaded - and paid for - the chart again.
+export const CUSTOMER_OWNERSHIP_JOB_KEY = "ubo-chart-job-pointer.v1";
 export const CURRENT_OWNERSHIP_EXTRACTION_PROFILE = Object.freeze({
   profileVersion: "ownership-chart-extraction-v2",
   schemaVersion: "ownership-chart-schema-v2",
@@ -175,16 +178,16 @@ export function clearCustomerOwnershipChartSession(storage = uboStore) {
   storage.removeItem(CUSTOMER_OWNERSHIP_CHART_SESSION_KEY);
 }
 
-export function readCustomerOwnershipJob(storage = uboStore) {
+export function readCustomerOwnershipJob(storage = casePointerStore) {
   const parsed = safeParse(storage.getItem(CUSTOMER_OWNERSHIP_JOB_KEY));
   return parsed?.jobId && parsed?.demoCaseId ? parsed : null;
 }
 
-export function writeCustomerOwnershipJob({ jobId, demoCaseId, artifactId, correlationId }, storage = uboStore) {
+export function writeCustomerOwnershipJob({ jobId, demoCaseId, artifactId, correlationId }, storage = casePointerStore) {
   storage.setItem(CUSTOMER_OWNERSHIP_JOB_KEY, JSON.stringify({ jobId, demoCaseId, artifactId, correlationId, savedAt: new Date().toISOString() }));
 }
 
-export function clearCustomerOwnershipJob(storage = uboStore) {
+export function clearCustomerOwnershipJob(storage = casePointerStore) {
   storage.removeItem(CUSTOMER_OWNERSHIP_JOB_KEY);
 }
 

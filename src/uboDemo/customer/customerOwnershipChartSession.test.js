@@ -9,6 +9,9 @@ import {
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
   sameCustomerCompany,
+  clearCustomerOwnershipJob,
+  readCustomerOwnershipJob,
+  writeCustomerOwnershipJob,
 } from "./customerOwnershipChartSession";
 import { uboStore } from "../browserStore";
 
@@ -145,4 +148,13 @@ test("a corrected company name with the same registration number is the same com
   expect(sameCustomerCompany({ countryCode: "GB", registrationNumber: "01471587" }, { countryCode: "IE", registrationNumber: "01471587" })).toBe(false);
   // Without a number, the name is all there is.
   expect(sameCustomerCompany({ countryCode: "GB", legalName: "Example Limited" }, { countryCode: "GB", legalName: "Other Limited" })).toBe(false);
+});
+
+test("a chart reading in progress is still found after a reload, by ids alone", () => {
+  writeCustomerOwnershipJob({ jobId: "job-1", demoCaseId: "case-1", artifactId: "artifact-1", correlationId: "corr-1" });
+  uboStore.clear(); // a reload empties the page's memory
+  expect(readCustomerOwnershipJob()).toEqual(expect.objectContaining({ jobId: "job-1", demoCaseId: "case-1" }));
+  expect(Object.keys(JSON.parse(window.sessionStorage.getItem("ubo-chart-job-pointer.v1"))).sort()).toEqual(["artifactId", "correlationId", "demoCaseId", "jobId", "savedAt"]);
+  clearCustomerOwnershipJob();
+  expect(readCustomerOwnershipJob()).toBeNull();
 });
