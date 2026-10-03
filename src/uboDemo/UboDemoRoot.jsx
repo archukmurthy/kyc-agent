@@ -241,6 +241,9 @@ function ResearchError({ error, result, replays, onRetry, onReplay, onEdit }) {
   return <main className="ubo-demo-main"><section className="ubo-demo-research-card ubo-demo-failure"><span className="ubo-demo-eyebrow">Research unavailable</span><h1>Live research could not be completed</h1><ProviderOutcomes outcomes={result?.providerOutcomes} /><p>{message}</p><p><strong>No conclusion about the ownership structure has been made from these provider failures.</strong></p><div className="ubo-demo-error-actions"><button className="ubo-demo-primary" onClick={onRetry}>Try live research again</button>{replays.length > 0 && <button className="ubo-demo-secondary" onClick={onReplay}>Use the latest saved replay</button>}<button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button></div></section></main>;
 }
 
+// ponytail: a fixed interval; a push channel if analysts need it sooner.
+const CUSTOMER_PROGRESS_REFRESH_MS = 30 * 1000;
+
 export default function UboDemoRoot() {
   const restored = readDemoSession();
   const [draft, setDraft] = useState(() => restored?.draft || emptyDemoDraft());
@@ -303,17 +306,30 @@ export default function UboDemoRoot() {
       setReplayLibraryStatus({ kind: "error", message: `${cause.message} This research result is not yet durably attached to the case.` });
     });
   }, [demoCase, draft, researchResult]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The customer's progress, as the server holds it, while an analyst page is
+  // open. (This used to wait for a browser-storage event, which nothing has
+  // sent since the case moved to the server - UBO-22.) Only the customer's
+  // trace is taken; the analyst's own state on the page is left alone.
+  const casePathOpen = isDemoResearchPath(pathname) || isDemoReviewPath(pathname) || isDemoAuditPath(pathname);
+  const researchReady = Boolean(researchResult) && researchResult.status !== "LOADING";
   useEffect(() => {
-    const receiveCustomerProgress = (event) => {
-      if (event.key !== "ubo-demo.case.v1" || !event.newValue) return;
+    const caseId = demoCase?.demoCaseId;
+    if (!caseId || !casePathOpen || !researchReady) return undefined;
+    let active = true;
+    const refresh = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
-        const next = JSON.parse(event.newValue);
-        if (next?.demoCase?.demoCaseId === demoCase?.demoCaseId && next.researchResult?.ownershipResolutionTrace) setResearchResult(next.researchResult);
-      } catch (_) { /* Ignore unrelated or incomplete browser storage events. */ }
+        const record = await loadPocCase(caseId);
+        const trace = record?.projection?.assessment?.trace || record?.projection?.resolution?.trace || null;
+        if (!active || !trace) return;
+        setResearchResult((current) => (current && current.status !== "LOADING"
+          && JSON.stringify(current.ownershipResolutionTrace || null) !== JSON.stringify(trace)
+          ? { ...current, ownershipResolutionTrace: trace } : current));
+      } catch (_) { /* The next refresh tries again; the page keeps what it has. */ }
     };
-    window.addEventListener("storage", receiveCustomerProgress);
-    return () => window.removeEventListener("storage", receiveCustomerProgress);
-  }, [demoCase?.demoCaseId]);
+    const timer = setInterval(refresh, CUSTOMER_PROGRESS_REFRESH_MS);
+    return () => { active = false; clearInterval(timer); };
+  }, [demoCase?.demoCaseId, casePathOpen, researchReady]);
   useEffect(() => {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
     let subscribed = true;

@@ -752,3 +752,24 @@ test("research interrupted by a reload says so instead of spinning forever", () 
   expect(screen.getByText(/This research did not finish/)).toBeInTheDocument();
   expect(window.fetch).not.toHaveBeenCalled();
 });
+
+test("an open analyst page picks up the customer's progress from the server every 30 seconds", async () => {
+  jest.useFakeTimers();
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "Acme Holdings Limited", registrationNumber: "00445790" },
+    demoCase: { demoCaseId: "demo-live", company: { legalName: "Acme Holdings Limited", registrationNumber: "00445790", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: research,
+  }));
+  const customerTrace = { discoveryState: "QUESTIONS", questions: [{ id: "q1", status: "RESOLVED" }] };
+  mockLoadPocCase.mockResolvedValue({ projection: { assessment: { trace: customerTrace } } });
+  window.history.replaceState({}, "", DEMO_REVIEW_PATH);
+  render(<UboDemoRoot />);
+  expect(mockLoadPocCase).not.toHaveBeenCalled();
+  await act(async () => { jest.advanceTimersByTime(30 * 1000); });
+  expect(mockLoadPocCase).toHaveBeenCalledWith("demo-live");
+  await waitFor(() => expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(customerTrace));
+  // The analyst's own research is untouched.
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.candidateSources).toEqual(research.candidateSources);
+});
