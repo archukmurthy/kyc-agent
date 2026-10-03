@@ -20,7 +20,8 @@ import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
 import JobsNeedingAttention from "./JobsNeedingAttention";
 import CaseLedger from "./CaseLedger";
-import { clearActivePocCase, listSavedResearch, loadPocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
+import { clearActivePocCase, customerEngagement, listSavedResearch, loadPocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
+import { customerCompanyKey } from "./customer/customerOwnershipChartSession";
 import "./uboDemo.css";
 
 // Temporarily hide the legacy analyst open-questions panel without removing its implementation.
@@ -258,6 +259,9 @@ export default function UboDemoRoot() {
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
   const [savedResearch, setSavedResearch] = useState([]);
+  // A new case was asked for while a customer may be working on this one: the
+  // warning has been shown, and the next submit goes ahead.
+  const [newCaseConfirmed, setNewCaseConfirmed] = useState(null);
   const skipNextSave = useRef(false);
   const durableResearchSaves = useRef(new Map());
 
@@ -418,7 +422,15 @@ export default function UboDemoRoot() {
     }
     setDraft((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined }));
   };
-  const startResearch = (event) => {
+  const caseFinalized = () => Boolean(researchResult?.ownershipResolutionTrace?.verificationAssessment?.finalized);
+  // The current case, re-run: its id stays (a link sent points at it), each
+  // run gets its own research job id (they defaulted to the case id).
+  const continuingCase = (candidate) => ({
+    ...candidate,
+    demoCaseId: demoCase.demoCaseId,
+    analysisContext: { ...(candidate.analysisContext || {}), researchJobId: `${demoCase.demoCaseId}:run-${Date.now().toString(36)}` },
+  });
+  const startResearch = async (event) => {
     event.preventDefault();
     let cleanDraft = { ...draft, demoFixtureId: "" };
     const next = {};
@@ -438,9 +450,33 @@ export default function UboDemoRoot() {
     Object.assign(next, validateDemoDraft(cleanDraft));
     setErrors(next);
     if (Object.keys(next).length) return;
+    const candidate = createDemoCase(cleanDraft);
+    // Same registration number and country: the same company (a corrected
+    // name, a different method) - its case continues, and a link already sent
+    // keeps pointing at the case being worked on.
+    const sameCompany = Boolean(demoCase?.demoCaseId) && customerCompanyKey(demoCase.company) === customerCompanyKey(candidate.company);
+    if (sameCompany && caseFinalized()) {
+      setReplayLibraryStatus({ kind: "error", message: "This review has been finalised, so its research and company cannot be changed. Reopen the review first (on the Review page)." });
+      return;
+    }
+    // A different company is a new case. If a customer may already be working
+    // on the current one, say so once before leaving it behind.
+    if (!sameCompany && demoCase?.demoCaseId && newCaseConfirmed !== demoCase.demoCaseId) {
+      let engagement = null;
+      try { engagement = await customerEngagement(demoCase.demoCaseId); } catch (_) { engagement = null; }
+      if (!engagement || engagement.linkSent || engagement.customerStarted) {
+        setNewCaseConfirmed(demoCase.demoCaseId);
+        setReplayLibraryStatus({ kind: "error", message: engagement
+          ? `${engagement.customerStarted ? "The customer has already started" : "A customer link was sent"} for ${demoCase.company.legalName}. That link stays on the ${demoCase.company.legalName} case - this starts a separate case for ${candidate.company.legalName}. Press Start research again to continue.`
+          : `We could not check whether a customer link was sent for ${demoCase.company.legalName}. Any link sent stays on that case - this starts a separate case. Press Start research again to continue.` });
+        return;
+      }
+    }
+    setNewCaseConfirmed(null);
+    setReplayLibraryStatus(null);
     setDraft(cleanDraft);
-    const nextCase = createDemoCase(cleanDraft);
-    persistPocCase("UPSERT_CASE", { caseId: nextCase.demoCaseId, idempotencyKey: `case-created:${nextCase.demoCaseId}`, payload: { draft: cleanDraft, demoCase: nextCase }, actorType: "ANALYST" }).catch((cause) => {
+    const nextCase = sameCompany ? continuingCase(candidate) : candidate;
+    persistPocCase("UPSERT_CASE", { caseId: nextCase.demoCaseId, idempotencyKey: sameCompany ? `case-updated:${nextCase.demoCaseId}:${smallStableHash([nextCase.company, cleanDraft])}` : `case-created:${nextCase.demoCaseId}`, payload: { draft: cleanDraft, demoCase: nextCase }, actorType: "ANALYST" }).catch((cause) => {
       setReplayLibraryStatus({ kind: "error", message: `${cause.message} Research was not started because the case could not be saved.` });
     });
     abortActiveDemoResearchJobs();
@@ -498,8 +534,14 @@ export default function UboDemoRoot() {
       try { nextDraft = bindDraftToReplay(nextDraft, record); }
       catch (cause) { setResearchError({ message: `${cause.message} No live search was started.`, code: null }); setResearchResult(null); return; }
     }
-    const nextCase = createDemoCase(nextDraft);
+    // The same case: a customer link already sent points at it (UBO-57).
+    if (demoCase && caseFinalized()) {
+      setReplayLibraryStatus({ kind: "error", message: "This review has been finalised, so its research cannot be replaced. Reopen the review first (on the Review page), then run the research again." });
+      return;
+    }
+    const nextCase = demoCase?.demoCaseId ? continuingCase(createDemoCase(nextDraft)) : createDemoCase(nextDraft);
     abortActiveDemoResearchJobs();
+    setReplayLibraryStatus(null);
     setDraft(nextDraft); setDemoCase(nextCase); setResearchError(""); setResearchResult({ status: "LOADING", sourceMode: mode }); setRunToken((n) => n + 1);
   };
   const startNewCase = () => { abortActiveDemoResearchJobs(); skipNextSave.current = true; clearActivePocCase(); clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };

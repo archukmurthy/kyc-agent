@@ -46,6 +46,21 @@ async function parse(response) {
   return payload.case;
 }
 
+/** Whether a customer may already be working on a case, from its audit
+ *  ledger: a link sent and not withdrawn, or anything the customer has done. */
+export async function customerEngagement(caseId, fetchImpl = window.fetch) {
+  const response = await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}&ledger=1`, { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.success) throw new Error(payload.message || "The case history could not be read.");
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  let linkSent = false;
+  events.forEach(({ eventType }) => {
+    if (eventType === "CUSTOMER_LINK_ISSUED") linkSent = true;
+    if (eventType === "CUSTOMER_LINK_REVOKED") linkSent = false;
+  });
+  return { linkSent, customerStarted: events.some(({ actorType }) => actorType === "CUSTOMER") };
+}
+
 /** This workspace's researched cases, newest first (staff only). */
 export async function listSavedResearch(fetchImpl = window.fetch) {
   const response = await fetchImpl("/api/ubo-poc-case?savedResearch=1", { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } });

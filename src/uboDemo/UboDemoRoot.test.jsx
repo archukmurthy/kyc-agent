@@ -1,12 +1,13 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "./browserStore";
 const mockPersistPocCase = jest.fn();
 const mockOpenCustomerViewHandoff = jest.fn();
 const mockListSavedResearch = jest.fn(async () => []);
 const mockLoadPocCase = jest.fn(async () => null);
-jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args) }));
+const mockCustomerEngagement = jest.fn(async () => ({ linkSent: false, customerStarted: false }));
+jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args), customerEngagement: (...args) => mockCustomerEngagement(...args) }));
 jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
 import UboDemoRoot from "./UboDemoRoot";
 import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch, saveLastSuccessfulResearch } from "./demoResearch";
@@ -50,7 +51,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); mockListSavedResearch.mockReset().mockResolvedValue([]); mockLoadPocCase.mockReset().mockResolvedValue(null); });
+beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); mockListSavedResearch.mockReset().mockResolvedValue([]); mockLoadPocCase.mockReset().mockResolvedValue(null); mockCustomerEngagement.mockReset().mockResolvedValue({ linkSent: false, customerStarted: false }); });
 afterEach(() => { abortActiveDemoResearchJobs(); uboStore.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -772,4 +773,78 @@ test("an open analyst page picks up the customer's progress from the server ever
   await waitFor(() => expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(customerTrace));
   // The analyst's own research is untouched.
   expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.candidateSources).toEqual(research.candidateSources);
+});
+
+// UBO-57: a customer link points at one case. Re-running research, or
+// correcting the company's name, continues that case; a different company is a
+// new case, and if a customer may be working on the current one the analyst is
+// told first.
+async function researchedCase({ name = "Acme Holdings Limited", number = "00445790" } = {}) {
+  window.fetch = jest.fn(() => okJson(evaluatedSession));
+  renderStart(); completeRequiredFields({ name, number });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  return JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase.demoCaseId;
+}
+const sessionCase = () => JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase;
+
+test("Run again re-runs the research on the same case, as a new research job", async () => {
+  const caseId = await researchedCase();
+  const firstJob = JSON.parse(window.fetch.mock.calls[0][1].body).jobId;
+  fireEvent.click(screen.getByRole("button", { name: "Run again" }));
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(sessionCase().demoCaseId).toBe(caseId);
+  expect(JSON.parse(window.fetch.mock.calls[1][1].body).jobId).not.toBe(firstJob);
+});
+
+test("Run again on a finalised review asks for it to be reopened and runs nothing", async () => {
+  await researchedCase();
+  const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
+  mockLoadPocCase.mockResolvedValue(null);
+  // The review is finalised (as the server's trace would say).
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, researchResult: { ...session.researchResult, ownershipResolutionTrace: { verificationAssessment: { finalized: true } } } }));
+  cleanup();
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  render(<UboDemoRoot />);
+  window.fetch.mockClear();
+  fireEvent.click(await screen.findByRole("button", { name: "Run again" }));
+  expect(await screen.findByText(/has been finalised, so its research cannot be replaced/)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("correcting the company name keeps the same case", async () => {
+  const caseId = await researchedCase({ name: "Vodaphone LTD", number: "01471587" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
+  fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: "Vodafone Limited" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(sessionCase()).toEqual(expect.objectContaining({ demoCaseId: caseId, company: expect.objectContaining({ legalName: "Vodafone Limited" }) }));
+  expect(mockCustomerEngagement).not.toHaveBeenCalled();
+  const upserts = mockPersistPocCase.mock.calls.filter(([operation]) => operation === "UPSERT_CASE").map(([, command]) => command.idempotencyKey);
+  expect(upserts[upserts.length - 1]).toMatch(new RegExp(`^case-updated:${caseId}:`));
+});
+
+test("a different company after a link was sent warns once, then starts a separate case", async () => {
+  const caseId = await researchedCase();
+  mockCustomerEngagement.mockResolvedValue({ linkSent: true, customerStarted: false });
+  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
+  fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: "Other Company Limited" } });
+  fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: "09999999" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByText(/A customer link was sent for Acme Holdings Limited\. That link stays on the Acme Holdings Limited case/)).toBeInTheDocument();
+  expect(sessionCase().demoCaseId).toBe(caseId);
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  await waitFor(() => expect(sessionCase().demoCaseId).not.toBe(caseId));
+  expect(mockCustomerEngagement).toHaveBeenCalledWith(caseId);
+});
+
+test("a different company with no customer involved starts a new case without a warning", async () => {
+  const caseId = await researchedCase();
+  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
+  fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: "09999999" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  await waitFor(() => expect(sessionCase().demoCaseId).not.toBe(caseId));
 });
