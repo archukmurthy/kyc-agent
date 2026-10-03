@@ -200,7 +200,7 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
   </section>;
 }
 
-function AnsweredQuestion({ question, answer, context, editing, draft, error, onEdit, onDraft, onSave, onCancel, onRetry }) {
+function AnsweredQuestion({ question, answer, context, editing, draft, error, locked, onEdit, onDraft, onSave, onCancel, onRetry }) {
   return <article className="ubo-resolution-answered-question">
     <div>
       <span>Answered {question.stage === "CONTROL" ? "control" : question.stage === "FALLBACK" ? "senior management" : question.stage === "ADDITIONAL" ? "additional" : "ownership"} question</span>
@@ -217,7 +217,7 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, on
     </> : <>
       <div className="ubo-resolution-answer-summary">
         <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong></p>
-        <button type="button" onClick={onEdit}>Edit answer</button>
+        {!locked && <button type="button" onClick={onEdit}>Edit answer</button>}
       </div>
       {/* A refused save must not look saved: the answer is shown, but it is not on the case. */}
       {error && <div className="ubo-resolution-edit-actions"><p className="ubo-resolution-error" role="alert">This answer was not saved: {error}</p><button type="button" onClick={onRetry}>Save again</button></div>}
@@ -279,6 +279,10 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [recalculations, setRecalculations] = useState(restored?.recalculations || {});
   const [drafts, setDrafts] = useState({});
   const [errors, setErrors] = useState({});
+  // A case finalised before this page loaded (the customer came back, or used
+  // Back from identity verification): the server refuses any change to it, so
+  // the page says so and goes straight on instead of finalising again.
+  const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
@@ -546,7 +550,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     }
   };
   return <section className="ubo-customer-card ubo-resolution-engine">
-    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
+    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} hidden={finalizedAtLoad} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
     <p className="ubo-resolution-intro">We ask only for facts that remain relevant after comparing the registry research with your ownership chart. Ownership is resolved first; control and fallback questions appear progressively under the active policy.</p>
     {activeIssueGroups.length > 0 && <div className="ubo-resolution-question-groups">{activeIssueGroups.map((group) => <QuestionGroup
       key={group.comparisonItemId}
@@ -574,6 +578,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         editing={editingQuestionId === question.id}
         draft={drafts[question.id]}
         error={errors[question.id]}
+        locked={finalizedAtLoad}
         onEdit={() => { setDrafts((current) => ({ ...current, [question.id]: answers[question.id].value })); setEditingQuestionId(question.id); }}
         onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))}
         onSave={() => submit(question)}
@@ -581,6 +586,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
-    <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>
+    {finalizedAtLoad ? <section className="ubo-customer-next-step"><div><small>Answers submitted</small><h3>Continue to identity verification</h3><p>Your answers have been submitted and can no longer be changed here. If something needs correcting, contact the person who sent you this link.</p></div><a className="ubo-customer-primary" href={CUSTOMER_IDV_PATH}>Continue to identity verification <span>→</span></a></section>
+    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>}
   </section>;
 }

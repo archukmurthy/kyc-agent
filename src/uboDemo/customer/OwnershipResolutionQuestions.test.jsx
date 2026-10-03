@@ -405,3 +405,17 @@ test("an answer the server refused says it was not saved and can be sent again",
   await waitFor(() => expect(sent).toHaveLength(2));
   await waitFor(() => expect(screen.queryByText(/This answer was not saved/i)).not.toBeInTheDocument());
 });
+
+test("a case finalised before the page loaded goes straight on to identity verification and cannot be edited", () => {
+  const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
+  const sent = [];
+  mockPersist = async (operation) => { sent.push(operation); return {}; };
+  const finalizedTrace = { discoveryState: DISCOVERY_STATE.IDV_IN_PROGRESS, verificationAssessment: { finalized: true, assessmentVersionId: "assessment-1" } };
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ contractVersion: DEMO_SESSION_CONTRACT, demoCase: { demoCaseId: context.demoCaseId, company: context.company }, researchResult: { ...input.researchResult, ownershipResolutionTrace: finalizedTrace } }));
+  render(<OwnershipResolutionQuestions {...input} />);
+  expect(screen.getByText(/Your answers have been submitted/i)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Continue to identity verification/i })).toHaveAttribute("href", "/ubo-demo/customer/idv");
+  expect(screen.queryByRole("button", { name: /Continue to identity verification/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Edit answer/i })).not.toBeInTheDocument();
+  expect(sent).not.toContain("FINALIZE_ASSESSMENT");
+});
