@@ -469,3 +469,8 @@
 .ubo-demo-customer-link [role="status"] .ubo-demo-secondary { min-height: 36px; padding: 0 12px; margin-right: 8px; border: 1px solid var(--ubo-demo-border); border-radius: 8px; background: white; }
 @media (max-width: 640px) { .ubo-demo-customer-link form { grid-template-columns: 1fr; } }
 .ubo-demo-case-alert { max-width: 1100px; margin: 12px auto 0; padding: 10px 14px; border-radius: 8px; color: #9b2525; background: #fff0f0; font-size: 13px; }
+.ubo-demo-new-case-notice { grid-column: 1 / -1; margin: 16px 0; padding: 16px 18px; border: 1px solid #e3b4b4; border-radius: 10px; background: #fff7f7; }
+.ubo-demo-new-case-notice h2 { margin: 0 0 8px; font-size: 16px; }
+.ubo-demo-new-case-notice p { margin: 0 0 8px; font-size: 13px; }
+.ubo-demo-new-case-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.ubo-demo-link-notice { padding: 8px 12px; border-radius: 8px; background: #fff7e6; font-size: 13px; }

@@ -14,7 +14,7 @@ import { limitNotice } from "../trials/limitNotice";
 import AssertionDetails from "./AssertionDetails";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isDemoAuditPath, isDemoResearchPath, isDemoReviewPath, navigateDemo } from "./demoRoute";
 import { buildCustomerHandoff, openCustomerViewHandoff } from "./customerHandoff";
-import CustomerLinkPanel from "./CustomerLinkPanel";
+import CustomerLinkPanel, { withdrawCustomerLinks } from "./CustomerLinkPanel";
 import AnalystInvestigationTopics from "./AnalystInvestigationTopics";
 import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
@@ -50,7 +50,27 @@ function CalculationMethodSelector({ value, onChange, compact = false }) {
   return <fieldset className={`ubo-demo-method ${compact ? "compact" : "ubo-demo-wide"}`}><legend>Calculation method</legend><p>Choose which calculation or control assessment to inspect.</p><div>{CALCULATION_METHODS.map((method) => <label key={method.code}><input type="radio" name={compact ? "resultCalculationMethod" : "calculationMethod"} value={method.code} checked={value === method.code} onChange={() => onChange(method.code)} /><span><strong>{method.label}</strong><small>{method.explanation}</small></span></label>)}</div></fieldset>;
 }
 
-function CompanyStart({ draft, errors, savedResearch, onChange, onSavedSelect, onSubmit, onLoadExample }) {
+// Leaving a case a customer may be working on (UBO-57): the analyst decides
+// what happens to the link - it never moves to another company's case.
+function NewCaseNotice({ notice, onContinue, onCancel }) {
+  const { fromCompany, toCompany, engagement, busy, error } = notice;
+  const what = !engagement ? `We could not check whether a customer link was sent for ${fromCompany}.`
+    : engagement.customerStarted ? `The customer has already started on the ${fromCompany} case.`
+      : `A customer link was sent for ${fromCompany}.`;
+  return <section className="ubo-demo-new-case-notice" role="alertdialog" aria-label="Starting a separate case">
+    <h2>This starts a separate case for {toCompany}</h2>
+    <p>{what} A link always stays on its own case - it is never moved to another company's case, because that would show one company's ownership details to another company's contact.</p>
+    <p>If that link went to the wrong case, withdraw it and send the customer a new link for {toCompany} once the research is ready.</p>
+    {error && <p role="alert" className="ubo-demo-error">{error}</p>}
+    <div className="ubo-demo-new-case-actions">
+      <button type="button" className="ubo-demo-primary" disabled={busy} onClick={() => onContinue({ withdraw: true })}>{busy ? "Withdrawing…" : `Withdraw the ${fromCompany} link and continue`}</button>
+      <button type="button" className="ubo-demo-secondary" disabled={busy} onClick={() => onContinue({ withdraw: false })}>Keep that link and continue</button>
+      <button type="button" className="ubo-demo-secondary" disabled={busy} onClick={onCancel}>Cancel</button>
+    </div>
+  </section>;
+}
+
+function CompanyStart({ draft, errors, savedResearch, newCaseNotice, onNewCaseContinue, onNewCaseCancel, onChange, onSavedSelect, onSubmit, onLoadExample }) {
   const replayMode = draft.sourceMode === "REPLAY";
   const savedMode = draft.sourceMode === "SAVED";
   return <main className="ubo-demo-main">
@@ -73,6 +93,7 @@ function CompanyStart({ draft, errors, savedResearch, onChange, onSavedSelect, o
         </fieldset>
       </div>
       <div className="ubo-demo-examples"><span>Instant engine examples</span><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.ALICE_28)}>Load Alice example — no provider call</button><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.METHOD_60_40)}>Load 60/40 method comparison — no provider call</button></div>
+      {newCaseNotice && <NewCaseNotice notice={newCaseNotice} onContinue={onNewCaseContinue} onCancel={onNewCaseCancel} />}
       <div className="ubo-demo-actions"><p>Saved to this case on our server - nothing about it stays in your browser.</p><button className="ubo-demo-primary" type="submit">{replayMode || savedMode ? "Start from saved research — no provider call" : "Start research"} <span>→</span></button></div>
     </form>
   </main>;
@@ -176,7 +197,7 @@ function CalculationPanel({ view, result, method, onMethodChange, onShowPath }) 
   </section>;
 }
 
-function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, customerSwitchState, prepareCustomerLink, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest, onActivateTopic, onCancelTopic }) {
+function ResearchResult({ demoCase, result, linkNotice, onEdit, onRetry, onSwitchCustomer, customerSwitchState, prepareCustomerLink, onDisplayChange, onCalculationMethodChange, onToggleCustomerRequest, onActivateTopic, onCancelTopic }) {
   const view = result.view;
   const pending = (result.decisionTargets?.candidateParties?.length || 0) + (result.decisionTargets?.candidateClaims?.length || 0);
   const scope = result.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT;
@@ -213,7 +234,7 @@ function ResearchResult({ demoCase, result, onEdit, onRetry, onSwitchCustomer, c
     {view ? <><CalculationPanel view={view} result={result} method={calculationMethod} onMethodChange={onCalculationMethodChange} onShowPath={showCalculationPath} /><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-section-heading"><div><span className="ubo-demo-eyebrow">Established structure</span><h2>Ownership structure</h2></div><button type="button" aria-expanded={graphExpanded} aria-controls="demo-ownership-content" onClick={() => setGraphExpanded((value) => !value)}>{graphExpanded ? "Collapse" : "Expand"}</button></div>{graphExpanded && <div id="demo-ownership-content"><GraphControls scope={scope} dimension={dimension} onScope={(next) => onDisplayChange({ scope: next })} onDimension={(next) => onDisplayChange({ dimension: next })} visibleGraph={filteredGraph} totalGraph={view.graph} /><GraphFrame projection={filteredGraph} entityLabels={result.entityLabels} registryContexts={result.registryContexts} reviewPresentations={reviewPresentations} selectionCommand={selectionCommand} onSelectionChange={onGraphSelection} /><Assertions result={result} /></div>}</section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={view} result={result} customerRequests={customerRequests} onShowOnMap={showOnMap} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></> : <><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">Research complete</span><h2>Explicit review is required before an ownership graph can be established</h2><p>{pending} candidate identity or claim decision{pending === 1 ? "" : "s"} remain. Live source assertions are not automatically adjudicated, and no UBO conclusion has been inferred.</p></section><div className="ubo-demo-workspace"><section className="ubo-demo-graph-card"><div className="ubo-demo-graph-empty"><h2>Ownership structure pending review</h2><p>The canonical graph will appear only after the existing Decision Application review boundary produces a snapshot.</p></div><Assertions result={result} /></section><AnalystInvestigationTopics activations={result.investigationTopicActivations || []} trace={result.ownershipResolutionTrace} onActivate={onActivateTopic} onCancel={onCancelTopic} />{SHOW_ANALYST_OPEN_QUESTIONS && <OpenQuestions view={null} result={result} customerRequests={customerRequests} onShowOnMap={() => {}} onToggleCustomerRequest={onToggleCustomerRequest} />}</div></>}
     <div className="ubo-demo-bottom-actions"><button className="ubo-demo-secondary" onClick={onEdit}>Edit company details</button><button className="ubo-demo-secondary" onClick={onRetry}>Run again</button><button className="ubo-demo-primary" onClick={onSwitchCustomer}>Switch to customer view</button></div>
     {customerSwitchState && <p className={`ubo-demo-handoff-status ${customerSwitchState.kind}`} role="status">{customerSwitchState.message}</p>}
-    {prepareCustomerLink && <CustomerLinkPanel caseId={demoCase.demoCaseId} prepare={prepareCustomerLink} />}
+    {prepareCustomerLink && <CustomerLinkPanel caseId={demoCase.demoCaseId} prepare={prepareCustomerLink} notice={linkNotice} />}
   </main>;
 }
 
@@ -260,8 +281,10 @@ export default function UboDemoRoot() {
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
   const [savedResearch, setSavedResearch] = useState([]);
   // A new case was asked for while a customer may be working on this one: the
-  // warning has been shown, and the next submit goes ahead.
-  const [newCaseConfirmed, setNewCaseConfirmed] = useState(null);
+  // analyst chooses what happens to that case's link before it goes ahead.
+  const [newCaseNotice, setNewCaseNotice] = useState(null);
+  // Shown with the new case's link panel after the old case's link was withdrawn.
+  const [linkNotice, setLinkNotice] = useState(null);
   const skipNextSave = useRef(false);
   const durableResearchSaves = useRef(new Map());
 
@@ -441,6 +464,19 @@ export default function UboDemoRoot() {
       return null;
     }
   };
+  const continueNewCase = async ({ withdraw }) => {
+    const notice = newCaseNotice;
+    if (!notice) return;
+    if (withdraw) {
+      setNewCaseNotice({ ...notice, busy: true, error: null });
+      try { await withdrawCustomerLinks(notice.fromCaseId); }
+      catch (cause) { setNewCaseNotice({ ...notice, busy: false, error: `${cause.message || "The link could not be withdrawn."} Nothing was changed.` }); return; }
+      setLinkNotice(`The customer link for ${notice.fromCompany} was withdrawn, and the customer's open session ended. Send them a new link for this case below.`);
+    } else {
+      setLinkNotice(null);
+    }
+    await startResearch(null, { confirmedCaseId: notice.fromCaseId });
+  };
   const caseFinalized = () => Boolean(researchResult?.ownershipResolutionTrace?.verificationAssessment?.finalized);
   // The current case, re-run: its id stays (a link sent points at it), each
   // run gets its own research job id (they defaulted to the case id).
@@ -449,8 +485,8 @@ export default function UboDemoRoot() {
     demoCaseId: demoCase.demoCaseId,
     analysisContext: { ...(candidate.analysisContext || {}), researchJobId: `${demoCase.demoCaseId}:run-${Date.now().toString(36)}` },
   });
-  const startResearch = async (event) => {
-    event.preventDefault();
+  const startResearch = async (event, { confirmedCaseId = null } = {}) => {
+    event?.preventDefault?.();
     let cleanDraft = { ...draft, demoFixtureId: "" };
     const next = {};
     if (cleanDraft.sourceMode === "SAVED") {
@@ -480,18 +516,16 @@ export default function UboDemoRoot() {
     }
     // A different company is a new case. If a customer may already be working
     // on the current one, say so once before leaving it behind.
-    if (!sameCompany && demoCase?.demoCaseId && newCaseConfirmed !== demoCase.demoCaseId) {
+    if (!sameCompany && demoCase?.demoCaseId && confirmedCaseId !== demoCase.demoCaseId) {
       let engagement = null;
       try { engagement = await customerEngagement(demoCase.demoCaseId); } catch (_) { engagement = null; }
       if (!engagement || engagement.linkSent || engagement.customerStarted) {
-        setNewCaseConfirmed(demoCase.demoCaseId);
-        setReplayLibraryStatus({ kind: "error", message: engagement
-          ? `${engagement.customerStarted ? "The customer has already started" : "A customer link was sent"} for ${demoCase.company.legalName}. That link stays on the ${demoCase.company.legalName} case - this starts a separate case for ${candidate.company.legalName}. Press Start research again to continue.`
-          : `We could not check whether a customer link was sent for ${demoCase.company.legalName}. Any link sent stays on that case - this starts a separate case. Press Start research again to continue.` });
+        setNewCaseNotice({ fromCaseId: demoCase.demoCaseId, fromCompany: demoCase.company.legalName, toCompany: candidate.company.legalName, engagement });
         return;
       }
     }
-    setNewCaseConfirmed(null);
+    setNewCaseNotice(null);
+    if (!confirmedCaseId) setLinkNotice(null);
     setReplayLibraryStatus(null);
     setDraft(cleanDraft);
     const nextCase = sameCompany ? continuingCase(candidate) : candidate;
@@ -588,13 +622,13 @@ export default function UboDemoRoot() {
   const analystResultPath = research || review || audit;
 
   let content;
-  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
+  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} newCaseNotice={newCaseNotice} onNewCaseContinue={continueNewCase} onNewCaseCancel={() => setNewCaseNotice(null)} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (review && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="REVIEW" demoCase={demoCase} result={researchResult} />;
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
   else if (researchResult?.status === "FAILED" || researchError) content = <ResearchError error={researchError || researchResult?.error || "Research failed."} result={researchResult} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
-  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} prepareCustomerLink={prepareCustomerLink} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
+  else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} linkNotice={linkNotice} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} prepareCustomerLink={prepareCustomerLink} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
   // Research is saved to the case only when it finishes, so a reload during
   // a run lands here with nothing running: say so, rather than spin forever.
   else content = <ResearchError error="This research did not finish - the page was reloaded or closed while it was running. Running it again reuses the server's saved result if it completed; otherwise it is a new research run." result={null} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;

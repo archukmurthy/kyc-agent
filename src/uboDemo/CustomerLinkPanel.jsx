@@ -23,11 +23,16 @@ async function post(body) {
   return payload;
 }
 
+/** Withdraws every link for a case; the customer's open session ends too. */
+export function withdrawCustomerLinks(caseId) {
+  return post({ action: "revoke", caseId });
+}
+
 export function customerLinkUrl(token, origin = window.location.origin) {
   return `${origin}${CUSTOMER_DEMO_START_PATH}?link=${encodeURIComponent(token)}`;
 }
 
-export default function CustomerLinkPanel({ caseId, prepare }) {
+export default function CustomerLinkPanel({ caseId, prepare, notice }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState({ kind: "idle" });
   const [copied, setCopied] = useState(false);
@@ -47,7 +52,7 @@ export default function CustomerLinkPanel({ caseId, prepare }) {
 
   const withdraw = async () => {
     try {
-      await post({ action: "revoke", caseId });
+      await withdrawCustomerLinks(caseId);
       setState({ kind: "withdrawn" });
     } catch (cause) {
       setState({ kind: "error", message: cause.message });
@@ -57,6 +62,7 @@ export default function CustomerLinkPanel({ caseId, prepare }) {
   return (
     <section className="ubo-demo-customer-link" aria-label="Send the customer a link">
       <h2>Send the customer their link</h2>
+      {notice && <p role="status" className="ubo-demo-link-notice">{notice}</p>}
       <p>Only the address you enter can open it - they confirm it with a code we email them. It lasts 30 days, and you can withdraw it.</p>
       <form onSubmit={create}>
         <label htmlFor="ubo-customer-link-email">Customer's email address</label>

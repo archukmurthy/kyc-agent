@@ -824,21 +824,47 @@ test("correcting the company name keeps the same case", async () => {
   expect(upserts[upserts.length - 1]).toMatch(new RegExp(`^case-updated:${caseId}:`));
 });
 
-test("a different company after a link was sent warns once, then starts a separate case", async () => {
-  const caseId = await researchedCase();
-  mockCustomerEngagement.mockResolvedValue({ linkSent: true, customerStarted: false });
+async function editToOtherCompany() {
   fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
   fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: "Other Company Limited" } });
   fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: "09999999" } });
   fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  expect(await screen.findByText(/A customer link was sent for Acme Holdings Limited\. That link stays on the Acme Holdings Limited case/)).toBeInTheDocument();
+  return screen.findByRole("alertdialog", { name: "Starting a separate case" });
+}
+
+test("a different company after a link was sent asks what happens to the link; keeping it starts a separate case", async () => {
+  const caseId = await researchedCase();
+  mockCustomerEngagement.mockResolvedValue({ linkSent: true, customerStarted: false });
+  const notice = await editToOtherCompany();
+  expect(within(notice).getByText(/A customer link was sent for Acme Holdings Limited/)).toBeInTheDocument();
   expect(sessionCase().demoCaseId).toBe(caseId);
-  fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  await screen.findByRole("heading", { name: "Ownership structure" });
+  fireEvent.click(within(notice).getByRole("button", { name: "Keep that link and continue" }));
   await waitFor(() => expect(sessionCase().demoCaseId).not.toBe(caseId));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(window.fetch.mock.calls.some(([url]) => String(url).includes("ubo-customer-link"))).toBe(false);
   expect(mockCustomerEngagement).toHaveBeenCalledWith(caseId);
 });
 
+test("withdrawing the old case's link, then continuing, starts the new case and says to send a new link", async () => {
+  const caseId = await researchedCase();
+  mockCustomerEngagement.mockResolvedValue({ linkSent: false, customerStarted: true });
+  const notice = await editToOtherCompany();
+  expect(within(notice).getByText(/The customer has already started on the Acme Holdings Limited case/)).toBeInTheDocument();
+  fireEvent.click(within(notice).getByRole("button", { name: /Withdraw the Acme Holdings Limited link and continue/ }));
+  await waitFor(() => expect(sessionCase().demoCaseId).not.toBe(caseId));
+  const revoke = window.fetch.mock.calls.find(([url]) => String(url).includes("ubo-customer-link"));
+  expect(JSON.parse(revoke[1].body)).toEqual({ action: "revoke", caseId });
+  expect(await screen.findByText(/link for Acme Holdings Limited was withdrawn/)).toBeInTheDocument();
+});
+
+test("cancelling leaves the current case as it was", async () => {
+  const caseId = await researchedCase();
+  mockCustomerEngagement.mockResolvedValue({ linkSent: true, customerStarted: false });
+  const notice = await editToOtherCompany();
+  fireEvent.click(within(notice).getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  expect(sessionCase().demoCaseId).toBe(caseId);
+});
 test("a different company with no customer involved starts a new case without a warning", async () => {
   const caseId = await researchedCase();
   fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
