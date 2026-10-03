@@ -97,18 +97,27 @@ test("a broken status call does not become an outage", async () => {
   expect(await screen.findByText("the product")).toBeInTheDocument();
 });
 
-test("a second trial's link for a login already in a trial says which trial and what to do", async () => {
+test("a second trial's link for a sign-in already in a trial says what to do, without naming the other trial", async () => {
   setUrl("?invite=VODAPH-LT6Y");
-  mockRedeemInvite.mockRejectedValue(Object.assign(new Error("already_in_trial"), { code: "already_in_trial", company: "Test LTD" }));
-  render(<TrialGate><div>the product</div></TrialGate>);
-  expect(await screen.findByText(/already in the Test LTD trial/)).toBeInTheDocument();
-  expect(screen.getByText(/sign in with a different email address/)).toBeInTheDocument();
-  expect(screen.queryByText("the product")).not.toBeInTheDocument();
+  mockRedeemInvite.mockRejectedValue(Object.assign(new Error("already_in_trial"), { code: "already_in_trial" }));
+  const signOut = jest.fn();
+  window.Clerk = { signOut };
+  try {
+    render(<TrialGate><div>the product</div></TrialGate>);
+    expect(await screen.findByText("This sign-in already belongs to another trial, sign out and sign in with a different email address.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to your current trial" })).toHaveAttribute("href", "/ubo-demo/");
+    expect(screen.queryByText(/Ask whoever sent it/)).not.toBeInTheDocument();
+    expect(screen.queryByText("the product")).not.toBeInTheDocument();
+    screen.getByRole("button", { name: "Sign out" }).click();
+    expect(signOut).toHaveBeenCalledWith({ redirectUrl: expect.stringContaining("invite=VODAPH-LT6Y") });
+  } finally {
+    delete window.Clerk;
+  }
 });
-
 test("an owner working in a trial is told their steps are not counted", async () => {
   mockTrialStatus.mockResolvedValue({ inTrial: true, unmetered: true, company: "Test LTD", trialEndsAt: new Date(Date.now() - 86400000).toISOString(), readOnly: false, budgetLeft: 7 });
   render(<TrialGate><div>the product</div></TrialGate>);
-  expect(await screen.findByText(/not counted against it/)).toBeInTheDocument();
+  expect(await screen.findByText(/not counted against this trial/)).toBeInTheDocument();
+  expect(screen.queryByText(/Test LTD/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Your trial has ended/)).not.toBeInTheDocument();
 });

@@ -60,7 +60,7 @@ export default function TrialGate({ children }) {
       setState({ phase: status.inTrial ? "in" : "no-access", status });
     } catch (error) {
       if (error.code === "invite_full" || error.code === "invite_revoked" || error.code === "invite_invalid" || error.code === "already_in_trial") {
-        setState({ phase: "bad-invite", reason: error.code, company: error.company || null });
+        setState({ phase: "bad-invite", reason: error.code });
         return;
       }
       // Anything else: let them through. The server still refuses what matters.
@@ -95,12 +95,29 @@ export default function TrialGate({ children }) {
     );
   }
 
+  if (state.phase === "bad-invite" && state.reason === "already_in_trial") {
+    // Signing out comes back here with the invitation still in the address,
+    // so the next sign-in uses it.
+    const signOut = () => {
+      try { window.Clerk?.signOut({ redirectUrl: window.location.href }); } catch (_) { /* Nothing to sign out of. */ }
+    };
+    return (
+      <div style={BOX}>
+        <h2 style={{ marginTop: 0 }}>This invitation cannot be used</h2>
+        <p>This sign-in already belongs to another trial, sign out and sign in with a different email address.</p>
+        <p style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <a href="/ubo-demo/">Go to your current trial</a>
+          <button type="button" onClick={signOut}>Sign out</button>
+        </p>
+      </div>
+    );
+  }
+
   if (state.phase === "bad-invite") {
     const message = {
       invite_full: "That invitation has already been used by the maximum number of people.",
       invite_revoked: "That invitation has been withdrawn.",
       invite_invalid: "That invitation code was not recognised.",
-      already_in_trial: `This email address is already in ${state.company ? `the ${state.company} trial` : "another trial"}. One sign-in can be in one trial - sign in with a different email address to use this invitation.`,
     }[state.reason];
     return (
       <div style={BOX}>
@@ -127,7 +144,7 @@ export default function TrialGate({ children }) {
           }}
         >
           {status.unmetered ? (
-            <span>Owner account - working in the {status.company} trial. Your paid AI steps are not counted against it.</span>
+            <span>Owner account - your paid AI steps are not counted against this trial.</span>
           ) : expired ? (
             <span>
               <strong>Your trial has ended.</strong> Your work is still here and can be viewed, but new research is

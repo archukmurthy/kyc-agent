@@ -23,7 +23,6 @@ async function call(body, { method = "POST", query = "" } = {}) {
   if (!response.ok) {
     const error = new Error((payload && (payload.message || payload.error)) || `HTTP ${response.status}`);
     error.code = payload && payload.error;
-    error.company = payload && payload.company;
     error.status = response.status;
     throw error;
   }
