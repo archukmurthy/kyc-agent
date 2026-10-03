@@ -119,3 +119,16 @@ describe("reopening a finalised review", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Only the analyst can reopen a review.");
   });
 });
+
+test("a registry shareholder proven removed is shown as no longer an owner, not a link to follow", () => {
+  const removed = {
+    ...trace.ownershipFacts[0], id: "resolution:gone", comparisonItemId: "gone", holderRemoved: true,
+    resolutionStatus: "RESOLVED_EVIDENCE_VERIFIED", ownershipEstablishment: "ESTABLISHED_EVIDENCE_VERIFIED", reason: "Evidence shows the registry-only shareholder no longer holds shares.",
+    customerAssertion: null, independentAssertion: { subject: { name: "Old Parent Limited" }, object: { name: "Customer Limited" }, measurement: { type: "RANGE", lowerBound: 75, upperBound: 100 } },
+    evidence: [{ status: "SATISFIED", purpose: "Establish that the shareholder shown in the registry no longer holds shares." }],
+  };
+  render(<AnalystResolutionView mode="REVIEW" demoCase={props.demoCase} result={{ ownershipResolutionTrace: { ...trace, ownershipFacts: [removed] } }} />);
+  expect(screen.getByText("Shareholder no longer current")).toBeInTheDocument();
+  expect(screen.getByText("Removed · evidence verified")).toBeInTheDocument();
+  expect(screen.queryByText("Continue through ownership chain")).not.toBeInTheDocument();
+});
