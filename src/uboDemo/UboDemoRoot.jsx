@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COUNTRIES } from "../constants/appConstants";
 import {
-  availableLabReplays, bindDraftToReplay, CALCULATION_METHODS, clearDemoSession, createDemoCase, emptyDemoDraft, findReplayById, importReplayLibrary,
-  OWNERSHIP_TYPES, ownershipLabelFor, readDemoSession, readLabReplays, replayOptionLabel, replaySubject, saveLabReplay, serializeReplayLibrary,
+  availableLabReplays, bindDraftToReplay, CALCULATION_METHODS, clearDemoSession, createDemoCase, emptyDemoDraft, findReplayById,
+  OWNERSHIP_TYPES, ownershipLabelFor, readDemoSession, readLabReplays, saveLabReplay,
   validateDemoDraft, writeDemoSession,
 } from "./demoSession";
 import {
@@ -49,17 +49,9 @@ function CalculationMethodSelector({ value, onChange, compact = false }) {
   return <fieldset className={`ubo-demo-method ${compact ? "compact" : "ubo-demo-wide"}`}><legend>Calculation method</legend><p>Choose which calculation or control assessment to inspect.</p><div>{CALCULATION_METHODS.map((method) => <label key={method.code}><input type="radio" name={compact ? "resultCalculationMethod" : "calculationMethod"} value={method.code} checked={value === method.code} onChange={() => onChange(method.code)} /><span><strong>{method.label}</strong><small>{method.explanation}</small></span></label>)}</div></fieldset>;
 }
 
-function CompanyStart({ draft, errors, replays, savedResearch, onChange, onSavedSelect, onSubmit, onLoadExample }) {
+function CompanyStart({ draft, errors, savedResearch, onChange, onSavedSelect, onSubmit, onLoadExample }) {
   const replayMode = draft.sourceMode === "REPLAY";
   const savedMode = draft.sourceMode === "SAVED";
-  const selectedReplay = findReplayById(replays, draft.replayId);
-  const duplicateNames = replays.reduce((counts, record) => {
-    const name = String(record?.companyContext?.legalEntityName || "").trim().toUpperCase();
-    counts[name] = (counts[name] || 0) + 1;
-    return counts;
-  }, {});
-  let selectedSubject = null;
-  try { if (selectedReplay) selectedSubject = replaySubject(selectedReplay); } catch (_) { /* Error is shown on submission. */ }
   return <main className="ubo-demo-main">
     <div className="ubo-demo-intro"><span className="ubo-demo-eyebrow">Ownership review</span><h1>Let&rsquo;s research your company</h1><p>Tell us which company you&rsquo;re reviewing. We&rsquo;ll use these details to start its ownership journey.</p></div>
     <form className="ubo-demo-card" onSubmit={onSubmit} noValidate>
@@ -367,7 +359,7 @@ export default function UboDemoRoot() {
       const compact = compactResearchResult(session, sourceMode, demoCase.analysisContext?.calculationMethod);
       if (session.replayCapture && compact.status !== "FAILED") {
         try { setReplays(saveLabReplay(session.replayCapture)); setReplayLibraryStatus({ kind: "success", message: "Live research saved locally. Future replay will make no provider call." }); }
-        catch (cause) { setReplays((current) => availableLabReplays({ replayCapture: session.replayCapture })); setReplayLibraryStatus({ kind: "error", message: `${cause.message || "Local replay storage failed."} Export this replay before leaving the page.` }); }
+        catch (cause) { setReplays((current) => availableLabReplays({ replayCapture: session.replayCapture })); setReplayLibraryStatus({ kind: "error", message: `${cause.message || "The in-page replay copy failed."} The research itself is saved with this case on the server.` }); }
       }
       if (sourceMode === "LIVE" && compact.status !== "FAILED") saveLastSuccessfulResearch(demoCase.company, compact);
       if (sourceMode === "LIVE" && compact.status === "FAILED") {
@@ -519,7 +511,7 @@ export default function UboDemoRoot() {
   const analystResultPath = research || review || audit;
 
   let content;
-  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} replays={replays} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
+  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (review && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="REVIEW" demoCase={demoCase} result={researchResult} />;
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
