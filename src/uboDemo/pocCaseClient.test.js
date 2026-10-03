@@ -103,6 +103,27 @@ test("a duplicate browser submission carries the same idempotency key", async ()
   expect(Object.keys(window.sessionStorage)).toEqual([ACTIVE_POC_CASE_KEY]);
 });
 
+test("writes to one case go one at a time, and a refused write does not block the next", async () => {
+  // An answer and the syncs it triggers used to race each other on the server
+  // until its retries ran out and the answer was refused (case_changed).
+  const pending = [];
+  const fetchImpl = jest.fn(() => new Promise((resolve) => pending.push(resolve)));
+  const command = (key) => ({ caseId: "case-serial", idempotencyKey: key, payload: {} });
+  const answer = persistPocCase("SUBMIT_ANSWER", command("answer:1"), fetchImpl);
+  const sync = persistPocCase("SYNC_RESOLUTION", command("resolution:1"), fetchImpl);
+  const otherCase = persistPocCase("SYNC_RESOLUTION", { ...command("resolution:2"), caseId: "case-other" }, fetchImpl);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(fetchImpl.mock.calls.map(([, options]) => JSON.parse(options.body).idempotencyKey)).toEqual(["answer:1", "resolution:2"]);
+  pending[0](response({ success: false, code: "case_changed" }, false));
+  await expect(answer).rejects.toMatchObject({ code: "case_changed" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(JSON.parse(fetchImpl.mock.calls[2][1].body).idempotencyKey).toBe("resolution:1");
+  pending[1](response({ success: true, case: record }));
+  pending[2](response({ success: true, case: record }));
+  await expect(sync).resolves.toEqual(record);
+  await expect(otherCase).resolves.toEqual(record);
+});
+
 test("research persistence sends the bounded transfer projection instead of duplicated immutable internals", async () => {
   const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
   const researchResult = {

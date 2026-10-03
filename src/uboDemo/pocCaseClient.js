@@ -51,7 +51,21 @@ export async function loadPocCase(caseId, fetchImpl = window.fetch) {
   return parse(await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}`, { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } }));
 }
 
-export async function persistPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl = window.fetch) {
+// One write per case at a time from this tab. An answer and the syncs it
+// triggers used to reach the server together, collide on the case version and
+// exhaust its retries, so the answer was refused (case_changed).
+const caseWrites = new Map();
+
+export function persistPocCase(operation, command, fetchImpl = window.fetch) {
+  const previous = caseWrites.get(command?.caseId) || Promise.resolve();
+  const next = previous.catch(() => {}).then(() => sendPocCase(operation, command, fetchImpl));
+  caseWrites.set(command?.caseId, next);
+  const forget = () => { if (caseWrites.get(command?.caseId) === next) caseWrites.delete(command?.caseId); };
+  next.then(forget, forget);
+  return next;
+}
+
+async function sendPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl) {
   if (!caseId) throw new TypeError("A durable case ID is required.");
   const durablePayload = compactCasePayload(payload);
   const record = await parse(await fetchImpl("/api/ubo-poc-case", {
