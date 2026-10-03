@@ -26,7 +26,7 @@ test("Vercel upload inventory excludes every discovered Evidence Lab surface", (
   const rules = readIgnoreRules(root);
   assert.deepEqual(REQUIRED_IGNORE_RULES.filter((rule) => !rules.includes(rule)), []);
   const inventory = inventoryLabSurfaces(root);
-  assert.equal(inventory.apiFunctions.length, 40);
+  assert.equal(inventory.apiFunctions.length, 41); // 41st reviewed 2026-10-04: excluded from upload like the rest
   assert.deepEqual(inventory.publicAssets, [
     "public/evidence-lab-state.js",
     "public/evidence-lab.html",
@@ -65,7 +65,7 @@ test("Evidence paths are denied before the SPA fallback while ordinary routing r
 test("production-boundary verifier accepts the repository source inventory", () => {
   const result = verifyBoundary(root, { requireBuild: false });
   assert.equal(result.sourceInventoryMode, "repository");
-  assert.equal(result.inventory.apiFunctions.length, 40);
+  assert.equal(result.inventory.apiFunctions.length, 41);
   assert.deepEqual(result.buildLabAssets, []);
 });
 
