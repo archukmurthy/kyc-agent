@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("node:crypto");
+
 /**
  * /api/ubo-customer-link - the customer's way into one UBO case
  * (docs/ubo/CUSTOMER-LINK-PLAN.md).
@@ -52,7 +54,20 @@ async function caseExists(tenantId, caseId) {
   }
 }
 
-const DEFAULT_DEPS = { applyCors, requireStaff, enforceRateLimit, caseExists, clerk: clerkAuth, storageBackend: () => storage.backend() };
+// A link made or withdrawn goes on the case's audit ledger (UBO-57): it is how
+// the analyst's screen knows a customer may already be working on this case.
+async function recordLinkEvent(tenantId, event) {
+  const { createPostgresDb } = require("../evidence/a2/postgresDb");
+  const auditLedger = require("../ubo-control-lab/server/auditLedger");
+  const db = createPostgresDb();
+  try {
+    await auditLedger.record(db, tenantId, [auditLedger.linkEvent(event)]);
+  } finally {
+    await db.close();
+  }
+}
+
+const DEFAULT_DEPS = { applyCors, requireStaff, enforceRateLimit, caseExists, recordLinkEvent, clerk: clerkAuth, storageBackend: () => storage.backend() };
 const COOKIE = "ubo_customer_session";
 
 function sessionCookie(req, value, maxAgeSeconds) {
@@ -115,13 +130,19 @@ function createHandler(deps = DEFAULT_DEPS) {
         if (!caseId || caseId.length > 200) return send(res, 400, { error: "case_id_required" });
         if (!(await deps.caseExists(tenantId, caseId))) return send(res, 404, { error: "case_not_found" });
 
+        const receivedAt = new Date().toISOString();
+        const linkActor = { type: "ANALYST", id: actor.userId || null };
         if (body.action === "revoke") {
           await customerLink.revokeLinks({ caseId, tenantId });
+          if (deps.recordLinkEvent) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_REVOKED", actor: linkActor, receivedAt, operationId: `link-revoked:${randomUUID()}` });
           return send(res, 200, { revoked: caseId });
         }
         const email = String(body.email || "").trim();
         if (!EMAIL.test(email)) return send(res, 400, { error: "email_required", message: "Enter the customer's email address." });
         const { token, expiresAt } = customerLink.mintLink({ caseId, tenantId, email });
+        // Recorded before the link is handed over: a link the ledger does not
+        // know about is one the analyst's warnings cannot see.
+        if (deps.recordLinkEvent) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_ISSUED", actor: linkActor, receivedAt, operationId: `link-issued:${randomUUID()}`, expiresAt });
         return send(res, 200, { token, caseId, expiresAt });
       }
 

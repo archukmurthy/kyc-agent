@@ -242,3 +242,38 @@ test("an owner's link is made in the workspace they are working in", async () =>
     if (saved === undefined) delete process.env.UBO_DEV_TENANT_ID; else process.env.UBO_DEV_TENANT_ID = saved;
   }
 });
+
+// UBO-57: a link made or withdrawn is on the case's audit ledger - by the
+// analyst, in their workspace - without the customer's email in it.
+test("making and withdrawing a link is recorded on the case's ledger, without the email", async () => {
+  const recorded = [];
+  const h = route.createHandler({
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST,
+    caseExists: async () => true,
+    recordLinkEvent: async (tenantId, event) => { recorded.push({ tenantId, ...event }); },
+    clerk: { isConfigured: () => false },
+  });
+  assert.strictEqual((await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).statusCode, 200);
+  assert.strictEqual((await call(h, { action: "revoke", caseId: "case-1" })).statusCode, 200);
+  assert.deepStrictEqual(recorded.map(({ tenantId, caseId, eventType, actor }) => [tenantId, caseId, eventType, actor.type, actor.id]), [
+    [ANALYST.tenantId, "case-1", "CUSTOMER_LINK_ISSUED", "ANALYST", "user_analyst"],
+    [ANALYST.tenantId, "case-1", "CUSTOMER_LINK_REVOKED", "ANALYST", "user_analyst"],
+  ]);
+  assert.ok(!JSON.stringify(recorded).includes("customer@example.test"));
+});
+
+test("a link the ledger could not record is not handed out", async () => {
+  const h = route.createHandler({
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST,
+    caseExists: async () => true,
+    recordLinkEvent: async () => { throw new Error("db down"); },
+    clerk: { isConfigured: () => false },
+  });
+  const res = await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" });
+  assert.strictEqual(res.statusCode, 500);
+  assert.strictEqual(res.body.token, undefined);
+});

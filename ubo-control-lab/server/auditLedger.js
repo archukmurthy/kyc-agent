@@ -35,6 +35,8 @@ const EVENT_TYPES = Object.freeze([
   "DOCUMENT_UPLOADED",
   "DOCUMENT_EXTRACTED",
   "DOCUMENT_EXTRACTION_FAILED",
+  "CUSTOMER_LINK_ISSUED",
+  "CUSTOMER_LINK_REVOKED",
   ...ASSESSMENT_EVENTS,
 ]);
 
@@ -160,6 +162,29 @@ function documentEvent({ tenantJob, eventType, actor = {}, receivedAt }) {
   };
 }
 
+/** A customer link made or withdrawn for a case. Who it was sent to is not
+ *  kept here: the link carries that, and the ledger does not need it. */
+function linkEvent({ caseId, eventType, actor = {}, receivedAt, operationId, expiresAt = null }) {
+  return {
+    caseId,
+    actorType: ACTOR_TYPES.has(actor.type) ? actor.type : "SYSTEM",
+    actorId: actor.id || null,
+    operationId,
+    correlationId: operationId,
+    receivedAt,
+    eventType,
+    occurredAt: receivedAt,
+    effectiveAt: null,
+    relatedAssertionId: null,
+    relatedArtifactId: null,
+    relatedAssessmentId: null,
+    relatedQuestionId: null,
+    reasonCode: null,
+    detail: expiresAt ? { expiresAt } : {},
+    subject: operationId,
+  };
+}
+
 /** Writes events; a replayed step records nothing twice. */
 async function record(executor, tenantId, events) {
   for (const raw of events) {
@@ -206,4 +231,4 @@ async function list(executor, tenantId, caseId, limit = 1000) {
   }));
 }
 
-module.exports = { EVENT_TYPES, ASSESSMENT_EVENTS, eventsForCommand, documentEvent, record, list };
+module.exports = { EVENT_TYPES, ASSESSMENT_EVENTS, eventsForCommand, documentEvent, linkEvent, record, list };
