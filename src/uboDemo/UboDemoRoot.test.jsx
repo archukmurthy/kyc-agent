@@ -10,7 +10,7 @@ const mockCustomerEngagement = jest.fn(async () => ({ linkSent: false, customerS
 jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args), customerEngagement: (...args) => mockCustomerEngagement(...args) }));
 jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
 import UboDemoRoot from "./UboDemoRoot";
-import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch, saveLastSuccessfulResearch } from "./demoResearch";
+import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
 import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
 import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
@@ -150,11 +150,6 @@ test("browser research timeout terminates instead of remaining pending", async (
   await expect(pending).rejects.toMatchObject({ code: "BROWSER_RESEARCH_TIMEOUT" });
 });
 
-test("a browser cache quota failure cannot turn a usable live result into a failed refresh", () => {
-  const storage = { setItem() { throw new DOMException("quota reached", "QuotaExceededError"); } };
-  expect(saveLastSuccessfulResearch({ countryCode: "GB", registrationNumber: "OC435996" }, { status: "PARTIAL", candidateSources: [{ candidateFacts: [fact] }] }, storage)).toBe(false);
-});
-
 test("failed live research reaches FAILED UI instead of returning to an indefinite spinner", async () => {
   window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
@@ -200,6 +195,10 @@ test("retry uses a new job and falls back to the same-company last successful re
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   expect(await screen.findByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
   const firstJobId = JSON.parse(window.fetch.mock.calls[0][1].body).jobId;
+  // The first result was saved with the case on the server; that is where the fallback comes from.
+  const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
+  mockListSavedResearch.mockResolvedValue([{ caseId: saved.demoCase.demoCaseId, company: saved.demoCase.company, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" }]);
+  mockLoadPocCase.mockResolvedValue({ projection: { researchResult: saved.researchResult } });
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
   expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
   expect(screen.getByText(/This cached result may be stale/)).toBeInTheDocument();
@@ -847,4 +846,20 @@ test("a different company with no customer involved starts a new case without a 
   fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByRole("heading", { name: "Ownership structure" });
   await waitFor(() => expect(sessionCase().demoCaseId).not.toBe(caseId));
+});
+
+test("after a reload, failed live research still falls back to the workspace's saved research for that company", async () => {
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  mockListSavedResearch.mockResolvedValue([
+    { caseId: "case-other", company: { legalName: "Other Limited", registrationNumber: "09999999", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T08:00:00.000Z" },
+    { caseId: "case-acme", company: { legalName: "ACME HOLDINGS LTD", registrationNumber: "00445790", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" },
+  ]);
+  mockLoadPocCase.mockResolvedValue({ projection: { researchResult: { ...research, ownershipResolutionTrace: { fromTheOldCustomer: true } } } });
+  window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
+  renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
+  expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
+  expect(mockLoadPocCase).toHaveBeenCalledWith("case-acme");
+  const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
+  expect(session.researchResult.fallback).toEqual(expect.objectContaining({ savedAt: "2026-10-03T07:00:00.000Z" }));
+  expect(session.researchResult.ownershipResolutionTrace).toBeUndefined();
 });

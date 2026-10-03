@@ -8,7 +8,7 @@ import {
 import {
   accountOpenItems, allCandidateFacts, compactResearchResult, DEMO_CALCULATION_FIXTURES, demoCalculationPeople, demoOpenQuestions, demoReviewPresentations,
   DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, executableCustomerBundles, formatMeasurement,
-  abortActiveDemoResearchJobs, acquireDemoResearch, demoSourceRelevantEntityIds, projectDemoGraph, readLastSuccessfulResearch, saveLastSuccessfulResearch,
+  abortActiveDemoResearchJobs, acquireDemoResearch, demoSourceRelevantEntityIds, projectDemoGraph,
 } from "./demoResearch";
 import { limitNotice } from "../trials/limitNotice";
 import AssertionDetails from "./AssertionDetails";
@@ -381,16 +381,16 @@ export default function UboDemoRoot() {
         try { setReplays(saveLabReplay(session.replayCapture)); setReplayLibraryStatus({ kind: "success", message: "Live research saved locally. Future replay will make no provider call." }); }
         catch (cause) { setReplays((current) => availableLabReplays({ replayCapture: session.replayCapture })); setReplayLibraryStatus({ kind: "error", message: `${cause.message || "The in-page replay copy failed."} The research itself is saved with this case on the server.` }); }
       }
-      if (sourceMode === "LIVE" && compact.status !== "FAILED") saveLastSuccessfulResearch(demoCase.company, compact);
       if (sourceMode === "LIVE" && compact.status === "FAILED") {
-        const fallback = readLastSuccessfulResearch(demoCase.company);
-        if (fallback) {
+        return savedResearchFallback(demoCase.company).then((fallback) => {
+          if (!subscribed) return;
+          if (!fallback) { setResearchResult(compact); return; }
           setResearchError("");
           setResearchResult({ ...fallback.result, status: "PARTIAL", providerOutcomes: compact.providerOutcomes, fallback: { savedAt: fallback.savedAt, reason: "The live providers did not return a usable result." }, completedAt: new Date().toISOString() });
-          return;
-        }
+        });
       }
       setResearchResult(compact);
+      return undefined;
     }).catch((cause) => {
       if (!subscribed || cause.code === "RESEARCH_ABORTED") return;
       // A reached limit is shown as a limit - never papered over with a saved result.
@@ -400,14 +400,16 @@ export default function UboDemoRoot() {
         return;
       }
       const message = `${cause.code ? `${cause.code}: ` : ""}${cause.message}`;
-      const fallback = sourceMode === "LIVE" ? readLastSuccessfulResearch(demoCase.company) : null;
-      if (fallback) {
-        setResearchError("");
-        setResearchResult({ ...fallback.result, status: "PARTIAL", fallback: { savedAt: fallback.savedAt, reason: message }, completedAt: new Date().toISOString() });
-      } else {
-        setResearchError(message);
-        setResearchResult({ status: "FAILED", sourceMode, jobId: lease.jobId, error: message, completedAt: new Date().toISOString() });
-      }
+      (sourceMode === "LIVE" ? savedResearchFallback(demoCase.company) : Promise.resolve(null)).then((fallback) => {
+        if (!subscribed) return;
+        if (fallback) {
+          setResearchError("");
+          setResearchResult({ ...fallback.result, status: "PARTIAL", fallback: { savedAt: fallback.savedAt, reason: message }, completedAt: new Date().toISOString() });
+        } else {
+          setResearchError(message);
+          setResearchResult({ status: "FAILED", sourceMode, jobId: lease.jobId, error: message, completedAt: new Date().toISOString() });
+        }
+      });
     });
     return () => { subscribed = false; lease.release(); };
   }, [pathname, demoCase, researchResult?.status, runToken]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -421,6 +423,23 @@ export default function UboDemoRoot() {
       }
     }
     setDraft((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined }));
+  };
+  // When live research fails: this workspace's newest saved research for the
+  // same company (registration number and country), read from the server -
+  // it survives a reload, another browser and another day. Only the research
+  // comes across, not that case's customer answers or analyst choices.
+  const savedResearchFallback = async (company) => {
+    try {
+      const key = customerCompanyKey(company);
+      const match = (await listSavedResearch()).find((item) => customerCompanyKey(item.company) === key);
+      if (!match) return null;
+      const saved = (await loadPocCase(match.caseId))?.projection?.researchResult;
+      if (!saved) return null;
+      const { ownershipResolutionTrace: _trace, analystCustomerRequests: _requests, investigationTopicActivations: _topics, ...research } = saved;
+      return { result: research, savedAt: match.updatedAt };
+    } catch (_) {
+      return null;
+    }
   };
   const caseFinalized = () => Boolean(researchResult?.ownershipResolutionTrace?.verificationAssessment?.finalized);
   // The current case, re-run: its id stays (a link sent points at it), each

@@ -1,13 +1,11 @@
 import { clerkAuthHeaders } from "../auth/clerkFetch";
 import { allCandidateFacts } from "./customer/caseResolution";
-import { uboStore } from "./browserStore";
 export const DEMO_SOURCE_MODES = Object.freeze({ LIVE: "LIVE", FIXTURE: "FIXTURE", REPLAY: "REPLAY" });
 export const REVIEWED_FIXTURE_ID = "V2-LAB-08";
 export const DEMO_GRAPH_SCOPES = Object.freeze({ RELEVANT: "RELEVANT", FULL: "FULL" });
 export const DEMO_GRAPH_DIMENSIONS = Object.freeze({ ALL: "ALL", OWNERSHIP: "OWNERSHIP", VOTING: "VOTING", CONTROL: "CONTROL" });
 export const DEMO_CALCULATION_FIXTURES = Object.freeze({ ALICE_28: "DEMO-ALICE-28", METHOD_60_40: "V2-LAB-02" });
 export const BROWSER_RESEARCH_TIMEOUT_MS = 70000;
-export const LAST_SUCCESSFUL_RESEARCH_KEY = "ubo-demo.last-successful-research.v1";
 
 const activeResearchJobs = new Map();
 
@@ -185,26 +183,7 @@ export function abortActiveDemoResearchJobs() {
   activeResearchJobs.clear();
 }
 
-function companyResearchKey(company = {}) {
-  return [company.countryCode, company.registrationNumber].map((value) => String(value || "").trim().toUpperCase()).join(":");
-}
 
-export function saveLastSuccessfulResearch(company, result, storage = uboStore) {
-  if (!result || result.status === "FAILED") return false;
-  try {
-    storage.setItem(LAST_SUCCESSFUL_RESEARCH_KEY, JSON.stringify({ companyKey: companyResearchKey(company), savedAt: new Date().toISOString(), result }));
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-export function readLastSuccessfulResearch(company, storage = uboStore) {
-  try {
-    const record = JSON.parse(storage.getItem(LAST_SUCCESSFUL_RESEARCH_KEY));
-    return record?.companyKey === companyResearchKey(company) && record?.result ? record : null;
-  } catch (_) { return null; }
-}
 
 export function latestReviewView(session) {
   return session?.snapshots?.[session.snapshots.length - 1]?.view || null;
