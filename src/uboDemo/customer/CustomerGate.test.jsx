@@ -85,3 +85,21 @@ test("under React's double start-up the right person still gets in", async () =>
   expect(await screen.findByText("Customer page")).toBeInTheDocument();
   expect(currentCustomerSession()).toEqual({ session: "s-2", caseId: "case-2", expiresAt: "2026-10-01T00:00:00.000Z" });
 });
+
+test("a customer session left in this browser for another case does not take over a different case's page", async () => {
+  respondWith({ resume: [200, { session: "s-old", caseId: "case-old", expiresAt: "2026-10-01T00:00:00.000Z" }], leave: [200, {}] });
+  at("/ubo-demo/customer/?case=case-new");
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  expect(await screen.findByTestId("trial-gate")).toBeInTheDocument();
+  expect(currentCustomerSession()).toBeNull();
+  const actions = window.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action);
+  expect(actions).toEqual(["resume", "leave"]);
+});
+
+test("a customer returning to their own case keeps their session", async () => {
+  respondWith({ resume: [200, { session: "s-1", caseId: "case-1", expiresAt: "2026-10-01T00:00:00.000Z" }] });
+  at("/ubo-demo/customer/questions?case=case-1");
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  expect(await screen.findByText("Customer page")).toBeInTheDocument();
+  expect(currentCustomerSession()).toEqual(expect.objectContaining({ caseId: "case-1" }));
+});

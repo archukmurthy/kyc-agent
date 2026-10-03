@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { openCustomerLink, resumeCustomerSession } from "../../auth/customerSession";
+import { leaveCustomerSession, openCustomerLink, resumeCustomerSession } from "../../auth/customerSession";
 
 /**
  * In front of the customer screens (docs/ubo/CUSTOMER-LINK-PLAN.md).
@@ -41,6 +41,16 @@ export default function CustomerGate({ children, fallback }) {
         return;
       }
       const resumed = await resumeCustomerSession();
+      // A session left in this browser for a different case (someone opened a
+      // customer link here earlier) is not this visit's: the address names the
+      // case being opened - an analyst's "customer view" of a new case. Leave
+      // it rather than show, and write to, the other customer's review.
+      const named = new URL(window.location.href).searchParams.get("case");
+      if (resumed.ok && named && named !== resumed.payload?.caseId) {
+        await leaveCustomerSession();
+        if (active) setState({ phase: "not-customer" });
+        return;
+      }
       if (active) setState({ phase: resumed.ok ? "customer" : "not-customer" });
     })().catch(() => { if (active) setState({ phase: "not-customer" }); });
     return () => { active = false; };
