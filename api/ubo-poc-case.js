@@ -29,6 +29,22 @@ function dependencies(tenantId) {
 // is deliberately added here.
 const CUSTOMER_OPERATIONS = new Set(["UPSERT_CASE", "ASSOCIATE_CHART", "SYNC_RESOLUTION", "SUBMIT_ANSWER", "RESET_ANSWERS", "FINALIZE_ASSESSMENT", "COMPLETE_IDV"]);
 
+// What a save answers with: what the screens read after one (the research
+// release, the server's assessment), not the whole case. The whole case - its
+// research, chart and trace - was about 1.9 MB, sent back on every answer
+// (end-to-end check, 2026-10-04); reading a case is GET.
+function savedRecord(record) {
+  if (!record || typeof record !== "object") return record;
+  const projection = record.projection || {};
+  return {
+    caseId: record.caseId,
+    updatedAt: record.updatedAt,
+    duplicate: record.duplicate,
+    researchRelease: record.researchRelease || projection.researchRelease || null,
+    projection: { currentStage: projection.currentStage || null, assessment: projection.assessment || null, researchRelease: projection.researchRelease || null },
+  };
+}
+
 function commandCaseId(body) {
   return String(body?.caseId || body?.payload?.demoCase?.demoCaseId || "").trim();
 }
@@ -105,7 +121,7 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
           correlationId,
           receivedAt,
         });
-        return res.status(200).json({ success: true, case: record });
+        return res.status(200).json({ success: true, case: savedRecord(record) });
       }
       res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ success: false, error: "Method not allowed" });

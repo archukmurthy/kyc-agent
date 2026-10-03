@@ -317,3 +317,21 @@ test("the saved research query is confined to the repository's workspace", async
   assert.strictEqual(queries[0].params[0], "acme");
   assert.deepStrictEqual(listed[0].company, { legalName: "Example Limited", registrationNumber: "00000001", countryCode: "GB" });
 });
+
+// End-to-end check (2026-10-04): every save sent back the whole case (~1.9 MB).
+test("a save answers with what the screens read after one, not the whole case", async () => {
+  const big = { caseId: "case-1", updatedAt: "t", duplicate: false, researchRelease: { mayProceed: true }, history: [{ eventType: "x" }], extraction: { result: "large" },
+    projection: { currentStage: "QUESTIONS", assessment: { trace: { discoveryState: "QUESTIONS" } }, researchResult: { candidateSources: ["large"] }, chartProjection: { large: true }, resolution: { trace: {} } } };
+  const handler = route.createHandler(() => ({ service: { apply: async () => big, load: async () => big }, close: async () => {} }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst" }) });
+  const res = fakeRes();
+  await handler({ method: "POST", headers: {}, body: { operation: "SUBMIT_ANSWER", caseId: "case-1", payload: {} } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.deepStrictEqual(Object.keys(res.body.case.projection).sort(), ["assessment", "currentStage", "researchRelease"]);
+  assert.deepStrictEqual(res.body.case.projection.assessment, { trace: { discoveryState: "QUESTIONS" } });
+  assert.deepStrictEqual(res.body.case.researchRelease, { mayProceed: true });
+  assert.strictEqual(res.body.case.history, undefined);
+  // Reading a case still returns all of it.
+  const read = fakeRes();
+  await handler({ method: "GET", headers: {}, query: { caseId: "case-1" } }, read);
+  assert.ok(read.body.case.projection.researchResult);
+});

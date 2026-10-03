@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
 const mockPersistDefault = async () => ({ researchRelease: { mayProceed: true } });
@@ -418,4 +418,25 @@ test("a case finalised before the page loaded goes straight on to identity verif
   expect(screen.queryByRole("button", { name: /Continue to identity verification/i })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Edit answer/i })).not.toBeInTheDocument();
   expect(sent).not.toContain("FINALIZE_ASSESSMENT");
+});
+
+test("an answer shows it is saving until the server confirms, and only one sync is sent for the page", async () => {
+  const calls = [];
+  let finishAnswer;
+  mockPersist = (operation) => {
+    calls.push(operation);
+    if (operation === "SUBMIT_ANSWER") return new Promise((resolve) => { finishAnswer = () => resolve({}); });
+    return Promise.resolve({});
+  };
+  render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const nominee = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(nominee).getByLabelText("No"));
+  fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
+  expect(await screen.findByText(/Saving…/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Saving your answers/i })).toBeDisabled();
+  await act(async () => { finishAnswer(); });
+  await waitFor(() => expect(screen.queryByText(/Saving…/)).not.toBeInTheDocument());
+  // The answer made the server recompute; no extra sync follows it.
+  expect(calls.filter((operation) => operation === "SYNC_RESOLUTION")).toHaveLength(1);
+  expect(calls.filter((operation) => operation === "SUBMIT_ANSWER")).toHaveLength(1);
 });

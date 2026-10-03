@@ -200,7 +200,7 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
   </section>;
 }
 
-function AnsweredQuestion({ question, answer, context, editing, draft, error, locked, onEdit, onDraft, onSave, onCancel, onRetry }) {
+function AnsweredQuestion({ question, answer, context, editing, draft, error, locked, saving, onEdit, onDraft, onSave, onCancel, onRetry }) {
   return <article className="ubo-resolution-answered-question">
     <div>
       <span>Answered {question.stage === "CONTROL" ? "control" : question.stage === "FALLBACK" ? "senior management" : question.stage === "ADDITIONAL" ? "additional" : "ownership"} question</span>
@@ -216,7 +216,7 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, lo
       </div>
     </> : <>
       <div className="ubo-resolution-answer-summary">
-        <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong></p>
+        <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong>{saving && <small role="status" className="ubo-resolution-saving"> · Saving…</small>}</p>
         {!locked && <button type="button" onClick={onEdit}>Edit answer</button>}
       </div>
       {/* A refused save must not look saved: the answer is shown, but it is not on the case. */}
@@ -283,6 +283,15 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   // Back from identity verification): the server refuses any change to it, so
   // the page says so and goes straight on instead of finalising again.
   const [finalizing, setFinalizing] = useState(false);
+  // Answers sent but not yet confirmed by the server. Shown on the answer, and
+  // Continue waits for them; leaving the page meanwhile would lose them.
+  const [saving, setSaving] = useState(() => new Set());
+  useEffect(() => {
+    if (!saving.size) return undefined;
+    const warn = (event) => { event.preventDefault(); event.returnValue = ""; return ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [saving]);
   const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
@@ -312,9 +321,13 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
 
   useEffect(() => { saveSession(context, result, { createdAt: createdAt.current, answers, evidence, recalculations }); }, [answers, context, evidence, recalculations, result]);
   useEffect(() => {
+    // Once per case when the page opens: the server holds no assessment after a
+    // chart is attached until a sync runs. Not after every answer - submitting
+    // one already makes the server recompute, and each save of a large case took
+    // 10-40 s, so answers queued for minutes (end-to-end check, 2026-10-04).
+    if (!context?.demoCaseId || durableSyncs.current.has(context.demoCaseId)) return;
+    durableSyncs.current.add(context.demoCaseId);
     const signature = smallStableHash([currentTrace.verificationAssessment?.inputStateVersion, answers, evidence, recalculations]);
-    if (!context?.demoCaseId || durableSyncs.current.has(signature)) return;
-    durableSyncs.current.add(signature);
     persistPocCase("SYNC_RESOLUTION", {
       caseId: context.demoCaseId,
       actorType: "SYSTEM",
@@ -322,12 +335,10 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       payload: {
         resolution: durableResolution(),
         assessment: { assessmentId: currentTrace.verificationAssessment?.assessmentVersionId, trace: currentTrace, evidence },
-        researchResult: { ...researchResult, ownershipResolutionTrace: currentTrace },
       },
-    }).catch(() => durableSyncs.current.delete(signature));
-    // The signature intentionally represents every submitted substantive projection change.
+    }).catch(() => durableSyncs.current.delete(context.demoCaseId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, context?.demoCaseId, currentTrace, evidence, recalculations]);
+  }, [context?.demoCaseId]);
   useEffect(() => {
     try {
       const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
@@ -432,6 +443,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         });
         requestedRecalculations.current.delete(question.comparisonItemId);
       }
+      setSaving((current) => new Set(current).add(question.id));
       persistPocCase("SUBMIT_ANSWER", {
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
@@ -439,9 +451,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         payload: {
           resolution: { ...durableResolution(nextAnswers, nextEvidence, nextRecalculations, nextTrace), submittedAnswer: { question, answer } },
           assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
-          researchResult: { ...researchResult, ownershipResolutionTrace: nextTrace },
         },
+      }).then(() => {
+        setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
       }).catch((caught) => {
+        setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
         answerSubmissions.current.delete(idempotencyKey);
         setErrors((current) => ({ ...current, [question.id]: caught.message }));
       });
@@ -583,6 +597,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         draft={drafts[question.id]}
         error={errors[question.id]}
         locked={finalizedAtLoad}
+        saving={saving.has(question.id)}
         onEdit={() => { setDrafts((current) => ({ ...current, [question.id]: answers[question.id].value })); setEditingQuestionId(question.id); }}
         onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))}
         onSave={() => submit(question)}
@@ -591,6 +606,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       />)}</div>
     </section>}
     {finalizedAtLoad ? <section className="ubo-customer-next-step"><div><small>Answers submitted</small><h3>Continue to identity verification</h3><p>Your answers have been submitted and can no longer be changed here. If something needs correcting, contact the person who sent you this link.</p></div><a className="ubo-customer-primary" href={CUSTOMER_IDV_PATH}>Continue to identity verification <span>→</span></a></section>
-    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv || finalizing}>{finalizing ? "Submitting your answers…" : <>Continue to identity verification <span>→</span></>}</button></form></section>}
+    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv || finalizing || saving.size > 0}>{finalizing ? "Submitting your answers…" : saving.size ? "Saving your answers…" : <>Continue to identity verification <span>→</span></>}</button></form></section>}
   </section>;
 }
