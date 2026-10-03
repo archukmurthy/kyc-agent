@@ -40,6 +40,8 @@ export default function PeopleAdmin() {
   const [form, setForm] = useState({ email: "", role: "analyst", tenantId: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Not allowed here: the refusal alone, not a form and tables that cannot work.
+  const [denied, setDenied] = useState(false);
 
   const isOwner = you && you.role === "owner";
 
@@ -55,8 +57,8 @@ export default function PeopleAdmin() {
       // Two different 403s, and telling somebody the wrong one wastes their
       // afternoon. "no_access" is a person nobody has added yet; "forbidden"
       // is an analyst, who has access - just not to this.
-      if (err.code === "no_access") setError(NO_ACCESS);
-      else if (err.status === 403) setError("Only an owner or an admin can manage people.");
+      if (err.code === "no_access") { setError(NO_ACCESS); setDenied(true); }
+      else if (err.status === 403) { setError("Only an owner or an admin can manage people."); setDenied(true); }
       else setError(err.message);
     }
   }, []);
@@ -106,6 +108,7 @@ export default function PeopleAdmin() {
         </div>
       ) : null}
 
+      {!denied && <>
       <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: isOwner ? "2fr 1fr 1fr auto" : "2fr 1fr auto", gap: 12, alignItems: "end", marginBottom: 28 }}>
         <div>
           <label style={label} htmlFor="email">Email address</label>
@@ -211,6 +214,7 @@ export default function PeopleAdmin() {
           ))}
         </tbody>
       </table>
+      </>}
     </div>
   );
 }

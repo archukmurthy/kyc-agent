@@ -2,6 +2,7 @@ import React from "react";
 import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import { currentCustomerSession } from "../../auth/customerSession";
+import { customerOwnershipChartSessionForContext, readCustomerDemoContext } from "./customerOwnershipChartSession";
 
 const STEPS = ["Company", "Ownership", "Questions", "Identity verification", "Complete"];
 
@@ -12,13 +13,16 @@ export function showCustomerOwnershipAnalysis(value = process.env.REACT_APP_SHOW
 
 export default function CustomerJourneyHeader({ currentStep, onViewOwnershipAnalysis, ownershipAnalysisVisible = false }) {
   const ownershipAnalysisPath = `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`;
+  // Nothing to analyse before a chart is read: the link only reloaded the
+  // upload page (found in the end-to-end check).
+  const hasChart = Boolean(customerOwnershipChartSessionForContext(readCustomerDemoContext())?.result);
   return <>
     <header className="ubo-customer-header">
       <a className="ubo-customer-brand" href="/ubo-demo/customer/"><span>N</span><strong>Ownership review</strong></a>
       <div className="ubo-customer-header-actions">
         <span className="ubo-customer-secure">Customer journey · Demo</span>
         <nav className="ubo-customer-analyst-links" aria-label="Analyst views">
-          {showCustomerOwnershipAnalysis() && <a href={ownershipAnalysisPath} aria-current={ownershipAnalysisVisible ? "page" : undefined} onClick={onViewOwnershipAnalysis ? (event) => { event.preventDefault(); onViewOwnershipAnalysis(); } : undefined}>View Ownership Analysis</a>}
+          {showCustomerOwnershipAnalysis() && hasChart && <a href={ownershipAnalysisPath} aria-current={ownershipAnalysisVisible ? "page" : undefined} onClick={onViewOwnershipAnalysis ? (event) => { event.preventDefault(); onViewOwnershipAnalysis(); } : undefined}>View Ownership Analysis</a>}
           {/* Analyst screens: not for a customer, who could not open them anyway. */}
           {!currentCustomerSession() && <a href={DEMO_REVIEW_PATH}>Open Analyst Review</a>}
           {!currentCustomerSession() && <a href={DEMO_AUDIT_PATH}>Open Audit</a>}

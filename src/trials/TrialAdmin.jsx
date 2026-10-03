@@ -115,6 +115,8 @@ export default function TrialAdmin() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
+  // Not allowed here: the refusal alone, not a form and table that cannot work.
+  const [denied, setDenied] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -125,8 +127,8 @@ export default function TrialAdmin() {
       // Two different 403s: "no_access" is a person nobody has added yet,
       // "forbidden" is somebody who has access but is not an owner. Telling
       // them the wrong one wastes their afternoon.
-      if (err.code === "no_access") setError(NO_ACCESS);
-      else if (err.status === 403) setError("Only an owner can manage trial invitations.");
+      if (err.code === "no_access") { setError(NO_ACCESS); setDenied(true); }
+      else if (err.status === 403) { setError("Only an owner can manage trial invitations."); setDenied(true); }
       else setError(err.message);
     }
   }, []);
@@ -210,6 +212,7 @@ export default function TrialAdmin() {
           </div>
         ) : null}
 
+        {!denied && <>
         <section aria-labelledby="ta-new" style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 28 }}>
           <h2 id="ta-new" style={{ fontSize: 17, margin: "0 0 16px", fontWeight: 700 }}>New trial link</h2>
           <form className="ta-form" onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.3fr auto", gap: 16, alignItems: "start" }}>
@@ -325,6 +328,7 @@ export default function TrialAdmin() {
             </tbody>
           </table>
         </section>
+        </>}
       </main>
     </div>
   );

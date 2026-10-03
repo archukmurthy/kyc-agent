@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { INVESTIGATION_TOPIC_REGISTRY } from "./customer/investigationTopics";
 
 function label(value) { return String(value || "").replaceAll("_", " ").toLowerCase(); }
@@ -7,6 +7,10 @@ export default function AnalystInvestigationTopics({ activations = [], trace, on
   const [previewCode, setPreviewCode] = useState(null);
   const [editing, setEditing] = useState(false);
   const [wording, setWording] = useState("");
+  // The preview sits below the whole list: without this, "Ask customer" on a
+  // card further up looked like it did nothing (found in the end-to-end check).
+  const previewRef = useRef(null);
+  useEffect(() => { if (previewCode) previewRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" }); }, [previewCode]);
   const groups = useMemo(() => INVESTIGATION_TOPIC_REGISTRY.reduce((result, topic) => {
     (result[topic.group] ||= []).push(topic);
     return result;
@@ -26,7 +30,7 @@ export default function AnalystInvestigationTopics({ activations = [], trace, on
     </section>)}</div>
     {previewCode && (() => {
       const topic = INVESTIGATION_TOPIC_REGISTRY.find(({ code }) => code === previewCode);
-      return <div className="ubo-demo-topic-preview" role="dialog" aria-modal="false" aria-labelledby="topic-preview-title">
+      return <div ref={previewRef} className="ubo-demo-topic-preview" role="dialog" aria-modal="false" aria-labelledby="topic-preview-title">
         <span className="ubo-demo-eyebrow">Question-pack preview</span><h3 id="topic-preview-title">Ask customer about {topic.label.toLowerCase()}</h3>
         {editing ? <label><span>Customer-facing root wording</span><textarea value={wording} onChange={(event) => setWording(event.target.value)} /></label> : <p>{wording}</p>}
         <small>Follow-up questions will only appear where relevant. Editing this wording does not change the structured Fact Requirement.</small>

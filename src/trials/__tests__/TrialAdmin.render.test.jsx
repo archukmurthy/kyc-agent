@@ -65,8 +65,10 @@ test("someone who is not an owner is told, not shown an empty table", async () =
   refusal.status = 403;
   mockListInvites.mockRejectedValue(refusal);
 
-  render(<TrialAdmin />);
+  const { container } = render(<TrialAdmin />);
   expect(await screen.findByRole("alert")).toHaveTextContent(/only an owner/i);
+  expect(container.querySelector("form")).toBeNull();
+  expect(container.querySelector("table")).toBeNull();
 });
 
 test("withdrawing a link refreshes the list", async () => {

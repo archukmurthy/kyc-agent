@@ -89,7 +89,7 @@ function ReopenReview({ caseId, verification, reopenCase }) {
 export default function AnalystResolutionView({ mode, demoCase, result, reopenCase = reopenOnServer }) {
   const trace = result?.ownershipResolutionTrace;
   const audit = mode === "AUDIT";
-  if (!trace) return <main className="ubo-demo-results"><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">{audit ? "Audit" : "Analyst review"}</span><h1>Waiting for the customer</h1><p>The customer has not finalised their answers yet. If you reopened this review, the customer can now change their answers; their earlier answers, uploads and identity checks are kept. This page shows the assessment again once they finalise.</p></section></main>;
+  if (!trace) return <main className="ubo-demo-results"><section className="ubo-demo-review-wait"><span className="ubo-demo-eyebrow">{audit ? "Audit" : "Analyst review"}</span><h1>Waiting for the customer</h1><p>The customer has not finalised their answers yet. This page shows the assessment once they do.</p><p>If you have not sent them their link yet, create it on the research page. If you reopened this review, their earlier answers, uploads and identity checks are kept.</p></section></main>;
   const people = trace.personOwnershipAssessments || [];
   const facts = trace.ownershipFacts || [];
   const relationshipFacts = facts.filter((item) => isRelationshipFact(item.resultingFact || item.customerAssertion || item.independentAssertion));

@@ -163,7 +163,7 @@ function OwnersCard({ owners }) {
 function ExistingResearchAssertions({ researchResult }) {
   const rows = allCandidateFacts(researchResult);
   if (!rows.length) return null;
-  return <AssertionDetails entries={rows} eyebrow="Existing case research" title="Registry assertions already available" sourceNotice="These saved research assertions remain a separate source dataset." variant="analyst" collapseButton />;
+  return <AssertionDetails entries={rows} eyebrow="From public registers" title="What the registers already show about your company" sourceNotice="This is what public registers say about your company. You do not need to do anything with it; your chart is compared with it." variant="customer" collapseButton />;
 }
 
 function ChartAssertions({ result }) {

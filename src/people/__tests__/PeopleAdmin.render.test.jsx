@@ -145,8 +145,10 @@ test("an analyst is told why the screen is empty", async () => {
   refusal.status = 403;
   mockListPeople.mockRejectedValue(refusal);
 
-  render(<PeopleAdmin />);
+  const { container } = render(<PeopleAdmin />);
   expect(await screen.findByRole("alert")).toHaveTextContent(/only an owner or an admin/i);
+  expect(container.querySelector("form")).toBeNull();
+  expect(container.querySelector("table")).toBeNull();
 });
 
 test("an email address is required before anything is sent", async () => {

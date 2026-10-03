@@ -166,7 +166,7 @@ test("the customer ownership step can inspect every registry assertion handed ov
   ] }] } });
   render(<CustomerOwnershipChartPage />);
   expect(screen.queryByRole("heading", { name: "Questions to help complete this review" })).not.toBeInTheDocument();
-  const registryAssertions = screen.getByText(/Registry assertions already available/i).closest("section");
+  const registryAssertions = screen.getByText(/What the registers already show about your company/i).closest("section");
   expect(within(registryAssertions).getByText(/2 assertions/)).toBeInTheDocument();
   expect(within(registryAssertions).getByRole("button", { name: "Expand" })).toHaveAttribute("aria-expanded", "false");
   fireEvent.click(within(registryAssertions).getByRole("button", { name: "Expand" }));
@@ -174,8 +174,9 @@ test("the customer ownership step can inspect every registry assertion handed ov
   expect(screen.getByText("10%")).toBeInTheDocument();
   expect(screen.getByText(/Bob → voting rights → Target Ltd/i)).toBeInTheDocument();
   expect(screen.getByText("(25%, 50%]")).toBeInTheDocument();
-  expect(screen.getByText(/ref-1/)).toBeInTheDocument();
-  expect(screen.getByText(/ref-2/)).toBeInTheDocument();
+  // A customer sees what the source says, not internal references or review states.
+  expect(screen.queryByText(/ref-1/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/not approved/)).not.toBeInTheDocument();
 });
 
 test("direct route fails closed when demo context has not been seeded", () => {
