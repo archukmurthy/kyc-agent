@@ -27,8 +27,12 @@ function safeParse(raw) {
 
 function normalized(value) { return String(value || "").trim().toUpperCase(); }
 
+// A company is its registration number in its country. The name is only the
+// fallback when there is no number: correcting a misspelt name must continue
+// the same researched case, not start a new one with no research.
 export function customerCompanyKey(company) {
-  return [normalized(company?.countryCode), normalized(company?.registrationNumber), normalized(company?.legalName)].join("|");
+  const registrationNumber = normalized(company?.registrationNumber);
+  return [normalized(company?.countryCode), registrationNumber, registrationNumber ? "" : normalized(company?.legalName)].join("|");
 }
 
 export function sameCustomerCompany(left, right) {

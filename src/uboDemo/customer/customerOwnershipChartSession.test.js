@@ -8,6 +8,7 @@ import {
   reusableCustomerOwnershipChartExtraction,
   saveCustomerOwnershipChartExtraction,
   writeCustomerOwnershipChartSession,
+  sameCustomerCompany,
 } from "./customerOwnershipChartSession";
 import { uboStore } from "../browserStore";
 
@@ -37,7 +38,7 @@ test("saves and restores a company-bound structured extraction without source do
 
   expect(customerOwnershipChartExtractionsForContext(context)).toEqual([
     expect.objectContaining({
-      companyKey: "GB|00123456|EXAMPLE LIMITED",
+      companyKey: "GB|00123456|",
       result,
       calculationMethod: "EFFECTIVE_INTEREST",
     }),
@@ -134,4 +135,14 @@ test("reuses only a complete same-digest extraction produced by the current prof
   expect(reusableCustomerOwnershipChartExtraction(records, "sha256:different")).toBeNull();
   expect(reusableCustomerOwnershipChartExtraction(records, "sha256:abc123", { ...diagram, instructionVersion: "ownership-chart-instructions-v4" })).toBeNull();
   expect(reusableCustomerOwnershipChartExtraction([{ result: { ...complete, extractionQuality: { state: "EXTRACTION_SUCCESS_PARTIAL" } } }], "sha256:abc123")).toBeNull();
+});
+
+test("a corrected company name with the same registration number is the same company", () => {
+  // Found in a demo: fixing "Vodaphone LTD" to "Vodafone Limited" started a new
+  // case with no research, and the chart was compared with nothing.
+  expect(sameCustomerCompany({ countryCode: "GB", registrationNumber: "01471587", legalName: "Vodaphone LTD" }, { countryCode: "gb", registrationNumber: " 01471587 ", legalName: "Vodafone Limited" })).toBe(true);
+  expect(sameCustomerCompany({ countryCode: "GB", registrationNumber: "01471587", legalName: "Vodafone Limited" }, { countryCode: "GB", registrationNumber: "00000001", legalName: "Vodafone Limited" })).toBe(false);
+  expect(sameCustomerCompany({ countryCode: "GB", registrationNumber: "01471587" }, { countryCode: "IE", registrationNumber: "01471587" })).toBe(false);
+  // Without a number, the name is all there is.
+  expect(sameCustomerCompany({ countryCode: "GB", legalName: "Example Limited" }, { countryCode: "GB", legalName: "Other Limited" })).toBe(false);
 });

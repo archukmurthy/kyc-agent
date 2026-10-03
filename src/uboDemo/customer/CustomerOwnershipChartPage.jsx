@@ -18,6 +18,7 @@ import {
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import ChartAnalysisPanel from "./ChartAnalysisPanel";
 import ChartResearchComparison from "./ChartResearchComparison";
+import ResearchRequiredNotice, { hasResearch } from "./ResearchRequiredNotice";
 import { CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, writeCustomerOwnershipChartPreview } from "./customerOwnershipChartPreview";
 import "./customerOwnershipChart.css";
@@ -358,6 +359,7 @@ export default function CustomerOwnershipChartPage() {
   }, [calculationMethod, context, result]);
 
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={2} /><main className="ubo-customer-empty"><span>Customer ownership step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href="/ubo-demo/customer/">Enter company details</a></main></div>;
+  if (!hasResearch(context.researchResult)) return <ResearchRequiredNotice currentStep={2} stepLabel="Customer ownership step" />;
 
   const choose = (next) => { setFile(next); setError(validateFile(next)); };
   const remove = () => { setFile(null); setError(""); };

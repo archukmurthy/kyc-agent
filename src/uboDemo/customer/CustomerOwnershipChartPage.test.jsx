@@ -591,3 +591,11 @@ test("chart presentation keeps the complete source graph when the operative engi
   expect(graphForChartPresentation(operative, source)).toBe(source);
   expect(projectGraph(graphForChartPresentation(operative, source), "FULL", "ALL").relationships).toHaveLength(4);
 });
+
+test("a case with no research stops before a chart is uploaded and read", () => {
+  seed({ researchResult: null });
+  render(<CustomerOwnershipChartPage />);
+  expect(screen.getByRole("heading", { name: /Ownership research is needed first/i })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Start research/i })).toHaveAttribute("href", "/ubo-demo/");
+  expect(screen.queryByRole("heading", { name: /Upload your ownership chart/i })).not.toBeInTheDocument();
+});

@@ -4,6 +4,7 @@ import { customerOwnershipChartSessionForContext, readCustomerDemoContext } from
 import { CUSTOMER_DEMO_START_PATH, CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
 import CustomerJourneyHeader from "./CustomerJourneyHeader";
 import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
+import ResearchRequiredNotice, { hasResearch } from "./ResearchRequiredNotice";
 import "./customerOwnershipChart.css";
 
 function QuestionContext({ context }) {
@@ -23,6 +24,7 @@ export default function CustomerQuestionsPage() {
   const chartSession = useMemo(() => customerOwnershipChartSessionForContext(context), [context]);
 
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={3} /><main className="ubo-customer-empty"><span>Customer questions step</span><h1>Start with a demo company</h1><p>This direct route needs seeded demo-session company and case context.</p><a href={CUSTOMER_DEMO_START_PATH}>Enter company details</a></main></div>;
+  if (!hasResearch(context.researchResult)) return <ResearchRequiredNotice currentStep={3} stepLabel="Customer questions step" />;
   if (!chartSession?.result) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={3} /><main className="ubo-customer-empty"><span>Customer questions step</span><h1>Complete the ownership step first</h1><p>Upload and process an ownership chart before answering the questions generated from its comparison.</p><a href={CUSTOMER_OWNERSHIP_CHART_PATH}>Go to ownership</a></main></div>;
 
   return <div className="ubo-customer-page">
