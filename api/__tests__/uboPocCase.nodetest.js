@@ -291,3 +291,29 @@ test("the audit ledger is read by staff; to a customer it does not exist", async
   await make({ kind: "customer", tenantId: "acme", caseId: "case-1" })({ method: "GET", headers: {}, query: { caseId: "case-1", ledger: "1" } }, customer);
   assert.strictEqual(customer.statusCode, 404);
 });
+
+// The workspace's saved research (start a new case without a provider call)
+// is the analyst's: listed in the caller's own workspace, never to a customer.
+test("saved research is listed for staff in their own workspace; to a customer it does not exist", async () => {
+  const workspaces = [];
+  const listService = { load: async () => ({}), savedResearch: async () => [{ caseId: "case-1", company: { legalName: "Example Limited", registrationNumber: "00000001", countryCode: "GB" } }] };
+  const make = (actor) => route.createHandler((tenantId) => { workspaces.push(tenantId); return { service: listService, close: async () => {} }; }, { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor });
+  const staff = fakeRes();
+  await make({ kind: "staff", tenantId: "acme", role: "analyst" })({ method: "GET", headers: {}, query: { savedResearch: "1", tenantId: "other" } }, staff);
+  assert.strictEqual(staff.statusCode, 200);
+  assert.deepStrictEqual(staff.body.research.map(({ caseId }) => caseId), ["case-1"]);
+  assert.deepStrictEqual(workspaces, ["acme"]);
+  const customer = fakeRes();
+  await make({ kind: "customer", tenantId: "acme", caseId: "case-1" })({ method: "GET", headers: {}, query: { savedResearch: "1", caseId: "case-1" } }, customer);
+  assert.strictEqual(customer.statusCode, 404);
+  assert.strictEqual(customer.body.research, undefined);
+});
+
+test("the saved research query is confined to the repository's workspace", async () => {
+  const queries = [];
+  const db = { query: async (sql, params) => { queries.push({ sql, params }); return { rows: [{ case_id: "case-1", company: { legalName: "Example Limited", registrationNumber: "00000001", countryCode: "GB", secret: "x" }, status: "COMPLETE", updated_at: "2026-10-03T00:00:00Z" }] }; } };
+  const listed = await new PostgresPocCaseRepository(db, "acme").savedResearch();
+  assert.match(queries[0].sql, /WHERE tenant_id = \$1/);
+  assert.strictEqual(queries[0].params[0], "acme");
+  assert.deepStrictEqual(listed[0].company, { legalName: "Example Limited", registrationNumber: "00000001", countryCode: "GB" });
+});

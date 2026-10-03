@@ -71,6 +71,13 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
       res.setHeader("Cache-Control", "no-store");
       active = factory(tenantId);
       if (req.method === "GET") {
+        // The workspace's researched cases, to start a new case from without a
+        // provider call. Staff only: to a customer it does not exist (and a
+        // customer never reaches here - no caseId is not their case).
+        if (String(req.query?.savedResearch || "") === "1") {
+          if (customer) return res.status(404).json({ success: false, code: "not_found" });
+          return res.status(200).json({ success: true, research: await active.service.savedResearch() });
+        }
         const caseId = String(req.query?.caseId || "").trim();
         if (!caseId) return res.status(400).json({ success: false, code: "case_id_required", message: "caseId is required" });
         // The audit ledger is staff's (UBO-33): to a customer it does not exist.

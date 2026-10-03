@@ -468,3 +468,4 @@
 .ubo-demo-customer-link [role="status"] input[readonly] { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ubo-demo-muted); background: #fbfcfc; margin-bottom: 10px; }
 .ubo-demo-customer-link [role="status"] .ubo-demo-secondary { min-height: 36px; padding: 0 12px; margin-right: 8px; border: 1px solid var(--ubo-demo-border); border-radius: 8px; background: white; }
 @media (max-width: 640px) { .ubo-demo-customer-link form { grid-template-columns: 1fr; } }
+.ubo-demo-case-alert { max-width: 1100px; margin: 12px auto 0; padding: 10px 14px; border-radius: 8px; color: #9b2525; background: #fff0f0; font-size: 13px; }

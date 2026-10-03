@@ -4,7 +4,9 @@ import "@testing-library/jest-dom";
 import { uboStore } from "./browserStore";
 const mockPersistPocCase = jest.fn();
 const mockOpenCustomerViewHandoff = jest.fn();
-jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args) }));
+const mockListSavedResearch = jest.fn(async () => []);
+const mockLoadPocCase = jest.fn(async () => null);
+jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args) }));
 jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
 import UboDemoRoot from "./UboDemoRoot";
 import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch, saveLastSuccessfulResearch } from "./demoResearch";
@@ -48,7 +50,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); });
+beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); mockListSavedResearch.mockReset().mockResolvedValue([]); mockLoadPocCase.mockReset().mockResolvedValue(null); });
 afterEach(() => { abortActiveDemoResearchJobs(); uboStore.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -206,7 +208,7 @@ test("retry uses a new job and falls back to the same-company last successful re
   expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.status).toBe("PARTIAL");
 });
 
-test("a successful live result is saved locally and enables replay without storing a second capture in the demo session", async () => {
+test("a successful live result keeps its replay capture out of the demo session", async () => {
   const replayCapture = britishAirwaysReplay("fresh-live-capture", "2026-09-16T08:00:00.000Z");
   window.fetch = jest.fn(() => okJson({ ...evaluatedSession, replayCapture }));
   renderStart(); completeRequiredFields({ name: "BRITISH AIRWAYS PLC", number: "01777777" });
@@ -216,45 +218,6 @@ test("a successful live result is saved locally and enables replay without stori
   const savedSession = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
   expect(savedSession.researchResult.replayCapture).toBeUndefined();
   expect(savedSession.researchResult.replayReference).toEqual({ replayId: "fresh-live-capture", savedAt: "2026-09-16T08:00:00.000Z" });
-  fireEvent.click(screen.getByRole("button", { name: "Edit company details" }));
-  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
-  expect(screen.getByText("1 saved live replay")).toBeInTheDocument();
-  expect(screen.getByText(/Future replay will make no provider call/)).toBeInTheDocument();
-});
-
-test("saved replay binds the selected record identity, reaches the graph, and restores it without a provider operation", async () => {
-  const record = britishAirwaysReplay();
-  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([record]));
-  window.fetch = jest.fn(() => okJson(britishAirwaysSession(record.replayId)));
-  const first = renderStart();
-  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
-  fireEvent.click(screen.getByLabelText(/Saved live replay/));
-  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: record.replayId } });
-  expect(screen.getByLabelText(/Company name/)).toHaveValue("BRITISH AIRWAYS PLC");
-  expect(screen.getByLabelText(/Company name/)).toHaveAttribute("readonly");
-  expect(screen.getByLabelText(/Registration number/)).toHaveValue("01777777");
-  expect(screen.getByText("Selected saved company")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /Replay saved research — no provider call/ }));
-  expect(await screen.findByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
-  expect(screen.getByText("Saved live replay — provisional demo result")).toBeInTheDocument();
-  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
-  expect(window.fetch).toHaveBeenCalledTimes(1);
-  const request = JSON.parse(window.fetch.mock.calls[0][1].body);
-  expect(request.operation).toBe("START_DEMO_REVIEW_REPLAY");
-  expect(request.payload.replayRecord.replayId).toBe(record.replayId);
-  expect(JSON.stringify(request)).not.toContain("START_DEMO_REVIEW_LIVE");
-  const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
-  expect(saved.demoCase.company).toEqual(expect.objectContaining({ legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }));
-  expect(saved.demoCase.analysisContext.replayId).toBe(record.replayId);
-  expect(saved.researchResult.replay).toEqual(expect.objectContaining({ replayId: record.replayId, transportCalls: 0 }));
-
-  first.unmount();
-  window.fetch.mockClear();
-  render(<UboDemoRoot />);
-  expect(screen.getByRole("heading", { level: 1, name: "BRITISH AIRWAYS PLC" })).toBeInTheDocument();
-  expect(screen.getByTitle("Ownership structure")).toBeInTheDocument();
-  expect(window.fetch).not.toHaveBeenCalled();
-  expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY))).toHaveLength(1);
 });
 
 test("repeated saved company names remain independently selectable by stable ID and sort by actual save time", () => {
@@ -279,20 +242,6 @@ test("a newer usable capture removes only older zero-assertion captures for the 
   expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY)).map(({ replayId }) => replayId)).toEqual(["vodafone-usable", "unrelated-empty"]);
 });
 
-test("a replay capture retained by an older completed session is recovered and enables no-provider replay", async () => {
-  const record = britishAirwaysReplay("recover-from-session");
-  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
-    contractVersion: DEMO_SESSION_CONTRACT,
-    draft: { ...emptyDemoDraft(), legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777" },
-    demoCase: { demoCaseId: "demo-recover", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
-    researchResult: { status: "COMPLETE", sourceMode: "LIVE", candidateSources: [], replayCapture: record },
-  }));
-  renderStart();
-  expect(screen.getByLabelText(/Saved live replay/)).toBeEnabled();
-  await waitFor(() => expect(readLabReplays().map(({ replayId }) => replayId)).toContain("recover-from-session"));
-  expect(screen.getByText(/Recovered the last completed live result/)).toBeInTheDocument();
-});
-
 test("a replay library exports and imports across browser origins without a provider call", () => {
   const first = britishAirwaysReplay("portable-1", "2026-09-15T08:00:00.000Z");
   const second = britishAirwaysReplay("portable-2", "2026-09-16T08:00:00.000Z");
@@ -302,19 +251,6 @@ test("a replay library exports and imports across browser origins without a prov
   expect(destination.values[LAB_REPLAY_KEY]).toContain("portable-1");
   expect(window.fetch).not.toHaveBeenCalled();
   expect(() => importReplayLibrary('{"records":[]}', destination)).toThrow(/not a valid UBO demo replay library/);
-});
-
-test("a missing or corrupt saved subject fails locally without a live fallback or deleting the capture", () => {
-  const corrupt = { ...britishAirwaysReplay("corrupt-capture"), subject: null };
-  uboStore.setItem(LAB_REPLAY_KEY, JSON.stringify([corrupt]));
-  renderStart();
-  completeRequiredFields({ name: "Example Trading Ltd", number: "DEMO0028" });
-  fireEvent.click(screen.getByLabelText(/Saved live replay/));
-  fireEvent.change(screen.getByLabelText("Saved research result"), { target: { value: corrupt.replayId } });
-  fireEvent.click(screen.getByRole("button", { name: /Replay saved research/ }));
-  expect(screen.getByText(/does not contain its captured subject identity/)).toBeInTheDocument();
-  expect(window.fetch).not.toHaveBeenCalled();
-  expect(JSON.parse(uboStore.getItem(LAB_REPLAY_KEY))[0].replayId).toBe(corrupt.replayId);
 });
 
 test("old sessions default to effective ownership and selector state survives refresh", () => {
@@ -757,4 +693,62 @@ test("a genuine failure still says something went wrong", async () => {
 
   expect(await screen.findByText(/Live research could not be completed/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Try live research again/ })).toBeInTheDocument();
+});
+
+// Saved research comes from this workspace's cases on the server (it survives a
+// reload, another browser and another day): starting from it makes no provider call.
+const savedBritishAirways = { caseId: "case-ba", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" };
+
+test("saved research from this workspace starts a new case without a provider call", async () => {
+  mockListSavedResearch.mockResolvedValue([savedBritishAirways]);
+  const research = { ...compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST"), ownershipResolutionTrace: { fromTheOldCustomer: true }, analystCustomerRequests: [{ requestId: "old" }] };
+  mockLoadPocCase.mockResolvedValue({ caseId: "case-ba", projection: { researchResult: research } });
+  renderStart();
+  const option = await screen.findByLabelText(/Saved research/);
+  await waitFor(() => expect(option).toBeEnabled());
+  fireEvent.click(option);
+  fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-ba" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start from saved research — no provider call/ }));
+  await screen.findByRole("heading", { name: "Ownership structure" });
+  expect(window.fetch).not.toHaveBeenCalled();
+  expect(mockLoadPocCase).toHaveBeenCalledWith("case-ba");
+  const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
+  expect(saved.demoCase.company).toEqual(expect.objectContaining({ legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777" }));
+  expect(saved.demoCase.demoCaseId).not.toBe("case-ba");
+  // Only the research comes across: not the old case's customer answers or the analyst's choices on it.
+  expect(saved.researchResult.ownershipResolutionTrace).toBeUndefined();
+  expect(saved.researchResult.analystCustomerRequests).toBeUndefined();
+  expect(saved.researchResult.savedFrom.caseId).toBe("case-ba");
+});
+
+test("saved research that can no longer be loaded stops without a live search", async () => {
+  mockListSavedResearch.mockResolvedValue([savedBritishAirways]);
+  mockLoadPocCase.mockResolvedValue(null);
+  renderStart();
+  const option = await screen.findByLabelText(/Saved research/);
+  await waitFor(() => expect(option).toBeEnabled());
+  fireEvent.click(option);
+  fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-ba" } });
+  fireEvent.click(screen.getByRole("button", { name: /Start from saved research/ }));
+  expect(await screen.findByText(/no longer available\. No live search was started/)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("with no saved research the option is offered but cannot be chosen", async () => {
+  renderStart();
+  expect(await screen.findByText("No saved research in this workspace yet")).toBeInTheDocument();
+  expect(screen.getByLabelText(/Saved research/)).toBeDisabled();
+});
+
+test("research interrupted by a reload says so instead of spinning forever", () => {
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "Acme Holdings Limited", registrationNumber: "00445790" },
+    demoCase: { demoCaseId: "demo-interrupted", company: { legalName: "Acme Holdings Limited", registrationNumber: "00445790", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: null,
+  }));
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  render(<UboDemoRoot />);
+  expect(screen.getByText(/This research did not finish/)).toBeInTheDocument();
+  expect(window.fetch).not.toHaveBeenCalled();
 });

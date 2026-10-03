@@ -380,6 +380,21 @@ class PostgresPocCaseRepository {
     return auditLedger.list(this.db, this.tenantId, caseId);
   }
 
+  /** This workspace's cases that carry research, newest first: the research
+   *  an analyst can start a new case from without a provider call. */
+  async savedResearch(limit = 20) {
+    return rows(await this.db.query(`SELECT case_id, company, current_projection->'researchResult'->>'status' AS status, updated_at
+      FROM ubo_poc_cases
+      WHERE tenant_id = $1 AND current_projection ? 'researchResult'
+        AND COALESCE(current_projection->'researchResult'->>'status', '') NOT IN ('FAILED', 'LOADING')
+      ORDER BY updated_at DESC LIMIT $2`, [this.tenantId, limit])).map((row) => ({
+      caseId: row.case_id,
+      company: { legalName: row.company?.legalName || "", registrationNumber: row.company?.registrationNumber || "", countryCode: row.company?.countryCode || "" },
+      status: row.status || null,
+      updatedAt: row.updated_at,
+    }));
+  }
+
   async history(caseId) {
     return rows(await this.db.query(`SELECT event_id, event_type, actor_type, occurred_at
       FROM ubo_poc_case_events WHERE case_id = $1 ORDER BY occurred_at, event_id`, [caseId])).map((row) => ({
@@ -622,6 +637,10 @@ class PocCaseService {
   /** The case's audit ledger - for staff; the route decides who asks. */
   async ledger(caseId) {
     return this.repository.ledger ? this.repository.ledger(caseId) : [];
+  }
+
+  async savedResearch() {
+    return this.repository.savedResearch ? this.repository.savedResearch() : [];
   }
 
   async load(caseId) {

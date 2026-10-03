@@ -46,6 +46,14 @@ async function parse(response) {
   return payload.case;
 }
 
+/** This workspace's researched cases, newest first (staff only). */
+export async function listSavedResearch(fetchImpl = window.fetch) {
+  const response = await fetchImpl("/api/ubo-poc-case?savedResearch=1", { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.success) throw Object.assign(new Error(payload.message || "Saved research could not be listed right now."), { code: payload.code, status: response.status });
+  return Array.isArray(payload.research) ? payload.research : [];
+}
+
 export async function loadPocCase(caseId, fetchImpl = window.fetch) {
   if (!caseId) return null;
   return parse(await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}`, { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } }));

@@ -20,7 +20,7 @@ import { createTopicActivation } from "./customer/investigationTopics";
 import AnalystResolutionView from "./AnalystResolutionView";
 import JobsNeedingAttention from "./JobsNeedingAttention";
 import CaseLedger from "./CaseLedger";
-import { clearActivePocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
+import { clearActivePocCase, listSavedResearch, loadPocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
 import "./uboDemo.css";
 
 // Temporarily hide the legacy analyst open-questions panel without removing its implementation.
@@ -49,8 +49,9 @@ function CalculationMethodSelector({ value, onChange, compact = false }) {
   return <fieldset className={`ubo-demo-method ${compact ? "compact" : "ubo-demo-wide"}`}><legend>Calculation method</legend><p>Choose which calculation or control assessment to inspect.</p><div>{CALCULATION_METHODS.map((method) => <label key={method.code}><input type="radio" name={compact ? "resultCalculationMethod" : "calculationMethod"} value={method.code} checked={value === method.code} onChange={() => onChange(method.code)} /><span><strong>{method.label}</strong><small>{method.explanation}</small></span></label>)}</div></fieldset>;
 }
 
-function CompanyStart({ draft, errors, replays, replayLibraryStatus, onChange, onReplaySelect, onSubmit, onLoadExample, onExportReplays, onImportReplays }) {
+function CompanyStart({ draft, errors, replays, savedResearch, onChange, onSavedSelect, onSubmit, onLoadExample }) {
   const replayMode = draft.sourceMode === "REPLAY";
+  const savedMode = draft.sourceMode === "SAVED";
   const selectedReplay = findReplayById(replays, draft.replayId);
   const duplicateNames = replays.reduce((counts, record) => {
     const name = String(record?.companyContext?.legalEntityName || "").trim().toUpperCase();
@@ -64,22 +65,22 @@ function CompanyStart({ draft, errors, replays, replayLibraryStatus, onChange, o
     <form className="ubo-demo-card" onSubmit={onSubmit} noValidate>
       <div className="ubo-demo-card-heading"><span>Company details</span><small>Fields marked * are required</small></div>
       <div className="ubo-demo-fields">
-        <label className="ubo-demo-field ubo-demo-wide"><span>Company name *</span><input autoComplete="organization" readOnly={replayMode} aria-invalid={Boolean(errors.legalName)} value={draft.legalName} onChange={(e) => onChange("legalName", e.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <FieldError id="legal-name-error">{errors.legalName}</FieldError>}</label>
-        <label className="ubo-demo-field"><span>Registration number *</span><input autoComplete="off" inputMode="text" readOnly={replayMode} aria-invalid={Boolean(errors.registrationNumber)} value={draft.registrationNumber} onChange={(e) => onChange("registrationNumber", e.target.value)} placeholder="For example, 00445790" /><small>Letters and leading zeros are preserved.</small>{errors.registrationNumber && <FieldError id="registration-error">{errors.registrationNumber}</FieldError>}</label>
-        <label className="ubo-demo-field"><span>Country of registration *</span><select disabled={replayMode} value={draft.countryCode} onChange={(e) => onChange("countryCode", e.target.value)}>{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
+        <label className="ubo-demo-field ubo-demo-wide"><span>Company name *</span><input autoComplete="organization" readOnly={replayMode || savedMode} aria-invalid={Boolean(errors.legalName)} value={draft.legalName} onChange={(e) => onChange("legalName", e.target.value)} placeholder="Enter the registered company name" />{errors.legalName && <FieldError id="legal-name-error">{errors.legalName}</FieldError>}</label>
+        <label className="ubo-demo-field"><span>Registration number *</span><input autoComplete="off" inputMode="text" readOnly={replayMode || savedMode} aria-invalid={Boolean(errors.registrationNumber)} value={draft.registrationNumber} onChange={(e) => onChange("registrationNumber", e.target.value)} placeholder="For example, 00445790" /><small>Letters and leading zeros are preserved.</small>{errors.registrationNumber && <FieldError id="registration-error">{errors.registrationNumber}</FieldError>}</label>
+        <label className="ubo-demo-field"><span>Country of registration *</span><select disabled={replayMode || savedMode} value={draft.countryCode} onChange={(e) => onChange("countryCode", e.target.value)}>{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
         <label className="ubo-demo-field"><span>Ownership type *</span><select value={draft.ownershipType} onChange={(e) => onChange("ownershipType", e.target.value)}>{OWNERSHIP_TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}</select><small>Context only; it does not change policy.</small></label>
         <CalculationMethodSelector value={draft.calculationMethod} onChange={(value) => onChange("calculationMethod", value)} />
         <label className="ubo-demo-field"><span>Case ID / reference <em>Optional</em></span><input autoComplete="off" value={draft.referenceCaseId} onChange={(e) => onChange("referenceCaseId", e.target.value)} placeholder="Your internal reference" /></label>
         <fieldset className="ubo-demo-source ubo-demo-wide"><legend>Demo source</legend>
           <label><input type="radio" name="sourceMode" value="LIVE" checked={draft.sourceMode === "LIVE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Live Lab research</label>
           <label><input type="radio" name="sourceMode" value="FIXTURE" checked={draft.sourceMode === "FIXTURE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Reviewed ASDA fixture <small>no provider call</small></label>
-          <label><input type="radio" name="sourceMode" value="REPLAY" disabled={!replays.length} checked={draft.sourceMode === "REPLAY"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Saved live replay <small>no provider call</small></label>
-          {replayMode && <><select aria-label="Saved research result" aria-invalid={Boolean(errors.replayId)} value={draft.replayId} onChange={(e) => onReplaySelect(e.target.value)}><option value="">Choose saved research</option>{replays.map((record) => { const name = String(record?.companyContext?.legalEntityName || "").trim().toUpperCase(); return <option key={record.replayId} value={record.replayId}>{replayOptionLabel(record, duplicateNames[name] || 1)}</option>; })}</select>{errors.replayId && <FieldError id="replay-error">{errors.replayId}</FieldError>}{selectedSubject && <div className="ubo-demo-replay-summary"><strong>Selected saved company</strong><span>{selectedSubject.legalName}</span><small>{selectedSubject.registrationNumber} · {selectedSubject.countryCode} · original capture retained</small></div>}</>}
-          <div className="ubo-demo-replay-library"><div><strong>{replays.length ? `${replays.length} saved live replay${replays.length === 1 ? "" : "s"}` : "No saved live replay on this browser origin"}</strong><small>Successful live research is saved automatically. Export it before changing preview URLs; importing never calls the provider.</small></div><div><button type="button" disabled={!replays.length} onClick={onExportReplays}>Export saved replays</button><label>Import saved replays<input type="file" accept="application/json,.json" onChange={(event) => onImportReplays(event.target.files?.[0] || null)} /></label></div>{replayLibraryStatus && <p role="status" className={replayLibraryStatus.kind}>{replayLibraryStatus.message}</p>}</div>
+          <label><input type="radio" name="sourceMode" value="SAVED" disabled={!savedResearch.length} checked={draft.sourceMode === "SAVED"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Saved research <small>no provider call</small></label>
+          {savedMode && <><select aria-label="Saved research" aria-invalid={Boolean(errors.savedCaseId)} value={draft.savedCaseId || ""} onChange={(e) => onSavedSelect(e.target.value)}><option value="">Choose saved research</option>{savedResearch.map((item) => <option key={item.caseId} value={item.caseId}>{item.company.legalName} · {item.company.registrationNumber} · {new Date(item.updatedAt).toLocaleString()}</option>)}</select>{errors.savedCaseId && <FieldError id="saved-research-error">{errors.savedCaseId}</FieldError>}</>}
+          <div className="ubo-demo-replay-library"><div><strong>{savedResearch.length ? `${savedResearch.length} saved research result${savedResearch.length === 1 ? "" : "s"} in this workspace` : "No saved research in this workspace yet"}</strong><small>Every completed research run is kept with its case on our server. Starting from one makes no provider call.</small></div></div>
         </fieldset>
       </div>
       <div className="ubo-demo-examples"><span>Instant engine examples</span><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.ALICE_28)}>Load Alice example — no provider call</button><button type="button" onClick={() => onLoadExample(DEMO_CALCULATION_FIXTURES.METHOD_60_40)}>Load 60/40 method comparison — no provider call</button></div>
-      <div className="ubo-demo-actions"><p>Saved to this case on our server - nothing about it stays in your browser.</p><button className="ubo-demo-primary" type="submit">{replayMode ? "Replay saved research — no provider call" : "Start research"} <span>→</span></button></div>
+      <div className="ubo-demo-actions"><p>Saved to this case on our server - nothing about it stays in your browser.</p><button className="ubo-demo-primary" type="submit">{replayMode || savedMode ? "Start from saved research — no provider call" : "Start research"} <span>→</span></button></div>
     </form>
   </main>;
 }
@@ -261,11 +262,20 @@ export default function UboDemoRoot() {
   const [customerSwitchState, setCustomerSwitchState] = useState(null);
   const [replays, setReplays] = useState(() => availableLabReplays(restored?.researchResult));
   const [replayLibraryStatus, setReplayLibraryStatus] = useState(null);
+  const [savedResearch, setSavedResearch] = useState([]);
   const skipNextSave = useRef(false);
   const durableResearchSaves = useRef(new Map());
 
   useEffect(() => { const onPop = () => setPathname(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
+  // Research saved with this workspace's cases on the server - what survives a
+  // reload, another browser or another day, unlike anything kept in the page.
+  useEffect(() => {
+    if (pathname !== DEMO_START_PATH && pathname !== "/ubo-demo") return undefined;
+    let active = true;
+    listSavedResearch().then((items) => { if (active) setSavedResearch(items); }).catch(() => { if (active) setSavedResearch([]); });
+    return () => { active = false; };
+  }, [pathname]);
   useEffect(() => {
     const capture = restored?.researchResult?.replayCapture;
     if (!capture) return;
@@ -316,6 +326,23 @@ export default function UboDemoRoot() {
     if (!isDemoResearchPath(pathname) || !demoCase || researchResult?.status !== "LOADING") return undefined;
     let subscribed = true;
     const sourceMode = demoCase.analysisContext?.sourceMode || draft.sourceMode;
+    if (sourceMode === "SAVED") {
+      // The research another case of this workspace already holds, read back
+      // from the server: no provider call. Only the research comes across -
+      // that case's customer answers and the analyst's choices on it do not.
+      loadPocCase(draft.savedCaseId).then((record) => {
+        if (!subscribed) return;
+        const saved = record?.projection?.researchResult;
+        if (!saved) throw new Error("That saved research is no longer available.");
+        const { ownershipResolutionTrace: _trace, analystCustomerRequests: _requests, investigationTopicActivations: _topics, ...research } = saved;
+        setResearchResult({ ...research, sourceMode: "SAVED", savedFrom: { caseId: draft.savedCaseId, loadedAt: new Date().toISOString() } });
+      }).catch((cause) => {
+        if (!subscribed) return;
+        setResearchError({ message: `${cause.message || "The saved research could not be loaded."} No live search was started.`, code: null });
+        setResearchResult(null);
+      });
+      return () => { subscribed = false; };
+    }
     const replayId = demoCase.analysisContext?.replayId || draft.replayId;
     const replayRecord = sourceMode === "REPLAY" ? findReplayById(replays, replayId) : null;
     if (sourceMode === "REPLAY" && !replayRecord) {
@@ -383,16 +410,15 @@ export default function UboDemoRoot() {
     }
     setDraft((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: undefined }));
   };
-  const selectReplay = (replayId) => {
-    const record = findReplayById(replays, replayId);
-    if (!record) { setDraft((current) => ({ ...current, replayId })); setErrors((current) => ({ ...current, replayId: "Choose an available saved research result." })); return; }
-    try { const nextDraft = bindDraftToReplay(draft, record); setDraft(nextDraft); setErrors((current) => ({ ...current, replayId: undefined, legalName: undefined, registrationNumber: undefined, countryCode: undefined })); }
-    catch (cause) { setDraft((current) => ({ ...current, replayId })); setErrors((current) => ({ ...current, replayId: cause.message })); }
-  };
   const startResearch = (event) => {
     event.preventDefault();
     let cleanDraft = { ...draft, demoFixtureId: "" };
     const next = {};
+    if (cleanDraft.sourceMode === "SAVED") {
+      const saved = savedResearch.find(({ caseId }) => caseId === cleanDraft.savedCaseId);
+      if (!saved) next.savedCaseId = "Choose saved research. No live search will be used.";
+      else cleanDraft = { ...cleanDraft, legalName: saved.company.legalName, registrationNumber: saved.company.registrationNumber, countryCode: saved.company.countryCode || cleanDraft.countryCode };
+    }
     if (cleanDraft.sourceMode === "REPLAY") {
       const record = findReplayById(replays, cleanDraft.replayId);
       if (!record) next.replayId = "Choose an available saved research result. No live search will be used.";
@@ -470,23 +496,6 @@ export default function UboDemoRoot() {
   };
   const startNewCase = () => { abortActiveDemoResearchJobs(); skipNextSave.current = true; clearActivePocCase(); clearDemoSession(); setDraft(emptyDemoDraft()); setDemoCase(null); setResearchResult(null); setErrors({}); navigateDemo(DEMO_START_PATH, { replace: true }); };
   const edit = () => navigateDemo(DEMO_START_PATH);
-  const exportReplays = () => {
-    try {
-      const blob = new Blob([serializeReplayLibrary(replays)], { type: "application/json" });
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href; link.download = "ubo-demo-saved-replays.json"; link.click(); URL.revokeObjectURL(href);
-      setReplayLibraryStatus({ kind: "success", message: "Saved replay library exported. Import it on another preview URL to avoid a new live search." });
-    } catch (cause) { setReplayLibraryStatus({ kind: "error", message: cause.message || "The replay library could not be exported." }); }
-  };
-  const importReplays = async (file) => {
-    if (!file) return;
-    try {
-      const imported = importReplayLibrary(await file.text());
-      setReplays(imported);
-      setReplayLibraryStatus({ kind: "success", message: `${imported.length} saved replay${imported.length === 1 ? "" : "s"} available. Replaying them makes no provider call.` });
-    } catch (cause) { setReplayLibraryStatus({ kind: "error", message: cause.message || "The replay library could not be imported." }); }
-  };
   // The same readiness check as the hand-off: the case is saved first, and no
   // link while research could still change who needs identity verification.
   const prepareCustomerLink = async () => {
@@ -510,13 +519,18 @@ export default function UboDemoRoot() {
   const analystResultPath = research || review || audit;
 
   let content;
-  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} replays={replays} replayLibraryStatus={replayLibraryStatus} onChange={updateDraft} onReplaySelect={selectReplay} onSubmit={startResearch} onLoadExample={loadCalculationExample} onExportReplays={exportReplays} onImportReplays={importReplays} />;
+  if (!analystResultPath) content = <CompanyStart draft={draft} errors={errors} replays={replays} savedResearch={savedResearch} onChange={updateDraft} onSavedSelect={(caseId) => updateDraft("savedCaseId", caseId)} onSubmit={startResearch} onLoadExample={loadCalculationExample} />;
   else if (!demoCase) content = <main className="ubo-demo-main ubo-demo-empty"><h1>Start with company details</h1><button className="ubo-demo-primary" onClick={edit}>Enter company details</button></main>;
   else if (review && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="REVIEW" demoCase={demoCase} result={researchResult} />;
   else if (audit && researchResult?.status !== "LOADING") content = <AnalystResolutionView mode="AUDIT" demoCase={demoCase} result={researchResult} />;
   else if (researchResult?.status === "LOADING") content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
   else if (researchResult?.status === "FAILED" || researchError) content = <ResearchError error={researchError || researchResult?.error || "Research failed."} result={researchResult} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
   else if (researchResult) content = <ResearchResult demoCase={demoCase} result={researchResult} onEdit={edit} onRetry={() => runAgain()} onSwitchCustomer={switchToCustomerView} customerSwitchState={customerSwitchState} prepareCustomerLink={prepareCustomerLink} onCalculationMethodChange={changeCalculationMethod} onToggleCustomerRequest={toggleCustomerRequest} onActivateTopic={activateTopic} onCancelTopic={cancelTopic} onDisplayChange={(change) => setResearchResult((current) => ({ ...current, displayState: { scope: current.displayState?.scope || DEMO_GRAPH_SCOPES.RELEVANT, dimension: current.displayState?.dimension || DEMO_GRAPH_DIMENSIONS.ALL, ...change } }))} />;
-  else content = <ResearchProgress company={demoCase.company} progress={researchProgress} />;
-  return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{content}{audit && demoCase?.demoCaseId && <CaseLedger caseId={demoCase.demoCaseId} />}{audit && <JobsNeedingAttention />}<DemoFooter pathname={pathname} /></div>;
+  // Research is saved to the case only when it finishes, so a reload during
+  // a run lands here with nothing running: say so, rather than spin forever.
+  else content = <ResearchError error="This research did not finish - the page was reloaded or closed while it was running. Running it again reuses the server's saved result if it completed; otherwise it is a new research run." result={null} replays={replays} onRetry={() => runAgain("LIVE")} onReplay={() => runAgain("REPLAY")} onEdit={edit} />;
+  // A failure to save the case or its research must be seen where it happens,
+  // not only on the start page.
+  const caseAlert = replayLibraryStatus?.kind === "error" ? <p role="alert" className="ubo-demo-case-alert">{replayLibraryStatus.message}</p> : null;
+  return <div className="ubo-demo-page"><DemoHeader onStartNew={startNewCase} /><DemoProgress pathname={pathname} />{caseAlert}{content}{audit && demoCase?.demoCaseId && <CaseLedger caseId={demoCase.demoCaseId} />}{audit && <JobsNeedingAttention />}<DemoFooter pathname={pathname} /></div>;
 }
