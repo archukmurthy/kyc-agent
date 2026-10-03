@@ -174,10 +174,11 @@ test("empty-object qualifications transport means no qualifications without acce
   assert.deepEqual(normalized.qualifications, []);
   assert.ok(validateTypedRelationshipCandidate(normalized, { factId: "fact-1", createdAt: "2026-09-27T00:00:00.000Z" }).relationship);
 
-  const populatedObject = mapTypedRelationshipCandidate({ ...input, qualifications_json: JSON.stringify({ note: "not an array" }) });
-  const rejected = validateTypedRelationshipCandidate(populatedObject, { factId: "fact-2", createdAt: "2026-09-27T00:00:00.000Z" });
-  assert.equal(rejected.relationship, null);
-  assert.deepEqual(rejected.limitations, ["qualifications must be an array"]);
+  // A populated object is kept as text, not a reason to lose the relationship
+  // (changed 2026-10-04: a register of members lost its 80% holding this way).
+  const populatedObject = mapTypedRelationshipCandidate({ ...input, qualifications_json: JSON.stringify({ "share class": "Ordinary", status: "Current", note: "" }) });
+  assert.deepEqual(populatedObject.qualifications, ["share class: Ordinary", "status: Current"]);
+  assert.ok(validateTypedRelationshipCandidate(populatedObject, { factId: "fact-2", createdAt: "2026-09-27T00:00:00.000Z" }).relationship);
 });
 
 test("qualifications given as nothing or as plain text never cost the relationship", () => {

@@ -61,6 +61,16 @@ function parsedQualifications(value) {
   // in prose - found in the end-to-end check (2026-10-04): 7 of 7 lost.
   if (parsed === null || parsed === undefined) return [];
   if (typeof parsed === "string") return parsed.trim() ? [parsed.trim()] : [];
+  // A populated object ({ "share class": "Ordinary", "status": "Current" }) is
+  // kept as text lines rather than rejecting the relationship: a register of
+  // members lost the very holding it was uploaded to prove this way (end-to-end
+  // check, 2026-10-04). Nothing it says is dropped - every key and value stays.
+  if (typeof parsed === "object") {
+    return Object.entries(parsed)
+      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+      .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value).trim()}`);
+  }
+  if (typeof parsed === "number" || typeof parsed === "boolean") return [String(parsed)];
   return parsed;
 }
 
