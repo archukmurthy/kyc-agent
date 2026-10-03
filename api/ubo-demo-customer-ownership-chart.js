@@ -18,6 +18,8 @@ function documentEventType(started, job) {
   return null;
 }
 
+const KNOWN_OPERATIONS = new Set(["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE"]);
+
 const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance, trials };
 
 function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwnershipChart, jobFactory = createCustomerOwnershipJobService, gates = DEFAULT_GATES) {
@@ -29,6 +31,11 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
     // re-evaluating a saved result are not, and one upload polls up to twelve
     // times - they used to spend the paid hourly limit and the trial's budget.
     const operation = req.body?.operation;
+    // An upload names no operation; anything else must be one this route
+    // knows. An unknown one used to fall through to a new - paid - upload.
+    if (operation !== undefined && !KNOWN_OPERATIONS.has(operation)) {
+      return res.status(400).json({ success: false, error: "unknown_operation" });
+    }
     const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE"].includes(operation);
     if (!(await gates.enforceRateLimit(req, res, paid ? "ubo-demo-chart" : "ubo-demo-chart-status"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this

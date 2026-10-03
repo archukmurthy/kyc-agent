@@ -220,3 +220,17 @@ test("only an upload's own formats are served, so a stored file is never shown a
   await assert.rejects(make("text/html").chartFile("job-1"), (error) => error.code === "media_type_not_viewable");
   await assert.rejects(make("image/png").chartFile("job-other"), (error) => error.code === "job_not_found");
 });
+
+test("an unknown operation is refused before the limiter and never starts a paid upload", async () => {
+  const calls = { limiter: 0, start: 0 };
+  const h = route.createHandler(null, undefined, () => ({ service: { start: async () => { calls.start += 1; return {}; } }, close: async () => {} }), {
+    applyCors: () => false,
+    enforceRateLimit: async () => { calls.limiter += 1; return true; },
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst" }),
+  });
+  const res = fakeRes();
+  await h({ method: "POST", headers: {}, body: { operation: "GET_EXTRACTON_JOB", jobId: "job-1" } }, res);
+  assert.strictEqual(res.statusCode, 400);
+  assert.strictEqual(res.body.error, "unknown_operation");
+  assert.deepStrictEqual(calls, { limiter: 0, start: 0 });
+});
