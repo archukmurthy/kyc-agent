@@ -180,6 +180,24 @@ test("empty-object qualifications transport means no qualifications without acce
   assert.deepEqual(rejected.limitations, ["qualifications must be an array"]);
 });
 
+test("qualifications given as nothing or as plain text never cost the relationship", () => {
+  const input = {
+    direction_established: true, relationship_type: "ECONOMIC_OWNERSHIP", subject_party_type: "natural_person", subject_json: JSON.stringify({ name: "Alice Morgan" }),
+    object_party_type: "legal_entity", object_json: JSON.stringify({ name: "Higgs LLP" }), value_kind: "EXACT", measurement_type: "percentage",
+    exact_value: 40, unit: "percentage_points", temporal_state: "current", temporal_json: "{}", source_specific_metadata_json: "{}",
+  };
+  const check = (qualifications_json) => {
+    const mapped = mapTypedRelationshipCandidate({ ...input, qualifications_json });
+    return { qualifications: mapped.qualifications, kept: Boolean(validateTypedRelationshipCandidate(mapped, { factId: "f", createdAt: "2026-10-04T00:00:00.000Z" }).relationship) };
+  };
+  assert.deepEqual(check(""), { qualifications: [], kept: true });
+  assert.deepEqual(check("   "), { qualifications: [], kept: true });
+  assert.deepEqual(check("null"), { qualifications: [], kept: true });
+  assert.deepEqual(check(undefined), { qualifications: [], kept: true });
+  assert.deepEqual(check("Synthetic demo data"), { qualifications: ["Synthetic demo data"], kept: true });
+  assert.deepEqual(check(JSON.stringify(["held jointly"])), { qualifications: ["held jointly"], kept: true });
+});
+
 test("semantic adapter retries one transient provider failure and reports attempts", async () => {
   let calls = 0;
   const adapter = new AnthropicSemanticProvider({

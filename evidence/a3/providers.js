@@ -54,6 +54,13 @@ function parsedQualifications(value) {
   // JSON object. It carries no qualification content, so normalize only that
   // transport representation; populated objects remain invalid at R4.
   if (parsed && typeof parsed === "object" && Object.keys(parsed).length === 0) return [];
+  // Nothing at all (null, a blank string) is no qualifications. Plain text that
+  // is not JSON is one qualification, kept as written. Either used to reject the
+  // whole relationship ("qualifications must be an array"), so a chart reading
+  // lost every relationship whenever the provider answered this optional field
+  // in prose - found in the end-to-end check (2026-10-04): 7 of 7 lost.
+  if (parsed === null || parsed === undefined) return [];
+  if (typeof parsed === "string") return parsed.trim() ? [parsed.trim()] : [];
   return parsed;
 }
 
