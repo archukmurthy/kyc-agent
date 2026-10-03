@@ -182,3 +182,41 @@ test("starting a chart reading uses one trial step for the caller, a status poll
   await handler({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, fakeRes());
   assert.deepEqual(counted, ["user_1"]);
 });
+
+// Viewing an uploaded chart again after a reload: the file is read back from
+// where the upload was stored. It costs nothing, so it never uses the paid
+// limit; a customer sees only their own case's file.
+test("an uploaded chart is served back free, to its workspace, and to a customer only for their own case", async () => {
+  const buckets = [];
+  const served = [];
+  const make = (actor, owned) => route.createHandler(null, undefined, () => ({
+    service: { ownedByCase: async () => owned, chartFile: async (jobId) => { served.push(jobId); return { bytes: Buffer.from("%PDF-1"), mediaType: "application/pdf", originalFilename: "chart.pdf" }; } },
+    close: async () => {},
+  }), { applyCors: () => false, enforceRateLimit: async (req, res, bucket) => { buckets.push(bucket); return true; }, requireUboCaller: async () => actor });
+  const headers = {};
+  let ended;
+  const res = { ...fakeRes(), setHeader(name, value) { headers[name.toLowerCase()] = value; return this; }, end(bytes) { ended = bytes; return this; } };
+  await make({ kind: "staff", tenantId: "acme", role: "analyst" }, true)({ method: "POST", headers: {}, body: { operation: "GET_CHART_FILE", jobId: "job-1" } }, res);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(headers["content-type"], "application/pdf");
+  assert.strictEqual(headers["x-content-type-options"], "nosniff");
+  assert.strictEqual(String(ended), "%PDF-1");
+  assert.deepStrictEqual(buckets, ["ubo-demo-chart-status"]);
+
+  const other = fakeRes();
+  await make({ kind: "customer", tenantId: "acme", caseId: "case-2" }, false)({ method: "POST", headers: {}, body: { operation: "GET_CHART_FILE", jobId: "job-1" } }, other);
+  assert.strictEqual(other.statusCode, 404);
+  assert.deepStrictEqual(served, ["job-1"]);
+});
+
+test("only an upload's own formats are served, so a stored file is never shown as a page", async () => {
+  const job = { id: "job-1", tenantId: "acme", contextId: "ctx", artifactSha256: "sha", artifactId: "art-1" };
+  const make = (mediaType) => new CustomerOwnershipExtractionJobService({
+    tenantId: "acme",
+    repository: { getJob: async ({ id, tenantId }) => (id === "job-1" && tenantId === "acme" ? job : null), findArtifact: async () => ({ artifactId: "art-1", mediaType, storageKey: "k", originalFilename: "f" }) },
+    artifactStore: { read: async () => ({ bytes: Buffer.from("x") }) },
+  });
+  assert.strictEqual((await make("image/png").chartFile("job-1")).mediaType, "image/png");
+  await assert.rejects(make("text/html").chartFile("job-1"), (error) => error.code === "media_type_not_viewable");
+  await assert.rejects(make("image/png").chartFile("job-other"), (error) => error.code === "job_not_found");
+});

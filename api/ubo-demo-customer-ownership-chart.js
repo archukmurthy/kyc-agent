@@ -29,7 +29,7 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
     // re-evaluating a saved result are not, and one upload polls up to twelve
     // times - they used to spend the paid hourly limit and the trial's budget.
     const operation = req.body?.operation;
-    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION"].includes(operation);
+    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE"].includes(operation);
     if (!(await gates.enforceRateLimit(req, res, paid ? "ubo-demo-chart" : "ubo-demo-chart-status"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
@@ -66,11 +66,21 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       // A customer's session names one case: uploads only for it, and only its
       // jobs - checked before a job is processed or retried, not after.
       if (actor.kind === "customer") {
-        const jobOperation = ["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB"].includes(body.operation);
+        const jobOperation = ["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "GET_CHART_FILE"].includes(body.operation);
         const ours = jobOperation
           ? await dependencies.service.ownedByCase(body.jobId, actor.caseId)
           : String(body.demoContext?.demoCaseId || "") === actor.caseId;
         if (!ours) return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
+      }
+      // The uploaded file, to view it again after a reload: read from where the
+      // upload was stored, never read by the AI again, so it costs nothing.
+      if (body.operation === "GET_CHART_FILE") {
+        const file = await dependencies.service.chartFile(body.jobId);
+        res.setHeader("Content-Type", file.mediaType);
+        res.setHeader("Content-Disposition", "inline");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.statusCode = 200;
+        return res.end(file.bytes);
       }
       let job;
       let started = false;

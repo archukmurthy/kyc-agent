@@ -300,14 +300,29 @@ test("retry reuses the failed job and existing Artifact", async () => {
   expect(window.fetch).toHaveBeenCalledTimes(3);
 });
 
-test("a restored structured extraction explains when the original chart bytes are unavailable", () => {
+test("after a reload the uploaded chart is read back from the server to view it, with no AI reading", async () => {
   seed();
   const context = readCustomerDemoContext();
-  writeCustomerOwnershipChartSession({ context, result: analysis });
+  writeCustomerOwnershipChartSession({ context, result: { ...analysis, durableExtraction: { jobId: "job-restored", artifactId: "artifact-1", state: "COMPLETE" } } });
+  window.fetch = jest.fn(async () => ({ ok: true, blob: async () => new Blob(["png"], { type: "image/png" }) }));
+  const createObjectURL = jest.fn(() => "blob:chart");
+  URL.createObjectURL = createObjectURL;
+  URL.revokeObjectURL = jest.fn();
   render(<CustomerOwnershipChartPage />);
   fireEvent.click(screen.getByRole("button", { name: "View chart" }));
-  expect(screen.getByText(/original file is not available in this browser tab/i)).toBeInTheDocument();
-  expect(screen.getByText(/upload the file again to enable preview/i)).toBeInTheDocument();
+  expect(await screen.findByRole("img", { name: /Preview of/ })).toHaveAttribute("src", "blob:chart");
+  expect(window.fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(window.fetch.mock.calls[0][1].body)).toEqual({ operation: "GET_CHART_FILE", jobId: "job-restored" });
+});
+
+test("a restored chart whose file cannot be loaded says so without hiding the results", async () => {
+  seed();
+  const context = readCustomerDemoContext();
+  writeCustomerOwnershipChartSession({ context, result: { ...analysis, durableExtraction: { jobId: "job-restored", artifactId: "artifact-1", state: "COMPLETE" } } });
+  window.fetch = jest.fn(async () => ({ ok: false, status: 404 }));
+  render(<CustomerOwnershipChartPage />);
+  fireEvent.click(screen.getByRole("button", { name: "View chart" }));
+  expect(await screen.findByText(/uploaded file could not be loaded right now/i)).toBeInTheDocument();
 });
 
 test("a saved same-company extraction can be replayed without a provider call", () => {

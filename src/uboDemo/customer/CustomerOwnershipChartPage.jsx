@@ -172,9 +172,39 @@ function ChartAssertions({ result }) {
   return <section className="ubo-customer-card ubo-customer-assertions"><div className="ubo-demo-assertion-heading"><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong><span>{result.assertions?.length || 0} reduced assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-legacy-assertions" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>{expanded && <div id="ubo-customer-legacy-assertions"><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></div>}</section>;
 }
 
+// After a reload the page has no copy of the file; it is read back from where
+// the upload was stored (free - the AI does not read it again).
+function useStoredChartFile(jobId, wanted) {
+  const [stored, setStored] = useState({ state: "IDLE" });
+  const requested = useRef(null);
+  useEffect(() => {
+    if (!wanted || !jobId || requested.current === jobId) return undefined;
+    requested.current = jobId;
+    let active = true;
+    let finished = false;
+    let objectUrl = null;
+    setStored({ state: "LOADING" });
+    clerkAuthHeaders().then((auth) => fetch("/api/ubo-demo-customer-ownership-chart", {
+      method: "POST", headers: { "Content-Type": "application/json", ...auth }, body: JSON.stringify({ operation: "GET_CHART_FILE", jobId }),
+    })).then(async (response) => {
+      if (!response.ok) throw new Error("unavailable");
+      const blob = await response.blob();
+      objectUrl = URL.createObjectURL(blob);
+      finished = true;
+      if (active) setStored({ state: "READY", url: objectUrl, mediaType: blob.type });
+    }).catch(() => { finished = true; if (active) setStored({ state: "UNAVAILABLE" }); });
+    // Closed before it arrived: ask again next time it is opened.
+    return () => { active = false; if (!finished) requested.current = null; };
+  }, [jobId, wanted]);
+  useEffect(() => () => { if (stored.url) URL.revokeObjectURL(stored.url); }, [stored.url]);
+  return stored;
+}
+
 function UploadedChartReceipt({ result, preview, onReplace }) {
   const [showPreview, setShowPreview] = useState(false);
-  const previewSource = preview ? `data:${preview.mediaType};base64,${preview.contentBase64}` : null;
+  const stored = useStoredChartFile(result.durableExtraction?.jobId?.startsWith("legacy-") ? null : result.durableExtraction?.jobId, showPreview && !preview);
+  const previewSource = preview ? `data:${preview.mediaType};base64,${preview.contentBase64}` : stored.state === "READY" ? stored.url : null;
+  const previewMediaType = preview ? preview.mediaType : stored.mediaType;
   const quality = result.extractionQuality;
   const qualityState = quality?.state || ((result.sourceGraph?.relationships || []).length ? "EXTRACTION_SUCCESS_COMPLETE" : "EXTRACTION_INCOMPLETE");
   const qualityMessage = qualityState === "EXTRACTION_SUCCESS_COMPLETE" ? "Ownership chart analysed successfully"
@@ -188,10 +218,11 @@ function UploadedChartReceipt({ result, preview, onReplace }) {
     <section className="ubo-customer-received"><span aria-hidden="true">{qualityState === "EXTRACTION_SUCCESS_COMPLETE" ? "✓" : "!"}</span><div><small>Ownership chart received</small><strong>{result.artifact.originalFilename}</strong><p>{Math.ceil(result.artifact.sizeBytes / 1024)} KB · integrity checked · {qualityMessage}</p>{qualityCounts && <p>{qualityCounts}</p>}</div><div className="ubo-customer-received-actions"><button type="button" onClick={() => setShowPreview((value) => !value)}>{showPreview ? "Hide chart" : "View chart"}</button><button type="button" onClick={onReplace}>Replace chart</button></div></section>
     {showPreview && <section className="ubo-customer-card ubo-customer-chart-preview" aria-label="Uploaded ownership chart preview">
       <header><div><small>Uploaded ownership chart</small><h2>{result.artifact.originalFilename}</h2></div><button type="button" onClick={() => setShowPreview(false)}>Close preview</button></header>
-      {previewSource ? (preview.mediaType === "application/pdf"
-        ? <iframe src={previewSource} title={`Preview of ${preview.originalFilename}`} />
-        : <img src={previewSource} alt={`Preview of ${preview.originalFilename}`} />)
-        : <div className="ubo-customer-chart-preview-unavailable"><strong>The original file is not available in this browser tab.</strong><p>This result was restored from the saved structured extraction, which deliberately does not retain document bytes. Choose “Replace chart” and upload the file again to enable preview.</p></div>}
+      {previewSource ? (previewMediaType === "application/pdf"
+        ? <iframe src={previewSource} title={`Preview of ${result.artifact.originalFilename}`} />
+        : <img src={previewSource} alt={`Preview of ${result.artifact.originalFilename}`} />)
+        : stored.state === "LOADING" ? <div className="ubo-customer-chart-preview-unavailable"><strong>Loading the uploaded chart…</strong></div>
+          : <div className="ubo-customer-chart-preview-unavailable"><strong>The uploaded file could not be loaded right now.</strong><p>The ownership results above are unaffected. Try again later, or choose “Replace chart” to upload it again.</p></div>}
     </section>}
   </>;
 }

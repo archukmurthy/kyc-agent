@@ -80,6 +80,8 @@ function reason(error) {
   return { code, upstreamStatus, retryable, safeMessage };
 }
 
+const VIEWABLE_MEDIA_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
+
 function artifactFrom(stored, company) {
   return {
     id: stored.artifactId,
@@ -179,6 +181,19 @@ class CustomerOwnershipExtractionJobService {
   async ownedByCase(jobId, caseId) {
     const job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
     return Boolean(job && caseId && job.demoCaseId === caseId);
+  }
+
+  /** The uploaded file itself, for viewing it again. Only the formats an
+   *  upload may be (so nothing stored is ever served as a page), and only a
+   *  job of this workspace. */
+  async chartFile(jobId) {
+    const job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
+    if (!job) throw Object.assign(new Error("Extraction job was not found."), { code: "job_not_found", statusCode: 404 });
+    const stored = await this.repository.findArtifact({ tenantId: job.tenantId, contextId: job.contextId, sha256: job.artifactSha256 });
+    if (!stored || stored.artifactId !== job.artifactId) throw Object.assign(new Error("The uploaded file is no longer available."), { code: "artifact_unavailable", statusCode: 404 });
+    if (!VIEWABLE_MEDIA_TYPES.has(stored.mediaType)) throw Object.assign(new Error("This file cannot be shown."), { code: "media_type_not_viewable", statusCode: 415 });
+    const { bytes } = await this.artifactStore.read(stored.storageKey);
+    return { bytes, mediaType: stored.mediaType, originalFilename: stored.originalFilename };
   }
 
   async status(jobId) {
