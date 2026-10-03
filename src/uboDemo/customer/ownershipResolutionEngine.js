@@ -794,9 +794,12 @@ function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
     && normalized(fact.object?.name) === normalized(expected?.object?.name)
     && fact.measurement?.type === "EXACT"
     && Number(fact.measurement.value) === Number(expected?.measurement?.value));
+  // Said so the customer can act on it: what the document had to show.
+  const holding = expected?.subject?.name && expected?.object?.name && expected?.measurement?.type === "EXACT"
+    ? `${expected.subject.name} holding ${expected.measurement.value}% of ${expected.object.name}` : "the ownership you described";
   return supporting
-    ? { status: EVIDENCE_STATUS.SATISFIED, reason: "The existing Evidence pipeline extracted a matching current ownership assertion." }
-    : { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence result did not establish the declared current ownership assertion; analyst review is required." };
+    ? { status: EVIDENCE_STATUS.SATISFIED, reason: `The document shows ${holding}.` }
+    : { status: EVIDENCE_STATUS.REJECTED, reason: `We could not find ${holding} in this document, so it could not be accepted. Please upload a current register of members that shows it.` };
 }
 
 module.exports = {

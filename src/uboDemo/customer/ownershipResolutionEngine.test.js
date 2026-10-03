@@ -363,3 +363,11 @@ test("indirect corporate traversal produces a person aggregate UBO while the com
   expect(engine.personOwnershipAssessments[0]).toEqual(expect.objectContaining({ personName: "Jane Smith", determination: UBO_DETERMINATION.DEFINITE_UBO, idvRequired: true }));
   expect(engine.resolutions.find(({ comparisonItemId }) => comparisonItemId === "holdco-target").uboImpact).toEqual(expect.objectContaining({ determination: null, idvRequired: false }));
 });
+
+test("an evidence decision tells the customer what the document had to show", () => {
+  const resolution = { resultingFact: fact("resolved", alice, target, { type: "EXACT", value: 30 }, "answer") };
+  const requirement = { comparisonItemId: "registry:chart" };
+  const result = (value) => ({ artifact: { integrityVerified: true }, candidateFacts: [fact("proof", alice, target, { type: "EXACT", value }, "proof")] });
+  expect(evidenceResultStatus(result(20), resolution, requirement).reason).toBe("We could not find Alice Morgan holding 30% of Target Limited in this document, so it could not be accepted. Please upload a current register of members that shows it.");
+  expect(evidenceResultStatus(result(30), resolution, requirement).reason).toBe("The document shows Alice Morgan holding 30% of Target Limited.");
+});
