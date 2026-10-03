@@ -88,6 +88,12 @@ if (UBO_HIDDEN && path.startsWith("/ubo-")) {
 } else if (isUboDemoPath(path)) {
   tree = <ClerkGate><TrialGate><DurablePocCaseBoundary><UboDemoRoot /></DurablePocCaseBoundary></TrialGate></ClerkGate>;
   title = "Ownership review demo";
+} else if (UBO_ONLY && path === "/") {
+  // The home of a UBO-only deployment is the ownership review - and where Clerk
+  // sends people when it falls back to its configured home. Anything in the
+  // address (an invitation, say) comes along.
+  window.location.replace(`/ubo-demo/${window.location.search}${window.location.hash}`);
+  tree = null;
 } else if (UBO_ONLY) {
   // Anything outside the UBO surfaces simply does not exist here. Deliberately
   // plain: a page that says "this is disabled in this deployment" tells a
