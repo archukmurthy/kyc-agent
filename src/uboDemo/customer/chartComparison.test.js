@@ -183,3 +183,15 @@ test("comparison scope follows ownership paths to the customer and retains sourc
   expect(relevant.map(({ fact: value }) => value.factId).sort()).toEqual(["holdco-customer", "lee-holdco", "mitchell-holdco"]);
   expect(entries).toEqual(original);
 });
+
+test("the customer's direct owner is compared whether the customer is named as written or found by number", () => {
+  // Research named the customer as typed when it ran, with the company number;
+  // the chart names it as written on the chart, with no number.
+  const company = { legalName: "VODAFONE LIMITED", registrationNumber: "01471587", countryCode: "GB" };
+  const holding = { name: "Vodafonethree Holdings Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const research = [{ fact: { factId: "r1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: holding, object: { name: "Vodaphone LTD", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01471587" }] }, measurement: { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "companies-house:01471587:psc:0" }] }, source: {} }];
+  const chart = [{ fact: { factId: "c1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: holding, object: { name: "Vodafone Limited", entityType: "LEGAL_ENTITY" }, measurement: { type: "EXACT", value: 80 }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "chart" }] }, source: {} }];
+  const rows = buildChartResearchComparison(filterComparisonEntriesRelevantToCustomer(research, company), filterComparisonEntriesRelevantToCustomer(chart, company));
+  expect(rows).toHaveLength(1);
+  expect(rows[0].status).toBe("INDEPENDENTLY_VERIFIED");
+});

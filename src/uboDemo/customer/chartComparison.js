@@ -77,9 +77,19 @@ function filterComparisonEntriesRelevantToCustomer(entries = [], company = null)
       changed = true;
     }
   }
+  // Whatever resolves to the customer is the customer: the chart may name it
+  // as written ("Vodafone Limited") and the research by number under the name
+  // typed when it ran ("Vodaphone LTD"). Each matched the customer, but not each
+  // other, so the customer's own direct owners were never compared (found in
+  // the end-to-end check, 2026-10-04).
   return entries.filter((entry) => {
     const { fact } = unwrap(entry);
     return !isEconomicOwnership(fact) || relevantFactIds.has(fact.factId);
+  }).map((entry) => {
+    const { fact } = unwrap(entry);
+    if (!isEconomicOwnership(fact) || !sameSourceParty(fact.object, subject)) return entry;
+    const asCustomer = { ...fact, object: { ...subject, sourceName: fact.object?.name || null } };
+    return entry?.fact ? { ...entry, fact: asCustomer } : asCustomer;
   });
 }
 

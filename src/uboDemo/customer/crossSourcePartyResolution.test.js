@@ -107,3 +107,13 @@ test("parties with no exact match are still offered to the AI", () => {
   expect(candidates.length).toBeGreaterThan(0);
   expect(candidates.every(({ sourcePartyA }) => sourcePartyA.name !== "Mezzanine Ltd")).toBe(true);
 });
+
+test("the same Companies House number is the same company whatever the namespace is called", () => {
+  const research = { name: "Vodaphone LTD", entityType: "COMPANY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01471587" }] };
+  const customer = { name: "VODAFONE LIMITED", entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE", value: "01471587" }] };
+  const same = resolveCrossSourceParty({ sourcePartyA: research, sourcePartyB: customer });
+  expect(same).toEqual(expect.objectContaining({ identityResolutionMethod: "TRUSTED_IDENTIFIER", classification: "SAME_ENTITY", autoLinked: true }));
+  // And a different number under either label is a different company.
+  const other = resolveCrossSourceParty({ sourcePartyA: research, sourcePartyB: { ...customer, externalIdentifiers: [{ namespace: "COMPANIES_HOUSE", value: "00000001" }] } });
+  expect(other).toEqual(expect.objectContaining({ classification: "DIFFERENT_ENTITY", autoLinked: false }));
+});

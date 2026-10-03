@@ -50,9 +50,18 @@ function normalizedLegalName(partyOrName) {
   return { normalized, base, compactBase: base.replace(/[^A-Z0-9]/g, ""), legalForm: form };
 }
 
+// One register, one namespace: research labels a company number
+// "COMPANIES_HOUSE_COMPANY_NUMBER" and the case "COMPANIES_HOUSE", so the same
+// number 01471587 was not recognised as the same company and every research
+// fact about the customer dropped out of the comparison (found in the
+// end-to-end check, 2026-10-04).
+function canonicalNamespace(namespace) {
+  return /COMPANIES ?HOUSE/.test(namespace) ? "COMPANIES HOUSE" : namespace;
+}
+
 function trustedIdentifiers(party) {
   return (party?.externalIdentifiers || []).map((identifier) => {
-    const namespace = words(identifier.namespace || identifier.system || identifier.identifierType);
+    const namespace = canonicalNamespace(words(identifier.namespace || identifier.system || identifier.identifierType));
     const value = words(identifier.value).replace(/\s/g, "");
     return { namespace, value, key: `${namespace}:${value}` };
   }).filter(({ namespace, value }) => namespace && value && TRUSTED_IDENTIFIER_NAMESPACES.test(namespace));
