@@ -81,7 +81,7 @@ function ReopenReview({ caseId, verification, reopenCase }) {
   return <section className="ubo-demo-card ubo-analyst-summary"><h2>Finalised review</h2>
     {stage === "IDLE" && <button type="button" onClick={() => setStage("CONFIRM")}>Reopen review</button>}
     {stage !== "IDLE" && <><p>The finalised assessment is set aside and the customer can change their answers again. Their answers, uploads and completed identity checks are kept.</p>
-      <button type="button" onClick={reopen} disabled={stage === "SAVING"}>Yes, reopen</button> <button type="button" onClick={() => setStage("IDLE")} disabled={stage === "SAVING"}>Cancel</button></>}
+      <button type="button" onClick={reopen} disabled={stage === "SAVING"}>{stage === "SAVING" ? "Reopening…" : "Yes, reopen"}</button> <button type="button" onClick={() => setStage("IDLE")} disabled={stage === "SAVING"}>Cancel</button></>}
     {error && <p role="alert">{error}</p>}
   </section>;
 }

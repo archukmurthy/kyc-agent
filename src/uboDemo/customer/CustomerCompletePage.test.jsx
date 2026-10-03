@@ -27,3 +27,24 @@ test("complete page opens after the shared case reaches IDV complete", () => {
   render(<CustomerCompletePage />);
   expect(screen.getByRole("heading", { name: "Thank you" })).toBeInTheDocument();
 });
+
+test("a customer who has finished is told what happens next, not offered another demo", () => {
+  const { setCustomerSession, clearCustomerSession } = require("../../auth/customerSession");
+  seed(DISCOVERY_STATE.IDV_COMPLETE);
+  setCustomerSession({ session: "s-1", caseId: "complete-case" });
+  try {
+    render(<CustomerCompletePage />);
+    expect(screen.getByText(/sent to the person reviewing your application/)).toBeInTheDocument();
+    expect(screen.getByText("You can close this page.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Start another demo/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/population/)).not.toBeInTheDocument();
+  } finally {
+    clearCustomerSession();
+  }
+});
+
+test("an analyst trying the customer view can start another demo", () => {
+  seed(DISCOVERY_STATE.IDV_COMPLETE);
+  render(<CustomerCompletePage />);
+  expect(screen.getByRole("link", { name: /Start another demo/ })).toBeInTheDocument();
+});

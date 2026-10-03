@@ -562,7 +562,9 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
         const dateRequired = [OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT].includes(explanationAnswer);
         if (stored?.status === EVIDENCE_STATUS.SATISFIED && percentage && (!dateRequired || dateAnswer)) {
           resolutionStatus = RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED;
-          reason = "The ownership explanation, current percentage, effective date and supporting evidence have been established.";
+          reason = dateRequired
+            ? "The ownership explanation, current percentage, effective date and supporting evidence have been established."
+            : "The ownership explanation, current percentage and supporting evidence have been established.";
         }
       }
     } else {
