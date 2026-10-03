@@ -2,7 +2,9 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
-jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
+const mockPersistDefault = async () => ({ researchRelease: { mayProceed: true } });
+let mockPersist = mockPersistDefault;
+jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: (...args) => mockPersist(...args) }));
 import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { DISCOVERY_STATE } from "./verificationAssessment";
@@ -62,7 +64,7 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => { jest.restoreAllMocks(); mockPersist = mockPersistDefault; });
 
 test("verified ownership creates no customer question and keeps analyst assessment details off the customer page", () => {
   render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
@@ -384,4 +386,22 @@ test("nominee evidence stays with its issue after all follow-up questions are an
   expect(within(group).getByRole("button", { name: "Choose supporting evidence" })).toBeInTheDocument();
   expect(within(group).getByText(/remains unresolved until supporting evidence passes/i)).toBeInTheDocument();
   expect(window.fetch).not.toHaveBeenCalled();
+});
+
+test("an answer the server refused says it was not saved and can be sent again", async () => {
+  const sent = [];
+  mockPersist = async (operation, command) => {
+    if (operation !== "SUBMIT_ANSWER") return { researchRelease: { mayProceed: true } };
+    sent.push(command.idempotencyKey);
+    if (sent.length === 1) throw new Error("The case changed while this step was being worked out.");
+    return { researchRelease: { mayProceed: true } };
+  };
+  render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const nominee = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(nominee).getByLabelText("No"));
+  fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
+  const refused = await screen.findByText(/This answer was not saved: The case changed/i);
+  fireEvent.click(within(refused.closest("article")).getByRole("button", { name: /Save again/i }));
+  await waitFor(() => expect(sent).toHaveLength(2));
+  await waitFor(() => expect(screen.queryByText(/This answer was not saved/i)).not.toBeInTheDocument());
 });

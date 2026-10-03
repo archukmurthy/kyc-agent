@@ -200,7 +200,7 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
   </section>;
 }
 
-function AnsweredQuestion({ question, answer, context, editing, draft, error, onEdit, onDraft, onSave, onCancel }) {
+function AnsweredQuestion({ question, answer, context, editing, draft, error, onEdit, onDraft, onSave, onCancel, onRetry }) {
   return <article className="ubo-resolution-answered-question">
     <div>
       <span>Answered {question.stage === "CONTROL" ? "control" : question.stage === "FALLBACK" ? "senior management" : question.stage === "ADDITIONAL" ? "additional" : "ownership"} question</span>
@@ -214,10 +214,14 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, on
         <button type="button" className="ubo-customer-primary" disabled={draft === undefined || draft === ""} onClick={onSave}>Save change <span>→</span></button>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
-    </> : <div className="ubo-resolution-answer-summary">
-      <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong></p>
-      <button type="button" onClick={onEdit}>Edit answer</button>
-    </div>}
+    </> : <>
+      <div className="ubo-resolution-answer-summary">
+        <p><small>Your answer</small><strong>{answerLabel(question, answer)}</strong></p>
+        <button type="button" onClick={onEdit}>Edit answer</button>
+      </div>
+      {/* A refused save must not look saved: the answer is shown, but it is not on the case. */}
+      {error && <div className="ubo-resolution-edit-actions"><p className="ubo-resolution-error" role="alert">This answer was not saved: {error}</p><button type="button" onClick={onRetry}>Save again</button></div>}
+    </>}
   </article>;
 }
 
@@ -372,10 +376,10 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     });
   }, [context, engine.resolutions, result, rows]);
 
-  const submit = (question) => {
+  const submit = (question, retryValue) => {
     let idempotencyKey;
     try {
-      const value = answerValue(question, drafts[question.id]);
+      const value = answerValue(question, retryValue !== undefined ? retryValue : drafts[question.id]);
       const previousValue = answers[question.id]?.value;
       const changed = previousValue !== value;
       const answeredAt = new Date().toISOString();
@@ -573,6 +577,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         onEdit={() => { setDrafts((current) => ({ ...current, [question.id]: answers[question.id].value })); setEditingQuestionId(question.id); }}
         onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))}
         onSave={() => submit(question)}
+        onRetry={() => submit(question, answers[question.id].value)}
         onCancel={() => { setEditingQuestionId(null); setErrors((current) => ({ ...current, [question.id]: "" })); }}
       />)}</div>
     </section>}
