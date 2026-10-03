@@ -59,8 +59,8 @@ export default function TrialGate({ children }) {
       const status = await trialStatus();
       setState({ phase: status.inTrial ? "in" : "no-access", status });
     } catch (error) {
-      if (error.code === "invite_full" || error.code === "invite_revoked" || error.code === "invite_invalid") {
-        setState({ phase: "bad-invite", reason: error.code });
+      if (error.code === "invite_full" || error.code === "invite_revoked" || error.code === "invite_invalid" || error.code === "already_in_trial") {
+        setState({ phase: "bad-invite", reason: error.code, company: error.company || null });
         return;
       }
       // Anything else: let them through. The server still refuses what matters.
@@ -100,6 +100,7 @@ export default function TrialGate({ children }) {
       invite_full: "That invitation has already been used by the maximum number of people.",
       invite_revoked: "That invitation has been withdrawn.",
       invite_invalid: "That invitation code was not recognised.",
+      already_in_trial: `This email address is already in ${state.company ? `the ${state.company} trial` : "another trial"}. One sign-in can be in one trial - sign in with a different email address to use this invitation.`,
     }[state.reason];
     return (
       <div style={BOX}>
@@ -125,7 +126,9 @@ export default function TrialGate({ children }) {
             fontSize: 13,
           }}
         >
-          {expired ? (
+          {status.unmetered ? (
+            <span>Owner account - working in the {status.company} trial. Your paid AI steps are not counted against it.</span>
+          ) : expired ? (
             <span>
               <strong>Your trial has ended.</strong> Your work is still here and can be viewed, but new research is
               switched off. Get in touch to continue.

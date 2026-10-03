@@ -96,3 +96,19 @@ test("a broken status call does not become an outage", async () => {
   render(<TrialGate><div>the product</div></TrialGate>);
   expect(await screen.findByText("the product")).toBeInTheDocument();
 });
+
+test("a second trial's link for a login already in a trial says which trial and what to do", async () => {
+  setUrl("?invite=VODAPH-LT6Y");
+  mockRedeemInvite.mockRejectedValue(Object.assign(new Error("already_in_trial"), { code: "already_in_trial", company: "Test LTD" }));
+  render(<TrialGate><div>the product</div></TrialGate>);
+  expect(await screen.findByText(/already in the Test LTD trial/)).toBeInTheDocument();
+  expect(screen.getByText(/sign in with a different email address/)).toBeInTheDocument();
+  expect(screen.queryByText("the product")).not.toBeInTheDocument();
+});
+
+test("an owner working in a trial is told their steps are not counted", async () => {
+  mockTrialStatus.mockResolvedValue({ inTrial: true, unmetered: true, company: "Test LTD", trialEndsAt: new Date(Date.now() - 86400000).toISOString(), readOnly: false, budgetLeft: 7 });
+  render(<TrialGate><div>the product</div></TrialGate>);
+  expect(await screen.findByText(/not counted against it/)).toBeInTheDocument();
+  expect(screen.queryByText(/Your trial has ended/)).not.toBeInTheDocument();
+});

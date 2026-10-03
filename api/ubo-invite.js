@@ -123,7 +123,7 @@ module.exports = async function handler(req, res) {
         // is what lets their work be re-linked after a move to a real domain.
         email: session.email || (req.body || {}).email || null,
       });
-      if (!result.ok) return send(res, 403, { error: result.reason });
+      if (!result.ok) return send(res, 403, { error: result.reason, ...(result.company ? { company: result.company } : {}) });
       return send(res, 200, { access: result.access, alreadyRedeemed: Boolean(result.alreadyRedeemed) });
     }
 
