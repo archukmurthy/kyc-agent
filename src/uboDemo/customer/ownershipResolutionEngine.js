@@ -68,6 +68,11 @@ const EVIDENCE_RULES = Object.freeze({
     preferredEvidenceTypes: ["CURRENT_REGISTER_OF_MEMBERS"],
     alternativeEvidenceTypes: ["UPDATED_SHARE_CERTIFICATE", "BOARD_RESOLUTION", "OTHER_OWNERSHIP_EVIDENCE"],
   }),
+  SHAREHOLDER_REMOVED: Object.freeze({
+    purpose: "Establish that the shareholder shown in the registry no longer holds shares.",
+    preferredEvidenceTypes: ["CURRENT_REGISTER_OF_MEMBERS"],
+    alternativeEvidenceTypes: ["CONFIRMATION_STATEMENT", "UPDATED_SHARE_CERTIFICATE"],
+  }),
   NOMINEE: Object.freeze({
     purpose: "Establish the declared nominee or bare-trust arrangement and its underlying beneficial owner.",
     preferredEvidenceTypes: ["NOMINEE_AGREEMENT", "DECLARATION_OF_TRUST"],
@@ -420,12 +425,14 @@ function questionForRequirement(item, createdAt) {
   return { ...base, type: QUESTION_TYPE.FREE_TEXT, prompt: "Please provide the missing ownership detail." };
 }
 
-function evidenceRequirement(comparisonItemId, factRequirementId, ruleKey, createdAt) {
+function evidenceRequirement(comparisonItemId, factRequirementId, ruleKey, createdAt, parties = {}) {
   const rule = EVIDENCE_RULES[ruleKey];
   return {
     id: id("evidence-requirement", comparisonItemId, ruleKey),
     comparisonItemId,
     factRequirementId,
+    ruleKey,
+    ...parties,
     purpose: rule.purpose,
     preferredEvidenceTypes: [...rule.preferredEvidenceTypes],
     alternativeEvidenceTypes: [...rule.alternativeEvidenceTypes],
@@ -464,6 +471,8 @@ function evidenceKeyForExplanation(answer) {
 function relationshipAssessment(row, resolution, personAssessments, threshold) {
   const holderParty = rowHolderParty(row) || {};
   const holderPartyType = canonicalPartyType(holderParty.entityType || holderParty.partyType);
+  // A holder proven to have gone holds nothing: no link, and no chain above it to trace.
+  const removed = resolution.holderRemoved === true;
   const measurement = resolution.resultingFact?.measurement || usableMeasurement(row);
   const personAssessment = holderPartyType === "NATURAL_PERSON" ? matchingPersonAssessment(row, personAssessments) : null;
   const determination = personAssessment?.determination || UBO_DETERMINATION.INDETERMINATE;
@@ -473,9 +482,9 @@ function relationshipAssessment(row, resolution, personAssessments, threshold) {
     ownershipLink: {
       outcome: ownershipLinkOutcome(measurement, threshold),
       measurement,
-      ownershipLinkEstablished: resolution.ownershipEstablishment !== "NOT_ESTABLISHED",
-      qualifyingOwnershipInterest: ownershipLinkOutcome(measurement, threshold) === OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_EXCEEDED,
-      continueOwnershipTraversal: holderPartyType === "LEGAL_ENTITY",
+      ownershipLinkEstablished: !removed && resolution.ownershipEstablishment !== "NOT_ESTABLISHED",
+      qualifyingOwnershipInterest: !removed && ownershipLinkOutcome(measurement, threshold) === OWNERSHIP_LINK_OUTCOME.OWNERSHIP_THRESHOLD_EXCEEDED,
+      continueOwnershipTraversal: !removed && holderPartyType === "LEGAL_ENTITY",
     },
     uboImpact: holderPartyType === "NATURAL_PERSON"
       ? {
@@ -529,6 +538,7 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
     let resolutionStatus = RESOLUTION_STATUS.UNRESOLVED;
     let reason = row.detail || "Ownership fact remains unresolved.";
     let resultingFact = null;
+    let holderRemoved = false;
     if (explanationAnswer && isAnalystAnswer(explanationAnswer)) {
       resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
       const otherDetails = items.find((item) => item.role === "OTHER_DETAILS");
@@ -572,8 +582,17 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
           reason = "The customer confirmed the registry-only shareholder is current, and the existing ownership range determines UBO status.";
         }
       } else if (confirmationAnswer === "NO") {
-        resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
-        reason = "The customer says the registry-only shareholder is no longer current.";
+        // The registry is overruled by a document, not by the customer's word
+        // alone - and not by making them wait for an analyst.
+        const evidenceRecord = evidenceRequirement(row.key, confirmation.id, "SHAREHOLDER_REMOVED", now, { removedHolder: holder(row), entity: entity(row) });
+        const stored = evidence[evidenceRecord.id];
+        evidenceRequirements.push(stored ? { ...evidenceRecord, ...stored } : evidenceRecord);
+        reason = "The customer says the registry-only shareholder is no longer current; a document showing this is requested.";
+        if (stored?.status === EVIDENCE_STATUS.SATISFIED) {
+          resolutionStatus = RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED;
+          holderRemoved = true;
+          reason = "Evidence shows the registry-only shareholder no longer holds shares.";
+        }
       } else if (confirmationAnswer === "NOT_SURE") {
         resolutionStatus = RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW;
       }
@@ -584,6 +603,7 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
       resolutionStatus,
       reason,
       resultingFact,
+      ...(holderRemoved ? { holderRemoved } : {}),
       ownershipEstablishment: resolutionStatus === RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED ? "ESTABLISHED_EVIDENCE_VERIFIED"
         : resolutionStatus === RESOLUTION_STATUS.RESOLVED_CUSTOMER_CONFIRMED ? "ESTABLISHED_CUSTOMER_DECLARATION"
           : "NOT_ESTABLISHED",
@@ -715,6 +735,27 @@ function determinationFromChartAnalysis(chartAnalysis, resultingFact, threshold 
 function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
   if (!result?.artifact?.integrityVerified || !Array.isArray(result?.candidateFacts)) return { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence pipeline did not return an integrity-checked structured result." };
   if (evidenceRequirementRecord?.reviewMode === "ANALYST_REVIEW") return { status: EVIDENCE_STATUS.ANALYST_REVIEW, reason: "The document passed through Evidence extraction and is queued for analyst review against the declared control or special-arrangement fact." };
+  if (evidenceRequirementRecord?.ruleKey === "SHAREHOLDER_REMOVED") {
+    // A complete current list of the company's holders (adding up to 100%)
+    // that does not include the one the customer says has gone.
+    const holdings = result.candidateFacts.filter((fact) => fact.type === "RELATIONSHIP"
+      && fact.relationship === "ECONOMIC_OWNERSHIP"
+      && normalized(fact.object?.name) === normalized(evidenceRequirementRecord.entity));
+    const stillHolds = holdings.some((fact) => normalized(fact.subject?.name) === normalized(evidenceRequirementRecord.removedHolder)
+      && !(fact.measurement?.type === "EXACT" && Number(fact.measurement.value) === 0));
+    // Each holder once: a register read twice must not add up to 100%.
+    const byHolder = new Map();
+    holdings.forEach((fact) => {
+      if (fact.measurement?.type !== "EXACT") return;
+      const key = normalized(fact.subject?.name);
+      byHolder.set(key, Math.max(byHolder.get(key) || 0, Number(fact.measurement.value) || 0));
+    });
+    const total = [...byHolder.values()].reduce((sum, value) => sum + value, 0);
+    if (stillHolds) return { status: EVIDENCE_STATUS.REJECTED, reason: `The document still shows ${evidenceRequirementRecord.removedHolder} as a shareholder.` };
+    return total >= 99.5
+      ? { status: EVIDENCE_STATUS.SATISFIED, reason: `The document shows the current shareholders of ${evidenceRequirementRecord.entity}, and ${evidenceRequirementRecord.removedHolder} is not one of them.` }
+      : { status: EVIDENCE_STATUS.REJECTED, reason: `The document does not show all the current shareholders of ${evidenceRequirementRecord.entity}. Upload a current register of members.` };
+  }
   if (evidenceRequirementRecord?.comparisonItemId === "ownership-comparison:nominee-declaration") {
     const declaration = resolution?.resultingFact?.declaration || {};
     const registeredHolder = normalized(declaration.REGISTERED_HOLDER);

@@ -127,8 +127,8 @@ function baseOwnershipSummary(base, comparisonRows, sourceCoverage) {
   const graph = base.chartAnalysis?.view?.graph;
   const labels = base.chartAnalysis?.entityLabels || {};
   const incomingTargets = new Set((graph?.relationships || []).map((edge) => edge.objectEntityId || edge.targetEntityId));
-  const pendingCorporateTraversal = !graph ? [] : ownershipResolutions.filter(({ comparisonItemId, holderPartyType }) => {
-    if (holderPartyType !== "LEGAL_ENTITY") return false;
+  const pendingCorporateTraversal = !graph ? [] : ownershipResolutions.filter(({ comparisonItemId, holderPartyType, holderRemoved }) => {
+    if (holderPartyType !== "LEGAL_ENTITY" || holderRemoved) return false;
     const row = comparisonRows.find(({ key }) => key === comparisonItemId);
     const subject = row?.chartFact?.subject || row?.researchFact?.subject;
     const graphId = subject?.entityId || Object.entries(labels).find(([, label]) => String(label).trim().toUpperCase() === String(subject?.name || "").trim().toUpperCase())?.[0];

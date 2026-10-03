@@ -101,3 +101,41 @@ test("a date answer is a date a person could mean", () => {
   assert.strictEqual(validFor(question, "2026-09-12"), true);
   for (const value of ["0000-01-01", "0999-12-31", "2026-9-12", "not a date"]) assert.strictEqual(validFor(question, value), false, value);
 });
+
+// A shareholder the registry shows and the chart does not: "no longer a
+// shareholder" asks for a document, and the server's own reading of it decides.
+test("a removed registry shareholder is cleared by the server's reading of a current register, not by the customer's word", async () => {
+  const parent = { name: "Parent Holdings Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const research = fx.researchResult(30);
+  research.candidateSources[0].candidateFacts.push({ ...fx.ownershipFact("research-fact:parent", 70, { system: "companies_house", referenceType: "PSC", referenceId: "psc-parent" }), subject: parent });
+  const projection = fx.projection({ research });
+  const run = (operation, incoming, findEvidenceResult = noEvidence, stored = projection) => computeCaseAssessment({ projection: stored, caseId: "case-1", operation, incoming, findEvidenceResult, now: NOW });
+  const { resolution: base } = await run("SYNC_RESOLUTION", {});
+  const question = base.questions.find((q) => q.id.includes("CONFIRM_CURRENT_SHAREHOLDING"));
+  assert.ok(question, "the fixture no longer raises the registry-only shareholder - this test would prove nothing");
+  const answers = { [question.id]: { value: "NO", answeredAt: NOW, comparisonItemId: question.comparisonItemId, factRequirementId: question.factRequirementId } };
+  const { resolution: asked } = await run("SUBMIT_ANSWER", { resolution: { answers, submittedAnswer: { question: { id: question.id } } } });
+  const request = asked.evidenceRequirements.find((record) => record.ruleKey === "SHAREHOLDER_REMOVED");
+  assert.ok(request, "the customer is asked for a document");
+  const fact = (resolution) => resolution.trace.ownershipFacts.find((item) => item.comparisonItemId === question.comparisonItemId);
+  assert.strictEqual(fact(asked).resolutionStatus, "UNRESOLVED");
+  const { assessment: waiting } = await run("SYNC_RESOLUTION", {}, noEvidence, { ...projection, resolution: asked });
+  assert.strictEqual(waiting.trace.verificationAssessment.blockingIssues[0].message, "Upload the requested supporting document to continue.");
+
+  const answered = { ...projection, resolution: asked };
+  const upload = { [request.id]: { status: "SATISFIED", artifactId: "register-artifact", filename: "register.pdf" } };
+  const reading = (holders) => async () => ({
+    evidenceHandoff: { requestedConcepts: request.handoff.requestedConcepts },
+    result: { artifact: { integrityVerified: true }, candidateFacts: holders.map(([subject, value], index) => ({ ...fx.ownershipFact(`register:${index}`, value, { referenceId: "register" }), subject })) },
+  });
+  const alice = { name: "Alice Morgan", entityType: "NATURAL_PERSON", jurisdiction: "GB" };
+  const stillListed = await run("SYNC_RESOLUTION", { resolution: { answers, evidence: upload } }, reading([[alice, 30], [parent, 70]]), answered);
+  assert.strictEqual(stillListed.resolution.evidence[request.id].status, "REJECTED");
+  assert.strictEqual(fact(stillListed.resolution).resolutionStatus, "UNRESOLVED");
+
+  const cleared = await run("SYNC_RESOLUTION", { resolution: { answers, evidence: upload } }, reading([[alice, 30], [{ name: "Bob Stone", entityType: "NATURAL_PERSON", jurisdiction: "GB" }, 70]]), answered);
+  assert.strictEqual(cleared.resolution.evidence[request.id].status, "SATISFIED");
+  assert.strictEqual(fact(cleared.resolution).resolutionStatus, "RESOLVED_EVIDENCE_VERIFIED");
+  assert.strictEqual(cleared.resolution.trace.ownershipResolution.pendingCorporateTraversalCount, 0);
+  assert.ok(!cleared.assessment.trace.verificationAssessment.blockingIssues.some(({ code }) => code === "MATERIAL_OWNERSHIP_UNRESOLVED"));
+});

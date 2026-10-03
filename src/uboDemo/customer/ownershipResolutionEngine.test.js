@@ -150,12 +150,62 @@ test("a registry-only holder is confirmed before exact ownership is requested", 
   expect(question(engine, FACT_REQUIREMENT_TYPE.EXACT_SHARE_PERCENTAGE)).toBeDefined();
 });
 
-test("a registry-only holder reported as removed creates a structured removed requirement and analyst review", () => {
+test("a registry-only holder reported as removed asks for evidence, and resolves once it is satisfied", () => {
   const rows = [row("NEEDS_CONFIRMATION", { type: "EXACT", value: 40 }, null)];
   const initial = evaluate({ comparisonRows: rows });
-  const engine = evaluate({ comparisonRows: rows, answers: answer(question(initial, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING), "NO") });
+  const answers = answer(question(initial, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING), "NO");
+  let engine = evaluate({ comparisonRows: rows, answers });
   expect(engine.requirements).toContainEqual(expect.objectContaining({ type: FACT_REQUIREMENT_TYPE.CONFIRM_SHAREHOLDER_REMOVED, status: "RESOLVED", assertedValue: true }));
-  expect(engine.resolutions[0]).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW }));
+  // The customer is asked for a document rather than left waiting for an analyst.
+  expect(engine.evidenceRequirements).toEqual([expect.objectContaining({ ruleKey: "SHAREHOLDER_REMOVED", removedHolder: "Alice Morgan", entity: "Target Limited", status: EVIDENCE_STATUS.OPEN })]);
+  expect(engine.resolutions[0]).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.UNRESOLVED }));
+  const evidenceId = engine.evidenceRequirements[0].id;
+  engine = evaluate({ comparisonRows: rows, answers, evidence: { [evidenceId]: { status: EVIDENCE_STATUS.REJECTED, artifactId: "artifact-wrong" } } });
+  expect(engine.resolutions[0].resolutionStatus).toBe(RESOLUTION_STATUS.UNRESOLVED);
+  engine = evaluate({ comparisonRows: rows, answers, evidence: { [evidenceId]: { status: EVIDENCE_STATUS.SATISFIED, artifactId: "artifact-register" } } });
+  expect(engine.resolutions[0]).toEqual(expect.objectContaining({
+    resolutionStatus: RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED,
+    holderRemoved: true,
+    resultingFact: null,
+    ownershipLink: expect.objectContaining({ ownershipLinkEstablished: false, continueOwnershipTraversal: false }),
+  }));
+});
+
+test("a removed corporate holder proven by evidence is not left as an ownership chain to trace", () => {
+  const parent = company("Parent Holdings Limited");
+  const rows = [{ key: "registry-only", status: "NEEDS_CONFIRMATION", detail: "Registry only.", researchFact: fact("registry", parent, target, { type: "RANGE", lowerBound: 75, upperBound: 100, lowerInclusive: true, upperInclusive: true }, "registry-source"), chartFact: null }];
+  const initial = evaluate({ comparisonRows: rows });
+  const answers = answer(question(initial, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING), "NO");
+  const evidenceId = evaluate({ comparisonRows: rows, answers }).evidenceRequirements[0].id;
+  const engine = evaluate({ comparisonRows: rows, answers, evidence: { [evidenceId]: { status: EVIDENCE_STATUS.SATISFIED, artifactId: "artifact-register" } } });
+  expect(engine.resolutions[0]).toEqual(expect.objectContaining({ resolutionStatus: RESOLUTION_STATUS.RESOLVED_EVIDENCE_VERIFIED, holderPartyType: "LEGAL_ENTITY" }));
+  expect(engine.resolutions[0].ownershipLink.continueOwnershipTraversal).toBe(false);
+});
+
+test("not sure whether a registry-only holder is current still goes to analyst review", () => {
+  const rows = [row("NEEDS_CONFIRMATION", { type: "EXACT", value: 40 }, null)];
+  const initial = evaluate({ comparisonRows: rows });
+  const engine = evaluate({ comparisonRows: rows, answers: answer(question(initial, FACT_REQUIREMENT_TYPE.CONFIRM_CURRENT_SHAREHOLDING), "NOT_SURE") });
+  expect(engine.evidenceRequirements).toEqual([]);
+  expect(engine.resolutions[0].resolutionStatus).toBe(RESOLUTION_STATUS.REQUIRES_ANALYST_REVIEW);
+});
+
+test("removal evidence must show the company's full current holders without the removed one", () => {
+  const bob = person("Bob Stone");
+  const requirement = { comparisonItemId: "registry-only", ruleKey: "SHAREHOLDER_REMOVED", removedHolder: "Alice Morgan", entity: "Target Limited" };
+  const register = (facts) => ({ artifact: { integrityVerified: true }, candidateFacts: facts });
+  // A current register: Bob holds everything, Alice is not on it.
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 100 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.SATISFIED);
+  // Alice is still on it.
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 60 }, "p"), fact("r2", alice, target, { type: "EXACT", value: 40 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // Only part of the holdings: it cannot show who else holds the rest.
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 60 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // The same holder read twice does not make up the whole.
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 60 }, "p"), fact("r2", bob, target, { type: "EXACT", value: 60 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // About a different company.
+  expect(evidenceResultStatus(register([fact("r1", bob, company("Other Limited"), { type: "EXACT", value: 100 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // Not integrity-checked.
+  expect(evidenceResultStatus({ artifact: { integrityVerified: false }, candidateFacts: [fact("r1", bob, target, { type: "EXACT", value: 100 }, "p")] }, null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
 });
 
 test("a share transfer resolves only after current fact, date and matching evidence are present", () => {

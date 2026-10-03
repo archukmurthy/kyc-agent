@@ -93,7 +93,7 @@ function canonicalPopulation(trace, completions, assessmentVersionId) {
 function blockingIssues(trace, pendingRecalculation) {
   const issues = [];
   if (pendingRecalculation) issues.push({ code: "ASSESSMENT_RECALCULATION_PENDING", message: "We are validating the information you provided." });
-  if (trace.ownershipResolution?.status !== "COMPLETE") issues.push({ code: "OWNERSHIP_DISCOVERY_INCOMPLETE", message: "Complete the remaining ownership questions to continue." });
+  if (trace.ownershipResolution?.status !== "COMPLETE") issues.push({ code: "OWNERSHIP_DISCOVERY_INCOMPLETE", message: trace.ownershipResolution?.status === "EVIDENCE_REQUIRED" ? "Upload the requested supporting document to continue." : "Complete the remaining ownership questions to continue." });
   if ((trace.questions || []).some(({ status }) => status === "OPEN")) issues.push({ code: "BLOCKING_QUESTIONS_OPEN", message: "Complete the remaining questions to continue." });
   if ((trace.evidence || []).some(({ status }) => status !== "SATISFIED")) issues.push({ code: "REQUIRED_EVIDENCE_OPEN", message: "Required supporting evidence must be resolved before identity verification." });
   if ((trace.ownershipFacts || []).some(({ resolutionStatus }) => ["UNRESOLVED", "REQUIRES_ANALYST_REVIEW"].includes(resolutionStatus))) issues.push({ code: "MATERIAL_OWNERSHIP_UNRESOLVED", message: "An ownership issue that can affect who requires verification is still unresolved." });
