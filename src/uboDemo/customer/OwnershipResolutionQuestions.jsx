@@ -282,6 +282,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   // A case finalised before this page loaded (the customer came back, or used
   // Back from identity verification): the server refuses any change to it, so
   // the page says so and goes straight on instead of finalising again.
+  const [finalizing, setFinalizing] = useState(false);
   const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
@@ -524,11 +525,13 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const readinessMessage = currentTrace.verificationAssessment?.blockingIssues?.[0]?.message || "Complete the remaining questions to continue.";
   const finalizeCurrentAssessment = async (event) => {
     event.preventDefault();
+    if (finalizing) return;
+    setFinalizing(true);
     const finalEngine = evaluateCase(inputs, { answers, evidence, recalculations, now: new Date().toISOString() });
     const finalTrace = resolutionTrace({ engine: finalEngine, rows, answers, previousTrace: readCurrentTrace(context), recalculations, finalized: true });
     try {
       const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY) || "null");
-      if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) return;
+      if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId || !session.researchResult) { setFinalizing(false); return; }
       uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: finalTrace } }));
       await persistPocCase("FINALIZE_ASSESSMENT", {
         caseId: context.demoCaseId,
@@ -547,6 +550,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         if (session?.researchResult) uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString(), researchResult: { ...session.researchResult, ownershipResolutionTrace: currentTrace } }));
       } catch (_) { /* Server submission failed; the page remains blocked from navigation. */ }
       setErrors((current) => ({ ...current, finalize: cause.message || "The assessment could not be saved." }));
+      setFinalizing(false);
     }
   };
   return <section className="ubo-customer-card ubo-resolution-engine">
@@ -587,6 +591,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       />)}</div>
     </section>}
     {finalizedAtLoad ? <section className="ubo-customer-next-step"><div><small>Answers submitted</small><h3>Continue to identity verification</h3><p>Your answers have been submitted and can no longer be changed here. If something needs correcting, contact the person who sent you this link.</p></div><a className="ubo-customer-primary" href={CUSTOMER_IDV_PATH}>Continue to identity verification <span>→</span></a></section>
-    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv}>Continue to identity verification <span>→</span></button></form></section>}
+    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv || finalizing}>{finalizing ? "Submitting your answers…" : <>Continue to identity verification <span>→</span></>}</button></form></section>}
   </section>;
 }

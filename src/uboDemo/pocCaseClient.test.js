@@ -191,3 +191,22 @@ test("final assessment persistence bounds repeated research and recalculation an
   expect(request.payload.researchResult.candidateSources[0].candidateFacts).toHaveLength(1);
   expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(15000);
 });
+
+test("a write that never answers is given up on, and the next write to the case goes ahead", async () => {
+  jest.useFakeTimers();
+  try {
+    const fetchImpl = jest.fn((url, options) => new Promise((resolve, reject) => {
+      if (fetchImpl.mock.calls.length === 1) options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      else resolve(response({ success: true, case: record }));
+    }));
+    const hung = persistPocCase("SUBMIT_ANSWER", { caseId: "case-hung", idempotencyKey: "answer:1", payload: {} }, fetchImpl);
+    const next = persistPocCase("SYNC_RESOLUTION", { caseId: "case-hung", idempotencyKey: "resolution:1", payload: {} }, fetchImpl);
+    for (let tick = 0; tick < 50 && fetchImpl.mock.calls.length < 1; tick += 1) await Promise.resolve();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(60 * 1000);
+    await expect(hung).rejects.toMatchObject({ code: "case_write_timeout" });
+    await expect(next).resolves.toEqual(record);
+  } finally {
+    jest.useRealTimers();
+  }
+});

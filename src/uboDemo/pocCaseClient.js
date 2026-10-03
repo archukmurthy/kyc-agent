@@ -63,6 +63,8 @@ export async function loadPocCase(caseId, fetchImpl = window.fetch) {
 // triggers used to reach the server together, collide on the case version and
 // exhaust its retries, so the answer was refused (case_changed).
 const caseWrites = new Map();
+// ponytail: one fixed ceiling, well above a normal case write (a few seconds).
+const WRITE_TIMEOUT_MS = 60 * 1000;
 
 export function persistPocCase(operation, command, fetchImpl = window.fetch) {
   const previous = caseWrites.get(command?.caseId) || Promise.resolve();
@@ -76,13 +78,26 @@ export function persistPocCase(operation, command, fetchImpl = window.fetch) {
 async function sendPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl) {
   if (!caseId) throw new TypeError("A durable case ID is required.");
   const durablePayload = compactCasePayload(payload);
-  const record = await parse(await fetchImpl("/api/ubo-poc-case", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await clerkAuthHeaders()) },
-    body: JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType }),
-  }));
-  rememberActivePocCase(caseId);
-  return record;
+  // Writes to a case go one at a time, so one that never answers would hold up
+  // every later one in this tab: it is given up on after a while. The same
+  // idempotency key makes sending it again safe.
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), WRITE_TIMEOUT_MS) : null;
+  try {
+    const record = await parse(await fetchImpl("/api/ubo-poc-case", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...(await clerkAuthHeaders()) },
+      body: JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType }),
+      ...(controller ? { signal: controller.signal } : {}),
+    }));
+    rememberActivePocCase(caseId);
+    return record;
+  } catch (error) {
+    if (error?.name === "AbortError") throw Object.assign(new Error("The server did not answer in time. Please try again."), { code: "case_write_timeout" });
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function resolutionSessionKey(caseId, artifactId) { return `${RESOLUTION_PREFIX}:${caseId}:${artifactId}`; }
