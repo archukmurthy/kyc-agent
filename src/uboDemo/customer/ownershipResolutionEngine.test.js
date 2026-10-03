@@ -204,6 +204,13 @@ test("removal evidence must show the company's full current holders without the 
   expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 60 }, "p"), fact("r2", bob, target, { type: "EXACT", value: 60 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
   // About a different company.
   expect(evidenceResultStatus(register([fact("r1", bob, company("Other Limited"), { type: "EXACT", value: 100 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // The same company written differently, and the removed holder written differently.
+  const targetLtd = company("Target Ltd");
+  expect(evidenceResultStatus(register([fact("r1", bob, targetLtd, { type: "EXACT", value: 100 }, "p")]), null, requirement).status).toBe(EVIDENCE_STATUS.SATISFIED);
+  const companyRequirement = { ...requirement, removedHolder: "Parent Holdings Limited", removedHolderParty: company("Parent Holdings Limited") };
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 20 }, "p"), fact("r2", company("Parent Holdings Ltd"), target, { type: "EXACT", value: 80 }, "p")]), null, companyRequirement).status).toBe(EVIDENCE_STATUS.REJECTED);
+  // A name merely close to the removed holder's is treated as still there.
+  expect(evidenceResultStatus(register([fact("r1", bob, target, { type: "EXACT", value: 20 }, "p"), fact("r2", company("Parent Holdings UK Ltd"), target, { type: "EXACT", value: 80 }, "p")]), null, companyRequirement).status).toBe(EVIDENCE_STATUS.REJECTED);
   // Not integrity-checked.
   expect(evidenceResultStatus({ artifact: { integrityVerified: false }, candidateFacts: [fact("r1", bob, target, { type: "EXACT", value: 100 }, "p")] }, null, requirement).status).toBe(EVIDENCE_STATUS.REJECTED);
 });

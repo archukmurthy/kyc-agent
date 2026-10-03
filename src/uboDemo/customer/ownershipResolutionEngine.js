@@ -1,6 +1,7 @@
 // CommonJS on purpose: the server recomputes with this same code (UBO-13).
 const { CONTROL_DISCOVERY_MODE } = require("./investigationTopics");
 const { extendResolutionWithInvestigation } = require("./controlDiscoveryEngine");
+const { normalizedLegalName, resolveCrossSourceParty } = require("./crossSourcePartyResolution");
 
 const FACT_REQUIREMENT_TYPE = Object.freeze({
   EXACT_SHARE_PERCENTAGE: "EXACT_SHARE_PERCENTAGE",
@@ -584,7 +585,7 @@ function evaluateOwnershipResolutionBase({ comparisonRows = [], answers = {}, ev
       } else if (confirmationAnswer === "NO") {
         // The registry is overruled by a document, not by the customer's word
         // alone - and not by making them wait for an analyst.
-        const evidenceRecord = evidenceRequirement(row.key, confirmation.id, "SHAREHOLDER_REMOVED", now, { removedHolder: holder(row), entity: entity(row) });
+        const evidenceRecord = evidenceRequirement(row.key, confirmation.id, "SHAREHOLDER_REMOVED", now, { removedHolder: holder(row), entity: entity(row), removedHolderParty: clone(rowHolderParty(row)), entityParty: clone(row.researchFact?.object || row.chartFact?.object || null) });
         const stored = evidence[evidenceRecord.id];
         evidenceRequirements.push(stored ? { ...evidenceRecord, ...stored } : evidenceRecord);
         reason = "The customer says the registry-only shareholder is no longer current; a document showing this is requested.";
@@ -732,29 +733,44 @@ function determinationFromChartAnalysis(chartAnalysis, resultingFact, threshold 
   return determineUboFromMeasurement(resultingFact?.measurement, threshold);
 }
 
+function sameParty(left, right) {
+  const match = resolveCrossSourceParty({ sourcePartyA: left, sourcePartyB: right });
+  return match.classification === "SAME_ENTITY" && match.autoLinked;
+}
+function possiblySameParty(left, right) {
+  const match = resolveCrossSourceParty({ sourcePartyA: left, sourcePartyB: right });
+  return (match.classification === "SAME_ENTITY" && match.autoLinked) || (match.identityResolutionMethod === "UNRESOLVED" && match.confidence >= 0.5);
+}
+
 function evidenceResultStatus(result, resolution, evidenceRequirementRecord) {
   if (!result?.artifact?.integrityVerified || !Array.isArray(result?.candidateFacts)) return { status: EVIDENCE_STATUS.REJECTED, reason: "The Evidence pipeline did not return an integrity-checked structured result." };
   if (evidenceRequirementRecord?.reviewMode === "ANALYST_REVIEW") return { status: EVIDENCE_STATUS.ANALYST_REVIEW, reason: "The document passed through Evidence extraction and is queued for analyst review against the declared control or special-arrangement fact." };
   if (evidenceRequirementRecord?.ruleKey === "SHAREHOLDER_REMOVED") {
     // A complete current list of the company's holders (adding up to 100%)
-    // that does not include the one the customer says has gone.
+    // that does not include the one the customer says has gone. Parties are
+    // matched as the comparison matches them (registry number, or the name
+    // with "Ltd"/"Limited" and punctuation normalised) - and a holder whose
+    // name is merely close to the removed one counts as still there.
+    const record = evidenceRequirementRecord;
+    const entityParty = record.entityParty || { name: record.entity };
+    const removedParty = record.removedHolderParty || { name: record.removedHolder };
     const holdings = result.candidateFacts.filter((fact) => fact.type === "RELATIONSHIP"
       && fact.relationship === "ECONOMIC_OWNERSHIP"
-      && normalized(fact.object?.name) === normalized(evidenceRequirementRecord.entity));
-    const stillHolds = holdings.some((fact) => normalized(fact.subject?.name) === normalized(evidenceRequirementRecord.removedHolder)
+      && sameParty(fact.object, entityParty));
+    const stillHolds = holdings.some((fact) => possiblySameParty(fact.subject, removedParty)
       && !(fact.measurement?.type === "EXACT" && Number(fact.measurement.value) === 0));
     // Each holder once: a register read twice must not add up to 100%.
     const byHolder = new Map();
     holdings.forEach((fact) => {
       if (fact.measurement?.type !== "EXACT") return;
-      const key = normalized(fact.subject?.name);
+      const key = normalizedLegalName(fact.subject).compactBase || normalized(fact.subject?.name);
       byHolder.set(key, Math.max(byHolder.get(key) || 0, Number(fact.measurement.value) || 0));
     });
     const total = [...byHolder.values()].reduce((sum, value) => sum + value, 0);
-    if (stillHolds) return { status: EVIDENCE_STATUS.REJECTED, reason: `The document still shows ${evidenceRequirementRecord.removedHolder} as a shareholder.` };
+    if (stillHolds) return { status: EVIDENCE_STATUS.REJECTED, reason: `The document still shows ${record.removedHolder}, or a shareholder with a very similar name, as a shareholder.` };
     return total >= 99.5
-      ? { status: EVIDENCE_STATUS.SATISFIED, reason: `The document shows the current shareholders of ${evidenceRequirementRecord.entity}, and ${evidenceRequirementRecord.removedHolder} is not one of them.` }
-      : { status: EVIDENCE_STATUS.REJECTED, reason: `The document does not show all the current shareholders of ${evidenceRequirementRecord.entity}. Upload a current register of members.` };
+      ? { status: EVIDENCE_STATUS.SATISFIED, reason: `The document shows the current shareholders of ${record.entity}, and ${record.removedHolder} is not one of them.` }
+      : { status: EVIDENCE_STATUS.REJECTED, reason: `The document does not show all the current shareholders of ${record.entity}. Upload a current register of members.` };
   }
   if (evidenceRequirementRecord?.comparisonItemId === "ownership-comparison:nominee-declaration") {
     const declaration = resolution?.resultingFact?.declaration || {};
