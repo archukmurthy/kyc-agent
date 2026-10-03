@@ -614,3 +614,14 @@ test("a case with no research stops before a chart is uploaded and read", () => 
   expect(screen.getByRole("link", { name: /Start research/i })).toHaveAttribute("href", "/ubo-demo/");
   expect(screen.queryByRole("heading", { name: /Upload your ownership chart/i })).not.toBeInTheDocument();
 });
+
+test("a current calculation in which nobody qualifies is not re-run on every visit", async () => {
+  seed();
+  const context = readCustomerDemoContext();
+  const nobodyQualifies = { ...analysis, chartAnalysis: { ...analysis.chartAnalysis, view: { ...(analysis.chartAnalysis.view || {}), qualificationBases: [], qualifications: [] } } };
+  writeCustomerOwnershipChartSession({ context, result: nobodyQualifies });
+  window.fetch = jest.fn();
+  render(<CustomerOwnershipChartPage />);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(window.fetch).not.toHaveBeenCalled();
+});

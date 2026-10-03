@@ -348,8 +348,12 @@ export default function CustomerOwnershipChartPage() {
   useEffect(() => {
     const artifactId = result?.artifact?.artifactId;
     const hasStructuredFacts = Array.isArray(result?.candidateFacts) && result.candidateFacts.length > 0;
-    const hasCalculationRecords = (result?.chartAnalysis?.view?.qualificationBases || []).length > 0
-      && (result?.chartAnalysis?.view?.qualifications || []).length > 0;
+    // Calculated is not the same as "found someone": a chart where nobody
+    // qualifies has empty lists. Treating that as never calculated re-ran it on
+    // every visit, and each run re-attached the chart and dropped the case's
+    // assessment (refused outright once finalised).
+    const hasCalculationRecords = Array.isArray(result?.chartAnalysis?.view?.qualificationBases)
+      && Array.isArray(result?.chartAnalysis?.view?.qualifications);
     const hasCurrentCalculationSemantics = result?.chartAnalysis?.calculationSemanticsVersion === CHART_CALCULATION_SEMANTICS_VERSION;
     const hasCurrentExtractionSemantics = result?.evidence?.ownershipDiagramCompleteness?.verificationStrategyVersion
       === CURRENT_OWNERSHIP_EXTRACTION_PROFILE.verificationStrategyVersion;
