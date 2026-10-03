@@ -139,3 +139,33 @@ test("a removed registry shareholder is cleared by the server's reading of a cur
   assert.strictEqual(cleared.resolution.trace.ownershipResolution.pendingCorporateTraversalCount, 0);
   assert.ok(!cleared.assessment.trace.verificationAssessment.blockingIssues.some(({ code }) => code === "MATERIAL_OWNERSHIP_UNRESOLVED"));
 });
+
+// Found in the review of UBO-51: the server worked out which questions were
+// asked with no evidence at all, so a question that only appears once evidence
+// is accepted (control, after ownership completes) had its answer refused.
+test("a question raised by accepted evidence can be answered", async () => {
+  const parent = { name: "Parent Holdings Limited", entityType: "LEGAL_ENTITY", jurisdiction: "GB" };
+  const research = fx.researchResult(20);
+  research.candidateSources[0].candidateFacts.push({ ...fx.ownershipFact("research-fact:parent", 80, { system: "companies_house", referenceType: "PSC", referenceId: "psc-parent" }), subject: parent });
+  const projection = fx.projection({ research, chart: fx.chartResult(20) });
+  const run = (operation, incoming, find, stored) => computeCaseAssessment({ projection: stored, caseId: "case-1", operation, incoming, findEvidenceResult: find, now: NOW });
+  const answerFor = (q, value) => ({ value, answeredAt: NOW, comparisonItemId: q.comparisonItemId, factRequirementId: q.factRequirementId });
+  let stored = projection;
+  const { resolution: base } = await run("SYNC_RESOLUTION", {}, noEvidence, stored);
+  for (const q of base.questions.filter((item) => item.status === "OPEN")) {
+    const value = q.id.includes("CONFIRM_CURRENT_SHAREHOLDING") ? "NO" : q.options ? q.options[0].value : 20;
+    const { resolution } = await run("SUBMIT_ANSWER", { resolution: { answers: { [q.id]: answerFor(q, value) }, submittedAnswer: { question: { id: q.id } } } }, noEvidence, stored);
+    stored = { ...projection, resolution };
+  }
+  const request = stored.resolution.evidenceRequirements.find((record) => record.ruleKey === "SHAREHOLDER_REMOVED");
+  assert.ok(request, "the fixture no longer asks for a removal document - this test would prove nothing");
+  const people = ["Alice Morgan", "Bob One", "Carol Two", "Dan Three", "Erin Four"].map((name) => ({ name, entityType: "NATURAL_PERSON", jurisdiction: "GB" }));
+  const reading = async () => ({ evidenceHandoff: { requestedConcepts: request.handoff.requestedConcepts }, result: { artifact: { integrityVerified: true }, candidateFacts: people.map((subject, index) => ({ ...fx.ownershipFact(`register:${index}`, 20, { referenceId: "register" }), subject })) } });
+  const cleared = await run("SYNC_RESOLUTION", { resolution: { evidence: { [request.id]: { status: "SATISFIED", artifactId: "register-artifact", filename: "register.pdf" } } } }, reading, stored);
+  stored = { ...projection, resolution: cleared.resolution };
+  const control = cleared.resolution.questions.find((q) => q.status === "OPEN" && q.stage !== "OWNERSHIP");
+  assert.ok(control, "accepted evidence no longer raises a control question - this test would prove nothing");
+  const value = control.options ? control.options[0].value : "x";
+  const { resolution } = await run("SUBMIT_ANSWER", { resolution: { answers: { [control.id]: answerFor(control, value) }, submittedAnswer: { question: { id: control.id } } } }, reading, stored);
+  assert.ok(resolution.answers[control.id], "the answer to the question the evidence raised is kept");
+});

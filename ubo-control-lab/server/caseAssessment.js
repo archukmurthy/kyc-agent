@@ -104,13 +104,16 @@ function sameKeys(a, b) {
   return keys.length === Object.keys(b).length && keys.every((key) => key in b);
 }
 
-function acceptedAnswers(inputs, candidate, now, createdAt) {
+// Evidence counts in what is asked: accepted evidence can complete ownership and
+// raise control questions, and an answer to one of those was refused when this
+// asked with no evidence at all. Only the server's own decisions are passed in.
+function acceptedAnswers(inputs, candidate, now, createdAt, evidence = {}) {
   let accepted = {};
   // Settled when a round accepts exactly what the last one did. A fixed
   // depth dropped honest answers six levels down (senior management); the
   // cap only bounds a pathological case (candidates are capped at 200).
   for (let round = 0; round <= Object.keys(candidate).length; round += 1) {
-    const asked = new Map(evaluate(inputs, { answers: accepted, evidence: {}, recalculations: {}, now: createdAt }).questions.map((q) => [q.id, q]));
+    const asked = new Map(evaluate(inputs, { answers: accepted, evidence, recalculations: {}, now: createdAt }).questions.map((q) => [q.id, q]));
     const next = {};
     for (const [questionId, answer] of Object.entries(candidate)) {
       const question = asked.get(questionId);
@@ -223,7 +226,10 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   const submittedId = operation === "SUBMIT_ANSWER" ? String(incoming?.resolution?.submittedAnswer?.question?.id || "") : "";
   const submittedRaw = submittedId ? incoming?.resolution?.answers?.[submittedId] : undefined;
   const incomingAnswers = cleanAnswers(submittedRaw ? { [submittedId]: submittedRaw } : {}, now);
-  const storedAnswers = acceptedAnswers(inputs, cleanAnswers(stored.answers, now), now, createdAt);
+  // The evidence this server has already decided for the case (never what a
+  // request claims): it can be what raised the question being answered.
+  const decidedEvidence = (stored.evidence && typeof stored.evidence === "object") ? stored.evidence : {};
+  const storedAnswers = acceptedAnswers(inputs, cleanAnswers(stored.answers, now), now, createdAt, decidedEvidence);
   // Most recent wins: a late retry of an older answer does not undo a newer
   // one. (ponytail: ordered by the device's clock, capped at the server's -
   // a second device running behind cannot change an answer for that long.)
@@ -232,11 +238,11 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
     // Checked as if it had won: an invalid answer is refused even when a newer
     // stored answer keeps it out (review).
     const alone = { ...merged, [submittedId]: incomingAnswers[submittedId] };
-    if (!incomingAnswers[submittedId] || acceptedAnswers(inputs, alone, now, createdAt)[submittedId] !== incomingAnswers[submittedId]) {
+    if (!incomingAnswers[submittedId] || acceptedAnswers(inputs, alone, now, createdAt, decidedEvidence)[submittedId] !== incomingAnswers[submittedId]) {
       throw fail("invalid_answer", "That answer is not one this question accepts.", 400);
     }
   }
-  const answers = acceptedAnswers(inputs, merged, now, createdAt);
+  const answers = acceptedAnswers(inputs, merged, now, createdAt, decidedEvidence);
   // A late retry of an older answer changes nothing and is not this request's answer.
   const submittedWon = Boolean(submittedId) && answers[submittedId] === incomingAnswers[submittedId];
   let evidenceSubmitted = operation === "RESET_ANSWERS" ? {} : { ...submittedEvidence(stored.evidence), ...submittedEvidence(incoming?.resolution?.evidence) };
@@ -245,11 +251,11 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   // answer no longer counts, and answers the new state no longer asks for go.
   const submitted = submittedWon ? answers[submittedId] : null;
   if (submitted && storedAnswers[submittedId] && storedAnswers[submittedId].value !== submitted.value) {
-    const before = evaluate(inputs, { answers: storedAnswers, evidence: {}, recalculations: {}, now: createdAt });
+    const before = evaluate(inputs, { answers: storedAnswers, evidence: decidedEvidence, recalculations: {}, now: createdAt });
     for (const { id } of before.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === submitted.comparisonItemId)) delete evidenceSubmitted[id];
   }
   if (submitted) {
-    const active = new Set(evaluate(inputs, { answers, evidence: {}, recalculations: {}, now: createdAt }).questions.map(({ id }) => id));
+    const active = new Set(evaluate(inputs, { answers, evidence: decidedEvidence, recalculations: {}, now: createdAt }).questions.map(({ id }) => id));
     for (const [questionId, answer] of Object.entries(answers)) {
       if (questionId !== submittedId && answer.comparisonItemId === submitted.comparisonItemId && !active.has(questionId)) delete answers[questionId];
     }
