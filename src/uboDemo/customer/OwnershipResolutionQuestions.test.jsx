@@ -478,3 +478,24 @@ test("a document still being checked when the page closed is picked up when it o
   expect(window.fetch.mock.calls.map(([, request]) => JSON.parse(request.body))).toContainEqual({ operation: "GET_EXTRACTION_JOB", jobId: "job-support-2" });
   expect([...Array(window.sessionStorage.length).keys()].map((index) => window.sessionStorage.key(index)).filter((key) => key.startsWith("ubo-evidence-job:"))).toEqual([]);
 });
+
+test("changing an answer back recalculates with it, rather than keeping the other value's result", async () => {
+  render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  const answer = async (value, button) => {
+    fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value } });
+    fireEvent.click(screen.getAllByRole("button", { name: button })[0]);
+    await waitFor(() => expect(screen.getByText(`${value}%`)).toBeInTheDocument());
+  };
+  await answer("18", /Save answer/i);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Edit answer" }));
+  await answer("30", /Save change/i);
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole("button", { name: "Edit answer" }));
+  await answer("18", /Save change/i);
+
+  // 18% had been calculated once already; before the fix it was not asked again.
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(3));
+  const last = JSON.parse(window.fetch.mock.calls[2][1].body);
+  expect(JSON.stringify(last.savedResult.candidateFacts)).toContain('"value":18');
+});

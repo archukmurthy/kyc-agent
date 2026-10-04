@@ -303,7 +303,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
-  const requestedRecalculations = useRef(new Set());
+  // The answers the last recalculation was asked for. Only the last: an
+  // answer changed back to an earlier value (10% -> 11% -> 10%) must be
+  // recalculated again, and an "ever requested" set skipped it, leaving part
+  // of the 11% result in place (found clicking through, 2026-10-04).
+  const lastRecalculation = useRef(null);
   const durableSyncs = useRef(new Set());
   const answerSubmissions = useRef(new Set());
   const recalculationGeneration = useRef(0);
@@ -366,8 +370,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       return;
     }
     const signature = JSON.stringify(material.map(({ comparisonItemId, resultingFact }) => [comparisonItemId, resultingFact]));
-    if (requestedRecalculations.current.has(signature)) return;
-    requestedRecalculations.current.add(signature);
+    if (lastRecalculation.current === signature) return;
+    lastRecalculation.current = signature;
     const generation = ++recalculationGeneration.current;
     const savedResult = material.reduce((current, resolution) => applyResultingFact(current, resolution.resultingFact), result);
     clerkAuthHeaders().then((auth) => fetch("/api/ubo-demo-customer-ownership-chart", {
@@ -448,7 +452,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
           relatedEvidenceIds.forEach((id) => delete next[id]);
           return next;
         });
-        requestedRecalculations.current.delete(question.comparisonItemId);
       }
       setSaving((current) => new Set(current).add(question.id));
       persistPocCase("SUBMIT_ANSWER", {
@@ -475,7 +478,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     // The server keeps the answers it is given (merged, most recent wins), so
     // starting again has to be said to it, not only done in this browser.
     if (context?.demoCaseId) persistPocCase("RESET_ANSWERS", { caseId: context.demoCaseId, actorType: "CUSTOMER", idempotencyKey: `reset:${Date.now()}`, payload: {} }).catch(() => {});
-    requestedRecalculations.current.clear();
+    lastRecalculation.current = null;
     setAnswers({});
     setEvidence({});
     setRecalculations({});
