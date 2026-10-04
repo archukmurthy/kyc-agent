@@ -88,7 +88,7 @@ test("all provider requests 502 terminate FAILED with a safe customer message", 
   const h = harness([failure("provider_failed", 502)]);
   const started = await h.service.start(input());
   const job = await processToTerminal(h.service, started.jobId);
-  assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 3); assert.match(job.failure.message, /saved safely/); assert.doesNotMatch(JSON.stringify(job), /502/);
+  assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 3); assert.match(job.failure.message, /saved safely/); assert.doesNotMatch(job.failure.message, /502/); // the message, not the whole job: a timestamp ending .502Z made this flaky
 });
 
 test("429 then success becomes COMPLETE", async () => {
@@ -115,7 +115,8 @@ test("server restart after Artifact save reuses it when job persistence recovers
   await assert.rejects(() => h.service.start(input()), /db unavailable/);
   assert.equal(h.ingestion.operations.size, 1);
   const restarted = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository: h.repository, ingestionRepository: h.ingestion, artifactStore: h.artifactStore, analyse: h.service.analyse, provider: { configuration: () => ({ provider: "test" }) } });
-  const job = await restarted.start(input()); assert.equal(job.reused, true); assert.equal(h.ingestion.operations.size, 1);
+  // The file is reused; the reading is new (the first attempt never read it), so it is not "reused".
+  const job = await restarted.start(input()); assert.equal(job.reused, false); assert.equal(h.ingestion.operations.size, 1);
 });
 
 test("re-upload of the same successful document reuses Artifact, job and result", async () => {
@@ -142,11 +143,16 @@ test("deterministic malformed output is not retried even when wrapped as 502", a
   assert.equal(job.state, "FAILED"); assert.equal(job.attemptCount, 1); assert.equal(h.calls(), 1);
 });
 
-test("re-upload of the same validated PARTIAL result returns it without another provider run", async () => {
-  const h = harness([usableResult("EXTRACTION_SUCCESS_PARTIAL")]);
+// Changed 2026-10-04: a partial reading came back on every re-upload of the
+// same file, so a poor reading (or one made before a fix) could not be redone.
+test("re-uploading a file whose reading was partial reads it afresh; a complete reading is then reused", async () => {
+  const h = harness([usableResult("EXTRACTION_SUCCESS_PARTIAL"), usableResult()]);
   const first = await h.service.start(input()); assert.equal((await h.service.process(first.jobId)).state, "PARTIAL");
-  const refreshed = await h.service.start(input()); assert.equal(refreshed.jobId, first.jobId); assert.equal(refreshed.state, "PARTIAL");
-  assert.equal(refreshed.reused, true); assert.equal(h.calls(), 1); assert.equal(h.ingestion.operations.size, 1);
+  const fresh = await h.service.start(input());
+  assert.notEqual(fresh.jobId, first.jobId); assert.equal(fresh.reused, false); assert.equal(h.ingestion.operations.size, 1, "the stored file is reused");
+  assert.equal((await h.service.process(fresh.jobId)).state, "COMPLETE"); assert.equal(h.calls(), 2);
+  const again = await h.service.start(input());
+  assert.equal(again.jobId, fresh.jobId); assert.equal(again.reused, true); assert.equal(h.calls(), 2, "a complete reading is not paid for twice");
 });
 
 test("re-upload of a failed extraction does not silently start another provider run", async () => {

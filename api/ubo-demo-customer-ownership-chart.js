@@ -107,10 +107,14 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         if (dependencies.db) await ensureTenantRow(dependencies.db, tenantId);
         job = await dependencies.service.start(body);
         started = true;
-        // One of a public demo's shared uploads (a no-op anywhere else).
-        await gates.demoAllowance.record("ubo-demo-chart");
-        // ...and one of the caller's trial steps, here where it is spent (UBO-44).
-        await (gates.trials || trials).countPaidStep(actor);
+        // Paid only when something is read: an earlier reading of the same file
+        // reused costs nothing, and used to be counted as a step anyway.
+        if (!job?.reused) {
+          // One of a public demo's shared uploads (a no-op anywhere else).
+          await gates.demoAllowance.record("ubo-demo-chart");
+          // ...and one of the caller's trial steps, here where it is spent (UBO-44).
+          await (gates.trials || trials).countPaidStep(actor);
+        }
       }
       if (job?.correlationId) res.setHeader("X-Correlation-Id", job.correlationId);
       const eventType = documentEventType(started, job);

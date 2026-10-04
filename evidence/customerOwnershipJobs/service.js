@@ -27,6 +27,9 @@ const DETERMINISTIC_CODES = new Set([
   "EVALUATION_PRECONDITION_FAILED",
 ]);
 
+// ponytail: a fixed bound on fresh readings of one file in one case; each is paid.
+const MAX_FRESH_READINGS = 5;
+
 function cacheKey({ digest, profile, provider, modelVersion }) {
   return createHash("sha256").update(JSON.stringify([
     digest,
@@ -165,13 +168,23 @@ class CustomerOwnershipExtractionJobService {
     const modelVersion = providerConfiguration.model || this.modelVersion;
     const key = cacheKey({ digest, profile: this.profile, provider, modelVersion });
     const correlationId = `customer-chart:${randomUUID()}`;
-    const claimed = await this.repository.createOrGetJob({
+    const claim = (cacheKey) => this.repository.createOrGetJob({
       tenantId: this.tenantId, contextId: context.id, artifactId: stored.artifactId, artifactSha256: digest,
-      cacheKey: key, demoCaseId: input.demoContext.demoCaseId, company: input.demoContext.company,
+      cacheKey, demoCaseId: input.demoContext.demoCaseId, company: input.demoContext.company,
       evidenceHandoff: input.evidenceHandoff, ...this.profile, provider, modelVersion,
       maxAttempts: this.maxAttempts, correlationId,
     });
-    const job = { ...claimed.job, reused: artifactReused || !claimed.created };
+    let claimed = await claim(key);
+    // A complete reading of the same file is reused, free. A partial one is
+    // read afresh when the file is uploaded again - otherwise a poor reading,
+    // or one made before a reading fix, came back every time (end-to-end check,
+    // 2026-10-04). Bounded: at most a few fresh readings of one file per case.
+    for (let attempt = 1; !claimed.created && claimed.job?.state === "PARTIAL" && attempt <= MAX_FRESH_READINGS; attempt += 1) {
+      claimed = await claim(`${key}:fresh:${attempt}`);
+    }
+    // Reused means the READING was reused (nothing new is read or paid for) -
+    // not merely that the file's bytes were already stored.
+    const job = { ...claimed.job, reused: !claimed.created, artifactReused };
     console.info("[ubo-customer-extraction] job-start", { jobId: job.id, correlationId: job.correlationId, state: job.state, reused: job.reused });
     return publicJob(job);
   }

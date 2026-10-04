@@ -234,3 +234,18 @@ test("an unknown operation is refused before the limiter and never starts a paid
   assert.strictEqual(res.body.error, "unknown_operation");
   assert.deepStrictEqual(calls, { limiter: 0, start: 0 });
 });
+
+// A reused reading reads nothing and costs nothing - it used to be counted as a step.
+test("an upload that reuses an earlier reading is not counted as a paid step", async () => {
+  const counted = [];
+  const make = (reused) => route.createHandler(null, undefined, () => ({ service: { start: async () => ({ jobId: "job-1", state: "COMPLETE", reused }) }, close: async () => {} }), {
+    applyCors: () => false, enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "u1" }),
+    demoAllowance: { record: async (bucket) => counted.push(`allowance:${bucket}`) },
+    trials: { countPaidStep: async () => counted.push("step") },
+  });
+  await make(true)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" } } }, fakeRes());
+  assert.deepStrictEqual(counted, []);
+  await make(false)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" } } }, fakeRes());
+  assert.deepStrictEqual(counted, ["allowance:ubo-demo-chart", "step"]);
+});
