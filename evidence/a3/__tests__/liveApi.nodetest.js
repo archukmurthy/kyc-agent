@@ -37,7 +37,7 @@ test("the chart reading asks the configured model for medium effort and reports 
   const result = await provider.extract({ decodedText: "{}", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
   assert.deepEqual(sent.output_config, { effort: "medium" });
   assert.equal(sent.max_tokens, 32000);
-  assert.deepEqual({ ...result.providerUsage, durationMs: 0 }, { model: "claude-sonnet-5-5", effort: "medium", inputTokens: 1200, outputTokens: 3400, durationMs: 0 });
+  assert.deepEqual({ ...result.providerUsage, durationMs: 0 }, { model: "claude-sonnet-5-5", effort: "medium", inputTokens: 1200, outputTokens: 3400, durationMs: 0, partyTypeWords: [] });
   // An older model refuses effort outright, so it is never sent one.
   assert.equal(acceptsEffort("claude-sonnet-4-5"), false);
   const older = new AnthropicSemanticProvider({ apiKey: "test", model: "claude-sonnet-4-5", fetchImpl, effort: "medium" });

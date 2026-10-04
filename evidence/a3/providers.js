@@ -545,7 +545,13 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const ownershipDataStatusFact = facts.find((fact) => fact.concept === "ownership_data_status" && typeof fact.value === "string")?.value;
     // What the call cost and took, so a model, effort or prompt change can be
     // measured rather than guessed (UBO-59).
-    const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt };
+    // The party-type words the provider used (never names): a word the
+    // contract does not know shows up here instead of as silent rejections.
+    const partyTypeWords = [...new Set([
+      ...(Array.isArray(parsed.typed_relationships) ? parsed.typed_relationships : []).flatMap((row) => [row?.subject_party_type, row?.object_party_type]),
+      ...rawPartyInventory.map((item) => item?.party_type ?? item?.type ?? item?.category),
+    ].filter((word) => typeof word === "string" && word.length <= 40))].slice(0, 20);
+    const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt, partyTypeWords };
     return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed, providerUsage };
   }
 }
