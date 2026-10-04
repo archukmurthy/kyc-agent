@@ -753,6 +753,24 @@ test("research interrupted by a reload says so instead of spinning forever", () 
   expect(window.fetch).not.toHaveBeenCalled();
 });
 
+test("a saved-research case reopened without its research reads it again from the saved case, not live", async () => {
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  mockLoadPocCase.mockImplementation(async (caseId) => (caseId === "case-ba" ? { caseId: "case-ba", projection: { researchResult: research } } : null));
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "British Airways PLC", registrationNumber: "01777777", sourceMode: "SAVED", savedCaseId: "case-ba" },
+    demoCase: { demoCaseId: "demo-saved-left-early", company: { legalName: "British Airways PLC", registrationNumber: "01777777", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PUBLIC_LIMITED" } },
+    researchResult: null,
+  }));
+  window.history.replaceState({}, "", DEMO_RESEARCH_PATH);
+  render(<UboDemoRoot />);
+  expect(await screen.findByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
+  expect(mockLoadPocCase).toHaveBeenCalledWith("case-ba");
+  expect(screen.queryByText(/This research did not finish/)).toBeNull();
+  // No live research: the only provider route is never called.
+  expect(window.fetch).not.toHaveBeenCalled();
+});
+
 test("an open analyst page picks up the customer's progress from the server every 30 seconds", async () => {
   jest.useFakeTimers();
   const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");

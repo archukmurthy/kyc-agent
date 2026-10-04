@@ -449,6 +449,15 @@ export default function UboDemoRoot() {
     });
     return () => { subscribed = false; lease.release(); };
   }, [pathname, demoCase, researchResult?.status, runToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A case started from saved research and left before that research reached
+  // the server comes back with none. It is read again from the saved case - no
+  // provider call - rather than shown as an interrupted live run whose retry
+  // would start a paid one (found clicking through, 2026-10-04).
+  useEffect(() => {
+    if (!isDemoResearchPath(pathname) || !demoCase || researchResult || researchError) return;
+    const sourceMode = demoCase.analysisContext?.sourceMode || draft.sourceMode;
+    if (sourceMode === "SAVED" && draft.savedCaseId) setResearchResult({ status: "LOADING", sourceMode: "SAVED" });
+  }, [pathname, demoCase, researchResult, researchError, draft.sourceMode, draft.savedCaseId]);
 
   const updateDraft = (field, value) => {
     if (field === "sourceMode" && value === "REPLAY") {
