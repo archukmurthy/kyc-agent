@@ -70,6 +70,8 @@ test("a chart reading with onProgress is streamed: drafts arrive as it is writte
   assert.deepEqual(drafts.at(-1), { pass: 1, parties: [{ label: "Alice Morgan", type: "natural_person" }, { label: "Target Ltd", type: "legal_entity" }], connections: [{ from: "Alice Morgan", to: "Target Ltd", percentage: "60%" }] });
   assert.equal(result.providerUsage.inputTokens, 900);
   assert.equal(result.providerUsage.outputTokens, 700);
+  assert.equal(result.providerUsage.draftPartyCount, 2);
+  assert.equal(result.providerUsage.parsedPartyCount, 2);
 });
 
 test("a typed relationship whose party type is written another way, or only inside the party details, is not rejected", () => {

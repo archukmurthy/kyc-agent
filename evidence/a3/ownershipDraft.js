@@ -92,9 +92,28 @@ function objectsOfArrays(text) {
   return objects;
 }
 
-const labelOf = (item) => String(item?.visible_label || item?.name || item?.label || "").trim().slice(0, 120);
-const isConnector = (item) => Boolean(item && (item.subject_inventory_id || item.object_inventory_id || item.connector_id));
-const isParty = (item) => Boolean(item && !isConnector(item) && (item.inventory_id || item.party_id) && labelOf(item));
+// One reading of an inventory entry, used by the provider's final parse and
+// by the live draft alike: two readings drifted apart and the draft saw
+// nothing while the parse saw seven parties (2026-10-04).
+function inventoryParty(item) {
+  return {
+    inventoryId: String(item?.inventory_id || item?.party_id || item?.id || ""),
+    visibleLabel: String(item?.visible_label || item?.name || item?.description || "").trim(),
+    partyType: canonicalPartyType(item?.party_type, item?.partyType, item?.type, item?.entity_type, item?.category, item?.kind) || "unknown_or_other",
+    disposition: String(item?.disposition || "UNRESOLVED"),
+  };
+}
+function inventoryConnector(item) {
+  const percentage = item?.percentage_points ?? item?.percentage ?? item?.percentage_value;
+  return {
+    connectorId: String(item?.connector_id || item?.inventory_id || item?.id || ""),
+    subjectInventoryId: String(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.source_party_id || item?.from_party_id || item?.from_party_inventory_id || item?.subject_id || item?.from || item?.source || ""),
+    objectInventoryId: String(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.target_party_id || item?.to_party_id || item?.to_party_inventory_id || item?.object_id || item?.to || item?.target || ""),
+    visibleLabel: String(item?.relationship_label || item?.connector_label || item?.source_label || item?.label || ""),
+    percentageText: String(item?.percentage_text || item?.connector_label || item?.relationship_label || item?.source_label || item?.label || (typeof percentage === "number" ? `${percentage}%` : "")),
+    disposition: String(item?.disposition || "UNRESOLVED"),
+  };
+}
 
 function ownershipDraft(text) {
   const source = String(text || "");
@@ -102,26 +121,27 @@ function ownershipDraft(text) {
     ...completeObjectsAfter(source, "ownership_party_inventory"),
     ...completeObjectsAfter(source, "ownership_connector_inventory"),
     ...encodedValues(source).flatMap(objectsOfArrays),
-  ];
+  ].filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  const connectorItems = candidates.map(inventoryConnector).filter((item) => item.subjectInventoryId && item.objectInventoryId);
+  const partyItems = candidates.filter((item) => !inventoryConnector(item).subjectInventoryId).map(inventoryParty).filter((item) => item.inventoryId && item.visibleLabel);
   const labels = new Map();
   const parties = [];
-  candidates.filter(isParty).forEach((item) => {
+  partyItems.forEach((item) => {
     if (item.disposition === "INTENTIONALLY_NON_OWNERSHIP") return;
-    const label = labelOf(item);
-    labels.set(String(item.inventory_id || item.party_id), label);
+    const label = item.visibleLabel.slice(0, 120);
+    labels.set(item.inventoryId, label);
     if (parties.some((party) => party.label === label) || parties.length >= MAX_ITEMS) return;
-    const type = canonicalPartyType(item.party_type, item.partyType, item.type, item.category, item.kind);
-    parties.push({ label, type: PARTY_TYPES.has(type) ? type : "unknown_or_other" });
+    parties.push({ label, type: PARTY_TYPES.has(item.partyType) ? item.partyType : "unknown_or_other" });
   });
   const connections = [];
-  candidates.filter(isConnector).forEach((item) => {
+  connectorItems.forEach((item) => {
     if (item.disposition === "INTENTIONALLY_NON_OWNERSHIP" || connections.length >= MAX_ITEMS) return;
-    const from = labels.get(String(item.subject_inventory_id || "")) || null;
-    const to = labels.get(String(item.object_inventory_id || "")) || null;
+    const from = labels.get(item.subjectInventoryId) || null;
+    const to = labels.get(item.objectInventoryId) || null;
     if (!from || !to || connections.some((connection) => connection.from === from && connection.to === to)) return;
-    connections.push({ from, to, percentage: String(item.percentage_text || "").trim().slice(0, 40) || null });
+    connections.push({ from, to, percentage: item.percentageText.trim().slice(0, 40) || null });
   });
   return { parties, connections };
 }
 
-module.exports = { canonicalPartyType, ownershipDraft, completeObjectsAfter };
+module.exports = { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft, completeObjectsAfter };

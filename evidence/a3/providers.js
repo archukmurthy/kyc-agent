@@ -1,7 +1,7 @@
 "use strict";
 
 const { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE } = require("./anthropicOutputSchema");
-const { canonicalPartyType, ownershipDraft } = require("./ownershipDraft");
+const { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft } = require("./ownershipDraft");
 
 class SemanticExtractionProvider {
   capabilities() { return { contentKinds: ["text"], maxRequestBytes: null }; }
@@ -565,12 +565,14 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
     const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) && parsed.completeness.source_record_count >= 0 ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) && parsed.completeness.represented_record_count >= 0 ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
     const requestedConceptOutcomes = requestedConcepts.map((request) => { const reported = reportedOutcomes.get(request.concept); const found = facts.some((fact) => fact.concept === request.concept && fact.valueFound && fact.semanticRole === "business_fact"); return { concept: request.concept, status: found ? "found" : reported === "not_found" ? "not_found" : completeness.state === "complete" ? "not_found" : "not_evaluated" }; });
-    const ownershipPartyInventory = rawPartyInventory.map((item) => ({
-      inventoryId: String(item?.inventory_id || item?.party_id || item?.id || ""), visibleLabel: String(item?.visible_label || item?.name || item?.description || ""), partyType: canonicalPartyType(item?.party_type, item?.partyType, item?.type, item?.entity_type, item?.category, item?.kind) || "unknown_or_other", sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
-    }));
-    const ownershipConnectorInventory = rawConnectorInventory.map((item) => ({
-      connectorId: String(item?.connector_id || item?.inventory_id || item?.id || ""), subjectInventoryId: String(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.source_party_id || item?.from_party_id || item?.from_party_inventory_id || item?.subject_id || item?.from || item?.source || ""), objectInventoryId: String(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.target_party_id || item?.to_party_id || item?.to_party_inventory_id || item?.object_id || item?.to || item?.target || ""), visibleLabel: String(item?.relationship_label || item?.connector_label || item?.source_label || item?.label || ""), percentageText: String(item?.percentage_text || item?.connector_label || item?.relationship_label || item?.source_label || item?.label || (typeof (item?.percentage_points ?? item?.percentage ?? item?.percentage_value) === "number" ? `${item.percentage_points ?? item.percentage ?? item.percentage_value}%` : "")), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
-    }));
+    const ownershipPartyInventory = rawPartyInventory.map((item) => {
+      const { inventoryId, visibleLabel, partyType, disposition } = inventoryParty(item);
+      return { inventoryId, visibleLabel, partyType, sourceLocator: parsedJson(item?.source_locator_json, {}), disposition };
+    });
+    const ownershipConnectorInventory = rawConnectorInventory.map((item) => {
+      const { connectorId, subjectInventoryId, objectInventoryId, visibleLabel, percentageText, disposition } = inventoryConnector(item);
+      return { connectorId, subjectInventoryId, objectInventoryId, visibleLabel, percentageText, sourceLocator: parsedJson(item?.source_locator_json, {}), disposition };
+    });
     const ownershipDataStatusFact = facts.find((fact) => fact.concept === "ownership_data_status" && typeof fact.value === "string")?.value;
     // What the call cost and took, so a model, effort or prompt change can be
     // measured rather than guessed (UBO-59).
@@ -580,7 +582,10 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       ...(Array.isArray(parsed.typed_relationships) ? parsed.typed_relationships : []).flatMap((row) => [row?.subject_party_type, row?.object_party_type]),
       ...rawPartyInventory.map((item) => item?.party_type ?? item?.type ?? item?.category),
     ].filter((word) => typeof word === "string" && word.length <= 40))].slice(0, 20);
-    const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt, partyTypeWords };
+    const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt, partyTypeWords,
+      // The live draft read from the finished answer against the parse: the
+      // two should agree; a gap here means the customer saw less than was found.
+      ...(streaming ? { draftPartyCount: ownershipDraft(text).parties.length, parsedPartyCount: ownershipPartyInventory.filter((item) => item.visibleLabel && item.disposition !== "INTENTIONALLY_NON_OWNERSHIP").length } : {}) };
     return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed, providerUsage };
   }
 }
