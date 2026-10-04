@@ -2,6 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// The Lab files work under a named workspace and refuses without one
+// (api/evidence/tenant.js). Each test file runs in its own process.
+process.env.EVIDENCE_LAB_TENANT_ID = "lab-tests";
 const handler = require("../../../api/evidence/a3-interpret");
 const configHandler = require("../../../api/evidence/a3-config");
 
@@ -12,7 +16,8 @@ test("live A3 API accepts Artifact identity but no browser bytes or storage refe
   const serviceDependencies = { repository: { async findArtifactForInterpretation(input) { received = input; return null; }, async appendInterpretation() {} }, artifactReader: { async read() { throw new Error("not called"); } }, provider: null };
   const api = handler.createHandler(async () => serviceDependencies); const res = recorder();
   await api({ method: "POST", body: { artifactIds: ["artifact-1", "artifact-2"], tenantId: "nium", bytes: "replacement", storageReference: "file:///secret" } }, res);
-  assert.equal(res.statusCode, 404); assert.deepEqual(received, { artifactId: "artifact-1", tenantId: "nium", contextId: null });
+  // The tenant the browser named is ignored as well: the workspace is the server's.
+  assert.equal(res.statusCode, 404); assert.deepEqual(received, { artifactId: "artifact-1", tenantId: "lab-tests", contextId: null });
 });
 
 test("A3 config exposes readiness but never credentials", () => {

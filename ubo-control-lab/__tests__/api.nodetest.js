@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const handler = require("../../api/ubo-control-lab");
+const discovery = require("../../api/ubo-discovery");
 const { createDiscoveryReplayRecord } = require("../server/labEngine");
 
 function invoke(method, body) {
@@ -111,8 +112,13 @@ test("Lab API runs the demo-only Alice calculation fixture without Discovery", a
 test("demo live research returns an explicit failed session when every provider is unavailable", async () => {
   const previousCompaniesHouse = process.env.COMPANIES_HOUSE_API_KEY;
   const previousAnthropic = process.env.ANTHROPIC_API_KEY;
+  const previousTenant = process.env.UBO_DEV_TENANT_ID;
   delete process.env.COMPANIES_HOUSE_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
+  // Discovery refuses a caller with no workspace; a local unsigned caller gets
+  // this one. Nothing is cached or recorded for it.
+  process.env.UBO_DEV_TENANT_ID = "lab-tests";
+  discovery.__setDeps({ getFresh: async () => null, cacheResult: async () => {}, appendAudit: async () => {}, persistUboInvestigation: async () => {} });
   try {
     const result = await invoke("POST", {
       operation: "START_DEMO_REVIEW_LIVE",
@@ -132,5 +138,8 @@ test("demo live research returns an explicit failed session when every provider 
     else process.env.COMPANIES_HOUSE_API_KEY = previousCompaniesHouse;
     if (previousAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
     else process.env.ANTHROPIC_API_KEY = previousAnthropic;
+    if (previousTenant === undefined) delete process.env.UBO_DEV_TENANT_ID;
+    else process.env.UBO_DEV_TENANT_ID = previousTenant;
+    discovery.__resetDeps();
   }
 });

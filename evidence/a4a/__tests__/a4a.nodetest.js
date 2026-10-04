@@ -1,5 +1,8 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path");
+// The Lab files work under a named workspace and refuses without one
+// (api/evidence/tenant.js). Each test file runs in its own process.
+process.env.EVIDENCE_LAB_TENANT_ID = "tenant-a";
 const {MemoryA4aRepository}=require("../repository"),{EvidenceNeedEvaluationService,automaticMethod}=require("../service"),{FixtureNeedEvaluationProvider}=require("../providers"),{buildFixtureDemonstration}=require("../fixtures"),{normalizeText,NORMALIZATION}=require("../normalization");
 const optionsHandler=require("../../../api/evidence/a4a-options");
 const tenantId="tenant-a",contextId="11111111-1111-4111-8111-111111111111",need={id:"22222222-2222-4222-8222-222222222222",tenantId,contextId,schemaReference:"s",schemaFieldId:"business_name",requirementId:"r"};

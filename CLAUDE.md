@@ -19,7 +19,7 @@ request that made it untrue: a stale map misleads every agent that reads it.
 - `npm start` — React dev server on `http://localhost:3000`. `src/setupProxy.js` mounts the `api/` handlers by hand, so frontend and backend both run under `npm start` alone — no `vercel dev` needed. **A new route in `api/` must be added there too, or it works in production and 404s in dev.** (Every route is mounted today except `finalize-submissions`, which is cron-only by design.)
 - `npm run build` — production build into `build/`, then stages the validation lab.
 - `npm test` — CRA Jest suite (component/render tests under `src/**/__tests__`).
-- `npm run test:node` — Node test runner over `lib/`, `api/`, `src/reresearch/`, `dossierLifecycle/`. **Its globs are hard-coded: a new test folder must be added, or the tests never run.** (`src/changeIntelligence/tests/classifyChange.completeness.nodetest.js` is currently outside every glob — known gap, PROC-3.)
+- `npm run test:node` — Node test runner over `lib/`, `api/`, `db/`, `src/reresearch/`, `dossierLifecycle/`, `ubo-control/`, `ubo-control-lab/`, `evidence/`, `integrations/` and `agents/`. **Its globs are hard-coded: a new test folder must be added, or the tests never run.** (`src/changeIntelligence/tests/classifyChange.completeness.nodetest.js` is currently outside every glob — known gap, PROC-3.)
 - `npm run idv:test` — the standalone `idv/` module's suites (named list, same hazard).
 - Both suites plus a clean build run before every pull request. No exceptions.
 

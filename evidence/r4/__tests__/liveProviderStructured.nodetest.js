@@ -65,7 +65,7 @@ test("structured live contract validates 75, 25 and 100 percentage-point ownersh
   assert.equal(result.facts[0].supportLocators[0].supportDescription.includes("75%"), true);
   assert.equal(requestBody.output_config.format.type, "json_schema"); assert.equal(requestBody.output_config.format.schema.additionalProperties, false);
   assert.equal(JSON.stringify(requestBody).includes('"citations"'), false); assert.equal(providerFor([]).configuration().instructionReference, ANTHROPIC_R4_INSTRUCTION_REFERENCE);
-  assert.equal(ANTHROPIC_R4_INSTRUCTION_REFERENCE, "evidence-r4-live-v4-typed-relations-shallow");
+  assert.equal(ANTHROPIC_R4_INSTRUCTION_REFERENCE, "evidence-r4-live-v5-ownership-inventory");
   assert.match(requestBody.messages[0].content.at(-1).text, /75% is 75/); assert.match(requestBody.messages[0].content.at(-1).text, /QUALITATIVE uses qualitative_value/);
 });
 
@@ -104,6 +104,8 @@ test("every object in the Anthropic output schema is closed and the typed value 
     assert.ok(relationshipSchema.required.includes("exact_value")); assert.ok(relationshipSchema.required.includes("qualitative_value"));
     let unions = 0, maxDepth = 0, propertyCount = 0; const nodes = [[schema, 0]];
     while (nodes.length) { const [node, depth] = nodes.pop(); if (!node || typeof node !== "object") continue; maxDepth = Math.max(maxDepth, depth); if (node.type === "object") propertyCount += Object.keys(node.properties || {}).length; if (node.anyOf || Array.isArray(node.type)) unions += 1; for (const child of Object.values(node)) if (child && typeof child === "object") nodes.push([child, depth + 1]); }
-    assert.equal(unions, 0); assert.ok(maxDepth <= 6, `schema nesting ${maxDepth} exceeds bounded adapter budget`); assert.ok(propertyCount <= 50, `schema property count ${propertyCount} exceeds bounded adapter budget`);
+    assert.equal(unions, 0); assert.ok(maxDepth <= 6, `schema nesting ${maxDepth} exceeds bounded adapter budget`); // 68 since v5 added the party and connector inventories (2026-09-19); the
+    // live provider accepts it - every chart reading of the 2026-10-04 run used it.
+    assert.ok(propertyCount <= 70, `schema property count ${propertyCount} exceeds bounded adapter budget`);
   });
 });

@@ -2,6 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// The Lab files work under a named workspace and refuses without one
+// (api/evidence/tenant.js). Each test file runs in its own process.
+process.env.EVIDENCE_LAB_TENANT_ID = "lab-tests";
 const handler = require("../../../api/evidence/a2-collect");
 
 function responseRecorder() {

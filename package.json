@@ -28,7 +28,7 @@
     "build": "react-scripts build && node scripts/stage-validation-lab.js",
     "postbuild": "node scripts/evidence-deployment-boundary.js --sanitize-build --verify",
     "test": "react-scripts test",
-    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js db/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js",
+    "test:node": "node --test lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js db/__tests__/*.nodetest.js src/reresearch/tests/*.nodetest.js dossierLifecycle/__tests__/*.test.js ubo-control/__tests__/*.nodetest.js ubo-control-lab/__tests__/*.nodetest.js ubo-control-lab/server/__tests__/*.nodetest.js \"evidence/**/__tests__/*.nodetest.js\" \"integrations/**/__tests__/*.nodetest.js\" \"agents/**/__tests__/*.nodetest.js\" agents/validation/tests/*.test.js",
     "test:ubo-demo:critical": "node scripts/run-ubo-demo-critical.js",
     "test:ubo-demo:regression": "node scripts/run-ubo-demo-regression.js",
     "test:ubo-poc:release-smoke": "node scripts/ubo-poc-release-smoke.js",
