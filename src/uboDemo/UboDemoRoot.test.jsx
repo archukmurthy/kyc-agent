@@ -721,6 +721,28 @@ test("saved research from this workspace starts a new case without a provider ca
   expect(saved.researchResult.savedFrom.caseId).toBe("case-ba");
 });
 
+test("two cases started from the same saved research each have it saved", async () => {
+  mockListSavedResearch.mockResolvedValue([savedBritishAirways]);
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  mockLoadPocCase.mockImplementation(async (caseId) => (caseId === "case-ba" ? { caseId: "case-ba", projection: { researchResult: research } } : null));
+  const startFromSaved = async () => {
+    const option = await screen.findByLabelText(/Saved research/);
+    await waitFor(() => expect(option).toBeEnabled());
+    fireEvent.click(option);
+    fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-ba" } });
+    fireEvent.click(screen.getByRole("button", { name: /Start from saved research — no provider call/ }));
+    await screen.findByRole("heading", { name: "Ownership structure" });
+    return JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase.demoCaseId;
+  };
+  renderStart();
+  const first = await startFromSaved();
+  fireEvent.click(screen.getByRole("button", { name: "Start new case" }));
+  const second = await startFromSaved();
+  expect(second).not.toBe(first);
+  const savedFor = () => mockPersistPocCase.mock.calls.filter(([operation]) => operation === "SAVE_RESEARCH").map(([, command]) => command.caseId);
+  await waitFor(() => expect(savedFor()).toEqual(expect.arrayContaining([first, second])));
+});
+
 test("saved research that can no longer be loaded stops without a live search", async () => {
   mockListSavedResearch.mockResolvedValue([savedBritishAirways]);
   mockLoadPocCase.mockResolvedValue(null);

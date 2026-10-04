@@ -312,7 +312,10 @@ export default function UboDemoRoot() {
   }, [draft, demoCase, researchResult]);
   const saveResearchDurably = () => {
     if (!demoCase?.demoCaseId || !researchResult || researchResult.status === "LOADING") return Promise.reject(new Error("Research is not ready to save."));
-    const signature = smallStableHash([researchResult.jobId, researchResult.status, researchResult.completedAt,
+    // The case is part of it: two cases started from the same saved research
+    // carry the same research, and the second was taken for an earlier save
+    // and never sent (found clicking through, 2026-10-04).
+    const signature = smallStableHash([demoCase.demoCaseId, researchResult.jobId, researchResult.status, researchResult.completedAt,
       researchResult.investigationTopicActivations, researchResult.analystCustomerRequests]);
     const existing = durableResearchSaves.current.get(signature);
     if (existing) return existing;
