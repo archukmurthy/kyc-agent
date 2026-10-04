@@ -440,3 +440,41 @@ test("an answer shows it is saving until the server confirms, and only one sync 
   expect(calls.filter((operation) => operation === "SYNC_RESOLUTION")).toHaveLength(1);
   expect(calls.filter((operation) => operation === "SUBMIT_ANSWER")).toHaveLength(1);
 });
+
+test("a document still being checked when the page closed is picked up when it opens again", async () => {
+  window.sessionStorage.clear();
+  const first = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+  const discrepancyQuestion = screen.getByRole("heading", { name: /Has the company's ownership changed/i }).closest("article");
+  fireEvent.click(within(discrepancyQuestion).getByLabelText(/existing shares were transferred/i));
+  fireEvent.click(within(discrepancyQuestion).getByRole("button", { name: /Save answer/i }));
+  const effectiveDate = screen.getByLabelText("Effective date").closest("article");
+  fireEvent.change(within(effectiveDate).getByLabelText("Effective date"), { target: { value: "2026-09-01" } });
+  fireEvent.click(within(effectiveDate).getByRole("button", { name: /Save answer/i }));
+  const percentage = screen.getByLabelText("Ownership percentage").closest("article");
+  fireEvent.change(within(percentage).getByLabelText("Ownership percentage"), { target: { value: "30" } });
+  fireEvent.click(within(percentage).getByRole("button", { name: /Save answer/i }));
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  window.fetch.mockClear();
+
+  // The upload is accepted for reading, and the page closes while it is read.
+  window.fetch
+    .mockResolvedValueOnce({ ok: true, status: 202, json: async () => ({ success: true, job: { jobId: "job-support-2", state: "QUEUED" } }) })
+    .mockImplementationOnce(() => new Promise(() => {}));
+  fireEvent.change(first.container.querySelector('.ubo-resolution-evidence input[type="file"]'), { target: { files: [new File(["%PDF-1.4\n%%EOF"], "current-register.pdf", { type: "application/pdf" })] } });
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+  first.unmount();
+
+  window.fetch.mockClear();
+  const recalculate = window.fetch.getMockImplementation();
+  window.fetch.mockImplementation(async (url, request) => (JSON.parse(request.body).operation === "GET_EXTRACTION_JOB"
+    ? { ok: true, status: 200, json: async () => ({ success: true, job: {
+      jobId: "job-support-2", state: "COMPLETE",
+      result: { artifact: { artifactId: "support-artifact", integrityVerified: true }, candidateFacts: [ownership("evidence-fact", { type: "EXACT", value: 30 }, "evidence-ref")] },
+    } }) }
+    : recalculate(url, request)));
+  render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 60 }, { type: "EXACT", value: 20 })} />);
+
+  await waitFor(() => expect(screen.getByText("File received · evidence accepted")).toBeInTheDocument());
+  expect(window.fetch.mock.calls.map(([, request]) => JSON.parse(request.body))).toContainEqual({ operation: "GET_EXTRACTION_JOB", jobId: "job-support-2" });
+  expect([...Array(window.sessionStorage.length).keys()].map((index) => window.sessionStorage.key(index)).filter((key) => key.startsWith("ubo-evidence-job:"))).toEqual([]);
+});

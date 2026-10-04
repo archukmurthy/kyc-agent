@@ -13,7 +13,7 @@ import {
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
-import { uboStore } from "../browserStore";
+import { casePointerStore, uboStore } from "../browserStore";
 import { limitNotice } from "../../trials/limitNotice";
 
 export const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
@@ -43,6 +43,13 @@ function readCurrentTrace(context) {
     if (session?.contractVersion !== DEMO_SESSION_CONTRACT || session?.demoCase?.demoCaseId !== context?.demoCaseId) return null;
     return session.researchResult?.ownershipResolutionTrace || null;
   } catch (_) { return null; }
+}
+// A document still being read when the page closed. Ids only - the reading is
+// driven from this page, so without them a reload left it unread and the card
+// showed the previous decision as if nothing had been sent (UBO-59).
+function evidenceJobKey(caseId, recordId) { return `ubo-evidence-job:${caseId}:${recordId}`; }
+function readEvidenceJob(caseId, recordId) {
+  try { return JSON.parse(casePointerStore.getItem(evidenceJobKey(caseId, recordId)) || "null")?.jobId || null; } catch (_) { return null; }
 }
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -494,10 +501,20 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         file: { originalFilename: file.name, declaredMediaType: file.type, sizeBytes: file.size, contentBase64: await fileAsBase64(file) },
         evidenceHandoff: record.handoff,
       });
+      await finishEvidence(record, started, file.name);
+    } catch (caught) {
+      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
+      setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
+    }
+  };
+  const finishEvidence = async (record, started, filename) => {
+    const pointer = evidenceJobKey(context?.demoCaseId, record.id);
+    if (started?.job?.jobId) casePointerStore.setItem(pointer, JSON.stringify({ jobId: started.job.jobId }));
+    try {
       const extractionResult = await awaitSupportingEvidenceResult(started);
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
       const outcome = evidenceResultStatus(extractionResult, resolution, record);
-      const submittedEvidence = { ...(evidence[record.id] || {}), filename: file.name, ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() };
+      const submittedEvidence = { ...(evidence[record.id] || {}), filename: filename || extractionResult.artifact?.originalFilename || "Your document", ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() };
       const nextEvidence = { ...evidence, [record.id]: submittedEvidence };
       setEvidence(nextEvidence);
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
@@ -517,11 +534,31 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       } catch (syncError) {
         setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: `${outcome.reason} The case link will retry automatically: ${syncError.message}` } }));
       }
-    } catch (caught) {
-      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
-      setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
+    } finally {
+      casePointerStore.removeItem(pointer);
     }
   };
+  // Picks up a reading the page was waiting on when it closed.
+  const resumedEvidence = useRef(false);
+  useEffect(() => {
+    if (resumedEvidence.current || !context?.demoCaseId) return;
+    resumedEvidence.current = true;
+    engine.evidenceRequirements.forEach((record) => {
+      const jobId = readEvidenceJob(context.demoCaseId, record.id);
+      if (!jobId) return;
+      setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.VALIDATING } }));
+      setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Still checking the document you uploaded." } }));
+      postOwnershipExtraction({ operation: "GET_EXTRACTION_JOB", jobId })
+        .then((found) => finishEvidence(record, found, null))
+        .catch((caught) => {
+          casePointerStore.removeItem(evidenceJobKey(context.demoCaseId, record.id));
+          setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, reason: caught.message } }));
+          setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
+        });
+    });
+    // Once per page: finishEvidence drives the reading from here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context?.demoCaseId]);
 
   const answeredQuestions = engine.questions.filter((question) => Boolean(answers[question.id]));
   const pendingEvidence = engine.evidenceRequirements.filter(({ status }) => status !== EVIDENCE_STATUS.SATISFIED);
