@@ -1,6 +1,7 @@
 "use strict";
 
 const test = require("node:test");
+const { expandSharedAnalyses } = require("../../../src/uboDemo/customer/recalculationStorage");
 const assert = require("node:assert/strict");
 const {
   PocCaseService,
@@ -211,7 +212,9 @@ test("case restore removes repeated immutable analysis internals without losing 
   assert.equal(compact.projection.researchResult.view.snapshot, undefined);
   assert.equal(compact.projection.chartProjection.chartAnalysis.view.snapshot, undefined);
   assert.equal(compact.projection.resolution.recalculations.q1.chartAnalysis.view.graph.companyAttributionAssessments, undefined);
-  assert.equal(compact.projection.resolution.recalculations.q2.chartAnalysis.view.graph.relationships.length, 1);
+  // The same analysis on two rows is kept once; reading it back restores it.
+  assert.equal(compact.projection.resolution.recalculations.q2.chartAnalysisSameAs, "q1");
+  assert.equal(expandSharedAnalyses(compact.projection.resolution.recalculations).q2.chartAnalysis.view.graph.relationships.length, 1);
   assert.equal(compact.projection.assessment.trace.verificationPopulation[0].personName, "Alice Morgan");
   assert.ok(JSON.stringify(compact).length < 20_000);
 });

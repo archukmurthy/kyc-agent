@@ -8,6 +8,7 @@ import {
 import { DEMO_SESSION_KEY } from "./demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customer/customerOwnershipChartSession";
 import { uboStore } from "./browserStore";
+import { expandSharedAnalyses } from "./customer/recalculationStorage";
 
 function response(body, ok = true) {
   return { ok, status: ok ? 200 : 503, json: async () => body };
@@ -187,7 +188,9 @@ test("final assessment persistence bounds repeated research and recalculation an
   expect(request.payload.researchResult.view.snapshot).toBeUndefined();
   expect(request.payload.chartProjection.chartAnalysis.view.snapshot).toBeUndefined();
   expect(request.payload.resolution.recalculations.q1.chartAnalysis.view.graph.percentageEvidenceAssessments).toBeUndefined();
-  expect(request.payload.resolution.recalculations.q2.chartAnalysis.view.graph.relationships).toHaveLength(1);
+  // The same analysis for both rows travels once; reading it back restores it.
+  expect(request.payload.resolution.recalculations.q2.chartAnalysisSameAs).toBe("q1");
+  expect(expandSharedAnalyses(request.payload.resolution.recalculations).q2.chartAnalysis.view.graph.relationships).toHaveLength(1);
   expect(request.payload.researchResult.candidateSources[0].candidateFacts).toHaveLength(1);
   expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(15000);
 });

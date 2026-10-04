@@ -5,6 +5,7 @@ import {
   CUSTOMER_OWNERSHIP_CHART_SESSION_VERSION,
 } from "./customer/customerOwnershipChartSession";
 import { compactResearchResultForTransfer } from "./customerHandoff";
+import { expandSharedAnalyses, shareRepeatedAnalyses } from "./customer/recalculationStorage";
 import { casePointerStore, uboStore } from "./browserStore";
 
 export const ACTIVE_POC_CASE_KEY = "ubo-case-pointer.v1";
@@ -134,9 +135,9 @@ function compactChartResult(result) {
 }
 
 function compactRecalculations(recalculations = {}) {
-  return Object.fromEntries(Object.entries(recalculations).map(([key, record]) => [key, record?.chartAnalysis
+  return shareRepeatedAnalyses(Object.fromEntries(Object.entries(recalculations || {}).map(([key, record]) => [key, record?.chartAnalysis
     ? { ...record, chartAnalysis: compactChartAnalysis(record.chartAnalysis) }
-    : record]));
+    : record])));
 }
 
 function compactCasePayload(payload) {
@@ -215,7 +216,7 @@ export function hydrateBrowserFromPocCase(record, storage = uboStore) {
         createdAt: projection.resolution.createdAt,
         answers: projection.resolution.answers || {},
         evidence: projection.resolution.evidence || {},
-        recalculations: compactRecalculations(projection.resolution.recalculations),
+        recalculations: expandSharedAnalyses(compactRecalculations(projection.resolution.recalculations)),
       }));
     }
   }

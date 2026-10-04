@@ -1,5 +1,6 @@
 "use strict";
 
+const { shareRepeatedAnalyses } = require("../../src/uboDemo/customer/recalculationStorage");
 const { computeCaseAssessment } = require("./caseAssessment");
 const auditLedger = require("./auditLedger");
 const { completeIdentityVerification, isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
@@ -97,9 +98,9 @@ function compactChartResult(result) {
   return result?.chartAnalysis ? { ...result, chartAnalysis: compactAnalysis(result.chartAnalysis) } : result;
 }
 function compactRecalculations(recalculations = {}) {
-  return Object.fromEntries(Object.entries(recalculations).map(([key, record]) => [key, record?.chartAnalysis
+  return shareRepeatedAnalyses(Object.fromEntries(Object.entries(recalculations || {}).map(([key, record]) => [key, record?.chartAnalysis
     ? { ...record, chartAnalysis: compactAnalysis(record.chartAnalysis) }
-    : record]));
+    : record])));
 }
 function compactCasePayload(payload) {
   if (!payload || typeof payload !== "object") return payload;
@@ -353,11 +354,11 @@ class PostgresPocCaseRepository {
     this.tenantId = tenantId;
   }
 
-  async get(caseId, executor = this.db) {
+  async get(caseId, executor = this.db, { forUpdate = false } = {}) {
     const row = first(await executor.query(`SELECT case_id, tenant_id, company, current_stage,
       research_release_state, latest_extraction_job_id, latest_artifact_id, current_assessment_id,
       current_projection, created_at, updated_at, updated_at::text AS version
-      FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2`, [caseId, this.tenantId]));
+      FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2${forUpdate ? " FOR UPDATE" : ""}`, [caseId, this.tenantId]));
     if (!row) return null;
     return {
       caseId: row.case_id,
@@ -423,13 +424,17 @@ class PostgresPocCaseRepository {
   async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
     return this.db.transaction(async (client) => {
       const company = payload.demoCase?.company || payload.company;
-      const existingCase = await this.get(caseId, client);
-      if (!existingCase) {
+      // Read and locked once: the case does not change under the lock, so it is
+      // not read again - each read moved the whole case over the wire, and a
+      // save read it four times (end-to-end check, 2026-10-04).
+      let existing = await this.get(caseId, client, { forUpdate: true });
+      if (!existing) {
         if (!company) throw Object.assign(new Error("A company is required when creating a POC case"), { statusCode: 400, code: "company_required" });
         await client.query(`INSERT INTO ubo_poc_cases (case_id, tenant_id, company, current_projection)
           VALUES ($1, $2, $3::jsonb, '{}'::jsonb)`, [caseId, this.tenantId, json(company)]);
+        existing = await this.get(caseId, client, { forUpdate: true });
       }
-      const locked = first(await client.query("SELECT updated_at::text AS version FROM ubo_poc_cases WHERE case_id = $1 AND tenant_id = $2 FOR UPDATE", [caseId, this.tenantId]));
+      const locked = existing;
       // A result computed from an older read of the case would overwrite what
       // changed since - the questions screen's sync erased answers saved in
       // between (found in the browser test). The service recomputes instead.
@@ -441,18 +446,17 @@ class PostgresPocCaseRepository {
         VALUES ($1, $2, $3, $4, $5::jsonb)
         ON CONFLICT (case_id, event_type, idempotency_key) DO NOTHING
         RETURNING event_id`, [caseId, operation, idempotencyKey, actorType, json(payload)]));
-      const existing = await this.get(caseId, client);
       if (!inserted && operation !== "SUBMIT_ANSWER") return { record: existing, duplicate: true };
       const projection = projectCommand(existing?.projection, operation, payload, release);
       const chart = projection.chartReference || {};
       const assessmentId = projection.assessment?.assessmentId || projection.assessment?.trace?.verificationAssessment?.assessmentVersionId || null;
-      await client.query(`UPDATE ubo_poc_cases SET company = $2::jsonb, current_stage = $3,
+      const updated = first(await client.query(`UPDATE ubo_poc_cases SET company = $2::jsonb, current_stage = $3,
         research_release_state = $4, latest_extraction_job_id = $5, latest_artifact_id = $6,
         current_assessment_id = $7, current_projection = $8::jsonb, updated_at = NOW()
-        WHERE case_id = $1`, [caseId, json(projection.demoCase?.company || projection.company || company), projection.currentStage,
+        WHERE case_id = $1 RETURNING updated_at, updated_at::text AS version`, [caseId, json(projection.demoCase?.company || projection.company || company), projection.currentStage,
         projection.researchRelease?.state || existing?.researchReleaseState || null,
         chart.jobId || existing?.latestExtractionJobId || null, chart.artifactId || existing?.latestArtifactId || null,
-        assessmentId, json(projection)]);
+        assessmentId, json(projection)]));
       await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
       // The audit ledger, in the same transaction: the step and its record
@@ -471,50 +475,65 @@ class PostgresPocCaseRepository {
         answerCount: Object.keys(projection.resolution?.answers || {}).length,
         stage: projection.currentStage,
       });
-      return { record: await this.get(caseId, client), duplicate: !inserted };
+      // What was just written, rather than reading the case back.
+      return {
+        record: {
+          ...existing,
+          company: projection.demoCase?.company || projection.company || company || existing?.company,
+          currentStage: projection.currentStage,
+          projection,
+          updatedAt: updated?.updated_at || existing?.updatedAt,
+          version: updated?.version || existing?.version,
+        },
+        duplicate: !inserted,
+      };
     });
   }
 
   async persistResolution(client, caseId, resolution, operation, idempotencyKey) {
     if (!resolution) return;
-    const requirements = resolution.requirements || [];
-    const known = new Set();
-    for (const item of requirements) {
-      const key = String(item.id || item.factRequirementId || item.comparisonItemId);
-      known.add(key);
-      await client.query(`INSERT INTO ubo_poc_fact_requirements
-        (case_id, requirement_key, snapshot, current_status) VALUES ($1,$2,$3::jsonb,$4)
-        ON CONFLICT (case_id, requirement_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
-        current_status=EXCLUDED.current_status, updated_at=NOW()`, [caseId, key, json(item), item.status || "CURRENT"]);
-    }
-    for (const question of resolution.questions || []) {
+    // One statement per table rather than one per row: a save wrote a dozen
+    // rows one round trip at a time. Within a batch the last row for a key
+    // wins, as it did when they were written in turn.
+    const lastByKey = (rows) => [...new Map(rows.map((row) => [row[0], row])).values()];
+    const requirements = lastByKey((resolution.requirements || []).map((item) => [String(item.id || item.factRequirementId || item.comparisonItemId), json(item), item.status || "CURRENT"]));
+    const known = new Set(requirements.map(([key]) => key));
+    const placeholders = [];
+    const questions = lastByKey((resolution.questions || []).map((question) => {
       const requirementKey = String(question.factRequirementId || question.comparisonItemId || `question:${question.id}`);
-      if (!known.has(requirementKey)) {
-        await client.query(`INSERT INTO ubo_poc_fact_requirements
-          (case_id, requirement_key, snapshot, current_status) VALUES ($1,$2,$3::jsonb,'CURRENT')
-          ON CONFLICT (case_id, requirement_key) DO NOTHING`, [caseId, requirementKey, json({ id: requirementKey, inferredFromQuestion: question.id })]);
-        known.add(requirementKey);
-      }
-      await client.query(`INSERT INTO ubo_poc_questions
-        (case_id, question_key, fact_requirement_key, snapshot, current_status) VALUES ($1,$2,$3,$4::jsonb,$5)
-        ON CONFLICT (case_id, question_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
-        current_status=EXCLUDED.current_status, updated_at=NOW()`, [caseId, String(question.id), requirementKey, json(question), question.status || "OPEN"]);
-    }
-    for (const requirement of resolution.evidenceRequirements || []) {
+      if (!known.has(requirementKey)) { known.add(requirementKey); placeholders.push([requirementKey, json({ id: requirementKey, inferredFromQuestion: question.id })]); }
+      return [String(question.id), requirementKey, json(question), question.status || "OPEN"];
+    }));
+    const evidence = lastByKey((resolution.evidenceRequirements || []).map((requirement) => {
       const requirementKey = String(requirement.factRequirementId || requirement.comparisonItemId || `evidence:${requirement.id}`);
-      if (!known.has(requirementKey)) {
-        await client.query(`INSERT INTO ubo_poc_fact_requirements
-          (case_id, requirement_key, snapshot, current_status) VALUES ($1,$2,$3::jsonb,'CURRENT')
-          ON CONFLICT (case_id, requirement_key) DO NOTHING`, [caseId, requirementKey, json({ id: requirementKey, inferredFromEvidenceRequirement: requirement.id })]);
-        known.add(requirementKey);
-      }
+      if (!known.has(requirementKey)) { known.add(requirementKey); placeholders.push([requirementKey, json({ id: requirementKey, inferredFromEvidenceRequirement: requirement.id })]); }
       const evidenceState = resolution.evidence?.[requirement.id] || {};
-      await client.query(`INSERT INTO ubo_poc_evidence_requirements
-        (case_id, evidence_requirement_key, fact_requirement_key, snapshot, current_status, artifact_id)
-        VALUES ($1,$2,$3,$4::jsonb,$5,$6)
+      return [String(requirement.id), requirementKey, json({ ...requirement, submitted: evidenceState }), evidenceState.status || requirement.status || "OPEN", evidenceState.artifactId || null];
+    }));
+    const column = (rows, index) => rows.map((row) => row[index]);
+    if (requirements.length) {
+      await client.query(`INSERT INTO ubo_poc_fact_requirements (case_id, requirement_key, snapshot, current_status)
+        SELECT $1, r.key, r.snapshot::jsonb, r.status FROM unnest($2::text[], $3::text[], $4::text[]) AS r(key, snapshot, status)
+        ON CONFLICT (case_id, requirement_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
+        current_status=EXCLUDED.current_status, updated_at=NOW()`, [caseId, column(requirements, 0), column(requirements, 1), column(requirements, 2)]);
+    }
+    if (placeholders.length) {
+      await client.query(`INSERT INTO ubo_poc_fact_requirements (case_id, requirement_key, snapshot, current_status)
+        SELECT $1, r.key, r.snapshot::jsonb, 'CURRENT' FROM unnest($2::text[], $3::text[]) AS r(key, snapshot)
+        ON CONFLICT (case_id, requirement_key) DO NOTHING`, [caseId, column(placeholders, 0), column(placeholders, 1)]);
+    }
+    if (questions.length) {
+      await client.query(`INSERT INTO ubo_poc_questions (case_id, question_key, fact_requirement_key, snapshot, current_status)
+        SELECT $1, q.key, q.requirement, q.snapshot::jsonb, q.status FROM unnest($2::text[], $3::text[], $4::text[], $5::text[]) AS q(key, requirement, snapshot, status)
+        ON CONFLICT (case_id, question_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
+        current_status=EXCLUDED.current_status, updated_at=NOW()`, [caseId, column(questions, 0), column(questions, 1), column(questions, 2), column(questions, 3)]);
+    }
+    if (evidence.length) {
+      await client.query(`INSERT INTO ubo_poc_evidence_requirements (case_id, evidence_requirement_key, fact_requirement_key, snapshot, current_status, artifact_id)
+        SELECT $1, e.key, e.requirement, e.snapshot::jsonb, e.status, e.artifact::uuid FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[]) AS e(key, requirement, snapshot, status, artifact)
         ON CONFLICT (case_id, evidence_requirement_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
         current_status=EXCLUDED.current_status, artifact_id=COALESCE(EXCLUDED.artifact_id, ubo_poc_evidence_requirements.artifact_id), updated_at=NOW()`,
-      [caseId, String(requirement.id), requirementKey, json({ ...requirement, submitted: evidenceState }), evidenceState.status || requirement.status || "OPEN", evidenceState.artifactId || null]);
+      [caseId, column(evidence, 0), column(evidence, 1), column(evidence, 2), column(evidence, 3), column(evidence, 4)]);
     }
     if (operation === "SUBMIT_ANSWER" && resolution.submittedAnswer) {
       const { question, answer } = resolution.submittedAnswer;
@@ -740,7 +759,16 @@ class PocCaseService {
       if (error.code === "case_changed" && attempt < 3) continue;
       throw error;
     }
-    return { ...(await this.load(caseId)), duplicate: result.duplicate, researchRelease: release || result.record?.projection?.researchRelease || null };
+    // What was written, not a fresh read of the case, its chart reading and
+    // its history - a save's answer is small (reading a case is load()).
+    const written = result.record || {};
+    return {
+      caseId,
+      updatedAt: written.updatedAt || null,
+      projection: written.projection || {},
+      duplicate: result.duplicate,
+      researchRelease: release || written.projection?.researchRelease || null,
+    };
     }
   }
 }
