@@ -1,6 +1,7 @@
 "use strict";
 
 const { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE } = require("./anthropicOutputSchema");
+const { ownershipDraft } = require("./ownershipDraft");
 
 class SemanticExtractionProvider {
   capabilities() { return { contentKinds: ["text"], maxRequestBytes: null }; }
@@ -30,6 +31,31 @@ const DEFAULT_CHART_READING_MODEL = "claude-sonnet-5-5";
 function chartReadingModel() { return process.env.EVIDENCE_A3_ANTHROPIC_MODEL || DEFAULT_CHART_READING_MODEL; }
 // Models that accept output_config.effort; sending it to an older model is
 // refused outright (400).
+// Reads a streamed Messages response into the same shape as a whole one,
+// calling onText with the answer so far. Thinking is not part of the answer.
+async function readMessageStream(body, onText) {
+  const decoder = new TextDecoder();
+  const message = { content: [], usage: {} };
+  let buffer = "", text = "";
+  for await (const chunk of body) {
+    buffer += decoder.decode(chunk, { stream: true }).replace(/\r/g, "");
+    let cut;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, cut); buffer = buffer.slice(cut + 2);
+      const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
+      if (!data) continue;
+      let event;
+      try { event = JSON.parse(data); } catch (_) { continue; }
+      if (event.type === "message_start") { message.model = event.message?.model; message.usage = { ...(event.message?.usage || {}) }; }
+      else if (event.type === "content_block_delta" && event.delta?.type === "text_delta") { text += event.delta.text || ""; onText(text); }
+      else if (event.type === "message_delta") { message.stop_reason = event.delta?.stop_reason; message.usage = { ...message.usage, ...(event.usage || {}) }; }
+      else if (event.type === "error") throw Object.assign(new Error(String(event.error?.message || "Semantic provider stream failed").slice(0, 500)), { code: "provider_failed" });
+    }
+  }
+  message.content = [{ type: "text", text }];
+  return message;
+}
+
 function acceptsEffort(model) { return /^claude-(fable|mythos|opus-5|opus-4-[5-8]|sonnet-5|sonnet-4-6)/.test(String(model || "")); }
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
@@ -328,8 +354,12 @@ function parseProviderJson(text) {
 }
 
 class AnthropicSemanticProvider extends SemanticExtractionProvider {
-  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE, maxAttempts = 2, effort = null } = {}) {
-    super(); this.apiKey = apiKey; this.model = model; this.effort = effort; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference; this.maxAttempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
+  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE, maxAttempts = 2, effort = null, onProgress = null } = {}) {
+    super(); this.apiKey = apiKey; this.model = model; this.effort = effort;
+    // onProgress({ pass, parties, connections }): what an ownership-chart
+    // reading has found so far. Set, the answer is streamed. pass 1 is the
+    // reading; a second call on this provider is the verification pass.
+    this.onProgress = typeof onProgress === "function" ? onProgress : null; this.calls = 0; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference; this.maxAttempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
   }
   configuration() { return { provider: "anthropic", model: this.model || null, instructionReference: this.instructionReference, ready: !!(this.apiKey && this.model) }; }
   capabilities() { return { contentKinds: ["text", "image", "document"], maxRequestBytes: 32 * 1024 * 1024, mediaTypes: ["application/json", "text/html", "application/pdf", "image/png", "image/jpeg"] }; }
@@ -389,30 +419,56 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     }
     if (this.effort && acceptsEffort(this.model)) request.output_config = { ...(request.output_config || {}), effort: this.effort };
     const requestStartedAt = Date.now();
+    this.calls += 1;
+    const pass = this.calls;
+    const streaming = Boolean(this.onProgress) && context.schemaReference === "ownership-chart-extraction-v2";
+    if (streaming) request.stream = true;
     const requestBody = JSON.stringify(request);
     let response;
+    let streamTimer = null;
     let attemptsUsed = 0;
     let lastTransportError = null;
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       attemptsUsed = attempt;
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      let keepTimer = false;
       try {
         response = await this.fetchImpl("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": this.apiKey, "anthropic-version": "2023-06-01" }, body: requestBody, signal: controller.signal });
-        if (!(response.status === 408 || response.status === 429 || response.status >= 500) || attempt === this.maxAttempts) break;
+        if (!(response.status === 408 || response.status === 429 || response.status >= 500) || attempt === this.maxAttempts) {
+          // A streamed body is still arriving: the time limit covers it too.
+          if (streaming && response.ok) { keepTimer = true; streamTimer = timer; }
+          break;
+        }
       } catch (error) {
         lastTransportError = error;
         if (attempt === this.maxAttempts) {
           if (error?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout", attemptsUsed });
           throw Object.assign(new Error("Semantic provider request failed"), { code: "provider_unavailable", attemptsUsed });
         }
-      } finally { clearTimeout(timer); }
+      } finally { if (!keepTimer) clearTimeout(timer); }
     }
     if (!response) {
       if (lastTransportError?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout", attemptsUsed });
       throw Object.assign(new Error("Semantic provider request failed"), { code: "provider_unavailable", attemptsUsed });
     }
     let payload;
-    try { payload = await response.json(); } catch (_) { throw Object.assign(new Error("Semantic provider returned malformed output"), { code: "provider_malformed_output" }); }
+    if (streaming && response.ok) {
+      let lastDraftAt = 0;
+      const onText = (text) => {
+        if (Date.now() - lastDraftAt < 1000) return;
+        lastDraftAt = Date.now();
+        try { this.onProgress({ pass, ...ownershipDraft(text) }); } catch (_) { /* A draft never stops the reading. */ }
+      };
+      try { payload = await readMessageStream(response.body, onText); }
+      catch (error) {
+        if (error?.name === "AbortError") throw Object.assign(new Error("Semantic provider timed out"), { code: "provider_timeout", attemptsUsed });
+        if (error?.code) throw Object.assign(error, { attemptsUsed });
+        throw Object.assign(new Error("Semantic provider stream failed"), { code: "provider_unavailable", attemptsUsed });
+      } finally { clearTimeout(streamTimer); }
+      try { this.onProgress({ pass, ...ownershipDraft(payload.content[0].text) }); } catch (_) { /* As above. */ }
+    } else {
+      try { payload = await response.json(); } catch (_) { throw Object.assign(new Error("Semantic provider returned malformed output"), { code: "provider_malformed_output" }); }
+    }
     if (!response.ok) {
       const safeReason = String(payload?.error?.message || payload?.message || "Provider request failed").slice(0, 500);
       const code = response.status === 401 || response.status === 403

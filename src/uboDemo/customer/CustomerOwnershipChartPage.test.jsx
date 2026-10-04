@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
-import CustomerOwnershipChartPage, { RUNNING_POLL_MS } from "./CustomerOwnershipChartPage";
+import CustomerOwnershipChartPage, { PROGRESS_POLL_MS, RUNNING_POLL_MS } from "./CustomerOwnershipChartPage";
 import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcileSubjectIdentity } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
@@ -298,6 +298,36 @@ test("a reading still running when the page is opened again is waited for, with 
     }
     expect(screen.getByRole("heading", { name: /Continue to questions/i })).toBeInTheDocument();
     expect(screen.queryByText(/Refresh this page/)).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("while the chart is read, what has been found so far is shown as an unchecked draft", async () => {
+  jest.useFakeTimers();
+  try {
+    seed();
+    let finish;
+    window.fetch = jest.fn(async (_url, request) => {
+      const body = JSON.parse(request.body);
+      const job = { jobId: "job-live", artifactId: "artifact-1", correlationId: "corr-live" };
+      if (body.operation === "PROCESS_EXTRACTION_JOB") return new Promise((resolve) => { finish = () => resolve({ ok: true, json: async () => ({ success: true, job: { ...job, state: "COMPLETE", result: analysis } }) }); });
+      if (body.operation === "GET_EXTRACTION_JOB") return { ok: true, json: async () => ({ success: true, job: { ...job, state: "RUNNING", progress: { stage: "READING", parties: [{ label: "Alice Morgan", type: "natural_person" }, { label: "Holdco Ltd", type: "legal_entity" }], connections: [{ from: "Alice Morgan", to: "Holdco Ltd", percentage: "60%" }] } } }) };
+      return { ok: true, json: async () => ({ success: true, job: { ...job, state: "QUEUED" } }) };
+    });
+    const { container } = render(<CustomerOwnershipChartPage />);
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" })] } });
+    fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+    // Reading the file is real work; then the draft is asked for every few seconds.
+    for (let tick = 0; tick < 20 && !screen.queryByText("Not checked yet"); tick += 1) {
+      await act(async () => { await new Promise((resolve) => jest.requireActual("timers").setImmediate(resolve)); jest.advanceTimersByTime(PROGRESS_POLL_MS); });
+    }
+    expect(screen.getByText("Not checked yet")).toBeInTheDocument();
+    expect(screen.getByText("Alice Morgan")).toBeInTheDocument();
+    expect(screen.getByText(/· 60%/)).toBeInTheDocument();
+    await act(async () => { finish(); });
+    await screen.findByRole("heading", { name: /Continue to questions/i });
+    expect(screen.queryByText("Not checked yet")).toBeNull();
   } finally {
     jest.useRealTimers();
   }

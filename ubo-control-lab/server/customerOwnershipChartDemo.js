@@ -127,7 +127,7 @@ function createMemoryArtifactRepository(artifact) {
   };
 }
 
-function defaultProvider() {
+function defaultProvider(onProgress = null) {
   return new AnthropicSemanticProvider({
     apiKey: process.env.ANTHROPIC_API_KEY,
     model: chartReadingModel(),
@@ -138,6 +138,8 @@ function defaultProvider() {
     effort: process.env.EVIDENCE_A3_EFFORT || "medium",
     // Thinking counts toward the cap on newer models; 16k cut readings short.
     maxOutputTokens: CHART_READING_MAX_OUTPUT_TOKENS,
+    // Streams the reading so the customer sees what is found as it is found.
+    onProgress,
   });
 }
 
@@ -239,9 +241,9 @@ function reviewedBettercommsProvider() {
   };
 }
 
-function selectSemanticProvider(fingerprintValue, injectedProvider) {
+function selectSemanticProvider(fingerprintValue, injectedProvider, onProgress = null) {
   if (injectedProvider) return injectedProvider;
-  return fingerprintValue === REVIEWED_BETTERCOMMS_DIGEST ? reviewedBettercommsProvider() : defaultProvider();
+  return fingerprintValue === REVIEWED_BETTERCOMMS_DIGEST ? reviewedBettercommsProvider() : defaultProvider(onProgress);
 }
 
 function createBaseConsumer({ artifact, artifactStore, provider, artifactRepository = null, operationRepository = null }) {
@@ -1024,7 +1026,7 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
     actorId: "ubo-demo-customer-composition",
     subjectReferenceId,
   };
-  const semanticProvider = selectSemanticProvider(ingestion.fingerprintValue, dependencies.provider);
+  const semanticProvider = selectSemanticProvider(ingestion.fingerprintValue, dependencies.provider, dependencies.onProgress);
   const baseConsumer = createBaseConsumer({
     artifact,
     artifactStore,

@@ -44,3 +44,30 @@ test("the chart reading asks the configured model for medium effort and reports 
   await older.extract({ decodedText: "{}", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
   assert.equal(sent.output_config, undefined);
 });
+
+test("a chart reading with onProgress is streamed: drafts arrive as it is written, and the answer is the same", async () => {
+  const { AnthropicSemanticProvider } = require("../providers");
+  const answer = JSON.stringify({ ownership_party_inventory: [{ inventory_id: "p1", visible_label: "Alice Morgan", party_type: "natural_person" }, { inventory_id: "p2", visible_label: "Target Ltd", party_type: "legal_entity" }], ownership_connector_inventory: [{ subject_inventory_id: "p1", object_inventory_id: "p2", percentage_text: "60%" }], facts: [] });
+  const events = [
+    { type: "message_start", message: { model: "claude-sonnet-5-5", usage: { input_tokens: 900 } } },
+    { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "hmm" } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: answer.slice(0, 60) } },
+    { type: "content_block_delta", delta: { type: "text_delta", text: answer.slice(60) } },
+    { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 700 } },
+    { type: "message_stop" },
+  ];
+  const wire = events.map((event) => `event: ${event.type}\r\ndata: ${JSON.stringify(event)}\r\n\r\n`).join("");
+  const bytes = new TextEncoder().encode(wire);
+  // Cut into uneven pieces, so frames arrive split.
+  const body = (async function* () { for (let at = 0; at < bytes.length; at += 37) yield bytes.slice(at, at + 37); })();
+  let sent;
+  const drafts = [];
+  const provider = new AnthropicSemanticProvider({ apiKey: "test", model: "claude-sonnet-5-5", effort: "medium", onProgress: (draft) => drafts.push(draft),
+    fetchImpl: async (_url, init) => { sent = JSON.parse(init.body); return { ok: true, status: 200, body }; } });
+  const result = await provider.extract({ decodedText: "{}", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
+  assert.equal(sent.stream, true);
+  assert.deepEqual(result.ownershipPartyInventory.map(({ visibleLabel }) => visibleLabel), ["Alice Morgan", "Target Ltd"]);
+  assert.deepEqual(drafts.at(-1), { pass: 1, parties: [{ label: "Alice Morgan", type: "natural_person" }, { label: "Target Ltd", type: "legal_entity" }], connections: [{ from: "Alice Morgan", to: "Target Ltd", percentage: "60%" }] });
+  assert.equal(result.providerUsage.inputTokens, 900);
+  assert.equal(result.providerUsage.outputTokens, 700);
+});

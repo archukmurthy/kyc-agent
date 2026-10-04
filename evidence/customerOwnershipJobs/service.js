@@ -122,7 +122,7 @@ class CustomerOwnershipExtractionJobService {
     provider = null, tenantId, modelVersion = chartReadingModel(),
     profile = OWNERSHIP_CHART_PROFILE,
     maxAttempts = DEFAULT_MAX_ATTEMPTS, leaseSeconds = DEFAULT_LEASE_SECONDS,
-    now = () => new Date(), analyse = analyseIngestedCustomerOwnershipChart } = {}) {
+    now = () => new Date(), analyse = analyseIngestedCustomerOwnershipChart, progressStore = null } = {}) {
     // Every job and artifact lookup below is scoped to this workspace. It comes
     // from the signed-in caller; there is no default (it used to be "nium").
     if (!tenantId) throw new Error("CustomerOwnershipExtractionJobService needs the caller's tenant");
@@ -139,6 +139,31 @@ class CustomerOwnershipExtractionJobService {
     this.leaseSeconds = leaseSeconds;
     this.now = now;
     this.analyse = analyse;
+    // Where a running reading's draft is kept ({ get, set, del }, shared across
+    // server instances - the page asking for it is rarely the one reading).
+    this.progressStore = progressStore;
+  }
+
+  forgetProgress(jobId) { if (this.progressStore) Promise.resolve(this.progressStore.del(this.progressKey(jobId))).catch(() => {}); }
+
+  progressKey(jobId) { return `ubo-chart-progress:${this.tenantId}:${jobId}`; }
+
+  /** Saves what the reading has found so far, at most every two seconds (and
+   *  at once when the verification pass starts). Never fails the reading. */
+  progressRecorder(jobId) {
+    if (!this.progressStore) return null;
+    let lastAt = 0, lastStage = null;
+    return ({ pass, parties = [], connections = [] }) => {
+      const stage = pass > 1 ? "CHECKING" : "READING";
+      if (stage === lastStage && Date.now() - lastAt < 2000) return;
+      lastAt = Date.now(); lastStage = stage;
+      Promise.resolve(this.progressStore.set(this.progressKey(jobId), { stage, parties, connections, updatedAt: new Date(lastAt).toISOString() }, { ttlSeconds: 900 })).catch(() => {});
+    };
+  }
+
+  async progressFor(job) {
+    if (!this.progressStore || job?.state !== "RUNNING") return null;
+    try { return (await this.progressStore.get(this.progressKey(job.id))) || null; } catch (_) { return null; }
   }
 
   async start(rawInput) {
@@ -213,7 +238,8 @@ class CustomerOwnershipExtractionJobService {
   async status(jobId) {
     const job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
     if (!job) throw Object.assign(new Error("Extraction job was not found."), { code: "job_not_found", statusCode: 404 });
-    return publicJob(job);
+    const progress = await this.progressFor(job);
+    return progress ? { ...publicJob(job), progress } : publicJob(job);
   }
 
   /** Retries a failed job. `retried` says whether it was queued again - the
@@ -269,6 +295,7 @@ class CustomerOwnershipExtractionJobService {
         provider: this.provider,
         artifactRepository: this.artifactRepository,
         operationRepository: this.operationRepository,
+        onProgress: this.progressRecorder(job.id),
         requestId: `${job.correlationId}:attempt-${job.attemptCount}`,
         persistence: "EVIDENCE_DURABLE",
       });
@@ -278,6 +305,7 @@ class CustomerOwnershipExtractionJobService {
         : quality === EXTRACTION_QUALITY_STATE.EXTRACTION_SUCCESS_PARTIAL && usable ? "PARTIAL" : null;
       if (!state) throw Object.assign(new Error("Evidence did not produce a validated usable ownership result."), { code: "evidence_result_not_usable", statusCode: 422 });
       const completed = await this.repository.completeJob({ id: job.id, state, result });
+      this.forgetProgress(job.id);
       console.info("[ubo-customer-extraction] job-complete", { jobId: job.id, correlationId: job.correlationId, state, attempt: job.attemptCount });
       return publicJob(completed);
     } catch (error) {
@@ -288,6 +316,7 @@ class CustomerOwnershipExtractionJobService {
         console.warn("[ubo-customer-extraction] attempt-retrying", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus, nextAttemptAt });
         return publicJob(retrying);
       }
+      this.forgetProgress(job.id);
       const failed = await this.repository.failJob({ id: job.id, code: failure.code, message: failure.safeMessage, upstreamStatus: failure.upstreamStatus });
       console.error("[ubo-customer-extraction] job-failed", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus });
       return publicJob(failed);

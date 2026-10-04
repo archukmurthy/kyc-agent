@@ -384,3 +384,15 @@
   .ubo-resolution-trace dl { grid-template-columns: 1fr; }
   .ubo-customer-next-step { align-items: stretch; flex-direction: column; }
 }
+.ubo-customer-found-so-far { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px dashed #b8c9dc; }
+.ubo-customer-found-so-far > strong { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.ubo-customer-found-so-far > strong span { padding: 1px 8px; border-radius: 999px; background: #fff4dd; color: #8a5a00; font-size: 10px; font-weight: 700; }
+.ubo-customer-found-parties, .ubo-customer-found-connections { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.ubo-customer-found-parties li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef4fb; font-size: 11px; animation: ubo-found-in .3s ease-out; }
+.ubo-customer-found-parties li small { color: var(--ubo-customer-muted); font-size: 10px; }
+.ubo-customer-found-connections { flex-direction: column; gap: 3px; }
+.ubo-customer-found-connections li { font-size: 11px; color: var(--ubo-customer-muted); overflow-wrap: anywhere; animation: ubo-found-in .3s ease-out; }
+.ubo-customer-found-connections b { color: inherit; }
+.ubo-customer-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@keyframes ubo-found-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ubo-customer-found-parties li, .ubo-customer-found-connections li { animation: none; } }

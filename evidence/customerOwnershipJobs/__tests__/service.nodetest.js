@@ -203,3 +203,33 @@ test("a retry says whether it actually queued the job again", async () => {
   const again = await service.retry(started.jobId);
   assert.equal(again.retried, false, "a job that is not failed is not retried, and nothing more is spent");
 });
+
+test("while a reading runs, its draft is shown on the job's status, and dropped when it finishes", async () => {
+  const ingestion = new MemoryR1Repository();
+  const repository = new MemoryJobs(ingestion);
+  const stored = new Map();
+  const progressStore = { async get(key) { return stored.get(key) || null; }, async set(key, value) { stored.set(key, value); }, async del(key) { stored.delete(key); } };
+  let release;
+  const analyse = async (_request, deps) => {
+    deps.onProgress({ pass: 1, parties: [{ label: "Alice Morgan", type: "natural_person" }], connections: [] });
+    deps.onProgress({ pass: 1, parties: [], connections: [] }); // within two seconds: not saved
+    deps.onProgress({ pass: 2, parties: [{ label: "Alice Morgan", type: "natural_person" }], connections: [] }); // a new pass is saved at once
+    await new Promise((resolve) => { release = resolve; });
+    return usableResult();
+  };
+  const service = new CustomerOwnershipExtractionJobService({ tenantId: "test-tenant", repository, ingestionRepository: ingestion, artifactStore: new MemoryArtifactStore(), analyse, provider: { configuration: () => ({ provider: "test" }) }, progressStore });
+  const started = await service.start(input());
+  const processing = service.process(started.jobId);
+  await new Promise((resolve) => setImmediate(resolve));
+  const running = await service.status(started.jobId);
+  assert.equal(running.state, "RUNNING");
+  assert.equal(running.progress.stage, "CHECKING");
+  assert.deepEqual(running.progress.parties, [{ label: "Alice Morgan", type: "natural_person" }]);
+  // Another workspace's key is never the one read.
+  assert.deepEqual([...stored.keys()], [`ubo-chart-progress:test-tenant:${started.jobId}`]);
+  release();
+  assert.equal((await processing).state, "COMPLETE");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((await service.status(started.jobId)).progress, undefined);
+  assert.equal(stored.size, 0);
+});

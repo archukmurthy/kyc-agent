@@ -31,6 +31,9 @@ function createCustomerOwnershipJobService(overrides = {}) {
     provider: overrides.provider,
     tenantId: overrides.tenantId,
     modelVersion: chartReadingModel(),
+    // The deployment's shared store (KV in production): a draft written by
+    // the instance reading is read by whichever instance answers the page.
+    progressStore: overrides.progressStore || require("../../lib/storage.js"),
   });
   return { service, repository, db, artifactStore, close: () => db.close() };
 }
