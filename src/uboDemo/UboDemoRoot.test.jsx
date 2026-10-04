@@ -819,7 +819,8 @@ test("correcting the company name keeps the same case", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(sessionCase()).toEqual(expect.objectContaining({ demoCaseId: caseId, company: expect.objectContaining({ legalName: "Vodafone Limited" }) }));
-  expect(mockCustomerEngagement).not.toHaveBeenCalled();
+  // No "separate case" check: the same company continues (the link panel may still ask whether a link was sent).
+  expect(screen.queryByRole("alertdialog", { name: "Starting a separate case" })).toBeNull();
   const upserts = mockPersistPocCase.mock.calls.filter(([operation]) => operation === "UPSERT_CASE").map(([, command]) => command.idempotencyKey);
   expect(upserts[upserts.length - 1]).toMatch(new RegExp(`^case-updated:${caseId}:`));
 });

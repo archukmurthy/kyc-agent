@@ -53,3 +53,24 @@ test("the server's refusal is shown", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Create customer link" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("That case is not in your workspace.");
 });
+
+test("a link made earlier is reported and can be withdrawn, though it cannot be shown again", async () => {
+  server({ revoke: [200, { revoked: "case-1" }] });
+  render(<CustomerLinkPanel caseId="case-1" linkStatus={async () => ({ linkSent: true })} />);
+  expect(await screen.findByText(/already been made/)).toBeInTheDocument();
+  expect(screen.queryByLabelText("Customer link")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Withdraw every link for this case" }));
+  expect(await screen.findByText(/has been withdrawn/)).toBeInTheDocument();
+  expect(screen.queryByText(/already been made/)).toBeNull();
+});
+
+test("a refused copy selects the link and says how to copy it", async () => {
+  server({ create: [200, { token: "tok.en", expiresAt: "2026-10-30T10:00:00.000Z" }] });
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } });
+  render(<CustomerLinkPanel caseId="case-1" />);
+  fireEvent.change(screen.getByLabelText("Customer's email address"), { target: { value: "customer@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create customer link" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Copy link" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/did not allow copying/);
+  expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
+});
