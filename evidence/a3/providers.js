@@ -1,7 +1,7 @@
 "use strict";
 
 const { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE } = require("./anthropicOutputSchema");
-const { ownershipDraft } = require("./ownershipDraft");
+const { canonicalPartyType, ownershipDraft } = require("./ownershipDraft");
 
 class SemanticExtractionProvider {
   capabilities() { return { contentKinds: ["text"], maxRequestBytes: null }; }
@@ -143,7 +143,12 @@ function metadataWithUnitNormalization(metadata, normalization) {
 function mapTypedRelationshipCandidate(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input || null;
   if (typeof input.subject_json === "string" && typeof input.object_json === "string") {
-    const party = (prefix) => ({ partyType: input[`${prefix}_party_type`], ...parsedJson(input[`${prefix}_json`], {}) });
+    const party = (prefix) => {
+      const details = parsedJson(input[`${prefix}_json`], {});
+      const stated = input[`${prefix}_party_type`];
+      const partyType = canonicalPartyType(stated, details.partyType, details.party_type, details.type, details.entityType, details.entity_type, details.category, details.kind) || stated || details.partyType;
+      return { ...details, partyType };
+    };
     const normalizedUnit = normalizeRelationshipUnit(input.measurement_type, input.unit);
     const value = { kind: input.value_kind, measurementType: input.measurement_type, unit: normalizedUnit.unit };
     if (input.value_kind === "EXACT" && input.measurement_type === "count_of_total") { value.numerator = input.numerator; value.denominator = input.denominator; }
@@ -166,7 +171,7 @@ function mapTypedRelationshipCandidate(input) {
   if (input.present === false) return null;
   if (input.present === true) {
     const party = (prefix) => ({
-      partyType: input[`${prefix}_party_type`], name: input[`${prefix}_name`], description: input[`${prefix}_description`],
+      partyType: canonicalPartyType(input[`${prefix}_party_type`]) || input[`${prefix}_party_type`], name: input[`${prefix}_name`], description: input[`${prefix}_description`],
       jurisdiction: input[`${prefix}_jurisdiction`], identifiers: parsedJson(input[`${prefix}_identifiers_json`], []),
       qualifiers: parsedJson(input[`${prefix}_qualifiers_json`], {}),
     });
@@ -532,7 +537,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const completeness = parsed.completeness && ["complete", "incomplete"].includes(parsed.completeness.state) ? { state: parsed.completeness.state, limitations: Array.isArray(parsed.completeness.limitations) ? parsed.completeness.limitations.map(String) : [], sourceRecordCount: Number.isInteger(parsed.completeness.source_record_count) && parsed.completeness.source_record_count >= 0 ? parsed.completeness.source_record_count : null, representedRecordCount: Number.isInteger(parsed.completeness.represented_record_count) && parsed.completeness.represented_record_count >= 0 ? parsed.completeness.represented_record_count : null } : { state: "incomplete", limitations: ["Provider did not report extraction completeness"], sourceRecordCount: null, representedRecordCount: null };
     const requestedConceptOutcomes = requestedConcepts.map((request) => { const reported = reportedOutcomes.get(request.concept); const found = facts.some((fact) => fact.concept === request.concept && fact.valueFound && fact.semanticRole === "business_fact"); return { concept: request.concept, status: found ? "found" : reported === "not_found" ? "not_found" : completeness.state === "complete" ? "not_found" : "not_evaluated" }; });
     const ownershipPartyInventory = rawPartyInventory.map((item) => ({
-      inventoryId: String(item?.inventory_id || item?.party_id || item?.id || ""), visibleLabel: String(item?.visible_label || item?.name || item?.description || ""), partyType: String(item?.party_type || "unknown_or_other"), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
+      inventoryId: String(item?.inventory_id || item?.party_id || item?.id || ""), visibleLabel: String(item?.visible_label || item?.name || item?.description || ""), partyType: canonicalPartyType(item?.party_type, item?.partyType, item?.type, item?.entity_type, item?.category, item?.kind) || "unknown_or_other", sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
     }));
     const ownershipConnectorInventory = rawConnectorInventory.map((item) => ({
       connectorId: String(item?.connector_id || item?.inventory_id || item?.id || ""), subjectInventoryId: String(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.source_party_id || item?.from_party_id || item?.from_party_inventory_id || item?.subject_id || item?.from || item?.source || ""), objectInventoryId: String(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.target_party_id || item?.to_party_id || item?.to_party_inventory_id || item?.object_id || item?.to || item?.target || ""), visibleLabel: String(item?.relationship_label || item?.connector_label || item?.source_label || item?.label || ""), percentageText: String(item?.percentage_text || item?.connector_label || item?.relationship_label || item?.source_label || item?.label || (typeof (item?.percentage_points ?? item?.percentage ?? item?.percentage_value) === "number" ? `${item.percentage_points ?? item.percentage ?? item.percentage_value}%` : "")), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),

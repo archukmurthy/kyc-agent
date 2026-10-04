@@ -71,3 +71,10 @@ test("a chart reading with onProgress is streamed: drafts arrive as it is writte
   assert.equal(result.providerUsage.inputTokens, 900);
   assert.equal(result.providerUsage.outputTokens, 700);
 });
+
+test("a typed relationship whose party type is written another way, or only inside the party details, is not rejected", () => {
+  const { mapTypedRelationshipCandidate } = require("../providers");
+  const mapped = mapTypedRelationshipCandidate({ subject_party_type: "NATURAL_PERSON", subject_json: JSON.stringify({ name: "Alice Morgan" }), object_party_type: "", object_json: JSON.stringify({ name: "Holdco Ltd", party_type: "Company" }), relationship_type: "ECONOMIC_OWNERSHIP", value_kind: "EXACT", measurement_type: "percentage", exact_value: 26, unit: "percentage_points", temporal_state: "current", temporal_json: "{}", source_specific_metadata_json: "{}", qualifications_json: "[]", direction_established: true });
+  assert.equal(mapped.subject.partyType, "natural_person");
+  assert.equal(mapped.object.partyType, "legal_entity");
+});

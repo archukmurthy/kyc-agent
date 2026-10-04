@@ -117,13 +117,20 @@ function FoundSoFar({ progress }) {
   </div>;
 }
 
-function ReadingProgress({ progress }) {
-  const [seconds, setSeconds] = useState(0);
+function ReadingProgress({ progress, startedAt }) {
+  // Counted from when the reading began (the job's creation), not from when
+  // this panel appeared: reopening the page mid-reading showed 0:00 again.
+  const since = useMemo(() => {
+    const at = startedAt ? new Date(startedAt).getTime() : NaN;
+    return Number.isFinite(at) && at <= Date.now() ? at : Date.now();
+  }, [startedAt]);
+  const [seconds, setSeconds] = useState(() => Math.floor((Date.now() - since) / 1000));
   useEffect(() => {
-    const started = Date.now();
-    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    const tick = () => setSeconds(Math.floor((Date.now() - since) / 1000));
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [since]);
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   return <div className="ubo-customer-reading-progress" role="status">
     <strong>{progress?.stage === "CHECKING" ? "Checking the reading against your chart" : "Reading your chart"} · {clock}</strong>
@@ -133,7 +140,7 @@ function ReadingProgress({ progress }) {
   </div>;
 }
 
-function UploadPanel({ file, error, busy, progress, retryAvailable, onChoose, onAnalyse, onRemove }) {
+function UploadPanel({ file, error, busy, progress, startedAt, retryAvailable, onChoose, onAnalyse, onRemove }) {
   const input = useRef(null);
   return <section className="ubo-customer-card ubo-customer-upload-card">
     <div className="ubo-customer-card-title"><span className="ubo-customer-icon" aria-hidden="true">↥</span><div><small>One document</small><h2>Upload your ownership chart</h2></div></div>
@@ -150,7 +157,7 @@ function UploadPanel({ file, error, busy, progress, retryAvailable, onChoose, on
       <button type="button" onClick={onRemove} disabled={busy}>Remove</button>
     </div>}
     {error && <p className="ubo-customer-error" role="alert">{error}</p>}
-    {busy && <ReadingProgress progress={progress} />}
+    {busy && <ReadingProgress progress={progress} startedAt={startedAt} />}
     <div className="ubo-customer-upload-actions"><small>{retryAvailable ? "Your document is saved safely. Retry will reuse it." : "Your file is saved before analysis begins."}</small><button type="button" className="ubo-customer-primary" onClick={onAnalyse} disabled={busy}>{busy ? "Analysing your ownership structure…" : retryAvailable ? "Try analysis again" : "Upload and analyse"}<span>→</span></button></div>
   </section>;
 }
@@ -293,7 +300,8 @@ export default function CustomerOwnershipChartPage() {
   // The running reading's draft (GET_EXTRACTION_JOB answers with it while the
   // job runs). Cleared when the reading ends.
   const [readingProgress, setReadingProgress] = useState(null);
-  useEffect(() => { if (!busy) setReadingProgress(null); }, [busy]);
+  const [readingStartedAt, setReadingStartedAt] = useState(null);
+  useEffect(() => { if (!busy) { setReadingProgress(null); setReadingStartedAt(null); } }, [busy]);
   const [result, setResult] = useState(restored && restored.context?.demoCaseId === context?.demoCaseId ? restored.result : null);
   const [preview, setPreview] = useState(() => customerOwnershipChartPreviewFor({ context, result: restored?.result }));
   const [calculationMethod, setCalculationMethod] = useState(restored?.calculationMethod || "EFFECTIVE_INTEREST");
@@ -381,6 +389,8 @@ export default function CustomerOwnershipChartPage() {
         if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
       }
       if (job.progress) setReadingProgress(job.progress);
+      const { createdAt } = job;
+      if (createdAt) setReadingStartedAt((current) => current || createdAt);
       if (job.state === "RUNNING") await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
       // Processing answers only when the reading ends; meanwhile its draft is
       // asked for separately (a free status check).
@@ -534,7 +544,7 @@ export default function CustomerOwnershipChartPage() {
       <CompanyContext context={context} />
       <ExistingResearchAssertions researchResult={context.researchResult} />
       <div className="ubo-customer-intro"><span>Step 2 · Ownership</span><h1>Help us understand your ownership structure</h1><p>Upload one ownership chart. We’ll read the relationships stated in it and check whether it contains certification details.</p></div>
-      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} analysisVisible={analysisVisible} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} progress={readingProgress} retryAvailable={Boolean(failedJob)} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
+      {result ? <Results result={result} researchResult={context.researchResult} calculationMethod={calculationMethod} onCalculationMethod={changeCalculationMethod} onReplace={replace} persistenceNotice={persistenceNotice} preview={preview} analysisVisible={analysisVisible} /> : <><SavedExtractionsPanel records={savedExtractions} onUse={useSaved} /><UploadPanel file={file} error={error} busy={busy} progress={readingProgress} startedAt={readingStartedAt} retryAvailable={Boolean(failedJob)} onChoose={choose} onAnalyse={analyse} onRemove={remove} /></>}
     </main>
     <footer className="ubo-customer-footer">Demo experience · Evidence Artifact and extraction saved durably · Read-only source comparison</footer>
   </div>;

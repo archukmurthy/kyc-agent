@@ -283,15 +283,18 @@ test("a reading still running when the page is opened again is waited for, with 
   try {
     seed();
     writeCustomerOwnershipJob({ jobId: "job-running", demoCaseId: demoCase.demoCaseId, artifactId: "artifact-1", correlationId: "corr-running" });
-    // The reading elsewhere finishes eight seconds from now.
+    // The reading elsewhere began 75 seconds ago and finishes eight seconds from now.
+    const startedAt = new Date(Date.now() - 75000).toISOString();
     const finishesAt = Date.now() + 2 * RUNNING_POLL_MS;
     window.fetch = jest.fn(async () => {
       const done = Date.now() >= finishesAt;
-      return { ok: true, json: async () => ({ success: true, job: { jobId: "job-running", artifactId: "artifact-1", correlationId: "corr-running", state: done ? "COMPLETE" : "RUNNING", ...(done ? { result: analysis } : {}) } }) };
+      return { ok: true, json: async () => ({ success: true, job: { jobId: "job-running", artifactId: "artifact-1", correlationId: "corr-running", createdAt: startedAt, state: done ? "COMPLETE" : "RUNNING", ...(done ? { result: analysis } : {}) } }) };
     });
     render(<CustomerOwnershipChartPage />);
     expect(await screen.findByText(/Reading your chart/)).toBeInTheDocument();
     expect(screen.getByText(/You can leave this page/)).toBeInTheDocument();
+    // The clock counts from the reading's start, not from the page opening.
+    await waitFor(() => expect(screen.getByText(/Reading your chart · 1:1\d/)).toBeInTheDocument());
     // Twelve quick re-asks used to end in "Refresh this page"; now each waits.
     for (let tick = 0; tick < 4 && !screen.queryByRole("heading", { name: /Continue to questions/i }); tick += 1) {
       await act(async () => { jest.advanceTimersByTime(RUNNING_POLL_MS); });
