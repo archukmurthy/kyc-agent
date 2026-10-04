@@ -5,6 +5,7 @@ const { verifyEnvBearer } = require("../lib/auth");
 const { createPostgresDb } = require("../evidence/a2/postgresDb.js");
 const { PostgresCustomerExtractionJobRepository } = require("../evidence/customerOwnershipJobs/repository.js");
 const storage = require("../lib/storage.js");
+const { chartReadingModel } = require("../evidence/a3/providers.js");
 
 const CONNECTIVITY_TIMEOUT_MS = 5000;
 
@@ -99,7 +100,7 @@ function createHandler({ dbFactory = createPostgresDb, fetchImpl = boundedFetch,
         anthropicConnectivity = providerResult(response);
       } catch (error) { anthropicConnectivity = { status: "DEGRADED", reason: error?.name === "AbortError" ? "timeout" : "network" }; }
     } else anthropicConnectivity = { status: "UNAVAILABLE", reason: "ANTHROPIC_API_KEY_missing" };
-    checks.aiExtractionProvider = { ...anthropicConnectivity, model: process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5", service: "anthropic" };
+    checks.aiExtractionProvider = { ...anthropicConnectivity, model: chartReadingModel(), service: "anthropic" };
     checks.researchProvider = { ...anthropicConnectivity, model: process.env.UBO_RESEARCH_ANTHROPIC_MODEL || "claude-sonnet-4-5", service: "anthropic" };
     if (process.env.COMPANIES_HOUSE_API_KEY) {
       try {

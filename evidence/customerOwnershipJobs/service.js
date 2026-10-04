@@ -4,6 +4,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { PrivateArtifactIngestionService } = require("../r1/service.js");
 const { sha256 } = require("../r1/domain.js");
 const { OWNERSHIP_CHART_PROFILE, EXTRACTION_QUALITY_STATE } = require("../a3/ownershipChartProfile.js");
+const { chartReadingModel } = require("../a3/providers.js");
 const {
   analyseIngestedCustomerOwnershipChart,
   selectSemanticProvider,
@@ -118,7 +119,7 @@ function artifactFrom(stored, company) {
 
 class CustomerOwnershipExtractionJobService {
   constructor({ repository, ingestionRepository, artifactStore, artifactRepository = null, operationRepository = null,
-    provider = null, tenantId, modelVersion = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5",
+    provider = null, tenantId, modelVersion = chartReadingModel(),
     profile = OWNERSHIP_CHART_PROFILE,
     maxAttempts = DEFAULT_MAX_ATTEMPTS, leaseSeconds = DEFAULT_LEASE_SECONDS,
     now = () => new Date(), analyse = analyseIngestedCustomerOwnershipChart } = {}) {

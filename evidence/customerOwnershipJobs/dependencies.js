@@ -8,6 +8,7 @@ const { PostgresA3Repository } = require("../a3/repository.js");
 const { PostgresR2Repository } = require("../r2/repository.js");
 const { PostgresCustomerExtractionJobRepository } = require("./repository.js");
 const { CustomerOwnershipExtractionJobService } = require("./service.js");
+const { chartReadingModel } = require("../a3/providers.js");
 
 function createArtifactStore() {
   if (process.env.BLOB_READ_WRITE_TOKEN) return new VercelBlobArtifactStore();
@@ -29,7 +30,7 @@ function createCustomerOwnershipJobService(overrides = {}) {
     repository, ingestionRepository, artifactStore, artifactRepository, operationRepository,
     provider: overrides.provider,
     tenantId: overrides.tenantId,
-    modelVersion: process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5",
+    modelVersion: chartReadingModel(),
   });
   return { service, repository, db, artifactStore, close: () => db.close() };
 }

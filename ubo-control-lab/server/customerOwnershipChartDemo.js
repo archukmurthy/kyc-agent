@@ -6,6 +6,7 @@ const { LiveArtifactInterpretationService } = require("../../evidence/a3/liveSer
 const {
   ANTHROPIC_R4_INSTRUCTION_REFERENCE,
   AnthropicSemanticProvider,
+  chartReadingModel,
 } = require("../../evidence/a3/providers.js");
 const { EXTRACTION_QUALITY_STATE, OWNERSHIP_CHART_PROFILE } = require("../../evidence/a3/ownershipChartProfile.js");
 const { createEvidenceConsumer, CONTRACT_VERSIONS } = require("../../evidence/consumer/v1/index.js");
@@ -26,6 +27,7 @@ const RESULT_VERSION = "ubo-demo-customer-ownership-chart-result-v1";
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 const MAX_BYTES = 3 * 1024 * 1024;
 const CUSTOMER_PROVIDER_TIMEOUT_MS = 240000;
+const CHART_READING_MAX_OUTPUT_TOKENS = 32000;
 const SUPPORTED_MEDIA = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const SUPPORTED_HANDOFF_CONCEPTS = new Set(["ECONOMIC_OWNERSHIP", "RELATIONSHIP_CURRENTNESS", "RELATIONSHIP_PERCENTAGE", "NOMINEE_RELATIONSHIP"]);
 const CERTIFICATION_CONCEPTS = Object.freeze([
@@ -126,12 +128,16 @@ function createMemoryArtifactRepository(artifact) {
 }
 
 function defaultProvider() {
-  const model = process.env.EVIDENCE_A3_ANTHROPIC_MODEL || "claude-sonnet-4-5";
   return new AnthropicSemanticProvider({
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model,
+    model: chartReadingModel(),
     timeoutMs: CUSTOMER_PROVIDER_TIMEOUT_MS,
     maxAttempts: 1,
+    // A customer waits on this reading. Medium is the documented starting
+    // point for latency-sensitive work; EVIDENCE_A3_EFFORT overrides it.
+    effort: process.env.EVIDENCE_A3_EFFORT || "medium",
+    // Thinking counts toward the cap on newer models; 16k cut readings short.
+    maxOutputTokens: CHART_READING_MAX_OUTPUT_TOKENS,
   });
 }
 

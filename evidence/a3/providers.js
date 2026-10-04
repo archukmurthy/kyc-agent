@@ -22,6 +22,15 @@ const SEMANTIC_DISCOVERY_OBJECTIVE = Object.freeze([
 ]);
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
+// The model that reads a customer's ownership chart and supporting documents
+// unless EVIDENCE_A3_ANTHROPIC_MODEL names another (owner decision 2026-10-04:
+// Sonnet 5.5 - newer than Sonnet 4.5, and $2/$10 per million tokens against
+// $3/$15).
+const DEFAULT_CHART_READING_MODEL = "claude-sonnet-5-5";
+function chartReadingModel() { return process.env.EVIDENCE_A3_ANTHROPIC_MODEL || DEFAULT_CHART_READING_MODEL; }
+// Models that accept output_config.effort; sending it to an older model is
+// refused outright (400).
+function acceptsEffort(model) { return /^claude-(fable|mythos|opus-5|opus-4-[5-8]|sonnet-5|sonnet-4-6)/.test(String(model || "")); }
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
 function parsedJson(value, fallback) {
@@ -319,8 +328,8 @@ function parseProviderJson(text) {
 }
 
 class AnthropicSemanticProvider extends SemanticExtractionProvider {
-  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE, maxAttempts = 2 } = {}) {
-    super(); this.apiKey = apiKey; this.model = model; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference; this.maxAttempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
+  constructor({ apiKey, model, fetchImpl = global.fetch, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS, instructionReference = ANTHROPIC_R4_INSTRUCTION_REFERENCE, maxAttempts = 2, effort = null } = {}) {
+    super(); this.apiKey = apiKey; this.model = model; this.effort = effort; this.fetchImpl = fetchImpl; this.timeoutMs = timeoutMs; this.maxOutputTokens = maxOutputTokens; this.instructionReference = instructionReference; this.maxAttempts = Math.max(1, Math.min(2, Number(maxAttempts) || 1));
   }
   configuration() { return { provider: "anthropic", model: this.model || null, instructionReference: this.instructionReference, ready: !!(this.apiKey && this.model) }; }
   capabilities() { return { contentKinds: ["text", "image", "document"], maxRequestBytes: 32 * 1024 * 1024, mediaTypes: ["application/json", "text/html", "application/pdf", "image/png", "image/jpeg"] }; }
@@ -378,6 +387,8 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     if (context.schemaReference !== "ownership-chart-extraction-v2") {
       request.output_config = { format: { type: "json_schema", schema: ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA } };
     }
+    if (this.effort && acceptsEffort(this.model)) request.output_config = { ...(request.output_config || {}), effort: this.effort };
+    const requestStartedAt = Date.now();
     const requestBody = JSON.stringify(request);
     let response;
     let attemptsUsed = 0;
@@ -471,8 +482,11 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       connectorId: String(item?.connector_id || item?.inventory_id || item?.id || ""), subjectInventoryId: String(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.source_party_id || item?.from_party_id || item?.from_party_inventory_id || item?.subject_id || item?.from || item?.source || ""), objectInventoryId: String(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.target_party_id || item?.to_party_id || item?.to_party_inventory_id || item?.object_id || item?.to || item?.target || ""), visibleLabel: String(item?.relationship_label || item?.connector_label || item?.source_label || item?.label || ""), percentageText: String(item?.percentage_text || item?.connector_label || item?.relationship_label || item?.source_label || item?.label || (typeof (item?.percentage_points ?? item?.percentage ?? item?.percentage_value) === "number" ? `${item.percentage_points ?? item.percentage ?? item.percentage_value}%` : "")), sourceLocator: parsedJson(item?.source_locator_json, {}), disposition: String(item?.disposition || "UNRESOLVED"),
     }));
     const ownershipDataStatusFact = facts.find((fact) => fact.concept === "ownership_data_status" && typeof fact.value === "string")?.value;
-    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed };
+    // What the call cost and took, so a model, effort or prompt change can be
+    // measured rather than guessed (UBO-59).
+    const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt };
+    return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed, providerUsage };
   }
 }
 
-module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, relationshipValueForCandidate };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_CHART_READING_MODEL, DEFAULT_MAX_OUTPUT_TOKENS, acceptsEffort, chartReadingModel, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, relationshipValueForCandidate };
