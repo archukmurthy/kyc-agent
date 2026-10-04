@@ -619,13 +619,19 @@ export default function UboDemoRoot() {
     if (!saved.researchRelease?.mayProceed) throw new Error(saved.researchRelease?.reason || "Discovery is still in progress because unresolved research could change who requires identity verification.");
   };
   const switchToCustomerView = async () => {
+    // Opened now, while this is still the click: after the save below the
+    // browser blocked it as an unrequested pop-up (found clicking through).
+    let openedWindow = null;
+    try { openedWindow = window.open("", "ubo-demo-customer-view"); } catch (_) { openedWindow = null; }
     try {
       setCustomerSwitchState({ kind: "pending", message: "Opening the customer view and transferring this case…" });
       const saved = await saveResearchDurably();
       if (!saved.researchRelease?.mayProceed) throw new Error(saved.researchRelease?.reason || "Discovery is still in progress because unresolved research could change who requires identity verification.");
-      await openCustomerViewHandoff(buildCustomerHandoff({ draft, demoCase, researchResult }));
+      await openCustomerViewHandoff(buildCustomerHandoff({ draft, demoCase, researchResult }), { openedWindow });
       setCustomerSwitchState({ kind: "accepted", message: "Customer view opened with this case and all research assertions." });
     } catch (cause) {
+      // Still blank (nothing was sent to it): close it rather than leave an empty window.
+      try { if (openedWindow && !openedWindow.closed && openedWindow.location.href === "about:blank") openedWindow.close(); } catch (_) { /* Another origin now: leave it. */ }
       setCustomerSwitchState({ kind: "error", message: cause.message || "The customer view could not be opened." });
     }
   };

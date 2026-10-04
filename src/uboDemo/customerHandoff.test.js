@@ -101,3 +101,24 @@ test("customer receiver accepts the complete handoff only from its exact opener 
   expect(onHandoff).toHaveBeenCalledWith(payload);
   expect(opener.postMessage).toHaveBeenLastCalledWith({ type: CUSTOMER_HANDOFF_ACCEPTED, contractVersion: CUSTOMER_HANDOFF_CONTRACT }, "http://localhost:3000");
 });
+
+test("a window opened at the click is used, so the browser does not block a pop-up after the save", async () => {
+  const listeners = {};
+  const openedWindow = { closed: false, location: { href: "about:blank" }, postMessage: jest.fn() };
+  const windowRef = {
+    location: { protocol: "http:", hostname: "localhost", origin: "http://localhost:3000" },
+    open: jest.fn(),
+    addEventListener: jest.fn((name, listener) => { listeners[name] = listener; }),
+    removeEventListener: jest.fn(),
+    setTimeout: jest.fn(() => 7),
+    clearTimeout: jest.fn(),
+  };
+  const payload = { demoCase: { demoCaseId: "demo-1" } };
+  const accepted = openCustomerViewHandoff(payload, { windowRef, configuredUrl: "", openedWindow });
+  expect(windowRef.open).not.toHaveBeenCalled();
+  expect(openedWindow.location.href).toContain("handoff=ubo-demo-customer-handoff-v1");
+  listeners.message({ origin: "http://localhost:3000", source: openedWindow, data: { type: CUSTOMER_HANDOFF_READY } });
+  expect(openedWindow.postMessage).toHaveBeenCalledWith({ type: CUSTOMER_HANDOFF_DELIVERY, payload }, "http://localhost:3000");
+  listeners.message({ origin: "http://localhost:3000", source: openedWindow, data: { type: CUSTOMER_HANDOFF_ACCEPTED, contractVersion: CUSTOMER_HANDOFF_CONTRACT } });
+  await expect(accepted).resolves.toContain("/ubo-demo/customer/");
+});

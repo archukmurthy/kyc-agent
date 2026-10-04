@@ -104,6 +104,9 @@ export function openCustomerViewHandoff(payload, {
   windowRef = window,
   configuredUrl = process.env.REACT_APP_UBO_CUSTOMER_DEMO_URL,
   timeoutMs = 10000,
+  // A window opened at the click itself. Opened only after the case is saved,
+  // the browser no longer counts it as the click's and may block it.
+  openedWindow = null,
 } = {}) {
   const target = resolveCustomerDemoUrl(windowRef.location, configuredUrl);
   if (!target) {
@@ -128,7 +131,10 @@ export function openCustomerViewHandoff(payload, {
         && event.data?.contractVersion === CUSTOMER_HANDOFF_CONTRACT) finish();
     };
     windowRef.addEventListener("message", receive);
-    customerWindow = windowRef.open(target.href, "ubo-demo-customer-view");
+    if (openedWindow && !openedWindow.closed) {
+      customerWindow = openedWindow;
+      customerWindow.location.href = target.href;
+    } else customerWindow = windowRef.open(target.href, "ubo-demo-customer-view");
     if (!customerWindow) {
       finish(new Error("The browser blocked the customer view. Allow pop-ups and try again."));
       return;
