@@ -65,7 +65,7 @@ test("structured live contract validates 75, 25 and 100 percentage-point ownersh
   assert.equal(result.facts[0].supportLocators[0].supportDescription.includes("75%"), true);
   assert.equal(requestBody.output_config.format.type, "json_schema"); assert.equal(requestBody.output_config.format.schema.additionalProperties, false);
   assert.equal(JSON.stringify(requestBody).includes('"citations"'), false); assert.equal(providerFor([]).configuration().instructionReference, ANTHROPIC_R4_INSTRUCTION_REFERENCE);
-  assert.equal(ANTHROPIC_R4_INSTRUCTION_REFERENCE, "evidence-r4-live-v5-ownership-inventory");
+  assert.equal(ANTHROPIC_R4_INSTRUCTION_REFERENCE, "evidence-r4-live-v6-inventory-first");
   assert.match(requestBody.messages[0].content.at(-1).text, /75% is 75/); assert.match(requestBody.messages[0].content.at(-1).text, /QUALITATIVE uses qualitative_value/);
 });
 

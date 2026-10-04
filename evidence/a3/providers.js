@@ -56,6 +56,34 @@ async function readMessageStream(body, onText) {
   return message;
 }
 
+// A relationship's parties take their type from the provider's own party
+// inventory when the relationship row does not state one. Sonnet 5.5 names
+// the parties of a relationship and states their types only in the inventory;
+// all 14 relationships of a chart were rejected as "partyType is required"
+// (2026-10-04). A type the row states itself is kept.
+const labelKey = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+function withInventoryPartyTypes(candidate, inventory) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return candidate;
+  const byId = new Map(), byLabel = new Map();
+  (inventory || []).forEach((item) => {
+    const type = canonicalPartyType(item?.party_type, item?.partyType, item?.type, item?.entity_type, item?.category, item?.kind);
+    if (!type) return;
+    const id = item?.inventory_id || item?.party_id || item?.id;
+    if (id) byId.set(String(id), type);
+    const label = labelKey(item?.visible_label || item?.name);
+    if (label) byLabel.set(label, type);
+  });
+  const metadata = candidate.sourceSpecificMetadata || {};
+  const fill = (party, idKey) => {
+    if (!party || typeof party !== "object") return party;
+    const own = canonicalPartyType(party.partyType, party.party_type, party.type, party.entityType, party.entity_type, party.category, party.kind);
+    if (own) return { ...party, partyType: own };
+    const found = byId.get(String(metadata[idKey] || party.inventoryId || party.inventory_id || "")) || byLabel.get(labelKey(party.name || party.description));
+    return found ? { ...party, partyType: found } : party;
+  };
+  return { ...candidate, subject: fill(candidate.subject, "subjectInventoryId"), object: fill(candidate.object, "objectInventoryId") };
+}
+
 function acceptsEffort(model) { return /^claude-(fable|mythos|opus-5|opus-4-[5-8]|sonnet-5|sonnet-4-6)/.test(String(model || "")); }
 const DEFAULT_PROVIDER_TIMEOUT_MS = 120000;
 
@@ -377,7 +405,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const instruction = [
       "Interpret only the verified preserved evidence supplied below.",
       "Return one JSON object with facts, requested_concept_outcomes, completeness, and support.",
-      "When Lab extraction context schemaReference is ownership-chart-extraction-v2, also build ownership_party_inventory and ownership_connector_inventory before extracting relationships. Identify every visible person, legal entity, trust/arrangement, and unclear party. Do not omit a party because its relationship is unclear; retain it with disposition UNRESOLVED. Inventory every visible connector and percentage separately. Link each ownership typed_relationship to its connector, subject, and object inventory IDs. If a visible item cannot be reconciled, retain it in the inventory rather than inventing a relationship.",
+      "When Lab extraction context schemaReference is ownership-chart-extraction-v2, also build ownership_party_inventory and ownership_connector_inventory before extracting relationships. Write them as the first two top-level arrays of the JSON object, before facts, so they are complete before any relationship refers to them. Identify every visible person, legal entity, trust/arrangement, and unclear party. Do not omit a party because its relationship is unclear; retain it with disposition UNRESOLVED. Inventory every visible connector and percentage separately. Link each ownership typed_relationship to its connector, subject, and object inventory IDs. If a visible item cannot be reconciled, retain it in the inventory rather than inventing a relationship.",
       "For ownership-chart-extraction-v2, ownership_data_status is OWNERSHIP_RELATIONSHIPS_PRESENT when at least one relationship is visible, NO_OWNERSHIP_RELATIONSHIPS_CONFIRMED only when the complete source was inspected and contains no ownership relationship, and UNRESOLVED when visibility or interpretation is incomplete. Use NOT_APPLICABLE for other profiles.",
       "For ownership-chart-extraction-v2, return only ownership/control parties, connectors, relationships, their currentness, and the specifically requested certification facts. Do not return application navigation, journey names, renderer metadata, page headings, graph counters, zoom percentages, instructions, status-card prose, or other user-interface text as business facts. A percentage is a relationship percentage only when it labels an ownership/control connector; never treat a zoom value such as 100% as ownership. Every returned business fact must include a source locator. For a PDF, use the exact 1-indexed page range plus an excerpt and set qualified=true when those fields locate the source. For an image, include an excerpt or description and original-pixel coordinates when available.",
       "Return shallow indexed transport lists: facts, support_locators, and typed_relationships. value_json and supporting_artifact_ids_json are valid JSON encoded as strings. Each support or relationship row uses fact_index, the zero-based index of its Fact. Omit rows instead of inventing unsupported locators or relationships.",
@@ -531,6 +559,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
         ...typedRelationshipCandidate,
         sourceSpecificMetadata: { ...(typedRelationshipCandidate.sourceSpecificMetadata || {}), ...Object.fromEntries(Object.entries(enriched.inventoryIds).filter(([, id]) => id)) },
       };
+      typedRelationshipCandidate = withInventoryPartyTypes(typedRelationshipCandidate, rawPartyInventory);
       return { concept: String(item.concept), value, raw: item.raw == null ? null : String(item.raw), requested: isRequested, schemaFieldId: isRequested ? request.schemaFieldId || null : null, informationNeedId: isRequested ? request.informationNeedId || null : null, valueFound: item.value_found === true, semanticRole: String(item.semantic_role || "unspecified"), sampled: item.sampled === true, supportingArtifactIds: Array.isArray(encodedSupportIds) ? encodedSupportIds.map(String) : Array.isArray(item.supporting_artifact_ids) ? item.supporting_artifact_ids.map(String) : [], supportLocators: shallowTransport ? locatorsByFact.get(sourceIndex) || [] : Array.isArray(item.support_locators) ? item.support_locators.map(mapSupportLocator) : [], semanticAmbiguity: !!item.semanticAmbiguity, ambiguous: !!item.ambiguous, typedRelationshipCandidate };
     });
     const reportedOutcomes = new Map((Array.isArray(parsed.requested_concept_outcomes) ? parsed.requested_concept_outcomes : []).filter((item) => item?.concept).map((item) => [String(item.concept), String(item.status)]));
@@ -556,4 +585,4 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
   }
 }
 
-module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_CHART_READING_MODEL, DEFAULT_MAX_OUTPUT_TOKENS, acceptsEffort, chartReadingModel, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, relationshipValueForCandidate };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_CHART_READING_MODEL, DEFAULT_MAX_OUTPUT_TOKENS, acceptsEffort, chartReadingModel, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, withInventoryPartyTypes, relationshipValueForCandidate };

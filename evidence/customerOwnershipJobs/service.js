@@ -152,11 +152,15 @@ class CustomerOwnershipExtractionJobService {
    *  at once when the verification pass starts). Never fails the reading. */
   progressRecorder(jobId) {
     if (!this.progressStore) return null;
-    let lastAt = 0, lastStage = null;
+    let lastAt = 0, lastStage = null, lastCount = -1;
     return ({ pass, parties = [], connections = [] }) => {
       const stage = pass > 1 ? "CHECKING" : "READING";
-      if (stage === lastStage && Date.now() - lastAt < 2000) return;
-      lastAt = Date.now(); lastStage = stage;
+      // Anything newly found is saved at once (the provider reports at most
+      // once a second); otherwise at most every two seconds. The last report
+      // of a pass was being dropped.
+      const count = parties.length + connections.length;
+      if (stage === lastStage && count === lastCount && Date.now() - lastAt < 2000) return;
+      lastAt = Date.now(); lastStage = stage; lastCount = count;
       Promise.resolve(this.progressStore.set(this.progressKey(jobId), { stage, parties, connections, updatedAt: new Date(lastAt).toISOString() }, { ttlSeconds: 900 })).catch(() => {});
     };
   }

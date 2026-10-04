@@ -212,7 +212,7 @@ test("while a reading runs, its draft is shown on the job's status, and dropped 
   let release;
   const analyse = async (_request, deps) => {
     deps.onProgress({ pass: 1, parties: [{ label: "Alice Morgan", type: "natural_person" }], connections: [] });
-    deps.onProgress({ pass: 1, parties: [], connections: [] }); // within two seconds: not saved
+    deps.onProgress({ pass: 1, parties: [{ label: "Alice Morgan", type: "natural_person" }], connections: [] }); // nothing new within two seconds: not saved
     deps.onProgress({ pass: 2, parties: [{ label: "Alice Morgan", type: "natural_person" }], connections: [] }); // a new pass is saved at once
     await new Promise((resolve) => { release = resolve; });
     return usableResult();

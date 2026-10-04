@@ -78,3 +78,21 @@ test("a typed relationship whose party type is written another way, or only insi
   assert.equal(mapped.subject.partyType, "natural_person");
   assert.equal(mapped.object.partyType, "legal_entity");
 });
+
+test("a relationship that only names its parties takes their types from the provider's own party inventory", async () => {
+  const { AnthropicSemanticProvider } = require("../providers");
+  const parties = [{ inventory_id: "P1", visible_label: "Alice Morgan", party_type: "person" }, { inventory_id: "P2", visible_label: "Vodafone Limited", type: "legal_entity" }];
+  const answer = {
+    facts: [
+      { concept: "ownership_party_inventory", value_json: JSON.stringify(parties), raw: "", requested: false, value_found: true, semantic_role: "business_fact", sampled: false, supporting_artifact_ids_json: "[]" },
+      { concept: "economic_ownership", value_json: JSON.stringify({ subject: "Alice Morgan", object: "Vodafone Limited", percentage: 26 }), raw: "Alice Morgan 26% Vodafone Limited", requested: false, value_found: true, semantic_role: "business_fact", sampled: false, supporting_artifact_ids_json: "[]" },
+    ],
+    support_locators: [],
+    typed_relationships: [{ fact_index: 1, subject_inventory_id: "P1", object_inventory_id: "", direction_established: true, relationship_type: "ECONOMIC_OWNERSHIP", subject_json: JSON.stringify({ name: "Alice Morgan" }), object_json: JSON.stringify({ name: "Vodafone  limited" }), value_kind: "EXACT", measurement_type: "percentage", exact_value: 26, unit: "percentage_points", temporal_state: "unknown", temporal_json: "{}", source_specific_metadata_json: "{}", qualifications_json: "[]" }],
+  };
+  const provider = new AnthropicSemanticProvider({ apiKey: "test", model: "claude-sonnet-5-5", fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(answer) }] }) }) });
+  const result = await provider.extract({ decodedText: "{}", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
+  const candidate = result.facts.find((fact) => fact.concept === "economic_ownership").typedRelationshipCandidate;
+  assert.equal(candidate.subject.partyType, "natural_person"); // by inventory id, "person" read as a natural person
+  assert.equal(candidate.object.partyType, "legal_entity"); // by name, spacing and case aside
+});

@@ -1,6 +1,6 @@
 "use strict";
 
-const ANTHROPIC_R4_INSTRUCTION_REFERENCE = "evidence-r4-live-v5-ownership-inventory";
+const ANTHROPIC_R4_INSTRUCTION_REFERENCE = "evidence-r4-live-v6-inventory-first";
 
 function strictObject(properties, required = Object.keys(properties), description) {
   return { type: "object", ...(description ? { description } : {}), properties, required, additionalProperties: false };
