@@ -99,6 +99,10 @@
 .ubo-customer-chart-preview-unavailable strong { font-size: 13px; }
 .ubo-customer-chart-preview-unavailable p { max-width: 580px; margin: 8px auto 0; color: var(--ubo-customer-muted); font-size: 11px; line-height: 1.55; }
 .ubo-customer-error { margin: 12px 0 0 !important; color: #aa2f2f !important; font-size: 11px !important; font-weight: 700; }
+.ubo-customer-reading-progress { margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: #eef4fb; }
+.ubo-customer-reading-progress strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.ubo-customer-reading-progress p { margin: 4px 0; color: var(--ubo-customer-muted); font-size: 11px; line-height: 1.5; }
+.ubo-customer-reading-progress small { color: var(--ubo-customer-muted); font-size: 11px; }
 .ubo-customer-upload-actions { margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .ubo-customer-upload-actions > small { color: var(--ubo-customer-muted); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .ubo-customer-primary { min-height: 45px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--ubo-customer-green); color: white; font-size: 12px; font-weight: 800; cursor: pointer; }

@@ -1,9 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
-import CustomerOwnershipChartPage from "./CustomerOwnershipChartPage";
+import CustomerOwnershipChartPage, { RUNNING_POLL_MS } from "./CustomerOwnershipChartPage";
 import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcileSubjectIdentity } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
@@ -276,6 +276,31 @@ test("refresh resumes the same persisted extraction job without uploading bytes 
   await screen.findByRole("heading", { name: /Continue to questions/i });
   expect(window.fetch).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(window.fetch.mock.calls[0])).not.toContain("contentBase64");
+});
+
+test("a reading still running when the page is opened again is waited for, with its progress shown", async () => {
+  jest.useFakeTimers();
+  try {
+    seed();
+    writeCustomerOwnershipJob({ jobId: "job-running", demoCaseId: demoCase.demoCaseId, artifactId: "artifact-1", correlationId: "corr-running" });
+    // The reading elsewhere finishes eight seconds from now.
+    const finishesAt = Date.now() + 2 * RUNNING_POLL_MS;
+    window.fetch = jest.fn(async () => {
+      const done = Date.now() >= finishesAt;
+      return { ok: true, json: async () => ({ success: true, job: { jobId: "job-running", artifactId: "artifact-1", correlationId: "corr-running", state: done ? "COMPLETE" : "RUNNING", ...(done ? { result: analysis } : {}) } }) };
+    });
+    render(<CustomerOwnershipChartPage />);
+    expect(await screen.findByText(/Reading your chart/)).toBeInTheDocument();
+    expect(screen.getByText(/You can leave this page/)).toBeInTheDocument();
+    // Twelve quick re-asks used to end in "Refresh this page"; now each waits.
+    for (let tick = 0; tick < 4 && !screen.queryByRole("heading", { name: /Continue to questions/i }); tick += 1) {
+      await act(async () => { jest.advanceTimersByTime(RUNNING_POLL_MS); });
+    }
+    expect(screen.getByRole("heading", { name: /Continue to questions/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Refresh this page/)).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("retry reuses the failed job and existing Artifact", async () => {

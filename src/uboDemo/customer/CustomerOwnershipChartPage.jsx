@@ -30,6 +30,7 @@ const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
+export const RUNNING_POLL_MS = 4000;
 
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -97,6 +98,24 @@ function CompanyContext({ context }) {
   </section>;
 }
 
+// A reading takes one to three minutes (one AI pass, two when the first is
+// incomplete). Said plainly, with the time so far, so a long wait reads as work
+// in progress rather than a stuck page.
+function ReadingProgress() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  return <div className="ubo-customer-reading-progress" role="status">
+    <strong>Reading your chart · {clock}</strong>
+    <p>{seconds < 90 ? "We are finding each person and company on it and the percentages between them. This usually takes one to two minutes." : "Still reading - a detailed chart is checked a second time so nothing is missed. Almost there."}</p>
+    <small>You can leave this page. The reading carries on, and it will be here when you come back.</small>
+  </div>;
+}
+
 function UploadPanel({ file, error, busy, retryAvailable, onChoose, onAnalyse, onRemove }) {
   const input = useRef(null);
   return <section className="ubo-customer-card ubo-customer-upload-card">
@@ -114,6 +133,7 @@ function UploadPanel({ file, error, busy, retryAvailable, onChoose, onAnalyse, o
       <button type="button" onClick={onRemove} disabled={busy}>Remove</button>
     </div>}
     {error && <p className="ubo-customer-error" role="alert">{error}</p>}
+    {busy && <ReadingProgress />}
     <div className="ubo-customer-upload-actions"><small>{retryAvailable ? "Your document is saved safely. Retry will reuse it." : "Your file is saved before analysis begins."}</small><button type="button" className="ubo-customer-primary" onClick={onAnalyse} disabled={busy}>{busy ? "Analysing your ownership structure…" : retryAvailable ? "Try analysis again" : "Upload and analyse"}<span>→</span></button></div>
   </section>;
 }
@@ -309,7 +329,11 @@ export default function CustomerOwnershipChartPage() {
 
   const continueJob = async (initialJob, nextPreview = null) => {
     let job = initialJob;
-    for (let poll = 0; poll < 12; poll += 1) {
+    // A reading running elsewhere (this page was left and opened again) is
+    // waited for, not re-asked twelve times in a row and given up on. Bounded
+    // past the job's lease, after which processing takes it over again.
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
       writeCustomerOwnershipJob({ jobId: job.jobId, demoCaseId: context.demoCaseId, artifactId: job.artifactId, correlationId: job.correlationId });
       if (job.state === "COMPLETE" || job.state === "PARTIAL") { await saveUsableResult(job.result, nextPreview, job); return; }
       if (job.state === "FAILED") {
@@ -321,6 +345,7 @@ export default function CustomerOwnershipChartPage() {
         const delay = Math.max(0, Math.min(9000, new Date(job.nextAttemptAt).getTime() - Date.now()));
         if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
       }
+      if (job.state === "RUNNING") await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
       job = await postJob({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId });
     }
     throw new Error("Analysis is still safely queued. Refresh this page to continue checking it.");
