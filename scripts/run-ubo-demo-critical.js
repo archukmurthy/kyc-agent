@@ -11,6 +11,15 @@ const childEnvironment = { ...process.env, CI: "true", UBO_DEMO_CRITICAL: "true"
 delete childEnvironment.COMPANIES_HOUSE_API_KEY;
 delete childEnvironment.ANTHROPIC_API_KEY;
 
+// This suite runs as `prebuild`, so on Vercel it inherits the deployment's own
+// settings. With them a test can reach the live database or file store, and
+// CLERK_SECRET_KEY switches sign-in on so handler tests get 401 and fail the
+// build. The suite is hermetic by design: it sees none of them.
+const DEPLOYMENT_SETTING = /^(CLERK_|REACT_APP_CLERK_|DATABASE_URL|POSTGRES_|PG[A-Z]+$|NEON_|BLOB_|KV_|REDIS_|UPSTASH_|PRODUCT_MODE$|REACT_APP_PRODUCT_MODE$|SESSION_SECRET$|CRON_SECRET$|UBO_|DEMO_TOTAL_|PLATFORM_OWNER_|ALLOWED_ORIGINS$|EVIDENCE_|DIDIT_|IDV_|COMPLYCUBE_)/;
+for (const name of Object.keys(childEnvironment)) {
+  if (DEPLOYMENT_SETTING.test(name)) delete childEnvironment[name];
+}
+
 function run(label, args) {
   console.log(`\n[UBO_DEMO_CRITICAL] ${label}`);
   const result = spawnSync(process.execPath, args, {
